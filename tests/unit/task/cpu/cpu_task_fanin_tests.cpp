@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "task_wait.h"
+
 #include <core/task/cpu/scheduler.h>
 #include <core/alloc/scratch.h>
 
@@ -47,17 +49,6 @@ private:
 };
 
 
-[[nodiscard]] bool WaitUntil(const Atomic<bool>& condition){
-    const Timer begin = TimerNow();
-    while(!condition.load(MemoryOrder::acquire)){
-        if(DurationInMS<u64>(TimerNow(), begin) >= s_GateTimeoutMS)
-            return false;
-        SleepMS(1u);
-    }
-    return true;
-}
-
-
 void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependencyCount, const usize repetitionCount){
     DeadlineGuard deadline;
     Atomic<bool> rootEntered{ false };
@@ -79,11 +70,11 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
 
     const CpuTaskHandle root = scheduler.submit([&](){
         rootEntered.store(true, MemoryOrder::release);
-        if(!WaitUntil(releaseRoot))
+        if(!CpuTaskTestSupport::WaitUntil(releaseRoot, s_GateTimeoutMS))
             rootExpired.store(true, MemoryOrder::release);
     });
     ASSERT_TRUE(root.valid());
-    ASSERT_TRUE(WaitUntil(rootEntered));
+    ASSERT_TRUE(CpuTaskTestSupport::WaitUntil(rootEntered, s_GateTimeoutMS));
     EXPECT_TRUE(scheduler.isComplete(completed));
     EXPECT_FALSE(scheduler.isComplete(root));
 

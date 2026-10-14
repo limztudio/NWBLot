@@ -146,18 +146,35 @@ protected:
         return DeclaredEdit{ retained, result };
     }
 
-    [[nodiscard]] bool prepare(){
+    [[nodiscard]] bool beginPreparedFrame(){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;
         m_host.beginFrame(m_generation, { m_viewport.width, m_viewport.height, 1.0f, 1.0f });
-        if(!m_context.beginRoot({ 17u, 1u }))
+        return m_context.beginRoot({ 17u, 1u });
+    }
+
+    [[nodiscard]] bool beginBaseFrame(){
+        if(!beginPreparedFrame())
             return false;
         const auto baseEdit = declareEdit("base", m_baseModel, { 10.0f, 20.0f, 180.0f, 30.0f });
         if(!baseEdit)
             return false;
         m_baseWidget = baseEdit->widget;
         m_baseResult = baseEdit->result;
+        return true;
+    }
+
+    [[nodiscard]] bool endPreparedFrame(){
+        if(!m_context.endRoot() || !m_context.finishFrame())
+            return false;
+        m_host.finishFrame();
+        return true;
+    }
+
+    [[nodiscard]] bool prepare(){
+        if(!beginBaseFrame())
+            return false;
         const Ui::WidgetState* popup = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!popup)
             return false;
@@ -188,18 +205,11 @@ protected:
         }
         else
             m_context.input().closePopup(m_token);
-        if(!m_context.endRoot() || !m_context.finishFrame())
-            return false;
-        m_host.finishFrame();
-        return true;
+        return endPreparedFrame();
     }
 
     [[nodiscard]] bool prepareDeferred(){
-        ++m_generation;
-        if(!m_context.beginFrame(m_generation))
-            return false;
-        m_host.beginFrame(m_generation, { m_viewport.width, m_viewport.height, 1.0f, 1.0f });
-        if(!m_context.beginRoot({ 17u, 1u }))
+        if(!beginPreparedFrame())
             return false;
         const Ui::WidgetState* declared = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!declared)
@@ -242,24 +252,12 @@ protected:
         }
         else
             m_context.input().closePopup(m_token);
-        if(!m_context.endRoot() || !m_context.finishFrame())
-            return false;
-        m_host.finishFrame();
-        return true;
+        return endPreparedFrame();
     }
 
     [[nodiscard]] bool prepareNested(){
-        ++m_generation;
-        if(!m_context.beginFrame(m_generation))
+        if(!beginBaseFrame())
             return false;
-        m_host.beginFrame(m_generation, { m_viewport.width, m_viewport.height, 1.0f, 1.0f });
-        if(!m_context.beginRoot({ 17u, 1u }))
-            return false;
-        const auto baseEdit = declareEdit("base", m_baseModel, { 10.0f, 20.0f, 180.0f, 30.0f });
-        if(!baseEdit)
-            return false;
-        m_baseWidget = baseEdit->widget;
-        m_baseResult = baseEdit->result;
         const Ui::WidgetState* declared = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!declared)
             return false;
@@ -320,10 +318,7 @@ protected:
         }
         else
             m_context.input().closePopup(m_token);
-        if(!m_context.endRoot() || !m_context.finishFrame())
-            return false;
-        m_host.finishFrame();
-        return true;
+        return endPreparedFrame();
     }
 
     [[nodiscard]] bool nestedFrame(){ return prepareNested() && commit(); }

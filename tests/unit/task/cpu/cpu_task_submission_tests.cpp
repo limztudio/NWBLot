@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "process_exit.h"
+
 #include <core/task/cpu/scheduler.h>
 #include <global/terminal_entry.h>
 #include <global/platform.h>
@@ -9,12 +11,6 @@
 #include <global/timer.h>
 
 #include <gtest/gtest.h>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX)
-#include <unistd.h>
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +29,7 @@ constexpr u32 s_ExpectedDualCount = 2u;
 
 
 using namespace NWB::Core;
+using CpuTaskTestSupport::ExitTestProcess;
 
 inline constexpr u32 s_ConstructionException = 0xE101u;
 inline constexpr u32 s_WorkerException = 0xE102u;
@@ -62,18 +59,6 @@ struct NonCallableTask{};
 
 static_assert(!IsConstructible_V<InplaceFunction<128u>, ThrowingMoveTask>);
 static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
-
-
-[[noreturn]] void ExitTestProcess(u32 code)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    ExitProcess(code);
-#elif defined(NWB_PLATFORM_LINUX)
-    ::_exit(static_cast<int>(code));
-#else
-    static_cast<void>(code);
-    TerminateInvariant();
-#endif
-}
 
 
 class DeadlineGuard final{

@@ -108,14 +108,11 @@ struct RadioAcceptedFrame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Point RadioCenter(const Rect& rectangle);
-void ExpectRadioRect(const Rect& actual, const Rect& expected);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RadioGroupFixture : public WidgetFixture{
+protected:
+    using WidgetFixture::press;
+
+
 protected:
     virtual void SetUp()override;
     void configureRadioSkin(bool fallbackOnly = false);
@@ -126,7 +123,6 @@ protected:
     [[nodiscard]] WidgetId host()const;
     [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 key, const RadioGroupState& state)const;
     [[nodiscard]] Point choicePoint(u64 key)const;
-    void press(Core::Key::Enum key, bool repeat = false);
     [[nodiscard]] RadioAcceptedFrame accepted()const;
     void expectAccepted(const RadioAcceptedFrame& saved, bool focus = true, bool popupScopes = true)const;
     [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const;

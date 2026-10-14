@@ -17,7 +17,7 @@ from smoke_volume_identity import file_identity
 import caustic_quality_smoke
 import surfel_gi_quality_smoke
 import smoke_cpu_gpu_timing
-from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit,
+from window_capture_smoke import (finish_logserver_cleanup, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
 LIT_REFERENCE_THREE = "reference_three"
@@ -616,14 +616,7 @@ def acquire(args, output):
                 logserver = None
             except Exception as error:
                 errors.append(f"failure-path log collection: {error}")
-        try:
-            terminate_process(logserver, "logserver")
-        except Exception as error:
-            errors.append(f"logger cleanup: {error}")
-        if errors:
-            write_json(output / "cleanup_error.json", {"errors": errors})
-            if not primary_failure:
-                raise SmokeFailure("; ".join(errors))
+        finish_logserver_cleanup(logserver, output, errors, primary_failure, terminate_process, write_json)
 
 
 def parse_args(argv=None):

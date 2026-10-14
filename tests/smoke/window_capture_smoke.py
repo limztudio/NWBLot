@@ -390,6 +390,17 @@ def terminate_process(process, name, window_handle=None):
     return exit_code, tail
 
 
+def finish_logserver_cleanup(logserver, output, errors, primary_failure, terminate, write_report):
+    try:
+        terminate(logserver, "logserver")
+    except Exception as error:
+        errors.append(f"logger cleanup: {error}")
+    if errors:
+        write_report(output / "cleanup_error.json", {"errors": errors})
+        if not primary_failure:
+            raise SmokeFailure("; ".join(errors))
+
+
 def require_positive_arg(parser, name, value):
     if value <= 0.0:
         parser.error(f"{name} must be positive")

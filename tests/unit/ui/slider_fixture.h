@@ -77,14 +77,11 @@ struct SliderAcceptedFrame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Point SliderCenter(const Rect& rectangle);
-void ExpectSliderRect(const Rect& actual, const Rect& expected);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class SliderFixture : public WidgetFixture{
+protected:
+    using WidgetFixture::press;
+
+
 protected:
     [[nodiscard]] static SliderOptions Options();
     [[nodiscard]] static ListOptions SiblingOptions();
@@ -102,7 +99,6 @@ protected:
     [[nodiscard]] WidgetId thumb()const;
     [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const;
     [[nodiscard]] Point thumbPoint()const;
-    void press(Core::Key::Enum key, bool repeat = false);
     [[nodiscard]] SliderAcceptedFrame accepted()const;
     void expectAccepted(const SliderAcceptedFrame& saved, bool popupFocus = true)const;
 

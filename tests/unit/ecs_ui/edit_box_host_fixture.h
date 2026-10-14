@@ -110,7 +110,7 @@ public:
 protected:
     virtual void SetUp()override{ ASSERT_TRUE(m_textInput.setFocused(true)); }
 
-    [[nodiscard]] bool prepare(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 30.0f }, Ui::IEditActionSink* actions = nullptr){
+    [[nodiscard]] bool beginEditFrame(){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;
@@ -121,6 +121,12 @@ protected:
         if(!widget)
             return false;
         m_widget = *widget;
+        return true;
+    }
+
+    [[nodiscard]] bool prepare(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 30.0f }, Ui::IEditActionSink* actions = nullptr){
+        if(!beginEditFrame())
+            return false;
         m_result = actions ? m_host.editActions(m_widget, model, options, {}, *actions) : m_host.edit(m_widget, model, options);
         if(!m_result.valid)
             return false;

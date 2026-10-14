@@ -8,7 +8,8 @@ import sys
 import time
 
 from radio_group_native import RadioGroupNativeInput
-from radio_group_probe import center, observe_radio_group, snapshot_from_logs
+from radio_group_probe import observe_radio_group, snapshot_from_logs
+from probe_common import center
 from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)

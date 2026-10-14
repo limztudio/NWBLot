@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "marker_positions.h"
+
 #include <impl/ecs_ui/components.h>
 
 #include <core/common/log.h>
@@ -47,8 +49,6 @@ template<typename Source>
 }
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -79,6 +79,19 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
     for(const char value : text)
         hash = (hash ^ static_cast<u8>(value)) * 16777619u;
     return hash;
+}
+
+template<u32 Step, u32 Width, typename ValuesT>
+inline void PaintKeyedSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u64 sequence){
+    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<ValuesT> + 1u) * 2u, 12u, Step>();
+    const f32 y = context.display.logicalHeight - 20.0f;
+    for(usize index = 0u; index <= values.size(); ++index){
+        const u64 value = index == values.size() ? sequence : values[index];
+        for(u32 part = 0u; part < 2u; ++part){
+            const usize marker = index * 2u + part;
+            context.paint.fillRect({ positions[marker], y, static_cast<f32>(Width), 12.0f }, EncodeSmokeColor(value >> (part * 12u)));
+        }
+    }
 }
 
 // Progress, slider, and image snapshots paint one 12-bit marker swatch per value part plus sequence swatches along the bottom edge.

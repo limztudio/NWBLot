@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/arena_owner_fixture.h>
+
 #include <core/alloc/module.h>
 
 #include <global/arena_memory.h>
@@ -21,17 +23,7 @@ namespace __hidden_allocator_owner_concurrency_tests{
 
 
 using namespace NWB::Core::Alloc;
-
-[[nodiscard]] ArenaMemoryStats OwnerStats(const Name& name){
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerSnapshot snapshot;
-        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-        if(snapshot.ownerName == name && snapshot.source == ArenaMemorySource::Arena)
-            return snapshot.stats;
-    }
-    return {};
-}
+using ArenaOwnerTestSupport::OwnerStats;
 
 void WaitForFlag(const Atomic<bool>& flag){
     AtomicBackOff backoff;

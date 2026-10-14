@@ -23,17 +23,11 @@ using namespace UiEditNavigationTestSupport;
 class UiEditPointerCaptureTests : public UiEditNavigationHostTests{
 protected:
     [[nodiscard]] bool publishPart(const bool gesture){
-        Array<Ui::HitTarget, 2u> targets;
-        bool found = false;
-        for(const auto& target : m_context.input().targets()){
-            if(target.id == m_widget.id){
-                targets[0u] = target;
-                found = true;
-                break;
-            }
-        }
-        if(!found)
+        const Ui::HitTarget* target = UiTestSupport::FindHitTarget(m_context.input().targets(), m_widget.id);
+        if(!target)
             return false;
+        Array<Ui::HitTarget, 2u> targets;
+        targets[0u] = *target;
         Ui::HitTarget& editor = targets[0u];
         editor.control = { 91u, 1u, 1u };
         Ui::HitTarget& part = targets[1u];

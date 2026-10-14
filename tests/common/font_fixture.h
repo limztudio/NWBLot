@@ -36,6 +36,15 @@ namespace Tests{
     return Move(source->fontBytes);
 }
 
+[[nodiscard]] inline bool LoadBundledFont(Impl::Font& font, Core::Alloc::GlobalArena& arena, const StringView directory, const StringView filename){
+    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, directory) / filename;
+    auto bytes = ReadBundledFontBytes(path, arena);
+    if(!bytes)
+        return false;
+    font.setFontBytes(Move(*bytes));
+    return font.validatePayload();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

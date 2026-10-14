@@ -5,6 +5,7 @@ import math
 import re
 
 from window_capture_smoke import SmokeFailure
+from probe_common import center, snapshot_from_patterns
 from probe_reference import compose, encoded_marker, linear_channels, sampled_tile
 
 
@@ -26,28 +27,15 @@ MARK = (235, 245, 255)
 
 
 def snapshot_from_logs(text):
-    states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
-    if not states or not displays or not skins:
+    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="radio")
+    if snapshot is None:
         return None
-    state = states[-1]
-    sequence, values = int(state[1]), tuple(map(int, state[2].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
-    if any(name not in rectangles for name in RECTANGLES):
-        return None
-    display = tuple(map(float, displays[-1].groups()))
-    geometry = tuple(value for rectangle in rectangles.values() for value in rectangle)
-    if not all(math.isfinite(value) for value in (*display, *geometry)) or not all(value > 0.0 for value in display):
-        raise SmokeFailure("radio fixture reported invalid geometry or display metrics")
+    values, sequence, rectangles = snapshot["values"], snapshot["sequence"], snapshot["rectangles"]
     if any(rectangle[2] < 0.0 or rectangle[3] < 0.0 for rectangle in rectangles.values()):
         raise SmokeFailure("radio fixture reported a negative placement extent")
     if any(value > 0xFFFFFF for value in (*values, sequence)):
         raise SmokeFailure("radio fixture exceeds its two-part 24-bit displayed marker schema")
-    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
-
-
-def center(rectangle):
-    x, y, width, height = rectangle
-    return x + width / 2.0, y + height / 2.0
+    return snapshot
 
 
 def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default", extra=None, pressed=None):

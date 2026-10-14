@@ -34,6 +34,10 @@ namespace UiWidgetTests{
 using namespace Impl;
 using namespace Impl::Ui;
 
+[[nodiscard]] inline Point Center(const Rect& bounds)noexcept{
+    return { bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f };
+}
+
 inline void ExpectRect(const Rect& actual, const Rect& expected){
     EXPECT_FLOAT_EQ(actual.x, expected.x);
     EXPECT_FLOAT_EQ(actual.y, expected.y);
@@ -77,19 +81,39 @@ template<usize Capacity, typename Input>
 }
 
 template<usize Capacity, typename Input>
-void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>& saved){
-    EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
-    EXPECT_EQ(input.capture(), saved.capture);
-    ASSERT_EQ(input.targets().size(), saved.count);
-    ASSERT_LE(saved.count, saved.targets.size());
-    for(usize index = 0u; index < saved.count; ++index){
-        const HitTarget& before = saved.targets[index];
+void ExpectAcceptedTargets(const Input& input, const Array<HitTarget, Capacity>& targets, const usize count, const bool checkOwnerDeclaration = false){
+    ASSERT_EQ(input.targets().size(), count);
+    ASSERT_LE(count, targets.size());
+    for(usize index = 0u; index < count; ++index){
+        const HitTarget& before = targets[index];
         const HitTarget& after = input.targets()[index];
-        UiWidgetTests::ExpectHitTargetIdentity(after, before);
-        EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
+        ExpectHitTargetIdentity(after, before);
+        if(checkOwnerDeclaration)
+            EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
         ExpectRect(after.rectangle, before.rectangle);
         ExpectRect(after.clip, before.clip);
     }
+}
+
+template<usize Capacity, typename Input>
+void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>& saved){
+    EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
+    EXPECT_EQ(input.capture(), saved.capture);
+    ExpectAcceptedTargets(input, saved.targets, saved.count, true);
+}
+
+[[nodiscard]] inline PopupOptions NestedParentOptions(){
+    PopupOptions options;
+    options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
+    options.size = { 300.0f, 380.0f };
+    return options;
+}
+
+[[nodiscard]] inline PopupOptions NestedChildOptions(){
+    PopupOptions options;
+    options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
+    options.size = { 340.0f, 380.0f };
+    return options;
 }
 
 [[nodiscard]] inline PopupOptions LargeLoanParentOptions(){
@@ -212,12 +236,8 @@ protected:
         return MakeWidgetId(MakeWidgetId(MakeRootId(m_root), parent), child);
     }
 
-    [[nodiscard]] const HitTarget* target(const WidgetId widget)const{
-        for(const HitTarget& entry : m_context.input().targets()){
-            if(entry.id == widget)
-                return &entry;
-        }
-        return nullptr;
+    [[nodiscard]] const HitTarget* target(const WidgetId widget)const noexcept{
+        return UiTestSupport::FindHitTarget(m_context.input().targets(), widget);
     }
 
     [[nodiscard]] InputRoutingResult send(const InputEvent& event){
@@ -237,6 +257,19 @@ protected:
         EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
         EXPECT_TRUE(send({ InputEventType::PointerMove, destination }).pointerConsumed);
         EXPECT_TRUE(send({ InputEventType::PrimaryUp, destination }).pointerConsumed);
+    }
+
+    void press(const Core::Key::Enum value, const bool repeat = false, const bool shift = false){
+        InputEvent event;
+        event.type = InputEventType::KeyDown;
+        event.key = value;
+        event.repeat = repeat;
+        event.shift = shift;
+        EXPECT_TRUE(send(event).commandConsumed);
+        if(!repeat){
+            event.type = InputEventType::KeyUp;
+            EXPECT_TRUE(send(event).commandConsumed);
+        }
     }
 
     [[nodiscard]] Expected<SkinPaintSample> sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept;

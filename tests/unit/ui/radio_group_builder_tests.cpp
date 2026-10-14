@@ -305,10 +305,10 @@ TEST_F(UiRadioGroupBuilderTests, PreparedGeometryDoesNotReplaceAcceptedChoiceTar
     ASSERT_TRUE(accept(1u));
     const Rect oldBounds = target(host())->rectangle;
     ASSERT_TRUE(prepare(2u, {}, { 80.0f, 40.0f, 420.0f, 360.0f }));
-    ExpectRadioRect(target(host())->rectangle, oldBounds);
+    ExpectRect(target(host())->rectangle, oldBounds);
     EXPECT_NE(m_state.placement().bounds.x, oldBounds.x);
     ASSERT_TRUE(m_context.commitFrame(2u));
-    ExpectRadioRect(target(host())->rectangle, m_state.placement().bounds);
+    ExpectRect(target(host())->rectangle, m_state.placement().bounds);
 }
 
 TEST_F(UiRadioGroupBuilderTests, DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds){

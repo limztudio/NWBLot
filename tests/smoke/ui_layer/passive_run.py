@@ -6,6 +6,7 @@ import time
 
 from guarded_native import GuardedNativeInput
 from fixture_environment import build_fixture_environment
+from fixture_launch import admit_fixture_processes, prepare_fixture_launch
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 
@@ -72,51 +73,44 @@ class PassiveImageRun:
 
 
 def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, label):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), fixture, skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = driver = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
+    launch = prepare_fixture_launch(args, fixture, build_launch_environment=build_launch_environment, build_fixture_environment=build_fixture_environment, create_capture_backend=create_capture_backend)
+    driver = None
     try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the image fixture appeared")
+        admit_fixture_processes(args, launch, launch_logserver=launch_logserver, launch_testbed=launch_testbed)
+        if not launch.handle:
+            ensure_process_running(launch.application, "before the image fixture appeared")
             raise SmokeFailure("custom image fixture did not appear")
         if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
+            launch.backend.prepare_raw_client_window(launch.handle)
         else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, display_marker, min(args.timeout, 15.0))
-        driver = driver_type(args, backend, handle, application, log_directory, log_baseline, log_pattern)
+            launch.backend.prepare_window(launch.handle)
+        wait_for_log_message(launch.log_directory, launch.log_baseline, launch.log_pattern, display_marker, min(args.timeout, 15.0))
+        driver = driver_type(args, launch.backend, launch.handle, launch.application, launch.log_directory, launch.log_baseline, launch.log_pattern)
         driver.execute()
     finally:
         try:
-            if application is not None:
-                exit_code, tail = terminate_process(application, "UI image fixture", handle)
+            if launch.application is not None:
+                exit_code, tail = terminate_process(launch.application, "UI image fixture", launch.handle)
                 require_normal_process_exit(exit_code, tail, "UI image fixture")
         finally:
             try:
                 text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
+                if launch.log_directory is not None:
+                    text = shutdown_logserver_and_collect(launch.logserver, launch.log_directory, launch.log_baseline, launch.log_pattern)
+                    launch.logserver = None
                     (args.output_directory / log_name).write_text(text, encoding="utf-8")
             finally:
                 try:
-                    if logserver is not None:
-                        terminate_process(logserver, "UI image logserver")
+                    if launch.logserver is not None:
+                        terminate_process(launch.logserver, "UI image logserver")
                 finally:
                     try:
                         if driver is not None:
                             driver.native.restore_pointer()
                     finally:
-                        backend.close()
+                        launch.backend.close()
     validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
     driver.write_report(True)
     print(f"{label}: {len(driver.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
     return 0
+

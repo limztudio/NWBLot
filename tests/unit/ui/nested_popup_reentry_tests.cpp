@@ -197,13 +197,6 @@ protected:
         m_siblingList.select(2u);
     }
 
-    [[nodiscard]] static PopupOptions ParentOptions(){
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 300.0f, 380.0f };
-        return options;
-    }
-
     [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
@@ -226,7 +219,7 @@ protected:
         return finishPanel() && m_context.commitFrame(1u);
     }
 
-    [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup("parent", m_parent, ParentOptions()); }
+    [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions()); }
 
     [[nodiscard]] bool declareChild(){
         return m_builder.beginPopup("child", m_child, ChildOptions()) && m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid && m_builder.endPopup();

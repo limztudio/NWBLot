@@ -5,57 +5,21 @@ from __future__ import annotations
 import json
 import platform
 import sys
-import time
 
 from list_native import ListNativeInput
 from probe_common import center
 from list_probe import observe_list, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
-from keyed_run import KeyedRun
-from fixture_environment import build_fixture_environment
+from window_capture_smoke import run_smoke_main
+from keyed_run import KeyedRun, run_keyed_fixture
 
 
 class ListRun(KeyedRun):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native_type=ListNativeInput)
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native_type=ListNativeInput, snapshot_reader=snapshot_from_logs, observer=observe_list,
+            minimum_height=400, fixture="list", capture_stage="during virtual-list UI capture")
         self.expected = {"selected": 0, "cursor": 0, "count": 100000, "focused": 0, "reversed": 0, "removed": 0, "visible": 1, "commits": 0, "underlying": 0}
 
-
-
-
-
-    def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), **changes):
-        self.expected.update(changes)
-        for field in dynamic:
-            self.expected.pop(field, None)
-        if self.snapshot is not None:
-            self.native.pointer(*self.point(*center(self.snapshot["rectangles"]["counter"])))
-        time.sleep(0.25)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during virtual-list UI capture")
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(0.1)
-                continue
-            if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < 400.0:
-                raise SmokeSkip("the list fixture needs a logical client of at least 600x400")
-            self.backend.capture_client_window(self.handle, path)
-            report = observe_list(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
-            if report["passed"]:
-                self.snapshot = snapshot
-                for field in dynamic:
-                    self.expected[field] = snapshot[field]
-                report.update({"stage": name, "capture": str(path)})
-                self.stages.append(report)
-                self.write_report(False)
-                return
-            time.sleep(0.1)
-        raise SmokeFailure(f"list displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
         report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
@@ -143,45 +107,7 @@ class ListRun(KeyedRun):
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "LIST", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = list_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the list fixture appeared")
-            raise SmokeFailure("custom virtual-list fixture did not appear")
-        backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiListSmoke: display", min(args.timeout, 15.0))
-        list_run = ListRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        list_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = terminate_process(application, "UI virtual-list fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI virtual-list fixture")
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "list.log").write_text(text, encoding="utf-8")
-            finally:
-                if logserver is not None:
-                    terminate_process(logserver, "UI virtual-list logserver")
-                backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    list_run.write_report(True)
-    print(f"UI virtual list: {len(list_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_keyed_fixture(args, fixture="LIST", display_marker="UiListSmoke: display", driver_type=ListRun, log_name="list.log", label="UI virtual list", window_label="list", process_label="virtual-list")
 
 
 def main(argv):

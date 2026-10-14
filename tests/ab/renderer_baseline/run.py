@@ -31,6 +31,7 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from profiles import BaselineProfile, corpus_profile_names, get_profile, profile_names  # noqa: E402
+from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_capture_result, wait_for_log_message,)
@@ -734,13 +735,7 @@ def run_self_test() -> int:
         orchestration_args = SimpleNamespace(executable=executable, runtime_dir=root, no_logserver=False, logserver_executable=None, startup_timeout=1.0, gpu_validation=False, settle_seconds=0.0, profile=LIT_OPAQUE_TEXTURE, reject_log=[],)
         events = []
 
-        def terminate(process, name, window_handle=None):
-            if process is app:
-                events.append((LIT_APP_STOP, name, window_handle))
-                return 7, "simulated abnormal exit"
-            assert process is None
-            events.append((LIT_CLEANUP_NONE, name, window_handle))
-            return None, ""
+        terminate = make_abnormal_exit_terminator(app, events)
 
         def shutdown(process, directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver

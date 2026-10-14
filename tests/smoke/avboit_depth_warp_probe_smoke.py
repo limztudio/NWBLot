@@ -11,7 +11,7 @@ import sys
 from types import SimpleNamespace
 from uuid import uuid4
 
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsDesktopUnavailable, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
+from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsDesktopUnavailable, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
 
 
 EXPECTED_COUNTS = (1050, 2550, 512, 4112)
@@ -86,14 +86,7 @@ def acquire(args, output):
                 logserver = None
             except Exception as error:
                 errors.append(f"failure log collection: {error}")
-        try:
-            terminate_process(logserver, "logserver")
-        except Exception as error:
-            errors.append(f"logger cleanup: {error}")
-        if errors:
-            write_json(output / "cleanup_error.json", {"errors": errors})
-            if not primary_failure:
-                raise SmokeFailure("; ".join(errors))
+        finish_logserver_cleanup(logserver, output, errors, primary_failure, terminate_process, write_json)
 
 
 def parse_args(argv=None):

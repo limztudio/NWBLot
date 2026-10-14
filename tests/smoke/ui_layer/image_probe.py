@@ -5,6 +5,7 @@ import math
 import re
 
 from window_capture_smoke import SmokeFailure
+from probe_common import center, snapshot_from_patterns
 from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile
 
 
@@ -22,26 +23,15 @@ SENTINEL = linear_rgb_bytes((0.07, 0.13, 0.2))
 
 
 def snapshot_from_logs(text):
-    states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
-    if not states or not displays or not skins:
+    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="image")
+    if snapshot is None:
         return None
-    state = states[-1]
-    sequence, values = int(state[1]), tuple(map(int, state[2].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
-    if any(name not in rectangles for name in RECTANGLES):
-        return None
-    display = tuple(map(float, displays[-1].groups()))
-    if not all(math.isfinite(value) for value in (*display, *(v for r in rectangles.values() for v in r))):
-        raise SmokeFailure("image fixture reported nonfinite display or geometry")
-    if any(value <= 0.0 for value in display) or any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
+    values, sequence, rectangles = snapshot["values"], snapshot["sequence"], snapshot["rectangles"]
+    if any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
         raise SmokeFailure("image fixture reported invalid display or placement extents")
     if any(value > 0xFFFFFF for value in (*values, sequence)):
         raise SmokeFailure("image fixture exceeds its two-part displayed marker schema")
-    return { "sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(FIELDS, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles, }
-
-
-def center(rectangle):
-    return rectangle[0] + rectangle[2] / 2.0, rectangle[1] + rectangle[3] / 2.0
+    return snapshot
 
 
 def observe_image(frame, snapshot, expected, *, extent=None, skin="default", extra=None):

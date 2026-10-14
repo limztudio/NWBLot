@@ -8,11 +8,13 @@ import sys
 import time
 
 from slider_native import SliderNativeInput
-from slider_probe import bits_value, center, f32, observe_slider, snapshot_from_logs, value_bits
+from slider_probe import bits_value, f32, observe_slider, snapshot_from_logs, value_bits
+from probe_common import center
 from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
+from checkpoint_report import accept_checkpoint, fail_checkpoint
 
 
 class SliderRun:
@@ -112,17 +114,10 @@ class SliderRun:
             report = observe_slider(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, modes=modes)
             self.native.record("capture_after", name=name, sequence=snapshot["sequence"], passed=report["passed"])
             if report["passed"]:
-                self.snapshot = snapshot
-                for field in dynamic:
-                    self.expected[field] = snapshot[field]
-                report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
-                self.stages.append(report)
-                self.write_report(False)
+                accept_checkpoint(self, name, path, snapshot, report, dynamic)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
-        self.write_report(False)
-        raise SmokeFailure(f"slider displayed-state gate '{name}' failed: {self.failure_report}")
+        fail_checkpoint(self, name, path, report, "slider")
 
     def write_report(self, passed):
         report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "native_actions": self.native.actions,

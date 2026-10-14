@@ -17,6 +17,14 @@ namespace UiTestSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline const NWB::Impl::Ui::HitTarget* FindHitTarget(const NWB::Impl::Ui::InputVector<NWB::Impl::Ui::HitTarget>& targets, const NWB::Impl::Ui::WidgetId widget)noexcept{
+    for(const auto& target : targets){
+        if(target.id == widget)
+            return &target;
+    }
+    return nullptr;
+}
+
 // Existing fixtures exercise the native cursor adapter; neutral providers use queuePointer directly.
 [[nodiscard]] inline NWB::Impl::Ui::InputEvent NativeInput(const NWB::Impl::Ui::InputEvent& event){
     using namespace NWB::Impl::Ui;

@@ -36,27 +36,13 @@ protected:
             state.open();
     }
 
-    [[nodiscard]] static PopupOptions ParentOptions(){
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 300.0f, 380.0f };
-        return options;
-    }
-
-    [[nodiscard]] static PopupOptions ChildOptions(){
-        PopupOptions options;
-        options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
-        options.size = { 340.0f, 380.0f };
-        return options;
-    }
-
     [[nodiscard]] WidgetId parentId()const{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
     [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }
     [[nodiscard]] WidgetId fieldId()const{ return MakeWidgetId(parentId(), "combo"); }
     [[nodiscard]] WidgetId menuRows()const{ return MakeWidgetId(MakeWidgetId(parentId(), "menu"), "rows"); }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions()))
             return false;
         const bool activated = m_builder.button("before", "Before");
         return !activated;
@@ -70,7 +56,7 @@ protected:
     [[nodiscard]] bool acceptPlain(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_childVisible = m_builder.beginPopup("child", m_child, ChildOptions());
+        m_childVisible = m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions());
         if(m_childVisible){
             const bool activated = m_builder.button("apply", "Child");
             if(activated || !m_builder.endPopup())
@@ -111,14 +97,14 @@ protected:
         const bool activated = m_builder.button("anchor", "Commands");
         if(activated || !m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu).valid)
             return false;
-        if(!m_builder.beginPopup("child", m_child, ChildOptions()) || !m_builder.comboBox("combo", m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
+        if(!m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.comboBox("combo", m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
             return false;
         for(usize index = 0u; index < 3u; ++index){
-            if(!m_builder.beginPopup("deep", m_deeper[index], ChildOptions()))
+            if(!m_builder.beginPopup("deep", m_deeper[index], UiWidgetTests::NestedChildOptions()))
                 return false;
         }
         if(overflow)
-            return m_builder.beginPopup("deep", m_deeper[3u], ChildOptions());
+            return m_builder.beginPopup("deep", m_deeper[3u], UiWidgetTests::NestedChildOptions());
         const bool leafActivated = m_builder.button("leaf", "Deepest");
         if(leafActivated)
             return false;

@@ -3,7 +3,6 @@
 
 
 #include "popup_tools_scene.h"
-#include "marker_positions.h"
 
 #include "smoke_geometry.h"
 #include "../smoke_environment.h"
@@ -108,7 +107,7 @@ bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.endPanel())
         return false;
     observeState();
-    paintMarkers(context);
+    PaintKeyedSmokeValueMarkers<16u, 12u>(context, values(), m_sequence);
     return true;
 }
 
@@ -186,20 +185,6 @@ void UiPopupToolsSmokeScene::observeState(){
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("sentinel"), sentinel);
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
-}
-
-void UiPopupToolsSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const auto current = values();
-    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<decltype(current)> + 1u) * 2u, 12u, 16u>();
-    const f32 y = context.display.logicalHeight - 20.0f;
-    for(usize index = 0u; index <= current.size(); ++index){
-        const u64 value = index == current.size() ? m_sequence : current[index];
-        for(u32 part = 0u; part < 2u; ++part){
-            const usize marker = index * 2u + part;
-            context.paint.fillRect({ positions[marker], y, 12.0f, 12.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
-        }
-    }
 }
 
 

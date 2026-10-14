@@ -6,6 +6,7 @@ import re
 
 from slider_probe import bits_value, value_bits
 from window_capture_smoke import SmokeFailure
+from probe_common import center, snapshot_from_patterns
 from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region
 
 
@@ -25,28 +26,18 @@ SENTINEL = linear_rgb_bytes((0.07, 0.13, 0.2))
 
 
 def snapshot_from_logs(text):
-    states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
-    if not states or not displays or not skins:
+    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="progress", bit_fields=BIT_FIELDS)
+    if snapshot is None:
         return None
-    state = states[-1]
-    sequence, values, bits = int(state[1]), tuple(map(int, state[2].split(","))), tuple(map(int, state[3].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
-    if any(name not in rectangles for name in RECTANGLES):
-        return None
-    display = tuple(map(float, displays[-1].groups()))
-    if not all(math.isfinite(value) for value in (*display, *(v for r in rectangles.values() for v in r))):
-        raise SmokeFailure("progress fixture reported nonfinite display or geometry")
-    if any(value <= 0.0 for value in display) or any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
+    values, sequence, rectangles = snapshot["values"], snapshot["sequence"], snapshot["rectangles"]
+    bits = snapshot["bits"]
+    if any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
         raise SmokeFailure("progress fixture reported invalid display or placement extents")
     if any(value > 0xFFFFFF for value in (*values, sequence)) or any(value > 0xFFFFFFFFFFFFFFFF for value in bits):
         raise SmokeFailure("progress fixture exceeds its displayed marker schema")
     if not all(math.isfinite(bits_value(value)) for value in bits):
         raise SmokeFailure("progress fixture reported a nonfinite frozen value")
-    return { "sequence": sequence, "skin": skins[-1][1], "values": values, "bits": bits, **dict(zip(FIELDS, values)), **dict(zip(BIT_FIELDS, bits)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles, }
-
-
-def center(rectangle):
-    return rectangle[0] + rectangle[2] / 2.0, rectangle[1] + rectangle[3] / 2.0
+    return snapshot
 
 
 def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", extra=None):

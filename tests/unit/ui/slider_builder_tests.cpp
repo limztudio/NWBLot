@@ -73,8 +73,8 @@ TEST_F(UiSliderBuilderTests, DisabledSliderKeepsAPointerBarrierWithoutApplyingQu
     ASSERT_NE(target(host()), nullptr);
     EXPECT_FALSE(target(host())->enabled);
     EXPECT_FALSE(target(host())->focusable);
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, SliderCenter(m_state.placement().bounds) }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, SliderCenter(m_state.placement().bounds) }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PrimaryDown, UiWidgetTests::Center(m_state.placement().bounds) }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PrimaryUp, UiWidgetTests::Center(m_state.placement().bounds) }).pointerConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(accept(3u, disabled));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
@@ -90,7 +90,7 @@ TEST_F(UiSliderBuilderTests, ConstantRangeIsValidAndNoninteractiveWithoutRewriti
     ASSERT_NE(target(host()), nullptr);
     EXPECT_FALSE(target(host())->focusable);
     EXPECT_FALSE(target(host())->enabled);
-    click(SliderCenter(m_state.placement().bounds));
+    click(UiWidgetTests::Center(m_state.placement().bounds));
     ASSERT_TRUE(accept(2u, constant));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
     EXPECT_FALSE(m_state.result().valueChanged);

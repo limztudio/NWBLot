@@ -11,13 +11,14 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def snapshot_from_patterns(text, state_pattern, display_pattern, skin_pattern, geometry_pattern, fields, required_rectangles, *, fixture):
+def snapshot_from_patterns(text, state_pattern, display_pattern, skin_pattern, geometry_pattern, fields, required_rectangles, *, fixture, bit_fields=()):
     states, displays, skins = list(state_pattern.finditer(text)), list(display_pattern.finditer(text)), list(skin_pattern.finditer(text))
     if not states or not displays or not skins:
         return None
     state = states[-1]
     sequence = int(state[1])
     values = tuple(map(int, state[2].split(",")))
+    bits = tuple(map(int, state[3].split(","))) if bit_fields else ()
     rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in geometry_pattern.finditer(text) if int(match[1]) == sequence}
     if any(name not in rectangles for name in required_rectangles):
         return None
@@ -25,4 +26,5 @@ def snapshot_from_patterns(text, state_pattern, display_pattern, skin_pattern, g
     geometry_values = (value for rectangle in rectangles.values() for value in rectangle)
     if not all(math.isfinite(value) for value in (*display, *geometry_values)) or not all(value > 0.0 for value in display):
         raise SmokeFailure(f"{fixture} fixture reported invalid geometry or display metrics")
-    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(fields, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
+    return {"sequence": sequence, "skin": skins[-1][1], "values": values, **({"bits": bits} if bit_fields else {}), **dict(zip(fields, values)), **dict(zip(bit_fields, bits)),
+        "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}

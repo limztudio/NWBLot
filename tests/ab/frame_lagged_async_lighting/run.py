@@ -23,6 +23,7 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
+from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process,)
@@ -302,13 +303,7 @@ def run_self_test() -> int:
         backend.wait_for_window.return_value = 17
         events = []
 
-        def terminate(process, name, window_handle=None):
-            if process is app:
-                events.append((LIT_APP_STOP, name, window_handle))
-                return 7, "simulated abnormal exit"
-            assert process is None
-            events.append((LIT_CLEANUP_NONE, name, window_handle))
-            return None, ""
+        terminate = make_abnormal_exit_terminator(app, events)
 
         def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver

@@ -4,6 +4,8 @@
 
 #include "radio_group_fixture.h"
 
+#include "combo_fixture.h"
+
 #include <global/simplemath.h>
 
 
@@ -179,21 +181,6 @@ void RadioSource::callback(const RadioCallbackSite::Enum site)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Point RadioCenter(const Rect& rectangle){
-    return { rectangle.x + rectangle.width * 0.5f, rectangle.y + rectangle.height * 0.5f };
-}
-
-void ExpectRadioRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RadioGroupFixture::SetUp(){
     WidgetFixture::SetUp();
     configureRadioSkin();
@@ -256,19 +243,7 @@ const RadioGroupChoicePlacement* RadioGroupFixture::choice(const u64 keyValue, c
 
 Point RadioGroupFixture::choicePoint(const u64 keyValue)const{
     const RadioGroupChoicePlacement* item = choice(keyValue, m_state);
-    return item ? RadioCenter(item->rectangle) : Point{};
-}
-
-void RadioGroupFixture::press(const Core::Key::Enum keyValue, const bool repeat){
-    InputEvent event;
-    event.type = InputEventType::KeyDown;
-    event.key = keyValue;
-    event.repeat = repeat;
-    EXPECT_TRUE(send(event).commandConsumed);
-    if(!repeat){
-        event.type = InputEventType::KeyUp;
-        EXPECT_TRUE(send(event).commandConsumed);
-    }
+    return item ? UiWidgetTests::Center(item->rectangle) : Point{};
 }
 
 RadioAcceptedFrame RadioGroupFixture::accepted()const{
@@ -290,15 +265,7 @@ void RadioGroupFixture::expectAccepted(const RadioAcceptedFrame& saved, const bo
     if(focus)
         EXPECT_EQ(m_context.input().focus(), saved.focus);
     EXPECT_EQ(m_context.input().capture(), saved.capture);
-    ASSERT_EQ(m_context.input().targets().size(), saved.count);
-    ASSERT_LE(saved.count, saved.targets.size());
-    for(usize index = 0u; index < saved.count; ++index){
-        const HitTarget& before = saved.targets[index];
-        const HitTarget& after = m_context.input().targets()[index];
-        UiWidgetTests::ExpectHitTargetIdentity(after, before);
-        ExpectRadioRect(after.rectangle, before.rectangle);
-        ExpectRadioRect(after.clip, before.clip);
-    }
+    ExpectAcceptedTargets(m_context.input(), saved.targets, saved.count);
 }
 
 usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const{

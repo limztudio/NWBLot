@@ -43,7 +43,6 @@ public:
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
     void observeState(Impl::Ui::TextService& text);
-    void paintMarkers(Impl::UiPaintContext& context)const;
     [[nodiscard]] Array<u64, 22u> values()const;
     [[nodiscard]] Impl::Ui::Rect cursorRow()const;
 

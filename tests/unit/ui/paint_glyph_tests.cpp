@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint.h>
+#include "paint_text_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -21,41 +21,7 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
 
-class UiPaintGlyphTests : public testing::Test{
-public:
-    UiPaintGlyphTests()
-        : m_arena(Name("tests/ui/paint_glyph"))
-        , m_skin(m_arena, Name("tests/ui/skin"))
-        , m_builder(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name("sprite"), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 16u, 16u, 1.0f, Move(regions));
-        begin(7u);
-    }
-
-
-protected:
-    void begin(const u64 generation){
-        m_builder.begin({ 100.0f, 80.0f, 1.5f, 2.0f }, generation, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
-        m_builder.reserve(16u);
-    }
-
-    [[nodiscard]] SharedGlyphPage makePage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u){
-        GlyphPage::Pixels pixels(m_arena);
-        pixels.resize(64u, 0u);
-        pixels[0] = 64u;
-        if(generation > 1u)
-            pixels[32] = 192u;
-        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = index, .width = 8u, .height = 8u, };
-        return CreateGlyphPage(m_arena, binding, Move(pixels));
-    }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    UiSkin m_skin;
-    PaintBuilder m_builder;
+class UiPaintGlyphTests : public NWB::UiPaintTextTests::PaintTextFixture{
 };
 
 
@@ -63,28 +29,17 @@ protected:
 
 
 TEST_F(UiPaintGlyphTests, ClipTrimsGlyphGeometryAndUv){
-    const SharedGlyphPage page = makePage();
+    const SharedGlyphPage page = makeGlyphPage();
     ASSERT_TRUE(page);
     m_builder.pushClip({ 10.0f, 5.0f, 20.0f, 10.0f });
     ASSERT_TRUE(m_builder.drawGlyph(page, { 0.0f, 0.0f, 40.0f, 20.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 0.8f, 0.4f, 0.2f, 0.5f }));
     ASSERT_TRUE(m_builder.popClip());
-    const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    const Vertex& first = snapshot.vertices()[0];
-    const Vertex& opposite = snapshot.vertices()[2];
-    EXPECT_FLOAT_EQ(first.position.x, 10.0f);
-    EXPECT_FLOAT_EQ(first.position.y, 5.0f);
-    EXPECT_FLOAT_EQ(opposite.position.x, 30.0f);
-    EXPECT_FLOAT_EQ(opposite.position.y, 15.0f);
-    EXPECT_FLOAT_EQ(first.texCoord.x, 0.25f);
-    EXPECT_FLOAT_EQ(first.texCoord.y, 0.375f);
-    EXPECT_FLOAT_EQ(opposite.texCoord.x, 0.5f);
-    EXPECT_FLOAT_EQ(opposite.texCoord.y, 0.625f);
+    ExpectClippedQuad(m_builder.freeze());
 }
 
 TEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndClip){
-    const SharedGlyphPage first = makePage();
-    const SharedGlyphPage second = makePage(11u, 1u, 1u);
+    const SharedGlyphPage first = makeGlyphPage();
+    const SharedGlyphPage second = makeGlyphPage(11u, 1u, 1u);
     ASSERT_TRUE(first);
     ASSERT_TRUE(second);
     const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
@@ -123,8 +78,8 @@ TEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndCl
 }
 
 TEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlierGlyphUvs){
-    const SharedGlyphPage original = makePage();
-    const SharedGlyphPage appended = makePage(11u, 2u);
+    const SharedGlyphPage original = makeGlyphPage();
+    const SharedGlyphPage appended = makeGlyphPage(11u, 2u);
     ASSERT_TRUE(original);
     ASSERT_TRUE(appended);
     const Rect earlierUv{ 0.0f, 0.0f, 0.25f, 0.25f };
@@ -154,13 +109,13 @@ TEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlier
 }
 
 TEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPageRelease){
-    SharedGlyphPage original = makePage();
+    SharedGlyphPage original = makeGlyphPage();
     ASSERT_TRUE(original);
     ASSERT_TRUE(m_builder.drawGlyph(original, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     const DrawSnapshot first = m_builder.freeze();
     original.reset();
     begin(8u);
-    SharedGlyphPage appended = makePage(11u, 2u);
+    SharedGlyphPage appended = makeGlyphPage(11u, 2u);
     ASSERT_TRUE(appended);
     ASSERT_TRUE(m_builder.drawGlyph(appended, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
     const DrawSnapshot second = m_builder.freeze();
@@ -182,14 +137,14 @@ TEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPa
 TEST_F(UiPaintGlyphTests, RejectedPageAdmissionAtCapacityPreservesBindingsAndGeometry){
     FixedVector<SharedGlyphPage, s_PaintMaxGlyphPages> pages;
     for(usize index = 0u; index < s_PaintMaxGlyphPages; ++index){
-        SharedGlyphPage page = makePage(100u + index);
+        SharedGlyphPage page = makeGlyphPage(100u + index);
         ASSERT_TRUE(page);
         pages.push_back(Move(page));
     }
     ASSERT_TRUE(m_builder.drawGlyph(pages[0], { 2.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
     ASSERT_TRUE(m_builder.prepareGlyphPages(pages.data(), pages.size()));
-    const SharedGlyphPage upgrade = makePage(100u, 2u);
-    const SharedGlyphPage overflow = makePage(1000u);
+    const SharedGlyphPage upgrade = makeGlyphPage(100u, 2u);
+    const SharedGlyphPage overflow = makeGlyphPage(1000u);
     ASSERT_TRUE(upgrade);
     ASSERT_TRUE(overflow);
     const Array<SharedGlyphPage, 2u> candidates{ upgrade, overflow };

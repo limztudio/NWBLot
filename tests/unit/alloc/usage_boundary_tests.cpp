@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/arena_owner_fixture.h>
+
 #include <core/alloc/general.h>
 
 #include <global/arena_memory.h>
@@ -23,19 +25,9 @@ namespace __hidden_allocator_usage_boundary_tests{
 
 
 using namespace NWB::Core::Alloc;
+using ArenaOwnerTestSupport::OwnerStats;
 
 inline constexpr u32 s_ExpectedDualCount = 2u;
-
-[[nodiscard]] ArenaMemoryStats OwnerStats(const Name& name, const ArenaMemorySource::Enum source = ArenaMemorySource::Arena){
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerSnapshot snapshot;
-        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-        if(snapshot.ownerName == name && snapshot.source == source)
-            return snapshot.stats;
-    }
-    return {};
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

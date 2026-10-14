@@ -41,8 +41,8 @@ public:
 
 protected:
     virtual void SetUp()override{
-        ASSERT_TRUE(loadFont(m_latin, "latin.font"));
-        ASSERT_TRUE(loadFont(m_korean, "korean.font"));
+        ASSERT_TRUE(Tests::LoadBundledFont(m_latin, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
+        ASSERT_TRUE(Tests::LoadBundledFont(m_korean, m_arena, NWB_TEST_FONT_DIRECTORY, "korean.font"));
         const FontSource sources[]{
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u },
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
@@ -50,17 +50,6 @@ protected:
         ASSERT_TRUE(m_service.setFonts(sources, 2u));
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
-    }
-
-    [[nodiscard]] bool loadFont(Font& font, StringView filename){
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
-        Core::Assets::AssetBytes bytes(m_arena);
-        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-        if(!bytesResult)
-            return false;
-        bytes = Move(*bytesResult);
-        font.setFontBytes(Move(bytes));
-        return font.validatePayload();
     }
 
     void beginPaint(u64 generation, f32 scale = 1.0f){

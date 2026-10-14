@@ -43,7 +43,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        ASSERT_TRUE(loadFont(m_font, "latin.font"));
+        ASSERT_TRUE(Tests::LoadBundledFont(m_font, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
         ASSERT_TRUE(m_text.setFonts(&source, 1u));
         {
@@ -86,17 +86,6 @@ protected:
         ASSERT_TRUE(m_atlas.validatePayload(m_scratchArena));
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.f, Move(regions));
-    }
-
-    [[nodiscard]] bool loadFont(Font& font, StringView filename){
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
-        Core::Assets::AssetBytes bytes(m_arena);
-        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-        if(!bytesResult)
-            return false;
-        bytes = Move(*bytesResult);
-        font.setFontBytes(Move(bytes));
-        return font.validatePayload();
     }
 
     [[nodiscard]] bool installAtlas(){

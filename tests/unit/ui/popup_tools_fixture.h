@@ -188,16 +188,6 @@ protected:
         return send({ InputEventType::PointerMove, point }).hover == anchor(parent);
     }
 
-    void press(const Core::Key::Enum key, const bool shift = false){
-        InputEvent event;
-        event.type = InputEventType::KeyDown;
-        event.key = key;
-        event.shift = shift;
-        EXPECT_TRUE(send(event).commandConsumed);
-        event.type = InputEventType::KeyUp;
-        EXPECT_TRUE(send(event).commandConsumed);
-    }
-
     void secondaryClick(const Point& point){
         EXPECT_TRUE(send({ InputEventType::SecondaryDown, point }).pointerConsumed);
         EXPECT_TRUE(send({ InputEventType::SecondaryUp, point }).pointerConsumed);

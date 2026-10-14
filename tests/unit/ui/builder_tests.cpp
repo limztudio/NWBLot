@@ -89,14 +89,6 @@ protected:
         return nullptr;
     }
 
-    [[nodiscard]] const HitTarget* target(const WidgetId widget)const{
-        for(const HitTarget& entry : m_context.input().targets()){
-            if(entry.id == widget)
-                return &entry;
-        }
-        return nullptr;
-    }
-
     [[nodiscard]] Expected<Rect> regionQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
         const f32 left = static_cast<f32>(slot) / 16.0f;
         const f32 right = static_cast<f32>(slot + 1u) / 16.0f;
@@ -171,7 +163,7 @@ TEST_F(UiBuilderTests, CheckboxTogglesOncePerAcceptedActionAcrossRepeatedBuilds)
     EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* control = target(id("enabled"));
+    const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("enabled"));
     ASSERT_NE(control, nullptr);
     const Point center{ control->rectangle.x + 4.0f, control->rectangle.y + 4.0f };
     click(center);
@@ -199,7 +191,7 @@ TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivat
     ASSERT_FALSE(m_context.failed());
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* control = target(id("apply"));
+    const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"));
     ASSERT_NE(control, nullptr);
     const Point point{ control->rectangle.x + 4.0f, control->rectangle.y + 4.0f };
     click(point);
@@ -212,7 +204,7 @@ TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivat
     EXPECT_TRUE(m_context.input().actions().empty());
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    control = target(id("apply"));
+    control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"));
     ASSERT_NE(control, nullptr);
     EXPECT_FALSE(control->enabled);
     EXPECT_FALSE(control->focusable);
@@ -225,7 +217,7 @@ TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivat
     EXPECT_FALSE(m_context.failed());
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_TRUE(target(id("apply"))->enabled);
+    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"))->enabled);
 }
 
 TEST_F(UiBuilderTests, MissingSkinRejectsDeclarationsWithoutPublishingCandidateTargets){
@@ -284,7 +276,7 @@ TEST_F(UiBuilderTests, RowUsesSkinMetricsPaddingAndClipsOverflowingControlHits){
     const WidgetId rowId = id("actions");
     const WidgetId firstId = MakeWidgetId(rowId, "first");
     const WidgetId secondId = MakeWidgetId(rowId, "second");
-    const HitTarget* secondTarget = target(secondId);
+    const HitTarget* secondTarget = UiTestSupport::FindHitTarget(m_context.input().targets(), secondId);
     ASSERT_NE(secondTarget, nullptr);
     EXPECT_FLOAT_EQ(secondTarget->clip.width, 18.0f);
     EXPECT_EQ(m_context.input().hitTest({ 100.0f, 40.0f }), secondId);
@@ -358,7 +350,7 @@ TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmiss
     EXPECT_FALSE(m_builder.button("apply", "Apply"));
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const Rect rectangle = target(id("apply"))->rectangle;
+    const Rect rectangle = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"))->rectangle;
     const Point point{ rectangle.x + rectangle.width * 0.5f, rectangle.y + rectangle.height * 0.5f };
     u64 generation = 1u;
     for(const i32 key : { Core::Key::Unknown, Core::Key::Enter, Core::Key::Space }){

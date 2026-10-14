@@ -110,7 +110,7 @@ protected:
     [[nodiscard]] bool wheel(const f64 delta = -1.0){
         InputEvent event;
         event.type = InputEventType::PointerWheel;
-        event.position = UiComboTests::Center(m_state.scrollbars().viewport);
+        event.position = UiWidgetTests::Center(m_state.scrollbars().viewport);
         event.scrollY = delta;
         return send(event).pointerConsumed;
     }
@@ -120,7 +120,7 @@ protected:
         const HitTarget* thumb = target(thumbId);
         if(thumb == nullptr)
             return false;
-        const Point origin = UiComboTests::Center(thumb->rectangle);
+        const Point origin = UiWidgetTests::Center(thumb->rectangle);
         const Point destination{ origin.x, origin.y + 24.0f };
         return send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed
             && m_context.input().capture() == thumbId
@@ -160,7 +160,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcce
     const WidgetId afterId = MakeWidgetId(id("area", "panel"), "scroll.y.after");
     const HitTarget* after = target(afterId);
     ASSERT_NE(after, nullptr);
-    click(UiComboTests::Center(after->rectangle));
+    click(UiWidgetTests::Center(after->rectangle));
     const Point scroll = m_state.scroll();
     const u64 revision = m_state.revision();
     ASSERT_TRUE(m_state.scrollTo(scroll));
@@ -171,7 +171,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcce
     expectModel(m_model, model);
     after = target(afterId);
     ASSERT_NE(after, nullptr);
-    click(UiComboTests::Center(after->rectangle));
+    click(UiWidgetTests::Center(after->rectangle));
     ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_GT(m_state.scroll().y, scroll.y);
     expectModel(m_model, model);
@@ -308,7 +308,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(popupArea()));
-    const Point release = UiComboTests::Center(m_state.scrollbars().vertical.thumb);
+    const Point release = UiWidgetTests::Center(m_state.scrollbars().vertical.thumb);
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPopup("parent", m_parent, ParentOptions()));
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
@@ -381,7 +381,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, DisablingRetiresPendingWheelAndThumbWithou
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(id("area", "panel")));
-    const Point release = UiComboTests::Center(m_state.scrollbars().vertical.thumb);
+    const Point release = UiWidgetTests::Center(m_state.scrollbars().vertical.thumb);
     TextAreaOptions disabled = SmallOptions();
     disabled.enabled = false;
     ASSERT_TRUE(frameArea(2u, disabled));

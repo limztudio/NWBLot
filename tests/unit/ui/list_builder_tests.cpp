@@ -111,10 +111,6 @@ public:
     return options;
 }
 
-[[nodiscard]] static Point Center(const Rect& bounds){
-    return { bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f };
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -173,18 +169,6 @@ protected:
         event.position = Center(accepted->rectangle);
         event.scrollY = delta;
         return send(event).pointerConsumed;
-    }
-
-    void key(const Core::Key::Enum value, const bool repeat = false){
-        InputEvent event;
-        event.type = InputEventType::KeyDown;
-        event.key = value;
-        event.repeat = repeat;
-        EXPECT_TRUE(send(event).commandConsumed);
-        if(!repeat){
-            event.type = InputEventType::KeyUp;
-            EXPECT_TRUE(send(event).commandConsumed);
-        }
     }
 
     [[nodiscard]] usize glyphIndices(const DrawSnapshot& snapshot)const{
@@ -268,8 +252,8 @@ TEST_F(UiListBuilderTests, InitialProgrammaticSelectionSurvivesAndEndNavigatesTo
     ASSERT_TRUE(accept(1u));
     EXPECT_EQ(m_state.selectedKey(), 50000u);
     ASSERT_NE(target(row(50000u)), nullptr);
-    key(Core::Key::Tab);
-    key(Core::Key::End);
+    press(Core::Key::Tab);
+    press(Core::Key::End);
     ASSERT_TRUE(prepare(2u));
     EXPECT_EQ(m_state.selectedKey(), 100000u);
     EXPECT_GT(m_state.scrollOffset(), 2399800.0);
@@ -342,25 +326,25 @@ TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmissi
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_FALSE(m_result.activated);
-    key(Core::Key::Escape);
+    press(Core::Key::Escape);
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.activated);
     EXPECT_FALSE(m_result.selectionChanged);
-    key(Core::Key::Tab);
+    press(Core::Key::Tab);
     ASSERT_EQ(m_context.input().focus(), host());
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
     ASSERT_TRUE(accept(4u));
     EXPECT_FALSE(m_result.activated);
-    key(Core::Key::Escape);
+    press(Core::Key::Escape);
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
     ASSERT_TRUE(accept(5u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.activated);
-    key(Core::Key::Tab);
+    press(Core::Key::Tab);
     ASSERT_EQ(m_context.input().focus(), host());
-    key(Core::Key::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(accept(6u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_TRUE(m_result.activated);
@@ -369,7 +353,7 @@ TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmissi
 TEST_F(UiListBuilderTests, DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRelease){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
-    key(Core::Key::Tab);
+    press(Core::Key::Tab);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
     ++m_source.contentRevision;
     ASSERT_TRUE(accept(2u));
@@ -378,7 +362,7 @@ TEST_F(UiListBuilderTests, DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRele
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.activated);
-    key(Core::Key::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(accept(4u));
     EXPECT_TRUE(m_result.activated);
 }
@@ -386,7 +370,7 @@ TEST_F(UiListBuilderTests, DatasetReplacementWhileSubmitIsHeldCannotSubmitOnRele
 TEST_F(UiListBuilderTests, HeldNavigationCannotMutateAnAcceptedReorderedDataset){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
-    key(Core::Key::Tab);
+    press(Core::Key::Tab);
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = Core::Key::Down;
@@ -487,8 +471,8 @@ TEST_F(UiListBuilderTests, EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardSt
     EXPECT_EQ(m_source.textCalls, 0u);
     EXPECT_EQ(m_context.input().targets().size(), 2u);
     EXPECT_FALSE(m_state.placement().scrollbarVisible);
-    key(Core::Key::Tab);
-    key(Core::Key::Down);
+    press(Core::Key::Tab);
+    press(Core::Key::Down);
     ASSERT_TRUE(prepare(2u));
     EXPECT_EQ(m_state.selectedKey(), 0u);
     EXPECT_FALSE(m_result.activated);
@@ -555,7 +539,7 @@ TEST_F(UiListBuilderTests, TinyPositiveRowHeightWithSmallDatasetBoundsPageSizeBy
 TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
-    key(Core::Key::Tab);
+    press(Core::Key::Tab);
     EXPECT_EQ(m_context.input().focus(), host());
     PopupState lowerPopup;
     PopupState upperPopup;
@@ -572,7 +556,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     ASSERT_TRUE(preparePopups(3u, lowerPopup, lowerState, &upperPopup, &upperState));
     ASSERT_TRUE(m_context.commitFrame(3u));
     EXPECT_EQ(m_context.input().focus(), id("list", "upper"));
-    key(Core::Key::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(preparePopups(4u, lowerPopup, lowerState, &upperPopup, &upperState));
     EXPECT_EQ(upperState.selectedKey(), 4u);
     EXPECT_EQ(lowerState.selectedKey(), 2u);
@@ -582,7 +566,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     ASSERT_TRUE(preparePopups(5u, lowerPopup, lowerState, &upperPopup, &upperState));
     ASSERT_TRUE(m_context.commitFrame(5u));
     EXPECT_EQ(m_context.input().focus(), lowerHost);
-    key(Core::Key::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(preparePopups(6u, lowerPopup, lowerState, &upperPopup, &upperState));
     EXPECT_EQ(lowerState.selectedKey(), 3u);
     ASSERT_TRUE(m_context.commitFrame(6u));
@@ -590,7 +574,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     ASSERT_TRUE(preparePopups(7u, lowerPopup, lowerState));
     ASSERT_TRUE(m_context.commitFrame(7u));
     EXPECT_EQ(m_context.input().focus(), host());
-    key(Core::Key::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(prepare(8u));
     EXPECT_EQ(m_state.selectedKey(), 2u);
 }

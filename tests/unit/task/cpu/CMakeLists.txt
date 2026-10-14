@@ -5,3 +5,5 @@ target_sources(nwb_cpu_task_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/cpu_task_pr
 target_link_libraries(nwb_cpu_task_tests PRIVATE nwb_cpu_task nwb_common)
 
 set_tests_properties(nwb_cpu_task_tests PROPERTIES TIMEOUT 120)
+
+target_sources(nwb_cpu_task_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/process_exit.h" "${CMAKE_CURRENT_LIST_DIR}/task_wait.h")

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint.h>
+#include "paint_text_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -21,60 +21,7 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
 
-class UiPaintSdfTests : public testing::Test{
-public:
-    UiPaintSdfTests()
-        : m_arena(Name("tests/ui/paint_sdf"))
-        , m_skin(m_arena, Name("tests/ui/skin"))
-        , m_builder(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name("sprite"), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 16u, 16u, 1.0f, Move(regions));
-        begin(7u);
-    }
-
-
-protected:
-    void begin(const u64 generation){
-        m_builder.begin({ 100.0f, 80.0f, 1.5f, 2.0f }, generation, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
-        m_builder.reserve(16u);
-    }
-
-    [[nodiscard]] SharedSdfAtlasPage makePage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u){
-        SdfAtlasPage::Pixels pixels(m_arena);
-        pixels.resize(8u * 8u * 4u, 0u);
-        pixels[0u] = 32u;
-        pixels[1u] = 128u;
-        pixels[2u] = interior;
-        pixels[3u] = 192u;
-        const SdfAtlasPageBinding binding{
-            .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
-            .fontSha256 = {},
-            .pixelsSha256 = {},
-            .fontGeneration = 9u,
-            .atlasIdentity = atlasIdentity,
-            .generation = generation,
-            .index = index,
-            .width = 8u,
-            .height = 8u,
-            .spreadPixels = 8u,
-        };
-        return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
-    }
-
-    [[nodiscard]] SharedGlyphPage makeCoverage(const u64 atlasIdentity, const u64 generation = 1u){
-        GlyphPage::Pixels pixels(m_arena);
-        pixels.resize(4u, 128u);
-        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .width = 2u, .height = 2u, };
-        return CreateGlyphPage(m_arena, binding, Move(pixels));
-    }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    UiSkin m_skin;
-    PaintBuilder m_builder;
+class UiPaintSdfTests : public NWB::UiPaintTextTests::PaintTextFixture{
 };
 
 
@@ -82,28 +29,17 @@ protected:
 
 
 TEST_F(UiPaintSdfTests, ClipTrimsSdfGeometryAndUv){
-    const SharedSdfAtlasPage page = makePage();
+    const SharedSdfAtlasPage page = makeSdfPage();
     ASSERT_TRUE(page);
     m_builder.pushClip({ 10.0f, 5.0f, 20.0f, 10.0f });
     ASSERT_TRUE(m_builder.drawSdfGlyph(page, 3u, { 0.0f, 0.0f, 40.0f, 20.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 0.8f, 0.4f, 0.2f, 0.5f }));
     ASSERT_TRUE(m_builder.popClip());
-    const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    const Vertex& first = snapshot.vertices()[0];
-    const Vertex& opposite = snapshot.vertices()[2];
-    EXPECT_FLOAT_EQ(first.position.x, 10.0f);
-    EXPECT_FLOAT_EQ(first.position.y, 5.0f);
-    EXPECT_FLOAT_EQ(opposite.position.x, 30.0f);
-    EXPECT_FLOAT_EQ(opposite.position.y, 15.0f);
-    EXPECT_FLOAT_EQ(first.texCoord.x, 0.25f);
-    EXPECT_FLOAT_EQ(first.texCoord.y, 0.375f);
-    EXPECT_FLOAT_EQ(opposite.texCoord.x, 0.5f);
-    EXPECT_FLOAT_EQ(opposite.texCoord.y, 0.625f);
+    ExpectClippedQuad(m_builder.freeze());
 }
 
 TEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip){
-    const SharedSdfAtlasPage first = makePage();
-    const SharedSdfAtlasPage second = makePage(11u, 1u, 1u);
+    const SharedSdfAtlasPage first = makeSdfPage();
+    const SharedSdfAtlasPage second = makeSdfPage(11u, 1u, 1u);
     const SharedGlyphPage coverage = makeCoverage(22u);
     ASSERT_TRUE(first && second && coverage);
     const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
@@ -136,14 +72,14 @@ TEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip){
 }
 
 TEST_F(UiPaintSdfTests, FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepackAndRelease){
-    SharedSdfAtlasPage original = makePage();
+    SharedSdfAtlasPage original = makeSdfPage();
     ASSERT_TRUE(original);
     const Sha256Digest oldPixelsHash = original->binding().pixelsSha256;
     ASSERT_TRUE(m_builder.drawSdfGlyph(original, 2u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     const DrawSnapshot first = m_builder.freeze();
     original.reset();
     begin(8u);
-    SharedSdfAtlasPage replacement = makePage(12u, 1u, 0u, 64u);
+    SharedSdfAtlasPage replacement = makeSdfPage(12u, 1u, 0u, 64u);
     ASSERT_TRUE(replacement);
     ASSERT_TRUE(m_builder.drawSdfGlyph(replacement, 2u, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
     const DrawSnapshot second = m_builder.freeze();
@@ -166,12 +102,12 @@ TEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverage
         ASSERT_TRUE(page);
         coverage.push_back(Move(page));
     }
-    const SharedSdfAtlasPage sdf = makePage();
+    const SharedSdfAtlasPage sdf = makeSdfPage();
     ASSERT_TRUE(sdf);
     ASSERT_TRUE(m_builder.prepareImages(coverage.data(), coverage.size(), &sdf, 1u));
     ASSERT_TRUE(m_builder.drawSdfGlyph(sdf, 3u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     const SharedGlyphPage upgrade = makeCoverage(100u, 2u);
-    const SharedSdfAtlasPage overflow = makePage(99u);
+    const SharedSdfAtlasPage overflow = makeSdfPage(99u);
     EXPECT_FALSE(m_builder.prepareImages(&upgrade, 1u, &overflow, 1u));
     EXPECT_FALSE(m_builder.drawSdfGlyph(overflow, 0u, { 10.0f, 10.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     const DrawSnapshot snapshot = m_builder.freeze();
@@ -186,8 +122,8 @@ TEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverage
 }
 
 TEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes){
-    const SharedSdfAtlasPage original = makePage();
-    const SharedSdfAtlasPage conflicting = makePage(11u, 1u, 0u, 64u);
+    const SharedSdfAtlasPage original = makeSdfPage();
+    const SharedSdfAtlasPage conflicting = makeSdfPage(11u, 1u, 0u, 64u);
     ASSERT_TRUE(original && conflicting);
     ASSERT_TRUE(m_builder.prepareSdfPages(&original, 1u));
     EXPECT_FALSE(m_builder.prepareSdfPages(&conflicting, 1u));
@@ -198,7 +134,7 @@ TEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes){
 }
 
 TEST_F(UiPaintSdfTests, InvalidChannelAndUvFailBeforeImageOrGeometryAdmission){
-    const SharedSdfAtlasPage page = makePage();
+    const SharedSdfAtlasPage page = makeSdfPage();
     ASSERT_TRUE(page);
     EXPECT_FALSE(m_builder.drawSdfGlyph(page, 4u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     EXPECT_FALSE(m_builder.drawSdfGlyph(page, 0u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.75f, 0.0f, 0.5f, 0.5f }));
@@ -209,8 +145,8 @@ TEST_F(UiPaintSdfTests, InvalidChannelAndUvFailBeforeImageOrGeometryAdmission){
 }
 
 TEST_F(UiPaintSdfTests, DuplicateCandidatesConsumeOneImageSlot){
-    const SharedSdfAtlasPage page = makePage();
-    const SharedSdfAtlasPage reconstructed = makePage();
+    const SharedSdfAtlasPage page = makeSdfPage();
+    const SharedSdfAtlasPage reconstructed = makeSdfPage();
     ASSERT_TRUE(page && reconstructed);
     const Array<SharedSdfAtlasPage, 3u> candidates{ page, reconstructed, page };
     ASSERT_TRUE(m_builder.prepareSdfPages(candidates.data(), candidates.size()));
@@ -220,7 +156,7 @@ TEST_F(UiPaintSdfTests, DuplicateCandidatesConsumeOneImageSlot){
 }
 
 TEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncompleteRgba){
-    SdfAtlasPageBinding binding = makePage()->binding();
+    SdfAtlasPageBinding binding = makeSdfPage()->binding();
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(256u, 0u);
     binding.distanceEncoding = 2u;
@@ -236,7 +172,7 @@ TEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncomplete
 }
 
 TEST_F(UiPaintSdfTests, CompactPageRejectsMissingChannelsWithoutPublishingGeometry){
-    SdfAtlasPageBinding binding = makePage()->binding();
+    SdfAtlasPageBinding binding = makeSdfPage()->binding();
     binding.width = 7u;
     binding.height = 5u;
     binding.channelCount = 2u;
@@ -254,7 +190,7 @@ TEST_F(UiPaintSdfTests, CompactPageRejectsMissingChannelsWithoutPublishingGeomet
 }
 
 TEST_F(UiPaintSdfTests, CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInput){
-    SdfAtlasPageBinding binding = makePage()->binding();
+    SdfAtlasPageBinding binding = makeSdfPage()->binding();
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(256u, 128u);
     binding.channelCount = 0u;

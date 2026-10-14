@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/arena_owner_fixture.h>
+
 #include <core/alloc/module.h>
 
 #include <global/arena_memory.h>
@@ -31,17 +33,7 @@ constexpr u32 s_ExpectedDualCount = 2u;
 
 
 using namespace NWB::Core::Alloc;
-
-[[nodiscard]] ArenaMemoryStats OwnerStats(const Name& name, const ArenaMemorySource::Enum source = ArenaMemorySource::Arena){
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerSnapshot snapshot;
-        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-        if(snapshot.ownerName == name && snapshot.source == source)
-            return snapshot.stats;
-    }
-    return {};
-}
+using ArenaOwnerTestSupport::OwnerStats;
 
 TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
     constexpr Name s_Owner("tests/allocation_owners/identity_retirement");

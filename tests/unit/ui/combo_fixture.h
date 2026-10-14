@@ -109,10 +109,6 @@ public:
     return options;
 }
 
-[[nodiscard]] inline Point Center(const Rect& bounds){
-    return { bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f };
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -146,17 +142,7 @@ protected:
         return MakeWidgetPartId(MakeWidgetId(list(combo), "rows"), key);
     }
 
-    void press(const Core::Key::Enum value, const bool repeat = false){
-        InputEvent event;
-        event.type = InputEventType::KeyDown;
-        event.key = value;
-        event.repeat = repeat;
-        EXPECT_TRUE(send(event).commandConsumed);
-        if(!repeat){
-            event.type = InputEventType::KeyUp;
-            EXPECT_TRUE(send(event).commandConsumed);
-        }
-    }
+    using WidgetFixture::press;
 
     [[nodiscard]] bool openByPointer(const u64 generation){
         const HitTarget* field = target(host());

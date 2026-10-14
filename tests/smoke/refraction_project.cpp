@@ -13,6 +13,7 @@
 #include <impl/ecs_render/module.h>
 
 #include "framebuffer_capture.h"
+#include "smoke_capture_teardown.h"
 #include "refraction_gallery_scene.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
@@ -64,14 +65,6 @@ private:
         return true;
     }
 
-    void destroyWorld(){
-        DestroySmokeRenderWorld(m_context, m_world);
-        if(m_framebufferCapture){
-            m_framebufferCapture->stop();
-            m_framebufferCapture.reset();
-        }
-    }
-
     NWB::Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale){
         const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
@@ -85,7 +78,7 @@ public:
     explicit RefractionSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context), m_world(CreateWorldOrDie(context)){}
 
-    virtual ~RefractionSmokeProject()override{ destroyWorld(); }
+    virtual ~RefractionSmokeProject()override{ DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture); }
 
     virtual bool onStartup()override{
         if(!configureFramebufferCapture())
@@ -118,7 +111,7 @@ public:
     }
 
     virtual void onShutdown()override{
-        destroyWorld();
+        DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: shutdown"));
     }
 

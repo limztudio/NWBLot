@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "process_exit.h"
+#include "task_wait.h"
+
 #include <core/task/cpu/scheduler.h>
 
 #include <global/platform.h>
@@ -9,13 +12,6 @@
 #include <global/timer.h>
 
 #include <gtest/gtest.h>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <windows.h>
-#endif
-#if defined(NWB_PLATFORM_LINUX)
-#include <unistd.h>
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,6 +31,7 @@ constexpr u32 s_ThirdElementIndex = 2u;
 
 
 using namespace NWB::Core;
+using CpuTaskTestSupport::ExitTestProcess;
 
 inline constexpr u32 s_GateTimeoutMS = 4000u;
 inline constexpr u32 s_TestTimeoutMS = 15000u;
@@ -48,13 +45,8 @@ public:
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS){
                     // A timeout must fail a death test instead of being mistaken for the expected invariant rejection.
-                    if(deathTest){
-#if defined(NWB_PLATFORM_WINDOWS)
-                        ExitProcess(0u);
-#elif defined(NWB_PLATFORM_LINUX)
-                        ::_exit(0);
-#endif
-                    }
+                    if(deathTest)
+                        ExitTestProcess(0u);
                     TerminateInvariant();
                 }
                 SleepMS(1u);
@@ -69,29 +61,6 @@ private:
 };
 
 
-[[noreturn]] void ExitTestProcess(u32 code)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    ExitProcess(code);
-#elif defined(NWB_PLATFORM_LINUX)
-    ::_exit(static_cast<int>(code));
-#else
-    static_cast<void>(code);
-    TerminateInvariant();
-#endif
-}
-
-
-[[nodiscard]] bool WaitUntil(const Atomic<bool>& condition){
-    const Timer begin = TimerNow();
-    while(!condition.load(MemoryOrder::acquire)){
-        if(DurationInMS<u64>(TimerNow(), begin) >= s_GateTimeoutMS)
-            return false;
-        SleepMS(1u);
-    }
-    return true;
-}
-
-
 struct TaskGate{
     Atomic<bool> entered{ false };
     Atomic<bool> released{ false };
@@ -100,7 +69,7 @@ struct TaskGate{
 
     void block(){
         entered.store(true, MemoryOrder::release);
-        if(!WaitUntil(released))
+        if(!CpuTaskTestSupport::WaitUntil(released, s_GateTimeoutMS))
             expired.store(true, MemoryOrder::release);
     }
 
@@ -157,7 +126,7 @@ TEST(CpuTaskSchedulerTests, DependencyFanInWaitsForEveryPredecessorIncludingDupl
     Atomic<u32> completedBits{ 0u };
     Atomic<u32> observedBits{ 0u };
     const auto root = scheduler.submit([&](){ rootGate.block(); });
-    EXPECT_TRUE(WaitUntil(rootGate.entered));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(rootGate.entered, s_GateTimeoutMS));
     CpuTaskHandle dependencies[6u];
     for(u32 index = 0u; index < 4u; ++index){
         dependencies[index] = scheduler.submit([&completedBits, index]()noexcept{
@@ -238,7 +207,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
     const auto dependent = scheduler.submit([&]()noexcept{
         retirementsSeenByDependent.store(retirements.load(MemoryOrder::acquire), MemoryOrder::release);
     }, parent);
-    EXPECT_TRUE(WaitUntil(grandchildGate.entered));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(grandchildGate.entered, s_GateTimeoutMS));
     EXPECT_FALSE(scheduler.isComplete(parent));
     EXPECT_FALSE(scheduler.isComplete(dependent));
     EXPECT_EQ(retirements.load(), 0u);
@@ -261,7 +230,7 @@ TEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope){
     CpuTaskScope owned(scheduler);
     ScopeExit releaseUnrelated([&]()noexcept{ unrelatedGate.open(); });
     const auto unrelatedTask = unrelated.submit([&](){ unrelatedGate.block(); });
-    EXPECT_TRUE(WaitUntil(unrelatedGate.entered));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(unrelatedGate.entered, s_GateTimeoutMS));
     Atomic<bool> ownedFinished{ false };
     EXPECT_TRUE(owned.submit([&]()noexcept{ ownedFinished.store(true, MemoryOrder::release); }).valid());
     owned.wait();
@@ -337,7 +306,7 @@ TEST(CpuTaskSchedulerTests, MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSch
             rejected.store(true, MemoryOrder::release);
         published.store(true, MemoryOrder::release);
     });
-    EXPECT_TRUE(WaitUntil(published));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(published, s_GateTimeoutMS));
     EXPECT_EQ(invocations.load(), 0u);
     scheduler.wait(parent);
     EXPECT_FALSE(rejected.load());
@@ -378,7 +347,7 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     ScopeExit releaseWorker([&]()noexcept{ occupied.open(); });
     EXPECT_TRUE(scheduler.submit([&](){ occupied.block(); }).valid());
-    EXPECT_TRUE(WaitUntil(occupied.entered));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(occupied.entered, s_GateTimeoutMS));
     Atomic<u32> cursor{ 0u };
     u32 order[3u]{};
     const CpuTaskPriority::Enum priorities[3u] = { CpuTaskPriority::Background, CpuTaskPriority::Normal, CpuTaskPriority::Critical };
@@ -432,7 +401,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
         if(!scheduler.submit([&](){ childInvocations.fetch_add(1u); }).valid())
             childRejected.store(true, MemoryOrder::release);
     });
-    EXPECT_TRUE(WaitUntil(parentGate.entered));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS));
     const auto continuation = scheduler.submit([&]()noexcept{ continuationInvocations.fetch_add(1u); }, parent);
     scope.cancel();
     parentGate.open();
@@ -462,12 +431,12 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
         preferredAffinity = scheduler.currentWorkerAffinity();
         preferredGate.block();
     }).valid());
-    EXPECT_TRUE(WaitUntil(preferredGate.entered));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(preferredGate.entered, s_GateTimeoutMS));
     EXPECT_TRUE(scheduler.submit([&](){
         spillAffinity = scheduler.currentWorkerAffinity();
         spillGate.block();
     }).valid());
-    EXPECT_TRUE(WaitUntil(spillGate.entered));
+    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(spillGate.entered, s_GateTimeoutMS));
     preferredGate.open();
     spillGate.open();
     scheduler.wait();
@@ -641,7 +610,7 @@ TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope
         EXPECT_TRUE(scope.submit([&](){
             parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
             EXPECT_TRUE(scheduler.submit([&](){
-                if(!WaitUntil(parentGate.entered) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
+                if(!CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
                     ExitTestProcess(0u);
                 scope.wait();
             }).valid());

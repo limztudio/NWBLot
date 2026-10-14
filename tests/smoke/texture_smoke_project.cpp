@@ -13,6 +13,7 @@
 #include <impl/ecs_render/module.h>
 
 #include "framebuffer_capture.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
@@ -31,7 +32,7 @@ using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
-using NWB::Tests::Smoke::DestroySmokeRenderWorld;
+using NWB::Tests::Smoke::DestroyCapturedSmokeRenderWorld;
 using NWB::Tests::Smoke::FramebufferCapture;
 using NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
@@ -82,14 +83,6 @@ private:
         return true;
     }
 
-    void destroyWorld(){
-        DestroySmokeRenderWorld(m_context, m_world);
-        if(m_framebufferCapture){
-            m_framebufferCapture->stop();
-            m_framebufferCapture.reset();
-        }
-    }
-
 
 public:
     explicit TextureSmokeProject(NWB::ProjectRuntimeContext& context)
@@ -100,7 +93,7 @@ public:
     }
 
     virtual ~TextureSmokeProject()override{
-        destroyWorld();
+        DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture);
     }
 
 
@@ -135,7 +128,7 @@ public:
     }
 
     virtual void onShutdown()override{
-        destroyWorld();
+        DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TextureSmokeProject: shutdown"));
     }
 

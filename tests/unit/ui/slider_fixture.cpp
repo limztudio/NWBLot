@@ -83,21 +83,6 @@ void SliderCallbackSource::clearCounters()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Point SliderCenter(const Rect& rectangle){
-    return { rectangle.x + rectangle.width * 0.5f, rectangle.y + rectangle.height * 0.5f };
-}
-
-void ExpectSliderRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 SliderOptions SliderFixture::Options(){
     SliderOptions settings;
     settings.width = { LayoutSizePolicy::Fixed, 280.0f };
@@ -173,19 +158,7 @@ Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)c
 }
 
 Point SliderFixture::thumbPoint()const{
-    return SliderCenter(m_state.placement().thumb);
-}
-
-void SliderFixture::press(const Core::Key::Enum key, const bool repeat){
-    InputEvent event;
-    event.type = InputEventType::KeyDown;
-    event.key = key;
-    event.repeat = repeat;
-    EXPECT_TRUE(send(event).commandConsumed);
-    if(!repeat){
-        event.type = InputEventType::KeyUp;
-        EXPECT_TRUE(send(event).commandConsumed);
-    }
+    return UiWidgetTests::Center(m_state.placement().thumb);
 }
 
 SliderAcceptedFrame SliderFixture::accepted()const{
@@ -207,15 +180,7 @@ void SliderFixture::expectAccepted(const SliderAcceptedFrame& saved, const bool 
         EXPECT_EQ(m_context.input().focus(), saved.focus);
     }
     EXPECT_EQ(m_context.input().capture(), saved.capture);
-    ASSERT_EQ(m_context.input().targets().size(), saved.count);
-    ASSERT_LE(saved.count, saved.targets.size());
-    for(usize index = 0u; index < saved.count; ++index){
-        const HitTarget& before = saved.targets[index];
-        const HitTarget& after = m_context.input().targets()[index];
-        UiWidgetTests::ExpectHitTargetIdentity(after, before);
-        ExpectSliderRect(after.rectangle, before.rectangle);
-        ExpectSliderRect(after.clip, before.clip);
-    }
+    ExpectAcceptedTargets(m_context.input(), saved.targets, saved.count);
 }
 
 

@@ -45,3 +45,5 @@ target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/widget_fixture.cp
 target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/image_fixture_support.h" "${CMAKE_CURRENT_LIST_DIR}/image_fixture_support.cpp")
 
 target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/paint_assertions.h" "${CMAKE_CURRENT_LIST_DIR}/paint_assertions.cpp")
+
+target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/paint_text_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/paint_text_fixture.cpp")

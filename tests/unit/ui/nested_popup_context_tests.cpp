@@ -86,14 +86,6 @@ protected:
         return m_context.input().process();
     }
 
-    [[nodiscard]] const HitTarget* target(const WidgetId id)const{
-        for(const auto& item : m_context.input().targets()){
-            if(item.id == id)
-                return &item;
-        }
-        return nullptr;
-    }
-
 
 protected:
     Core::Alloc::GlobalArena m_arena;
@@ -157,11 +149,11 @@ TEST_F(UiNestedPopupContextTests, ReservationOrderControlsLayersAcrossReactivati
     EXPECT_EQ(m_context.topPopupToken(), second.scope.token);
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(first.action.id), nullptr);
-    ASSERT_NE(target(second.action.id), nullptr);
-    EXPECT_EQ(target(first.action.id)->layer, 2u);
-    EXPECT_EQ(target(second.action.id)->layer, 3u);
-    EXPECT_GT(target(first.action.id)->paintOrder, target(second.action.id)->paintOrder);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), first.action.id), nullptr);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), second.action.id), nullptr);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), first.action.id)->layer, 2u);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), second.action.id)->layer, 3u);
+    EXPECT_GT(UiTestSupport::FindHitTarget(m_context.input().targets(), first.action.id)->paintOrder, UiTestSupport::FindHitTarget(m_context.input().targets(), second.action.id)->paintOrder);
     EXPECT_EQ(m_context.input().hitTest({ 105.0f, 75.0f }), second.action.id);
     EXPECT_EQ(m_context.input().focus(), second.action.id);
 }
@@ -229,7 +221,7 @@ TEST_F(UiNestedPopupContextTests, DiscardingInactiveChildKeepsItsActiveParentBal
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
     EXPECT_EQ(m_context.input().focus(), parent.action.id);
-    EXPECT_EQ(target(child.owner.id), nullptr);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), child.owner.id), nullptr);
 }
 
 TEST_F(UiNestedPopupContextTests, DiscardingAnActiveAncestorFailsWithoutRemovingItsActivation){

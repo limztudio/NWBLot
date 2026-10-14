@@ -3,7 +3,6 @@
 
 
 #include "search_combo_scene.h"
-#include "marker_positions.h"
 
 #include "smoke_geometry.h"
 #include "edit_selection_probe.h"
@@ -96,7 +95,7 @@ bool UiSearchComboSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.endPanel())
         return false;
     observeState(context.text);
-    paintMarkers(context);
+    PaintKeyedSmokeValueMarkers<12u, 8u>(context, values(), m_sequence);
     return true;
 }
 
@@ -209,20 +208,6 @@ void UiSearchComboSmokeScene::observeState(Impl::Ui::TextService& text){
     LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_content"), editor.content);
     LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_caret"), editor.caret);
     LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_selection"), CaptureEditSelection(m_arena, text, m_state.query(), editor, 12.0f));
-}
-
-void UiSearchComboSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const auto current = values();
-    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<decltype(current)> + 1u) * 2u, 12u, 12u>();
-    const f32 y = context.display.logicalHeight - 20.0f;
-    for(usize index = 0u; index <= current.size(); ++index){
-        const u64 value = index == current.size() ? m_sequence : current[index];
-        for(u32 part = 0u; part < 2u; ++part){
-            const usize marker = index * 2u + part;
-            context.paint.fillRect({ positions[marker], y, 8.0f, 12.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
-        }
-    }
 }
 
 

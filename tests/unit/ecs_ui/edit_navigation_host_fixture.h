@@ -159,16 +159,8 @@ protected:
     }
 
     [[nodiscard]] bool prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
-        ++m_generation;
-        if(!m_context.beginFrame(m_generation))
+        if(!beginEditFrame())
             return false;
-        m_host.beginFrame(m_generation, { 500.0f, 200.0f, 1.0f, 1.0f });
-        if(!m_context.beginRoot({ 17u, 1u }))
-            return false;
-        const Ui::WidgetState* widget = m_context.declare("edit", Ui::WidgetKind::EditBox);
-        if(!widget)
-            return false;
-        m_widget = *widget;
         m_result = m_host.editNavigated(m_widget, model, options, {}, navigation, m_resolver, m_actions);
         if(!m_result.valid)
             return false;

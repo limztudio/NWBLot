@@ -34,20 +34,6 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] static PopupOptions ParentOptions(){
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 300.0f, 380.0f };
-        return options;
-    }
-
-    [[nodiscard]] static PopupOptions ChildOptions(){
-        PopupOptions options;
-        options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
-        options.size = { 340.0f, 380.0f };
-        return options;
-    }
-
     [[nodiscard]] static WidgetOptions Control(){
         WidgetOptions options;
         options.width = { LayoutSizePolicy::Fixed, 220.0f };
@@ -67,11 +53,11 @@ protected:
     }
 
     [[nodiscard]] bool beginChild(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions()))
             return false;
         if(m_builder.button("before", "Parent before", Control()))
             return false;
-        return m_builder.beginPopup("child", m_child, ChildOptions());
+        return m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions());
     }
 
     [[nodiscard]] bool finishChild(const u64 generation){

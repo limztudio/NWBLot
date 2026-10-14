@@ -168,20 +168,6 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] static PopupOptions ParentOptions(){
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 300.0f, 380.0f };
-        return options;
-    }
-
-    [[nodiscard]] static PopupOptions ChildOptions(){
-        PopupOptions options;
-        options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
-        options.size = { 340.0f, 380.0f };
-        return options;
-    }
-
     [[nodiscard]] static ListOptions ListOptions(){
         NWB::Impl::Ui::ListOptions options;
         options.height = { LayoutSizePolicy::Fixed, 150.0f };
@@ -190,7 +176,7 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions());
     }
 
     [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
@@ -206,7 +192,7 @@ protected:
     [[nodiscard]] bool declareLists(const u64 generation){
         if(!beginParent(generation) || !m_builder.virtualList("list", m_parentSource, m_parentList, ListOptions()).valid)
             return false;
-        if(!m_builder.beginPopup("child", m_child, ChildOptions()) || !m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid)
+        if(!m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid)
             return false;
         return m_builder.endPopup();
     }
@@ -216,7 +202,7 @@ protected:
     }
 
     [[nodiscard]] bool declareChildCompounds(const u64 generation){
-        if(!beginParent(generation) || !m_builder.beginPopup("child", m_child, ChildOptions()))
+        if(!beginParent(generation) || !m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()))
             return false;
         if(!m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid || !m_builder.comboBox("combo", m_comboSource, m_combo, Options()).valid)
             return false;
@@ -285,7 +271,7 @@ protected:
 
 TEST_F(UiNestedPopupLoanTests, ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds){
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid);
     m_childSource.resetAllCounters();
     ASSERT_TRUE(m_builder.endPopup());
@@ -352,7 +338,7 @@ TEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotMutateTheParentComboAfte
     ASSERT_TRUE(acceptBase(1u));
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(m_builder.comboBox("combo", m_comboSource, m_combo, Options()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     const u64 inputGeneration = m_combo.inputGeneration();
@@ -369,7 +355,7 @@ TEST_F(UiNestedPopupLoanTests, ParentSourceCallbackCannotMutateTheEndedChildSear
     m_search.combo().open();
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(m_builder.virtualList("list", m_parentSource, m_parentList, ListOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()));
     SearchComboOptions searchOptions;
     searchOptions.combo = Options();
     ASSERT_TRUE(m_builder.searchComboBox("search", m_searchSource, m_search, searchOptions).combo.valid);
@@ -388,7 +374,7 @@ TEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotCloseTheParentContextMen
     ASSERT_TRUE(beginParent(2u));
     EXPECT_FALSE(m_builder.button("anchor", "Commands"));
     ASSERT_TRUE(m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     const u64 revision = m_menu.revision();
@@ -440,7 +426,7 @@ TEST_F(UiNestedPopupLoanTests, ReopeningTheParentBeforeOuterEndSuppressesItsOldD
 TEST_F(UiNestedPopupLoanTests, ClosingTheEndedChildSkipsItsCallbacksAndKeepsParentControlsPainted){
     ASSERT_TRUE(beginParent(1u));
     EXPECT_FALSE(m_builder.button("before", "Parent before"));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     m_childSource.resetAllCounters();
@@ -459,7 +445,7 @@ TEST_F(UiNestedPopupLoanTests, ClosingTheEndedChildSkipsItsCallbacksAndKeepsPare
 
 TEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks){
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     m_childSource.resetAllCounters();
@@ -501,7 +487,7 @@ TEST_F(UiNestedPopupLoanTests, ChildFirstRowReopeningItsAncestorRejectsBeforeLat
     sibling.open();
     NestedMutationSource siblingSource(2301u);
     ListState siblingList;
-    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::NestedChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", siblingSource, siblingList, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     m_parentSource.resetAllCounters();

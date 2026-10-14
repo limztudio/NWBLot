@@ -14,6 +14,7 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
+from checkpoint_report import accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
 
 
 class PopupToolsRun:
@@ -49,13 +50,7 @@ class PopupToolsRun:
         self.native.right_click(*self.point(*center(self.snapshot["rectangles"]["anchor"])))
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), settle=0.25, **changes):
-        self.expected.update(changes)
-        for field in dynamic:
-            self.expected.pop(field, None)
-        self.native.maintain_pointer()
-        time.sleep(settle)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        path, stage_deadline = prepare_guarded_checkpoint(self, name, changes, dynamic, settle)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during popup tools UI capture")
@@ -72,17 +67,10 @@ class PopupToolsRun:
                 self.backend.capture_client_window(self.handle, path)
             report = observe_popup_tools(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
-                self.snapshot = snapshot
-                for field in dynamic:
-                    self.expected[field] = snapshot[field]
-                report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
-                self.stages.append(report)
-                self.write_report(False)
+                accept_checkpoint(self, name, path, snapshot, report, dynamic)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
-        self.write_report(False)
-        raise SmokeFailure(f"popup tools displayed-state gate '{name}' failed: {self.failure_report}")
+        fail_checkpoint(self, name, path, report, "popup tools")
 
     def write_report(self, passed):
         report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report,

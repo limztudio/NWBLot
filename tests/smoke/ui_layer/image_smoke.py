@@ -7,7 +7,8 @@ import platform
 import sys
 
 from window_smoke import parse_args
-from image_probe import center, observe_image, snapshot_from_logs
+from probe_common import center
+from image_probe import observe_image, snapshot_from_logs
 from window_capture_smoke import run_smoke_main
 from passive_run import PassiveImageRun, run_passive_image
 

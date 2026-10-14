@@ -156,14 +156,6 @@ protected:
         return frame;
     }
 
-    [[nodiscard]] const HitTarget* target(const WidgetId id)const{
-        for(const auto& item : m_context.input().targets()){
-            if(item.id == id)
-                return &item;
-        }
-        return nullptr;
-    }
-
 
 protected:
     Core::Alloc::GlobalArena m_arena;
@@ -350,24 +342,24 @@ TEST_F(UiPopupContextTests, TargetsInSequentialScopesReceiveDistinctLayersThenRe
     const WidgetState tail = button("tail", { 80.0f, 10.0f, 60.0f, 24.0f });
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(base.id), nullptr);
-    ASSERT_NE(target(firstOwner.id), nullptr);
-    ASSERT_NE(target(firstChild.id), nullptr);
-    ASSERT_NE(target(secondOwner.id), nullptr);
-    ASSERT_NE(target(secondChild.id), nullptr);
-    ASSERT_NE(target(tail.id), nullptr);
-    EXPECT_FALSE(target(base.id)->popup.valid());
-    EXPECT_EQ(target(base.id)->layer, 0u);
-    EXPECT_TRUE(target(firstOwner.id)->popup == first.token);
-    EXPECT_TRUE(target(firstChild.id)->popup == first.token);
-    EXPECT_EQ(target(firstOwner.id)->layer, 1u);
-    EXPECT_EQ(target(firstChild.id)->layer, 1u);
-    EXPECT_TRUE(target(secondOwner.id)->popup == second.token);
-    EXPECT_TRUE(target(secondChild.id)->popup == second.token);
-    EXPECT_EQ(target(secondOwner.id)->layer, 2u);
-    EXPECT_EQ(target(secondChild.id)->layer, 2u);
-    EXPECT_FALSE(target(tail.id)->popup.valid());
-    EXPECT_EQ(target(tail.id)->layer, 0u);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), base.id), nullptr);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), firstOwner.id), nullptr);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), firstChild.id), nullptr);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), secondOwner.id), nullptr);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), secondChild.id), nullptr);
+    ASSERT_NE(UiTestSupport::FindHitTarget(m_context.input().targets(), tail.id), nullptr);
+    EXPECT_FALSE(UiTestSupport::FindHitTarget(m_context.input().targets(), base.id)->popup.valid());
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), base.id)->layer, 0u);
+    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), firstOwner.id)->popup == first.token);
+    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), firstChild.id)->popup == first.token);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), firstOwner.id)->layer, 1u);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), firstChild.id)->layer, 1u);
+    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), secondOwner.id)->popup == second.token);
+    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), secondChild.id)->popup == second.token);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), secondOwner.id)->layer, 2u);
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), secondChild.id)->layer, 2u);
+    EXPECT_FALSE(UiTestSupport::FindHitTarget(m_context.input().targets(), tail.id)->popup.valid());
+    EXPECT_EQ(UiTestSupport::FindHitTarget(m_context.input().targets(), tail.id)->layer, 0u);
     EXPECT_EQ(m_context.input().focus(), secondChild.id);
 }
 

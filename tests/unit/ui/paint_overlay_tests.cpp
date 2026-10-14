@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint.h>
+#include "paint_text_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -21,45 +21,7 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
 
-class UiPaintOverlayTests : public testing::Test{
-public:
-    UiPaintOverlayTests()
-        : m_arena(Name("tests/ui/paint_overlay"))
-        , m_skin(m_arena, Name("tests/ui/skin"))
-        , m_builder(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name("sprite"), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 16u, 16u, 1.0f, Move(regions));
-        begin(7u);
-    }
-
-
-protected:
-    void begin(const u64 generation){
-        m_builder.begin({ 100.0f, 80.0f, 1.5f, 2.0f }, generation, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
-        m_builder.reserve(16u);
-    }
-
-    [[nodiscard]] SharedGlyphPage makeCoverage(){
-        GlyphPage::Pixels pixels(m_arena);
-        pixels.resize(4u, 128u);
-        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = 11u, .generation = 1u, .width = 2u, .height = 2u, };
-        return CreateGlyphPage(m_arena, binding, Move(pixels));
-    }
-
-    [[nodiscard]] SharedSdfAtlasPage makeDistance(){
-        SdfAtlasPage::Pixels pixels(m_arena);
-        pixels.resize(4u * 4u * 4u, 128u);
-        const SdfAtlasPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontSha256 = {}, .pixelsSha256 = {}, .fontGeneration = 9u, .atlasIdentity = 22u, .generation = 1u, .width = 4u, .height = 4u, .spreadPixels = 2u, };
-        return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
-    }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    UiSkin m_skin;
-    PaintBuilder m_builder;
+class UiPaintOverlayTests : public NWB::UiPaintTextTests::PaintTextFixture{
 };
 
 

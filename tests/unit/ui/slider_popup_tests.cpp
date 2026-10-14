@@ -149,7 +149,7 @@ TEST_F(UiSliderPopupTests, ParentAndChildCannotBorrowTheSameSliderStateAtTheSame
 
 TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetiresTheOldChildDrag){
     ASSERT_TRUE(acceptFamily(1u));
-    const Point origin = SliderCenter(m_childState.placement().thumb);
+    const Point origin = UiWidgetTests::Center(m_childState.placement().thumb);
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 60.0f, origin.y } }).pointerConsumed);
     ASSERT_TRUE(beginParent(2u));

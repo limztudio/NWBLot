@@ -132,7 +132,7 @@ Validation: the direct-cycle regression timed out against the original implement
 
 `parallelFor()` reserves and publishes its chunk nodes under one scheduler lock, with one publication notification. Internal captures contain only the caller-context pointer, an invocation pointer, and range bounds; user callables are neither copied nor invoked under that lock. A single chunk runs directly through the ordinary execution/retirement machinery when the caller is an eligible owner or worker. External producers and off-owner main-thread work remain queued. Descendants, cancellation boundaries, and exception cleanup still use task nodes and scopes.
 
-Seven opt-in `CpuTaskProfile.DISABLED_*` cases record raw samples and validate deterministic outputs. They are excluded from normal tests and have no timing pass threshold. On Linux x64 Optimize, AMD BC-250 (6 cores / 12 logical processors), three ABBA epochs gave 48 measured samples per design with zero placement failures. Builds and other tests were stopped during measurement. Times below are complete benchmark-case medians in microseconds, not per-element costs or application frame times:
+Seven opt-in `CpuTaskProfile` sampling cases (recorded through the `core/perf` profiler opt-in API, excluded from the normal `nwb_cpu_task_tests` run) record raw samples and validate deterministic outputs. They have no timing pass threshold. On Linux x64 Optimize, AMD BC-250 (6 cores / 12 logical processors), three ABBA epochs gave 48 measured samples per design with zero placement failures. Builds and other tests were stopped during measurement. Times below are complete benchmark-case medians in microseconds, not per-element costs or application frame times:
 
 | Workload | Before | After |
 | --- | ---: | ---: |

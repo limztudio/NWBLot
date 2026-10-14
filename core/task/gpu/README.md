@@ -73,18 +73,16 @@ The declaration must cover every byte touched by the task's commands and interna
 
 A pending queue-family release must be acquired with its original byte interval. Handoff subset selection rejects clipping a pending release. Release separate intervals on the producer when consumers need independent ownership ranges.
 
-# CPU scaling benchmarks
+# CPU scaling coverage
 
-The `nwb_gpu_task_tests` target includes disabled benchmarks for queue placement, timing-history routing, resource-version analysis and binding validation, inferred dependency analysis, resource-state fragments and epilogue grouping, terminal dependencies, ownership statistics, initial-state handoff validation, replay preflight, submission bindings and validation, resource/pipeline/completion imports, telemetry export, and compiled packet queries. Run them with an optimized build:
+CPU scaling behavior is covered by ordinary enabled unit tests in `tests/unit/task/gpu/` (262 `TEST` cases, no `DISABLED_*` cases): queue placement and scoring, timing-history routing, resource-version analysis, dependency inference, resource-state fragments and epilogue grouping, terminal dependencies, ownership statistics, initial-state handoff validation, replay preflight, submission bindings and validation, resource/pipeline/completion imports, telemetry export, and compiled packet queries. Those tests carry correctness assertions and no wall-clock thresholds; they exercise the CPU pipeline, while native GPU frame performance requires a representative rendering workload. Run them with an optimized build:
 
 ```sh
-python -m launcher run nwb_gpu_task_tests --config opt --working-directory . -- --gtest_also_run_disabled_tests --gtest_filter="*Benchmark.*:*.DISABLED_*Benchmark*" --gtest_output=xml:gpu_benchmarks.xml
+python -m launcher run nwb_gpu_task_tests --config opt --working-directory . -- --gtest_output=xml:gpu_task_tests.xml
 ```
 
 The launcher builds and runs the target; the test executable writes the XML report in the repository root.
 
-The XML properties record elapsed CPU nanoseconds and, where applicable, scratch memory and allocation counts. Run several samples and compare matching graph shapes and build configurations. Some analysis fixtures report the total for multiple repetitions; use their `repetitions` or `call_count` property when comparing per-operation cost. Benchmarks have correctness assertions and no wall-clock thresholds. They measure the CPU pipeline; native GPU frame performance requires a representative rendering workload.
-
-The partial-DAG benchmarks in `tests/unit/task/gpu/task_graph_queue_partial_dag_tests.cpp` cover a single dependency, disjoint and reversed pairs, contiguous and interleaved 32-task chains, connected branches, dense layers, two dense components, fan-in/out stars, and merged pairs, with controls through 16,384 tasks. These complement the independent-task and serial-chain placement controls.
+The partial-DAG placement cases in `tests/unit/task/gpu/task_graph_queue_partial_dag_tests.cpp` cover multiword score preservation across queue moves and rebuilds, sparse-row scratch bounds, relation-state reset on rebuild, assignment exclusion without local assignment, and mask-allocation avoidance for ordered/unused reachability. These complement the independent-task and serial-chain placement controls.
 
 Historical measurement evidence is preserved in the [GPU task performance report](../../../docs/gpu_task_performance_history.md) and [renderer M4 qualification report](../../../tests/ab/async_shadow_m4/qualification_history.md).

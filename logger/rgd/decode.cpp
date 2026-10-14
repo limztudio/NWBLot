@@ -4,9 +4,10 @@
 
 #include "decode.h"
 
+#include <global/sync.h>
+
 #include <cstdint>
 #include <iostream>
-#include <mutex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -38,8 +39,8 @@ namespace Rgd{
 
 namespace __hidden_rgd_decode{
 
-std::mutex& RgdConsoleMutex(){
-    static std::mutex s_Mutex;
+Futex& RgdConsoleMutex(){
+    static Futex s_Mutex;
     return s_Mutex;
 }
 
@@ -47,26 +48,27 @@ std::mutex& RgdConsoleMutex(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ScopedRgdConsoleMute final{
+// The vendored RGD parser writes progress diagnostics to the process console. Capture that chatter in a caller-owned sink instead of leaking it into the logger stream, and drop it with the guard.
+class ScopedRgdConsoleCapture final{
 public:
-    ScopedRgdConsoleMute()
+    ScopedRgdConsoleCapture()
         : m_lock(RgdConsoleMutex())
         , m_coutBuffer(std::cout.rdbuf(m_sink.rdbuf()))
         , m_cerrBuffer(std::cerr.rdbuf(m_sink.rdbuf()))
     {
     }
 
-    ~ScopedRgdConsoleMute()noexcept{
+    ~ScopedRgdConsoleCapture()noexcept{
         std::cout.rdbuf(m_coutBuffer);
         std::cerr.rdbuf(m_cerrBuffer);
     }
 
-    ScopedRgdConsoleMute(const ScopedRgdConsoleMute&) = delete;
-    ScopedRgdConsoleMute& operator=(const ScopedRgdConsoleMute&) = delete;
+    ScopedRgdConsoleCapture(const ScopedRgdConsoleCapture&) = delete;
+    ScopedRgdConsoleCapture& operator=(const ScopedRgdConsoleCapture&) = delete;
 
 private:
     std::ostringstream m_sink;
-    std::lock_guard<std::mutex> m_lock;
+    ScopedLock<Futex> m_lock;
     std::streambuf* m_coutBuffer;
     std::streambuf* m_cerrBuffer;
 };
@@ -198,7 +200,7 @@ Expected<std::string, StringView> DecodeCrashDumpToText(const std::string& fileP
     config.crash_dump_file = filePath;
     RgdCrashDumpContents contents;
     {
-        __hidden_rgd_decode::ScopedRgdConsoleMute muteRgdConsole;
+        __hidden_rgd_decode::ScopedRgdConsoleCapture captureRgdConsole;
 
         if(!RgdParsingUtils::ParseCrashDump(config, contents))
             return MakeUnexpected(StringView("parse_failed"));

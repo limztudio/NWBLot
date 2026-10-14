@@ -327,7 +327,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 Frame::Frame(void* inst){
     {
         ScopedLock lock(FrameDetail::s_ListMutex);
-        FrameDetail::s_Store.reset(new FrameDetail::MessageStore());
+        FrameDetail::s_Store = MakeUnique<FrameDetail::MessageStore>();
     }
     FrameDetail::s_Frame = this;
 

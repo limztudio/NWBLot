@@ -22,14 +22,14 @@ NWB_IMPL_BEGIN
 
 RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& graph, const RayTracingSceneGraphResources& resources, const Core::ResourceStates::Mask tlasInitialState, Core::Alloc::ScratchArena& scratchArena){
     if(!resources.valid())
-        return {};
+        return RayTracingSceneGraphReads(scratchArena);
 
     const Core::BufferHandle buffers[] = { resources.materialContextSlotsBuffer, resources.instanceMaterialBuffer, resources.materialTypedBuffer, resources.instanceBuffer, };
     Core::GpuGraphResourceId importedBuffers[LengthOf(buffers)] = {};
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         if(!declarations.valid())
-            return {};
+            return RayTracingSceneGraphReads(scratchArena);
         for(usize index = 0u; index < LengthOf(buffers); ++index)
             importedBuffers[index] = declarations.findImportedBuffer(buffers[index]);
     }
@@ -38,10 +38,10 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& gr
             continue;
         const Name identity = buffers[index]->getCreationDescription().debugName;
         if(!identity)
-            return {};
+            return RayTracingSceneGraphReads(scratchArena);
         importedBuffers[index] = graph.importBuffer(buffers[index], RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
         if(!importedBuffers[index].valid())
-            return {};
+            return RayTracingSceneGraphReads(scratchArena);
     }
 
     // Other shared scene consumers use this identity. Reimporting the same TLAS with matching metadata returns its existing graph identity, preserving the preparation producer and cross-effect read dependencies.
@@ -51,13 +51,13 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& gr
             .setInitialState(tlasInitialState)
     );
     if(!tlas.valid())
-        return {};
+        return RayTracingSceneGraphReads(scratchArena);
 
     const RayTracingOpticalSceneGraphBuffer optical = ImportRayTracingOpticalSceneBuffer(graph, resources.opticalScene, scratchArena);
     if(!optical.valid())
-        return {};
+        return RayTracingSceneGraphReads(scratchArena);
 
-    RayTracingSceneGraphReads result;
+    RayTracingSceneGraphReads result(scratchArena);
     result.uses[0] = RendererTaskGraphDetail::ReadUse(tlas, Core::ResourceStates::AccelStructRead);
     for(usize index = 0u; index < LengthOf(buffers); ++index){
         const Core::ResourceStates::Mask state = index == 0u ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::ShaderResource;
@@ -65,13 +65,12 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& gr
     }
     result.uses[LengthOf(result.uses) - 1u] = RendererTaskGraphDetail::ReadUse(optical.resource);
     if(resources.csgTraceContextBuffer){
-        result.csgUses = Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>(scratchArena);
         result.csgUses.reserve(1u + resources.csgTraceBoundsBufferCount);
         if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
             graph, resources.csgTraceContextBuffer, resources.csgTraceBoundsBuffers, resources.csgTraceBoundsBufferCount,
             [&](const Core::GpuGraphResourceId resource){ result.csgUses.push_back(RendererTaskGraphDetail::ReadUse(resource)); }
         ))
-            return {};
+            return RayTracingSceneGraphReads(scratchArena);
     }
     return result;
 }

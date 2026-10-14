@@ -509,7 +509,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         rayTracingShadowVisibilityPlan.lightSpace.receiverCsgSampleState = csgResources.intervalSampleState;
     }
     const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
-    RayTracingSceneGraphReads sceneReads;
+    RayTracingSceneGraphReads sceneReads(traceGeometryScratchArena);
     if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace){
         sceneReads = ImportRayTracingSceneGraphReads(m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena);
         if(!sceneReads.valid()){

@@ -386,6 +386,13 @@ def prepare_m4_client_area(capture_backend, window):
     """Stabilize the Windows M4 client capture before the held-frame marker."""
     if isinstance(capture_backend, WindowsCapture):
         capture_backend.prepare_raw_client_window(window)
+        client_rect = capture_backend._client_rect(window)
+        if client_rect is None or client_rect.right <= client_rect.left or client_rect.bottom <= client_rect.top:
+            raise SmokeFailure("M4 cursor preparation requires a positive screen client rectangle")
+        center_x = (client_rect.left + client_rect.right) // 2
+        center_y = (client_rect.top + client_rect.bottom) // 2
+        if not capture_backend.user32.SetCursorPos(center_x, center_y):
+            raise SmokeFailure("M4 cursor preparation SetCursorPos failed")
 
 
 @dataclass
@@ -742,6 +749,36 @@ def run_self_test() -> int:
     assert client_origin_failure_capture._client_rect(17) is None
     assert client_origin_failure_user32.get_client_rect_calls == 1
     assert client_origin_failure_user32.client_to_screen_calls == 1
+
+    cursor_capture = object.__new__(WindowsCapture)
+    cursor_events = []
+    cursor_capture.prepare_raw_client_window = mock.Mock(side_effect=lambda hwnd: cursor_events.append((LIT_PREPARE, hwnd)))
+    cursor_capture._client_rect = mock.Mock(side_effect=lambda hwnd: cursor_events.append(("screen-client", hwnd)) or WindowsCapture.RECT(-1281, 73, -1, 974))
+    cursor_capture.user32 = SimpleNamespace(SetCursorPos=mock.Mock(side_effect=lambda x, y: cursor_events.append(("cursor", x, y)) or 1))
+    prepare_m4_client_area(cursor_capture, 17)
+    assert cursor_events == [(LIT_PREPARE, 17), ("screen-client", 17), ("cursor", -641, 523)]
+
+    for client_rect in (None, WindowsCapture.RECT(104, 73, 104, 973), WindowsCapture.RECT(104, 73, 103, 973),
+                        WindowsCapture.RECT(104, 73, 1384, 73), WindowsCapture.RECT(104, 73, 1384, 72)):
+        cursor_capture._client_rect = mock.Mock(return_value=client_rect)
+        cursor_capture.user32.SetCursorPos = mock.Mock(return_value=1)
+        try:
+            prepare_m4_client_area(cursor_capture, 17)
+        except SmokeFailure as error:
+            assert "positive screen client rectangle" in str(error)
+        else:
+            raise AssertionError("M4 cursor preparation accepted missing or nonpositive client geometry")
+        cursor_capture.user32.SetCursorPos.assert_not_called()
+
+    cursor_capture._client_rect = mock.Mock(return_value=WindowsCapture.RECT(104, 73, 1384, 973))
+    cursor_capture.user32.SetCursorPos = mock.Mock(return_value=0)
+    try:
+        prepare_m4_client_area(cursor_capture, 17)
+    except SmokeFailure as error:
+        assert "SetCursorPos failed" in str(error)
+    else:
+        raise AssertionError("M4 cursor preparation accepted a failed SetCursorPos call")
+    cursor_capture.user32.SetCursorPos.assert_called_once_with(744, 523)
 
     class DwmApi:
         def __init__(self, calls, set_result=0, flush_result=0):

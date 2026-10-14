@@ -20,6 +20,10 @@ NWB_IMPL_BEGIN
 
 
 struct RayTracingSceneGraphReads{
+    explicit RayTracingSceneGraphReads(Core::Alloc::ScratchArena& scratchArena)
+        : csgUses(scratchArena)
+    {}
+
     [[nodiscard]] bool valid()const noexcept{
         for(const auto& use : uses){
             if(!use.resource.valid())

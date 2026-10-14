@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from contextlib import redirect_stderr, redirect_stdout
+import ctypes
 import io
+import json
 import math
 import os
 import subprocess
@@ -172,6 +174,121 @@ class BmpReadbackTests(unittest.TestCase):
             path.write_bytes(data)
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "must be uncompressed 24-bit"):
                 window_capture_smoke.read_bmp_24(path)
+
+
+class TimingCaptureConfigurationTests(unittest.TestCase):
+    def test_non_finite_timings_are_rejected_for_each_capture_mode(self):
+        base_args = [LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
+        for mode in ([], [LIT_APPLICATION_CAPTURE], [LIT_WINDOW_HANDLE, "1"], [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701]):
+            options = ["--timeout", "--render-ready-timeout", LIT_SETTLE_SECONDS]
+            if LIT_RESIZE_CLIENT in mode:
+                options.append(LIT_RESIZE_SETTLE_SECONDS)
+            for option in options:
+                for value in (LIT_NAN, LIT_INF, "-inf"):
+                    with self.subTest(mode=mode, option=option, value=value), redirect_stderr(io.StringIO()) as errors:
+                        with self.assertRaises(SystemExit) as rejection:
+                            window_capture_smoke.parse_args(base_args + mode + [f"{option}={value}"])
+                        self.assertEqual(rejection.exception.code, 2)
+                        self.assertIn(option, errors.getvalue())
+                        self.assertIn("finite", errors.getvalue())
+
+    def test_zero_settle_is_allowed_but_zero_timeouts_are_rejected(self):
+        base_args = [LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
+        self.assertEqual(window_capture_smoke.parse_args(base_args + [LIT_SETTLE_SECONDS, "0"]).settle_seconds, 0.0)
+        for option in ("--timeout", "--render-ready-timeout"):
+            with self.subTest(option=option), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as rejection:
+                window_capture_smoke.parse_args(base_args + [option, "0"])
+            self.assertEqual(rejection.exception.code, 2)
+
+
+class WindowsDesktopPreflightTests(unittest.TestCase):
+    @staticmethod
+    def user32(flags=1, station=0xF234567887654321):
+        user32 = mock.Mock()
+        user32.GetProcessWindowStation.return_value = station
+
+        def get_flags(_station, _index, output, _size, needed):
+            ctypes.cast(output, ctypes.POINTER(window_capture_smoke.WindowsUserObjectFlags)).contents.dwFlags = flags
+            ctypes.cast(needed, ctypes.POINTER(ctypes.c_uint32)).contents.value = ctypes.sizeof(window_capture_smoke.WindowsUserObjectFlags)
+            return 1
+
+        user32.GetUserObjectInformationW.side_effect = get_flags
+        return user32
+
+    def test_only_window_station_visibility_bit_admits_the_desktop(self):
+        for flags in (0, 2, 1, 5):
+            with self.subTest(flags=flags):
+                user32 = self.user32(flags)
+                if flags & 1:
+                    window_capture_smoke.require_windows_interactive_desktop(user32)
+                else:
+                    with self.assertRaisesRegex(window_capture_smoke.WindowsDesktopUnavailable, "no visible display surfaces"):
+                        window_capture_smoke.require_windows_interactive_desktop(user32)
+                self.assertEqual(user32.GetUserObjectInformationW.call_args.args[0].value, 0xF234567887654321)
+                user32.CloseWindowStation.assert_not_called()
+
+    def test_window_station_query_failure_remains_a_failure(self):
+        for missing_station in (True, False):
+            with self.subTest(missing_station=missing_station):
+                user32 = self.user32(station=0 if missing_station else 42)
+                user32.GetUserObjectInformationW.side_effect = None
+                user32.GetUserObjectInformationW.return_value = 0
+                api = "GetProcessWindowStation" if missing_station else "GetUserObjectInformationW"
+                with mock.patch.object(window_capture_smoke.ctypes, "get_last_error", return_value=5, create=True), \
+                     self.assertRaisesRegex(window_capture_smoke.SmokeFailure, api + ".*failed: 5"):
+                    window_capture_smoke.require_windows_interactive_desktop(user32)
+                if missing_station:
+                    user32.GetUserObjectInformationW.assert_not_called()
+
+    def test_capture_constructor_checks_the_station_before_loading_gdi(self):
+        with mock.patch.object(window_capture_smoke, "create_windows_user32", return_value=self.user32(0)), \
+             mock.patch.object(window_capture_smoke.ctypes, "WinDLL", create=True) as load_dll, \
+             self.assertRaises(window_capture_smoke.WindowsDesktopUnavailable):
+            window_capture_smoke.WindowsCapture()
+        load_dll.assert_not_called()
+
+    def test_desktop_and_application_capture_skip_before_launching_processes(self):
+        for mode in ([], [LIT_APPLICATION_CAPTURE]):
+            with tempfile.TemporaryDirectory() as temp_dir, self.subTest(mode=mode):
+                with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
+                     mock.patch.object(window_capture_smoke, "create_windows_user32", return_value=self.user32(0)), \
+                     mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER) as launch_logger, \
+                     mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED) as launch_application, \
+                     mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS):
+                    code = window_capture_smoke.main([LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, str(Path(temp_dir) / LIT_CAPTURE_BMP), *mode])
+                self.assertEqual(code, window_capture_smoke.SKIP_EXIT_CODE)
+                launch_logger.assert_not_called()
+                launch_application.assert_not_called()
+
+    def test_logger_preserves_desktop_skip_evidence_without_launching(self):
+        import logger_busy_spin_smoke
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            with mock.patch.object(logger_busy_spin_smoke, "os", SimpleNamespace(name="nt")), \
+                 mock.patch.object(logger_busy_spin_smoke, "WindowsCapture", side_effect=window_capture_smoke.WindowsDesktopUnavailable("invisible station")), \
+                 mock.patch.object(logger_busy_spin_smoke, "launch_logserver") as launch_logger, \
+                 mock.patch.object(logger_busy_spin_smoke, "write_status"):
+                code = logger_busy_spin_smoke.main([LIT_EXECUTABLE, sys.executable, "--working-directory", temp_dir, "--output-directory", temp_dir])
+            evidence = json.loads((directory / "evidence.json").read_text(encoding=LIT_UTF_8))
+            self.assertEqual(code, window_capture_smoke.SKIP_EXIT_CODE)
+            self.assertFalse(evidence["passed"])
+            self.assertTrue(evidence["skipped"])
+            self.assertEqual(evidence["skip_reason"], "invisible station")
+            self.assertEqual(evidence["failures"], [])
+            launch_logger.assert_not_called()
+
+    def test_native_probe_skips_only_the_unavailable_windows_desktop(self):
+        import avboit_depth_warp_probe_smoke
+        for error, expected in ((window_capture_smoke.WindowsDesktopUnavailable("invisible station"), 77), (window_capture_smoke.SmokeSkip("missing device support"), 1), (window_capture_smoke.SmokeFailure("query failed"), 1)):
+            with tempfile.TemporaryDirectory() as temp_dir, self.subTest(error=error):
+                args = SimpleNamespace(output_directory=Path(temp_dir))
+                with mock.patch.object(avboit_depth_warp_probe_smoke, "parse_args", return_value=args), \
+                     mock.patch.object(avboit_depth_warp_probe_smoke, "acquire", side_effect=error), \
+                     redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(avboit_depth_warp_probe_smoke.main([]), expected)
+                evidence = json.loads(next(args.output_directory.glob("*/result.json")).read_text(encoding=LIT_UTF_8))
+                self.assertFalse(evidence["passed"])
+                self.assertEqual(evidence.get("skipped", False), expected == 77)
 
 
 class ApplicationCaptureConfigurationTests(unittest.TestCase):
@@ -1194,7 +1311,8 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
     def test_launch_environment_checks_freeze_only_when_resize_is_requested(self):
         args = SimpleNamespace(resize_client=[1001, 701], software_vulkan=LIT_OFF)
         with mock.patch.dict(os.environ, {LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "6"}, clear=True), \
-             mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS):
+             mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
+             mock.patch.object(window_capture_smoke, "require_windows_interactive_desktop"):
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "active or invalid"):
                 window_capture_smoke.build_launch_environment(args)
             args.resize_client = None

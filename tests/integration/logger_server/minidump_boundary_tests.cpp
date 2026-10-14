@@ -66,7 +66,7 @@ void StoreDumpRecord(DumpBytes& bytes, const usize offset, const T& record)noexc
     return bytes;
 }
 
-class MinidumpBoundaryTests final : public testing::Test{
+class MinidumpBoundaryTests : public testing::Test{
 public:
     MinidumpBoundaryTests()
         : m_directory(m_testArena.arena, "logserver_minidump_boundary_tests")

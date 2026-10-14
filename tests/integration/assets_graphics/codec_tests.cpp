@@ -4,6 +4,10 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <core/assets/input_list.h>
+#include <core/assets/volume/built_asset.h>
+#include <core/assets/volume/cooked_object_cache.h>
+
 #include <gtest/gtest.h>
 
 
@@ -35,6 +39,17 @@ namespace __hidden_assets_graphics_codec{
 
 
 static constexpr AStringView s_CACHE = "cache";
+static constexpr AStringView s_SamplerMetadata =
+    "sampler asset;\n"
+    "asset.min_filter = \"linear\";\n"
+    "asset.mag_filter = \"linear\";\n"
+    "asset.mip_filter = \"linear\";\n"
+    "asset.address_u = \"wrap\";\n"
+    "asset.address_v = \"wrap\";\n"
+    "asset.address_w = \"wrap\";\n"
+    "asset.reduction = \"standard\";\n"
+    "asset.max_anisotropy = 1.0;\n"
+    "asset.mip_bias = 0.0;\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,6 +236,21 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     ASSERT_TRUE(unchangedObjectBytes);
     EXPECT_TRUE(AssetBytesEqual(*firstObjectBytes, *unchangedObjectBytes));
 
+    // The compact path omits this type-hash lane, so the full header must still reject it as a cache hit.
+    auto mismatchedObjectBytes = *firstObjectBytes;
+    constexpr usize s_ObjectAssetTypeOffset = sizeof(u32) + sizeof(u16) * 2u;
+    usize headerCursor = s_ObjectAssetTypeOffset;
+    const auto cachedAssetType = ReadPOD<NameHash>(mismatchedObjectBytes, headerCursor);
+    ASSERT_TRUE(cachedAssetType);
+    NameHash differentAssetType = *cachedAssetType;
+    differentAssetType.qwords[NameDetail::s_HashLaneCount - 1u] ^= 1u;
+    ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(mismatchedObjectBytes, s_ObjectAssetTypeOffset, differentAssetType));
+    ASSERT_TRUE(WriteBinaryFile(*objectPath, mismatchedObjectBytes));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
+    const auto repairedObjectBytes = ReadAssetObjectCacheBytes(testArena, *objectPath);
+    ASSERT_TRUE(repairedObjectBytes);
+    EXPECT_TRUE(AssetBytesEqual(*firstObjectBytes, *repairedObjectBytes));
+
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     const auto changedObjectPath = FindNewAssetObjectCachePath(testArena, root / s_CACHE, *objectPath);
@@ -238,6 +268,141 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
 
     EXPECT_TRUE(RemoveAllIfExists(root));
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDirectories){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "shared_codec_payloads");
+    ASSERT_TRUE(cookCase);
+    const Path& root = cookCase->root;
+    const Path& outputDirectory = cookCase->outputDirectory;
+    const Path assetRoot = root / "assets";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_SamplerMetadata));
+
+    // A 200-character directory leaves room for compact artifacts within the traditional Windows path limit.
+    const usize rootTextLength = PathToString(testArena.arena, root).size();
+    ASSERT_LT(rootTextLength, 199u);
+    NWB::Core::Assets::AssetString directoryName(testArena.arena);
+    directoryName.resize(199u - rootTextLength, 'b');
+    const Path builtDirectory = root / directoryName;
+    ASSERT_EQ(PathToString(testArena.arena, builtDirectory).size(), 200u);
+    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, { assetRoot }, s_ExpectedDualCount));
+    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE));
+
+    NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
+    options.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
+    options.outputDirectory = PathToString(testArena.arena, outputDirectory);
+    options.configuration = "tests";
+    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
+    for(const Name& virtualPath : { Name("project/samplers/first"), Name("project/samplers/second") }){
+        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, outputDirectory, virtualPath, s_ExpectedDualCount);
+        ASSERT_TRUE(asset);
+        EXPECT_EQ((*asset)->virtualPath(), virtualPath);
+    }
+    EXPECT_EQ(logger.errorCount(), 0u);
+    EXPECT_TRUE(RemoveAllIfExists(root));
+}
+
+TEST(AssetsGraphics, BuiltArtifactsRejectMismatchedObjectCookKeys){
+    namespace Pack = NWB::Core::Assets::AssetsVolumeCookDetail;
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "built_object_cook_key_mismatch");
+    ASSERT_TRUE(rootResult);
+    const Path& root = *rootResult;
+    const Path assetRoot = root / "assets";
+    const Name virtualPath("project/samplers/first");
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, root / "built", { assetRoot }, s_ExpectedDualCount));
+    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    ASSERT_TRUE(objectPath);
+    NWB::Core::Assets::AssetBytes objectBytes(testArena.arena);
+    const auto payload = Pack::ReadCookedObjectPayload(*objectPath, virtualPath, objectBytes);
+    ASSERT_TRUE(payload);
+    auto mismatchedIdentity = payload->identity;
+    mismatchedIdentity.cookKeyHash = mismatchedIdentity.cookKeyHash == 1u ? 2u : 1u;
+    Pack::AssetVolumePackManifest manifest(testArena.arena);
+    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(manifest, 1u));
+    ASSERT_TRUE(Pack::AppendObjectFilePayloadToManifest(manifest, virtualPath, *objectPath, mismatchedIdentity));
+    EXPECT_FALSE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(root / "rejected", manifest));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("object cache identity mismatch")));
+    EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(RemoveAllIfExists(root));
+}
+
+TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualPaths){
+    namespace Pack = NWB::Core::Assets::AssetsVolumeCookDetail;
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "failed_reordered_shared_payloads");
+    ASSERT_TRUE(cookCase);
+    const Path& root = cookCase->root;
+    const Path assetRoot = root / "assets";
+    const Path publishedDirectory = root / "published";
+    const Name firstPath("project/samplers/first");
+    const Name secondPath("project/samplers/second");
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_SamplerMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, root / "seed_built", { assetRoot }, s_ExpectedDualCount));
+    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    ASSERT_TRUE(objectPath);
+    NWB::Core::Assets::AssetBytes objectBytes(testArena.arena);
+    const auto payload = Pack::ReadCookedObjectPayload(*objectPath, firstPath, objectBytes);
+    ASSERT_TRUE(payload);
+
+    Pack::AssetVolumePackManifest initial(testArena.arena);
+    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(initial, s_ExpectedDualCount));
+    ASSERT_TRUE(Pack::AppendObjectFilePayloadToManifest(initial, firstPath, *objectPath, payload->identity));
+    ASSERT_TRUE(Pack::AppendObjectFilePayloadToManifest(initial, secondPath, *objectPath, payload->identity));
+    ASSERT_TRUE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, initial));
+    NWB::Core::Assets::AssetBytes originalList(testArena.arena);
+    ASSERT_TRUE(ReadBinaryFile(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, originalList));
+    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> originalArtifactPaths(testArena.arena);
+    ASSERT_TRUE(NWB::Core::Assets::ReadAssetInputList(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, originalArtifactPaths, true));
+    ASSERT_EQ(originalArtifactPaths.size(), s_ExpectedDualCount);
+    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetBytes> originalArtifactBytes(testArena.arena);
+    originalArtifactBytes.reserve(originalArtifactPaths.size());
+    for(const auto& artifactPath : originalArtifactPaths){
+        originalArtifactBytes.emplace_back(testArena.arena);
+        ASSERT_TRUE(ReadBinaryFile(Path(testArena.arena, artifactPath), originalArtifactBytes.back()));
+    }
+
+    Pack::AssetVolumePackManifest reordered(testArena.arena);
+    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(reordered, s_ExpectedDualCount + 1u));
+    ASSERT_TRUE(Pack::AppendObjectFilePayloadToManifest(reordered, secondPath, *objectPath, payload->identity));
+    ASSERT_TRUE(Pack::AppendObjectFilePayloadToManifest(reordered, firstPath, *objectPath, payload->identity));
+    auto mismatchedIdentity = payload->identity;
+    mismatchedIdentity.cookKeyHash = mismatchedIdentity.cookKeyHash == 1u ? 2u : 1u;
+    // Reorder both shared-payload entries before failing, so publication also has to create a new artifact slot.
+    ASSERT_TRUE(Pack::AppendObjectFilePayloadToManifest(reordered, Name("project/samplers/failing"), *objectPath, mismatchedIdentity));
+    EXPECT_FALSE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, reordered));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("object cache identity mismatch")));
+    NWB::Core::Assets::AssetBytes retainedList(testArena.arena);
+    ASSERT_TRUE(ReadBinaryFile(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, retainedList));
+    EXPECT_EQ(retainedList, originalList);
+    NWB::Core::Assets::AssetBytes retainedArtifactBytes(testArena.arena);
+    for(usize index = 0u; index < originalArtifactPaths.size(); ++index){
+        ASSERT_TRUE(ReadBinaryFile(Path(testArena.arena, originalArtifactPaths[index]), retainedArtifactBytes));
+        EXPECT_EQ(retainedArtifactBytes, originalArtifactBytes[index]);
+    }
+
+    NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
+    options.inputs.emplace_back(PathToString(testArena.arena, publishedDirectory));
+    options.outputDirectory = PathToString(testArena.arena, cookCase->outputDirectory);
+    options.configuration = "tests";
+    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
+    for(const Name& virtualPath : { firstPath, secondPath }){
+        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, cookCase->outputDirectory, virtualPath, s_ExpectedDualCount);
+        ASSERT_TRUE(asset);
+        EXPECT_EQ((*asset)->virtualPath(), virtualPath);
+    }
+    EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 

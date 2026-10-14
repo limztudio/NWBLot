@@ -92,7 +92,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         if(TARGET nwb_logserver)
             add_test(NAME nwb_avboit_depth_warp_probe_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe_smoke.py" --executable "$<TARGET_FILE:nwb_avboit_depth_warp_probe_smoke>"
                     --working-directory "${_nwb_transparent_multi_runtime_root}" --logserver-executable "$<TARGET_FILE:nwb_logserver>" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/avboit_depth_warp_probe" CONFIGURATIONS dbg opt)
-            set_tests_properties(nwb_avboit_depth_warp_probe_smoke PROPERTIES RESOURCE_LOCK nwb_display TIMEOUT 180 LABELS "avboit;gpu_validation")
+            set_tests_properties(nwb_avboit_depth_warp_probe_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 180 LABELS "avboit;gpu_validation")
         endif()
 
         nwb_declare_executable(nwb_csg_shadow_smoke)

@@ -35,9 +35,14 @@ inline constexpr AStringView s_TemporaryNameExtension = ".tmp";
 inline constexpr u64 s_TemporarySequenceStep = 1u;
 Atomic<u64> g_TemporarySequence{0u};
 
-static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes& existing){
-    if(ReadBinaryFile(path, existing) && existing == bytes)
+static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes& existing, const bool replaceDifferent = true){
+    const auto read = ReadBinaryFile(path, existing);
+    if(read && existing == bytes)
         return true;
+    if(!replaceDifferent && (read || !IsMissingPathError(read.error()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
+        return false;
+    }
 
     AssetString temporaryName(s_TemporaryNamePrefix, path.arena());
     AppendHexU64(CurrentProcessId(), temporaryName);
@@ -81,6 +86,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
     AssetBytes artifactBytes(arena);
     AssetBytes existingBytes(arena);
     AssetString manifestText(arena);
+    u64 artifactIndex = 0u;
     for(const auto& entry : manifest.entries){
         const u8* payloadData = entry.payloadBytes.data();
         usize payloadSize = entry.payloadBytes.size();
@@ -88,6 +94,10 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
             const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
             if(!payload)
                 return false;
+            if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), StringConvert(entry.virtualPath.resolvedText()));
+                return false;
+            }
             payloadData = payload->data;
             payloadSize = payload->size;
         }
@@ -110,14 +120,33 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
         BinaryDetail::AppendBytesNoReserveUnchecked(artifactBytes, payloadData, payloadSize);
 
         AssetString filename(arena);
-        for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
-            AppendHexU64(entry.virtualPath.hash().qwords[lane], filename);
-        filename += '_';
-        AppendHexU64(entry.identity.payloadHash, filename);
-        filename += s_Extension;
-        const Path path = outputDirectory / filename;
-        if(!__hidden_built_asset::WriteIfChanged(path, artifactBytes, existingBytes))
-            return false;
+        filename.reserve(NameDetail::s_HexDigitsPerHashLane * 3u + s_Extension.size());
+        // Preserve files referenced by the previous manifest if a later entry fails during this publication.
+        for(;;){
+            if(artifactIndex == Limit<u64>::s_Max){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: built asset filename slots are exhausted"));
+                return false;
+            }
+            filename.clear();
+            AppendHexU64(artifactIndex++, filename);
+            AppendHexU64(entry.identity.payloadHash, filename);
+            AppendHexU64(entry.identity.cookKeyHash, filename);
+            filename += s_Extension;
+            const Path path = outputDirectory / filename;
+            const auto read = ReadBinaryFile(path, existingBytes);
+            if(read){
+                if(existingBytes == artifactBytes)
+                    break;
+                continue;
+            }
+            if(!IsMissingPathError(read.error())){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect built asset '{}'"), PathToString<tchar>(path));
+                return false;
+            }
+            if(!__hidden_built_asset::WriteIfChanged(path, artifactBytes, existingBytes, false))
+                return false;
+            break;
+        }
         manifestText += filename;
         manifestText += '\n';
     }

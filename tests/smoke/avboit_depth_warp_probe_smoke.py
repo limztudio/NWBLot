@@ -11,7 +11,7 @@ import sys
 from types import SimpleNamespace
 from uuid import uuid4
 
-from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsDesktopUnavailable, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
 
 
 EXPECTED_COUNTS = (1050, 2550, 512, 4112)
@@ -124,8 +124,12 @@ def main(argv=None):
     print(f"AVBOIT depth-warp probe artifacts: {output}", flush=True)
     try:
         result = acquire(args, output)
+    except WindowsDesktopUnavailable as error:
+        write_json(output / "result.json", {"schema": 1, "passed": False, "skipped": True, "skip_reason": str(error)})
+        print(f"SKIP: {error}", file=sys.stderr, flush=True)
+        return SKIP_EXIT_CODE
     except (SmokeFailure, SmokeSkip, OSError) as error:
-        # Missing display/validation/device support fails this native qualification instead of producing a skip.
+        # Missing validation/device support still fails this native qualification.
         write_json(output / "result.json", {"schema": 1, "passed": False, "error": str(error)})
         print(f"FAIL: {error}", file=sys.stderr, flush=True)
         return 1

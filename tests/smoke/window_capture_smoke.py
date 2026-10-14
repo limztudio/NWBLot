@@ -77,6 +77,10 @@ class SmokeSkip(Exception):
     pass
 
 
+class WindowsDesktopUnavailable(SmokeSkip):
+    pass
+
+
 class SmokeFailure(Exception):
     pass
 
@@ -447,7 +451,9 @@ def build_launch_environment(args):
     env = os.environ.copy()
     system = platform.system()
 
-    if system == LIT_LINUX:
+    if system == LIT_WINDOWS:
+        require_windows_interactive_desktop()
+    elif system == LIT_LINUX:
         if not env.get("DISPLAY"):
             raise SmokeSkip("DISPLAY is not set; X11 window capture is unavailable")
 
@@ -1262,6 +1268,29 @@ class WinBitmapInfo(ctypes.Structure):
     _fields_ = [("bmiHeader", WinBitmapInfoHeader), ("bmiColors", ctypes.c_uint32 * 3),]
 
 
+class WindowsUserObjectFlags(ctypes.Structure):
+    _fields_ = [("fInherit", ctypes.c_int32), ("fReserved", ctypes.c_int32), ("dwFlags", ctypes.c_uint32)]
+
+
+def require_windows_interactive_desktop(user32=None):
+    user32 = user32 if user32 is not None else create_windows_user32()
+    user32.GetProcessWindowStation.argtypes = []
+    user32.GetProcessWindowStation.restype = ctypes.c_void_p
+    user32.GetUserObjectInformationW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32)]
+    user32.GetUserObjectInformationW.restype = ctypes.c_int
+    station = user32.GetProcessWindowStation()
+    if not station:
+        raise SmokeFailure(f"GetProcessWindowStation failed: {ctypes.get_last_error()}")
+    flags = WindowsUserObjectFlags()
+    length_needed = ctypes.c_uint32()
+    # UOI_FLAGS returns USEROBJECTFLAGS; WSF_VISIBLE marks visible display surfaces.
+    # GetProcessWindowStation returns a borrowed handle that must not be closed.
+    if not user32.GetUserObjectInformationW(ctypes.c_void_p(station), 1, ctypes.byref(flags), ctypes.sizeof(flags), ctypes.byref(length_needed)):
+        raise SmokeFailure(f"GetUserObjectInformationW(UOI_FLAGS) failed: {ctypes.get_last_error()}")
+    if not flags.dwFlags & 0x0001:
+        raise WindowsDesktopUnavailable("the Windows process window station has no visible display surfaces; native window/input smoke requires an interactive desktop")
+
+
 class WindowsCapture:
     SRCCOPY = 0x00CC0020
     DIB_RGB_COLORS = 0
@@ -1288,6 +1317,7 @@ class WindowsCapture:
 
     def __init__(self):
         self.user32 = create_windows_user32()
+        require_windows_interactive_desktop(self.user32)
         self.gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
         self.dwmapi = None
         self._bind_functions()
@@ -1979,6 +2009,9 @@ def parse_args(argv):
         parser.error("--log-output requires --application-capture")
     if args.window_handle is None and not args.executable:
         parser.error("--executable is required unless --window-handle is provided")
+    for name, value in ((LIT_TIMEOUT, args.timeout), (LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout), (LIT_SETTLE_SECONDS, args.settle_seconds), ("--resize-settle-seconds", args.resize_settle_seconds)):
+        if value is not None and not math.isfinite(value):
+            parser.error(f"{name} must be finite")
     require_positive_arg(parser, LIT_TIMEOUT, args.timeout)
     require_positive_arg(parser, LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout)
     require_positive_arg(parser, LIT_APPLICATION_CAPTURE_FRAME_COUNT, args.application_capture_frame_count,)
@@ -1989,14 +2022,12 @@ def parse_args(argv):
             parser.error("--resize-client requires a launched desktop capture; application capture and existing handles are incompatible")
         if any(dimension < 1 or dimension > 16384 for dimension in args.resize_client):
             parser.error("--resize-client dimensions must be between 1 and 16384")
-        if not math.isfinite(args.settle_seconds) or args.settle_seconds < 1.0:
-            parser.error("--resize-client requires --settle-seconds to be finite and at least 1")
+        if args.settle_seconds < 1.0:
+            parser.error("--resize-client requires --settle-seconds to be at least 1")
         if args.resize_settle_seconds is None:
             args.resize_settle_seconds = 2.0
-        if not math.isfinite(args.resize_settle_seconds) or args.resize_settle_seconds < 1.0:
-            parser.error("--resize-settle-seconds must be finite and at least 1")
-        if not math.isfinite(args.render_ready_timeout) or not math.isfinite(args.timeout):
-            parser.error("--resize-client requires finite --timeout and --render-ready-timeout")
+        if args.resize_settle_seconds < 1.0:
+            parser.error("--resize-settle-seconds must be at least 1")
     elif args.resize_settle_seconds is not None:
         parser.error("--resize-settle-seconds requires --resize-client")
 

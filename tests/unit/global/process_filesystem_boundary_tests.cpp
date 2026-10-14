@@ -32,7 +32,9 @@ namespace __hidden_process_filesystem_boundary_tests{
 
 
 using AString = NWB::Tests::TestAString;
+#if defined(NWB_PLATFORM_LINUX)
 constexpr u32 s_ExpectedDualCount = 2u;
+#endif
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 static constexpr AStringView s_BIN_SH = "/bin/sh";
 static constexpr AStringView s_C = "-c";

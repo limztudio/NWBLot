@@ -11,7 +11,7 @@ import sys
 import time
 from types import SimpleNamespace
 
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, WindowsCapture, WinRect, collect_log_delta, ensure_process_running, launch_logserver, read_bmp_24_rows, request_windows_graceful_exit, require_normal_process_exit,
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, WinRect, collect_log_delta, ensure_process_running, launch_logserver, read_bmp_24_rows, request_windows_graceful_exit, require_normal_process_exit,
     snapshot_log_files, terminate_process, validate_expected_log_text, wait_for_log_message, write_status,)
 
 SETTLE_SECONDS = 1.0
@@ -173,6 +173,7 @@ def main(argv):
     evidence = {"scenario": "active_logger_busy_spin", "executable": str(args.executable), "settle_seconds": SETTLE_SECONDS, "sample_seconds": SAMPLE_SECONDS, "max_cpu_fraction": args.max_cpu_fraction, "startup_received": False,
                 "clean_wm_close_exit": False, "screenshot_path": str(args.output_directory / "logger.bmp")}
     failures = []
+    skip_reason = None
     required_messages = []
     process = backend = handle = None
     directory = baseline = pattern = None
@@ -218,6 +219,8 @@ def main(argv):
         evidence["screenshot_after_idle"] = capture_visible_messages(backend, handle, wake_screenshot, rows_before_wakeup + 1,)
         if evidence["cpu"]["single_core_cpu_fraction"] >= args.max_cpu_fraction:
             raise SmokeFailure(f"active idle logger consumed {evidence['cpu']['single_core_cpu_fraction']:.3f} of one CPU core; " f"required < {args.max_cpu_fraction:.3f}")
+    except SmokeSkip as error:
+        skip_reason = str(error)
     except Exception as error:
         failures.append(str(error))
     finally:
@@ -255,13 +258,16 @@ def main(argv):
                 failures.append(f"log evidence: {error}")
         if backend:
             backend.close()
-        evidence.update({"passed": not failures, "failures": failures})
+        evidence.update({"passed": not failures and skip_reason is None, "skipped": skip_reason is not None, "skip_reason": skip_reason, "failures": failures})
         (args.output_directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
     for failure in failures:
         write_status(f"FAIL: {failure}")
     if failures:
         return 1
+    if skip_reason is not None:
+        write_status(f"SKIP: {skip_reason}")
+        return SKIP_EXIT_CODE
     write_status(f"PASS: active logger idle CPU fraction {evidence['cpu']['single_core_cpu_fraction']:.3f}; clean WM_CLOSE exit")
     return 0
 

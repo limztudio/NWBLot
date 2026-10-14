@@ -39,12 +39,14 @@ using ScratchString = AssetsVolumeCookDetail::ScratchString;
 static constexpr u32 s_ObjectFileMagic = 0x4f4a424e; // NBJO
 static constexpr u16 s_ObjectFileVersion = 2u;
 static constexpr AStringView s_ObjectFileVersionPrefix = "v2_";
-static constexpr AStringView s_ObjectFileHashSeparator = "__";
 static constexpr AStringView s_ObjectFileExtension = ".nwbobj";
 static constexpr AStringView s_ObjectCacheDirectoryName = "objects";
-static constexpr usize s_ObjectFileHashFieldCount = 3u;
-static constexpr usize s_ObjectFileHashSeparatorCount = s_ObjectFileHashFieldCount - 1u;
-static constexpr usize s_ObjectFileNameReserveBytes = s_ObjectFileVersionPrefix.size() + (NameDetail::s_HexDigitsPerHashLane * s_ObjectFileHashFieldCount) + (s_ObjectFileHashSeparator.size() * s_ObjectFileHashSeparatorCount) + s_ObjectFileExtension.size();
+static constexpr u32 s_ObjectPathHashLanesPerLevel = 2u;
+static constexpr u32 s_ObjectPathHashLevelCount = 2u;
+static_assert(NameDetail::s_HashLaneCount >= s_ObjectPathHashLanesPerLevel * s_ObjectPathHashLevelCount, "Object cache path hash must provide at least four lanes");
+static constexpr usize s_ObjectPathDirectoryTextLength = NameDetail::s_HexDigitsPerHashLane * s_ObjectPathHashLanesPerLevel;
+static constexpr usize s_ObjectPayloadDirectoryTextLength = NameDetail::s_HexDigitsPerHashLane + 1u + s_ObjectPathDirectoryTextLength;
+static constexpr usize s_ObjectFileNameTextLength = s_ObjectFileVersionPrefix.size() + NameDetail::s_HexDigitsPerHashLane * 2u + s_ObjectFileExtension.size();
 
 struct AssetVolumeObjectFileHeader{
     u32 magic = s_ObjectFileMagic;
@@ -60,27 +62,32 @@ struct AssetVolumeObjectFileHeader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendEncodedNameHashText(const NameHash& hash, ScratchString& outText){
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
+static void AppendObjectPathHashText(const NameHash& hash, const u32 laneBegin, ScratchString& outText){
+    for(u32 lane = laneBegin; lane < laneBegin + s_ObjectPathHashLanesPerLevel; ++lane)
         AppendHexU64(hash.qwords[lane], outText);
 }
 
 static Path BuildObjectFilePath(const Path& cacheDirectory, const AStringView configurationSafeName, const AssetVolumeObjectFileHeader& header, ScratchArena& scratchArena){
+    // Compact paths encode four asset-type lanes directly; the cook key folds every lane and the complete payload identity.
+    // HeaderMatches validates the complete asset-type hash before reusing a cached file.
     ScratchString assetTypeDirectory{scratchArena};
-    assetTypeDirectory.reserve(NameDetail::s_EncodedNameHashLength);
-    AppendEncodedNameHashText(header.assetTypeHash, assetTypeDirectory);
+    assetTypeDirectory.reserve(s_ObjectPathDirectoryTextLength);
+    AppendObjectPathHashText(header.assetTypeHash, 0u, assetTypeDirectory);
+
+    ScratchString payloadDirectory{scratchArena};
+    payloadDirectory.reserve(s_ObjectPayloadDirectoryTextLength);
+    AppendHexU64(header.payloadSize, payloadDirectory);
+    payloadDirectory += '_';
+    AppendObjectPathHashText(header.assetTypeHash, s_ObjectPathHashLanesPerLevel, payloadDirectory);
 
     ScratchString objectFileName{scratchArena};
-    objectFileName.reserve(s_ObjectFileNameReserveBytes);
+    objectFileName.reserve(s_ObjectFileNameTextLength);
     objectFileName += s_ObjectFileVersionPrefix;
     AppendHexU64(header.cookKeyHash, objectFileName);
-    objectFileName += s_ObjectFileHashSeparator;
     AppendHexU64(header.payloadHash, objectFileName);
-    objectFileName += s_ObjectFileHashSeparator;
-    AppendHexU64(header.payloadSize, objectFileName);
     objectFileName += s_ObjectFileExtension;
 
-    return cacheDirectory / configurationSafeName / s_ObjectCacheDirectoryName / assetTypeDirectory / objectFileName;
+    return cacheDirectory / configurationSafeName / s_ObjectCacheDirectoryName / assetTypeDirectory / payloadDirectory / objectFileName;
 }
 
 static AssetVolumeObjectFileHeader BuildObjectFileHeader(const Core::Assets::IAssetCodec& codec, const Core::Assets::AssetBytes& payload, const AStringView configurationSafeName){

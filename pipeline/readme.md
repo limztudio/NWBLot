@@ -57,8 +57,10 @@ path `NameHash`, 64-bit payload size, and 64-bit FNV payload checksum. These fie
 use the engine's native little-endian binary encoding. The gatherer validates the
 header, size, checksum, and virtual identity before packaging the payload.
 
-Artifact names include their virtual path hash and payload hash. `assets.list`
-contains relative filenames for only the current successful build. It is
+Artifact names combine a compact hexadecimal slot with payload and cook hashes.
+The builder reuses byte-identical artifacts and advances past occupied slots with
+different contents, preserving artifacts referenced by an earlier manifest.
+`assets.list` contains relative filenames for only the current successful build. It is
 published after all artifacts have been written, so failed builds leave the
 previous manifest intact and removed inputs do not return through stale files.
 Older content files may remain in the build directory; directory gathering uses

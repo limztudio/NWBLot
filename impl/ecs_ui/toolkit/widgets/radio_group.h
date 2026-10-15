@@ -20,7 +20,6 @@ NWB_IMPL_UI_BEGIN
 
 struct RadioGroupOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    f32 rowHeight = s_RadioGroupMinimumRowHeight;
     bool enabled = true;
 };
 

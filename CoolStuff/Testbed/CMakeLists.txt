@@ -1,5 +1,5 @@
 nwb_declare_executable(testbed)
-target_sources(testbed PRIVATE "${CMAKE_CURRENT_LIST_DIR}/namespace.h" "${CMAKE_CURRENT_LIST_DIR}/ui_gallery_metrics.h" "${CMAKE_CURRENT_LIST_DIR}/ui_image_gallery.h" "${CMAKE_CURRENT_LIST_DIR}/ui_image_gallery.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_progress_gallery.h"
+target_sources(testbed PRIVATE "${CMAKE_CURRENT_LIST_DIR}/namespace.h" "${CMAKE_CURRENT_LIST_DIR}/ui_image_gallery.h" "${CMAKE_CURRENT_LIST_DIR}/ui_image_gallery.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_progress_gallery.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_progress_gallery.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_slider_gallery.h" "${CMAKE_CURRENT_LIST_DIR}/ui_slider_gallery.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_radio_group_gallery.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_radio_group_gallery.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_text_area_gallery.h" "${CMAKE_CURRENT_LIST_DIR}/ui_text_area_gallery.cpp" "${CMAKE_CURRENT_LIST_DIR}/entry.cpp" "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_controls.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_skin_preview.cpp" "${CMAKE_CURRENT_LIST_DIR}/ui_skin_preview.h" "${CMAKE_CURRENT_LIST_DIR}/ui_widget_gallery.h" "${CMAKE_CURRENT_LIST_DIR}/ui_widget_gallery.cpp"

@@ -43,7 +43,7 @@ struct KeyResolution{
 }
 
 [[nodiscard]] static bool ValidOptions(const ListOptions& options)noexcept{
-    return options.enabled && IsFinite(options.rowHeight) && options.rowHeight > 0.0f && IsFinite(options.wheelRows) && options.wheelRows > 0.0f;
+    return options.enabled && IsFinite(options.wheelRows) && options.wheelRows > 0.0f;
 }
 
 [[nodiscard]] static bool IsReverse(const ControlActionKind::Enum kind)noexcept{
@@ -193,28 +193,6 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
         result.activated = result.activated || activate;
     }
     result.valid = true;
-    return true;
-}
-
-bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source, const f32 rowHeight, const f64 viewportHeight){
-    using namespace __hidden_ui_list_behavior;
-    const u64 inputGeneration = state.m_inputGeneration;
-    if(!IsFinite(rowHeight) || rowHeight <= 0.0f || !IsFinite(viewportHeight) || viewportHeight < 0.0 || !SourceMatches(source, state.m_sourceGeneration, state.m_sourceRevision) || state.m_inputGeneration != inputGeneration)
-        return false;
-    if(!state.m_ensureCursor)
-        return true;
-    if(state.m_cursor == 0u){
-        state.m_ensureCursor = false;
-        return true;
-    }
-    const auto resolved = ResolveKey(source, source.rowCount(), state.m_cursor);
-    if(!resolved || !resolved->present)
-        return false;
-    const f64 start = (static_cast<f64>(resolved->index) * static_cast<f64>(rowHeight));
-    const f64 end = (start + static_cast<f64>(rowHeight));
-    if(!IsFinite(start) || !IsFinite(end) || end <= start || !SourceMatches(source, state.m_sourceGeneration, state.m_sourceRevision) || state.m_inputGeneration != inputGeneration || !state.m_scroll.ensureVisible(start, end, viewportHeight))
-        return false;
-    state.m_ensureCursor = false;
     return true;
 }
 

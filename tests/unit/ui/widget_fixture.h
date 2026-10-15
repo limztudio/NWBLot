@@ -133,7 +133,6 @@ void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>&
 [[nodiscard]] inline NWB::Impl::Ui::ListOptions LargeLoanListOptions(){
     NWB::Impl::Ui::ListOptions options;
     options.height = { LayoutSizePolicy::Fixed, 140.0f };
-    options.rowHeight = 24.0f;
     return options;
 }
 

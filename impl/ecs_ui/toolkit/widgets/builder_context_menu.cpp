@@ -24,7 +24,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
         || !anchor || !IsFinite(options.size.x) || !IsFinite(options.size.y) || options.size.x <= 0.0f || options.size.y <= 0.0f
-        || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
+        || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
         || m_scope->m_contextMenus.size() >= s_InputMaxPopups
     ){
         m_context.fail();
@@ -114,7 +114,6 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     list.style = m_listStyle;
     list.token = frame.listToken;
     list.rowCount = frame.rowCount;
-    list.options.rowHeight = options.rowHeight;
     list.options.wheelRows = options.wheelRows;
     list.options.selectOnNavigate = false;
     list.options.enabled = frame.options.enabled;
@@ -129,6 +128,10 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
     const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent, VectorGreater(listpaddingCurrent, listpaddingCandidate));
     list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
+    if(!prepareListMetrics(list) || !contextMenuMatches(frame)){
+        m_context.fail();
+        return result;
+    }
     frame.list = static_cast<u32>(m_scope->m_lists.size());
     state.m_popup.bindParent(frame.parentToken);
     if(frame.open && !reserveCompoundPopup(frame.popup, frame.popupToken)){

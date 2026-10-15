@@ -68,7 +68,6 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
         if(action->kind != ControlActionKind::Submit){
             action->control = { state.m_list.inputGeneration(), frame.results->instanceGeneration(), frame.results->revision() };
             ListOptions options;
-            options.rowHeight = frame.options.rowHeight;
             options.wheelRows = frame.options.wheelRows;
             options.selectOnNavigate = false;
             ListResult preview;
@@ -99,7 +98,6 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
     auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
     bool haveAction = action && action->popup == frame.popupToken;
     ListOptions options;
-    options.rowHeight = frame.options.rowHeight;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
     while(haveGesture || haveAction){

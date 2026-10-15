@@ -66,7 +66,6 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
         first.control = frame.listToken;
         first.kind = ControlActionKind::Home;
         ListOptions options;
-        options.rowHeight = frame.options.rowHeight;
         options.wheelRows = frame.options.wheelRows;
         options.selectOnNavigate = false;
         ListResult preview;
@@ -84,7 +83,6 @@ bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& 
     auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
     bool haveAction = action && action->popup == frame.popupToken;
     ListOptions options;
-    options.rowHeight = frame.options.rowHeight;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
     while(haveGesture || haveAction){

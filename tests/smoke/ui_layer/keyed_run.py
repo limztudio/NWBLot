@@ -40,8 +40,13 @@ class KeyedRun:
         self.native.click(*self.point(*center(self.snapshot["rectangles"][name])))
 
     def row(self, offset):
-        x, y, width, height = self.snapshot["rectangles"]["viewport"]
-        return self.point(x + min(width / 2.0, 120.0), y + (offset + 0.5) * 24.0)
+        x, y, width, height = self.snapshot["rectangles"]["first_row"]
+        vx, vy, vw, vh = self.snapshot["rectangles"]["viewport"]
+        left, right = max(vx, x), min(vx + vw, x + width)
+        top, bottom = max(vy, y + offset * height), min(vy + vh, y + (offset + 1) * height)
+        if height <= 0.0 or right <= left or not 0 <= offset < self.snapshot["past"] - self.snapshot["first"] or bottom <= top:
+            raise SmokeFailure(f"{self.fixture} requested a row outside its accepted visible interval")
+        return self.point(left + min((right - left) / 2.0, 120.0), (top + bottom) / 2.0)
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), **changes):
         self.expected.update(changes)

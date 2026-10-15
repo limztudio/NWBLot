@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import platform
 import sys
 
@@ -30,7 +31,7 @@ class ComboRun(KeyedRun):
         self.checkpoint("initial_closed_combo", extra=lambda s: s["rectangles"]["trigger"][2] > 0.0)
         self.expected.pop("focused")
         self.click("trigger")
-        self.checkpoint("pointer_opens_preview", open=1, dynamic=("cursor",), extra=lambda s: s["past"] - s["first"] <= 10)
+        self.checkpoint("pointer_opens_preview", open=1, dynamic=("cursor",), extra=lambda s: 0 < s["past"] - s["first"] <= math.ceil(s["rectangles"]["viewport"][3] / s["rectangles"]["first_row"][3]) + 1)
         self.native.tap("Home")
         self.checkpoint("home_previews_first_without_commit", cursor=1)
         self.native.tap("Down")

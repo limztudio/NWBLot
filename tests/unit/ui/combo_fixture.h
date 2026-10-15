@@ -104,7 +104,6 @@ public:
     options.width = { LayoutSizePolicy::Fixed, 220.0f };
     options.height = { LayoutSizePolicy::Fixed, 32.0f };
     options.popupHeight = 144.0f;
-    options.rowHeight = 24.0f;
     options.placeholder = "Choose";
     return options;
 }

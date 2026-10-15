@@ -3,7 +3,6 @@
 
 
 #include "ui_list_gallery.h"
-#include "ui_gallery_metrics.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -58,12 +57,6 @@ StringView UiListSource::text(const u64 index)const noexcept{
 void UiListGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
-    // The virtual source emits only this glyph repertoire, so its uniform row metric does not require scanning 100000 rows.
-    const auto rowHeight = UiGalleryMetrics::RowHeight(context, "Row 0123456789", 14.0f);
-    if(!rowHeight){
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: UI list row measurement failed"));
-        return;
-    }
     if(!ui.beginPanel("list_gallery", { x, y, 280.0f, 258.0f }))
         return;
     const f32 previousFontSize = ui.style().fontSize;
@@ -71,7 +64,6 @@ void UiListGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const
     bool valid = ui.label("title", "100000 virtual rows");
     ListOptions options;
     options.height = { LayoutSizePolicy::Fixed, 180.0f };
-    options.rowHeight = *rowHeight;
     const ListResult result = ui.virtualList("rows", m_source, m_state, options);
     if(result.activated)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom list selected key={}"), m_state.selectedKey());

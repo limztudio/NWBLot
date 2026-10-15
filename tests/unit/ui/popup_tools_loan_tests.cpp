@@ -114,7 +114,6 @@ TEST_F(UiPopupToolsLoanTests, MenuRowCallbackCannotReplaceAnAlreadyPaintedOrdina
     ListOptions options;
     options.width = { LayoutSizePolicy::Fixed, 220.0f };
     options.height = { LayoutSizePolicy::Fixed, 168.0f };
-    options.rowHeight = 28.0f;
     ASSERT_TRUE(m_builder.virtualList("ordinary", ordinarySource, ordinary, options).valid);
     EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
     ASSERT_TRUE(m_builder.contextMenu("menu", "anchor", m_source, m_menu, m_menuOptions).valid);
@@ -145,7 +144,6 @@ TEST_F(UiPopupToolsLoanTests, LateMenuMetadataCallbackCannotCloseAPaintedComboAn
     options.width = { LayoutSizePolicy::Fixed, 220.0f };
     options.height = { LayoutSizePolicy::Fixed, 32.0f };
     options.popupHeight = 176.0f;
-    options.rowHeight = 28.0f;
     ASSERT_TRUE(m_builder.comboBox("combo", comboSource, combo, options).valid);
     ASSERT_EQ(comboSource.textCalls, 0u);
     ASSERT_EQ(m_source.closeComboOnRevision, nullptr);

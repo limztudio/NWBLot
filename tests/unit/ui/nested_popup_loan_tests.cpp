@@ -171,7 +171,6 @@ protected:
     [[nodiscard]] static ListOptions ListOptions(){
         NWB::Impl::Ui::ListOptions options;
         options.height = { LayoutSizePolicy::Fixed, 150.0f };
-        options.rowHeight = 24.0f;
         return options;
     }
 

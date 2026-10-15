@@ -480,8 +480,8 @@ TEST_F(UiPopupToolsBuilderTests, MissingMenuAnchorRejectsTheCandidate){
     EXPECT_TRUE(m_context.failed());
 }
 
-TEST_F(UiPopupToolsBuilderTests, InvalidMenuRowHeightRejectsTheCandidate){
-    m_menuOptions.rowHeight = 0.0f;
+TEST_F(UiPopupToolsBuilderTests, InvalidMenuWheelStepRejectsTheCandidate){
+    m_menuOptions.wheelRows = 0.0f;
     EXPECT_FALSE(declareTools(1u, false));
     EXPECT_TRUE(m_context.failed());
 }

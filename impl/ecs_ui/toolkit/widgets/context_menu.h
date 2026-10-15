@@ -20,7 +20,6 @@ NWB_IMPL_UI_BEGIN
 
 struct ContextMenuOptions{
     Point size = { 220.0f, 160.0f };
-    f32 rowHeight = 28.0f;
     f32 wheelRows = 3.0f;
     bool enabled = true;
 };

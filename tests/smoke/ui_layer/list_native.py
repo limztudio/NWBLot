@@ -1,4 +1,4 @@
-"""Native fixed-height list input, including positioned vertical wheel events."""
+"""Native automatically sized list input, including positioned vertical wheel events."""
 from __future__ import annotations
 
 import ctypes

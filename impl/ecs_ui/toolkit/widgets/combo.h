@@ -22,7 +22,6 @@ struct ComboOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     LayoutSize height;
     f32 popupHeight = 240.0f;
-    f32 rowHeight = 32.0f;
     f32 wheelRows = 3.0f;
     bool enabled = true;
     StringView placeholder = "Select...";

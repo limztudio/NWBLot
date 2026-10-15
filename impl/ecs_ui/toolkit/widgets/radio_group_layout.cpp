@@ -31,7 +31,7 @@ namespace __hidden_ui_radio_group_layout{
 [[nodiscard]] static bool ValidMetrics(const RadioGroupMetrics& metrics)noexcept{
     if(
         metrics.count > s_RadioGroupMaxChoices || !IsValidUiPadding(metrics.padding) || !IsValidUiExtent(metrics.contentSize)
-        || !IsFinite(metrics.rowHeight) || metrics.rowHeight < s_RadioGroupMinimumRowHeight
+        || !IsFinite(metrics.rowHeight) || metrics.rowHeight <= 0.0f
         || !IsFinite(metrics.indicatorExtent) || metrics.indicatorExtent <= 0.0f || metrics.indicatorExtent > metrics.rowHeight
         || !IsFinite(metrics.gap) || metrics.gap < 0.0f || !IsFinite(metrics.rowGap) || metrics.rowGap < 0.0f
         || !IsFinite(metrics.markInset) || metrics.markInset < 0.0f || metrics.markInset > 0.5f
@@ -57,7 +57,6 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
     using namespace __hidden_ui_radio_group_layout;
     if(
         count > s_RadioGroupMaxChoices || !IsValidUiExtent(maximumLabel) || !IsValidUiPadding(style.padding)
-        || !IsFinite(options.rowHeight) || options.rowHeight < s_RadioGroupMinimumRowHeight
         || options.width.policy > LayoutSizePolicy::Stretch || !IsFinite(options.width.value) || options.width.value < 0.0f
         || (options.width.policy == LayoutSizePolicy::Stretch && options.width.value <= 0.0f)
         || !IsFinite(style.indicatorExtent) || style.indicatorExtent <= 0.0f || !IsFinite(style.gap) || style.gap < 0.0f
@@ -67,7 +66,7 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
     )
         return MakeUnexpected(Failure{});
     RadioGroupMetrics candidate;
-    candidate.rowHeight = Max(options.rowHeight, Max(maximumLabel.y, style.indicatorExtent));
+    candidate.rowHeight = Max(maximumLabel.y, style.indicatorExtent);
     candidate.indicatorExtent = style.indicatorExtent;
     candidate.gap = style.gap;
     candidate.rowGap = style.rowGap;

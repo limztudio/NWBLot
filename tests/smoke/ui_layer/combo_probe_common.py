@@ -44,7 +44,7 @@ class ComboProbe:
             raise SmokeFailure("combo fixture reported invalid geometry or display metrics")
         return {"sequence": sequence, "skin": skins[-1][1], "values": values, **dict(zip(self.fields, values)), "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
 
-    def observe(self, frame, snapshot, expected, *, extent=None, skin="default", row_height=24.0, extra=None):
+    def observe(self, frame, snapshot, expected, *, extent=None, skin="default", extra=None):
         width, height, rows = frame
         scale_x, scale_y = snapshot["scale"]
         probes = []
@@ -68,7 +68,8 @@ class ComboProbe:
         geometry_matches = True
         if snapshot["open"]:
             bounded = first <= past <= snapshot["count"] and snapshot["label_reads"] <= max(0, past - first) + 3
-            bounded = bounded and past - first <= math.ceil(viewport[3] / row_height) + 2
+            row_height = snapshot["rectangles"]["first_row"][3]
+            bounded = bounded and (past == first == 0 if snapshot["count"] == 0 else row_height > 0.0 and past - first <= math.ceil(viewport[3] / row_height) + 2)
             bx, by, bw, bh = snapshot["rectangles"]["popup"]
             tx, ty, tw, th = snapshot["rectangles"]["trigger"]
             logical_width, logical_height = snapshot["logical_extent"]

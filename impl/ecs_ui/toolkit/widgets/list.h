@@ -37,7 +37,6 @@ interface IListDataSource{
 struct ListOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     LayoutSize height = { LayoutSizePolicy::Fixed, 240.0f };
-    f32 rowHeight = 32.0f;
     f32 wheelRows = 3.0f;
     bool enabled = true;
     bool selectOnNavigate = true;
@@ -56,6 +55,7 @@ struct ListResult{
 
 class ListState final : NoCopy{
     friend class Builder;
+    friend class BuilderScopeFrame;
     friend class ListBehavior;
 
 
@@ -78,6 +78,26 @@ public:
 
 
 private:
+    struct MeasureKey{
+        u64 sourceGeneration = 0u;
+        u64 sourceRevision = 0u;
+        u64 rowCount = 0u;
+        u64 textIdentity = 0u;
+        u64 textGeneration = 0u;
+        f32 fontSize = 0.0f;
+        f32 pixelScaleX = 0.0f;
+        f32 pixelScaleY = 0.0f;
+        Array<f32, 6u> rowMetrics{};
+        Array<char, 64u> language{};
+        u32 scriptTag = 0u;
+
+        [[nodiscard]] bool operator==(const MeasureKey&)const noexcept = default;
+    };
+
+    MeasureKey m_measureKey;
+    f32 m_rowHeight = 0.0f;
+    f32 m_scrollRowHeight = 0.0f;
+    u64 m_scrollSourceGeneration = 0u;
     ScrollState m_scroll;
     ScrollPlacement m_placement;
     u64 m_inputGeneration = 0u;
@@ -92,7 +112,6 @@ class ListBehavior final{
 public:
     [[nodiscard]] static bool Reconcile(ListState& state, const IListDataSource& source);
     [[nodiscard]] static bool Apply(ListState& state, const IListDataSource& source, const ListOptions& options, const ControlAction& action, ListResult& result);
-    [[nodiscard]] static bool EnsureCursor(ListState& state, const IListDataSource& source, f32 rowHeight, f64 viewportHeight);
 };
 
 

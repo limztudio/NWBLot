@@ -31,7 +31,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool paintParent(NWB::Impl::Ui::Builder& ui, f32 rowHeight);
+    [[nodiscard]] bool paintParent(NWB::Impl::Ui::Builder& ui);
     [[nodiscard]] bool paintChild(NWB::Impl::Ui::Builder& ui);
 
 

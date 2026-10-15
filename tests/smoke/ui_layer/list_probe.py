@@ -14,7 +14,7 @@ STATE = re.compile(r"UiListSmoke: state sequence=(\d+) values=((?:\d+,){11}\d+)"
 GEOMETRY = re.compile(rf"UiListSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 SKIN = re.compile(r"UiListSmoke: skin=(default|alternate)")
 FIELDS = ("selected", "cursor", "count", "first", "past", "label_reads", "focused", "reversed", "removed", "visible", "commits", "underlying")
-RECTANGLES = ("list", "viewport", "track", "thumb", "selected_row", "counter")
+RECTANGLES = ("list", "viewport", "first_row", "track", "thumb", "selected_row", "counter")
 MARKER_TOLERANCE = 5
 
 
@@ -24,7 +24,7 @@ def snapshot_from_logs(text):
 
 
 
-def observe_list(frame, snapshot, expected, *, extent=None, skin="default", row_height=24.0, extra=None):
+def observe_list(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
     probes = []
@@ -47,7 +47,8 @@ def observe_list(frame, snapshot, expected, *, extent=None, skin="default", row_
     viewport = snapshot["rectangles"]["viewport"]
     bounded = first <= past <= snapshot["count"] and snapshot["label_reads"] <= max(0, past - first) + 2
     if snapshot["visible"]:
-        bounded = bounded and past - first <= math.ceil(viewport[3] / row_height) + 2
+        row_height = snapshot["rectangles"]["first_row"][3]
+        bounded = bounded and (past == first == 0 if snapshot["count"] == 0 else row_height > 0.0 and past - first <= math.ceil(viewport[3] / row_height) + 2)
         # A dark textured frame and its clear outer gutter verify clipping independently of model markers.
         bx, by, bw, bh = snapshot["rectangles"]["list"]
         if bw > 12.0 and bh > 12.0:

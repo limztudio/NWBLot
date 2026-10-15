@@ -94,7 +94,6 @@ ListOptions SliderFixture::SiblingOptions(){
     ListOptions settings;
     settings.width = { LayoutSizePolicy::Fixed, 280.0f };
     settings.height = { LayoutSizePolicy::Fixed, 48.0f };
-    settings.rowHeight = 24.0f;
     return settings;
 }
 

@@ -34,7 +34,6 @@ namespace __hidden_ui_popup_tools_smoke{
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 200.0f };
 static constexpr Impl::Ui::Rect s_Anchor{ 32.0f, 64.0f, 220.0f, 36.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
-static constexpr f32 s_RowHeight = 28.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +81,6 @@ bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
         return false;
     ContextMenuOptions menu;
     menu.size = { 220.0f, 180.0f };
-    menu.rowHeight = __hidden_ui_popup_tools_smoke::s_RowHeight;
     const ContextMenuResult result = ui.contextMenu("commands", "anchor", m_source, m_menu, menu);
     if(!result.valid)
         return false;
@@ -149,10 +147,7 @@ Impl::Ui::Rect UiPopupToolsSmokeScene::rowBounds(const u64 key)const{
     const auto index = m_source.indexOf(key);
     if(!index || *index < placement.firstRow || *index >= placement.endRow)
         return {};
-    const auto rectangle = Impl::Ui::ScrollLayout::RowBounds(*index, placement, __hidden_ui_popup_tools_smoke::s_RowHeight);
-    if(!rectangle)
-        return {};
-    return *rectangle;
+    return VisibleSmokeListRow(placement, *index);
 }
 
 void UiPopupToolsSmokeScene::observeState(){
@@ -160,11 +155,18 @@ void UiPopupToolsSmokeScene::observeState(){
     const auto& menu = m_menu.placement();
     const auto& tooltip = m_tooltip.placement();
     const auto& sentinel = m_sentinelState.placement.bounds;
-    if(m_sequence != 0u && !m_displayChanged && current == m_lastValues && SameSmokeRect(menu.bounds, m_lastMenu.bounds) && SameSmokeRect(tooltip.bounds, m_lastTooltip.bounds) && SameSmokeRect(sentinel, m_lastSentinel))
+    const auto& list = m_menu.listState().placement();
+    if(
+        m_sequence != 0u && !m_displayChanged && current == m_lastValues
+        && list.offset == m_lastList.offset && list.contentHeight == m_lastList.contentHeight
+        && SameSmokeRect(list.viewport, m_lastList.viewport) && SameSmokeRect(menu.bounds, m_lastMenu.bounds)
+        && SameSmokeRect(tooltip.bounds, m_lastTooltip.bounds) && SameSmokeRect(sentinel, m_lastSentinel)
+    )
         return;
     ++m_sequence;
     m_lastValues = current;
     m_lastMenu = menu;
+    m_lastList = list;
     m_lastTooltip = tooltip;
     m_lastSentinel = sentinel;
     m_displayChanged = false;
@@ -175,7 +177,6 @@ void UiPopupToolsSmokeScene::observeState(){
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("anchor"), __hidden_ui_popup_tools_smoke::s_Anchor);
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("menu"), menu.bounds);
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("tooltip"), tooltip.bounds);
-    const auto& list = m_menu.listState().placement();
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("list"), list.bounds);
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("viewport"), list.viewport);
     LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("first"), rowBounds(1u));

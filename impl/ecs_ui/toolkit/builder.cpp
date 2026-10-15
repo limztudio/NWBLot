@@ -3,6 +3,7 @@
 
 
 #include "builder.h"
+#include "widgets/selectable_paint.h"
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -200,16 +201,16 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
     Point minimum;
     Point measured{ item.textBounds.width, item.textBounds.height };
     if(kind == WidgetKind::Selectable){
-        const UiSkinRegion* skinRegion = region(m_listStyle.row.normal, m_listStyle.row.fallback);
-        if(!skinRegion){
+        const auto metrics = SelectablePainter::Measure(*m_skin, m_listStyle.row);
+        if(!metrics){
             m_context.fail();
             return nullptr;
         }
-        item.padding = m_listStyle.row.padding;
+        item.padding = metrics->padding;
         const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
         const SIMDVectorSingle paddedMeasure = VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), paddingSize);
         measured = { VectorGetX(paddedMeasure), VectorGetY(paddedMeasure) };
-        minimum = { skinRegion->minimumWidth, skinRegion->minimumHeight };
+        minimum = metrics->minimum;
     }
     else if(kind == WidgetKind::Button){
         if(!region(m_style.button, m_style.button)){

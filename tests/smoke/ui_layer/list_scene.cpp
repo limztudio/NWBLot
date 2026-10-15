@@ -33,7 +33,6 @@ namespace __hidden_ui_list_smoke{
 
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 340.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 32.0f, 312.0f, 140.0f, 36.0f };
-static constexpr f32 s_RowHeight = 24.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +71,6 @@ bool UiListSmokeScene::paint(Impl::UiPaintContext& context){
     if(m_visible){
         ListOptions options;
         options.height = { LayoutSizePolicy::Fixed, 240.0f };
-        options.rowHeight = __hidden_ui_list_smoke::s_RowHeight;
         const ListResult result = ui.virtualList("rows", m_source, m_state, options);
         if(!result.valid)
             return false;
@@ -133,7 +131,7 @@ Impl::Ui::Rect UiListSmokeScene::selectedRow()const{
     const auto index = m_source.indexOf(m_state.selectedKey());
     if(!index || *index < placement.firstRow || *index >= placement.endRow)
         return {};
-    const auto rectangle = Impl::Ui::ScrollLayout::RowBounds(*index, placement, __hidden_ui_list_smoke::s_RowHeight);
+    const auto rectangle = SmokeListRowBounds(placement, *index);
     if(!rectangle)
         return {};
     return *rectangle;
@@ -142,7 +140,11 @@ Impl::Ui::Rect UiListSmokeScene::selectedRow()const{
 void UiListSmokeScene::observeState(){
     const auto current = values();
     const auto& placement = m_state.placement();
-    if(m_sequence != 0u && !m_displayChanged && current == m_lastValues && placement.offset == m_lastPlacement.offset && SameSmokeRect(placement.bounds, m_lastPlacement.bounds) && SameSmokeRect(placement.thumb, m_lastPlacement.thumb))
+    if(
+        m_sequence != 0u && !m_displayChanged && current == m_lastValues
+        && placement.offset == m_lastPlacement.offset && placement.contentHeight == m_lastPlacement.contentHeight
+        && SameSmokeRect(placement.bounds, m_lastPlacement.bounds) && SameSmokeRect(placement.thumb, m_lastPlacement.thumb)
+    )
         return;
     ++m_sequence;
     m_lastValues = current;
@@ -154,6 +156,8 @@ void UiListSmokeScene::observeState(){
     );
     LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
     LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    const auto first = SmokeListRowBounds(placement, placement.firstRow);
+    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
     LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
     LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
     LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("selected_row"), selectedRow());

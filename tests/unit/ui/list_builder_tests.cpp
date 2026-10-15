@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <impl/ecs_ui/toolkit/widgets/selectable_paint.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -62,6 +64,11 @@ public:
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
         ++textCalls;
+        if(index == specialIndex){
+            for(usize byte = 0u; byte < specialText.size(); ++byte)
+                temporary[byte] = specialText[byte];
+            return { temporary.data(), specialText.size() };
+        }
         temporary[0u] = static_cast<char>('A' + index % 26u);
         temporary[1u] = 'x';
         return { temporary.data(), 2u };
@@ -92,6 +99,8 @@ public:
     u64 contentRevision = 1u;
     u64 removed = 0u;
     u64 disabled = 0u;
+    u64 specialIndex = Limit<u64>::s_Max;
+    StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3\nPrevious\nNext";
     bool reverse = false;
     bool duplicate = false;
     bool malformedLookup = false;
@@ -100,14 +109,13 @@ public:
     mutable u64 searchCalls = 0u;
     mutable u64 textCalls = 0u;
     mutable u64 enabledCalls = 0u;
-    mutable Array<char, 2u> temporary{};
+    mutable Array<char, 128u> temporary{};
 };
 
 [[nodiscard]] static ListOptions Options(){
     ListOptions options;
     options.width = { LayoutSizePolicy::Fixed, 280.0f };
     options.height = { LayoutSizePolicy::Fixed, 120.0f };
-    options.rowHeight = 24.0f;
     return options;
 }
 
@@ -121,8 +129,8 @@ protected:
         return prepareSource(generation, m_source, m_state, options);
     }
 
-    [[nodiscard]] bool prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options()){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
+    [[nodiscard]] bool prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options(), const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f }){
+        if(!begin(generation, display) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
         m_result = m_builder.virtualList("list", source, state, options);
         return m_result.valid && finishPanel();
@@ -227,13 +235,265 @@ TEST_F(UiListBuilderTests, HundredThousandRowsBuildOnlyVisibleTextTargetsAndGlyp
     EXPECT_EQ(m_context.input().targets().size(), static_cast<usize>(visible) + 4u);
 }
 
+TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixelScrollAnchor){
+    m_source.specialIndex = 50000u;
+    ASSERT_TRUE(accept(1u));
+    ASSERT_NE(target(row(1u)), nullptr);
+    const f32 initialHeight = target(row(1u))->rectangle.height;
+    const f64 within = static_cast<f64>(initialHeight) * 0.25;
+    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(m_source.specialIndex) * initialHeight + within));
+    m_source.textCalls = 0u;
+    m_source.keyCalls = 0u;
+    m_source.lookupCalls = 0u;
+    ASSERT_TRUE(accept(2u));
+    const ScrollPlacement& placement = m_state.placement();
+    ASSERT_EQ(placement.firstRow, m_source.specialIndex);
+    const HitTarget* tall = target(row(m_source.specialIndex + 1u));
+    ASSERT_NE(tall, nullptr);
+    const f32 grownHeight = tall->rectangle.height;
+    EXPECT_GT(grownHeight, initialHeight);
+    EXPECT_NEAR(tall->rectangle.y, placement.viewport.y - within, 0.0001);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), static_cast<f64>(m_source.specialIndex) * grownHeight + within);
+    EXPECT_DOUBLE_EQ(placement.contentHeight, static_cast<f64>(m_source.count) * grownHeight);
+    const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+    const auto layout = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
+    ASSERT_TRUE(metrics);
+    ASSERT_TRUE(layout);
+    const auto visual = m_text.measure(*layout, m_paint.displayMetrics());
+    ASSERT_TRUE(visual);
+    EXPECT_GE(grownHeight + 0.0001f, visual->height + metrics->padding.top + metrics->padding.bottom);
+    const u64 provisionalBound = static_cast<u64>(Ceil(placement.viewport.height / initialHeight)) + 1u;
+    EXPECT_LE(m_source.textCalls, provisionalBound);
+    EXPECT_LE(m_source.keyCalls, provisionalBound * 2u + 2u);
+    EXPECT_LE(m_source.lookupCalls, provisionalBound + 2u);
+    EXPECT_LT(m_context.input().targets().size(), 16u);
+    ASSERT_TRUE(m_state.scrollTo(0.0));
+    ASSERT_TRUE(accept(3u));
+    ASSERT_NE(target(row(1u)), nullptr);
+    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, grownHeight);
+    ++m_source.contentRevision;
+    ASSERT_TRUE(accept(4u));
+    ASSERT_NE(target(row(1u)), nullptr);
+    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, initialHeight);
+}
+
+TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplayAndResolvedRowGeometry){
+    const SelectableStyle originalStyle = m_builder.listStyle().row;
+    u64 generation = 1u;
+    for(u32 change = 0u; change < 7u; ++change){
+        SCOPED_TRACE(testing::Message() << "change=" << change);
+        m_builder.style().fontSize = 16.0f;
+        m_builder.listStyle().row = originalStyle;
+        ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "en"));
+        ListState state;
+        ArithmeticSource source;
+        source.specialIndex = 50000u;
+        DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
+        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
+        ASSERT_TRUE(m_context.commitFrame(generation++));
+        ASSERT_NE(target(row(1u)), nullptr);
+        const f32 seed = target(row(1u))->rectangle.height;
+        ASSERT_TRUE(state.scrollTo(static_cast<f64>(source.specialIndex) * seed));
+        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
+        ASSERT_TRUE(m_context.commitFrame(generation++));
+        ASSERT_NE(target(row(source.specialIndex + 1u)), nullptr);
+        const f32 grown = target(row(source.specialIndex + 1u))->rectangle.height;
+        ASSERT_GT(grown, seed);
+        ASSERT_TRUE(state.scrollTo(0.0));
+        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
+        ASSERT_TRUE(m_context.commitFrame(generation++));
+        ASSERT_NE(target(row(1u)), nullptr);
+        ASSERT_FLOAT_EQ(target(row(1u))->rectangle.height, grown);
+        switch(change){
+        case 0u: ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text)); break;
+        case 1u: m_builder.style().fontSize = 12.0f; break;
+        case 2u: display.pixelScaleX = 1.25f; display.pixelScaleY = 1.5f; break;
+        case 3u: ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "ko")); break;
+        case 4u: m_builder.listStyle().row.padding.bottom += 2.0f; break;
+        case 5u: ++source.generation; break;
+        case 6u: --source.count; break;
+        }
+        source.textCalls = 0u;
+        ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
+        ASSERT_TRUE(m_context.commitFrame(generation++));
+        ASSERT_NE(target(row(1u)), nullptr);
+        const f32 refreshed = target(row(1u))->rectangle.height;
+        EXPECT_LT(refreshed, grown);
+        const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+        ASSERT_TRUE(metrics);
+        f32 expected = metrics->minimum.y;
+        const StringView language = change == 3u ? "ko" : "en";
+        for(const StringView label : { StringView{}, StringView{ "Ax" } }){
+            const auto layout = m_text.layout({ .text = label, .fontSize = m_builder.style().fontSize, .language = language });
+            ASSERT_TRUE(layout);
+            const auto visual = m_text.measure(*layout, display);
+            ASSERT_TRUE(visual);
+            expected = Max(expected, visual->height + metrics->padding.top + metrics->padding.bottom);
+        }
+        EXPECT_FLOAT_EQ(refreshed, expected);
+        EXPECT_LE(source.textCalls, 8u);
+    }
+}
+
+TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum){
+    m_source.specialIndex = 50000u;
+    ASSERT_TRUE(accept(1u));
+    ASSERT_NE(target(row(1u)), nullptr);
+    const f32 seed = target(row(1u))->rectangle.height;
+    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(m_source.specialIndex) * seed));
+    ASSERT_TRUE(accept(2u));
+    ASSERT_NE(target(row(m_source.specialIndex + 1u)), nullptr);
+    const f32 grown = target(row(m_source.specialIndex + 1u))->rectangle.height;
+    ASSERT_GT(grown, seed);
+    ASSERT_TRUE(m_state.scrollTo(0.0));
+    ASSERT_TRUE(accept(3u));
+    ASSERT_NE(target(row(1u)), nullptr);
+    ASSERT_FLOAT_EQ(target(row(1u))->rectangle.height, grown);
+    TextService replacement(m_arena);
+    ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, replacement));
+    ASSERT_EQ(replacement.generation(), m_text.generation());
+    ASSERT_NE(replacement.identity(), m_text.identity());
+    Builder builder(m_arena, m_context, m_paint, replacement);
+    builder.setSkin(m_skin);
+    builder.style() = m_builder.style();
+    builder.listStyle() = m_builder.listStyle();
+    ASSERT_TRUE(begin(4u));
+    ASSERT_TRUE(builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+    ASSERT_TRUE(builder.virtualList("list", m_source, m_state, Options()).valid);
+    ASSERT_TRUE(builder.endPanel());
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(4u));
+    ASSERT_NE(target(row(1u)), nullptr);
+    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, seed);
+}
+
+TEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutContaminatingDifferentMetrics){
+    u64 generation = 1u;
+    for(const bool differentMetrics : { false, true }){
+        SCOPED_TRACE(testing::Message() << "differentMetrics=" << differentMetrics);
+        ArithmeticSource source;
+        source.specialIndex = 2u;
+        ListState state;
+        ASSERT_TRUE(begin(generation));
+        ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+        m_builder.style().fontSize = 22.0f;
+        ASSERT_TRUE(m_builder.virtualList("list", source, state, Options()).valid);
+        if(differentMetrics)
+            m_builder.style().fontSize = 12.0f;
+        ListOptions small = Options();
+        small.height.value = 40.0f;
+        ASSERT_TRUE(m_builder.virtualList("second", source, state, small).valid);
+        ASSERT_TRUE(finishPanel());
+        ASSERT_TRUE(m_context.commitFrame(generation++));
+        ASSERT_NE(target(row(1u)), nullptr);
+        const f32 firstHeight = target(row(1u))->rectangle.height;
+        const WidgetId secondRow = MakeWidgetPartId(MakeWidgetId(id("second", "panel"), "rows"), 1u);
+        ASSERT_NE(target(secondRow), nullptr);
+        const f32 secondHeight = target(secondRow)->rectangle.height;
+        ASSERT_GT(firstHeight, secondHeight);
+        ASSERT_TRUE(state.scrollTo(0.0));
+        ASSERT_TRUE(prepareSource(generation, source, state, small));
+        ASSERT_TRUE(m_context.commitFrame(generation++));
+        ASSERT_NE(target(row(1u)), nullptr);
+        EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, differentMetrics ? secondHeight : firstHeight);
+    }
+}
+
+TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInheritedClipAcrossFrames){
+    m_builder.style().fontSize = 12.0f;
+    m_source.specialIndex = 16u;
+    ASSERT_TRUE(accept(1u));
+    ASSERT_NE(target(row(1u)), nullptr);
+    const f32 naturalHeight = target(row(1u))->rectangle.height;
+    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(naturalHeight) * 10.25));
+    const WidgetId earlier = MakeWidgetId(id("clipped", "panel"), "earlier");
+    const WidgetId earlierRows = MakeWidgetId(earlier, "rows");
+    Rect previousRow;
+    Rect previousClip;
+    for(u64 generation = 2u; generation <= 3u; ++generation){
+        ASSERT_TRUE(begin(generation));
+        ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+        ContainerOptions clipped;
+        clipped.height = { LayoutSizePolicy::Fixed, 20.0f };
+        ASSERT_TRUE(m_builder.beginColumn("clipped", clipped));
+        m_builder.style().fontSize = 12.0f;
+        ListOptions content = Options();
+        content.height = { LayoutSizePolicy::Content, 0.0f };
+        ASSERT_TRUE(m_builder.virtualList("earlier", m_source, m_state, content).valid);
+        ASSERT_TRUE(m_builder.endContainer());
+        m_builder.style().fontSize = 22.0f;
+        ASSERT_TRUE(m_builder.virtualList("later", m_source, m_state, Options()).valid);
+        ASSERT_TRUE(finishPanel());
+        ASSERT_TRUE(m_context.commitFrame(generation));
+        const HitTarget* hostTarget = target(earlier);
+        const HitTarget* first = target(MakeWidgetPartId(earlierRows, 11u));
+        ASSERT_NE(hostTarget, nullptr);
+        ASSERT_NE(first, nullptr);
+        EXPECT_EQ(target(MakeWidgetPartId(earlierRows, 10u)), nullptr);
+        EXPECT_EQ(target(MakeWidgetPartId(earlierRows, 17u)), nullptr);
+        EXPECT_FLOAT_EQ(first->rectangle.height, naturalHeight);
+        EXPECT_FLOAT_EQ(hostTarget->clip.height, clipped.height.value);
+        EXPECT_GT(hostTarget->rectangle.height, hostTarget->clip.height);
+        EXPECT_GT(first->clip.height, 0.0f);
+        EXPECT_LT(first->clip.height, first->rectangle.height);
+        EXPECT_FLOAT_EQ(first->clip.y + first->clip.height, hostTarget->clip.y + hostTarget->clip.height);
+        EXPECT_NEAR((first->clip.y - first->rectangle.y) / first->rectangle.height, 0.25f, 0.00001f);
+        if(generation != 2u){
+            ExpectRect(first->rectangle, previousRow);
+            ExpectRect(first->clip, previousClip);
+        }
+        previousRow = first->rectangle;
+        previousClip = first->clip;
+    }
+}
+
+TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScrollBeforeParentLayout){
+    m_source.count = 8u;
+    m_source.specialIndex = 1u;
+    ListOptions options = Options();
+    options.height = { LayoutSizePolicy::Content, 0.0f };
+    const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+    const auto ordinary = m_text.layout({ .text = "Ax", .fontSize = m_builder.style().fontSize });
+    const auto tall = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
+    ASSERT_TRUE(metrics);
+    ASSERT_TRUE(ordinary);
+    ASSERT_TRUE(tall);
+    const DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
+    const auto ordinaryVisual = m_text.measure(*ordinary, display);
+    const auto tallVisual = m_text.measure(*tall, display);
+    ASSERT_TRUE(ordinaryVisual);
+    ASSERT_TRUE(tallVisual);
+    const f32 initialHeight = Max(metrics->minimum.y, ordinaryVisual->height + metrics->padding.top + metrics->padding.bottom);
+    const f32 finalHeight = Max(metrics->minimum.y, tallVisual->height + metrics->padding.top + metrics->padding.bottom);
+    ASSERT_GT(finalHeight, initialHeight);
+    ASSERT_TRUE(m_state.scrollTo(initialHeight * 0.25));
+    ASSERT_TRUE(begin(1u, display));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+    ASSERT_TRUE(m_builder.virtualList("list", m_source, m_state, options).valid);
+    EXPECT_FALSE(m_builder.button("after", ""));
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_NE(target(host()), nullptr);
+    ASSERT_NE(target(row(1u)), nullptr);
+    ASSERT_NE(target(row(2u)), nullptr);
+    EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, finalHeight);
+    EXPECT_FLOAT_EQ(target(row(2u))->rectangle.height, finalHeight);
+    EXPECT_GE(m_state.placement().viewport.height + 0.0001f, finalHeight);
+    const HitTarget* after = target(id("after", "panel"));
+    ASSERT_NE(after, nullptr);
+    EXPECT_FLOAT_EQ(after->rectangle.y, target(host())->rectangle.y + target(host())->rectangle.height + m_builder.style().gap);
+    EXPECT_LE(m_source.textCalls, 8u);
+}
+
 TEST_F(UiListBuilderTests, ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted){
     ASSERT_TRUE(accept(1u));
     ASSERT_NE(target(row(1u)), nullptr);
     const Rect oldBounds = target(row(1u))->rectangle;
+    const f64 acceptedStep = target(host())->scrollStep;
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(prepare(2u));
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 72.0);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), acceptedStep);
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     ASSERT_NE(target(row(1u)), nullptr);
     EXPECT_FLOAT_EQ(target(row(1u))->rectangle.y, oldBounds.y);
@@ -256,10 +516,55 @@ TEST_F(UiListBuilderTests, InitialProgrammaticSelectionSurvivesAndEndNavigatesTo
     press(Core::Key::End);
     ASSERT_TRUE(prepare(2u));
     EXPECT_EQ(m_state.selectedKey(), 100000u);
-    EXPECT_GT(m_state.scrollOffset(), 2399800.0);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), m_state.placement().maxOffset);
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_NE(target(row(100000u)), nullptr);
     EXPECT_LE(m_source.textCalls, 12u);
+}
+
+TEST_F(UiListBuilderTests, UnseenTallCursorIsMeasuredBeforeRevealAndFailedRevisionRefreshRetainsTheRequest){
+    m_source.specialIndex = m_source.count - 1u;
+    m_state.select(1u);
+    ListOptions options = Options();
+    options.selectOnNavigate = false;
+    ASSERT_TRUE(accept(1u, options));
+    ASSERT_NE(target(row(1u)), nullptr);
+    const f32 initialHeight = target(row(1u))->rectangle.height;
+    press(Core::Key::Tab);
+    ASSERT_EQ(m_context.input().focus(), host());
+    press(Core::Key::End);
+    m_source.textCalls = 0u;
+    ASSERT_TRUE(accept(2u, options));
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_state.cursorKey(), m_source.count);
+    const HitTarget* cursor = target(row(m_source.count));
+    ASSERT_NE(cursor, nullptr);
+    EXPECT_GT(cursor->rectangle.height, initialHeight);
+    EXPECT_GE(cursor->rectangle.y, cursor->clip.y);
+    EXPECT_LE(cursor->rectangle.y + cursor->rectangle.height, cursor->clip.y + cursor->clip.height);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), m_state.placement().maxOffset);
+    EXPECT_LE(m_source.textCalls, 8u);
+    ASSERT_TRUE(m_state.scrollTo(0.0));
+    ASSERT_TRUE(accept(3u, options));
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 0.0);
+    EXPECT_EQ(m_state.cursorKey(), m_source.count);
+    EXPECT_EQ(target(row(m_source.count)), nullptr);
+    ++m_source.contentRevision;
+    const f32 fontSize = m_builder.style().fontSize;
+    m_builder.style().fontSize = Limit<f32>::s_QuietNaN;
+    EXPECT_FALSE(prepare(4u, options));
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_state.cursorKey(), m_source.count);
+    m_context.abandonFrame();
+    m_builder.reset();
+    m_builder.style().fontSize = fontSize;
+    ASSERT_TRUE(accept(5u, options));
+    cursor = target(row(m_source.count));
+    ASSERT_NE(cursor, nullptr);
+    EXPECT_GE(cursor->rectangle.y, cursor->clip.y);
+    EXPECT_LE(cursor->rectangle.y + cursor->rectangle.height, cursor->clip.y + cursor->clip.height);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), m_state.placement().maxOffset);
 }
 
 TEST_F(UiListBuilderTests, ReorderPreservesSelectionByKeyAndRemovalClearsIt){
@@ -515,20 +820,18 @@ TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInp
     EXPECT_EQ(m_state.placement().endRow, 100000u);
 }
 
-TEST_F(UiListBuilderTests, TinyPositiveRowHeightWithEmptyDatasetKeepsABoundedPageCount){
+TEST_F(UiListBuilderTests, EmptyDatasetKeepsABoundedPageCountWithoutReadingText){
     m_source.count = 0u;
     ListOptions options = Options();
-    options.rowHeight = 1.0e-30f;
     ASSERT_TRUE(accept(1u, options));
     ASSERT_NE(target(host()), nullptr);
     EXPECT_EQ(target(host())->pageRows, 1u);
     EXPECT_EQ(m_source.textCalls, 0u);
 }
 
-TEST_F(UiListBuilderTests, TinyPositiveRowHeightWithSmallDatasetBoundsPageSizeByRows){
+TEST_F(UiListBuilderTests, SmallDatasetBoundsPageSizeByRows){
     m_source.count = 2u;
     ListOptions options = Options();
-    options.rowHeight = 1.0e-30f;
     ASSERT_TRUE(accept(1u, options));
     ASSERT_NE(target(host()), nullptr);
     EXPECT_EQ(target(host())->pageRows, 2u);

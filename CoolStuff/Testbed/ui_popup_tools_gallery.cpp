@@ -3,7 +3,6 @@
 
 
 #include "ui_popup_tools_gallery.h"
-#include "ui_gallery_metrics.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -21,11 +20,6 @@ TESTBED_BEGIN
 void UiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
-    const auto rowHeight = UiGalleryMetrics::RowsHeight(context, m_source, 14.0f);
-    if(!rowHeight){
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: UI list row measurement failed"));
-        return;
-    }
     if(!ui.beginPanel("popup_tools_gallery", { x, y, 280.0f, 132.0f }))
         return;
     const f32 previousFontSize = ui.style().fontSize;
@@ -35,7 +29,6 @@ void UiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x,
         ++m_anchorClicks;
     valid = ui.tooltip("help", "anchor", "Open commands here; Delete is disabled.", m_tooltip) && valid;
     ContextMenuOptions options;
-    options.rowHeight = *rowHeight;
     options.size = { 220.0f, 180.0f };
     const ContextMenuResult result = ui.contextMenu("commands", "anchor", m_source, m_menu, options);
     if(result.activated){

@@ -33,7 +33,6 @@ namespace __hidden_ui_combo_smoke{
 
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 160.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
-static constexpr f32 s_RowHeight = 24.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +75,6 @@ bool UiComboSmokeScene::paint(Impl::UiPaintContext& context){
         ComboOptions options;
         options.height = { LayoutSizePolicy::Fixed, 36.0f };
         options.popupHeight = 240.0f;
-        options.rowHeight = __hidden_ui_combo_smoke::s_RowHeight;
         options.enabled = m_enabled;
         const ComboResult result = ui.comboBox("choice", m_source, m_state, options);
         if(!result.valid)
@@ -170,7 +168,7 @@ Impl::Ui::Rect UiComboSmokeScene::cursorRow()const{
     const auto index = m_source.indexOf(list.cursorKey());
     if(!index || *index < placement.firstRow || *index >= placement.endRow)
         return {};
-    const auto rectangle = Impl::Ui::ScrollLayout::RowBounds(*index, placement, __hidden_ui_combo_smoke::s_RowHeight);
+    const auto rectangle = SmokeListRowBounds(placement, *index);
     if(!rectangle)
         return {};
     return *rectangle;
@@ -183,7 +181,7 @@ void UiComboSmokeScene::observeState(){
     const auto& bounds = m_state.bounds();
     if(
         m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && placement.offset == m_lastPlacement.offset
+        && placement.offset == m_lastPlacement.offset && placement.contentHeight == m_lastPlacement.contentHeight
         && SameSmokeRect(placement.bounds, m_lastPlacement.bounds)
         && SameSmokeRect(placement.thumb, m_lastPlacement.thumb)
         && SameSmokeRect(popup.bounds, m_lastPopup.bounds)
@@ -204,6 +202,8 @@ void UiComboSmokeScene::observeState(){
     LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("popup"), popup.bounds);
     LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
     LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    const auto first = SmokeListRowBounds(placement, placement.firstRow);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
     LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
     LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
     LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("cursor_row"), cursorRow());

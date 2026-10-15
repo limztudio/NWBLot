@@ -400,7 +400,7 @@ TEST(UiComboBehaviorTests, ReplacingEstablishedSourceClosesAndClearsSelectionPre
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
     ComboBehavior::Open(state);
     ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(state), source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(ComboBehavior::Preview(state), source, 32.0f, 64.0));
+    ASSERT_TRUE(ComboBehavior::Preview(state).scrollTo(120.0));
     ASSERT_GT(state.listState().scrollOffset(), 0.0);
     const u64 inputGeneration = state.inputGeneration();
     ++source.generation;

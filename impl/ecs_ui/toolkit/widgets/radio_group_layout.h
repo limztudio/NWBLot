@@ -18,14 +18,13 @@ NWB_IMPL_UI_BEGIN
 
 
 inline constexpr u32 s_RadioGroupMaxChoices = 64u;
-inline constexpr f32 s_RadioGroupMinimumRowHeight = 32.0f;
 
 struct RadioGroupChoices;
 struct RadioGroupOptions;
 struct RadioGroupStyle;
 
 struct RadioGroupMetrics{
-    f32 rowHeight = s_RadioGroupMinimumRowHeight;
+    f32 rowHeight = 0.0f;
     f32 indicatorExtent = 24.0f;
     f32 gap = 8.0f;
     f32 rowGap = 4.0f;

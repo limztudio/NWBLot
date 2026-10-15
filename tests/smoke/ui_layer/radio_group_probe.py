@@ -65,6 +65,9 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
     gx, gy, gw, gh = rectangles["group"]
     probe("replacement_panel_gutter", (gx + gw - 8.0, gy + gh + 2.0), panel)
     geometry_matches = snapshot["label_reads"] <= 15 and snapshot["choice_count"] in (4, 5)
+    natural_height = 8.0 + snapshot["choice_count"] * 24.0 + (snapshot["choice_count"] - 1) * 4.0
+    geometry_matches = geometry_matches and abs(gh - natural_height) <= 0.01
+    geometry_matches = geometry_matches and abs(rectangles["disabled_group"][3] - natural_height) <= 0.01
 
     def contains(outer, inner):
         ox, oy, ow, oh = outer
@@ -82,7 +85,8 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
             return
         geometry_matches = geometry_matches and key != snapshot["removed"] \
             and contains(group, row) and contains(row, indicator) and contains(indicator, mark)
-        geometry_matches = geometry_matches and row[3] >= 32.0 and abs(indicator[2] - 24.0) <= 0.01
+        # At 14px these ASCII labels fit the authored 24px indicator, which determines natural row height.
+        geometry_matches = geometry_matches and abs(row[3] - 24.0) <= 0.01 and abs(indicator[2] - 24.0) <= 0.01
         geometry_matches = geometry_matches and abs(indicator[3] - 24.0) <= 0.01
         geometry_matches = geometry_matches and abs(mark[2] - indicator[2] * 0.4) <= 0.01
         geometry_matches = geometry_matches and abs(mark[3] - indicator[3] * 0.4) <= 0.01
@@ -127,6 +131,7 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
     if snapshot["parent"]:
         popup = rectangles["parent"]
         geometry_matches = geometry_matches and contains((0.0, 0.0, *snapshot["logical_extent"]), popup)
+        geometry_matches = geometry_matches and abs(rectangles["popup_group"][3] - natural_height) <= 0.01
         for key in KEYS:
             choice("popup_", key, rectangles["popup_group"], snapshot["popup_selected"], True, (26, 34, 45))
     else:

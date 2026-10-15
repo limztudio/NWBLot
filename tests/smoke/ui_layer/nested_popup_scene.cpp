@@ -137,7 +137,6 @@ bool UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
     edit.height = { LayoutSizePolicy::Fixed, 32.0f };
     ListOptions list;
     list.height = { LayoutSizePolicy::Fixed, 56.0f };
-    list.rowHeight = 20.0f;
     if(!ui.label("title", "Parent scope resumes after nested child", caption) || !ui.beginRow("before", row))
         return false;
     if(ui.button("action", "Before", button))
@@ -157,7 +156,6 @@ bool UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
     ComboOptions combo;
     combo.height = { LayoutSizePolicy::Fixed, 32.0f };
     combo.popupHeight = 172.0f;
-    combo.rowHeight = 24.0f;
     if(!ui.comboBox("combo", m_source, m_combo, combo).valid)
         return false;
     SearchComboOptions search;
@@ -218,12 +216,12 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
         m_rectangles[4] = { parent.x + 8.0f, parent.y + 28.0f, 100.0f, 32.0f };
         m_rectangles[5] = m_beforeEdit.placement.bounds;
         m_rectangles[6] = m_beforeList.placement().bounds;
-        m_rectangles[7] = rowBounds(m_beforeList, m_source, 2u, 20.0f);
+        m_rectangles[7] = rowBounds(m_beforeList, m_source, 2u);
         m_rectangles[8] = { parent.x + 8.0f, parent.y + 124.0f, parent.width - 16.0f, 32.0f };
         m_rectangles[9] = { parent.x + 8.0f, parent.y + 160.0f, 100.0f, 32.0f };
         m_rectangles[10] = m_afterEdit.placement.bounds;
         m_rectangles[11] = m_afterList.placement().bounds;
-        m_rectangles[12] = rowBounds(m_afterList, m_source, 2u, 20.0f);
+        m_rectangles[12] = rowBounds(m_afterList, m_source, 2u);
         m_rectangles[16] = m_combo.bounds();
         m_rectangles[19] = m_search.combo().bounds();
         m_rectangles[23] = { parent.x + 8.0f, parent.y + 328.0f, parent.width - 16.0f, 32.0f };
@@ -236,16 +234,16 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
         }
         if(m_combo.isOpen()){
             m_rectangles[17] = m_combo.placement().bounds;
-            m_rectangles[18] = rowBounds(m_combo.listState(), m_source, 2u, 24.0f);
+            m_rectangles[18] = rowBounds(m_combo.listState(), m_source, 2u);
         }
         if(m_search.combo().isOpen()){
             m_rectangles[20] = m_search.combo().placement().bounds;
             m_rectangles[21] = m_search.editorState().placement.bounds;
-            m_rectangles[22] = rowBounds(m_search.combo().listState(), m_source.filtered(), 2u, 24.0f);
+            m_rectangles[22] = rowBounds(m_search.combo().listState(), m_source.filtered(), 2u);
         }
         if(m_menu.isOpen()){
             m_rectangles[24] = m_menu.placement().bounds;
-            m_rectangles[25] = rowBounds(m_menu.listState(), m_source, 2u, 28.0f);
+            m_rectangles[25] = rowBounds(m_menu.listState(), m_source, 2u);
         }
     }
     m_focusScope = 0u;
@@ -319,15 +317,12 @@ Array<u64, 29u> UiNestedPopupSmokeScene::values()const{
         static_cast<u64>(m_childParentScope) };
 }
 
-Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& state, const Impl::Ui::IListDataSource& source, const u64 key, const f32 rowHeight)const{
+Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& state, const Impl::Ui::IListDataSource& source, const u64 key)const{
     const auto& placement = state.placement();
     const auto index = source.indexOf(key);
     if(!index || *index < placement.firstRow || *index >= placement.endRow)
         return {};
-    const auto result = Impl::Ui::ScrollLayout::RowBounds(*index, placement, rowHeight);
-    if(!result)
-        return {};
-    return *result;
+    return VisibleSmokeListRow(placement, *index);
 }
 
 

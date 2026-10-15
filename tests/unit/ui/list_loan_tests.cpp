@@ -120,7 +120,6 @@ protected:
         ListOptions options;
         options.width = { LayoutSizePolicy::Fixed, 280.0f };
         options.height = { LayoutSizePolicy::Fixed, 120.0f };
-        options.rowHeight = 24.0f;
         return m_builder.virtualList("list", m_source, m_state, options).valid;
     }
 

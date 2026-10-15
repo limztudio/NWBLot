@@ -45,6 +45,7 @@ private:
     using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
     using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
     using ListFrame = BuilderScopeFrame::ListFrame;
+    using ListRow = BuilderScopeFrame::ListRow;
     using ComboFrame = BuilderScopeFrame::ComboFrame;
     using TooltipFrame = BuilderScopeFrame::TooltipFrame;
     using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
@@ -157,8 +158,11 @@ private:
     [[nodiscard]] bool prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool prepareListMetrics(ListFrame& frame);
+    [[nodiscard]] bool prepareListRow(const ListFrame& frame, u64 index, ListRow& row);
+    [[nodiscard]] bool measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip, ScrollPlacement& placement, PaintVector<ListRow>& rows);
     [[nodiscard]] bool paintList(const Item& item, const LayoutBox& box);
-    [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
+    [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement, const PaintVector<ListRow>& rows);
     [[nodiscard]] bool paintRadioGroup(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept;
     [[nodiscard]] bool radioGroupMatches(const RadioGroupFrame& frame)const;

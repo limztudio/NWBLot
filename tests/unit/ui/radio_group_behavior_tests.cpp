@@ -401,11 +401,6 @@ TEST(UiRadioGroupBehaviorTests, RejectedActionsPreserveStateAndResult){
     EXPECT_FALSE(RadioGroupBehavior::Apply(state, *choices, disabled, Action(state, ControlActionKind::Down), result));
     EXPECT_TRUE(state.matches(before));
     ExpectResult(result, expected);
-    RadioGroupOptions tooSmall;
-    tooSmall.rowHeight = 31.0f;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(state, *choices, tooSmall, Action(state, ControlActionKind::Down), result));
-    EXPECT_TRUE(state.matches(before));
-    ExpectResult(result, expected);
     ControlAction stale = Action(state, ControlActionKind::Down);
     ++stale.control.contentRevision;
     EXPECT_FALSE(RadioGroupBehavior::Apply(state, *choices, {}, stale, result));

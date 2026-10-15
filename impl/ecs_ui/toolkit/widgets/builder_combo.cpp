@@ -27,7 +27,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
         || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.popupHeight) || options.popupHeight <= 0.0f
-        || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
+        || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
         || !IsFinite(m_comboStyle.arrowExtent) || m_comboStyle.arrowExtent <= 0.0f
         || !IsFinite(m_comboStyle.arrowGap) || m_comboStyle.arrowGap < 0.0f
     ){
@@ -188,7 +188,6 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     list.state = &state.m_list;
     list.widgetStyle = m_style;
     list.style = m_listStyle;
-    list.options.rowHeight = options.rowHeight;
     list.options.wheelRows = options.wheelRows;
     list.options.enabled = options.enabled;
     list.options.selectOnNavigate = false;
@@ -207,6 +206,10 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
     const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent, VectorGreater(listpaddingCurrent, listpaddingCandidate));
     list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
+    if(!prepareListMetrics(list) || !comboMatches(frame)){
+        m_context.fail();
+        return {};
+    }
     const auto textBounds = m_text.measure(item.text, m_paint.displayMetrics());
     if(!textBounds){
         m_context.fail();

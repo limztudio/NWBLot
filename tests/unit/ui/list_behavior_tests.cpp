@@ -128,7 +128,7 @@ static void ExpectResult(const ListResult& actual, const ListResult& expected){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiListBehaviorTests, ReorderingRetainsStableSelectionAndCursorKeysAndRevealsTheirNewIndex){
+TEST(UiListBehaviorTests, ReorderingRetainsStableSelectionAndCursorKeys){
     RangeSource source;
     ListState state;
     state.select(5u);
@@ -143,8 +143,6 @@ TEST(UiListBehaviorTests, ReorderingRetainsStableSelectionAndCursorKeysAndReveal
     ASSERT_TRUE(ListBehavior::Reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 6u);
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
 }
 
 TEST(UiListBehaviorTests, RemovedCursorClearsIndependentlyOfSurvivingSelection){
@@ -407,38 +405,6 @@ TEST(UiListBehaviorTests, ApplicationChangesFenceEvenAnUnchangedSelectionValue){
     EXPECT_EQ(state.cursorKey(), 3u);
 }
 
-TEST(UiListBehaviorTests, RevisionChangeRequestsEnsureVisibleExactlyUntilItSucceeds){
-    RangeSource source;
-    ListState state;
-    state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
-    ASSERT_TRUE(state.scrollTo(0.0));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
-    ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
-}
-
-TEST(UiListBehaviorTests, EnsureVisibleFailureKeepsItsRequestForTheNextValidAttempt){
-    RangeSource source;
-    ListState state;
-    state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    EXPECT_FALSE(ListBehavior::EnsureCursor(state, source, 0.0f, 64.0));
-    EXPECT_FALSE(ListBehavior::EnsureCursor(state, source, 32.0f, Limit<f64>::s_QuietNaN));
-    source.badLookup = true;
-    EXPECT_FALSE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
-    source.badLookup = false;
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
-}
-
 TEST(UiListBehaviorTests, HugeWheelDeltasClampWithoutMultiplicationOverflow){
     RangeSource source;
     ListState state;
@@ -497,7 +463,7 @@ TEST(UiListBehaviorTests, InvalidOptionsKindsAndZeroPageSizeRejectWithoutChangin
     ListResult result;
     EXPECT_FALSE(ListBehavior::Apply(state, source, options, valid, result));
     options = {};
-    options.rowHeight = 0.0f;
+    options.wheelRows = 0.0f;
     EXPECT_FALSE(ListBehavior::Apply(state, source, options, valid, result));
     options = {};
     options.wheelRows = Limit<f32>::s_QuietNaN;

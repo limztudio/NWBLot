@@ -321,13 +321,13 @@ TEST_F(UiRadioGroupBuilderTests, DeclarationFreezesStyleMetricsBeforeTheOwningPa
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_NE(choice(10u, m_state), nullptr);
     EXPECT_FLOAT_EQ(choice(10u, m_state)->indicator.width, 24.0f);
-    EXPECT_FLOAT_EQ(choice(10u, m_state)->rectangle.height, 32.0f);
+    EXPECT_FLOAT_EQ(choice(10u, m_state)->rectangle.height, 24.0f);
 }
 
-TEST_F(UiRadioGroupBuilderTests, InvalidRowHeightRejectsBeforeSourceCallbacksOrStateMutation){
+TEST_F(UiRadioGroupBuilderTests, InvalidWidthRejectsBeforeSourceCallbacksOrStateMutation){
     const RadioGroupSnapshot saved = m_state.snapshot();
     RadioGroupOptions options;
-    options.rowHeight = 31.0f;
+    options.width = { LayoutSizePolicy::Fixed, -1.0f };
     EXPECT_FALSE(declare(1u, options));
     EXPECT_TRUE(m_context.failed());
     EXPECT_TRUE(m_state.matches(saved));

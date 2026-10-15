@@ -8,6 +8,7 @@
 #include "marker_positions.h"
 
 #include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
 #include <core/common/log.h>
 #include <core/alloc/general.h>
@@ -60,6 +61,22 @@ template<typename Source>
 
 [[nodiscard]] inline bool SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
+}
+
+// The accepted uniform content extent owns row height; smoke input never supplies a sizing policy.
+[[nodiscard]] inline Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
+    if(placement.rowCount == 0u)
+        return MakeUnexpected(Failure{});
+    const f32 height = static_cast<f32>(placement.contentHeight / static_cast<f64>(placement.rowCount));
+    return Impl::Ui::ScrollLayout::RowBounds(index, placement, height);
+}
+
+[[nodiscard]] inline Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
+    const auto rectangle = SmokeListRowBounds(placement, index);
+    if(!rectangle)
+        return {};
+    const auto visible = Impl::Ui::IntersectUiRects<Impl::Ui::UiRectPrecision::PreciseExtents>(*rectangle, placement.contentClip);
+    return visible ? *visible : Impl::Ui::Rect{};
 }
 
 inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){

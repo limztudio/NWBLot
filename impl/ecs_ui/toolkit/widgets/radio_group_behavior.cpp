@@ -83,8 +83,7 @@ namespace __hidden_ui_radio_group_behavior{
 
 [[nodiscard]] static bool ValidOptions(const RadioGroupOptions& options)noexcept{
     return
-        options.enabled && IsFinite(options.rowHeight) && options.rowHeight >= s_RadioGroupMinimumRowHeight
-        && options.width.policy <= LayoutSizePolicy::Stretch && IsFinite(options.width.value) && options.width.value >= 0.0f
+        options.enabled && options.width.policy <= LayoutSizePolicy::Stretch && IsFinite(options.width.value) && options.width.value >= 0.0f
         && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f)
     ;
 }

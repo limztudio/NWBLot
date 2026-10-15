@@ -3,8 +3,10 @@
 
 
 #include "widget_fixture.h"
+#include "combo_fixture.h"
 
 #include <impl/ecs_ui/toolkit/widgets/label.h>
+#include <impl/ecs_ui/toolkit/widgets/selectable_paint.h>
 
 #include <core/alloc/scratch.h>
 
@@ -119,6 +121,21 @@ static void CopyGlyphVertices(const DrawSnapshot& snapshot, Vector<Vertex, Core:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class IntrinsicRowSource final : public UiComboTests::ComboSource{
+public:
+    [[nodiscard]] virtual StringView text(const u64 index)const override{
+        ++textCalls;
+        return index == specialIndex ? specialText : ordinaryText;
+    }
+
+
+public:
+    StringView ordinaryText = "Next";
+    StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
+    u64 specialIndex = 1u;
+};
+
+
 class UiTextRegionTests : public WidgetFixture{
 protected:
     virtual void SetUp()override{
@@ -147,6 +164,81 @@ protected:
         m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
+    }
+
+    void checkIntrinsicRowCoverage(IntrinsicRowSource& source, ListState& list, ComboState& combo, const bool popup, const f32 fontSize, const DisplayMetrics& display, const u64 generation){
+        SCOPED_TRACE(testing::Message() << "popup=" << popup << ", fontSize=" << fontSize << ", scale=" << display.pixelScaleX << "/" << display.pixelScaleY);
+        m_builder.style().fontSize = fontSize;
+        const auto rowMetrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+        ASSERT_TRUE(rowMetrics);
+        ASSERT_TRUE(begin(generation, display));
+        ASSERT_TRUE(m_builder.beginPanel("rows_panel", { 10.0f, 20.0f, 600.0f, 540.0f }));
+        const WidgetId owner = id(popup ? "combo" : "list", "rows_panel");
+        if(popup){
+            ASSERT_TRUE(ComboBehavior::Reconcile(combo, source));
+            if(!combo.isOpen())
+                combo.open();
+            ComboOptions options;
+            options.width = { LayoutSizePolicy::Fixed, 400.0f };
+            options.popupHeight = 320.0f;
+            options.placeholder = "";
+            ASSERT_TRUE(m_builder.comboBox("combo", source, combo, options).valid);
+        }
+        else{
+            ListOptions options;
+            options.width = { LayoutSizePolicy::Fixed, 400.0f };
+            options.height = { LayoutSizePolicy::Fixed, 320.0f };
+            ASSERT_TRUE(m_builder.virtualList("list", source, list, options).valid);
+        }
+        ASSERT_TRUE(finishPanel());
+        const DrawSnapshot actual = m_paint.freeze();
+        ASSERT_TRUE(m_context.commitFrame(generation));
+        const ListState& state = popup ? combo.listState() : list;
+        const ScrollPlacement& placement = state.placement();
+        ASSERT_GT(placement.endRow, placement.firstRow);
+        const WidgetId listOwner = popup ? MakeWidgetId(owner, "rows") : owner;
+        const WidgetId rows = MakeWidgetId(listOwner, "rows");
+        const HitTarget* first = target(MakeWidgetPartId(rows, placement.firstRow + 1u));
+        ASSERT_NE(first, nullptr);
+        const f32 rowHeight = first->rectangle.height;
+        f32 expectedHeight = rowMetrics->minimum.y;
+        for(const StringView label : { StringView{}, source.ordinaryText, source.specialText }){
+            const auto layout = m_text.layout({ .text = label, .fontSize = fontSize });
+            ASSERT_TRUE(layout);
+            const auto visual = m_text.measure(*layout, display);
+            ASSERT_TRUE(visual);
+            expectedHeight = Max(expectedHeight, visual->height + rowMetrics->padding.top + rowMetrics->padding.bottom);
+        }
+        EXPECT_FLOAT_EQ(rowHeight, expectedHeight);
+        EXPECT_DOUBLE_EQ(placement.contentHeight, static_cast<f64>(rowHeight) * source.count);
+        const HitTarget* host = target(listOwner);
+        ASSERT_NE(host, nullptr);
+        EXPECT_DOUBLE_EQ(host->scrollStep, static_cast<f64>(rowHeight) * 3.0);
+        PaintBuilder reference(m_arena);
+        reference.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        reference.pushClip(placement.contentClip);
+        for(u64 index = placement.firstRow; index < placement.endRow; ++index){
+            const HitTarget* row = target(MakeWidgetPartId(rows, index + 1u));
+            ASSERT_NE(row, nullptr);
+            EXPECT_FLOAT_EQ(row->rectangle.height, rowHeight);
+            const StringView label = index == source.specialIndex ? source.specialText : source.ordinaryText;
+            const auto layout = m_text.layout({ .text = label, .fontSize = fontSize });
+            ASSERT_TRUE(layout);
+            const auto visual = m_text.measure(*layout, display);
+            ASSERT_TRUE(visual);
+            const Insets& padding = rowMetrics->padding;
+            EXPECT_GE(rowHeight + 0.0001f, visual->height + padding.top + padding.bottom);
+            const f32 contentHeight = rowHeight - padding.top - padding.bottom;
+            const Point origin{ row->rectangle.x + padding.left - visual->x, row->rectangle.y + padding.top + Max(0.0f, (contentHeight - visual->height) * 0.5f) - visual->y };
+            ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
+        }
+        ASSERT_TRUE(reference.popClip());
+        const auto expectedCoverage = GlyphCoverageArea(reference.freeze());
+        const auto actualCoverage = GlyphCoverageArea(actual);
+        ASSERT_TRUE(expectedCoverage);
+        ASSERT_TRUE(actualCoverage);
+        ASSERT_GT(*expectedCoverage, 0.0);
+        EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
     }
 
     void checkContentButtonRow(const StringView firstText, const StringView secondText, const f32 fontSize, const f32 scale, const u64 generation, const bool fixedHeight = false){
@@ -380,7 +472,7 @@ TEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFull
     const auto skin = sampleSkinPaint(snapshot, Name("button.normal"));
     ASSERT_TRUE(skin);
     ExpectRect(skin->bounds, selectable->rectangle);
-    ExpectGlyphRegion(snapshot, { 20.0f, 35.0f, 70.0f, 20.0f });
+    ExpectGlyphRegion(snapshot, { 20.0f, 35.0f, 70.0f, 18.0f });
 }
 
 TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInsteadOfTheWholeRow){
@@ -394,7 +486,7 @@ TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInstea
     EXPECT_FALSE(m_builder.selectable("selectable", text, false, options));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot actual = m_paint.freeze();
-    const Rect content{ 20.0f, 35.0f, 70.0f, 56.0f };
+    const Rect content{ 20.0f, 35.0f, 70.0f, 54.0f };
     ExpectGlyphRegion(actual, content);
     auto layout = m_text.layout({ .text = text, .fontSize = m_builder.style().fontSize });
     ASSERT_TRUE(layout);
@@ -540,6 +632,101 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
             ASSERT_TRUE(actualCoverage);
             ASSERT_GT(*expectedCoverage, 0.0);
             EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
+        }
+    }
+}
+
+TEST_F(UiTextRegionTests, IntrinsicListAndComboRowsPreserveActualMarksFallbackAndMultilineCoverage){
+    ASSERT_TRUE(installKoreanFallback());
+    IntrinsicRowSource source;
+    source.count = 3u;
+    source.ordinaryText = "A\xCC\x81\xCC\x81 g\xCC\xA3 gjpqy";
+    source.specialText = "\xED\x95\x9C\xEA\xB8\x80 Next\nA\xCC\x81\xCC\x81 g\xCC\xA3";
+    ListState list;
+    ComboState combo;
+    u64 generation = 1u;
+    for(const bool popup : { false, true }){
+        for(const f32 fontSize : { 12.0f, 16.0f, 22.0f }){
+            for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.25f, 1.25f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 1.5f } })
+                ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, fontSize, { 800.0f, 600.0f, scale.x, scale.y }, generation++));
+        }
+    }
+}
+
+TEST_F(UiTextRegionTests, IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges){
+    IntrinsicRowSource source;
+    source.count = 3u;
+    source.specialText = "Previous\nA\xCC\x81\xCC\x81 g\xCC\xA3\nNext";
+    ListState list;
+    ComboState combo;
+    const DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
+    u64 generation = 1u;
+    for(const bool popup : { false, true }){
+        source.specialText = "Previous\nA\xCC\x81\xCC\x81 g\xCC\xA3\nNext";
+        ++source.contentRevision;
+        m_builder.listStyle().row.padding = { 8.0f, 16.0f, 8.0f, 18.0f };
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 22.0f, display, generation++));
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
+        m_builder.listStyle().row.padding = { 8.0f, 4.0f, 8.0f, 4.0f };
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
+        source.specialText = "Next";
+        ++source.contentRevision;
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
+        source.specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
+        ++source.generation;
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 16.0f, display, generation++));
+    }
+}
+
+TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithoutHoverMovement){
+    UiSkin::RegionVector regions(m_arena);
+    regions.assign(m_skin.regions().begin(), m_skin.regions().end());
+    for(UiSkinRegion& region : regions){
+        if(region.name == Name("button.normal"))
+            region.padding = { 9.0f, 1.0f, 2.0f, 3.0f };
+        else if(region.name == Name("button.hover"))
+            region.padding = { 1.0f, 11.0f, 2.0f, 3.0f };
+        else if(region.name == Name("button.pressed")){
+            region.padding = { 1.0f, 2.0f, 13.0f, 3.0f };
+            region.minimumHeight = 55.0f;
+        }
+        else if(region.name == Name("button.disabled")){
+            region.padding = { 1.0f, 2.0f, 3.0f, 15.0f };
+            region.minimumWidth = 100.0f;
+        }
+    }
+    m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+    ASSERT_TRUE(m_skin.validatePayload());
+    m_builder.setSkin(m_skin);
+    const SelectableStyle style;
+    const auto metrics = SelectablePainter::Measure(m_skin, style);
+    ASSERT_TRUE(metrics);
+    EXPECT_FLOAT_EQ(metrics->padding.left, 9.0f);
+    EXPECT_FLOAT_EQ(metrics->padding.top, 11.0f);
+    EXPECT_FLOAT_EQ(metrics->padding.right, 13.0f);
+    EXPECT_FLOAT_EQ(metrics->padding.bottom, 15.0f);
+    EXPECT_FLOAT_EQ(metrics->minimum.x, 100.0f);
+    EXPECT_FLOAT_EQ(metrics->minimum.y, 55.0f);
+    const auto layout = m_text.layout({ .text = "Agjpqy", .fontSize = 16.0f });
+    ASSERT_TRUE(layout);
+    Core::Alloc::ScratchArena scratch(Name("tests/ui/selectable_state_metrics"));
+    Vector<Vertex, Core::Alloc::ScratchArena> baseline(scratch);
+    u64 generation = 1u;
+    for(const SelectablePaintFlags flags : { SelectablePaintFlags{}, SelectablePaintFlags{ true, false, true, false }, SelectablePaintFlags{ true, true, false, false }, SelectablePaintFlags{ false, false, false, false } }){
+        m_paint.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, generation++, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        ASSERT_TRUE(SelectablePainter::Paint(m_paint, m_text, m_skin, *layout, { 20.0f, 30.0f, 180.0f, 70.0f }, { 0.0f, 0.0f, 800.0f, 600.0f }, style, flags, {}, {}));
+        const DrawSnapshot snapshot = m_paint.freeze();
+        ExpectGlyphRegion(snapshot, { 29.0f, 41.0f, 158.0f, 44.0f });
+        Vector<Vertex, Core::Alloc::ScratchArena> glyphs(scratch);
+        CopyGlyphVertices(snapshot, glyphs);
+        if(baseline.empty())
+            baseline = glyphs;
+        ASSERT_EQ(glyphs.size(), baseline.size());
+        for(usize index = 0u; index < glyphs.size(); ++index){
+            EXPECT_FLOAT_EQ(glyphs[index].position.x, baseline[index].position.x);
+            EXPECT_FLOAT_EQ(glyphs[index].position.y, baseline[index].position.y);
+            EXPECT_FLOAT_EQ(glyphs[index].texCoord.x, baseline[index].texCoord.x);
+            EXPECT_FLOAT_EQ(glyphs[index].texCoord.y, baseline[index].texCoord.y);
         }
     }
 }

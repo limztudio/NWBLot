@@ -29,7 +29,7 @@ bool Builder::prepareListRow(const ListFrame& frame, const u64 index, ListRow& r
     const bool enabled = frame.options.enabled && frame.source->enabled(index);
     if(!listStateMatches(frame))
         return false;
-    const ShapeRequest request{ frame.source->text(index), frame.widgetStyle.fontSize, TextDirection::LeftToRight, frame.scriptTag, StringView(frame.language.data()) };
+    const ShapeRequest request{ frame.source->text(index), frame.widgetStyle.fontSize, TextDirection::LeftToRight, frame.measureKey.scriptTag, StringView(frame.measureKey.language.data()) };
     if(!listStateMatches(frame))
         return false;
     // The source owns a temporary view; shaping must copy it before any further source callback.
@@ -47,7 +47,8 @@ bool Builder::prepareListRow(const ListFrame& frame, const u64 index, ListRow& r
     return listMatches(frame);
 }
 
-bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip, ScrollPlacement& placement, PaintVector<ListRow>& rows){
+bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip, ScrollPlacement& placement){
+    auto& rows = frame.rows;
     ListState& state = *frame.state;
     ScrollState scroll;
     if(!listMatches(frame) || !scroll.setOffset(frame.scrollOffset))
@@ -72,13 +73,14 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
             if(!IsFinite(start) || !IsFinite(end) || end <= start || !scroll.ensureVisible(start, end, candidate->viewport.height))
                 return false;
         }
-        candidate = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+        if(revealCursor)
+            candidate = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
         if(!candidate || candidate->endRow - candidate->firstRow > 1024u)
             return false;
         f32 height = frame.rowHeight;
         for(u64 index = candidate->firstRow; index < candidate->endRow; ++index){
-            const auto found = FindIf(rows.begin(), rows.end(), [index](const ListRow& row){ return row.index == index; });
-            if(found != rows.end())
+            const auto found = LowerBound(rows.begin(), rows.end(), index, [](const ListRow& row, const u64 value){ return row.index < value; });
+            if(found != rows.end() && found->index == index)
                 continue;
             // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
             if(rows.size() >= 1024u)
@@ -86,8 +88,8 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
             ListRow row(m_arena);
             if(!prepareListRow(frame, index, row))
                 return false;
-            height = Max(height, Max(frame.rowMinimumHeight, row.textBounds.height + frame.style.row.padding.top + frame.style.row.padding.bottom));
-            rows.push_back(Move(row));
+            height = Max(height, row.textBounds.height + frame.style.row.padding.top + frame.style.row.padding.bottom);
+            rows.insert(found, Move(row));
         }
         if(!IsFinite(height) || height <= 0.0f || !listMatches(frame))
             return false;
@@ -117,8 +119,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
         return false;
     const Rect clip = visibleClip(box.clip);
     ScrollPlacement placement;
-    PaintVector<ListRow> rows(m_arena);
-    if(!measureListPlacement(frame, box, clip, placement, rows))
+    if(!measureListPlacement(frame, box, clip, placement))
         return false;
     if(!frame.state->m_scroll.setOffset(frame.scrollOffset))
         return false;
@@ -149,8 +150,10 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     host.pageRows = page >= static_cast<f64>(frame.rowCount) ? Max<u64>(1u, frame.rowCount) : Max<u64>(1u, static_cast<u64>(page));
     host.gestureMaximum = placement.maxOffset;
     host.focusOnCommit = frame.focusOnCommit;
-    if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement, rows))
+    if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement))
         return false;
+    // Paint owns its glyph pages now; keep no shaped rows alive through later sibling lists.
+    frame.rows.clear();
     if(placement.scrollbarVisible){
         const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
         const WidgetId thumbId = MakeWidgetId(item.state.id, "scrollbar");
@@ -182,12 +185,13 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     return true;
 }
 
-bool Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement, const PaintVector<ListRow>& rows){
+bool Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
+    const auto& rows = frame.rows;
     const WidgetId rowsId = MakeWidgetId(item.state.id, "rows");
     const bool focused = m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_context.input().focus() == frame.commandFocus);
-    for(u64 index = placement.firstRow; index < placement.endRow; ++index){
-        const auto found = FindIf(rows.begin(), rows.end(), [index](const ListRow& row){ return row.index == index; });
-        if(found == rows.end() || !listStateMatches(frame))
+    auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value){ return row.index < value; });
+    for(u64 index = placement.firstRow; index < placement.endRow; ++index, ++found){
+        if(found == rows.end() || found->index != index || !listStateMatches(frame))
             return false;
         const ListRow& row = *found;
         const u64 key = row.key;
@@ -197,7 +201,7 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
         if(!rectangle)
             return false;
         const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
-        if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, row.text, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
+        if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, row.text, row.textBounds, frame.style.row.padding, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
             return false;
         if(item.enabled){
             HitTarget target;

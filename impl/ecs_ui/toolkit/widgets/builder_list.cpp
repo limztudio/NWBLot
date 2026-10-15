@@ -77,7 +77,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
             haveAction = action.has_value();
         }
     }
-    ListFrame frame;
+    ListFrame frame(m_arena);
     frame.source = &source;
     frame.state = &state;
     frame.widgetStyle = m_style;
@@ -105,14 +105,13 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     // A fractional offset or a skin minimum can expose more than one row in a natural viewport.
     // Finish that bounded measurement before its intrinsic height enters the parent layout.
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
-        PaintVector<ListRow> rows(m_arena);
         for(;;){
             LayoutBox provisional;
             const f32 probeWidth = Max(Max(120.0f, background->minimumWidth), frame.padding.left + frame.padding.right + frame.style.scrollbarWidth + frame.rowHeight);
             provisional.rectangle = { 0.0f, 0.0f, probeWidth, Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom) };
             provisional.clip = provisional.rectangle;
             ScrollPlacement placement;
-            if(!measureListPlacement(frame, provisional, provisional.clip, placement, rows)){
+            if(!measureListPlacement(frame, provisional, provisional.clip, placement)){
                 m_context.fail();
                 result.valid = false;
                 return result;
@@ -140,7 +139,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
         return result;
     }
     item.node = *admittedNode;
-    m_scope->m_lists.push_back(frame);
+    m_scope->m_lists.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return result;
 }
@@ -152,7 +151,6 @@ bool Builder::prepareListMetrics(ListFrame& frame){
     if(!metrics)
         return false;
     frame.style.row.padding = metrics->padding;
-    frame.rowMinimumHeight = metrics->minimum.y;
     ListState::MeasureKey key;
     key.sourceGeneration = frame.token.contentGeneration;
     key.sourceRevision = frame.token.contentRevision;
@@ -168,8 +166,6 @@ bool Builder::prepareListMetrics(ListFrame& frame){
         return false;
     for(usize index = 0u; index < m_textLanguage.size(); ++index)
         key.language[index] = m_textLanguage[index];
-    frame.language = key.language;
-    frame.scriptTag = key.scriptTag;
     frame.measureKey = key;
     ListState& state = *frame.state;
     if(key != state.m_measureKey || state.m_rowHeight <= 0.0f){

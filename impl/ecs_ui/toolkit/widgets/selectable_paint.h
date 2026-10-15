@@ -34,9 +34,10 @@ struct SelectablePaintFlags{
 class SelectablePainter final{
 public:
     [[nodiscard]] static Expected<SelectableMetrics> Measure(const UiSkin& skin, const SelectableStyle& style)noexcept;
+    // Use the same display-scale visual bounds and resolved padding that sized the control.
     [[nodiscard]] static bool Paint(
         PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
-        const Rect& bounds, const Rect& clip, const SelectableStyle& style,
+        const Rect& textBounds, const Insets& padding, const Rect& bounds, const Rect& clip, const SelectableStyle& style,
         const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor
     );
 };

@@ -51,12 +51,9 @@ Expected<SelectableMetrics> SelectablePainter::Measure(const UiSkin& skin, const
 
 bool SelectablePainter::Paint(
     PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
-    const Rect& bounds, const Rect& clip, const SelectableStyle& style,
+    const Rect& textBounds, const Insets& padding, const Rect& bounds, const Rect& clip, const SelectableStyle& style,
     const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor
 ){
-    const auto metrics = Measure(skin, style);
-    if(!metrics)
-        return false;
     const Name& preferred = !flags.enabled ? style.disabled : flags.selected ? style.selected : flags.hover ? style.hover : style.normal;
     const Name& fallback = !flags.enabled ? style.disabledFallback : flags.selected ? style.selectedFallback : flags.hover ? style.hoverFallback : style.fallback;
     const UiSkinRegion* region = skin.findRegion(preferred);
@@ -64,18 +61,15 @@ bool SelectablePainter::Paint(
         region = skin.findRegion(fallback);
     if(!region)
         return false;
-    const auto textBounds = text.measure(layout, paint.displayMetrics());
-    if(!textBounds)
-        return false;
     paint.pushClip(clip);
     paint.pushClip(bounds);
     bool painted = paint.drawRegion(region->name, bounds);
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
-    const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(metrics->padding.left, metrics->padding.top, metrics->padding.right, metrics->padding.bottom));
-    const f32 verticalOffset = Max(0.0f, ((VectorGetW(content) - textBounds->height) * 0.5f));
+    const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
+    const f32 verticalOffset = Max(0.0f, ((VectorGetW(content) - textBounds.height) * 0.5f));
     const SIMDVectorSingle textOrigin = VectorAdd(content, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
-    const Point origin{ VectorGetX(textOrigin) - textBounds->x, VectorGetY(textOrigin) - textBounds->y };
+    const Point origin{ VectorGetX(textOrigin) - textBounds.x, VectorGetY(textOrigin) - textBounds.y };
     paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
     if(painted)
         painted = text.paint(paint, layout, origin, flags.enabled ? textColor : disabledTextColor);
@@ -97,7 +91,7 @@ bool Builder::selectable(const AStringView stableKey, const StringView text, con
 bool Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
-    if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, item.text, box.rectangle, visibleClip(box.clip), item.selectableStyle, flags, item.style.text, item.style.disabledText))
+    if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, visibleClip(box.clip), item.selectableStyle, flags, item.style.text, item.style.disabledText))
         return false;
     HitTarget target;
     target.rectangle = box.rectangle;

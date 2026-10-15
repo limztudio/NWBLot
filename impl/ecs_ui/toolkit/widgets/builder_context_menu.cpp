@@ -107,7 +107,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         m_context.fail();
         return result;
     }
-    ListFrame list;
+    ListFrame list(m_arena);
     list.source = &source;
     list.state = &state.m_list;
     list.widgetStyle = m_style;
@@ -138,7 +138,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         m_context.fail();
         return {};
     }
-    m_scope->m_lists.push_back(list);
+    m_scope->m_lists.push_back(Move(list));
     anchor->contextMenu = frame.options.enabled;
     anchor->annotated = true;
     result.valid = true;

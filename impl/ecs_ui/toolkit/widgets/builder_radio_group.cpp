@@ -194,7 +194,7 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
         const SIMDVectorSingle labelSize = VectorSet(measured.x, measured.y, measured.x, measured.y);
         const SIMDVectorSingle maximumSize = VectorSelect(labelSize, currentSize, VectorGreater(currentSize, labelSize));
         maximumLabel = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
-        frame.m_labels.push_back(Move(*label));
+        frame.m_labels.push_back({ Move(*label), *textBounds });
     }
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.fallback);
     const UiSkinRegion* checked = region(frame.m_style.checked, frame.m_style.checkedFallback);

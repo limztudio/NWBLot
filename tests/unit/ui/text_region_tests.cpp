@@ -709,12 +709,14 @@ TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithout
     EXPECT_FLOAT_EQ(metrics->minimum.y, 55.0f);
     const auto layout = m_text.layout({ .text = "Agjpqy", .fontSize = 16.0f });
     ASSERT_TRUE(layout);
+    const auto textBounds = m_text.measure(*layout, { 800.0f, 600.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(textBounds);
     Core::Alloc::ScratchArena scratch(Name("tests/ui/selectable_state_metrics"));
     Vector<Vertex, Core::Alloc::ScratchArena> baseline(scratch);
     u64 generation = 1u;
     for(const SelectablePaintFlags flags : { SelectablePaintFlags{}, SelectablePaintFlags{ true, false, true, false }, SelectablePaintFlags{ true, true, false, false }, SelectablePaintFlags{ false, false, false, false } }){
         m_paint.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, generation++, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
-        ASSERT_TRUE(SelectablePainter::Paint(m_paint, m_text, m_skin, *layout, { 20.0f, 30.0f, 180.0f, 70.0f }, { 0.0f, 0.0f, 800.0f, 600.0f }, style, flags, {}, {}));
+        ASSERT_TRUE(SelectablePainter::Paint(m_paint, m_text, m_skin, *layout, *textBounds, metrics->padding, { 20.0f, 30.0f, 180.0f, 70.0f }, { 0.0f, 0.0f, 800.0f, 600.0f }, style, flags, {}, {}));
         const DrawSnapshot snapshot = m_paint.freeze();
         ExpectGlyphRegion(snapshot, { 29.0f, 41.0f, 158.0f, 44.0f });
         Vector<Vertex, Core::Alloc::ScratchArena> glyphs(scratch);

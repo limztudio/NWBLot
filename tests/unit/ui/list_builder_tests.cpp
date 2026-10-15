@@ -64,6 +64,8 @@ public:
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
         ++textCalls;
+        if(index < textCallsByIndex.size())
+            ++textCallsByIndex[index];
         if(index == specialIndex){
             for(usize byte = 0u; byte < specialText.size(); ++byte)
                 temporary[byte] = specialText[byte];
@@ -108,6 +110,7 @@ public:
     mutable u64 lookupCalls = 0u;
     mutable u64 searchCalls = 0u;
     mutable u64 textCalls = 0u;
+    mutable Array<u64, 32u> textCallsByIndex{};
     mutable u64 enabledCalls = 0u;
     mutable Array<char, 128u> temporary{};
 };
@@ -483,7 +486,9 @@ TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScr
     const HitTarget* after = target(id("after", "panel"));
     ASSERT_NE(after, nullptr);
     EXPECT_FLOAT_EQ(after->rectangle.y, target(host())->rectangle.y + target(host())->rectangle.height + m_builder.style().gap);
-    EXPECT_LE(m_source.textCalls, 8u);
+    EXPECT_EQ(m_source.textCalls, 2u);
+    EXPECT_EQ(m_source.textCallsByIndex[0u], 1u);
+    EXPECT_EQ(m_source.textCallsByIndex[1u], 1u);
 }
 
 TEST_F(UiListBuilderTests, ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted){
@@ -749,6 +754,22 @@ TEST_F(UiListBuilderTests, SourceRevisionChangedDuringScopeRejectsTheDeferredLoa
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
     const ListResult result = m_builder.virtualList("list", m_source, m_state, Options());
     ASSERT_TRUE(result.valid);
+    ++m_source.contentRevision;
+    EXPECT_FALSE(m_builder.endPanel());
+    EXPECT_TRUE(m_context.failed());
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_FALSE(m_context.ready());
+}
+
+TEST_F(UiListBuilderTests, ContentPreflightRowsCannotHideAChangedSourceBeforePaint){
+    ListOptions options = Options();
+    options.height = { LayoutSizePolicy::Content, 0.0f };
+    ASSERT_TRUE(accept(1u, options));
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+    m_source.textCalls = 0u;
+    ASSERT_TRUE(m_builder.virtualList("list", m_source, m_state, options).valid);
+    ASSERT_GT(m_source.textCalls, 0u);
     ++m_source.contentRevision;
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_context.failed());

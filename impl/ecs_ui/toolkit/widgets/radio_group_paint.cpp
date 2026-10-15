@@ -56,9 +56,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         if(!indicator || !mark)
             return false;
         const Color tint = !enabled ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint : hover ? frame.m_style.hoverTint : Color{};
-        const auto textBounds = m_text.measure(frame.m_labels[index], m_paint.displayMetrics());
-        if(!textBounds)
-            return false;
+        const Rect& textBounds = frame.m_labels[index].bounds;
         m_paint.pushClip(row.clip);
         bool painted = m_paint.drawRegion(indicator->name, row.indicator, tint);
         if(painted && checked)
@@ -66,11 +64,11 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const bool focused = enabled && input.focus() == item.state.id && frame.m_snapshot.cursorKey == row.key;
         if(painted && focused && m_skin->findRegion(frame.m_style.focus))
             painted = m_paint.drawRegion(frame.m_style.focus, row.rectangle);
-        const TextLayout& label = frame.m_labels[index];
+        const TextLayout& label = frame.m_labels[index].text;
         const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + frame.m_metrics.gap);
-        const f32 verticalOffset = Max(0.0f, (row.rectangle.height - textBounds->height) * 0.5f);
+        const f32 verticalOffset = Max(0.0f, (row.rectangle.height - textBounds.height) * 0.5f);
         const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, row.rectangle.x, row.rectangle.y), VectorSet(horizontalOffset, verticalOffset, horizontalOffset, verticalOffset));
-        const Point origin{ VectorGetX(textOrigin) - textBounds->x, VectorGetY(textOrigin) - textBounds->y };
+        const Point origin{ VectorGetX(textOrigin) - textBounds.x, VectorGetY(textOrigin) - textBounds.y };
         m_paint.pushClip(row.textClip);
         if(painted)
             painted = m_text.paint(m_paint, label, origin, enabled ? frame.m_widgetStyle.text : frame.m_widgetStyle.disabledText);

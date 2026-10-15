@@ -151,6 +151,9 @@ private:
     };
 
     struct ListFrame{
+        explicit ListFrame(Core::Alloc::GlobalArena& arena)noexcept : rows(arena) {}
+
+        PaintVector<ListRow> rows;
         const IListDataSource* source = nullptr;
         ListState* state = nullptr;
         WidgetStyle widgetStyle;
@@ -160,9 +163,6 @@ private:
         f64 scrollOffset = 0.0;
         u64 cursorKey = 0u;
         f32 rowHeight = 0.0f;
-        f32 rowMinimumHeight = 0.0f;
-        Array<char, 64u> language{};
-        u32 scriptTag = 0u;
         ControlToken token;
         Insets padding;
         u64 rowCount = 0u;

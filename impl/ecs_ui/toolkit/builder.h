@@ -160,9 +160,9 @@ private:
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool prepareListMetrics(ListFrame& frame);
     [[nodiscard]] bool prepareListRow(const ListFrame& frame, u64 index, ListRow& row);
-    [[nodiscard]] bool measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip, ScrollPlacement& placement, PaintVector<ListRow>& rows);
+    [[nodiscard]] bool measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip, ScrollPlacement& placement);
     [[nodiscard]] bool paintList(const Item& item, const LayoutBox& box);
-    [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement, const PaintVector<ListRow>& rows);
+    [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
     [[nodiscard]] bool paintRadioGroup(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept;
     [[nodiscard]] bool radioGroupMatches(const RadioGroupFrame& frame)const;

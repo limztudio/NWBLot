@@ -183,7 +183,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return {};
     }
     frame.options.placeholder = {};
-    ListFrame list;
+    ListFrame list(m_arena);
     list.source = frame.results;
     list.state = &state.m_list;
     list.widgetStyle = m_style;
@@ -236,7 +236,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return {};
     }
-    m_scope->m_lists.push_back(list);
+    m_scope->m_lists.push_back(Move(list));
     m_scope->m_combos.push_back(frame);
     m_scope->m_items.push_back(Move(item));
     result.valid = true;

@@ -42,7 +42,7 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.x, box.rectangle.y), VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top));
     const Rect textClip{ VectorGetX(textOrigin), VectorGetY(textOrigin), Max(0.0f, icon.x - frame.style.arrowGap - box.rectangle.x - item.padding.left), contentHeight };
     m_paint.pushClip(textClip);
-    const Point origin{ textClip.x, textClip.y + Max(0.0f, (contentHeight - item.text.measure().y) * 0.5f) };
+    const Point origin{ textClip.x - item.textBounds.x, textClip.y + Max(0.0f, (contentHeight - item.textBounds.height) * 0.5f) - item.textBounds.y };
     const bool textPainted = arrowPainted && m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
     const bool textPopped = m_paint.popClip();
     const bool focusPainted = textPainted && (!focused || !item.enabled || !m_skin->findRegion(item.style.focus) || m_paint.drawRegion(item.style.focus, box.rectangle));

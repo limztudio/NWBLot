@@ -191,8 +191,14 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
         return nullptr;
     }
     item.text = Move(*layout);
+    const auto textBounds = m_text.measure(item.text, m_paint.displayMetrics());
+    if(!textBounds){
+        m_context.fail();
+        return nullptr;
+    }
+    item.textBounds = *textBounds;
     Point minimum;
-    Point measured = item.text.measure();
+    Point measured{ item.textBounds.width, item.textBounds.height };
     if(kind == WidgetKind::Selectable){
         const UiSkinRegion* skinRegion = region(m_listStyle.row.normal, m_listStyle.row.fallback);
         if(!skinRegion){

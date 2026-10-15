@@ -34,7 +34,7 @@ TESTBED_BEGIN
 
 class UiWidgetGallery final : NoCopy{
 public:
-    [[nodiscard]] static NWB::Impl::Ui::Rect LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display)noexcept;
+    [[nodiscard]] static NWB::Impl::Ui::Rect LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display, f32 preferredTop)noexcept;
 
 
 public:
@@ -42,7 +42,7 @@ public:
 
 
 public:
-    void paint(NWB::Impl::UiPaintContext& context);
+    void paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds);
 
 
 private:

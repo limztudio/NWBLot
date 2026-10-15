@@ -186,7 +186,10 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
         auto label = m_text.layout(textShapeRequest(text, frame.m_widgetStyle.fontSize));
         if(!label || !radioGroupMatches(frame))
             return false;
-        const Point measured = label->measure();
+        const auto textBounds = m_text.measure(*label, m_paint.displayMetrics());
+        if(!textBounds)
+            return false;
+        const Point measured{ textBounds->width, textBounds->height };
         const SIMDVectorSingle currentSize = VectorSet(maximumLabel.x, maximumLabel.y, maximumLabel.x, maximumLabel.y);
         const SIMDVectorSingle labelSize = VectorSet(measured.x, measured.y, measured.x, measured.y);
         const SIMDVectorSingle maximumSize = VectorSelect(labelSize, currentSize, VectorGreater(currentSize, labelSize));

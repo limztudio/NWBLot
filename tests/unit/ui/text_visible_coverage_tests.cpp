@@ -3,8 +3,10 @@
 
 
 #include "text_visible_fixture.h"
+#include "baked_font_fixture.h"
 
 #include <impl/ecs_ui/toolkit/text/atlas.h>
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.h>
 
 #include <global/algorithm.h>
 #include <global/simplemath.h>
@@ -103,6 +105,7 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     }
     ASSERT_EQ(m_layout.lines().size(), 2u);
     ASSERT_EQ(m_layout.glyphs().size(), hiddenCount + 1u);
+    ASSERT_TRUE(m_text.measure(m_layout, { 800.0f, 600.0f, 1.0f, 1.0f }));
     Core::Alloc::ScratchArena scratch(Name("tests/ui/text/visible_hangul"));
     Vector<u32, Core::Alloc::ScratchArena> ids(scratch);
     ids.reserve(hiddenCount);
@@ -358,6 +361,212 @@ TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisible
     EXPECT_EQ(revealed.glyphPages().size(), 2u);
     EXPECT_EQ(revealed.vertices().size(), 8u);
 }
+
+
+TEST_F(TextVisibleCoverageTests, NaturalMeasurementUsesFontLineMetricsAndPreservesLogicalMeasurement){
+    const auto previous = m_text.layout({ .text = "Previous", .fontSize = 16.0f });
+    ASSERT_TRUE(previous);
+    EXPECT_FLOAT_EQ(previous->lines()[0u].baseline, 17.109375f);
+    EXPECT_FLOAT_EQ(previous->measure().y, 21.796875f);
+    EXPECT_FLOAT_EQ(previous->inkBounds().y + previous->inkBounds().height, 17.265625f);
+    const auto measured = m_text.measure(*previous, { 800.0f, 600.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(measured);
+    EXPECT_FLOAT_EQ(measured->height + 16.0f, 37.796875f);
+    const auto fallback = m_text.layout({ .text = "Edit me: \xed\x95\x9c\xea\xb8\x80", .fontSize = 14.0f });
+    ASSERT_TRUE(fallback);
+    EXPECT_FLOAT_EQ(fallback->measure().y, 20.34375f);
+    const Point logical = fallback->measure();
+    for(const f32 scale : { 1.0f, 1.25f, 1.5f, 2.0f }){
+        const auto bounds = m_text.measure(*fallback, { 800.0f, 600.0f, scale, scale });
+        ASSERT_TRUE(bounds);
+        EXPECT_GE(bounds->height, logical.y);
+        EXPECT_FLOAT_EQ(fallback->measure().x, logical.x);
+        EXPECT_FLOAT_EQ(fallback->measure().y, logical.y);
+    }
+}
+
+TEST_F(TextVisibleCoverageTests, NativePresetMeasurementMatchesRenderedBitmapWithoutAtlasAdmission){
+    const auto layout = m_text.layout({ .text = "Previous gyjpq A\xcc\x81\xcc\x81 g\xcc\xa3 \xed\x95\x9c\xea\xb8\x80" });
+    ASSERT_TRUE(layout);
+    for(const u32 pixelSize : { 12u, 14u, 16u, 18u, 21u, 24u, 32u, 48u }){
+        for(const PlacedGlyph& glyph : layout->glyphs()){
+            const auto preset = glyph.face->rasterBounds(glyph.glyphId, pixelSize);
+            ASSERT_TRUE(preset);
+            ASSERT_TRUE(glyph.face->rasterize(glyph.glyphId, pixelSize, m_bitmap));
+            EXPECT_FLOAT_EQ(preset->x, static_cast<f32>(m_bitmap.bearingX));
+            EXPECT_FLOAT_EQ(preset->y, -static_cast<f32>(m_bitmap.bearingY));
+            EXPECT_FLOAT_EQ(preset->width, static_cast<f32>(m_bitmap.width));
+            EXPECT_FLOAT_EQ(preset->height, static_cast<f32>(m_bitmap.height));
+        }
+    }
+    const auto large = m_text.layout({ .text = "W", .fontSize = 1024.0f });
+    ASSERT_TRUE(large);
+    ASSERT_TRUE(m_text.measure(*large, { 800.0f, 600.0f, 1.0f, 1.0f }));
+    beginPaint(1u);
+    ASSERT_TRUE(m_text.paint(m_paint, *layout, { 20.0f, 20.0f }));
+    const DrawSnapshot snapshot = m_paint.freeze();
+    ASSERT_FALSE(snapshot.glyphPages().empty());
+    EXPECT_EQ(snapshot.glyphPages()[0u]->binding().generation, 1u);
+}
+
+TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase){
+    const StringView samples[]{ "Previous", "Next", "gyjpq", "\xc3\x81\xc3\x89\xc3\x8d\xc3\x93\xc3\x9a \xc3\x87", "A\xcc\x81\xcc\x81", "g\xcc\xa3", "\xed\x95\x9c\xea\xb8\x80", "Edit me: \xed\x95\x9c\xea\xb8\x80" };
+    for(const f32 size : { 12.0f, 14.0f, 16.0f }){
+        for(const StringView sample : samples){
+            const auto layout = m_text.layout({ .text = sample, .fontSize = size });
+            ASSERT_TRUE(layout);
+            for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.25f, 1.25f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 1.5f } }){
+                const DisplayMetrics display{ 800.0f, 600.0f, scale.x, scale.y };
+                const auto measured = m_text.measure(*layout, display);
+                ASSERT_TRUE(measured);
+                for(const f32 phase : { 0.0f, 0.25f, 0.53125f, 0.9375f }){
+                    const Rect content{ 32.0f + phase, 24.0f + phase, measured->width, measured->height };
+                    const Point origin{ content.x - measured->x, content.y - measured->y };
+                    for(const PlacedGlyph& glyph : layout->glyphs()){
+                        const auto preset = glyph.face->rasterBounds(glyph.glyphId, static_cast<u32>(Ceil(size * Max(scale.x, scale.y))));
+                        ASSERT_TRUE(preset);
+                        if(preset->width == 0.0f || preset->height == 0.0f)
+                            continue;
+                        const auto raster = rasterRectangle(glyph, size, display, origin);
+                        ASSERT_TRUE(raster);
+                        EXPECT_GE(raster->x + 0.0001f, content.x);
+                        EXPECT_GE(raster->y + 0.0001f, content.y);
+                        EXPECT_LE(raster->x + raster->width, content.x + content.width + 0.0001f);
+                        EXPECT_LE(raster->y + raster->height, content.y + content.height + 0.0001f);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+[[nodiscard]] static f32 SampleSdfDistance(const SdfAtlasPage& page, const u32 channel, const f32 texelX, const f32 texelY)noexcept{
+    const SdfAtlasPageBinding& binding = page.binding();
+    const auto& pixels = page.pixels();
+    const f32 x = texelX - 0.5f;
+    const f32 y = texelY - 0.5f;
+    const i32 firstX = static_cast<i32>(Floor(x));
+    const i32 firstY = static_cast<i32>(Floor(y));
+    const f32 fractionX = x - static_cast<f32>(firstX);
+    const f32 fractionY = y - static_cast<f32>(firstY);
+    const auto sample = [&](const i32 column, const i32 row)noexcept -> f32{
+        const u32 clampedX = static_cast<u32>(Clamp(column, 0, static_cast<i32>(binding.width) - 1));
+        const u32 clampedY = static_cast<u32>(Clamp(row, 0, static_cast<i32>(binding.height) - 1));
+        return static_cast<f32>(pixels[(static_cast<usize>(clampedY) * binding.width + clampedX) * binding.channelCount + channel]) / 255.0f;
+    };
+    const f32 top = sample(firstX, firstY) * (1.0f - fractionX) + sample(firstX + 1, firstY) * fractionX;
+    const f32 bottom = sample(firstX, firstY + 1) * (1.0f - fractionX) + sample(firstX + 1, firstY + 1) * fractionX;
+    const f32 encoded = top * (1.0f - fractionY) + bottom * fractionY;
+    return (encoded * 255.0f - 128.0f) * static_cast<f32>(binding.spreadPixels) / 128.0f;
+}
+
+TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage){
+    const auto initial = m_text.layout({ .text = "A", .fontSize = 32.0f });
+    ASSERT_TRUE(initial);
+    ASSERT_EQ(initial->glyphs().size(), 1u);
+    FontAtlas baked(m_arena, Name("tests/ui/fonts/measured_sdf"));
+    FontAtlasPayload payload(m_arena);
+    payload.font = Core::Assets::AssetRef<Font>("tests/ui/fonts/latin");
+    const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
+    payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
+    UiFixtureSupport::PopulateBakedFontTables(bytes, payload, m_arena);
+    payload.bakePpem = 32u;
+    payload.ascenderUnits = 1069.0f;
+    payload.descenderUnits = -293.0f;
+    payload.glyphs.resize(payload.sourceGlyphCount);
+    for(u32 index = 0u; index < payload.sourceGlyphCount; ++index)
+        payload.glyphs[index].glyphId = index;
+    FontAtlasGlyph& glyph = payload.glyphs[initial->glyphs()[0u].glyphId];
+    glyph.drawable = 1u;
+    glyph.channel = 3u;
+    glyph.x = 1u;
+    glyph.y = 1u;
+    glyph.width = 48u;
+    glyph.height = 48u;
+    glyph.planeLeft = -1000.0f;
+    glyph.planeTop = -2000.0f;
+    glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width * payload.unitsPerEm) / payload.bakePpem;
+    glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height * payload.unitsPerEm) / payload.bakePpem;
+    payload.groups.emplace_back(m_arena);
+    FontAtlasGroup& group = payload.groups.back();
+    group.width = 64u;
+    group.height = 64u;
+    // Other channels are fully opaque: measurement must follow the selected glyph channel.
+    group.pixels.resize(64u * 64u * 4u, 255u);
+    for(u32 y = 0u; y < group.height; ++y){
+        for(u32 x = 0u; x < group.width; ++x){
+            const i32 localX = static_cast<i32>(x) - static_cast<i32>(glyph.x);
+            const i32 localY = static_cast<i32>(y) - static_cast<i32>(glyph.y);
+            const i32 distance = Min(Min(localX - 15, 25 - localX), Min(localY - 13, 23 - localY));
+            group.pixels[(static_cast<usize>(y) * group.width + x) * 4u + glyph.channel] = static_cast<u8>(Clamp(128 + 16 * distance, 0, 255));
+        }
+    }
+    group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
+    baked.setPayload(Move(payload));
+    Core::Alloc::ScratchArena scratch(Name("tests/ui/text/measure_sdf"));
+    ASSERT_TRUE(baked.validatePayload(scratch));
+    const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u, &baked };
+    ASSERT_TRUE(m_text.setFonts(&source, 1u));
+    usize visibleSamples = 0u;
+    for(const f32 fontSize : { 16.0f, 24.0f, 32.0f }){
+        const auto layout = m_text.layout({ .text = "A", .fontSize = fontSize });
+        ASSERT_TRUE(layout);
+        const PlacedGlyph& placed = layout->glyphs()[0u];
+        ASSERT_TRUE(placed.face->bakedAtlas());
+        const BakedFontAtlas& atlas = *placed.face->bakedAtlas();
+        const FontAtlasGlyph& record = *atlas.glyph(placed.glyphId);
+        const SdfAtlasPage& page = *atlas.page(record.group);
+        for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 2.0f }, Point{ 2.0f, 0.75f } }){
+            const f32 physicalSize = fontSize * Max(scale.x, scale.y);
+            if(physicalSize < 24.0f || physicalSize > 48.0f)
+                continue;
+            const DisplayMetrics display{ 800.0f, 600.0f, scale.x, scale.y };
+            const auto measured = m_text.measure(*layout, display);
+            ASSERT_TRUE(measured);
+            const auto relativePlane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, {});
+            ASSERT_TRUE(relativePlane);
+            EXPECT_GT(measured->x, relativePlane->x);
+            EXPECT_GT(measured->y, relativePlane->y);
+            for(const f32 phase : { 0.0f, 0.25f, 0.53125f, 0.9375f }){
+                const Rect content{ 100.0f + phase, 100.0f + phase * 0.5f, measured->width, measured->height };
+                const Point origin{ content.x - measured->x, content.y - measured->y };
+                const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, origin);
+                ASSERT_TRUE(plane);
+                const i32 firstX = static_cast<i32>(Floor(plane->x * scale.x));
+                const i32 firstY = static_cast<i32>(Floor(plane->y * scale.y));
+                const i32 lastX = static_cast<i32>(Ceil((plane->x + plane->width) * scale.x));
+                const i32 lastY = static_cast<i32>(Ceil((plane->y + plane->height) * scale.y));
+                const auto distance = [&](const i32 x, const i32 y)noexcept -> f32{
+                    const f32 localX = (static_cast<f32>(x) + 0.5f) / scale.x - plane->x;
+                    const f32 localY = (static_cast<f32>(y) + 0.5f) / scale.y - plane->y;
+                    return SampleSdfDistance(page, record.channel, static_cast<f32>(record.x) + localX * record.width / plane->width, static_cast<f32>(record.y) + localY * record.height / plane->height);
+                };
+                for(i32 y = firstY; y < lastY; ++y){
+                    for(i32 x = firstX; x < lastX; ++x){
+                        const f32 pointX = (static_cast<f32>(x) + 0.5f) / scale.x;
+                        const f32 pointY = (static_cast<f32>(y) + 0.5f) / scale.y;
+                        if(pointX < plane->x || pointY < plane->y || pointX >= plane->x + plane->width || pointY >= plane->y + plane->height)
+                            continue;
+                        const f32 current = distance(x, y);
+                        // Quad lanes share a finite difference with their horizontal and vertical partners, including helpers outside the plane.
+                        const f32 derivative = Abs(distance(x ^ 1, y) - current) + Abs(distance(x, y ^ 1) - current);
+                        if(0.5f + current / Max(derivative, 0.001f) <= 0.0f)
+                            continue;
+                        ++visibleSamples;
+                        EXPECT_GE(pointX + 0.0001f, content.x);
+                        EXPECT_GE(pointY + 0.0001f, content.y);
+                        EXPECT_LE(pointX, content.x + content.width + 0.0001f);
+                        EXPECT_LE(pointY, content.y + content.height + 0.0001f);
+                    }
+                }
+            }
+        }
+    }
+    EXPECT_GT(visibleSamples, 100u);
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

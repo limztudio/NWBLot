@@ -41,7 +41,13 @@ bool Builder::beginWindow(const AStringView stableKey, const StringView title, W
         return false;
     }
     m_scope->m_window.title = Move(*titleLayout);
-    const auto metrics = WindowLayout::Measure(*frame, *header, collapse, resize, m_style, options, m_scope->m_window.title.measure(), m_skin->referenceDensity());
+    const auto titleBounds = m_text.measure(m_scope->m_window.title, m_paint.displayMetrics());
+    if(!titleBounds){
+        m_context.fail();
+        return false;
+    }
+    m_scope->m_window.titleBounds = *titleBounds;
+    const auto metrics = WindowLayout::Measure(*frame, *header, collapse, resize, m_style, options, { titleBounds->width, titleBounds->height }, m_skin->referenceDensity());
     if(!metrics){
         m_context.fail();
         return false;

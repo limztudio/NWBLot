@@ -81,6 +81,8 @@ public:
     [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {});
     // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
     [[nodiscard]] bool adoptLayout(TextLayout&& layout);
+    // Call after shaping at the target display scale before arranging painted text; measurement preserves logical line, caret, hit-test, and composition coordinates.
+    [[nodiscard]] bool measure(TextService& text, const DisplayMetrics& display);
     [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, bool revealCaret = true)const noexcept;
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.
     [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, bool revealCaret = true)const noexcept;
@@ -91,6 +93,7 @@ public:
 public:
     [[nodiscard]] StringView displayText()const noexcept{ return { m_display.data(), m_display.size() }; }
     [[nodiscard]] const TextLayout& layout()const noexcept{ return m_geometry.layout(); }
+    [[nodiscard]] const Rect& visualBounds()const noexcept{ return m_visualBounds; }
     [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const noexcept{ return m_geometry.caretStops(); }
     [[nodiscard]] const EditCaretGeometry& caretGeometry()const noexcept{ return m_geometry; }
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
@@ -109,6 +112,7 @@ private:
     AString<Core::Alloc::GlobalArena> m_display;
     PaintVector<EditCaretMapping> m_mapping;
     EditCaretGeometry m_geometry;
+    Rect m_visualBounds;
     EditBoxRange m_selection;
     EditBoxRange m_preedit;
     EditBoxRange m_replacement;

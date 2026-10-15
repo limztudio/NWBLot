@@ -149,7 +149,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { minimum.x, Max(minimum.y, ((item.editView.layout().measure().y + item.padding.top) + item.padding.bottom)) };
+    description.intrinsicSize = { minimum.x, Max(minimum.y, ((item.editView.visualBounds().height + item.padding.top) + item.padding.bottom)) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();

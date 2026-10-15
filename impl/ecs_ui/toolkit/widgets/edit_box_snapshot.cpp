@@ -87,8 +87,20 @@ bool EditBoxView::adoptLayout(TextLayout&& layout){
         return false;
     if(!candidate.caretRect(m_caret) || !candidate.caretRect(m_selection.begin) || !candidate.caretRect(m_selection.end))
         return false;
+    const Point logicalSize = candidate.layout().measure();
     m_geometry = Move(candidate);
+    m_visualBounds = { 0.0f, 0.0f, logicalSize.x, logicalSize.y };
     m_ready = true;
+    return true;
+}
+
+bool EditBoxView::measure(TextService& text, const DisplayMetrics& display){
+    if(!m_ready)
+        return false;
+    const auto measured = text.measure(layout(), display);
+    if(!measured)
+        return false;
+    m_visualBounds = *measured;
     return true;
 }
 

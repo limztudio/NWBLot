@@ -31,17 +31,15 @@ void UiEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = 14.0f;
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 20.0f } };
-    bool valid = ui.label("title", "Text editing", caption);
+    bool valid = ui.label("title", "Text editing");
     EditBoxOptions options;
-    options.height = { LayoutSizePolicy::Fixed, 36.0f };
     const EditBoxResult text = ui.editBox("editable", m_text, m_textState, options);
     if(text.textChanged)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom edit text bytes={}"), m_text.text().size());
     options.readOnly = true;
     const EditBoxResult readOnly = ui.editBox("read_only", m_readOnly, m_readOnlyState, options);
     valid = text.valid && readOnly.valid && valid;
-    valid = ui.label("hint", "Ctrl+A/C/X/V, undo and redo", caption) && valid;
+    valid = ui.label("hint", "Ctrl+A/C/X/V, undo and redo") && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)

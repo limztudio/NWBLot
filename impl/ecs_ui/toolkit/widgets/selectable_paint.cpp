@@ -31,15 +31,18 @@ bool SelectablePainter::Paint(
         region = skin.findRegion(fallback);
     if(!region)
         return false;
+    const auto textBounds = text.measure(layout, paint.displayMetrics());
+    if(!textBounds)
+        return false;
     paint.pushClip(clip);
     paint.pushClip(bounds);
     bool painted = paint.drawRegion(region->name, bounds);
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
     const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(style.padding.left, style.padding.top, style.padding.right, style.padding.bottom));
-    const f32 verticalOffset = Max(0.0f, ((VectorGetW(content) - layout.measure().y) * 0.5f));
+    const f32 verticalOffset = Max(0.0f, ((VectorGetW(content) - textBounds->height) * 0.5f));
     const SIMDVectorSingle textOrigin = VectorAdd(content, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
-    const Point origin{ VectorGetX(textOrigin), VectorGetY(textOrigin) };
+    const Point origin{ VectorGetX(textOrigin) - textBounds->x, VectorGetY(textOrigin) - textBounds->y };
     paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
     if(painted)
         painted = text.paint(paint, layout, origin, flags.enabled ? textColor : disabledTextColor);

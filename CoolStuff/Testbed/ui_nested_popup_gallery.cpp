@@ -3,6 +3,7 @@
 
 
 #include "ui_nested_popup_gallery.h"
+#include "ui_gallery_metrics.h"
 
 #include <core/common/log.h>
 
@@ -34,6 +35,11 @@ UiNestedPopupGallery::UiNestedPopupGallery(NWB::Core::Alloc::GlobalArena& arena)
 void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
+    const auto rowHeight = UiGalleryMetrics::RowsHeight(context, m_source, 12.0f);
+    if(!rowHeight){
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: UI list row measurement failed"));
+        return;
+    }
     m_source.beginFrame();
     const f32 previousFontSize = ui.style().fontSize;
     const f32 previousGap = ui.style().gap;
@@ -41,19 +47,17 @@ void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     ui.style().gap = 4.0f;
     if(!ui.beginPanel("nested_popup_gallery", { x, y, 280.0f, 92.0f }))
         return;
-    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    const WidgetOptions button{ {}, { LayoutSizePolicy::Fixed, 28.0f } };
-    bool valid = ui.label("title", "Nested popup / parent scope", title);
-    if(ui.button("open", "Open parent and right child", button))
+    bool valid = ui.label("title", "Nested popup / parent scope");
+    if(ui.button("open", "Open parent and right child"))
         m_parent.open();
-    valid = ui.label("hint", "Escape/outside closes the top child", title) && valid;
+    valid = ui.label("hint", "Escape/outside closes the top child") && valid;
     valid = ui.endPanel() && valid;
     PopupOptions parent;
     const SIMDVectorSingle parentOrigin = VectorAdd(VectorSet(x, y, 0.0f, 0.0f), VectorSet(8.0f, 28.0f, 0.0f, 0.0f));
     parent.anchor = { VectorGetX(parentOrigin), VectorGetY(parentOrigin), 264.0f, 28.0f };
     parent.size = { 300.0f, 420.0f };
     if(ui.beginPopup("nested_parent", m_parent, parent)){
-        valid = paintParent(ui) && valid;
+        valid = paintParent(ui, *rowHeight) && valid;
         valid = ui.endPopup() && valid;
     }
     ui.style().fontSize = previousFontSize;
@@ -62,20 +66,17 @@ void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom nested popup declaration failed"));
 }
 
-bool UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
+bool UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui, const f32 rowHeight){
     using namespace NWB::Impl::Ui;
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    const WidgetOptions button{ { LayoutSizePolicy::Fixed, 100.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
-    const WidgetOptions wide{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
+    const WidgetOptions button{ { LayoutSizePolicy::Fixed, 100.0f }, {} };
+    const WidgetOptions wide{ { LayoutSizePolicy::Stretch, 1.0f }, {} };
     ContainerOptions row;
-    row.height = { LayoutSizePolicy::Fixed, 32.0f };
     row.gap = 4.0f;
     EditBoxOptions edit;
-    edit.height = { LayoutSizePolicy::Fixed, 32.0f };
     ListOptions list;
     list.height = { LayoutSizePolicy::Fixed, 56.0f };
-    list.rowHeight = 20.0f;
-    if(!ui.label("title", "Parent: controls before and after child", caption) || !ui.beginRow("before", row))
+    list.rowHeight = rowHeight;
+    if(!ui.label("title", "Parent: controls before and after child") || !ui.beginRow("before", row))
         return false;
     if(ui.button("action", "Before", button))
         ++m_beforeClicks;
@@ -92,9 +93,8 @@ bool UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
     if(!after.valid || !ui.endContainer() || !ui.virtualList("after_list", m_source, m_afterList, list).valid)
         return false;
     ComboOptions combo;
-    combo.height = { LayoutSizePolicy::Fixed, 32.0f };
     combo.popupHeight = 172.0f;
-    combo.rowHeight = 24.0f;
+    combo.rowHeight = rowHeight;
     if(!ui.comboBox("combo", m_source, m_combo, combo).valid)
         return false;
     SearchComboOptions search;
@@ -105,6 +105,7 @@ bool UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
     if(ui.button("menu_anchor", "Right-click / Menu for commands", wide))
         m_command = 0u;
     ContextMenuOptions menu;
+    menu.rowHeight = rowHeight;
     menu.size = { 200.0f, 172.0f };
     const ContextMenuResult result = ui.contextMenu("commands", "menu_anchor", m_source, m_menu, menu);
     if(result.activated){
@@ -125,14 +126,12 @@ bool UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
     options.size = { 220.0f, 178.0f };
     if(!ui.beginPopup("right_child", m_child, options))
         return !ui.failed();
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
-    if(!ui.label("title", "Independent child overlay", caption))
+    const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, {} };
+    if(!ui.label("title", "Independent child overlay"))
         return false;
     if(ui.button("action", "Child action", button))
         ++m_childClicks;
     EditBoxOptions edit;
-    edit.height = { LayoutSizePolicy::Fixed, 32.0f };
     const EditBoxResult result = ui.editBox("edit", m_childText, m_childEdit, edit);
     if(ui.button("close_branch", "Close ancestor and entire branch", button))
         m_parent.close();

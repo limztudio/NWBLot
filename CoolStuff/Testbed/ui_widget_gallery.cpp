@@ -33,7 +33,6 @@ namespace Section{
 };
 
 static constexpr f32 s_Margin = 18.0f;
-static constexpr f32 s_PreferredTop = 246.0f;
 static constexpr f32 s_SelectorWidth = 400.0f;
 static constexpr f32 s_SelectorHeight = 88.0f;
 static constexpr f32 s_ContentHeight = 260.0f;
@@ -56,13 +55,13 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display)noexcept{
+NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display, const f32 preferredTop)noexcept{
     using namespace __hidden_testbed_ui_gallery;
     const f32 height = ((s_SelectorHeight + s_ContentGap) + s_ContentHeight);
     const SIMDVectorSingle available = VectorSubtract(VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f), VectorSet(s_SelectorWidth, height, 0.0f, 0.0f)), VectorReplicate(s_Margin));
-    const SIMDVectorSingle preferredTop = VectorSet(0.0f, s_PreferredTop, 0.0f, 0.0f);
-    const SIMDVectorSingle topLimit = VectorAndInt(VectorLess(preferredTop, available), VectorSelectControl(0u, 1u, 0u, 0u));
-    const SIMDVectorSingle capped = VectorSelect(available, preferredTop, topLimit);
+    const SIMDVectorSingle preferred = VectorSet(0.0f, preferredTop, 0.0f, 0.0f);
+    const SIMDVectorSingle topLimit = VectorAndInt(VectorLess(preferred, available), VectorSelectControl(0u, 1u, 0u, 0u));
+    const SIMDVectorSingle capped = VectorSelect(available, preferred, topLimit);
     const SIMDVectorSingle margin = VectorReplicate(s_Margin);
     const SIMDVectorSingle origin = VectorSelect(capped, margin, VectorGreater(margin, capped));
     return { VectorGetX(origin), VectorGetY(origin), s_SelectorWidth, height };
@@ -81,20 +80,17 @@ UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB
     , m_images(arena, assets)
 {}
 
-void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
+void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds){
     using namespace NWB::Impl::Ui;
     using namespace __hidden_testbed_ui_gallery;
     Builder& ui = context.ui;
-    const Rect bounds = LayoutBounds(context.display);
     const u32 previous = m_selectedGallery;
     if(!ui.beginPanel("gallery_selector", { bounds.x, bounds.y, bounds.width, s_SelectorHeight }))
         return;
     ContainerOptions row;
-    row.height = { LayoutSizePolicy::Fixed, 32.0f };
     bool valid = ui.beginRow("navigation", row);
     WidgetOptions navigation;
     navigation.width = { LayoutSizePolicy::Fixed, 100.0f };
-    navigation.height = { LayoutSizePolicy::Fixed, 32.0f };
     navigation.enabled = m_selectedGallery != 0u && !ui.input().hasPopup();
     if(ui.button("previous", "Previous", navigation))
         --m_selectedGallery;

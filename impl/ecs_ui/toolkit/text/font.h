@@ -76,6 +76,8 @@ public:
     [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const noexcept;
     [[nodiscard]] Expected<FontMetrics> metrics(f32 fontSize)const;
     [[nodiscard]] bool shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const;
+    // The unrendered native slot presets the same pixel rectangle used by grayscale rasterization.
+    [[nodiscard]] Expected<Rect> rasterBounds(u32 glyphId, u32 pixelSize);
     [[nodiscard]] bool rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output);
 
 

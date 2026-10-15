@@ -99,7 +99,7 @@ bool Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     if(frame.editor >= m_scope->m_comboEditors.size() || !comboMatches(frame))
         return false;
     const Item& item = m_scope->m_comboEditors[frame.editor];
-    const f32 measured = item.editView.layout().measure().y + item.padding.top + item.padding.bottom;
+    const f32 measured = item.editView.visualBounds().height + item.padding.top + item.padding.bottom;
     LayoutBox box = content;
     box.rectangle.height = Min(Max(frame.queryHeight, measured), content.rectangle.height);
     HitTarget navigation;

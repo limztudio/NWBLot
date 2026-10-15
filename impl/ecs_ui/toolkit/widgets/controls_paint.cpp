@@ -84,7 +84,7 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     bool painted = true;
     Point origin{ box.rectangle.x, box.rectangle.y };
     Rect textClip = box.rectangle;
-    const Point measured = item.text.measure();
+    const Point measured{ item.textBounds.width, item.textBounds.height };
     if(item.state.kind == WidgetKind::Separator){
         painted = m_paint.drawRegion(item.style.separator, box.rectangle);
         const bool popped = m_paint.popClip();
@@ -122,6 +122,8 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     }
     if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
         painted = m_paint.drawRegion(item.style.focus, box.rectangle);
+    origin.x -= item.textBounds.x;
+    origin.y -= item.textBounds.y;
     m_paint.pushClip(textClip);
     if(painted)
         painted = m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);

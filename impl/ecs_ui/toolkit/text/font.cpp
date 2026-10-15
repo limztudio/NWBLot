@@ -353,6 +353,23 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
     return true;
 }
 
+Expected<Rect> FontFace::rasterBounds(const u32 glyphId, const u32 pixelSize){
+    if(!valid() || pixelSize == 0u || pixelSize > 4096u)
+        return MakeUnexpected(Failure{});
+    if(FT_Set_Pixel_Sizes(m_state->m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_state->m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("UI glyph raster measurement failed"));
+        return MakeUnexpected(Failure{});
+    }
+    // FT_Load_Glyph presets this box through the same ft_glyphslot_preset_bitmap path as the normal renderer, without allocating coverage pixels.
+    const FT_GlyphSlot slot = m_state->m_face->glyph;
+    const FT_Bitmap& bitmap = slot->bitmap;
+    if(slot->format != FT_GLYPH_FORMAT_OUTLINE || (bitmap.pixel_mode != FT_PIXEL_MODE_GRAY && bitmap.width != 0u && bitmap.rows != 0u)){
+        NWB_LOGGER_ERROR(NWB_TEXT("UI glyph measurement requires a grayscale outline"));
+        return MakeUnexpected(Failure{});
+    }
+    return Rect{ static_cast<f32>(slot->bitmap_left), -static_cast<f32>(slot->bitmap_top), static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows) };
+}
+
 bool FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){
     if(!valid() || pixelSize == 0u || pixelSize > 4096u)
         return false;

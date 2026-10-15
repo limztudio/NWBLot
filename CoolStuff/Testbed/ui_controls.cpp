@@ -30,10 +30,12 @@ void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     NWB::Impl::Ui::WindowOptions options;
     options.initialBounds = { 18.0f, 18.0f, 360.0f, 160.0f };
     options.contentHeightFirstUse = true;
-    const auto gallery = UiWidgetGallery::LayoutBounds(context.display);
+    const auto gallery = m_uiPreview.galleryBounds(context);
+    if(!gallery)
+        return;
     const auto& overview = options.initialBounds;
     const SIMDVectorSingle overviewEnd = VectorAdd(VectorSet(overview.x, overview.y, 0.0f, 0.0f), VectorSet(overview.width, overview.height, 0.0f, 0.0f));
-    if(Vector2Less(VectorSet(gallery.x, gallery.y, 0.0f, 0.0f), overviewEnd))
+    if(Vector2Less(VectorSet(gallery->x, gallery->y, 0.0f, 0.0f), overviewEnd))
         return;
     NWB::Impl::Ui::SeparatorOptions separator;
     separator.thickness = 1.0f;

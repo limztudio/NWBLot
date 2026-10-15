@@ -5,6 +5,7 @@
 #include "service.h"
 #include "atlas.h"
 #include "glyph_visibility.h"
+#include "../layout/validation.h"
 
 #include <core/alloc/scratch.h>
 
@@ -27,6 +28,105 @@ namespace __hidden_ui_text_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static f32 RoundMeasuredBound(const f64 value, const bool upper)noexcept{
+    const f32 rounded = static_cast<f32>(value);
+    if(upper ? static_cast<f64>(rounded) >= value : static_cast<f64>(rounded) <= value)
+        return rounded;
+    if(rounded == 0.0f)
+        return BitCast<f32>(upper ? 1u : 0x80000001u);
+    const u32 bits = BitCast<u32>(rounded);
+    return BitCast<f32>((upper == (rounded > 0.0f)) ? bits + 1u : bits - 1u);
+}
+
+[[nodiscard]] static Expected<Rect> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
+    const f64 left = VectorDoubleGetX(minimum);
+    const f64 top = VectorDoubleGetY(minimum);
+    const f64 right = VectorDoubleGetX(maximum);
+    const f64 bottom = VectorDoubleGetY(maximum);
+    if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < -Limit<f32>::s_Max || top < -Limit<f32>::s_Max || right > Limit<f32>::s_Max || bottom > Limit<f32>::s_Max || right < left || bottom < top)
+        return MakeUnexpected(Failure{});
+    const f32 x = RoundMeasuredBound(left, false);
+    const f32 y = RoundMeasuredBound(top, false);
+    const f64 width = static_cast<f64>(RoundMeasuredBound(right, true)) - x;
+    const f64 height = static_cast<f64>(RoundMeasuredBound(bottom, true)) - y;
+    if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
+        return MakeUnexpected(Failure{});
+    const Rect result{ x, y, RoundMeasuredBound(width, true), RoundMeasuredBound(height, true) };
+    if(!IsValidUiRect(result))
+        return MakeUnexpected(Failure{});
+    return result;
+}
+
+[[nodiscard]] static Expected<Rect> MeasureSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display){
+    const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, {});
+    if(!plane || plane->width <= 0.0f || plane->height <= 0.0f)
+        return plane;
+    const FontAtlasGlyph& glyph = *atlas.glyph(placed.glyphId);
+    const SdfAtlasPage& page = *atlas.page(glyph.group);
+    const SdfAtlasPageBinding& binding = page.binding();
+    const auto& pixels = page.pixels();
+    const f64 texelWidth = static_cast<f64>(plane->width) / glyph.width;
+    const f64 texelHeight = static_cast<f64>(plane->height) / glyph.height;
+    const f64 physicalStepX = 1.0 / (texelWidth * display.pixelScaleX);
+    const f64 physicalStepY = 1.0 / (texelHeight * display.pixelScaleY);
+    if(!IsFinite(physicalStepX) || !IsFinite(physicalStepY))
+        return MakeUnexpected(Failure{});
+    const auto sample = [&](const u32 x, const u32 y)noexcept -> i32{
+        return pixels[(static_cast<usize>(y) * binding.width + x) * binding.channelCount + glyph.channel];
+    };
+    // A derivative lane can sample one physical pixel beyond the quad; one additional texel covers both bilinear neighbors there.
+    const u32 haloX = static_cast<u32>(Min(static_cast<f64>(binding.width), Ceil(physicalStepX) + 1.0));
+    const u32 haloY = static_cast<u32>(Min(static_cast<f64>(binding.height), Ceil(physicalStepY) + 1.0));
+    const u32 firstX = glyph.x > haloX ? glyph.x - haloX : 0u;
+    const u32 firstY = glyph.y > haloY ? glyph.y - haloY : 0u;
+    const u32 lastX = Min(binding.width - 1u, glyph.x + glyph.width + haloX);
+    const u32 lastY = Min(binding.height - 1u, glyph.y + glyph.height + haloY);
+    i32 gradientX = 0;
+    i32 gradientY = 0;
+    for(u32 y = firstY; y <= lastY; ++y){
+        for(u32 x = firstX; x <= lastX; ++x){
+            const i32 value = sample(x, y);
+            if(x != lastX)
+                gradientX = Max(gradientX, Abs(sample(x + 1u, y) - value));
+            if(y != lastY)
+                gradientY = Max(gradientY, Abs(sample(x, y + 1u) - value));
+        }
+    }
+    // Bilinear directional slopes are bounded by adjacent-texel differences, including helper lanes outside the visible quad.
+    // The shader decodes distance = (encoded - 128) * spread / 128, then uses max(fwidth(distance), 0.001).
+    const f64 derivative = static_cast<f64>(gradientX) * physicalStepX + static_cast<f64>(gradientY) * physicalStepY;
+    const f64 halfWidth = 0.5 * Max(derivative, 0.001 * 128.0 / binding.spreadPixels);
+    f64 left = glyph.width;
+    f64 top = glyph.height;
+    f64 right = 0.0;
+    f64 bottom = 0.0;
+    bool visible = false;
+    for(u32 y = 0u; y <= glyph.height; ++y){
+        const u32 y0 = glyph.y + y == 0u ? 0u : glyph.y + y - 1u;
+        const u32 y1 = Min(binding.height - 1u, glyph.y + y);
+        for(u32 x = 0u; x <= glyph.width; ++x){
+            const u32 x0 = glyph.x + x == 0u ? 0u : glyph.x + x - 1u;
+            const u32 x1 = Min(binding.width - 1u, glyph.x + x);
+            const i32 maximum = Max(Max(sample(x0, y0), sample(x1, y0)), Max(sample(x0, y1), sample(x1, y1)));
+            if(static_cast<f64>(maximum) + halfWidth < 128.0)
+                continue;
+            // Texel centers lie at n + 0.5; retain exactly the candidate cell's intersection with the drawn plane.
+            left = Min(left, Max(0.0, static_cast<f64>(x) - 0.5));
+            top = Min(top, Max(0.0, static_cast<f64>(y) - 0.5));
+            right = Max(right, Min(static_cast<f64>(glyph.width), static_cast<f64>(x) + 0.5));
+            bottom = Max(bottom, Min(static_cast<f64>(glyph.height), static_cast<f64>(y) + 0.5));
+            visible = true;
+        }
+    }
+    if(!visible)
+        return Rect{};
+    const SIMDVectorDouble origin = VectorDoubleSet(plane->x, plane->y, 0.0, 0.0);
+    const SIMDVectorDouble scale = VectorDoubleSet(texelWidth, texelHeight, 0.0, 0.0);
+    const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(VectorDoubleSet(left, top, 0.0, 0.0), scale, origin);
+    const SIMDVectorDouble maximum = VectorDoubleMultiplyAddExpression(VectorDoubleSet(right, bottom, 0.0, 0.0), scale, origin);
+    return MeasuredRectangle(minimum, maximum);
+}
+
 struct PreparedGlyph{
     Rect rectangle;
     Rect uv;
@@ -44,6 +144,58 @@ struct PreparedGlyph{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetrics& display){
+    using namespace __hidden_ui_text_paint;
+    if(layout.lines().empty() || !IsFinite(layout.fontSize()) || layout.fontSize() < 1.0f / 64.0f || layout.fontSize() > 2048.0f || !IsFinite(display.pixelScaleX) || !IsFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
+        return MakeUnexpected(Failure{});
+    const f32 physicalSize = layout.fontSize() * Max(display.pixelScaleX, display.pixelScaleY);
+    const f32 rasterPpem = Ceil(physicalSize);
+    if(!IsFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > 4096.0f)
+        return MakeUnexpected(Failure{});
+    const f32 rasterScale = rasterPpem / layout.fontSize();
+    const u32 pixelSize = static_cast<u32>(rasterPpem);
+    const Point logical = layout.measure();
+    const Rect ink = layout.inkBounds();
+    SIMDVectorDouble minimum = VectorDoubleSet(Min(0.0f, ink.x), Min(0.0f, ink.y), 0.0, 0.0);
+    SIMDVectorDouble maximum = VectorDoubleSet(Max(static_cast<f64>(logical.x), static_cast<f64>(ink.x) + ink.width), Max(static_cast<f64>(logical.y), static_cast<f64>(ink.y) + ink.height), 0.0, 0.0);
+    for(const PlacedGlyph& glyph : layout.glyphs()){
+        SIMDVectorDouble first;
+        SIMDVectorDouble last;
+        if(const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize)){
+            const auto support = MeasureSdfSupport(glyph, *atlas, layout.fontSize(), display);
+            if(!support)
+                return MakeUnexpected(Failure{});
+            if(support->width <= 0.0f || support->height <= 0.0f)
+                continue;
+            first = VectorDoubleSet(support->x, support->y, 0.0, 0.0);
+            last = VectorDoubleAdd(first, VectorDoubleSet(support->width, support->height, 0.0, 0.0));
+        }
+        else{
+            if(!glyph.face || !glyph.face->valid())
+                return MakeUnexpected(Failure{});
+            const AtlasGlyph* cached = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
+            const Expected<Rect> raster = cached
+                ? Expected<Rect>(Rect{ static_cast<f32>(cached->bearingX), -static_cast<f32>(cached->bearingY), cached->pixels.width, cached->pixels.height })
+                : glyph.face->rasterBounds(glyph.glyphId, pixelSize);
+            if(!raster)
+                return MakeUnexpected(Failure{});
+            if(raster->width <= 0.0f || raster->height <= 0.0f)
+                continue;
+            const SIMDVectorDouble scale = VectorDoubleReplicate(static_cast<f64>(rasterScale));
+            const SIMDVectorDouble origin = VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0);
+            const SIMDVectorDouble pixelOrigin = VectorDoubleSet(raster->x, raster->y, 0.0, 0.0);
+            const SIMDVectorDouble pixelEnd = VectorDoubleAdd(pixelOrigin, VectorDoubleSet(raster->width, raster->height, 0.0, 0.0));
+            // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
+            const SIMDVectorDouble snap = VectorDoubleSet(0.5 / display.pixelScaleX, 0.5 / display.pixelScaleY, 0.0, 0.0);
+            first = VectorDoubleSubtract(VectorDoubleAdd(origin, VectorDoubleDivide(pixelOrigin, scale)), snap);
+            last = VectorDoubleAdd(VectorDoubleAdd(origin, VectorDoubleDivide(pixelEnd, scale)), snap);
+        }
+        minimum = VectorDoubleSelect(minimum, first, VectorDoubleLess(first, minimum));
+        maximum = VectorDoubleSelect(maximum, last, VectorDoubleGreater(last, maximum));
+    }
+    return MeasuredRectangle(minimum, maximum);
+}
 
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();

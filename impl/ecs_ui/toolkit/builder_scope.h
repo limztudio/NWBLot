@@ -52,6 +52,7 @@ private:
         EditBoxStyle editStyle;
         ScrollbarStyle scrollbarStyle;
         TextLayout text;
+        Rect textBounds;
         EditBoxView editView;
         EditBoxState* editState = nullptr;
         EditBoxOptions editOptions;
@@ -92,6 +93,7 @@ private:
         WidgetState collapseState;
         WidgetState resizeState;
         TextLayout title;
+        Rect titleBounds;
         bool firstUse = false;
 
         explicit WindowFrame(Core::Alloc::GlobalArena& arena)noexcept

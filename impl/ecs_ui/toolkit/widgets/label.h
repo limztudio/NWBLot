@@ -25,6 +25,7 @@ public:
 
 public:
     [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request);
+    [[nodiscard]] Expected<Rect> measure(TextService& text, const DisplayMetrics& display);
     [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color = {});
     [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
 

@@ -85,30 +85,37 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
     const auto caret = m_geometry.caretRect(m_caret);
     if(!caret)
         return MakeUnexpected(Failure{});
-    const f32 maximumScroll = Max(0.0f, layout().measure().x + caretWidth - placement.content.width);
-    if(!IsFinite(maximumScroll))
+    const Point logicalSize = layout().measure();
+    const f32 rightOverhang = Max(0.0f, m_visualBounds.x + m_visualBounds.width - logicalSize.x);
+    const f32 bottomOverhang = Max(0.0f, m_visualBounds.y + m_visualBounds.height - logicalSize.y);
+    const f32 maximumScroll = Max(0.0f, m_visualBounds.width + caretWidth - placement.content.width);
+    // Scroll offsets start at the visual envelope; reveal its overhang with the logical caret at either text edge.
+    const f32 caretEndX = caret->x - m_visualBounds.x + caretWidth + rightOverhang;
+    if(!IsFinite(maximumScroll) || !IsFinite(caretEndX))
         return MakeUnexpected(Failure{});
     placement.scroll = Clamp(previousScroll.x, 0.0f, maximumScroll);
     if(revealCaret && caret->x < placement.scroll)
         placement.scroll = caret->x;
-    if(revealCaret && caret->x + caretWidth > placement.scroll + placement.content.width)
-        placement.scroll = caret->x + caretWidth - placement.content.width;
+    if(revealCaret && caretEndX > placement.scroll + placement.content.width)
+        placement.scroll = caretEndX - placement.content.width;
     placement.scroll = Clamp(placement.scroll, 0.0f, maximumScroll);
     if(m_textMode == EditTextMode::Multiline){
-        const f32 maximumScrollY = Max(0.0f, layout().measure().y - placement.content.height);
-        if(!IsFinite(maximumScrollY))
+        const f32 maximumScrollY = Max(0.0f, m_visualBounds.height - placement.content.height);
+        const f32 caretEndY = caret->y - m_visualBounds.y + caret->height + bottomOverhang;
+        if(!IsFinite(maximumScrollY) || !IsFinite(caretEndY))
             return MakeUnexpected(Failure{});
         placement.scrollY = Clamp(previousScroll.y, 0.0f, maximumScrollY);
         if(revealCaret && caret->y < placement.scrollY)
             placement.scrollY = caret->y;
-        if(revealCaret && caret->y + caret->height > placement.scrollY + placement.content.height)
-            placement.scrollY = caret->y + caret->height - placement.content.height;
+        if(revealCaret && caretEndY > placement.scrollY + placement.content.height)
+            placement.scrollY = caretEndY - placement.content.height;
         placement.scrollY = Clamp(placement.scrollY, 0.0f, maximumScrollY);
-        const SIMDVectorSingle origin = VectorSubtract(VectorSet(left, top, left, top), VectorSet(placement.scroll, placement.scrollY, placement.scroll, placement.scrollY));
+        const SIMDVectorSingle visualOrigin = VectorSubtract(VectorSet(left, top, left, top), VectorSet(m_visualBounds.x, m_visualBounds.y, m_visualBounds.x, m_visualBounds.y));
+        const SIMDVectorSingle origin = VectorSubtract(visualOrigin, VectorSet(placement.scroll, placement.scrollY, placement.scroll, placement.scrollY));
         placement.textOrigin = { VectorGetX(origin), VectorGetY(origin) };
     }
     else
-        placement.textOrigin = { left - placement.scroll, top + Max(0.0f, (placement.content.height - caret->height) * 0.5f) };
+        placement.textOrigin = { left - m_visualBounds.x - placement.scroll, top - m_visualBounds.y + Max(0.0f, (placement.content.height - m_visualBounds.height) * 0.5f) };
     const SIMDVectorSingle caretOrigin = VectorAdd(VectorSet(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y), VectorSet(caret->x, caret->y, caret->x, caret->y));
     placement.caret = { VectorGetX(caretOrigin), VectorGetY(caretOrigin), caretWidth, caret->height };
     auto selection = m_geometry.rangeOnLine(m_selection, 0u, caretWidth);

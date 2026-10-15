@@ -32,19 +32,16 @@ void UiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = 14.0f;
-    const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 20.0f } };
-    bool valid = ui.label("title", "Exact integer / decimal editing", caption);
+    bool valid = ui.label("title", "Exact integer / decimal editing");
     IntegerEditOptions integer;
-    integer.edit.height = { LayoutSizePolicy::Fixed, 32.0f };
     const NumericEditBoxResult first = ui.integerEdit("integer", m_integer, m_integerState, integer);
     FloatEditOptions floating;
-    floating.edit.height = { LayoutSizePolicy::Fixed, 32.0f };
     floating.bounds = { -10.0, 10.0, NumericBoundsPolicy::Clamp };
     const NumericEditBoxResult second = ui.floatEdit("float", m_float, m_floatState, floating);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/numeric_edit_caption"));
     const auto text = StringFormat(scratchArena, "Committed: {} / {}", m_integer.value(), m_float.value());
-    valid = ui.label("committed", { text.data(), text.size() }, caption) && first.edit.valid && second.edit.valid && valid;
-    valid = ui.label("hint", "Enter: commit, Escape: restore", caption) && valid;
+    valid = ui.label("committed", { text.data(), text.size() }) && first.edit.valid && second.edit.valid && valid;
+    valid = ui.label("hint", "Enter: commit, Escape: restore") && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)

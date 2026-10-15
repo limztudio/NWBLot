@@ -99,7 +99,10 @@ bool Builder::paintTooltips(){
         const SIMDVectorSingle secondPadding = VectorSet(frame.style.padding.left, frame.style.padding.top, frame.style.padding.right, frame.style.padding.bottom);
         const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
         const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
-        const Point measured = frame.text.measure();
+        const auto textBounds = m_text.measure(frame.text, m_paint.displayMetrics());
+        if(!textBounds)
+            return false;
+        const Point measured{ textBounds->width, textBounds->height };
         PopupOptions options;
         options.anchor = box->rectangle;
         const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), VectorSwizzle<0, 1, 0, 1>(paddingValue)), VectorSwizzle<2, 3, 2, 3>(paddingValue));
@@ -116,7 +119,7 @@ bool Builder::paintTooltips(){
         const SIMDVectorSingle inset = InsetRectValue(VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
         const Rect content{ VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
         m_paint.pushClip(content);
-        const bool painted = backgroundPainted && m_text.paint(m_paint, frame.text, { content.x, content.y }, frame.style.text);
+        const bool painted = backgroundPainted && m_text.paint(m_paint, frame.text, { content.x - textBounds->x, content.y - textBounds->y }, frame.style.text);
         const bool contentPopped = m_paint.popClip();
         const bool popped = m_paint.popClip();
         const bool ended = m_paint.endOverlay();

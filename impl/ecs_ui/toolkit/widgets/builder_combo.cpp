@@ -207,7 +207,13 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
     const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent, VectorGreater(listpaddingCurrent, listpaddingCandidate));
     list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
-    const Point measured = item.text.measure();
+    const auto textBounds = m_text.measure(item.text, m_paint.displayMetrics());
+    if(!textBounds){
+        m_context.fail();
+        return {};
+    }
+    item.textBounds = *textBounds;
+    const Point measured{ textBounds->width, textBounds->height };
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;

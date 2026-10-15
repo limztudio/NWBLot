@@ -31,6 +31,9 @@ public:
     [[nodiscard]] u64 identity()const noexcept{ return m_identity; }
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
     [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const ShapeRequest& request);
+    // Logical extent plus visible glyph support for this display, including every native pixel-snap phase; no atlas admission or line/caret mutation.
+    // Size from width/height and paint at contentOrigin - { x, y } to keep negative bearings and marks inside the content rectangle.
+    [[nodiscard]] Expected<Rect> measure(const TextLayout& layout, const DisplayMetrics& display);
     [[nodiscard]] bool paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color = {});
 
 

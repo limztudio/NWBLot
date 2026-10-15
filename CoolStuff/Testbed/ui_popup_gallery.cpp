@@ -36,10 +36,9 @@ void UiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = 14.0f;
-    const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 20.0f } };
-    const WidgetOptions row{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
+    const WidgetOptions row{ { LayoutSizePolicy::Stretch, 1.0f }, {} };
     const StringView caption = m_choice == 0u ? "Popup menu" : m_choice == 1u ? "First choice selected" : "Second choice selected";
-    bool valid = ui.label("title", caption, title);
+    bool valid = ui.label("title", caption);
     if(ui.button("first", "First choice", row)){
         m_choice = 1u;
         if(!m_keepOpen)

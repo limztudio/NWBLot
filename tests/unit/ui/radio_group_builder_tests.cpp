@@ -51,7 +51,9 @@ TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallb
             layout = Move(*layoutResult);
         }
         const RadioGroupChoicePlacement& row = m_state.placement().rows[index];
-        const Point origin{ row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap, row.rectangle.y + Max(0.0f, (row.rectangle.height - layout.measure().y) * 0.5f) };
+        const auto measured = m_text.measure(layout, reference.displayMetrics());
+        ASSERT_TRUE(measured);
+        const Point origin{ row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap - measured->x, row.rectangle.y + Max(0.0f, (row.rectangle.height - measured->height) * 0.5f) - measured->y };
         reference.pushClip(row.clip);
         reference.pushClip(row.textClip);
         const Color& color = row.enabled ? m_builder.style().text : m_builder.style().disabledText;

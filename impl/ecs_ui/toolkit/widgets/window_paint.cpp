@@ -58,10 +58,10 @@ bool Builder::paintWindowTitle(){
         if(painted && focused && m_skin->findRegion(style.focus))
             painted = m_paint.drawRegion(style.focus, collapse);
     }
-    const Point titleSize = m_scope->m_window.title.measure();
+    const Rect& titleBounds = m_scope->m_window.titleBounds;
     const f32 collapseReservation = m_scope->m_window.options.collapsible ? metrics.collapseExtent + style.gap : 0.0f;
     const SIMDVectorSingle content = InsetRectValue(VectorSet(header.x, header.y, header.width, header.height), VectorSet(metrics.titlePadding.left + collapseReservation, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom));
-    const Point origin{ VectorGetX(content), VectorGetY(content) + Max(0.0f, (VectorGetW(content) - titleSize.y) * 0.5f) };
+    const Point origin{ VectorGetX(content) - titleBounds.x, VectorGetY(content) + Max(0.0f, (VectorGetW(content) - titleBounds.height) * 0.5f) - titleBounds.y };
     m_paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
     if(painted)
         painted = m_text.paint(m_paint, m_scope->m_window.title, origin, style.text);

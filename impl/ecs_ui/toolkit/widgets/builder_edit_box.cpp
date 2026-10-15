@@ -95,7 +95,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { minimum.x, Max(minimum.y, ((item.editView.layout().measure().y + item.padding.top) + item.padding.bottom)) };
+    description.intrinsicSize = { minimum.x, Max(minimum.y, ((item.editView.visualBounds().height + item.padding.top) + item.padding.bottom)) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();
@@ -138,7 +138,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
 
     item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly, state.caretElapsed < 0.5 };
     item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
-    if(!item.editView.snapshot(model) || item.editView.shape(m_text, textShapeRequest({}, m_style.fontSize)) != TextLayoutStatus::Success){
+    if(!item.editView.snapshot(model) || item.editView.shape(m_text, textShapeRequest({}, m_style.fontSize)) != TextLayoutStatus::Success || !item.editView.measure(m_text, m_paint.displayMetrics())){
         m_context.fail();
         return false;
     }

@@ -27,6 +27,7 @@ public:
 
 
 public:
+    [[nodiscard]] Expected<NWB::Impl::Ui::Rect> galleryBounds(NWB::Impl::UiPaintContext& context);
     void paint(NWB::Impl::UiPaintContext& context);
 
 

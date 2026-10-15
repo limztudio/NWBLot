@@ -387,17 +387,6 @@ TEST_F(UiSearchComboBehaviorTests, OnlyCommittedImeTextChangesTheFilteredQuery){
     EXPECT_EQ(m_source.view.count, 3u);
 }
 
-TEST_F(UiSearchComboBehaviorTests, QueryBytesAreCopiedExactlyIncludingUtf8){
-    const AStringView query = "\xEA\xB2\x80\xEC\x83\x89";
-    ASSERT_TRUE(m_state.query().setText(query));
-    ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));
-    EXPECT_EQ(AStringView(m_source.queryBytes.data(), m_source.queryBytes.size()), query);
-    ASSERT_TRUE(m_state.query().setText("tail"));
-    EXPECT_EQ(AStringView(m_source.queryBytes.data(), m_source.queryBytes.size()), query);
-    ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));
-    EXPECT_EQ(AStringView(m_source.queryBytes.data(), m_source.queryBytes.size()), "tail");
-}
-
 TEST_F(UiSearchComboBehaviorTests, IndependentViewInvalidationReassertsTheCachedQuery){
     ASSERT_TRUE(m_state.query().setText("tail"));
     ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));

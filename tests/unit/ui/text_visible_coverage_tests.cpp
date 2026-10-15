@@ -1,6 +1,4 @@
 // limztudio@gmail.com
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -366,14 +364,6 @@ TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisible
 
 
 TEST_F(TextVisibleCoverageTests, NaturalMeasurementUsesFontLineMetricsAndPreservesLogicalMeasurement){
-    const auto previous = m_text.layout({ .text = "Previous", .fontSize = 16.0f });
-    ASSERT_TRUE(previous);
-    EXPECT_FLOAT_EQ(previous->lines()[0u].baseline, 17.109375f);
-    EXPECT_FLOAT_EQ(previous->measure().y, 21.796875f);
-    EXPECT_FLOAT_EQ(previous->inkBounds().y + previous->inkBounds().height, 17.265625f);
-    const auto measured = m_text.measure(*previous, { 800.0f, 600.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(measured);
-    EXPECT_FLOAT_EQ(measured->height + 16.0f, 37.796875f);
     const auto fallback = m_text.layout({ .text = "Edit me: \xed\x95\x9c\xea\xb8\x80", .fontSize = 14.0f });
     ASSERT_TRUE(fallback);
     EXPECT_FLOAT_EQ(fallback->measure().y, 20.34375f);

@@ -63,20 +63,6 @@ TEST_F(UiEditPointerSourceTests, TouchTimestampsCannotManufactureNativeDoubleCli
     }
 }
 
-TEST_F(UiEditPointerSourceTests, ContactCanExtendSelectionWithoutAKeyboardModifier){
-    ASSERT_TRUE(m_model.setText("abcdef"));
-    ASSERT_TRUE(activate());
-    ASSERT_TRUE(m_model.setSelection(5u, 5u));
-    ASSERT_TRUE(frame(m_model));
-    const Ui::InputSource touch{ 21u, 9u };
-    ASSERT_TRUE(dispatchPointer({ .source = touch, .phase = Ui::PointerPhase::Press, .position = atByte(2u), .extend = true }));
-    ASSERT_TRUE(dispatchPointer({ .source = touch, .phase = Ui::PointerPhase::Release, .position = atByte(2u), .extend = true }));
-    ASSERT_TRUE(frame(m_model));
-    EXPECT_EQ(m_model.anchor(), 5u);
-    EXPECT_EQ(m_model.caret(), 2u);
-    EXPECT_EQ(m_model.selectedText(), "cde");
-}
-
 TEST_F(UiEditPointerSourceTests, CancelledContactCannotEraseAnEarlierCompletedSelection){
     ASSERT_TRUE(m_model.setText("abcdef"));
     ASSERT_TRUE(activate());

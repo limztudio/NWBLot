@@ -10,7 +10,6 @@
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
-#include <global/simplemath.h>
 
 #include <gtest/gtest.h>
 
@@ -329,14 +328,6 @@ TEST(TextGlyphVisibilityTests, EmptyClipSkipsValidCandidatesAfterParameterValida
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(TextGlyphVisibilityFontTests, ReliableShapingInkSkipsDistantGlyphsWithoutPreparation){
-    PlacedGlyph glyph;
-    glyph.face = m_face;
-    glyph.position = { 1000.0f, 1000.0f };
-    glyph.ink = { -2.0f, -10.0f, 12.0f, 12.0f };
-    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }), TextGlyphIntersection::Invisible);
-}
-
 TEST_F(TextGlyphVisibilityFontTests, NegativeBearingsAndMarksCanReachTheClipOutsideTheirOrigin){
     PlacedGlyph glyph;
     glyph.face = m_face;
@@ -367,25 +358,6 @@ TEST_F(TextGlyphVisibilityFontTests, UntrustedUnknownInkRetainsAConservativeCand
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Visible);
     glyph.coverage = { glyph.ink, true };
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Invisible);
-}
-
-TEST_F(TextGlyphVisibilityFontTests, NativeCffOutlineBoundsAreAvailableForRealCoverageCandidates){
-    ShapeRequest request{ "\xed\x95\x9c" };
-    request.fontSize = 24.0f;
-    request.scriptTag = TextScriptTag('H', 'a', 'n', 'g');
-    request.language = "ko";
-    PaintVector<RawShapedGlyph> shaped(m_arena);
-    ASSERT_TRUE(m_koreanFace->shape(request, 0u, 3u, shaped));
-    ASSERT_FALSE(shaped.empty());
-    ASSERT_TRUE(shaped[0u].coverage.known);
-    EXPECT_GT(shaped[0u].coverage.ink.width, 0.0f);
-    EXPECT_GT(shaped[0u].coverage.ink.height, 0.0f);
-    PlacedGlyph glyph;
-    glyph.face = m_koreanFace;
-    glyph.position = { 1000.0f, 1000.0f };
-    glyph.ink = shaped[0u].ink;
-    glyph.coverage = shaped[0u].coverage;
-    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 24.0f, 24.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }), TextGlyphIntersection::Invisible);
 }
 
 

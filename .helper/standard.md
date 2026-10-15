@@ -17,7 +17,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `#endif`
   - Do not `#undef` the include guard or the public macros declared by the header.
 - Separate major file sections with the 128-slash separator and optional section comments.
-  - Keep exactly two blank lines before and after every file-scope separator line, including banner-adjacent separators (after the banner separator, before/after `#pragma once`, include groups, `NWB_*_BEGIN`/`NWB_*_END`, section comments, and the final separator).
+  - The banner separator immediately follows `// limztudio@gmail.com`, with no intervening blank line. Keep exactly two blank lines before and after every other file-scope separator line, and after the banner separator (before/after `#pragma once`, include groups, `NWB_*_BEGIN`/`NWB_*_END`, section comments, and the final separator).
   - Split multiline prose comments only at sentence boundaries: a sentence-ending period (`.`) is a split point; a continuing sentence must remain on one physical comment line, even when it exceeds the soft code-line width. Join existing wrapped continuations of the same sentence. Do not mistake decimal points, abbreviations, filenames, URLs, or member access for sentence endings. Preserve paragraphs, code examples, tables, licenses, banners, and machine-readable/tooling directives.
   - Use comments for non-obvious intent, contracts, ownership, lifetimes, layouts, numerical assumptions, or external API constraints. Remove code narration, redundant headings, tutorial annotations, and obsolete change history; compact repeated explanations.
   - Preserve required banners, license notices, machine-readable/tooling directives, and comments that identify regression scenarios.

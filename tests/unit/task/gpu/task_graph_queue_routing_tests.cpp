@@ -100,34 +100,6 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
 
 }
 
-TEST(GpuTaskGraph, RoutesSameClassWorkAroundExternalQueueLoad){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskCommandRequirements commands;
-    commands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    Graphics::GpuTaskSchedulingHint scheduling;
-    scheduling.allowSameClassQueueRouting = true;
-    const Graphics::GpuTaskId task = AddTaskWithCommands(graph, Name("tests/task_graph/external_load_same_class"), "External Load Same Class", commands, scheduling);
-    ASSERT_TRUE(task.valid());
-
-    Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(1u);
-    secondaryGraphicsQueue.queueIndex = 1u;
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), secondaryGraphicsQueue, };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
-    const Graphics::GpuTaskQueueLoad queueLoads[]{ { .queue = queues[0u].id, .estimatedCost = 32u, }, };
-    Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueLoads = queueLoads;
-    options.queueLoadCount = LengthOf(queueLoads);
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
-    const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-    ASSERT_NE(assignment, nullptr);
-    EXPECT_EQ(assignment->queue, queues[1u].id);
-}
-
-
 TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOrder){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

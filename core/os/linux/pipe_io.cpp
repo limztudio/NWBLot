@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -61,7 +63,7 @@ static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcep
 
 
 Expected<ClipboardPipe> OpenClipboardPipe()noexcept{
-    int descriptors[2]{ -1, -1 };
+    int descriptors[2];
     if(pipe(descriptors) != 0)
         return MakeUnexpected(Failure{});
     int readFd = descriptors[0];
@@ -90,7 +92,7 @@ void CloseClipboardPipe(int& fd)noexcept{
 }
 
 Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, ClipboardTextAccumulator& text){
-    Array<char, 4096u> bytes{};
+    Array<char, 4096u> bytes;
     usize consumed = 0u;
     usize calls = 0u;
     while(consumed < __hidden_clipboard_pipe::s_PumpByteBudget && calls < __hidden_clipboard_pipe::s_PumpCallBudget){

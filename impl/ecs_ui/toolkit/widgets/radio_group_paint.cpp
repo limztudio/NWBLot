@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -39,6 +41,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     if(!m_context.addTarget(item.state, host))
         return false;
     const WidgetId choices = MakeWidgetId(item.state.id, "choices");
+    const UiSkinRegion* mark = placement->count != 0u ? region(frame.m_style.mark, frame.m_style.markFallback) : nullptr;
     for(u32 index = 0u; index < placement->count; ++index){
         const RadioGroupChoicePlacement& row = placement->rows[index];
         const WidgetId part = MakeWidgetPartId(choices, row.key);
@@ -52,7 +55,6 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const UiSkinRegion* indicator = region(preferred, fallback);
         if(!indicator)
             indicator = region(frame.m_style.normal, frame.m_style.fallback);
-        const UiSkinRegion* mark = region(frame.m_style.mark, frame.m_style.markFallback);
         if(!indicator || !mark)
             return false;
         const Color tint = !enabled ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint : hover ? frame.m_style.hoverTint : Color{};

@@ -308,13 +308,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .setMembers(hardwareTraceAttributeResources.data(), hardwareTraceAttributeResources.size())
         );
     }
-    bool softwareTraceResourcesPrepared = false;
-    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
-        if(preparedBuffer.roles & (PreparedShadowTraceGeometryRole::SoftwareNode | PreparedShadowTraceGeometryRole::SoftwarePosition | PreparedShadowTraceGeometryRole::SoftwareIndex | PreparedShadowTraceGeometryRole::SoftwareAttribute)){
-            softwareTraceResourcesPrepared = true;
-            break;
-        }
-    }
+    const bool softwareTraceResourcesPrepared = !softwareTraceGeometryResources.empty();
     FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_deferredLightingTaskGraph, m_meshSystem);
     auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
         FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = &rayTracingShadowResources, .softwareTraceResourcesPrepared = softwareTraceResourcesPrepared, },

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -128,7 +130,7 @@ template<typename CharT>
     if(text.size() != s_DebugHashTextLength)
         return MakeUnexpected(Failure{});
 
-    NameHash hash = {};
+    NameHash hash;
     usize cursor = 0u;
     for(u32 lane = 0u; lane < s_HashLaneCount; ++lane){
         if((lane > 0u && text[cursor++] != '_') || cursor + s_HexDigitsPerHashLane > text.size())
@@ -161,7 +163,7 @@ inline constexpr NameHash ComputeNameHash(const CharT* str)noexcept(IsArithmetic
     if(str == nullptr)
         return {};
 
-    NameHash hash = {};
+    NameHash hash;
     NameDetail::InitializeNameHash(hash);
     for(; *str != CharT{}; ++str)
         NameDetail::UpdateCanonicalNameHashLanes(hash, *str);
@@ -170,7 +172,7 @@ inline constexpr NameHash ComputeNameHash(const CharT* str)noexcept(IsArithmetic
 
 template<typename CharT>
 inline constexpr NameHash ComputeNameHash(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    NameHash hash = {};
+    NameHash hash;
     NameDetail::InitializeNameHash(hash);
     if(!NameDetail::UpdateCanonicalNameHashText(hash, text))
         return {};
@@ -329,7 +331,7 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
     }
     else{
         // Wide->narrow by byte truncation, not UTF-8, so recorded text round-trips to the hash.
-        char narrowText[s_SymbolTextBufferLength] = {};
+        char narrowText[s_SymbolTextBufferLength];
         usize copiedCount = 0u;
         for(const CharT ch : text){
             if(ch == CharT{})
@@ -695,7 +697,7 @@ inline constexpr u64 s_DerivePrefixHash = UpdateFnv64TextCanonical(s_Fnv64Offset
 
 
 [[nodiscard]] inline Expected<NameHash> BeginDerivedNameHash(const Name& baseName){
-    NameHash derivedHash = {};
+    NameHash derivedHash;
     if(!baseName)
         return MakeUnexpected(Failure{});
 
@@ -738,7 +740,7 @@ template<typename CharT>
     if(encodedHash.size() != NameDetail::s_EncodedNameHashLength)
         return MakeUnexpected(Failure{});
 
-    NameHash hash = {};
+    NameHash hash;
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         const usize begin = static_cast<usize>(lane) * NameDetail::s_HexDigitsPerHashLane;
         const BasicStringView<CharT> laneHex = encodedHash.substr(begin, NameDetail::s_HexDigitsPerHashLane);

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -156,10 +158,6 @@ void RendererFramePipeline::invalidateResources(){
     resetGraphicsPrefixTaskState();
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
-    m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareAccelStructFinalizeTask = {};
     resetSharedDeferredFrameTaskState();
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -156,7 +158,7 @@ inline void AppendFormatLiteral(char (&outText)[s_MaxEventTextBytes], usize& out
 
 template<typename T>
 inline void AppendEventNumber(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const T value)noexcept{
-    char buffer[s_NumberTextBufferBytes] = {};
+    char buffer[s_NumberTextBufferBytes];
     const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
     if(result.ec == std::errc{})
         AppendEventText(outText, outCursor, AStringView(buffer, static_cast<usize>(result.ptr - buffer)));
@@ -168,7 +170,7 @@ inline void AppendEventPointer(char (&outText)[s_MaxEventTextBytes], usize& outC
         return;
     }
 
-    char buffer[s_NumberTextBufferBytes] = {};
+    char buffer[s_NumberTextBufferBytes];
     const usize address = reinterpret_cast<usize>(value);
     const auto result = std::to_chars(buffer, buffer + sizeof(buffer), address, s_PointerTextRadix);
     if(result.ec != std::errc{})

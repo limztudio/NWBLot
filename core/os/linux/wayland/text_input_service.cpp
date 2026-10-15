@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -110,7 +112,7 @@ bool WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
 #endif
     if(codePoint < 32u || codePoint == 127u)
         return true;
-    char bytes[4]{};
+    char bytes[4];
     const auto length = EncodeTextInputCodePoint(codePoint, bytes);
     if(!length){
         nativeFailure();

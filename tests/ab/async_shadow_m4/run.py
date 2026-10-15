@@ -27,6 +27,7 @@ import sys
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
@@ -629,6 +630,18 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     missing = [f"--{name.replace('_', '-')}" for name in required if getattr(args, name) is None]
     if missing:
         parser.error(f"missing required arguments: {', '.join(missing)}")
+    # The native environment reader uses full-consumption std::from_chars<f32>.
+    yaw_token = re.fullmatch(r"-?([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", args.frozen_yaw)
+    if yaw_token is None:
+        parser.error("--frozen-yaw must be a finite float32 decimal")
+    if any(digit not in "0." for digit in yaw_token[1]):
+        try:
+            frozen_yaw = Decimal(args.frozen_yaw).copy_abs()
+        except InvalidOperation:
+            parser.error("--frozen-yaw must be a finite float32 decimal")
+        # Nonzero values rounding to zero or infinity are native range errors.
+        if not Decimal.from_float(2.0 ** -150) < frozen_yaw < Decimal(2 ** 128 - 2 ** 103):
+            parser.error("--frozen-yaw must be a finite float32 decimal")
     require_non_negative(parser, LIT_WARMUP_SECONDS, args.warmup_seconds)
     require_positive(parser, LIT_MEASURE_SECONDS, args.measure_seconds)
     require_positive(parser, LIT_STARTUP_TIMEOUT, args.startup_timeout)
@@ -670,6 +683,27 @@ def run_self_test() -> int:
             else:
                 raise AssertionError("a non-finite benchmark deadline or tolerance was accepted")
             numeric_parser.error.assert_called_once()
+
+    yaw_arguments = ["--sync-executable", "sync", "--async-executable", "async", "--runtime-dir", "runtime", "--output-dir", "output"]
+    for value in (
+        "nan", "inf", "-inf", "not-a-number", "1e100", "1e300", "-1e100", "1_0", "+0.6", " 0.6", "0.6 ", "3.4028236e38", "1e-46", "1e-999",
+        "340282356779733661637539395458142568448",
+        "7.00649232162408535461864791644958065640130970938257885878534141944895541342930300743319094181060791015625E-46",
+    ):
+        with mock.patch("sys.stderr"):
+            try:
+                parse_args(yaw_arguments + [f"--frozen-yaw={value}"])
+            except SystemExit as error:
+                assert error.code == 2
+            else:
+                raise AssertionError(f"M4 CLI accepted malformed frozen yaw {value}")
+    for value in (
+        "0", "-1", "0.6000", "-0.0", ".6", "1.", "6e-1", "6E+0", "3.4028235e38", "1e-45", "0e-999", "-0e999",
+        "340282356779733661637539395458142568447",
+        "7.00649232162408535461864791644958065640130970938257885878534141944895541342930300743319094181060791015626E-46",
+        "0e9999999999999999999999999999999", "-0e-9999999999999999999999999999999",
+    ):
+        assert parse_args(yaw_arguments + [f"--frozen-yaw={value}"]).frozen_yaw == value
 
     capture_args = parse_args([LIT_SELF_TEST])
 

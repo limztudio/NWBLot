@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -205,7 +207,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: unsupported texture payload version; recook required"));
         return false;
     }
-    if((header.alphaInfo & TextureBinaryPayload::s_AlphaInfoReservedMask) != 0u || header.payloadFormat > static_cast<u32>(Limit<u8>::s_Max)){
+    if((header.alphaInfo & TextureBinaryPayload::s_AlphaInfoReservedMask) != 0u || header.payloadFormat > static_cast<u32>(Limit<u8>::s_Max) || header.colorSpace > static_cast<u32>(Limit<u8>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid texture payload flags"));
         return false;
     }

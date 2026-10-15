@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -102,6 +104,27 @@ TEST(AssetsGraphics, TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOve
     ASSERT_TRUE(codec.serialize(texture, retained));
     EXPECT_EQ(retained, validBinary);
     EXPECT_TRUE(texture.loadBinary(validBinary));
+}
+
+TEST(AssetsGraphics, TextureCodecRejectsColorSpaceNarrowingWithoutReplacingPublishedPayload){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    AssetsGraphicsFixture::TestArena testArena;
+    const auto original = BuildPartialBlockTextureBinary(testArena);
+    Impl::Texture texture(testArena.arena, Name("project/textures/color_space_admission"));
+    ASSERT_TRUE(texture.loadBinary(original));
+    Impl::TextureAssetCodec codec;
+    for(const u32 colorSpace : { 2u, 255u, 256u, 257u, 0xffffff00u, 0xffffff01u, Limit<u32>::s_Max }){
+        SCOPED_TRACE(colorSpace);
+        Core::Assets::AssetBytes malformed(original);
+        NWB_MEMCPY(malformed.data() + offsetof(Impl::TextureBinaryPayload::HeaderBinary, colorSpace), sizeof(colorSpace), &colorSpace, sizeof(colorSpace));
+        EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), malformed));
+        EXPECT_FALSE(texture.loadBinary(malformed));
+        Core::Assets::AssetBytes retained(testArena.arena);
+        ASSERT_TRUE(codec.serialize(texture, retained));
+        EXPECT_EQ(retained, original);
+    }
+    EXPECT_TRUE(texture.loadBinary(original));
 }
 
 TEST(AssetsGraphics, TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEncodingAfterRejectedLoads){

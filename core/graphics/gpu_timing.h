@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -143,7 +145,7 @@ private:
     void releaseUnacceptedQuery(QueryRecord& record)noexcept;
     [[nodiscard]] usize pendingAttributionCount()const noexcept;
     [[nodiscard]] bool markAttributionsForRetirement(u64 subscriptionIdentityLimit)noexcept;
-    [[nodiscard]] Expected<SampleDispatch> retireMarkedAttribution()noexcept;
+    void retireMarkedAttributions(SampleDispatchVector& outSamples);
     void discardMarkedAttributions()noexcept;
     void retireAttributions(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
     void appendStatistics(GpuTimingRecorderStatistics& outStatistics)const noexcept;
@@ -310,7 +312,6 @@ private:
     void dispatchCompletedSample(const GpuTimingSample& sample, u64 subscriptionIdentityLimit);
     void dispatchCompletedSamples(const SampleDispatchVector& samples);
     void reservePendingAttributionSamplesLocked(SampleDispatchVector& outSamples)const;
-    [[nodiscard]] Expected<SampleDispatch> retireMarkedPendingAttributionLocked()noexcept;
     void retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples);
     void discardMarkedPendingAttributionsLocked()noexcept;
     void retirePendingAttributionsLocked(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);

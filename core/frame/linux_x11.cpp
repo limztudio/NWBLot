@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -104,7 +106,7 @@ static void ResetKeyStates()noexcept{
 }
 
 static void SynchronizeKeyStates(const Common::LinuxFrame& frameData){
-    char keymap[s_KeyStateCount / 8u] = {};
+    char keymap[s_KeyStateCount / 8u];
     if(XQueryKeymap(GetX11Display(frameData), keymap) == 0){
         ResetKeyStates();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 physical key-state query failed"));
@@ -178,7 +180,7 @@ static i32 TranslateKey(KeySym keySym){
 }
 
 static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mods){
-    char buffer[s_TextInputBufferSize] = {};
+    char buffer[s_TextInputBufferSize];
     KeySym ignored = NoSymbol;
     const i32 byteCount = XLookupString(&keyEvent, buffer, static_cast<i32>(sizeof(buffer)), &ignored, nullptr);
     if(byteCount <= 0)
@@ -312,8 +314,8 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         break;
 
     case ButtonPress: {
-        f64 xoffset = 0.0;
-        f64 yoffset = 0.0;
+        f64 xoffset;
+        f64 yoffset;
         if(TranslateScroll(event.xbutton.button, xoffset, yoffset)){
             frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
             frame.input().mouseScrollUpdate(xoffset, yoffset);
@@ -329,8 +331,8 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     break;
 
     case ButtonRelease: {
-        f64 xoffset = 0.0;
-        f64 yoffset = 0.0;
+        f64 xoffset;
+        f64 yoffset;
         if(TranslateScroll(event.xbutton.button, xoffset, yoffset))
             break;
 
@@ -521,10 +523,10 @@ bool RunX11Frame(Frame& frame){
                 return true;
         }
 
-        u32 width = 0;
-        u32 height = 0;
-        bool windowVisible = false;
-        bool windowIsInFocus = false;
+        u32 width;
+        u32 height;
+        bool windowVisible;
+        bool windowIsInFocus;
         if(!QueryWindowState(frame, width, height, windowVisible, windowIsInFocus))
             return false;
 

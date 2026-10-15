@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -6,6 +8,7 @@
 
 #include "report.h"
 
+#include <global/binary.h>
 #include <global/diagnostics.h>
 #include <global/hash_utils.h>
 #include <global/json_text.h>
@@ -40,6 +43,9 @@ static constexpr usize s_JsonReportBytesPerEdge = 96u;
 static constexpr usize s_JsonReportRuntimeStatisticsBytes = 4096u;
 static constexpr usize s_JsonReportPhysicalQueueRuntimeStatisticsBytes = 2048u;
 static constexpr usize s_JsonReportPacketSubmissionStatisticsBytes = 512u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] usize EstimateJsonReportReserve(const FrameGraphReportRecords& graphs)noexcept{
@@ -416,7 +422,7 @@ void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize grap
     FrameGraphOwnerStatisticsRange ownerRange;
     for(usize nodeIndex = 0u; nodeIndex < graph.nodes.size(); ++nodeIndex){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[nodeIndex];
-        char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+        char identityText[NameDetail::s_DebugHashTextLength + 1u];
         const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
 
         StringAppendFormat(out, "          {{\"index\": {}, \"identity\": ", nodeIndex);
@@ -449,7 +455,10 @@ void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize grap
 
 void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportRecords& graphs, const AStringView memoryRecords, AString<TelemetryArena>& out){
     out.clear();
-    out.reserve(EstimateJsonReportReserve(graphs));
+    usize reserveBytes = EstimateJsonReportReserve(graphs);
+    if(!AddBinaryReserveBytes(reserveBytes, memoryRecords.size()))
+        reserveBytes = Max(reserveBytes, memoryRecords.size());
+    out.reserve(reserveBytes);
     out += "{\n";
     StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";

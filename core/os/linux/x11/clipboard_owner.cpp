@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -26,7 +28,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
         if(event.target == m_multipleAtom && event.property){
             const auto property = ReadX11Property(m_display, event.requestor, event.property, false, 256u * 4u);
             if(property.has_value() && (property->type == m_atomPairAtom || property->type == XA_ATOM) && property->format == 32 && property->count <= 256u && (property->count % 2u) == 0u && property->remaining == 0u){
-                Array<Atom, 256u> pairs{};
+                Array<Atom, 256u> pairs;
                 if(property->count)
                     NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property->bytes, property->count * sizeof(Atom));
                 for(usize index = 0u; index < property->count; index += 2u){

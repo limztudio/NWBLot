@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -12,6 +14,7 @@
 #include <core/metascript/parser.h>
 
 #include <global/binary.h>
+#include <global/exception.h>
 #include <global/text_utils.h>
 
 
@@ -100,7 +103,6 @@ public:
     static Expected<ScratchVector<ElementT>> ParseMetadataFloatListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const AStringView fieldName, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept;
     static void LogMetadataU32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure);
-    [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ParseMetadataU32Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label);
     template<typename IndexVectorT>
     static bool FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, IndexVectorT& outIndices, Core::Alloc::ScratchArena& scratchArena);
     static Expected<Core::Assets::AssetVector<u32>> ParseMetadataIndexField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
@@ -182,23 +184,57 @@ Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
 
 template<typename IndexVectorT>
 bool MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, IndexVectorT& outIndices, Core::Alloc::ScratchArena& scratchArena){
-    if(value.isList()){
-        const auto& list = value.asList();
-        for(usize i = 0u; i < list.size(); ++i){
-            const ScratchString childLabel = MakeIndexedLabel(scratchArena, label, i);
-            if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, outIndices, scratchArena))
-                return false;
+    struct IndexBreadcrumb{
+        const IndexBreadcrumb* parent = nullptr;
+        usize index = 0u;
+    };
+    const auto fill = [&](auto&& recurse, const Core::Metascript::Value& current, const IndexBreadcrumb* path) -> bool{
+        if(current.isList()){
+            const auto& list = current.asList();
+            for(usize i = 0u; i < list.size(); ++i){
+                const IndexBreadcrumb child{ path, i };
+                if(!recurse(recurse, list[i], &child))
+                    return false;
+            }
+            return true;
         }
+
+        const auto index = ValidateMetadataU32Value(current);
+        if(!index){
+            ScratchString failureLabel{scratchArena};
+            const usize maxLabelBytes = failureLabel.max_size();
+            usize depth = 0u;
+            usize labelBytes = label.size();
+            if(labelBytes > maxLabelBytes)
+                throw LengthException("mesh index diagnostic label exceeds string capacity");
+            for(const IndexBreadcrumb* component = path; component; component = component->parent){
+                char digits[TextDetail::s_DecimalTextBufferBytes];
+                const usize indexBytes = FormatDecimal(component->index, digits).size();
+                if(indexBytes > maxLabelBytes - labelBytes || s_IndexedLabelBracketReserve > maxLabelBytes - labelBytes - indexBytes)
+                    throw LengthException("mesh index diagnostic label exceeds string capacity");
+                labelBytes += indexBytes + s_IndexedLabelBracketReserve;
+                ++depth;
+            }
+            failureLabel.reserve(labelBytes);
+            failureLabel.append(label.data(), label.size());
+            for(usize remainingDepth = depth; remainingDepth > 0u; --remainingDepth){
+                const IndexBreadcrumb* component = path;
+                for(usize parentCount = 1u; parentCount < remainingDepth; ++parentCount)
+                    component = component->parent;
+                char digits[TextDetail::s_DecimalTextBufferBytes];
+                const AStringView indexText = FormatDecimal(component->index, digits);
+                failureLabel += '[';
+                failureLabel.append(indexText.data(), indexText.size());
+                failureLabel += ']';
+            }
+            LogMetadataU32ValueFailure(nwbFilePath, metaKind, failureLabel, index.error());
+            return false;
+        }
+        using IndexValue = typename IndexVectorT::value_type;
+        outIndices.push_back(static_cast<IndexValue>(*index));
         return true;
-    }
-
-    const auto index = ParseMetadataU32Value(nwbFilePath, value, metaKind, label);
-    if(!index)
-        return false;
-
-    using IndexValue = typename IndexVectorT::value_type;
-    outIndices.push_back(static_cast<IndexValue>(*index));
-    return true;
+    };
+    return fill(fill, value, nullptr);
 }
 
 

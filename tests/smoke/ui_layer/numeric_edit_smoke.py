@@ -9,6 +9,7 @@ import time
 
 from numeric_edit_native import NumericEditNativeInput
 from numeric_edit_probe import center, draft_fields, float_bits, integer_bits, observe_numeric_edit, snapshot_from_logs, text_hash
+from edit_probe import caret_pixel_column
 from caret_capture import wait_for_caret_phase
 from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
@@ -98,7 +99,7 @@ class NumericEditRun:
             cx, cy, cw, ch = snapshot["rectangles"][f"{field}_content"]
             if not (cx - 0.75 <= kx and kx + kw <= cx + cw + 0.75 and cy - 0.75 <= ky and ky + kh <= cy + ch + 0.75):
                 continue
-            column, row = round(kx * scale_x), round((min(ky + kh, cy + ch) - 0.75) * scale_y)
+            column, row = caret_pixel_column(kx, scale_x), round((min(ky + kh, cy + ch) - 0.75) * scale_y)
             if 0 <= column < width and 0 <= row < height:
                 return (column, max(0, row - 1), min(height, row + 2), color, 5)
         return None

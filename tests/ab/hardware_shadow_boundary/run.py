@@ -370,13 +370,13 @@ def make_failure_report(error: SmokeFailure, healthy: Optional[RunResult], basel
 
 
 def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if value <= 0.0:
-        parser.error(f"{option} must be positive")
+    if not math.isfinite(value) or value <= 0.0:
+        parser.error(f"{option} must be positive and finite")
 
 
 def require_non_negative(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if value < 0.0:
-        parser.error(f"{option} must not be negative")
+    if not math.isfinite(value) or value < 0.0:
+        parser.error(f"{option} must be non-negative and finite")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -433,6 +433,28 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def run_self_test() -> int:
     defaults = parse_args([LIT_SELF_TEST])
+    numeric_arguments = ["--healthy-executable", "healthy", "--baseline-executable", "baseline", "--runtime-dir", "runtime", "--output-dir", "output"]
+    numeric_options = (LIT_WARMUP_SECONDS, LIT_MEASURE_SECONDS, LIT_STARTUP_TIMEOUT, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2)
+    for option in numeric_options:
+        for value in ("nan", "inf", "-inf"):
+            with mock.patch("sys.stderr"):
+                try:
+                    parse_args(numeric_arguments + [f"{option}={value}"])
+                except SystemExit as error:
+                    assert error.code == 2
+                else:
+                    raise AssertionError(f"hardware-shadow CLI accepted non-finite {option}={value}")
+    for option in (LIT_WARMUP_SECONDS, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2):
+        assert getattr(parse_args(numeric_arguments + [f"{option}=0"]), option[2:].replace("-", "_")) == 0.0
+    for option in (LIT_MEASURE_SECONDS, LIT_STARTUP_TIMEOUT):
+        with mock.patch("sys.stderr"):
+            try:
+                parse_args(numeric_arguments + [f"{option}=0"])
+            except SystemExit as error:
+                assert error.code == 2
+            else:
+                raise AssertionError(f"hardware-shadow CLI accepted zero {option}")
+        assert getattr(parse_args(numeric_arguments + [f"{option}=1"]), option[2:].replace("-", "_")) == 1.0
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)

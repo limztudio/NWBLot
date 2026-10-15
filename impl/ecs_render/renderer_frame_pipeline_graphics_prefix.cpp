@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -188,8 +190,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixMeshViewSetupTask = prefixSceneUploadResult->meshViewSetupTask;
     m_graphicsPrefixSceneShadingSetupTask = prefixSceneUploadResult->sceneShadingSetupTask;
     const RayTracingLightingClassification rayTracingLightingClassification = prefixSceneUploadResult->lightingClassification;
-    ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
-    NWB_MEMCPY(sceneLightData, sizeof(sceneLightData), prefixSceneUploadResult->lightData, sizeof(prefixSceneUploadResult->lightData));
     const u32 sceneLightCount = prefixSceneUploadResult->lightCount;
     Core::GpuTaskSchedulingHint immutableUploadScheduling;
     immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -1196,7 +1196,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         return MakeUnexpected(Failure{});
     }
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
-    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, sceneLightData, sceneLightCount);
+    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, prefixSceneUploadResult->lightData, sceneLightCount);
     return prefixSceneUploadResult->sceneLightingContentHash;
 }
 

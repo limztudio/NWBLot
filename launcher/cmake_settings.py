@@ -29,10 +29,10 @@ class CmakeSettings:
     @staticmethod
     def read_cmake_cache_value(build_dir: Path, key: str) -> Optional[str]:
         cache = build_dir / CMAKE_CACHE_FILE
+        prefix = key + CACHE_KEY_SEPARATOR
         try:
             with cache.open(CACHE_FILE_MODE, encoding=CACHE_FILE_ENCODING, errors=CACHE_FILE_ERRORS) as cache_file:
                 for line in cache_file:
-                    prefix = key + CACHE_KEY_SEPARATOR
                     if line.startswith(prefix):
                         _, value = line.rstrip(CACHE_LINE_END).split(CACHE_ENTRY_SEPARATOR, 1)
                         return value

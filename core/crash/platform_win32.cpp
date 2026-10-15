@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -141,7 +143,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 
     // Capture in-process (all modules loaded); server only resolves symbols, never unwinds (no .pdata needed).
     // Leading capture frames dropped via options.callstackFramesToSkip.
-    void* backTrace[s_MaxCallstackFrames] = {};
+    void* backTrace[s_MaxCallstackFrames];
     const USHORT capturedFrames = RtlCaptureStackBackTrace(0u, static_cast<ULONG>(s_MaxCallstackFrames), backTrace, nullptr);
     outOptions.callstackFrameCount = 0u;
     for(USHORT i = 0u; i < capturedFrames; ++i){

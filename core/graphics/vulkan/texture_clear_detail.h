@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -678,9 +680,15 @@ inline Expected<TextureClearPattern<s_TextureClearStencilPatternBytes>> BuildTex
 }
 
 inline void FillTextureClearBytes(void* bytes, const usize byteCount, const u8* pattern, const u32 patternSize)noexcept{
-    u8* outBytes = static_cast<u8*>(bytes);
-    for(usize offset = 0u; offset < byteCount; offset += patternSize)
-        NWB_MEMCPY(outBytes + offset, byteCount - offset, pattern, patternSize);
+    if(byteCount == 0u)
+        return;
+    u8* const outBytes = static_cast<u8*>(bytes);
+    NWB_MEMCPY(outBytes, byteCount, pattern, patternSize);
+    for(usize filled = patternSize; filled < byteCount; ){
+        const usize copySize = Min(filled, byteCount - filled);
+        NWB_MEMCPY(outBytes + filled, byteCount - filled, outBytes, copySize);
+        filled += copySize;
+    }
 }
 
 

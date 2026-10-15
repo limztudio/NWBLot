@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -193,7 +195,7 @@ Expected<GpuSdfGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGr
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
         const auto& page = frame->m_sdfPages[index];
-        char identityText[32u] = {};
+        char identityText[32u];
         const AStringView suffix = FormatDecimal(index, identityText);
         const Name readyIdentity = DeriveName(Name("ui.sdf_page_ready/"), suffix);
         const Name textureIdentity = DeriveName(Name("ui.sdf_page/"), suffix);

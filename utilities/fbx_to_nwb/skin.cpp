@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -25,6 +27,10 @@ namespace FbxSkinDetail{
 static constexpr f64 s_UniformScaleNumerator = 1.0;
 static constexpr f64 s_InvertibleMatrixDeterminantEpsilon = 0.00000001;
 static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale)noexcept{
     ufbx_matrix matrix = {};
@@ -75,11 +81,6 @@ ufbx_matrix BuildMeshFromOutputMatrix(const MeshInstance& instance, const Import
 
     const ufbx_matrix nodeMeshToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
     return ufbx_matrix_mul(&nodeMeshToWorldInverse, &scaleInverse);
-}
-
-ufbx_matrix BuildOutputInverseBindMatrix(const ufbx_skin_cluster& cluster, const MeshInstance& instance, const ImportOptions& options)noexcept{
-    const ufbx_matrix meshFromOutput = BuildMeshFromOutputMatrix(instance, options);
-    return ufbx_matrix_mul(&cluster.geometry_to_bone, &meshFromOutput);
 }
 
 Expected<u16> FindOrAddJoint(ExportContext& context, ufbx_skin_cluster* cluster, const ufbx_matrix& inverseBind){
@@ -151,6 +152,7 @@ Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, 
     context.inverseBindMatrices.reserve(reservedJointCount);
     context.jointLookup.reserve(reservedJointCount);
     outClusterJoints.reserve(skin->clusters.count);
+    ufbx_matrix meshFromOutput;
     for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
         ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];
         if(!cluster){
@@ -158,7 +160,9 @@ Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, 
             return MakeUnexpected(Failure{});
         }
 
-        const ufbx_matrix inverseBind = BuildOutputInverseBindMatrix(*cluster, instance, options);
+        if(clusterIndex == 0u)
+            meshFromOutput = BuildMeshFromOutputMatrix(instance, options);
+        const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
         const auto joint = FindOrAddJoint(context, cluster, inverseBind);
         if(!joint)
             return MakeUnexpected(Failure{});

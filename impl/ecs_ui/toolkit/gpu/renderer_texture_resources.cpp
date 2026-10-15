@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -167,7 +169,7 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::
         const auto& source = frame->m_snapshot.textureImages()[index];
         if(!image || !source || !image->m_source || image->m_source->generation() != source->generation() || image->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_images::ValidVersion(*image))
             return MakeUnexpected(Failure{});
-        char identityText[32u] = {};
+        char identityText[32u];
         const AStringView suffix = FormatDecimal(index, identityText);
         const Name readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
         const Name textureIdentity = DeriveName(Name("ui.texture_image/"), suffix);

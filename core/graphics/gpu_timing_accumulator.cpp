@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -527,15 +529,15 @@ bool GpuTimingAccumulator::markAttributionsForRetirement(const u64 subscriptionI
     return retirementPending;
 }
 
-Expected<GpuTimingAccumulator::SampleDispatch> GpuTimingAccumulator::retireMarkedAttribution()noexcept{
+void GpuTimingAccumulator::retireMarkedAttributions(SampleDispatchVector& outSamples){
     for(QueryRecord& record : m_queries){
         if(!record.retirementNotificationPending || record.attribution == s_NoGpuTimingSampleAttribution)
             continue;
 
-        const SampleDispatch dispatch{
+        outSamples.push_back(SampleDispatch{
             .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
             .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
-        };
+        });
         record.attribution = s_NoGpuTimingSampleAttribution;
         record.retirementSubscriptionIdentityLimit = 0u;
         record.retirementNotificationPending = false;
@@ -543,9 +545,7 @@ Expected<GpuTimingAccumulator::SampleDispatch> GpuTimingAccumulator::retireMarke
             record.physicalQueue = {};
             record.frameIndex = 0u;
         }
-        return dispatch;
     }
-    return MakeUnexpected(Failure{});
 }
 
 void GpuTimingAccumulator::discardMarkedAttributions()noexcept{

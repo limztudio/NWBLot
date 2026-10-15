@@ -5,73 +5,22 @@ from __future__ import annotations
 import json
 import platform
 import sys
-import time
 
-from guarded_native import GuardedNativeInput
+from window_smoke import parse_args
 from progress_probe import observe_progress, snapshot_from_logs, value_bits
 from probe_common import center
-from window_smoke import parse_args
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
-from fixture_environment import build_fixture_environment
+from window_capture_smoke import run_smoke_main
+from passive_run import PassiveImageRun, run_passive_image
 
 
-class ProgressRun:
+class ProgressRun(PassiveImageRun):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args, self.backend, self.handle, self.process = args, backend, handle, process
-        self.log_directory, self.log_baseline, self.log_pattern = log_directory, log_baseline, log_pattern
-        self.native = GuardedNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-        self.failure_report = None
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern,
+            minimum_height=480.0, snapshot_reader=snapshot_from_logs, observer=observe_progress, center=center, fixture_label="progress")
         self.expected = { "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0, "parent": 0, "child": 0, "popup_count": 0, "progress_targets": 0, "declared_frozen_bits": value_bits(0.25), "post_declaration_bits": value_bits(0.75), }
 
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        sx, sy = self.snapshot["scale"]
-        return round(x * sx), round(y * sy)
-
-    def click(self, name):
-        rectangle = self.snapshot["rectangles"][name]
-        if rectangle[2] <= 0.0 or rectangle[3] <= 0.0:
-            raise SmokeFailure(f"progress fixture has no displayed placement for '{name}'")
-        self.native.click(*self.point(*center(rectangle)))
-
     def checkpoint(self, name, *, extent=None, extra=None, **changes):
-        self.expected.update(changes)
-        self.native.pointer(4, 4)
-        self.native.maintain_pointer()
-        time.sleep(0.25)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during progress UI capture")
-            self.native.maintain_pointer()
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(0.1)
-                continue
-            if snapshot["logical_extent"][0] < 740.0 or snapshot["logical_extent"][1] < 480.0:
-                raise SmokeSkip("the progress fixture needs a logical client of at least 740x480")
-            if self.native.windows:
-                self.backend.capture_prepared_raw_client_window(self.handle, path)
-            else:
-                self.backend.capture_client_window(self.handle, path)
-            report = observe_progress(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
-            if report["passed"]:
-                self.snapshot = snapshot
-                report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
-                self.stages.append(report)
-                self.write_report(False)
-                return
-            time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
-        self.write_report(False)
-        raise SmokeFailure(f"progress displayed-state gate '{name}' failed: {self.failure_report}")
+        return self.capture_checkpoint(name, extent=extent, extra=extra, stage_timeout=10.0, changes=changes)
 
     def write_report(self, passed):
         report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
@@ -112,54 +61,7 @@ class ProgressRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "PROGRESS", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = progress_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the progress fixture appeared")
-            raise SmokeFailure("custom progress fixture did not appear")
-        if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
-        else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiProgressSmoke: display", min(args.timeout, 15.0))
-        progress_run = ProgressRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        progress_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = terminate_process(application, "UI progress fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI progress fixture")
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "progress.log").write_text(text, encoding="utf-8")
-            finally:
-                try:
-                    if logserver is not None:
-                        terminate_process(logserver, "UI progress logserver")
-                finally:
-                    try:
-                        if progress_run is not None:
-                            progress_run.native.restore_pointer()
-                    finally:
-                        backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    progress_run.write_report(True)
-    print(f"UI progress: {len(progress_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_passive_image(args, fixture="PROGRESS", display_marker="UiProgressSmoke: display", driver_type=ProgressRun, log_name="progress.log", label="UI progress", fixture_label="progress")
 
 
 def main(argv):

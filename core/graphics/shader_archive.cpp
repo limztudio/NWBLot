@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -138,7 +140,7 @@ Name ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringVi
     if(!shaderName || variantName.empty() || !stageName)
         return s_NameNone;
 
-    NameHash derivedHash = {};
+    NameHash derivedHash;
     static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         u64 laneHash = UpdateFnv64(s_Fnv64OffsetBasis, reinterpret_cast<const u8*>(s_VirtualPathPrefix.data()), s_VirtualPathPrefix.size());

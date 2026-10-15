@@ -42,7 +42,6 @@ def send_wm_delete(disp, win):
     xlib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
     # NoEventMask delivers directly even without a window manager. Send once: a retry can race window destruction.
     ev = XClientMessageEvent()
-    ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
     ev.type = 33  # ClientMessage
     ev.display = disp
     ev.window = win

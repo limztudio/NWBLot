@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -237,7 +239,7 @@ template<typename ArenaT>
 [[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> GetExecutablePath(ArenaT& arena){
 #if defined(NWB_PLATFORM_WINDOWS)
     constexpr usize s_MaxPathLength = 4096;
-    tchar executablePathBuffer[s_MaxPathLength] = {};
+    tchar executablePathBuffer[s_MaxPathLength];
     const DWORD copiedLength = GetModuleFileName(nullptr, executablePathBuffer, static_cast<DWORD>(s_MaxPathLength));
     if(copiedLength == 0u)
         return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());

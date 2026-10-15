@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -82,7 +84,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(const TextInputS
     // Editing/navigation control keys are delivered through the ordinary key path, never committed as document text.
     if(codePoint < 0x20u || codePoint == 0x7fu)
         return TextInputAdmission::Accepted;
-    char bytes[4] = {};
+    char bytes[4];
     const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
     if(!encoded)
         return encoded.error();

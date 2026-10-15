@@ -707,7 +707,7 @@ def main(argv=None):
         optical = result[LIT_OPTICAL_REFLECTION]
         write_status(f"Optical reflection: {optical['status']} (query activity alone does not certify optical correctness)")
         if optical[LIT_REQUESTED]:
-            write_status(f"Reflection samples={optical['sample_count']} unsupported_ratio={optical['unsupported_ratio']} " f"exterior_eligible_ratio={optical['exterior_eligible_ratio']} queries_per_hardware_ray={optical['queries_per_hardware_ray']}")
+            write_status(f"Reflection samples={optical['sample_count']} unsupported_ratio={optical['unsupported_ratio']} " f"exterior_eligible_ratio={optical['exterior_eligible_ratio']} physical_queries_per_hardware_ray={optical['physical_queries_per_hardware_ray']}")
         return 0
     except SmokeSkip as error:
         if output is not None:

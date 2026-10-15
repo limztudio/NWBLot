@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -205,7 +207,9 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
         return false;
     Core::Device& device = m_graphics.getDevice();
     if(slot.vertexCapacity < vertexCount){
-        const usize capacity = Max(vertexCount, static_cast<usize>(4096u));
+        usize capacity = NextGrowingCapacity(slot.vertexCapacity, vertexCount, 4096u);
+        if(capacity > Limit<usize>::s_Max / sizeof(Vertex))
+            capacity = vertexCount;
         Core::BufferDesc description;
         description.setByteSize(static_cast<u64>(capacity * sizeof(Vertex))).setIsVertexBuffer(true)
             .setDebugName(Name("ui.vertices")).enableAutomaticStateTracking(Core::ResourceStates::Common)
@@ -218,7 +222,9 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
         slot.vertexCapacity = capacity;
     }
     if(slot.indexCapacity < indexCount){
-        const usize capacity = Max(indexCount, static_cast<usize>(12288u));
+        usize capacity = NextGrowingCapacity(slot.indexCapacity, indexCount, 12288u);
+        if(capacity > Limit<usize>::s_Max / sizeof(u32))
+            capacity = indexCount;
         Core::BufferDesc description;
         description.setByteSize(static_cast<u64>(capacity * sizeof(u32))).setIsIndexBuffer(true)
             .setDebugName(Name("ui.indices")).enableAutomaticStateTracking(Core::ResourceStates::Common)

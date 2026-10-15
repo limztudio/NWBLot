@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -519,7 +521,7 @@ template<typename ArenaT, typename StringT>
     if(flags < 0 || ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK) < 0)
         return false;
 
-    char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes] = {};
+    char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes];
     const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer) ? readBufferBytes : sizeof(buffer);
     bool readSucceeded = true;
     bool outputTruncated = false;

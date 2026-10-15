@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -71,7 +73,7 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
         outReport += "exception=";
         outReport += Core::Crash::PosixSignalName(summary.reasonCode);
         outReport += " (";
-        char buffer[s_DecimalTextBufferCapacity] = {};
+        char buffer[s_DecimalTextBufferCapacity];
         outReport += FormatDecimal(static_cast<usize>(summary.reasonCode), buffer);
         outReport += ")\n";
         return;
@@ -191,7 +193,7 @@ static void AppendReportWithoutSection(CrashReportText& outReport, const AString
         if(summary.triggerLine != 0u){
             if(!summary.triggerFile.empty())
                 outReport += ":";
-            char buffer[s_DecimalTextBufferCapacity] = {};
+            char buffer[s_DecimalTextBufferCapacity];
             outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
         }
         outReport += "\n";

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -23,6 +25,8 @@
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/graphics/shader_stage_names.h>
+
+#include <global/overflow.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -287,6 +291,24 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     auto generatedAvboitExtinctionPixelShadersResult = EmitMaterialAvboitExtinctionPixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
     if(!generatedAvboitExtinctionPixelShadersResult)
         return false;
+
+    usize shaderEntryCapacity = graphicsMetadata.shaderEntries.size();
+    const usize generatedShaderCounts[] = {
+        generatedPixelShadersResult->size(),
+        generatedAvboitAccumulatePixelShadersResult->size(),
+        generatedAvboitOccupancyPixelShadersResult->size(),
+        generatedAvboitExtinctionPixelShadersResult->size(),
+    };
+    for(const usize generatedShaderCount : generatedShaderCounts){
+        const auto capacity = AddNoOverflow(shaderEntryCapacity, generatedShaderCount);
+        if(!capacity){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: generated shader entry count exceeds container capacity"));
+            return false;
+        }
+        shaderEntryCapacity = *capacity;
+    }
+    graphicsMetadata.shaderEntries.reserve(shaderEntryCapacity);
+    graphicsMetadata.seenShaderIdentityKeys.reserve(shaderEntryCapacity);
 
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
     const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> bool{

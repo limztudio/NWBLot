@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -924,9 +926,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .accumulatorTextureCount = LengthOf(hardwareCausticAccumulatorTextures),
     };
 
-    const Core::TextureHandle deferredLightingShadowReturnTextures[] = { deferredTargets.shadowVisibility, };
-    const Core::TextureHandle deferredLightingCausticReturnTextures[] = { deferredTargets.causticIrradiance, };
-    const Core::TextureHandle deferredLightingSurfelReturnTextures[] = { deferredTargets.surfelIrradiance, };
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate(m_shadowVisibilityReturnState);
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate(m_causticIrradianceReturnState);
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate(m_surfelIrradianceReturnState);
@@ -937,12 +936,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .shadowReturnStateCandidate = &deferredLightingShadowReturnStateCandidate,
         .causticReturnStateCandidate = &deferredLightingCausticReturnStateCandidate,
         .surfelReturnStateCandidate = &deferredLightingSurfelReturnStateCandidate,
-        .shadowReturnTextures = deferredLightingShadowReturnTextures,
-        .causticReturnTextures = deferredLightingCausticReturnTextures,
-        .surfelReturnTextures = deferredLightingSurfelReturnTextures,
-        .shadowReturnTextureCount = LengthOf(deferredLightingShadowReturnTextures),
-        .causticReturnTextureCount = LengthOf(deferredLightingCausticReturnTextures),
-        .surfelReturnTextureCount = LengthOf(deferredLightingSurfelReturnTextures),
+        .shadowReturnTextures = shadowVisibilityReturnTextures,
+        .causticReturnTextures = causticIrradianceTextures,
+        .surfelReturnTextures = surfelIrradianceReturnTextures,
+        .shadowReturnTextureCount = LengthOf(shadowVisibilityReturnTextures),
+        .causticReturnTextureCount = LengthOf(causticIrradianceTextures),
+        .surfelReturnTextureCount = LengthOf(surfelIrradianceReturnTextures),
         .usesLaggedHistory = laggedAsyncLightingSchedule,
     };
 
@@ -1180,9 +1179,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         else{
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
             Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_surfelGiCounterPersistentState);
-            const Core::BufferHandle readbackCounterBuffers[] = { rayTracingSurfelResources.counterBuffer, };
             // Keep the candidate private until Transfer accepts.
-            FrameExecuteSurfelReadback::Context readbackContext{ .scratchArena = scratchArena, .renderer = this, .candidate = &readbackCounterStateCandidate, .buffers = readbackCounterBuffers, .bufferCount = LengthOf(readbackCounterBuffers), };
+            FrameExecuteSurfelReadback::Context readbackContext{ .scratchArena = scratchArena, .renderer = this, .candidate = &readbackCounterStateCandidate, .buffers = surfelGiCounterBuffers, .bufferCount = LengthOf(surfelGiCounterBuffers), };
             const auto prepareReadbackFinalState = &FrameExecuteSurfelReadback::PrepareReadbackFinalState;
             const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = prepareReadbackFinalState, };
             const auto acceptReadbackFinalState = &FrameExecuteSurfelReadback::AcceptReadbackFinalState;

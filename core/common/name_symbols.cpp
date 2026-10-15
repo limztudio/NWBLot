@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -42,7 +44,7 @@ inline constexpr AStringView s_NamesymProducerSuffix = "\tproducer=runtime\n";
 inline constexpr AStringView s_NamesymRuntimeSource = "\truntime\t";
 
 void AppendDebugHashText(SymbolString& outText, const NameHash& hash){
-    char hashText[::NameDetail::s_DebugHashTextLength + 1u] = {};
+    char hashText[::NameDetail::s_DebugHashTextLength + 1u];
     NameDetail::HashToDebugString(hash, hashText, sizeof(hashText));
     outText += AStringView(hashText, ::NameDetail::s_DebugHashTextLength);
 }

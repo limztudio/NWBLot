@@ -5,6 +5,7 @@ import math
 import re
 
 from numeric_edit_probe import center, ink_coverage, text_hash
+from edit_probe import caret_pixel_column
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
@@ -132,7 +133,7 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
         geometry_matches &= (ox, oy, ow, oh) == (0.0,) * 4
     foreground = (0.92, 0.94, 0.98) if enabled else (0.48, 0.50, 0.55)
     if snapshot["bytes"] and snapshot["anchor"] == snapshot["caret"]:
-        caret_column = round(kx * scale_x)
+        caret_column = caret_pixel_column(kx, scale_x)
         left, right = max(0, math.ceil(cx * scale_x)), min(width, math.floor((cx + min(cw, 200.0)) * scale_x))
         top, bottom = max(0, math.ceil(cy * scale_y)), min(height, math.floor((cy + ch) * scale_y))
         best = None
@@ -186,7 +187,7 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
     geometry_matches &= visible_selections >= minimum_selection_lines
     if focused and enabled and not snapshot["readonly"] and snapshot["anchor"] == snapshot["caret"] and caret_visible:
         geometry_matches &= abs(kw * scale_x - 1.0) <= 0.01
-        column, row = round(kx * scale_x), round((ky + kh - 0.75) * scale_y)
+        column, row = caret_pixel_column(kx, scale_x), round((ky + kh - 0.75) * scale_y)
         if not 0 <= column < width or not 0 <= row < height:
             raise SmokeFailure("TextArea caret probe is outside the captured client")
         color = linear_rgb_bytes((0.95, 0.97, 1.0))

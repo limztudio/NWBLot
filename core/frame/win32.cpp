@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -391,7 +393,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             frame->input().windowFocusUpdate(focused);
             return 0;
         }
-        LRESULT lifecycleResult = 0;
+        LRESULT lifecycleResult;
         if(
             __hidden_win32_message_loop::HandleWin32FrameLifecycleMessage(
                 hwnd, uMsg, wParam, []()noexcept{},

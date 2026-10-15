@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -34,6 +36,9 @@ void CompactAtlasGroups(Impl::FontAtlasPayload& payload){
         NWB_ASSERT(channelCount > 0u);
         const u32 width = endX - firstX;
         const u32 height = endY - firstY;
+        if(firstX == 0u && firstY == 0u && width == group.width && height == group.height && channelCount == group.channelCount)
+            continue;
+
         Core::Assets::AssetBytes compactPixels(group.pixels.get_allocator().arena());
         compactPixels.resize(static_cast<usize>(width) * height * channelCount);
         if(channelCount == group.channelCount){

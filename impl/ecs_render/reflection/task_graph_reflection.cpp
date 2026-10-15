@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -565,7 +567,7 @@ ReflectionGraphResult DeclareReflectionTasks(
         metadata.feedbackSequence = feedbackReserved ? resources.feedback.plan.sequence : 0u;
         ReflectionStatisticsReservation reservation(resources.statistics.control, metadata);
         if(reservation.valid()){
-            const Core::BufferHandle readback = resources.statistics.buffers[reservation.slotIndex()];
+            const Core::BufferHandle& readback = resources.statistics.buffers[reservation.slotIndex()];
             if(!readback)
                 return {};
             const Core::GpuGraphResourceId readbackResource = ImportBuffer(graph, readback);

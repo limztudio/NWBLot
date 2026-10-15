@@ -101,9 +101,17 @@ class LauncherDiscovery:
             return {}
 
         scripts = LauncherDiscovery._launcher_scripts(search_path)
+        script_directories = {script.parent for script in scripts}
+        router_directories = set()
+        for script in scripts:
+            for ancestor in script.parent.parents:
+                if not ancestor.is_relative_to(search_path):
+                    break
+                if ancestor in script_directories:
+                    router_directories.add(ancestor)
         launchers: Dict[str, RepoLauncher] = {}
         for script in scripts:
-            if any(nested_script != script and nested_script.is_relative_to(script.parent) for nested_script in scripts):
+            if script.parent in router_directories:
                 continue
 
             command = _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)

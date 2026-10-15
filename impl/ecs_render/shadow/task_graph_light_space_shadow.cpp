@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -372,8 +374,8 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         const auto& caster = snapshot.casters[index];
         if(caster.meshletCount == 0u)
             continue;
-        const Core::BufferHandle buffers[] = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };
-        for(const auto& buffer : buffers){
+        const ReferenceWrapper<const Core::BufferHandle> buffers[] = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };
+        for(const Core::BufferHandle& buffer : buffers){
             if(!buffer)
                 return {};
             Core::GpuGraphResourceId resource;

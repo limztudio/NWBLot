@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -111,17 +113,19 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
     for(usize i = 0u; i <= lastTokenOffset;){
         const auto hashText = ::NameDetail::CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
         const auto hash = hashText ? ::NameDetail::DecodeDebugHashText(AStringView(hashText->data(), ::NameDetail::s_DebugHashTextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
-        char resolvedText[s_MaxResolvedTextLength] = {};
-        if(hash && Resolve(*hash, resolvedText, sizeof(resolvedText))){
-            if(!decoded){
-                decoded.emplace(arena);
-                decoded->reserve(inOutText.size());
+        if(hash){
+            char resolvedText[s_MaxResolvedTextLength];
+            if(Resolve(*hash, resolvedText, sizeof(resolvedText))){
+                if(!decoded){
+                    decoded.emplace(arena);
+                    decoded->reserve(inOutText.size());
+                }
+                decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
+                AppendResolvedText(arena, *decoded, AStringView(resolvedText));
+                i += ::NameDetail::s_DebugHashTextLength;
+                copiedUntil = i;
+                continue;
             }
-            decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
-            AppendResolvedText(arena, *decoded, AStringView(resolvedText));
-            i += ::NameDetail::s_DebugHashTextLength;
-            copiedUntil = i;
-            continue;
         }
 
         ++i;

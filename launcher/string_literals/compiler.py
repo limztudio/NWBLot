@@ -200,7 +200,7 @@ def compile_plan(command: Sequence[str]) -> Optional[CompilePlan]:
             passthrough = True
         if argument in {"-S", "-emit-llvm", "-save-temps", "-save-temps=obj"} or argument.startswith(("-flto", "-fmodule-output", "-fmodules-ts")):
             unsupported = argument
-        if argument in FRONTEND_VALUE_OPTIONS | DRIVER_VALUE_OPTIONS:
+        if argument in FRONTEND_VALUE_OPTIONS or argument in DRIVER_VALUE_OPTIONS:
             if index + 1 == len(arguments):
                 raise ValueError(f"Missing value for {argument}")
             value = effective_argument(arguments[index + 1])

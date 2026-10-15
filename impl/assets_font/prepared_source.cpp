@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -128,7 +130,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     if(!stream)
         return ReadFailure(path, "could not seek prepared-source header");
 
-    u8 header[s_HeaderBytes] = {};
+    u8 header[s_HeaderBytes];
     if(!ReadExact(stream, header, sizeof(header)))
         return ReadFailure(path, "prepared-source header is truncated");
     const u32 fontByteCount = ReadU32(header + 12u);
@@ -142,10 +144,10 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     candidate.faceIndex = ReadU32(header + 8u);
     NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header + 24u, sizeof(candidate.fontSha256.bytes));
     candidate.groups.reserve(groupCount);
-    u32 groupByteCounts[s_MaxGroupCount] = {};
+    u32 groupByteCounts[s_MaxGroupCount];
     u64 pixelByteCount = 0u;
     for(u32 index = 0u; index < groupCount; ++index){
-        u8 groupHeader[s_GroupHeaderBytes] = {};
+        u8 groupHeader[s_GroupHeaderBytes];
         if(!ReadExact(stream, groupHeader, sizeof(groupHeader)))
             return ReadFailure(path, "image directory is truncated");
         PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -481,18 +483,18 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
         }
 
-        auto appendDrawItemForRenderPath = [](const RenderPath::Enum renderPath, const MaterialPassDrawItem& drawItem, MaterialPassDrawItems& targetDrawItems){
+        auto appendDrawItemForRenderPath = [](const RenderPath::Enum renderPath, MaterialPassDrawItem drawItem, MaterialPassDrawItems& targetDrawItems){
             switch(renderPath){
             case RenderPath::MeshShader:{
-                targetDrawItems.meshDrawItems.push_back(drawItem);
+                targetDrawItems.meshDrawItems.push_back(Move(drawItem));
                 break;
             }
             case RenderPath::VertexIndexed:{
-                targetDrawItems.indexedDrawItems.push_back(drawItem);
+                targetDrawItems.indexedDrawItems.push_back(Move(drawItem));
                 break;
             }
             case RenderPath::ComputeEmulation:{
-                targetDrawItems.computeDrawItems.push_back(drawItem);
+                targetDrawItems.computeDrawItems.push_back(Move(drawItem));
                 break;
             }
             default:
@@ -532,14 +534,16 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         if(passDrawItemActive){
             MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
-            appendDrawItemForRenderPath(renderPath, drawItem, targetDrawItems);
+            if(csgReceiverSurfaceActive)
+                appendDrawItemForRenderPath(renderPath, drawItem, targetDrawItems);
+            else
+                appendDrawItemForRenderPath(renderPath, Move(drawItem), targetDrawItems);
         }
 
         if(csgReceiverSurfaceActive){
-            MaterialPassDrawItem csgReceiverSurfaceDrawItem = drawItem;
-            csgReceiverSurfaceDrawItem.pipelineKey = csgReceiverSurfacePipelineKey;
-            csgReceiverSurfaceDrawItem.pipelineResources = __hidden_material_pass::CapturePipelineResourceSnapshot(*csgReceiverSurfacePipelineResources);
-            appendDrawItemForRenderPath(csgReceiverSurfaceRenderPath, csgReceiverSurfaceDrawItem, drawItems.csgReceiverSurface);
+            drawItem.pipelineKey = csgReceiverSurfacePipelineKey;
+            drawItem.pipelineResources = __hidden_material_pass::CapturePipelineResourceSnapshot(*csgReceiverSurfacePipelineResources);
+            appendDrawItemForRenderPath(csgReceiverSurfaceRenderPath, Move(drawItem), drawItems.csgReceiverSurface);
         }
 
         return true;

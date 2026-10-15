@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -352,7 +354,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         csgUses.push_back(ReadBufferUse(cutters, Core::BufferRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData))));
         csgUses.push_back(ReadUse(clip, Core::ResourceStates::ConstantBuffer));
         csgUses.push_back(ReadUse(interval, Core::ResourceStates::ConstantBuffer));
-        const Core::TextureHandle intervalTextures[] = { targets.csgRemovedIntervalDepth, targets.csgRemovedIntervalCapNormal, targets.csgRemovedIntervalData, targets.csgRemovedIntervalCount, };
+        const ReferenceWrapper<const Core::TextureHandle> intervalTextures[] = { targets.csgRemovedIntervalDepth, targets.csgRemovedIntervalCapNormal, targets.csgRemovedIntervalData, targets.csgRemovedIntervalCount, };
         for(const Core::TextureHandle& texture : intervalTextures){
             const Core::GpuGraphResourceId resource = ImportTexture(graph, texture);
             if(!resource.valid())

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -105,7 +107,7 @@ Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::As
     candidate.setAtlas(entry.texture, entry.atlasWidth, entry.atlasHeight, entry.referenceDensity, Move(regions));
     candidate.setPalette(entry.palette);
     candidate.setTypography(entry.typography);
-    if(!candidate.validatePayload() || (entry.completeToolkitSkin && !ValidateUiSkinToolkitContract(candidate)))
+    if(entry.completeToolkitSkin ? !ValidateUiSkinToolkitContract(candidate) : !candidate.validatePayload())
         return MakeUnexpected(Failure{});
     return candidate;
 }

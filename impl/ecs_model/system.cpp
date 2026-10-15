@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -485,15 +487,13 @@ void ModelSystem::updateStaticMeshAttachments(){
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const{
-    Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
-    m_world.view<ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, ModelObjectComponent& object)noexcept{
-            if(result.valid())
-                return;
-            if(object.owner == owner && object.object == objectName)
-                result = entity;
-        }
-    );
-    return result;
+    const auto objects = m_world.view<ModelObjectComponent>();
+    for(auto it = objects.begin(); it != objects.end(); ++it){
+        auto&& [entity, object] = *it;
+        if(object.owner == owner && object.object == objectName)
+            return entity;
+    }
+    return Core::ECS::s_InvalidEntityId;
 }
 
 

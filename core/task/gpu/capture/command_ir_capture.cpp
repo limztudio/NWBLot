@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -195,9 +197,10 @@ BinaryByteView GpuCommandIrCapture::commandBytes()const{
     if(m_packedDirty){
         NWB_FATAL_ASSERT_MSG(m_commandBytes.size() <= Limit<usize>::s_Max - m_blobBytes.size(), "Command IR stream size exceeded addressable storage");
         const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
-        m_packedBytes.resize(totalSize);
-        NWB_MEMCPY(m_packedBytes.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
-        NWB_MEMCPY(m_packedBytes.data() + m_commandBytes.size(), m_blobBytes.size(), m_blobBytes.data(), m_blobBytes.size());
+        ContainerDetail::ReserveGrowingCapacity(m_packedBytes, totalSize);
+        m_packedBytes.clear();
+        m_packedBytes.insert(m_packedBytes.end(), m_commandBytes.begin(), m_commandBytes.end());
+        m_packedBytes.insert(m_packedBytes.end(), m_blobBytes.begin(), m_blobBytes.end());
         m_packedDirty = false;
     }
     return BinaryByteView{ m_packedBytes.data(), m_packedBytes.size() };
@@ -209,11 +212,9 @@ Expected<GpuCommandIrOwnedStream> GpuCommandIrCapture::exportOwned(GraphicsArena
         return MakeUnexpected(Failure{});
     const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
     GraphicsBytes candidate(arena);
-    candidate.resize(totalSize);
-    NWB_MEMCPY(candidate.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
-    if(!m_blobBytes.empty()){
-        NWB_MEMCPY(candidate.data() + m_commandBytes.size(), m_blobBytes.size(), m_blobBytes.data(), m_blobBytes.size());
-    }
+    candidate.reserve(totalSize);
+    candidate.insert(candidate.end(), m_commandBytes.begin(), m_commandBytes.end());
+    candidate.insert(candidate.end(), m_blobBytes.begin(), m_blobBytes.end());
     GpuCommandIrRasterOwnerTable* ownerCandidate = nullptr;
     if(m_rasterOwners && (!m_rasterOwners->stateOwners.empty() || !m_rasterOwners->heapOwners.empty())){
         GpuCommandIrRasterOwnerTable staged(arena);

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -34,6 +36,10 @@ inline constexpr char s_TemporaryNameSeparator = '_';
 inline constexpr AStringView s_TemporaryNameExtension = ".tmp";
 inline constexpr u64 s_TemporarySequenceStep = 1u;
 Atomic<u64> g_TemporarySequence{0u};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes& existing, const bool replaceDifferent = true){
     const auto read = ReadBinaryFile(path, existing);
@@ -86,6 +92,10 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
     AssetBytes artifactBytes(arena);
     AssetBytes existingBytes(arena);
     AssetString manifestText(arena);
+    usize manifestLineBytes = NameDetail::s_HexDigitsPerHashLane * 3u + s_Extension.size();
+    usize manifestReserveBytes = 0u;
+    if(AddBinaryReserveBytes(manifestLineBytes, 1u) && AddBinaryRepeatedReserveBytes(manifestReserveBytes, manifest.entries.size(), manifestLineBytes))
+        manifestText.reserve(manifestReserveBytes);
     u64 artifactIndex = 0u;
     for(const auto& entry : manifest.entries){
         const u8* payloadData = entry.payloadBytes.data();
@@ -101,7 +111,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
             payloadData = payload->data;
             payloadSize = payload->size;
         }
-        if(entry.identity.payloadSize != payloadSize || entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize)){
+        if(entry.identity.payloadSize != payloadSize || (entry.source != AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload && entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize))){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
             return false;
         }

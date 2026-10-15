@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -78,17 +80,18 @@ bool X11PreeditBuffer::replace(const usize firstCharacter, const usize character
     const auto firstByte = ByteOffset(m_text, firstCharacter);
     if(!firstByte)
         return false;
-    const auto lastByte = ByteOffset(m_text, firstCharacter + characterCount);
-    if(!lastByte)
+    const auto removedBytes = ByteOffset(AStringView(m_text).substr(*firstByte), characterCount);
+    if(!removedBytes)
         return false;
-    const usize remainingBytes = m_text.size() - (*lastByte - *firstByte);
+    const usize lastByte = *firstByte + *removedBytes;
+    const usize remainingBytes = m_text.size() - *removedBytes;
     if(insertion.size() > s_MaxBytes - remainingBytes)
         return false;
     m_candidate.clear();
     m_candidate.append(m_text.data(), *firstByte);
     if(!insertion.empty())
         m_candidate.append(insertion.data(), insertion.size());
-    m_candidate.append(m_text.data() + *lastByte, m_text.size() - *lastByte);
+    m_candidate.append(m_text.data() + lastByte, m_text.size() - lastByte);
     const auto caretByte = ByteOffset(m_candidate, caretCharacter);
     if(!caretByte)
         return false;

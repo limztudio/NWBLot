@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -64,7 +66,7 @@ Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexcept{
 }
 
 bool VolumeFileSystem::loadMetadataLocked(){
-    FilesystemVolumeDetail::VolumeHeaderDisk header{};
+    FilesystemVolumeDetail::VolumeHeaderDisk header;
     if(!readBytesLocked(0, &header, sizeof(header))){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "failed to read metadata header");
         return false;
@@ -149,7 +151,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
             return false;
         }
 
-        FilesystemVolumeDetail::VolumeIndexEntryDisk entry{};
+        FilesystemVolumeDetail::VolumeIndexEntryDisk entry;
         NWB_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
         cursor += sizeof(entry);
 
@@ -208,7 +210,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    FilesystemVolumeDetail::VolumeHeaderDisk header{};
+    FilesystemVolumeDetail::VolumeHeaderDisk header;
     NWB_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(FilesystemVolumeDetail::s_VolumeMagic));
     header.segmentSize = m_segmentSize;
     header.metadataBytes = m_metadataBytes;

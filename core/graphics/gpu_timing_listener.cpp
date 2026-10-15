@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -347,23 +349,10 @@ void GpuTimingRecorder::reservePendingAttributionSamplesLocked(SampleDispatchVec
     outSamples.reserve(requiredCapacity);
 }
 
-Expected<GpuTimingRecorder::SampleDispatch> GpuTimingRecorder::retireMarkedPendingAttributionLocked()noexcept{
-    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it){
-        const auto dispatch = it.value()->retireMarkedAttribution();
-        if(dispatch)
-            return *dispatch;
-    }
-    m_pendingAttributionRetirements = false;
-    return MakeUnexpected(Failure{});
-}
-
 void GpuTimingRecorder::retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples){
-    for(;;){
-        const auto dispatch = retireMarkedPendingAttributionLocked();
-        if(!dispatch)
-            return;
-        outSamples.push_back(*dispatch);
-    }
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
+        it.value()->retireMarkedAttributions(outSamples);
+    m_pendingAttributionRetirements = false;
 }
 
 void GpuTimingRecorder::discardMarkedPendingAttributionsLocked()noexcept{

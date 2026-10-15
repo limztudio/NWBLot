@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -313,7 +315,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    NameHash materialInterfaceHash = {};
+    NameHash materialInterfaceHash;
     const auto materialInterfaceHashResult = ReadPOD<NameHash>(binary, cursor);
     if(!materialInterfaceHashResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing material interface"));
@@ -357,7 +359,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
 
     for(u32 i = 0u; i < shaderCount; ++i){
         Core::ShaderType::Enum shaderType = Core::ShaderType::Invalid;
-        NameHash shaderNameHash = {};
+        NameHash shaderNameHash;
         const auto shaderTypeResult = ReadPOD<Core::ShaderType::Enum>(binary, cursor);
         if(!shaderTypeResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed shader stage at index {}"), i);
@@ -432,7 +434,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
             return MakeUnexpected(Failure{});
         }
         if(hasShader == 1u){
-            NameHash shaderNameHash = {};
+            NameHash shaderNameHash;
             const auto shaderNameHashResult = ReadPOD<NameHash>(binary, cursor);
             if(!shaderNameHashResult){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT {} pixel shader name"), passLabel);

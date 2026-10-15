@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -31,8 +33,8 @@ inline constexpr AStringView s_OwnerSeparator = "_";
     if(!sourceName || label.empty())
         return s_NameNone;
 
-    char ownerBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
-    char revisionBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
+    char ownerBuffer[TextDetail::s_DecimalTextBufferBytes];
+    char revisionBuffer[TextDetail::s_DecimalTextBufferBytes];
     const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
     const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
     if(ownerText.empty() || revisionText.empty())

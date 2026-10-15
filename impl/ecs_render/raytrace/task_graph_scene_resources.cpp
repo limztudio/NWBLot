@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -24,7 +26,7 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& gr
     if(!resources.valid())
         return RayTracingSceneGraphReads(scratchArena);
 
-    const Core::BufferHandle buffers[] = { resources.materialContextSlotsBuffer, resources.instanceMaterialBuffer, resources.materialTypedBuffer, resources.instanceBuffer, };
+    const ReferenceWrapper<const Core::BufferHandle> buffers[] = { resources.materialContextSlotsBuffer, resources.instanceMaterialBuffer, resources.materialTypedBuffer, resources.instanceBuffer, };
     Core::GpuGraphResourceId importedBuffers[LengthOf(buffers)] = {};
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -36,10 +38,11 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& gr
     for(usize index = 0u; index < LengthOf(buffers); ++index){
         if(importedBuffers[index].valid())
             continue;
-        const Name identity = buffers[index]->getCreationDescription().debugName;
+        const Core::BufferHandle& buffer = buffers[index];
+        const Name identity = buffer->getCreationDescription().debugName;
         if(!identity)
             return RayTracingSceneGraphReads(scratchArena);
-        importedBuffers[index] = graph.importBuffer(buffers[index], RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
+        importedBuffers[index] = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
         if(!importedBuffers[index].valid())
             return RayTracingSceneGraphReads(scratchArena);
     }

@@ -55,13 +55,16 @@ def load_name_symbols(path: Optional[Path], required_scopes: Iterable[str], *, m
 def parse_timing_file(path: Path, symbols: Mapping[str, str], start_byte_offset: int = 0,) -> List[Dict[str, float]]:
     if not path.is_file():
         raise SmokeFailure(f"GPU timing file was not written: {path}")
-    raw_timing = path.read_bytes()
-    if start_byte_offset < 0 or start_byte_offset > len(raw_timing):
-        raise SmokeFailure(f"GPU timing measurement offset {start_byte_offset} is outside {path} ({len(raw_timing)} bytes)")
+    with path.open("rb") as source:
+        byte_count = source.seek(0, 2)
+        if start_byte_offset < 0 or start_byte_offset > byte_count:
+            raise SmokeFailure(f"GPU timing measurement offset {start_byte_offset} is outside {path} ({byte_count} bytes)")
+        source.seek(start_byte_offset)
+        raw_timing = source.read()
 
     intervals: List[Dict[str, float]] = []
     current: Optional[Dict[str, float]] = None
-    for raw_line in raw_timing[start_byte_offset:].decode(LIT_UTF_8, errors=LIT_REPLACE).splitlines():
+    for raw_line in raw_timing.decode(LIT_UTF_8, errors=LIT_REPLACE).splitlines():
         header = INTERVAL_RE.fullmatch(raw_line)
         if header:
             frames = int(header.group("frames"))

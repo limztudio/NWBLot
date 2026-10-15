@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -37,7 +39,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
         m_pendingPreeditHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;
     }
-    char bytes[4] = {};
+    char bytes[4];
     const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
     if(!encoded)
         return encoded.error();

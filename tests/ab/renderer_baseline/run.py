@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import struct
@@ -482,7 +483,13 @@ def corpus_number(entry: Mapping[str, object], key: str, profile_name: str) -> f
     value = entry.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no valid {key}")
-    return float(value)
+    try:
+        number = float(value)
+    except OverflowError as error:
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no finite {key}") from error
+    if not math.isfinite(number):
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no finite {key}")
+    return number
 
 
 def load_corpus_reference(corpus_id: str, supplied_root: Optional[Path], profile_name: str, profile: BaselineProfile, gpu_validation: bool, frozen_environment: Optional[Mapping[str, str]] = None, corpus_path: Path = CURRENT_CORPUS_FILE,
@@ -610,8 +617,8 @@ def prepare_output_directory(path: Path) -> None:
 def run(args: argparse.Namespace) -> int:
     profile = get_profile(args.profile)
     args.settle_seconds = profile.settle_seconds if args.settle_seconds is None else args.settle_seconds
-    if args.settle_seconds <= 0.0:
-        raise SmokeFailure("--settle-seconds must be positive")
+    if not math.isfinite(args.settle_seconds) or args.settle_seconds <= 0.0:
+        raise SmokeFailure("--settle-seconds must be positive and finite")
     frozen_environment = effective_frozen_environment(profile)
     reference_manifest: Optional[Mapping[str, object]] = None
     reference_capture: Optional[Path] = None
@@ -697,17 +704,37 @@ def validate_args(args: argparse.Namespace) -> None:
     missing = [flag for flag, value in ((LIT_PROFILE_2, args.profile), (LIT_EXECUTABLE, args.executable), (LIT_RUNTIME_DIR, args.runtime_dir), (LIT_OUTPUT_DIR, args.output_dir)) if value is None]
     if missing:
         raise SmokeFailure("renderer baseline runner requires " + ", ".join(missing))
-    if args.startup_timeout <= 0.0:
-        raise SmokeFailure("--startup-timeout must be positive")
+    if not math.isfinite(args.startup_timeout) or args.startup_timeout <= 0.0:
+        raise SmokeFailure("--startup-timeout must be positive and finite")
+    if args.settle_seconds is not None and (not math.isfinite(args.settle_seconds) or args.settle_seconds <= 0.0):
+        raise SmokeFailure("--settle-seconds must be positive and finite")
     if args.maximum_max_abs is not None and args.maximum_max_abs < 0:
         raise SmokeFailure("--maximum-max-abs must not be negative")
-    if args.maximum_mean_abs is not None and args.maximum_mean_abs < 0.0:
-        raise SmokeFailure("--maximum-mean-abs must not be negative")
+    if args.maximum_mean_abs is not None and (not math.isfinite(args.maximum_mean_abs) or args.maximum_mean_abs < 0.0):
+        raise SmokeFailure("--maximum-mean-abs must be non-negative and finite")
     if args.maximum_changed_fraction is not None and not 0.0 <= args.maximum_changed_fraction <= 1.0:
         raise SmokeFailure("--maximum-changed-fraction must be in [0, 1]")
 
 
 def run_self_test() -> int:
+    numeric_arguments = [LIT_PROFILE_2, LIT_OPAQUE_TEXTURE, LIT_EXECUTABLE, "renderer", LIT_RUNTIME_DIR, "runtime", LIT_OUTPUT_DIR, "output"]
+    for option in ("--startup-timeout", "--settle-seconds", "--maximum-mean-abs"):
+        for value in ("nan", "inf", "-inf"):
+            try:
+                validate_args(make_parser().parse_args(numeric_arguments + [f"{option}={value}"]))
+            except SmokeFailure:
+                pass
+            else:
+                raise AssertionError(f"renderer baseline CLI accepted non-finite {option}={value}")
+    for option in ("--startup-timeout", "--settle-seconds"):
+        try:
+            validate_args(make_parser().parse_args(numeric_arguments + [f"{option}=0"]))
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError(f"renderer baseline CLI accepted zero {option}")
+    validate_args(make_parser().parse_args(numeric_arguments + ["--maximum-mean-abs=0"]))
+    validate_args(make_parser().parse_args(numeric_arguments + ["--startup-timeout=1", "--settle-seconds=1"]))
     try:
         validate_runtime_log("", ())
     except SmokeFailure:
@@ -813,6 +840,18 @@ def run_self_test() -> int:
                         LIT_MEAN_ABS: 0.5, LIT_CHANGED_FRACTION: 0.25, }, LIT_LIMITS: { LIT_MAXIMUM_MAX_ABS: 3, LIT_MAXIMUM_MEAN_ABS: 1.0, LIT_MAXIMUM_CHANGED_FRACTION: 0.75, }, } }, }
         write_json(corpus_path, corpus)
         _, _, corpus_reference = load_corpus_reference(CURRENT_CORPUS_ID, root, LIT_OPAQUE_TEXTURE, get_profile(LIT_OPAQUE_TEXTURE), False, corpus_path=corpus_path,)
+        for key in (LIT_MAXIMUM_MAX_ABS, LIT_MAXIMUM_MEAN_ABS, LIT_MAXIMUM_CHANGED_FRACTION):
+            for value in (float("nan"), float("inf"), -float("inf"), 1 << 4096):
+                corpus[LIT_PROFILES][LIT_OPAQUE_TEXTURE][LIT_LIMITS][key] = value
+                write_json(corpus_path, corpus)
+                try:
+                    load_corpus_reference(CURRENT_CORPUS_ID, root, LIT_OPAQUE_TEXTURE, get_profile(LIT_OPAQUE_TEXTURE), False, corpus_path=corpus_path)
+                except SmokeFailure:
+                    pass
+                else:
+                    raise AssertionError(f"renderer baseline corpus accepted non-finite {key}")
+            corpus[LIT_PROFILES][LIT_OPAQUE_TEXTURE][LIT_LIMITS][key] = corpus_reference.limits[key]
+        write_json(corpus_path, corpus)
         reference_log = reference_directory / LIT_RUNTIME_LOG
         reference_log.write_text("tampered runtime log\n", encoding=LIT_UTF_8)
         try:

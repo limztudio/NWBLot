@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -202,6 +204,14 @@ void RendererMaterialSystem::SplitMaterialTypedBytesByClass(const Material& mate
     outMutableDefaultTypedBytes.clear();
 
     const auto& packedTypedBytes = material.typedBlockBytes();
+    usize constantByteSize = 0u;
+    usize mutableByteSize = 0u;
+    for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
+        usize& targetByteSize = block.blockClass == MaterialBlockClass::MaterialConstant ? constantByteSize : mutableByteSize;
+        targetByteSize += block.byteSize;
+    }
+    outConstantTypedBytes.reserve(constantByteSize);
+    outMutableDefaultTypedBytes.reserve(mutableByteSize);
     usize sourceByteOffset = 0u;
     for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
         // Material::loadBinary already ran ValidateMaterialTypedLayout; keep a debug-only invariant here.

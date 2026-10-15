@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -156,7 +158,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
         if(sourceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += "#define ";
         source += s_DeferredBxdfFunctionMacro;
@@ -176,7 +178,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
         if(sourceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += "    case ";
         source += idView;
@@ -268,7 +270,7 @@ static bool AppendShadowSurfaceBindAliases(
     outAliasSymbols.reserve(static_cast<usize>(NameDetail::s_HashLaneCount) + 7u + bindEntry.structs.size() + bindEntry.instances.size() * 4u);
 
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        char laneDigits[TextDetail::s_DecimalTextBufferBytes] = {};
+        char laneDigits[TextDetail::s_DecimalTextBufferBytes];
         ScratchString suffix("INTERFACE_HASH_", scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
@@ -442,10 +444,10 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         if(surfaceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         const u32 bindNamespaceId = bindNamespaceIdById[id];
-        char bindNamespaceIdText[TextDetail::s_DecimalTextBufferBytes] = {};
+        char bindNamespaceIdText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView bindNamespaceIdView = FormatDecimal(bindNamespaceId, bindNamespaceIdText);
         bindNamespace.clear();
         bindNamespace += s_ShadowSurfaceBindNamespacePrefix;
@@ -490,7 +492,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         if(surfaceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += "    case ";
         source += idView;

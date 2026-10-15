@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -245,7 +247,7 @@ private:
         if(!expect(TokenType::Semicolon, "expected ';' after expression"))
             return false;
 
-        Value* target = resolveTarget(path, assignOp == TokenType::Equal, firstLine, firstColumn);
+        Value* target = resolveTarget(path, firstLine, firstColumn);
         if(!target)
             return false;
 
@@ -731,25 +733,14 @@ private:
     }
 
 
-    Value* resolveTarget(const ScratchPath& path, const bool allowCreateRoot, const u32 errorLine, const u32 errorColumn){
+    Value* resolveTarget(const ScratchPath& path, const u32 errorLine, const u32 errorColumn){
         NWB_ASSERT(!path.empty());
 
         const auto rootName = path[0];
-        if(!isDeclaredVariable(rootName)){
-            error(errorLine, errorColumn, "assignments must target a declared variable");
-            return nullptr;
-        }
-
         auto rootIt = m_variables.find(rootName);
         if(rootIt == m_variables.end()){
-            if(!allowCreateRoot){
-                error(errorLine, errorColumn, "undefined variable");
-                return nullptr;
-            }
-
-            MString rootKey(rootName.data(), rootName.size(), m_arena);
-            auto result = m_variables.emplace(Move(rootKey), Value(m_arena));
-            rootIt = result.first;
+            error(errorLine, errorColumn, "assignments must target a declared variable");
+            return nullptr;
         }
 
         Value* current = &rootIt.value();

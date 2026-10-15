@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -178,7 +180,7 @@ bool Frame::updateFrame(f32 delta){
     }
     m_cpuTasks.pumpMainThread();
     Perf::TimingSink& cpuTiming = m_perfSession.cpuTimingSink();
-    f64 projectUpdateSeconds = 0.0;
+    f64 projectUpdateSeconds;
     bool recordProjectUpdateTiming = false;
     const u64 sampleFrameIndex = m_perfSession.frameIndex();
 

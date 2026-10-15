@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -36,7 +38,7 @@ NWB_FILESYSTEM_BEGIN
 }
 
 [[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
-    char segmentIndexBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
+    char segmentIndexBuffer[TextDetail::s_DecimalTextBufferBytes];
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);
     NWB_ASSERT(!segmentIndexText.empty());
 

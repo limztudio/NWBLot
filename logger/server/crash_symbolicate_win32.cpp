@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -370,14 +372,14 @@ static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const D
     }
 
     outReport += "modules_loaded=";
-    char countBuffer[s_DecimalTextBufferCapacity] = {};
+    char countBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(loadedCount), countBuffer);
     outReport += "\n";
 }
 
 static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
     outReport += "#";
-    char frameBuffer[s_DecimalTextBufferCapacity] = {};
+    char frameBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(frameIndex), frameBuffer);
     outReport += " ";
     AppendHexAddress(arena, outReport, address);
@@ -408,7 +410,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
         outReport += " at ";
         outReport += file;
         outReport += ":";
-        char lineBuffer[s_DecimalTextBufferCapacity] = {};
+        char lineBuffer[s_DecimalTextBufferCapacity];
         outReport += FormatDecimal(static_cast<usize>(line.LineNumber), lineBuffer);
     }
 
@@ -503,7 +505,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
     outReport += "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";
     outReport += BasicStringDetail::WideToUtf8(arena, WStringView(symbolPath));
     outReport += "\nthread_id=";
-    char threadBuffer[s_DecimalTextBufferCapacity] = {};
+    char threadBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(crashContext->threadId), threadBuffer);
     outReport += "\n";
     LoadDumpModules(arena, symbolProcess, dumpImage, outReport);

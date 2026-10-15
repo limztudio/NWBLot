@@ -12,7 +12,7 @@ from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, Smo
 
 
 class PassiveImageRun:
-    def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern, *, minimum_height, snapshot_reader, observer, center):
+    def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern, *, minimum_height, snapshot_reader, observer, center, fixture_label="image"):
         self.args, self.backend, self.handle, self.process = args, backend, handle, process
         self.log_directory, self.log_baseline, self.log_pattern = log_directory, log_baseline, log_pattern
         self.native = GuardedNativeInput(backend, handle)
@@ -24,6 +24,7 @@ class PassiveImageRun:
         self.snapshot_reader = snapshot_reader
         self.observer = observer
         self.center = center
+        self.fixture_label = fixture_label
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -35,7 +36,7 @@ class PassiveImageRun:
     def click(self, name):
         rectangle = self.snapshot["rectangles"][name]
         if rectangle[2] <= 0.0 or rectangle[3] <= 0.0:
-            raise SmokeFailure(f"image fixture has no displayed placement for '{name}'")
+            raise SmokeFailure(f"{self.fixture_label} fixture has no displayed placement for '{name}'")
         self.native.click(*self.point(*self.center(rectangle)))
 
     def capture_checkpoint(self, name, *, extent, extra, stage_timeout, changes):
@@ -47,14 +48,14 @@ class PassiveImageRun:
         stage_deadline = min(self.deadline, time.monotonic() + stage_timeout)
         report = None
         while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during image UI capture")
+            ensure_process_running(self.process, f"during {self.fixture_label} UI capture")
             self.native.maintain_pointer()
             snapshot = self.snapshot_reader(self.logs())
             if snapshot is None:
                 time.sleep(0.1)
                 continue
             if snapshot["logical_extent"][0] < 740.0 or snapshot["logical_extent"][1] < self.minimum_height:
-                raise SmokeSkip(f"the image fixture needs a logical client of at least 740x{self.minimum_height:g}")
+                raise SmokeSkip(f"the {self.fixture_label} fixture needs a logical client of at least 740x{self.minimum_height:g}")
             if self.native.windows:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
@@ -69,17 +70,17 @@ class PassiveImageRun:
             time.sleep(0.1)
         self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
         self.write_report(False)
-        raise SmokeFailure(f"image displayed-state gate '{name}' failed: {self.failure_report}")
+        raise SmokeFailure(f"{self.fixture_label} displayed-state gate '{name}' failed: {self.failure_report}")
 
 
-def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, label):
+def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, label, fixture_label="image"):
     launch = prepare_fixture_launch(args, fixture, build_launch_environment=build_launch_environment, build_fixture_environment=build_fixture_environment, create_capture_backend=create_capture_backend)
     driver = None
     try:
         admit_fixture_processes(args, launch, launch_logserver=launch_logserver, launch_testbed=launch_testbed)
         if not launch.handle:
-            ensure_process_running(launch.application, "before the image fixture appeared")
-            raise SmokeFailure("custom image fixture did not appear")
+            ensure_process_running(launch.application, f"before the {fixture_label} fixture appeared")
+            raise SmokeFailure(f"custom {fixture_label} fixture did not appear")
         if platform.system() == "Windows":
             launch.backend.prepare_raw_client_window(launch.handle)
         else:
@@ -90,8 +91,8 @@ def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, l
     finally:
         try:
             if launch.application is not None:
-                exit_code, tail = terminate_process(launch.application, "UI image fixture", launch.handle)
-                require_normal_process_exit(exit_code, tail, "UI image fixture")
+                exit_code, tail = terminate_process(launch.application, f"UI {fixture_label} fixture", launch.handle)
+                require_normal_process_exit(exit_code, tail, f"UI {fixture_label} fixture")
         finally:
             try:
                 text = ""
@@ -102,7 +103,7 @@ def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, l
             finally:
                 try:
                     if launch.logserver is not None:
-                        terminate_process(launch.logserver, "UI image logserver")
+                        terminate_process(launch.logserver, f"UI {fixture_label} logserver")
                 finally:
                     try:
                         if driver is not None:

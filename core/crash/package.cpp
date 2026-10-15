@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -336,7 +338,7 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
 
 template<typename ArenaT>
 static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const AStringView procName, const AStringView outputName){
-    char procPath[s_LinuxProcPathTextCapacity] = {};
+    char procPath[s_LinuxProcPathTextCapacity];
     CopyFixedBuffer(procPath, PackageNames::s_LinuxProcRootPath);
     AppendUnsignedToFixedBuffer(procPath, request.processId);
     AppendFixedBuffer(procPath, "/");
@@ -398,8 +400,7 @@ bool WriteCrashPackage(const CrashRequest& request){
 
 template<typename ArenaT>
 static void AppendArchiveText(CrashBytesT<ArenaT>& out, const AStringView text){
-    for(const char ch : text)
-        out.push_back(static_cast<u8>(ch));
+    out.insert(out.end(), text.begin(), text.end());
 }
 
 template<typename ArenaT>

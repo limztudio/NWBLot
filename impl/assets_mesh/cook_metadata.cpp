@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -55,7 +57,7 @@ Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascri
 
 
 ScratchString MeshCookMetadata::MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index){
-    char indexBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
+    char indexBuffer[TextDetail::s_DecimalTextBufferBytes];
     const AStringView indexText = FormatDecimal(index, indexBuffer);
     NWB_ASSERT(!indexText.empty());
 
@@ -145,19 +147,6 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(const Path& nwbFilePath, const
         return;
     }
 }
-
-
-Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ParseMetadataU32Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label){
-    const auto parsedValue = ValidateMetadataU32Value(value);
-    if(parsedValue)
-        return parsedValue;
-
-    LogMetadataU32ValueFailure(nwbFilePath, metaKind, label, parsedValue.error());
-    return parsedValue;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END

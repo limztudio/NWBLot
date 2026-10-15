@@ -777,6 +777,17 @@ class StressPerformanceTargetTests(unittest.TestCase):
             patch.object(smoke.ab, LIT_DEVICE_MATERIAL_SIGNATURE, return_value={}), patch.object(smoke, "write_status"):
             return smoke.main(argv) if use_main else smoke.acquire(args, output)
 
+    def test_main_reports_physical_reflection_queries_and_keeps_validated_result(self):
+        row = reflection_record(query_budget_units=20, physical_queries=10, unsupported_paths=0)
+        text = shadow_record() + "\n" + reflection_log(row)
+        self.assertEqual(self.acquire_or_main([LIT_REFLECTION_DIAGNOSTICS], text, use_main=True), 0)
+        output = self.root / LIT_CAPTURE
+        result = json.loads((output / "result.json").read_text(encoding=LIT_UTF_8))
+        self.assertTrue(result[LIT_CAPTURE_VALIDATED])
+        self.assertEqual(result[LIT_OPTICAL_REFLECTION]["query_budget_units_per_hardware_ray"], 2.)
+        self.assertEqual(result[LIT_OPTICAL_REFLECTION]["physical_queries_per_hardware_ray"], 1.)
+        self.assertFalse((output / LIT_FAILURE_JSON).exists())
+
     def test_positive_finite_threshold_extremes_are_accepted(self):
         for threshold in ("5e-324", "1e308"):
             self.assertEqual(smoke.parse_args(self.argv + [LIT_MINIMUM_FPS, threshold]).minimum_fps, float(threshold))

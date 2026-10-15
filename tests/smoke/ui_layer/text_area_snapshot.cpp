@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -53,6 +55,8 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     using namespace __hidden_ui_text_area_snapshot;
     if(!m_observed.snapshot(m_model) || m_observed.shape(context.text, { {}, 16.0f }) != TextLayoutStatus::Success)
         return false;
+    if(!m_observed.measure(context.text, context.display))
+        return false;
     const EditBoxPlacement& placement = m_state.placement();
     const ScrollViewportPlacement& scrollbars = m_state.scrollbars();
     const auto& geometry = m_observed.caretGeometry();
@@ -62,7 +66,9 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     UiTextAreaSnapshot current;
     current.display = context.display;
     current.scroll = m_state.scroll();
-    current.measure = m_observed.layout().measure();
+    // Scroll maxima use the measured visual envelope, including glyph overhang.
+    const Rect& visualBounds = m_observed.visualBounds();
+    current.measure = { visualBounds.width, visualBounds.height };
     current.maximum = { static_cast<f32>(scrollbars.horizontal.maximum), static_cast<f32>(scrollbars.vertical.maximum) };
     current.lineHeight = localCaret->height;
     current.rectangles[0u] = placement.bounds;

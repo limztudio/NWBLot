@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -182,29 +184,29 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool AppendMeshReplacements(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreams& before, const SourceMeshStreams& after){
-    if(before.positions.size() != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
+[[nodiscard]] bool AppendMeshReplacements(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after){
+    if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
         return false;
-    if(before.normals.size() != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
+    if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
         return false;
-    if(before.tangents.size() != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList(after.tangents, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
+    if(before.tangents != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList(after.tangents, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
         return false;
-    if(before.uv0.size() != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList(after.uv0, [](AStringStream& out, const Vec2& value){ WriteVec2(out, value); })))
+    if(before.uv0 != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList(after.uv0, [](AStringStream& out, const Vec2& value){ WriteVec2(out, value); })))
         return false;
-    if(before.colors.size() != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList(after.colors, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
+    if(before.colors != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList(after.colors, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
         return false;
 
     const bool componentRefsChanged =
-        before.positions.size() != after.positions.size()
-        || before.normals.size() != after.normals.size()
-        || before.tangents.size() != after.tangents.size()
-        || before.uv0.size() != after.uv0.size()
-        || before.colors.size() != after.colors.size()
-        || before.vertexRefs.size() != after.vertexRefs.size()
+        before.positions != after.positions.size()
+        || before.normals != after.normals.size()
+        || before.tangents != after.tangents.size()
+        || before.uv0 != after.uv0.size()
+        || before.colors != after.colors.size()
+        || before.vertexRefs != after.vertexRefs.size()
     ;
     if(componentRefsChanged && !AddReplacement(replacements, source, variableName, s_VertexRefsStreamLabel, WriteVertexRefList(after.vertexRefs)))
         return false;
-    if(before.vertexRefs.size() != after.vertexRefs.size() && !AddReplacement(replacements, source, variableName, s_IndicesStreamLabel, WriteIndexList(after.indices)))
+    if(before.vertexRefs != after.vertexRefs.size() && !AddReplacement(replacements, source, variableName, s_IndicesStreamLabel, WriteIndexList(after.indices)))
         return false;
 
     return true;

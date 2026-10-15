@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -193,7 +195,7 @@ bool UiEditBoxHost::character(const u32 unicode){
     event.kind = UiEditBoxEventKind::Character;
     event.owner = entry->owner;
     event.focusGeneration = entry->focusGeneration;
-    char bytes[4u] = {};
+    char bytes[4u];
     usize count = 0u;
     if(unicode < 0x80u){
         bytes[0u] = static_cast<char>(unicode);

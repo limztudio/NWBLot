@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -101,7 +103,7 @@ static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& option
 // When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
 // Returns false when nothing unwound so the caller falls back to the frame-pointer walk.
 [[nodiscard]] static bool CaptureEhFrameCallstack(Detail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
-    void* unwoundAddresses[Detail::s_MaxCallstackFrames] = {};
+    void* unwoundAddresses[Detail::s_MaxCallstackFrames];
     const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
     if(unwoundFrameCount <= 0)
         return false;
@@ -126,7 +128,7 @@ static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& option
 }
 
 static void WarmUpUnwinder()noexcept{
-    void* warmUpAddresses[Detail::s_MaxCallstackFrames] = {};
+    void* warmUpAddresses[Detail::s_MaxCallstackFrames];
     const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
     if(warmedFrameCount <= 0)
         return;
@@ -230,7 +232,7 @@ static void OpenAndroidEmergencyFile(){
     if(Detail::g_State.spoolDirectoryText[0] == 0)
         return;
 
-    char emergencyPath[Detail::s_MaxPathText] = {};
+    char emergencyPath[Detail::s_MaxPathText];
     CopyFixedBuffer(emergencyPath, Detail::g_State.spoolDirectoryText);
     AppendFixedBuffer(emergencyPath, "/");
     AppendFixedBuffer(emergencyPath, PackageNames::s_AndroidEmergencyRequestFileName);

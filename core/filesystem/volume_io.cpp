@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -55,13 +57,13 @@ ACompactString LastErrnoMessage(){
     if(errorNumber == 0)
         return ACompactString(__hidden_filesystem_volume_io::s_NoMountLabel);
 
-    char errorText[s_ErrnoMessageBufferBytes] = {};
+    char errorText[s_ErrnoMessageBufferBytes];
     if(NWB_STRERROR(errorText, sizeof(errorText), errorNumber) != 0)
         return ACompactString(__hidden_filesystem_volume_io::s_UnknownMountLabel);
 
     ACompactString output(errorText);
     output += " (";
-    char numberText[TextDetail::s_DecimalTextBufferBytes] = {};
+    char numberText[TextDetail::s_DecimalTextBufferBytes];
     output += FormatDecimal(errorNumber, numberText);
     output += ")";
     return output;
@@ -80,7 +82,7 @@ void LogFailureWithFsError(AStringView volumeName, AStringView operation, const 
 }
 
 Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeName, const Path& segmentPath){
-    VolumeHeaderDisk header{};
+    VolumeHeaderDisk header;
 
     GlobalFilesystemDetail::InputFileStream stream(segmentPath, GlobalFilesystemDetail::InputFileStream::binary);
     if(!stream.is_open()){

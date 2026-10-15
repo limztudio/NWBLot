@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -163,16 +165,23 @@ static constexpr FormatMapping s_FormatMappings[] = {
     { Format::ASTC_12x12_FLOAT       , VK_FORMAT_ASTC_12x12_SFLOAT_BLOCK_EXT   ,  0, false, false, true  },
 };
 
-static constexpr usize s_NumFormatMappings = LengthOf(s_FormatMappings);
+struct FormatLookup{
+    VkFormat formats[Format::kCount]{};
+
+    constexpr FormatLookup()noexcept{
+        for(auto& format : formats)
+            format = VK_FORMAT_UNDEFINED;
+        for(const FormatMapping& mapping : s_FormatMappings)
+            formats[static_cast<usize>(mapping.format)] = mapping.vkFormat;
+    }
+};
+
+static constexpr FormatLookup s_FormatLookup;
 
 
 VkFormat ConvertFormat(Format::Enum format)noexcept{
-    for(usize i = 0u; i < s_NumFormatMappings; ++i){
-        if(s_FormatMappings[i].format == format)
-            return s_FormatMappings[i].vkFormat;
-    }
-
-    return VK_FORMAT_UNDEFINED;
+    const usize index = static_cast<usize>(format);
+    return index < LengthOf(s_FormatLookup.formats) ? s_FormatLookup.formats[index] : VK_FORMAT_UNDEFINED;
 }
 
 VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept{

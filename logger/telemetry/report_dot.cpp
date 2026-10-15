@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -345,7 +347,7 @@ void AppendTimedGraphDot(TelemetryArena& arena, const FrameGraphReportRecord& re
     FrameGraphOwnerStatisticsRange ownerRange;
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
-        char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+        char identityText[NameDetail::s_DebugHashTextLength + 1u];
         const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
 
         const GraphTimingKey timingKey{ graph.frameIndex, node.name };

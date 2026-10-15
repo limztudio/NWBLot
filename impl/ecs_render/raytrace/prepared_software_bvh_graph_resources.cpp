@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -23,7 +25,7 @@ Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphRe
     if(!declarations.valid())
         return MakeUnexpected(Failure{});
     for(const PreparedMeshSwBvhBuild& build : builds){
-        const PreparedMeshSwBvhGraphResources resources{
+        PreparedMeshSwBvhGraphResources resources{
             .build = build,
             .position = declarations.findImportedBuffer(build.positionBuffer),
             .triangleIndex = declarations.findImportedBuffer(build.triangleIndexBuffer),
@@ -36,7 +38,7 @@ Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphRe
         if(!resources.position.valid() || !resources.triangleIndex.valid() || !resources.node.valid() || !resources.parent.valid() || !resources.sortKeys.valid() || !resources.sortPayload.valid() || !resources.visitCounter.valid()){
             return MakeUnexpected(Failure{});
         }
-        result.push_back(resources);
+        result.push_back(Move(resources));
     }
     return result;
 }

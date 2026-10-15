@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -38,6 +40,10 @@ struct StreamSortEntry{
     Value value;
     usize sourceIndex = 0u;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] bool LessF32(const f32 lhs, const f32 rhs)noexcept{
     return FloatingHashBits(lhs) < FloatingHashBits(rhs);
@@ -386,7 +392,6 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
             return MakeUnexpected(Failure{});
         SourceMeshStreams& mesh = *meshResult;
 
-        SourceMeshStreams before = mesh;
         SourceMeshCanonicalizeReport itemReport;
 
         const auto skinReference = MeshRefreshTextDetail::FindSkinForMesh(doc, meshVariableName);
@@ -403,7 +408,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;
-            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, before, mesh))
+            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh))
                 return MakeUnexpected(Failure{});
             if(itemReport.before.skin != itemReport.after.skin && !MeshRefreshTextDetail::AddReplacement(replacements, source, skinVariableName, "influences", MeshRefreshTextDetail::WriteSkinInfluenceList(skinInfluences))){
                 return MakeUnexpected(Failure{});
@@ -414,7 +419,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;
-            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, before, mesh))
+            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh))
                 return MakeUnexpected(Failure{});
         }
 

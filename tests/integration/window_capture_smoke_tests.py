@@ -21,6 +21,8 @@ sys.path.insert(0, str(SMOKE_DIRECTORY / "ui_layer"))
 
 import window_capture_smoke  # noqa: E402
 import csg_gi_temporal_smoke  # noqa: E402
+import edit_probe  # noqa: E402
+import numeric_edit_smoke  # noqa: E402
 import text_area_probe  # noqa: E402
 import text_area_smoke  # noqa: E402
 from probe_reference import encoded_marker  # noqa: E402
@@ -1197,6 +1199,91 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         self.assertTrue(next(probe for probe in reports[1]["probes"] if probe["name"] == "caret")["passed"])
         self.assertEqual([probe["name"] for probe in reports[1]["probes"] if not probe["passed"]], ["model_25_0"])
         self.assertFalse(reports[1]["passed"])
+
+
+class CaretPixelColumnTests(unittest.TestCase):
+    def test_half_pixel_boundaries_choose_the_covered_column(self):
+        cases = ((333.0, 333), (333.5, 333), (334.5, 334), (335.5, 335),
+            (math.nextafter(333.5, -math.inf), 333), (math.nextafter(333.5, math.inf), 334))
+        for left, expected_column in cases:
+            with self.subTest(left=left):
+                self.assertEqual(edit_probe.caret_pixel_column(left, 1.0), expected_column)
+
+    def test_scale_is_applied_before_the_physical_half_pixel_offset(self):
+        for left, scale, expected_column in ((10.4, 2.0, 21), (10.25, 2.0, 20), (667.0, 0.5, 333)):
+            with self.subTest(left=left, scale=scale):
+                self.assertEqual(edit_probe.caret_pixel_column(left, scale), expected_column)
+
+    def test_edit_and_numeric_phase_samples_use_the_same_one_pixel_column(self):
+        caret, content = (333.5, 148.0, 1.0, 21.796875), (40.0, 148.0, 364.0, 144.0)
+        self.assertEqual(edit_probe.caret_probe_position(caret, content, 1.0, 1.0, 640, 440)[0], 333)
+        run = object.__new__(numeric_edit_smoke.NumericEditRun)
+        run.backend, run.handle = SimpleNamespace(client_size=lambda _handle: (640, 440)), 42
+        snapshot = {"scale": (1.0, 1.0), "enabled": 1, "readonly": 0, "i_focus": 1, "i_anchor": 32, "i_caret": 32,
+            "rectangles": {"integer_caret": caret, "integer_content": content}}
+        self.assertEqual(run._caret_probe_sample(snapshot)[0], 333)
+
+    def test_text_area_oracle_requires_the_covered_column_and_rejects_an_adjacent_decoy(self):
+        _text, snapshot, frame, expected = TextAreaCaretCaptureTests.fixture(7, False)
+        snapshot["rectangles"]["caret"] = (333.5, 148.0, 1.0, 21.796875)
+        rows = frame[2]
+        for y in range(148, 170):
+            rows[y][333] = (249, 252, 255)
+        report = text_area_probe.observe_text_area(frame, snapshot, expected)
+        self.assertTrue(report["passed"])
+        self.assertEqual(next(probe for probe in report["probes"] if probe["name"] == "caret")["position"][0], 333)
+        for y in range(148, 170):
+            rows[y][333], rows[y][334] = (18, 26, 37), (249, 252, 255)
+        report = text_area_probe.observe_text_area(frame, snapshot, expected)
+        self.assertTrue(report["model_matches"])
+        self.assertTrue(report["geometry_matches"])
+        self.assertEqual([probe["name"] for probe in report["probes"] if not probe["passed"]], ["caret"])
+        self.assertFalse(report["passed"])
+
+
+class UiSmokeEntrypointBootstrapTests(unittest.TestCase):
+    def test_progress_help_bootstraps_from_an_unrelated_working_directory(self):
+        environment = os.environ.copy()
+        environment.pop("PYTHONPATH", None)
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, str(SMOKE_DIRECTORY / "ui_layer" / "progress_smoke.py"), "--help"],
+                cwd=directory, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("usage:", result.stdout)
+        self.assertEqual(result.stderr, "")
+
+
+class TextAreaVisualMeasurementTests(unittest.TestCase):
+    def test_visual_extent_matches_scroll_maximum_and_stale_logical_extent_is_rejected(self):
+        _text, snapshot, frame, expected = TextAreaCaretCaptureTests.fixture(7, True)
+        snapshot["measure"], snapshot["maximum"] = (533.09375, 370.54688), (184.09375, 240.54688)
+        rectangles = snapshot["rectangles"]
+        rectangles["content"] = rectangles["clip"] = (40.0, 148.0, 350.0, 130.0)
+        rectangles["x_track"], rectangles["y_track"] = (40.0, 278.0, 350.0, 14.0), (390.0, 148.0, 14.0, 130.0)
+        rectangles["x_thumb"] = (40.0, 278.0, 350.0 * 350.0 / 534.09375, 14.0)
+        rectangles["y_thumb"] = (390.0, 148.0, 14.0, 130.0 * 130.0 / 370.54688)
+        rectangles["corner"] = (390.0, 278.0, 14.0, 14.0)
+        rows = frame[2]
+        def fill(rectangle, color):
+            x, y, width, height = rectangle
+            for row in range(math.ceil(y - 0.5), math.ceil(y + height - 0.5)):
+                for column in range(math.ceil(x - 0.5), math.ceil(x + width - 0.5)):
+                    rows[row][column] = color
+        for name in ("x_track", "y_track", "corner"):
+            fill(rectangles[name], (24, 29, 37))
+        for name in ("x_thumb", "y_thumb"):
+            fill(rectangles[name], (45, 60, 80))
+        report = text_area_probe.observe_text_area(frame, snapshot, expected)
+        self.assertTrue(report["model_matches"])
+        self.assertTrue(report["geometry_matches"])
+        self.assertTrue(all(probe["passed"] for probe in report["probes"]))
+        self.assertTrue(report["passed"])
+        snapshot["measure"] = (532.59375, 370.54688)
+        report = text_area_probe.observe_text_area(frame, snapshot, expected)
+        self.assertTrue(report["model_matches"])
+        self.assertTrue(all(probe["passed"] for probe in report["probes"]))
+        self.assertFalse(report["geometry_matches"])
+        self.assertFalse(report["passed"])
 
 
 class GracefulTerminationTests(unittest.TestCase):

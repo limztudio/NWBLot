@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -43,7 +45,7 @@ inline constexpr AStringView s_SceneTlasResourceLabel = "Scene TLAS";
 // The importer callback matches each file's local importBuffer lambda, so call sites keep their exact graph.
 template<typename ImportBufferFn, typename AppendBufferFn>
 [[nodiscard]] inline bool AppendRayTracingSceneShadowBuffers(const RayTracingDeferredGraphResourceSnapshot& rayTracingResources, ImportBufferFn&& importBuffer, AppendBufferFn&& appendBuffer){
-    const Core::BufferHandle sceneShadowBuffers[] = {
+    const ReferenceWrapper<const Core::BufferHandle> sceneShadowBuffers[] = {
         rayTracingResources.sceneBvhNodeBuffer,
         rayTracingResources.sceneInstanceBuffer,
         rayTracingResources.shadowInstanceMaterialBuffer,
@@ -53,9 +55,10 @@ template<typename ImportBufferFn, typename AppendBufferFn>
     const Name sceneShadowIdentities[] = { Name("render.shadow_visibility.scene_bvh_nodes"), Name("render.shadow_visibility.scene_instances"), Name(s_SceneShadowInstanceMaterialName), Name(s_SceneShadowMaterialTypedName), Name(s_SceneShadowInstancesName), };
     const AStringView sceneShadowLabels[] = { "Scene BVH Nodes", "Scene Instances", s_SceneShadowInstanceMaterialLabel, s_SceneShadowMaterialTypedLabel, s_SceneShadowInstancesLabel, };
     for(usize bufferIndex = 0u; bufferIndex < 5u; ++bufferIndex){
-        if(!sceneShadowBuffers[bufferIndex])
+        const Core::BufferHandle& buffer = sceneShadowBuffers[bufferIndex];
+        if(!buffer)
             continue;
-        const Core::GpuGraphResourceId resource = importBuffer(sceneShadowBuffers[bufferIndex], sceneShadowIdentities[bufferIndex], sceneShadowLabels[bufferIndex]);
+        const Core::GpuGraphResourceId resource = importBuffer(buffer, sceneShadowIdentities[bufferIndex], sceneShadowLabels[bufferIndex]);
         if(!resource.valid())
             return false;
         appendBuffer(resource, Core::ResourceStates::ShaderResource);

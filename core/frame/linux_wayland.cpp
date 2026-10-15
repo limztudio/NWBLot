@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -913,7 +915,7 @@ static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
         return false;
     }
 
-    pollfd fd = {};
+    pollfd fd;
     fd.fd = wl_display_get_fd(context.display);
     fd.events = POLLIN;
 

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -110,46 +112,48 @@ usize EditModel::nextBoundary(const usize position)const noexcept{
     return found == m_boundaries.end() ? m_text.size() : *found;
 }
 
-usize EditModel::wordBoundary(usize position, const bool forward)const noexcept{
+usize EditModel::wordBoundary(const usize position, const bool forward)const noexcept{
     using namespace __hidden_ui_edit_navigation;
+    if((forward && position == m_text.size()) || (!forward && position == 0u))
+        return position;
+    auto cursor = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
     if(forward){
-        if(position == m_text.size())
-            return position;
         const RunClass::Enum category = Classify(text(), position);
-        while(position < m_text.size() && Classify(text(), position) == category)
-            position = nextBoundary(position);
-        while(position < m_text.size() && Classify(text(), position) == RunClass::Whitespace)
-            position = nextBoundary(position);
-        return position;
+        while(cursor != m_boundaries.end() - 1 && Classify(text(), *cursor) == category)
+            ++cursor;
+        while(cursor != m_boundaries.end() - 1 && Classify(text(), *cursor) == RunClass::Whitespace)
+            ++cursor;
+        return *cursor;
     }
-    while(position != 0u && Classify(text(), previousBoundary(position)) == RunClass::Whitespace)
-        position = previousBoundary(position);
-    if(position == 0u)
-        return position;
-    const RunClass::Enum category = Classify(text(), previousBoundary(position));
-    while(position != 0u && Classify(text(), previousBoundary(position)) == category)
-        position = previousBoundary(position);
-    return position;
+    while(cursor != m_boundaries.begin() && Classify(text(), *(cursor - 1)) == RunClass::Whitespace)
+        --cursor;
+    if(cursor == m_boundaries.begin())
+        return 0u;
+    const RunClass::Enum category = Classify(text(), *(cursor - 1));
+    while(cursor != m_boundaries.begin() && Classify(text(), *(cursor - 1)) == category)
+        --cursor;
+    return *cursor;
 }
 
 Expected<EditWordRange> EditModel::wordRangeAt(const usize position)const noexcept{
     using namespace __hidden_ui_edit_navigation;
-    if(!isBoundary(position))
+    const auto requested = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
+    if(requested == m_boundaries.end() || *requested != position)
         return MakeUnexpected(Failure{});
     if(m_text.empty())
         return EditWordRange{};
-    const usize origin = position == m_text.size() ? previousBoundary(position) : position;
+    const auto origin = position == m_text.size() ? requested - 1 : requested;
     const auto category = [this](const usize byte)noexcept{
         return m_text[byte] == '\n' ? RunClass::LineBreak : Classify(text(), byte);
     };
-    const RunClass::Enum run = category(origin);
-    usize first = origin;
-    usize last = nextBoundary(origin);
-    while(first != 0u && category(previousBoundary(first)) == run)
-        first = previousBoundary(first);
-    while(last < m_text.size() && category(last) == run)
-        last = nextBoundary(last);
-    return EditWordRange{ first, last };
+    const RunClass::Enum run = category(*origin);
+    auto first = origin;
+    auto last = origin + 1;
+    while(first != m_boundaries.begin() && category(*(first - 1)) == run)
+        --first;
+    while(last != m_boundaries.end() - 1 && category(*last) == run)
+        ++last;
+    return EditWordRange{ *first, *last };
 }
 
 

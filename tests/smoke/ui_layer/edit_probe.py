@@ -67,9 +67,17 @@ def caret_required(field, state, readonly, visible, selection):
     return bool(state[4] and not selection and (field != "primary" or (visible and not readonly)))
 
 
+def caret_pixel_column(logical_left, scale_x):
+    """Select the one physical column covered by a one-pixel caret.
+
+    Pixel centers are n + 0.5; the left edge is inclusive.
+    """
+    return math.ceil(logical_left * scale_x - 0.5)
+
+
 def caret_probe_position(caret, content, scale_x, scale_y, width, height):
     x, y, caret_width, caret_height = caret
-    column = round(x * scale_x)
+    column = caret_pixel_column(x, scale_x)
     row = round((min(y + caret_height, content[1] + content[3]) - 0.75) * scale_y)
     if not 0 <= column < width or not 0 <= row < height:
         raise SmokeFailure(f"edit caret probe falls outside {width}x{height}: ({column},{row})")

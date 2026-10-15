@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -44,7 +46,7 @@ inline void AppendFixedBuffer(char (&dst)[N], const AStringView src)noexcept{
 
 template<usize N>
 inline void AppendUnsignedToFixedBuffer(char (&dst)[N], u64 value)noexcept{
-    char text[TextDetail::s_DecimalTextBufferBytes] = {};
+    char text[TextDetail::s_DecimalTextBufferBytes];
     usize begin = sizeof(text);
     do{
         text[--begin] = static_cast<char>('0' + (value % TextDetail::s_DefaultNumericTextBase));

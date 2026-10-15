@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -144,7 +146,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 }
 
 [[nodiscard]] static Expected<ScratchString> MakeShapeIdDefineValue(const u32 shapeTypeId, ScratchArena& arena){
-    char shapeTypeIdText[TextDetail::s_DecimalTextBufferBytes] = {};
+    char shapeTypeIdText[TextDetail::s_DecimalTextBufferBytes];
     const AStringView shapeTypeIdView = FormatDecimal(shapeTypeId, shapeTypeIdText);
     if(shapeTypeIdView.empty())
         return MakeUnexpected(Failure{});

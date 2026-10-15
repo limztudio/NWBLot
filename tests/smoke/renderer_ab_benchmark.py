@@ -25,7 +25,7 @@ from gpu_timing_parse import load_name_symbols
 import reflection_benchmark as reflection
 import caustic_timing_qualification as caustic
 from reflection_benchmark import balanced_orders, paired_statistics, parse_intervals, summarize_intervals
-from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
+from smoke_volume_identity import file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
@@ -383,7 +383,7 @@ def runtime_identity(runtime):
         raise SmokeFailure(f"runtime lacks a packed res directory: {runtime}")
     mutable = set(runtime_pipeline_cache_paths(runtime))
     files = {path.relative_to(runtime).as_posix(): file_identity(path) for path in sorted(resources.rglob("*")) if path.is_file() and path not in mutable}
-    volumes = authored_volume_hashes(runtime)
+    volumes = {relative: identity["sha256"] for relative, identity in files.items() if Path(relative).match("*.vol")}
     if not files or not volumes:
         raise SmokeFailure("runtime contains no authored packed volume")
     return {LIT_FILES: files, "authored_volume_hashes": volumes}
@@ -422,8 +422,9 @@ def validate_arm_separation(arms):
     if first.runtime == second.runtime or first.runtime.is_relative_to(second.runtime) \
         or second.runtime.is_relative_to(first.runtime) or (first.runtime / LIT_RES).resolve() == (second.runtime / LIT_RES).resolve():
         raise SmokeFailure("arms need distinct non-nested runtime/resource directories and separate mutable caches")
+    second_caches = runtime_pipeline_cache_paths(second.runtime)
     for first_cache in runtime_pipeline_cache_paths(first.runtime):
-        for second_cache in runtime_pipeline_cache_paths(second.runtime):
+        for second_cache in second_caches:
             if first_cache.samefile(second_cache):
                 raise SmokeFailure("arm runtime caches alias the same physical file")
 

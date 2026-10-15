@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -343,7 +345,13 @@ void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphSt
         const MeshResources& mesh = meshIt.value();
         if(!mesh.blas)
             continue;
-        const auto snapshot = __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(mesh);
+        // This predicate consumes only build/revision state; the graph output below retains the BLAS.
+        ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot{};
+        snapshot.runtimeGeometryContentRevision = mesh.runtimeGeometryContentRevision;
+        snapshot.blasGeometryContentRevision = mesh.blasGeometryContentRevision;
+        snapshot.runtimeMesh = mesh.runtimeMesh;
+        snapshot.blasBuildPending = mesh.blasBuildPending;
+        snapshot.blasBuildAccepted = mesh.blasBuildAccepted;
         outStates.push_back({
             .meshName = mesh.meshName,
             .blas = mesh.blas,

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -134,7 +136,7 @@ bool X11TextInputService::convertPreeditText(const XIMText& text){
             next += bytes;
             codePoint = static_cast<u32>(wide);
         }
-        char bytes[4]{};
+        char bytes[4];
         const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
         if(!encoded)
             return false;

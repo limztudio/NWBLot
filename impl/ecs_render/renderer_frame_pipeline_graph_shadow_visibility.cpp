@@ -296,14 +296,15 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     }
     Core::GpuGraphResourceId hardwareTransparentScratch[3u] = {};
     if(hardwareTransparentTrace){
-        const Core::BufferHandle buffers[] = { rayTracingResources.hardwareTransparentCrossingsBuffer, rayTracingResources.hardwareTransparentOverflowListBuffer, rayTracingResources.hardwareTransparentOverflowArgsBuffer, };
+        const ReferenceWrapper<const Core::BufferHandle> buffers[] = { rayTracingResources.hardwareTransparentCrossingsBuffer, rayTracingResources.hardwareTransparentOverflowListBuffer, rayTracingResources.hardwareTransparentOverflowArgsBuffer, };
         for(usize index = 0u; index < LengthOf(buffers); ++index){
-            if(!buffers[index])
+            const Core::BufferHandle& buffer = buffers[index].get();
+            if(!buffer)
                 return false;
-            const Core::BufferDesc& bufferDesc = buffers[index]->getCreationDescription();
+            const Core::BufferDesc& bufferDesc = buffer->getCreationDescription();
             if(!bufferDesc.debugName)
                 return false;
-            hardwareTransparentScratch[index] = m_deferredLightingTaskGraph.importBuffer(buffers[index], BufferResourceDesc(bufferDesc.debugName, "Hardware Transparent Shadow Scratch").setInitialState(bufferDesc.initialState));
+            hardwareTransparentScratch[index] = m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(bufferDesc.debugName, "Hardware Transparent Shadow Scratch").setInitialState(bufferDesc.initialState));
             if(!hardwareTransparentScratch[index].valid())
                 return false;
             resourceUses.push_back(ReadWriteUse(hardwareTransparentScratch[index], Core::ResourceStates::UnorderedAccess));

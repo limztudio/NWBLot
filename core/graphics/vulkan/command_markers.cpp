@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -99,7 +101,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
         return token;
     }
 
-    const GraphicsString markerName(name, m_context.objectArena);
+    const GraphicsString markerName(useDebugUtils ? name : AStringView{}, m_context.objectArena);
     usize gpuCrashMarker = 0u;
     Device::AmdBreadcrumbWrite breadcrumb;
     __hidden_command_markers::CrashMarkerRollback crashMarkerRollback(m_gpuCrashMarkerTracker);

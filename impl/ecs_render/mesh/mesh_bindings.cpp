@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -191,9 +193,16 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
 }
 
 ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSnapshot()const{
-    ECSRenderDetail::MeshFrameBindingSnapshot snapshot = m_meshState.m_frameBindings;
-    snapshot.meshView = meshViewBufferSnapshot();
-    return snapshot;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& bindings = m_meshState.m_frameBindings;
+    return {
+        .instanceBuffer = bindings.instanceBuffer,
+        .materialTypedBuffer = bindings.materialTypedBuffer,
+        .meshView = meshViewBufferSnapshot(),
+        .instanceHeapHandle = bindings.instanceHeapHandle,
+        .materialTypedHeapHandle = bindings.materialTypedHeapHandle,
+        .instanceBufferCapacity = bindings.instanceBufferCapacity,
+        .materialTypedBufferCapacity = bindings.materialTypedBufferCapacity,
+    };
 }
 
 void RendererMeshSystem::releaseMeshFrameHeapHandles(){

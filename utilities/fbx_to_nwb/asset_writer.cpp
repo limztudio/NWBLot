@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -269,7 +271,7 @@ bool NameUsed(const UtilityVector<AString>& names, const AStringView name)noexce
     return false;
 }
 
-AString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, UtilityVector<AString>& usedNames){
+AString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const UtilityVector<AString>& usedNames){
     const AString baseName = AssetWriterSkeletonDetail::NodeName(node, fallbackIndex);
     AString name = baseName;
 
@@ -280,18 +282,14 @@ AString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, Utility
         name = out.str();
     }
 
-    usedNames.push_back(name);
     return name;
 }
 
 UtilityVector<AString> BuildUniqueJointNames(const UtilityVector<ufbx_node*>& joints){
-    UtilityVector<AString> usedNames;
-    usedNames.reserve(joints.size());
-
     UtilityVector<AString> names;
     names.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
-        names.push_back(UniqueNodeName(joints[jointIndex], jointIndex, usedNames));
+        names.push_back(UniqueNodeName(joints[jointIndex], jointIndex, names));
 
     return names;
 }

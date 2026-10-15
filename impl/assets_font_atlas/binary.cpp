@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -127,7 +129,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
         return MakeUnexpected(reserved.error());
     if(*magic != FontAtlasBinaryPayload::s_Magic || *version != FontAtlasBinaryPayload::s_Version || *encoding != s_FontAtlasDistanceEncoding || *reserved != 0u)
         return MakeUnexpected(Failure{});
-    NameHash identity = {};
+    NameHash identity;
     for(u64& lane : identity.qwords){
         const auto low = ReadU32(bytes, cursor);
         if(!low)

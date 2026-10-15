@@ -22,11 +22,13 @@ def runtime_pipeline_cache_paths(directory):
         return []
     result = []
     # Packed-volume segments are contiguous from zero. A missing earlier segment cannot excuse an unrelated file.
-    for index in range(sum(1 for path in resources.iterdir() if path.is_file()) + 1):
+    index = 0
+    while True:
         path = resources / volume_segment_filename("runtime_pipeline_cache", index)
         if not path.is_file():
             break
         result.append(path)
+        index += 1
     return result
 
 

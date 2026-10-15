@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -111,14 +113,15 @@ namespace RendererTaskGraphDetail{
 
     const usize sourceBufferCapacity = uniqueMeshes.size() * NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
     resourceUses.reserve(sourceBufferCapacity);
-    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
+    using BufferRef = NotNull<const Core::BufferHandle*>;
+    Vector<BufferRef, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
     sourceBuffers.reserve(sourceBufferCapacity);
     {
         HashSet<Core::Buffer*, Core::Alloc::ScratchArena, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>> sourceBufferIdentities(AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena);
         for(const MeshSourceRef& mesh : uniqueMeshes){
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
                 if(sourceBufferIdentities.insert(buffer.get()).second)
-                    sourceBuffers.push_back(buffer);
+                    sourceBuffers.push_back(BufferRef(&buffer));
             });
         }
     }
@@ -130,10 +133,10 @@ namespace RendererTaskGraphDetail{
             return MakeUnexpected(Failure{});
         }
         for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex)
-            resourceUses[bufferIndex].resource = declarations.findImportedBuffer(sourceBuffers[bufferIndex]);
+            resourceUses[bufferIndex].resource = declarations.findImportedBuffer(*sourceBuffers[bufferIndex]);
     }
     for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex){
-        const Core::BufferHandle& buffer = sourceBuffers[bufferIndex];
+        const Core::BufferHandle& buffer = *sourceBuffers[bufferIndex];
         Core::GpuGraphResourceId resource = resourceUses[bufferIndex].resource;
         if(!resource.valid()){
             const Name identity = buffer->getCreationDescription().debugName;

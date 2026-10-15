@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -105,10 +107,10 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Telemetry::TelemetryArena>& o
     AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(payload.snapshot.source));
     out += TelemetryMemoryReportDetail::s_MemoryRecordPeakBasisKey;
     AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(payload.snapshot.source));
-    char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+    char identityText[NameDetail::s_DebugHashTextLength + 1u];
     NameDetail::HashToDebugString(payload.scopeName.hash(), identityText, sizeof(identityText));
     const AStringView identity(identityText, NameDetail::s_DebugHashTextLength);
-    char resolvedText[Core::Common::NameSymbols::s_MaxResolvedTextLength] = {};
+    char resolvedText[Core::Common::NameSymbols::s_MaxResolvedTextLength];
     AStringView scopeText(payload.scopeText.data(), payload.scopeText.size());
     if(scopeText == identity && Core::Common::NameSymbols::Resolve(payload.scopeName.hash(), resolvedText, sizeof(resolvedText)))
         scopeText = AStringView(resolvedText);

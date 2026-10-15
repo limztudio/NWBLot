@@ -5,6 +5,7 @@ import math
 import re
 import struct
 
+from edit_probe import caret_pixel_column
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
@@ -124,7 +125,7 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
         anchor, caret = snapshot[f"{prefix}_anchor"], snapshot[f"{prefix}_caret"]
         if field != "clipboard" and snapshot[f"{prefix}_bytes"] and anchor == caret:
             foreground = (0.92, 0.94, 0.98) if enabled else (0.48, 0.50, 0.55)
-            caret_column = round(kx * scale_x)
+            caret_column = caret_pixel_column(kx, scale_x)
             left, right = max(0, math.ceil(cx * scale_x)), min(width, math.floor((cx + min(cw, 200.0)) * scale_x))
             top, bottom = max(0, math.ceil(cy * scale_y)), min(height, math.floor((cy + ch) * scale_y))
             candidates = []
@@ -155,7 +156,7 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
                 probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0), linear_rgb_bytes(color))
         elif focused and enabled and (field == "clipboard" or not snapshot["readonly"]):
             geometry_matches = geometry_matches and abs(kw * scale_x - 1.0) <= 0.01
-            column = round(kx * scale_x)
+            column = caret_pixel_column(kx, scale_x)
             row = round((min(ky + kh, cy + ch) - 0.75) * scale_y)
             if not 0 <= column < width or not 0 <= row < height:
                 raise SmokeFailure(f"numeric caret falls outside {width}x{height}: ({column},{row})")

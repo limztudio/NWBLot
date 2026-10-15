@@ -1,13 +1,25 @@
 nwb_declare_gtest_executable(nwb_os_tests)
-target_sources(nwb_os_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/text_input_selection_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/clipboard_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/clipboard_async_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/clipboard_text_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_input_text_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/linux_text_input_model_tests.cpp")
+target_sources(nwb_os_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/text_input_selection_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/clipboard_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/clipboard_async_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/clipboard_text_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_input_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_input_text_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/linux_text_input_model_tests.cpp"
+)
 target_link_libraries(nwb_os_tests PRIVATE nwb_os)
 if(WIN32)
-    target_sources(nwb_os_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/win32_text_input_tests.cpp")
+    target_sources(nwb_os_tests PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/win32_text_input_tests.cpp"
+    )
     target_link_libraries(nwb_os_tests PRIVATE user32 imm32)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_sources(nwb_os_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/pipe_io_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/x11_clipboard_tests.cpp")
+    target_sources(nwb_os_tests PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/pipe_io_tests.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/x11_clipboard_tests.cpp"
+    )
     target_link_libraries(nwb_os_tests PRIVATE nwb::x11)
 
     find_program(NWB_XVFB_RUN_EXECUTABLE xvfb-run)

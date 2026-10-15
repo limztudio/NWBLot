@@ -57,6 +57,9 @@ function(nwb_enable_wayland_protocol target_name)
     add_custom_command(OUTPUT "${_xdg_shell_code}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_generated_dir}" COMMAND "${_wayland_scanner}" private-code "${_wayland_xdg_shell_xml}" "${_xdg_shell_code}"
         DEPENDS "${_wayland_xdg_shell_xml}" "${_xdg_shell_header}" VERBATIM)
 
-    target_sources(${target_name} PRIVATE "${_xdg_shell_code}" "${_xdg_shell_header}")
+    target_sources(${target_name} PRIVATE
+        "${_xdg_shell_code}"
+        "${_xdg_shell_header}"
+    )
     target_include_directories(${target_name} PRIVATE "${_generated_dir}")
 endfunction()

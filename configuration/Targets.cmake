@@ -55,5 +55,8 @@ function(nwb_target_link_libraries_whole_archive target)
 endfunction()
 
 function(nwb_target_sources_standalone_runtime target)
-    target_sources(${target} PRIVATE "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.cpp" "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.h")
+    target_sources(${target} PRIVATE
+        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.cpp"
+        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.h"
+    )
 endfunction()

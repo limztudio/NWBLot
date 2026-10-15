@@ -1,7 +1,9 @@
 # Use the engine entry point so all GoogleTest suites share runtime initialization.
 function(nwb_declare_gtest_executable target)
     nwb_declare_executable(${target})
-    target_sources(${target} PRIVATE "${CMAKE_SOURCE_DIR}/tests/common/gtest_nwb_main.cpp")
+    target_sources(${target} PRIVATE
+        "${CMAKE_SOURCE_DIR}/tests/common/gtest_nwb_main.cpp"
+    )
     target_link_libraries(${target} PRIVATE nwb::gtest nwb_common nwb_alloc)
     add_test(NAME ${target} COMMAND ${target})
 endfunction()

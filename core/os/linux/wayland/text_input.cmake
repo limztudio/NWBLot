@@ -14,7 +14,10 @@ function(nwb_enable_text_input_protocol target_name)
     set(_code "${_generated_dir}/text-input-v3-protocol.c")
     add_custom_command(OUTPUT "${_header}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_generated_dir}" COMMAND "${_scanner}" client-header "${_text_input_xml}" "${_header}" DEPENDS "${_text_input_xml}" VERBATIM)
     add_custom_command(OUTPUT "${_code}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_generated_dir}" COMMAND "${_scanner}" private-code "${_text_input_xml}" "${_code}" DEPENDS "${_text_input_xml}" "${_header}" VERBATIM)
-    target_sources(${target_name} PRIVATE "${_header}" "${_code}")
+    target_sources(${target_name} PRIVATE
+        "${_header}"
+        "${_code}"
+    )
     target_include_directories(${target_name} PRIVATE "${_generated_dir}")
     target_compile_definitions(${target_name} PRIVATE NWB_OS_WITH_TEXT_INPUT_V3=1)
 endfunction()

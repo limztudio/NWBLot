@@ -1,10 +1,36 @@
 add_subdirectory(toolkit)
 
 nwb_declare_static_library(nwb_ecs_ui)
-target_sources(nwb_ecs_ui PRIVATE "${CMAKE_CURRENT_LIST_DIR}/components.h" "${CMAKE_CURRENT_LIST_DIR}/text_edit_session.h" "${CMAKE_CURRENT_LIST_DIR}/text_edit_session.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_edit_session_local.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/text_edit_event.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker.h" "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_controller.h"
-    "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_controller.cpp" "${CMAKE_CURRENT_LIST_DIR}/clipboard_publications.h" "${CMAKE_CURRENT_LIST_DIR}/clipboard_publications.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_host.h" "${CMAKE_CURRENT_LIST_DIR}/edit_box_host.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/edit_box_input.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_submit.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_model.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_actions.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_navigation.cpp" "${CMAKE_CURRENT_LIST_DIR}/edit_box_hit.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module.h" "${CMAKE_CURRENT_LIST_DIR}/frame_delta.h" "${CMAKE_CURRENT_LIST_DIR}/frame_delta.cpp" "${CMAKE_CURRENT_LIST_DIR}/skin_selection.h" "${CMAKE_CURRENT_LIST_DIR}/layer_input.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/layer_input_bindings.cpp" "${CMAKE_CURRENT_LIST_DIR}/layer_pointer_input.cpp" "${CMAKE_CURRENT_LIST_DIR}/layer_system.h" "${CMAKE_CURRENT_LIST_DIR}/layer_system.cpp" "${CMAKE_CURRENT_LIST_DIR}/layer_system_frame.cpp" "${CMAKE_CURRENT_LIST_DIR}/layer_system_fonts.cpp")
+target_sources(nwb_ecs_ui PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/components.h"
+    "${CMAKE_CURRENT_LIST_DIR}/text_edit_session.h"
+    "${CMAKE_CURRENT_LIST_DIR}/text_edit_session.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_edit_session_local.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_edit_event.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_controller.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_controller.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/clipboard_publications.h"
+    "${CMAKE_CURRENT_LIST_DIR}/clipboard_publications.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_host.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_host.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_input.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_submit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_model.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_actions.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_navigation.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_hit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/frame_delta.h"
+    "${CMAKE_CURRENT_LIST_DIR}/frame_delta.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/skin_selection.h"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_input.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_input_bindings.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_pointer_input.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_system_frame.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_system_fonts.cpp"
+)
 target_link_libraries(nwb_ecs_ui PUBLIC nwb_assets nwb_ecs nwb_graphics nwb_input nwb_os nwb_ui_edit nwb_ui_gpu nwb_ui_text nwb_ui_widgets)

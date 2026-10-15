@@ -1,4 +1,6 @@
 nwb_declare_gtest_executable(nwb_filesystem_tests)
-target_sources(nwb_filesystem_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/filesystem_tests.cpp")
+target_sources(nwb_filesystem_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/filesystem_tests.cpp"
+)
 target_link_libraries(nwb_filesystem_tests PRIVATE nwb_filesystem)
 

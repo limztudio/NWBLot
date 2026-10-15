@@ -62,7 +62,9 @@ function(nwb_attach_string_literal_runtime directory)
                     message(FATAL_ERROR "String obfuscation owns the linker launcher for ${_nwb_literal_target}; remove the competing launcher.")
                 endif()
             endforeach()
-            target_sources("${_nwb_literal_target}" PRIVATE $<TARGET_OBJECTS:nwb_string_literal_runtime>)
+            target_sources("${_nwb_literal_target}" PRIVATE
+                $<TARGET_OBJECTS:nwb_string_literal_runtime>
+            )
             # Mach-O constructors follow link-input order. Put the one decoder before all consumer objects.
             set(_nwb_literal_link_launcher "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/launcher/string_literals/linker.py" --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime> --)
             set_property(TARGET "${_nwb_literal_target}" PROPERTY C_LINKER_LAUNCHER "${_nwb_literal_link_launcher}")

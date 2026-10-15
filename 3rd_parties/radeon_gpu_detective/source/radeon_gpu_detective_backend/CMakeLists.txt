@@ -39,7 +39,9 @@ endif()
 # SYSTEM_INFO_ENABLE_RDF (selects system_info's rdf::ChunkFile Parse overload) and RDF_CXX_BINDINGS (the
 # rdf::ChunkFile C++ wrapper) both arrive transitively: the former PUBLIC from system_info once
 # SYSTEM_INFO_BUILD_RDF_INTERFACES is on, the latter PUBLIC from amdrdf.
-target_compile_definitions(rgd_backend PRIVATE NOMINMAX)
+# Match the public JSON serializer API to the summary-only source set above. Enhanced shader
+# serialization must not retain a reference to the intentionally excluded disassembly implementation.
+target_compile_definitions(rgd_backend PUBLIC NWB_RGD_SUMMARY_ONLY=1 PRIVATE NOMINMAX)
 set_target_properties(rgd_backend PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON)

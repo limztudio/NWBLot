@@ -609,6 +609,7 @@ void RgdSerializerJson::SetDriverExperimentsInfoData(const nlohmann::json& drive
     }
 }
 
+#if !defined(NWB_RGD_SUMMARY_ONLY)
 void RgdSerializerJson::SetShaderInfo(const Config& user_config, RgdEnhancedCrashInfoSerializer& enhanced_crash_info_serializer)
 {
     RgdUtils::PrintMessage("generating JSON representation of the in-flight shader information...", RgdMessageType::kInfo, user_config.is_verbose);
@@ -627,6 +628,7 @@ void RgdSerializerJson::SetShaderInfo(const Config& user_config, RgdEnhancedCras
         RgdUtils::PrintMessage(kStrNoInFlightShaderInfo, RgdMessageType::kWarning, user_config.is_verbose);
     }
 }
+#endif
 
 void RgdSerializerJson::SetGprData(const CrashData& kmd_crash_data)
 {

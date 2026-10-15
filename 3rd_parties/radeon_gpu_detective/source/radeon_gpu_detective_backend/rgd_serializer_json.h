@@ -20,7 +20,9 @@
 #include "rgd_data_types.h"
 #include "rgd_resource_info_serializer.h"
 #include "rgd_marker_data_serializer.h"
+#if !defined(NWB_RGD_SUMMARY_ONLY)
 #include "rgd_enhanced_crash_info_serializer.h"
+#endif
 
 // JSON Schema version
 #define STRINGIFY_JSON_SCHEMA_VERSION(major, minor) STRINGIFY_MACRO(major) "." STRINGIFY_MACRO(minor)
@@ -31,7 +33,9 @@
 // *** INTERNALLY-LINKED AUXILIARY CONSTANTS - BEGIN ***
 
 static const char* kStrInfoNoCmdBuffersInFlight = "no command buffers were in flight during crash.";
+#if !defined(NWB_RGD_SUMMARY_ONLY)
 static const char* kStrNoInFlightShaderInfo     = "in flight shader info not available.";
+#endif
 
 // *** INTERNALLY-LINKED AUXILIARY CONSTANTS - END ***
 
@@ -71,8 +75,10 @@ public:
     // Set Driver Experiments info.
     void SetDriverExperimentsInfoData(const nlohmann::json& driver_experiments_json);
 
-    // Set shader info.
+#if !defined(NWB_RGD_SUMMARY_ONLY)
+    // Set shader info (requires the enhanced crash-info/disassembly backend).
     void SetShaderInfo(const Config& user_config, RgdEnhancedCrashInfoSerializer& enhanced_crash_info_serializer);
+#endif
 
     // Set raw GPR (VGPR and SGPR) data.
     void SetGprData(const CrashData& kmd_crash_data);

@@ -373,7 +373,19 @@ static void OnOutputScale(void* data, wl_output* output, i32 factor){
     ApplyBufferScale(context, factor);
 }
 
-static const wl_output_listener s_OutputListener = { &OnOutputGeometry, &OnOutputMode, &OnOutputDone, &OnOutputScale, };
+// Output is bound at version 2, so newer name/description events cannot be sent.
+static const wl_output_listener s_OutputListener = {
+    &OnOutputGeometry,
+    &OnOutputMode,
+    &OnOutputDone,
+    &OnOutputScale,
+#if defined(WL_OUTPUT_NAME_SINCE_VERSION)
+    nullptr,
+#endif
+#if defined(WL_OUTPUT_DESCRIPTION_SINCE_VERSION)
+    nullptr,
+#endif
+};
 
 static void AttachSeatListener(WaylandContext& context);
 

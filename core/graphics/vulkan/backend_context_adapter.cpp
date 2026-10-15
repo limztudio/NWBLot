@@ -115,6 +115,11 @@ bool BackendContext::pickPhysicalDevice(){
         return false;
     }
 
+    if(deviceCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No devices were found. Install a compatible hardware driver or software Vulkan ICD; software fallback requires an installed driver."));
+        return false;
+    }
+
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PhysicalDeviceSelectArena, s_DeviceSetupScratchArenaBytes);
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
@@ -124,7 +129,9 @@ bool BackendContext::pickPhysicalDevice(){
         return false;
     }
 
-    i32 adapterIndex = m_deviceParams.adapterIndex;
+    devices.resize(deviceCount);
+
+    const i32 adapterIndex = m_deviceParams.adapterIndex;
     i32 firstDevice = 0;
     i32 lastDevice = static_cast<i32>(devices.size()) - 1;
     if(adapterIndex >= 0){
@@ -137,7 +144,7 @@ bool BackendContext::pickPhysicalDevice(){
     }
 
     auto errorStream = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
-    errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
+    errorStream << "Cannot find a compatible hardware or software Vulkan device. Software fallback requires an installed Vulkan ICD with all required extensions, features, queues and presentation support.";
 
     struct DeviceSelection{
         VkPhysicalDevice device = VK_NULL_HANDLE;
@@ -174,9 +181,8 @@ bool BackendContext::pickPhysicalDevice(){
         m_secondaryTransferQueueFamily = selection.secondaryTransferQueueFamily;
         m_presentQueueFamily = selection.presentQueueFamily;
     };
-    DeviceSelection fallbackSelection;
-    bool skippedWindowedCpuDevice = false;
-    bool sawWindowedGpuCandidate = false;
+    DeviceSelection hardwareFallbackSelection;
+    DeviceSelection softwareFallbackSelection;
 
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
@@ -184,14 +190,6 @@ bool BackendContext::pickPhysicalDevice(){
         m_instanceDispatch.vkGetPhysicalDeviceProperties(dev, &prop);
 
         errorStream << "\n" << prop.deviceName << ":";
-        if(!m_deviceParams.headlessDevice && prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU){
-            errorStream << "\n  - CPU Vulkan devices are not supported for windowed rendering";
-            skippedWindowedCpuDevice = true;
-            continue;
-        }
-        if(!m_deviceParams.headlessDevice)
-            sawWindowedGpuCandidate = true;
-
         VulkanDetail::ScratchStringSet requiredExtensions(0, Hasher<VulkanDetail::ScratchString>(), EqualTo<VulkanDetail::ScratchString>(), scratchArena);
         requiredExtensions.reserve(m_enabledExtensions.device.size());
         for(const auto& [name, _] : m_enabledExtensions.device)
@@ -301,18 +299,26 @@ bool BackendContext::pickPhysicalDevice(){
             return true;
         }
 
+        // Enumeration order must never let a software device hide a compatible integrated or virtual GPU.
+        DeviceSelection& fallbackSelection = prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? softwareFallbackSelection : hardwareFallbackSelection;
         if(fallbackSelection.device == VK_NULL_HANDLE)
             fallbackSelection = captureCurrentSelection(dev);
     }
 
-    if(fallbackSelection.device != VK_NULL_HANDLE){
-        applySelection(fallbackSelection);
+    if(hardwareFallbackSelection.device != VK_NULL_HANDLE){
+        applySelection(hardwareFallbackSelection);
         return true;
     }
 
-    if(skippedWindowedCpuDevice && !sawWindowedGpuCandidate){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
-        return false;
+    if(softwareFallbackSelection.device != VK_NULL_HANDLE){
+        applySelection(softwareFallbackSelection);
+        VkPhysicalDeviceProperties properties{};
+        m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &properties);
+        if(adapterIndex >= 0)
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Using explicitly selected software device '{}'. Rendering will run on the CPU."), StringConvert(properties.deviceName));
+        else
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: No compatible hardware device found; falling back to software device '{}'. Rendering will run on the CPU."), StringConvert(properties.deviceName));
+        return true;
     }
 
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));

@@ -195,6 +195,8 @@ public:
 
 
 private:
+    // Driver layout sizes may exceed the working-size defaults; addresses become immutable after the first allocation in a generation.
+    [[nodiscard]] bool reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
     [[nodiscard]] DescriptorBufferSegment allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
 
 

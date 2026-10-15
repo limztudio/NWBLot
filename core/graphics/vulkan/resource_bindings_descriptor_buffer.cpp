@@ -112,7 +112,7 @@ bool DescriptorBufferManager::initialize(){
 
     const auto& props = m_context.descriptorBufferProperties;
 
-    // Cap persistent mapped segment reservations at practical working sizes.
+    // Initial working sizes; the first heap reserves larger driver-reported layouts before any allocation is published.
     constexpr u32 s_TargetResourceSegmentBytes = 32u * 1024u * 1024u;
     constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
 
@@ -217,6 +217,54 @@ u64 DescriptorBufferManager::getTexelBufferAddressAlignmentBytes()const noexcept
 
 u32 DescriptorBufferManager::getMaxTexelBufferElements()const noexcept{
     return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
+}
+
+bool DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32 resourceBytes, const u32 samplerBytes, const u64 requiredGeneration){
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+    if(!m_enabled || m_lifecycleTransitioning || requiredGeneration == 0u || requiredGeneration != m_bindingGeneration)
+        return false;
+
+    const u32 alignmentBytes = getOffsetAlignmentBytes();
+    const auto resourceCapacityBytes = AlignUpU32Checked(Max(resourceBytes, m_resourceSegment.capacityBytes), alignmentBytes);
+    const auto samplerCapacityBytes = AlignUpU32Checked(Max(samplerBytes, m_samplerSegment.capacityBytes), alignmentBytes);
+    if(!resourceCapacityBytes || !samplerCapacityBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Initial descriptor-buffer layout capacity exceeds aligned 32-bit storage."));
+        return false;
+    }
+    if(*resourceCapacityBytes == m_resourceSegment.capacityBytes && *samplerCapacityBytes == m_samplerSegment.capacityBytes)
+        return true;
+
+    // A freed allocation still leaves a high-water mark, so no recorded address can survive this startup-only replacement.
+    ScopedLock resourceLock(m_resourceSegment.mutex);
+    ScopedLock samplerLock(m_samplerSegment.mutex);
+    if(m_resourceSegment.writableOffsetBytes != 0u || m_samplerSegment.writableOffsetBytes != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer capacity cannot change after allocations have been published."));
+        return false;
+    }
+
+    const auto& props = m_context.descriptorBufferProperties;
+    const VkDeviceSize resourceMaxBytes = Min<VkDeviceSize>(props.resourceDescriptorBufferAddressSpaceSize, props.maxResourceDescriptorBufferRange);
+    const VkDeviceSize samplerMaxBytes = Min<VkDeviceSize>(props.samplerDescriptorBufferAddressSpaceSize, props.maxSamplerDescriptorBufferRange);
+    const VkDeviceSize totalBytes = static_cast<VkDeviceSize>(*resourceCapacityBytes) + *samplerCapacityBytes;
+    if(*resourceCapacityBytes > resourceMaxBytes || *samplerCapacityBytes > samplerMaxBytes || totalBytes > props.descriptorBufferAddressSpaceSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Initial descriptor-buffer layouts require {} resource and {} sampler bytes, exceeding device segment or address-space limits."), *resourceCapacityBytes, *samplerCapacityBytes);
+        return false;
+    }
+
+    const auto failReservation = [this]()noexcept{
+        shutdownSegment(m_resourceSegment);
+        shutdownSegment(m_samplerSegment);
+        m_bindingGeneration = 0u;
+        m_enabled = false;
+        return false;
+    };
+    if(*resourceCapacityBytes != m_resourceSegment.capacityBytes && !initializeSegment(m_resourceSegment, "vk_resource_descriptor_buffer", *resourceCapacityBytes))
+        return failReservation();
+    if(*samplerCapacityBytes != m_samplerSegment.capacityBytes && !initializeSegment(m_samplerSegment, "vk_sampler_descriptor_buffer", *samplerCapacityBytes))
+        return failReservation();
+
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Sized initial descriptor buffers to driver layouts (resource={} bytes, sampler={} bytes)."), *resourceCapacityBytes, *samplerCapacityBytes);
+    return true;
 }
 
 DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){

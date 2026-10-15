@@ -390,8 +390,23 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         m_accelStructBufferBindingOffset = offsetIt->second;
     }
 
-    // Carve persistent mapped resource and sampler blocks once.
+    // Reserve exact driver layout footprints, including every immutable in-flight TLAS generation, before publishing descriptor addresses.
     const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
+    const auto resourceLayoutBytes = AlignUpU32Checked(m_resourceLayout->getDescriptorBufferSetSizeBytes(), offsetAlignmentBytes);
+    const auto accelStructLayoutBytes = AlignUpU32Checked(m_accelStructLayout ? m_accelStructLayout->getDescriptorBufferSetSizeBytes() : 0u, offsetAlignmentBytes);
+    if(!resourceLayoutBytes || !accelStructLayoutBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap initial descriptor layouts overflow aligned 32-bit storage."));
+        return failInitialization();
+    }
+    const u64 requiredResourceBytes = static_cast<u64>(*resourceLayoutBytes) + static_cast<u64>(*accelStructLayoutBytes) * accelStructCapacity;
+    if(requiredResourceBytes > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap initial descriptor layouts exceed 32-bit storage."));
+        return failInitialization();
+    }
+    if(!m_context.descriptorBufferManager->reserveInitialCapacityForBindingGeneration(static_cast<u32>(requiredResourceBytes), m_samplerLayout->getDescriptorBufferSetSizeBytes(), m_descriptorBufferGeneration))
+        return failInitialization();
+
+    // Carve persistent mapped resource and sampler blocks once.
     if(!initializeDescriptorBufferBlocks(offsetAlignmentBytes))
         return failInitialization();
 

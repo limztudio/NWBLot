@@ -25,6 +25,13 @@ class RadioGroupFrame final : NoCopy{
     friend class Builder;
 
 
+private:
+    struct Label{
+        TextLayout text;
+        Rect bounds;
+    };
+
+
 public:
     RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state)noexcept;
 
@@ -32,11 +39,6 @@ public:
 private:
     const IListDataSource& m_source;
     RadioGroupState& m_state;
-    struct Label{
-        TextLayout text;
-        Rect bounds;
-    };
-
     PaintVector<Label> m_labels;
     RadioGroupChoices m_choices;
     RadioGroupSnapshot m_snapshot;

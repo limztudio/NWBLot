@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A passive label caches logical layout; each paint rasterizes at the current display scale.
+// A passive label caches logical layout; paint confines its ink to the supplied region and inherited clip at the current display scale.
 class Label final : NoCopy{
 public:
     explicit Label(Core::Alloc::GlobalArena& arena);
@@ -25,7 +25,7 @@ public:
 
 public:
     [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request);
-    [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, Point topLeft, const Color& color = {});
+    [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color = {});
     [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
 
 

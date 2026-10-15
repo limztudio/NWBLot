@@ -3,6 +3,7 @@
 
 
 #include "../builder.h"
+#include "../rect_math.h"
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -58,19 +59,20 @@ bool Builder::paintWindowTitle(){
             painted = m_paint.drawRegion(style.focus, collapse);
     }
     const Point titleSize = m_scope->m_window.title.measure();
-    const SIMDVectorSingle titleOrigin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y), VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top));
-    Point origin{ VectorGetX(titleOrigin), VectorGetY(titleOrigin) + Max(0.0f, (metrics.titleHeight - metrics.titlePadding.top - metrics.titlePadding.bottom - titleSize.y) * 0.5f) };
-    if(m_scope->m_window.options.collapsible)
-        origin.x += metrics.collapseExtent + style.gap;
+    const f32 collapseReservation = m_scope->m_window.options.collapsible ? metrics.collapseExtent + style.gap : 0.0f;
+    const SIMDVectorSingle content = InsetRectValue(VectorSet(header.x, header.y, header.width, header.height), VectorSet(metrics.titlePadding.left + collapseReservation, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom));
+    const Point origin{ VectorGetX(content), VectorGetY(content) + Max(0.0f, (VectorGetW(content) - titleSize.y) * 0.5f) };
+    m_paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
     if(painted)
         painted = m_text.paint(m_paint, m_scope->m_window.title, origin, style.text);
+    const bool textPopped = m_paint.popClip();
     const bool popped = m_paint.popClip();
     HitTarget title;
     title.rectangle = header;
     title.clip = clip;
     title.gestureReference = state.bounds;
     title.pointerGesture = m_scope->m_window.options.movable;
-    if(!painted || !popped || !m_context.addTarget(m_scope->m_window.titleState, title))
+    if(!painted || !textPopped || !popped || !m_context.addTarget(m_scope->m_window.titleState, title))
         return false;
     if(m_scope->m_window.options.collapsible){
         HitTarget collapse;

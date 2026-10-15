@@ -31,6 +31,7 @@ target_sources(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/input_bindings_te
     "${CMAKE_CURRENT_LIST_DIR}/nested_popup_router_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/nested_popup_trigger_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/nested_popup_reentry_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/paint_overlay_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pointer_gesture_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/layout_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/context_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/context_claim_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/builder_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/widget_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/window_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/window_behavior_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/window_skin_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/separator_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_region_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/paint_glyph_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/paint_sdf_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_layout_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_layout_ink_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_glyph_visibility_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_visible_fixture.h" "${CMAKE_CURRENT_LIST_DIR}/text_visible_fixture.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_visible_coverage_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_visible_baked_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_font_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/text_baked_tests.cpp")

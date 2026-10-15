@@ -35,7 +35,7 @@ TextLayoutStatus::Enum Label::setText(const ShapeRequest& request){
     return TextLayoutStatus::Success;
 }
 
-bool Label::paint(TextService& text, PaintBuilder& paint, const Point topLeft, const Color& color){
+bool Label::paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color){
     if(m_dirty || m_serviceIdentity != text.identity() || m_fontGeneration != text.generation()){
         const ShapeRequest request{ StringView(m_text.data(), m_text.size()), m_fontSize, m_direction, m_scriptTag, StringView(m_language.data(), m_language.size()) };
         auto layout = text.layout(request);
@@ -46,7 +46,10 @@ bool Label::paint(TextService& text, PaintBuilder& paint, const Point topLeft, c
         m_fontGeneration = text.generation();
         m_dirty = false;
     }
-    return text.paint(paint, m_layout, topLeft, color);
+    paint.pushClip(bounds);
+    const bool painted = text.paint(paint, m_layout, { bounds.x, bounds.y }, color);
+    const bool restored = paint.popClip();
+    return painted && restored;
 }
 
 

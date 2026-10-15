@@ -4,6 +4,7 @@
 
 #include "selectable_paint.h"
 #include "../builder.h"
+#include "../rect_math.h"
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -35,14 +36,17 @@ bool SelectablePainter::Paint(
     bool painted = paint.drawRegion(region->name, bounds);
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
-    const f32 verticalOffset = Max(0.0f, ((bounds.height - layout.measure().y) * 0.5f));
-    const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.x, bounds.y), VectorSet(style.padding.left, verticalOffset, style.padding.left, verticalOffset));
+    const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(style.padding.left, style.padding.top, style.padding.right, style.padding.bottom));
+    const f32 verticalOffset = Max(0.0f, ((VectorGetW(content) - layout.measure().y) * 0.5f));
+    const SIMDVectorSingle textOrigin = VectorAdd(content, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
     const Point origin{ VectorGetX(textOrigin), VectorGetY(textOrigin) };
+    paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
     if(painted)
         painted = text.paint(paint, layout, origin, flags.enabled ? textColor : disabledTextColor);
+    const bool textPopped = paint.popClip();
     const bool rowPopped = paint.popClip();
     const bool clipPopped = paint.popClip();
-    return painted && rowPopped && clipPopped;
+    return painted && textPopped && rowPopped && clipPopped;
 }
 
 bool Builder::selectable(const AStringView stableKey, const StringView text, const bool selected, const WidgetOptions& options){

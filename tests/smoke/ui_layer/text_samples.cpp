@@ -116,13 +116,10 @@ bool UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
     Impl::Ui::PaintBuilder& paint = context.paint;
     const f32 width = context.display.logicalWidth;
     const f32 height = context.display.logicalHeight;
-    if(!m_latin.paint(context.text, paint, { width * 0.04f, height * 0.80f }) || !m_korean.paint(context.text, paint, { width * 0.04f, height * 0.875f }))
+    if(!m_latin.paint(context.text, paint, { width * 0.04f, height * 0.80f, width * 0.28f, height * 0.075f }) || !m_korean.paint(context.text, paint, { width * 0.04f, height * 0.875f, width * 0.28f, height * 0.075f }))
         return false;
 
-    paint.pushClip({ width * 0.34f, height * 0.82f, width * 0.21f, height * 0.08f });
-    const bool clippedPainted = m_clipped.paint(context.text, paint, { width * 0.34f, height * 0.82f });
-    const bool restored = paint.popClip();
-    if(!clippedPainted || !restored)
+    if(!m_clipped.paint(context.text, paint, { width * 0.34f, height * 0.82f, width * 0.21f, height * 0.08f }))
         return false;
 
     const Impl::Ui::Color tint{ 1.0f, 0.2f, 0.6f, 0.5f };

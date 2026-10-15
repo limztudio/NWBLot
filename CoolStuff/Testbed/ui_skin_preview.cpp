@@ -38,6 +38,7 @@ static const Name s_ButtonNormal("button.normal");
 static const Name s_ButtonHover("button.hover");
 static const Name s_ButtonPressed("button.pressed");
 static const Name s_ButtonDisabled("button.disabled");
+static const Name s_EditNormal("edit.normal");
 static const Name s_EditFocused("edit.focused");
 static const Name s_ComboArrow("combo.arrow");
 static const Name s_Checkbox("checkbox.checked");
@@ -74,6 +75,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
         && paint.drawRegion(s_CheckboxMark, { VectorGetX(checkboxMark), VectorGetY(checkboxMark), 16.0f, 16.0f })
         && paint.drawRegion(s_ProgressTrack, { VectorGetX(progressTrack), VectorGetY(progressTrack), 256.0f, 16.0f })
         && paint.drawRegion(s_ProgressFill, { VectorGetX(progressFill), VectorGetY(progressFill), 168.0f, 12.0f })
+        && paint.drawRegion(s_EditNormal, { x + 12.0f, y + 158.0f, 256.0f, 46.0f })
     ;
 }
 
@@ -122,37 +124,26 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     }
 
     const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
-    const SIMDVectorSingle clipOrigin = VectorAdd(origin, VectorSet(12.0f, 160.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle firstFillOrigin = VectorAdd(origin, VectorSet(2.0f, 160.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle secondFillOrigin = VectorAdd(origin, VectorSet(100.0f, 176.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(18.0f, 160.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle koreanOrigin = VectorAdd(origin, VectorSet(18.0f, 181.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(18.0f, 162.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle koreanOrigin = VectorAdd(origin, VectorSet(18.0f, 182.0f, 0.0f, 0.0f));
     const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(20.0f, 17.0f, 0.0f, 0.0f));
     const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(154.0f, 17.0f, 0.0f, 0.0f));
     const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(20.0f, 55.0f, 0.0f, 0.0f));
     const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(154.0f, 55.0f, 0.0f, 0.0f));
     const SIMDVectorSingle editOrigin = VectorAdd(origin, VectorSet(20.0f, 94.0f, 0.0f, 0.0f));
-    context.paint.pushClip({ VectorGetX(clipOrigin), VectorGetY(clipOrigin), 256.0f, 42.0f });
-    context.paint.fillRect({ VectorGetX(firstFillOrigin), VectorGetY(firstFillOrigin), 184.0f, 34.0f },
-        { 0.12f, 0.48f, 1.0f, 0.65f }
-    );
-    context.paint.fillRect({ VectorGetX(secondFillOrigin), VectorGetY(secondFillOrigin), 184.0f, 34.0f },
-        { 1.0f, 0.18f, 0.08f, 0.6f }
-    );
-    const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin) }) && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin) });
-    const bool clipRestored = context.paint.popClip();
-    NWB_FATAL_ASSERT(clipRestored);
+    const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), 244.0f, 20.0f })
+        && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin), 244.0f, 20.0f });
     if(!captionPainted){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI caption shaping or rasterization failed"));
         return;
     }
     const NWB::Impl::Ui::Color textColor{ 0.92f, 0.96f, 1.0f, 1.0f };
     if(
-        !m_normal.paint(context.text, context.paint, { VectorGetX(normalOrigin), VectorGetY(normalOrigin) }, textColor)
-        || !m_hover.paint(context.text, context.paint, { VectorGetX(hoverOrigin), VectorGetY(hoverOrigin) }, textColor)
-        || !m_pressed.paint(context.text, context.paint, { VectorGetX(pressedOrigin), VectorGetY(pressedOrigin) }, textColor)
-        || !m_disabled.paint(context.text, context.paint, { VectorGetX(disabledOrigin), VectorGetY(disabledOrigin) }, { 0.38f, 0.42f, 0.48f, 1.0f })
-        || !m_edit.paint(context.text, context.paint, { VectorGetX(editOrigin), VectorGetY(editOrigin) }, textColor)
+        !m_normal.paint(context.text, context.paint, { VectorGetX(normalOrigin), VectorGetY(normalOrigin), 106.0f, 20.0f }, textColor)
+        || !m_hover.paint(context.text, context.paint, { VectorGetX(hoverOrigin), VectorGetY(hoverOrigin), 106.0f, 20.0f }, textColor)
+        || !m_pressed.paint(context.text, context.paint, { VectorGetX(pressedOrigin), VectorGetY(pressedOrigin), 106.0f, 20.0f }, textColor)
+        || !m_disabled.paint(context.text, context.paint, { VectorGetX(disabledOrigin), VectorGetY(disabledOrigin), 106.0f, 20.0f }, { 0.38f, 0.42f, 0.48f, 1.0f })
+        || !m_edit.paint(context.text, context.paint, { VectorGetX(editOrigin), VectorGetY(editOrigin), 178.0f, 20.0f }, textColor)
     )
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label shaping or rasterization failed"));
 }

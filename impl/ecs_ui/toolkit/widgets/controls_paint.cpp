@@ -83,6 +83,7 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     m_paint.pushClip(visibleClip(box.clip));
     bool painted = true;
     Point origin{ box.rectangle.x, box.rectangle.y };
+    Rect textClip = box.rectangle;
     const Point measured = item.text.measure();
     if(item.state.kind == WidgetKind::Separator){
         painted = m_paint.drawRegion(item.style.separator, box.rectangle);
@@ -93,11 +94,11 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         const Name& preferred = !item.enabled ? item.style.buttonDisabled : pressed ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
         const UiSkinRegion* skinRegion = region(preferred, item.style.button);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, box.rectangle);
-        const SIMDVectorSingle content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
+        const SIMDVectorSingle content = InsetRectValue(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
+        textClip = { VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) };
         const SIMDVectorSingle remaining = VectorScale(VectorSubtract(VectorSwizzle<2, 3, 2, 3>(content), VectorSet(measured.x, measured.y, 0.0f, 0.0f)), 0.5f);
         const SIMDVectorSingle centered = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
-        const SIMDVectorSingle offset = VectorAdd(VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f), centered);
-        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), offset);
+        const SIMDVectorSingle textOrigin = VectorAdd(content, centered);
         origin = { VectorGetX(textOrigin), VectorGetY(textOrigin) };
     }
     else if(item.state.kind == WidgetKind::Checkbox){
@@ -117,13 +118,16 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         const f32 verticalOffset = Max(0.0f, (box.rectangle.height - measured.y) * 0.5f);
         const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(origin.x, origin.y, origin.x, origin.y), VectorSet(horizontalOffset, verticalOffset, horizontalOffset, verticalOffset));
         origin = { VectorGetX(textOrigin), VectorGetY(textOrigin) };
+        textClip = { origin.x, box.rectangle.y, Max(0.0f, box.rectangle.width - horizontalOffset), box.rectangle.height };
     }
     if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
         painted = m_paint.drawRegion(item.style.focus, box.rectangle);
+    m_paint.pushClip(textClip);
     if(painted)
         painted = m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
+    const bool textPopped = m_paint.popClip();
     const bool popped = m_paint.popClip();
-    if(!painted || !popped)
+    if(!painted || !textPopped || !popped)
         return false;
     if(interactive || item.annotated){
         HitTarget target;

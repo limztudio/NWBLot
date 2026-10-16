@@ -21,7 +21,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
     RasterGlyphs glyphs(font.bytes().get_allocator().arena());
     FT_Face face = font.face();
-    const f32 designPerPixel = static_cast<f32>(face->units_per_EM) / static_cast<f32>(options.ppem);
+    const SIMDVectorSingle designPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(face->units_per_EM)), VectorReplicate(static_cast<f32>(options.ppem)));
     const u64 capacity = static_cast<u64>(options.extent) * options.extent * 4u * options.maxGroups;
     u64 rasterBytes = 0u;
     glyphs.reserve(static_cast<usize>(face->num_glyphs));
@@ -79,9 +79,9 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
         glyph.record.drawable = 1u;
         glyph.record.width = bitmap.width;
         glyph.record.height = bitmap.rows;
-        const SIMDVectorSingle origin = VectorScale(VectorSet(static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(-face->glyph->bitmap_top), static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(-face->glyph->bitmap_top)), designPerPixel);
+        const SIMDVectorSingle origin = VectorMultiply(VectorSet(static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(-face->glyph->bitmap_top), static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(-face->glyph->bitmap_top)), designPerPixel);
         const SIMDVectorSingle size = VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows), static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows));
-        const SIMDVectorSingle end = VectorMultiplyAddExpression(size, VectorReplicate(designPerPixel), origin);
+        const SIMDVectorSingle end = VectorMultiplyAddExpression(size, designPerPixel, origin);
         glyph.record.planeLeft = VectorGetX(origin);
         glyph.record.planeTop = VectorGetY(origin);
         glyph.record.planeRight = VectorGetX(end);

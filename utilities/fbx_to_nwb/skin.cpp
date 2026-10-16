@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,7 +34,7 @@ static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
 
 ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale)noexcept{
     ufbx_matrix matrix = {};
-    const f64 inverseScale = s_UniformScaleNumerator / scale;
+    const f64 inverseScale = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(s_UniformScaleNumerator), VectorDoubleReplicate(scale)));
     matrix.m00 = inverseScale;
     matrix.m11 = inverseScale;
     matrix.m22 = inverseScale;

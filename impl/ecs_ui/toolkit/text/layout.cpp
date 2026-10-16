@@ -94,11 +94,12 @@ namespace __hidden_ui_text_layout{
     const SIMDVectorDouble geometryPair2Operand0 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0), VectorDoubleSet(bounds.width, bounds.height, 0.0, 0.0));
     const SIMDVectorDouble geometryPair2Operand1 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(ink.x), static_cast<f64>(ink.y), 0.0, 0.0), VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
     const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleGreater(geometryPair2Operand0, geometryPair2Operand1));
-    const f64 right = VectorDoubleGetX(rightBottomValue);
-    const f64 bottom = VectorDoubleGetY(rightBottomValue);
-    if(!FitsCoordinate(right - left) || !FitsCoordinate(bottom - top))
+    const SIMDVectorDouble size = VectorDoubleSubtract(rightBottomValue, leftTopValue);
+    const f64 width = VectorDoubleGetX(size);
+    const f64 height = VectorDoubleGetY(size);
+    if(!FitsCoordinate(width) || !FitsCoordinate(height))
         return false;
-    const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(right - left), static_cast<f32>(bottom - top) };
+    const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(width), static_cast<f32>(height) };
     if(!IsFinite(combined.x + combined.width) || !IsFinite(combined.y + combined.height))
         return false;
     bounds = combined;
@@ -233,7 +234,8 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         line.glyphCount = static_cast<u32>(run.glyphs.size());
         line.firstCluster = static_cast<u32>(result.m_clusters.size());
         line.top = result.m_measure.y;
-        const SIMDVectorDouble baselineHeightValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(line.top), (static_cast<f64>(run.metrics.ascender) + run.metrics.descender), 0.0, 0.0), VectorDoubleSet(run.metrics.ascender, run.metrics.lineGap, 0.0, 0.0));
+        const SIMDVectorDouble baselineAndAscent = VectorDoubleAdd(VectorDoubleSet(line.top, run.metrics.ascender, 0.0, 0.0), VectorDoubleSet(run.metrics.ascender, run.metrics.descender, 0.0, 0.0));
+        const SIMDVectorDouble baselineHeightValue = VectorDoubleSelect(baselineAndAscent, VectorDoubleAdd(baselineAndAscent, VectorDoubleSet(0.0, run.metrics.lineGap, 0.0, 0.0)), s_DoubleSIMDMaskY);
         const f64 baseline = VectorDoubleGetX(baselineHeightValue);
         const f64 height = VectorDoubleGetY(baselineHeightValue);
         if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(line.top + height))
@@ -250,10 +252,10 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             const u32 firstGlyph = static_cast<u32>(result.m_glyphs.size());
             for(usize index = first; index < end; ++index){
                 const ShapedGlyph& glyph = run.glyphs[index];
-                const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(pen), static_cast<f64>(line.baseline), 0.0, 0.0), VectorDoubleSet(glyph.offset.x, glyph.offset.y, 0.0, 0.0));
-                const f64 x = VectorDoubleGetX(xYValue);
-                const f64 y = VectorDoubleGetY(xYValue);
-                const f64 nextPen = static_cast<f64>(pen) + glyph.advance.x;
+                const SIMDVectorDouble placement = VectorDoubleAdd(VectorDoubleSet(pen, line.baseline, pen, 0.0), VectorDoubleSet(glyph.offset.x, glyph.offset.y, glyph.advance.x, 0.0));
+                const f64 x = VectorDoubleGetX(placement);
+                const f64 y = VectorDoubleGetY(placement);
+                const f64 nextPen = VectorDoubleGetZ(placement);
                 if(!__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y) || !__hidden_ui_text_layout::FitsCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
@@ -282,8 +284,12 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         line.advance = pen;
         line.clusterCount = static_cast<u32>(result.m_clusters.size()) - line.firstCluster;
         result.m_lines.push_back(line);
-        result.m_measure.x = Max(result.m_measure.x, pen);
-        result.m_measure.y += line.height;
+        const SIMDVectorSingle measured = VectorSet(result.m_measure.x, result.m_measure.y, 0.0f, 0.0f);
+        const SIMDVectorSingle advance = VectorSet(pen, line.height, 0.0f, 0.0f);
+        const SIMDVectorSingle widest = VectorSelect(advance, measured, VectorGreater(measured, advance));
+        const SIMDVectorSingle accumulated = VectorAdd(VectorSelect(VectorZero(), measured, s_SIMDMaskY), VectorSelect(VectorZero(), advance, s_SIMDMaskY));
+        const SIMDVectorSingle extent = VectorSelect(widest, accumulated, s_SIMDMaskY);
+        result.m_measure = { VectorGetX(extent), VectorGetY(extent) };
         if(breakEnd == byteEnd)
             break;
         byteBegin = breakEnd;

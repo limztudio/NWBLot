@@ -34,19 +34,9 @@ namespace __hidden_ui_scroll_layout{
     const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(lhs.x), static_cast<f64>(lhs.y), 0.0, 0.0), VectorDoubleSet(lhs.width, lhs.height, 0.0, 0.0));
     const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(rhs.x), static_cast<f64>(rhs.y), 0.0, 0.0), VectorDoubleSet(rhs.width, rhs.height, 0.0, 0.0));
     const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleLess(geometryPair1Operand0, geometryPair1Operand1));
-    const f64 right = VectorDoubleGetX(rightBottomValue);
-    const f64 bottom = VectorDoubleGetY(rightBottomValue);
-    return { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(Max(0.0, right - x)), static_cast<f32>(Max(0.0, bottom - y)) };
-}
-
-[[nodiscard]] static u64 RowIndex(const f64 position, const f64 rowHeight, const u64 rowCount, const bool exclusive)noexcept{
-    const f64 quotient = position / rowHeight;
-    const f64 rounded = exclusive ? Ceil(quotient) : Floor(quotient);
-    if(rounded >= static_cast<f64>(rowCount))
-        return rowCount;
-    if(rounded <= 0.0)
-        return 0u;
-    return static_cast<u64>(rounded);
+    const SIMDVectorDouble extent = VectorDoubleSubtract(rightBottomValue, xYValue);
+    const SIMDVectorDouble size = VectorDoubleSelect(extent, VectorDoubleZero(), VectorDoubleGreater(VectorDoubleZero(), extent));
+    return { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(VectorDoubleGetX(size)), static_cast<f32>(VectorDoubleGetY(size)) };
 }
 
 
@@ -113,8 +103,15 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(const Rect& bounds, const Rect
         const f64 clippedTop = static_cast<f64>(candidate.contentClip.y) - candidate.viewport.y;
         const f64 start = candidate.offset + clippedTop;
         const f64 end = start + candidate.contentClip.height;
-        candidate.firstRow = RowIndex(Max(0.0, start), rowHeight, rowCount, false);
-        candidate.endRow = Max(candidate.firstRow, RowIndex(Max(0.0, end), rowHeight, rowCount, true));
+        const SIMDVectorDouble endpoints = VectorDoubleSet(start, end, 0.0, 0.0);
+        const SIMDVectorDouble positions = VectorDoubleSelect(endpoints, VectorDoubleZero(), VectorDoubleGreater(VectorDoubleZero(), endpoints));
+        const SIMDVectorDouble quotients = VectorDoubleDivide(positions, VectorDoubleReplicate(rowHeight));
+        const SIMDVectorDouble rounded = VectorDoubleSelect(VectorDoubleFloor(quotients), VectorDoubleCeiling(quotients), s_DoubleSIMDMaskY);
+        const f64 firstRow = VectorDoubleGetX(rounded);
+        const f64 endRow = VectorDoubleGetY(rounded);
+        candidate.firstRow = firstRow >= static_cast<f64>(rowCount) ? rowCount : firstRow <= 0.0 ? 0u : static_cast<u64>(firstRow);
+        const u64 boundedEnd = endRow >= static_cast<f64>(rowCount) ? rowCount : endRow <= 0.0 ? 0u : static_cast<u64>(endRow);
+        candidate.endRow = Max(candidate.firstRow, boundedEnd);
     }
     return candidate;
 }

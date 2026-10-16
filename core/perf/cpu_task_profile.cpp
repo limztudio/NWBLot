@@ -7,6 +7,8 @@
 
 #include <core/task/cpu/scheduler.h>
 
+#include <global/simd/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,15 +70,24 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
         remaining -= count;
         if(!enabled)
             continue;
-        for(usize index = 0u; index < count; ++index){
-            const CpuTaskProfileEvent& event = events[index];
-            const Name* const scopeName = __hidden_cpu_task_profile::TimingScope(event);
-            if(!scopeName)
-                continue;
-            const TimingScopeId scope = timing.registerScope(*scopeName);
-            const f64 nanoseconds = static_cast<f64>(event.durationNanoseconds);
-            const f64 seconds = nanoseconds * __hidden_cpu_task_profile::s_NanosecondsToSeconds;
-            timing.recordSample(scope, seconds, event.frameIndex);
+        for(usize index = 0u; index < count; index += 4u){
+            const usize batchCount = Min(count - index, usize(4u));
+            const Name* scopeNames[4u] = {};
+            f64 nanoseconds[4u] = {};
+            for(usize lane = 0u; lane < batchCount; ++lane){
+                const CpuTaskProfileEvent& event = events[index + lane];
+                scopeNames[lane] = __hidden_cpu_task_profile::TimingScope(event);
+                if(scopeNames[lane])
+                    nanoseconds[lane] = static_cast<f64>(event.durationNanoseconds);
+            }
+            const SIMDVectorDouble seconds = VectorDoubleMultiply(VectorDoubleSet(nanoseconds[0u], nanoseconds[1u], nanoseconds[2u], nanoseconds[3u]), VectorDoubleReplicate(__hidden_cpu_task_profile::s_NanosecondsToSeconds));
+            for(usize lane = 0u; lane < batchCount; ++lane){
+                if(!scopeNames[lane])
+                    continue;
+                const CpuTaskProfileEvent& event = events[index + lane];
+                const TimingScopeId scope = timing.registerScope(*scopeNames[lane]);
+                timing.recordSample(scope, VectorDoubleGetByIndex(seconds, lane), event.frameIndex);
+            }
         }
     }
 }

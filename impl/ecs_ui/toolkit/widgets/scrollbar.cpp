@@ -155,8 +155,9 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     bool vertical = false;
     // Each axis can only add a reservation; the other axis is rechecked after either addition.
     for(u32 iteration = 0u; iteration < 3u; ++iteration){
-        const f64 viewportWidth = static_cast<f32>(availableWidth - (vertical ? verticalWidth : 0.0));
-        const f64 viewportHeight = static_cast<f32>(availableHeight - (horizontal ? horizontalHeight : 0.0));
+        const SIMDVectorDouble viewportSize = VectorDoubleSubtract(VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0), VectorDoubleSet(vertical ? verticalWidth : 0.0, horizontal ? horizontalHeight : 0.0, 0.0, 0.0));
+        const f64 viewportWidth = static_cast<f32>(VectorDoubleGetX(viewportSize));
+        const f64 viewportHeight = static_cast<f32>(VectorDoubleGetY(viewportSize));
         const bool nextHorizontal = horizontal || (horizontalHeight > 0.0 && availableWidth > 0.0 && contentWidth > viewportWidth);
         const bool nextVertical = vertical || (verticalWidth > 0.0 && availableHeight > 0.0 && contentHeight > viewportHeight);
         if(nextHorizontal == horizontal && nextVertical == vertical)
@@ -167,7 +168,8 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     const f64 barWidth = vertical ? verticalWidth : 0.0;
     const f64 barHeight = horizontal ? horizontalHeight : 0.0;
     ScrollViewportPlacement candidate;
-    const auto viewport = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, padded->y, availableWidth - barWidth, availableHeight - barHeight);
+    const SIMDVectorDouble viewportSize = VectorDoubleSubtract(VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0), VectorDoubleSet(barWidth, barHeight, 0.0, 0.0));
+    const auto viewport = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, padded->y, VectorDoubleGetX(viewportSize), VectorDoubleGetY(viewportSize));
     if(!viewport)
         return MakeUnexpected(Failure{});
     candidate.viewport = *viewport;
@@ -194,7 +196,8 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
         verticalTrack = *track;
     }
     if(barWidth > 0.0 && barHeight > 0.0){
-        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(static_cast<f64>(padded->x) + viewportWidth, static_cast<f64>(padded->y) + viewportHeight, barWidth, barHeight);
+        const SIMDVectorDouble cornerOrigin = VectorDoubleAdd(VectorDoubleSet(padded->x, padded->y, 0.0, 0.0), VectorDoubleSet(viewportWidth, viewportHeight, 0.0, 0.0));
+        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleGetX(cornerOrigin), VectorDoubleGetY(cornerOrigin), barWidth, barHeight);
         if(!corner)
             return MakeUnexpected(Failure{});
         candidate.corner = *corner;

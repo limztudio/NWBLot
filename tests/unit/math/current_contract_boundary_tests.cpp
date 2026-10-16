@@ -4,6 +4,8 @@
 
 #include <tests/common/test_context.h>
 
+#include <global/floating_point_environment.h>
+#include <global/scope_exit.h>
 #include <global/simdmath.h>
 
 #include <gtest/gtest.h>
@@ -293,6 +295,36 @@ TEST(CurrentMathContractBoundaries, SphereTransformBoundsSmallShearAdmittedByDec
         doubleSource.transform(doubleTransformed, doubleShear);
         const SIMDVectorDouble doublePoint = VectorDouble3Transform(SIMDVectorDouble{ doubleDiagonal, static_cast<f64>(sign) * doubleDiagonal, 0.0, 0.0 }, doubleShear);
         EXPECT_NE(doubleTransformed.contains(doublePoint), ContainmentType::Disjoint);
+    }
+}
+
+
+TEST(CurrentMathContractBoundaries, DoubleQuaternionExtractionKeepsBranchTiesAndIgnoresNonrotationLanes){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
+            NWB_ASSERT(false);
+    });
+    const SIMDVectorDouble inputs[]{
+        { 1.0, 0.2, -0.3, 0.1 }, { 0.2, 1.0, -0.3, 0.1 }, { 0.2, -0.3, 1.0, 0.1 }, { 0.2, -0.3, 0.1, 1.0 },
+        { 0.5, 0.5, 0.5, 0.5 }, { 0.5 + 0x1p-40, 0.5, 0.5, 0.5 }, { 0.5, 0.5 + 0x1p-40, 0.5, 0.5 }, { 0.5, 0.5, 0.5 + 0x1p-40, 0.5 }, { 0.5, 0.5, 0.5, 0.5 + 0x1p-40 }
+    };
+    volatile u64 unusedBits = 0x7ff0000000000001u;
+    for(usize index = 0u; index < LengthOf(inputs); ++index){
+        SCOPED_TRACE(index);
+        const SIMDVectorDouble expected = QuaternionDoubleNormalize(inputs[index]);
+        SIMDMatrixDouble matrix = MatrixDoubleRotationQuaternion(expected);
+        for(usize row = 0u; row < 3u; ++row)
+            matrix.v[row].w = BitCast<f64>(unusedBits);
+        matrix.v[3] = VectorDoubleReplicate(BitCast<f64>(unusedBits));
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const SIMDVectorDouble actual = QuaternionDoubleRotationMatrix(matrix);
+        const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+        EXPECT_EQ(exceptions, 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_NEAR(actual[lane], expected[lane], 8.0e-16) << lane;
     }
 }
 

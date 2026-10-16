@@ -192,7 +192,7 @@ NWB_INLINE void RankDecompose(usize& a, usize& b, usize& c, T x, T y, T z)noexce
 }
 
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(const f32 viewWidth, const f32 viewHeight, const f32 nearZ, const f32 farZ, const f32 rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(const f32 viewWidth, const f32 viewHeight, const f32 nearZ, const f32 farZ, const SIMDVectorSingle rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -201,7 +201,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(const f32 viewWidth, c
     const SIMDVectorSingle zero = VectorZero();
     const SIMDVectorSingle nearZVector = VectorReplicate(nearZ);
     const SIMDVectorSingle twoNearZ = VectorAdd(nearZVector, nearZVector);
-    const SIMDVectorSingle range = VectorDivide(VectorReplicate(farZ), VectorReplicate(rangeDenominator));
+    const SIMDVectorSingle range = VectorDivide(VectorReplicate(farZ), rangeDenominator);
     const SIMDVectorSingle rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
 
     SIMDMatrix matrix{};
@@ -212,7 +212,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(const f32 viewWidth, c
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY, const f32 aspectRatio, const f32 nearZ, const f32 farZ, const f32 rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY, const f32 aspectRatio, const f32 nearZ, const f32 farZ, const SIMDVectorSingle rangeDenominator, const f32 rangeNearScale, const f32 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, s_MatrixPerspectiveFovNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -224,7 +224,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(const f32 fovAngleY
     const SIMDVectorSingle zero = VectorZero();
     const SIMDVectorSingle height = VectorDivide(cosFov, sinFov);
     const SIMDVectorSingle width = VectorDivide(height, VectorReplicate(aspectRatio));
-    const SIMDVectorSingle range = VectorDivide(VectorReplicate(farZ), VectorReplicate(rangeDenominator));
+    const SIMDVectorSingle range = VectorDivide(VectorReplicate(farZ), rangeDenominator);
     const SIMDVectorSingle rangeNear = VectorMultiply(VectorMultiply(VectorReplicate(rangeNearScale), range), VectorReplicate(nearZ));
 
     SIMDMatrix matrix{};
@@ -242,7 +242,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveOffCenterImpl(
     const f32 viewTop,
     const f32 nearZ,
     const f32 farZ,
-    const f32 rangeDenominator,
+    const SIMDVectorSingle rangeDenominator,
     const f32 centerScale,
     const f32 rangeNearScale,
     const f32 forwardZ
@@ -261,7 +261,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveOffCenterImpl(
     const SIMDVectorSingle twoNearZ = VectorAdd(nearZVector, nearZVector);
     const SIMDVectorSingle reciprocalWidth = VectorReciprocal(VectorSubtract(right, left));
     const SIMDVectorSingle reciprocalHeight = VectorReciprocal(VectorSubtract(top, bottom));
-    const SIMDVectorSingle range = VectorDivide(VectorReplicate(farZ), VectorReplicate(rangeDenominator));
+    const SIMDVectorSingle range = VectorDivide(VectorReplicate(farZ), rangeDenominator);
     const SIMDVectorSingle rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
     const SIMDVectorSingle offsetX = VectorMultiply(VectorScale(VectorAdd(left, right), centerScale), reciprocalWidth);
     const SIMDVectorSingle offsetY = VectorMultiply(VectorScale(VectorAdd(bottom, top), centerScale), reciprocalHeight);
@@ -274,14 +274,14 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveOffCenterImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicImpl(const f32 viewWidth, const f32 viewHeight, const f32 nearZ, const f32 rangeDenominator, const f32 rangeNearScale)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicImpl(const f32 viewWidth, const f32 viewHeight, const f32 nearZ, const SIMDVectorSingle rangeDenominator, const f32 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(VectorGetX(rangeDenominator), 0.0f, s_MatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorSingle zero = VectorZero();
     const SIMDVectorSingle nearZVector = VectorReplicate(nearZ);
-    const SIMDVectorSingle range = VectorReciprocal(VectorReplicate(rangeDenominator));
+    const SIMDVectorSingle range = VectorReciprocal(rangeDenominator);
     const SIMDVectorSingle rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
 
     SIMDMatrix matrix{};
@@ -292,10 +292,10 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicImpl(const f32 viewWidth, 
     return matrix;
 }
 
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 viewLeft, const f32 viewRight, const f32 viewBottom, const f32 viewTop, const f32 nearZ, const f32 rangeDenominator, const f32 rangeNearScale)noexcept{
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 viewLeft, const f32 viewRight, const f32 viewBottom, const f32 viewTop, const f32 nearZ, const SIMDVectorSingle rangeDenominator, const f32 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(VectorGetX(rangeDenominator), 0.0f, s_MatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorSingle zero = VectorZero();
     const SIMDVectorSingle left = VectorReplicate(viewLeft);
@@ -305,7 +305,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(const f32 vi
     const SIMDVectorSingle nearZVector = VectorReplicate(nearZ);
     const SIMDVectorSingle reciprocalWidth = VectorReciprocal(VectorSubtract(right, left));
     const SIMDVectorSingle reciprocalHeight = VectorReciprocal(VectorSubtract(top, bottom));
-    const SIMDVectorSingle range = VectorReciprocal(VectorReplicate(rangeDenominator));
+    const SIMDVectorSingle range = VectorReciprocal(rangeDenominator);
     const SIMDVectorSingle rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
     const SIMDVectorSingle offsetX = VectorNegate(VectorMultiply(VectorAdd(left, right), reciprocalWidth));
     const SIMDVectorSingle offsetY = VectorNegate(VectorMultiply(VectorAdd(bottom, top), reciprocalHeight));
@@ -361,7 +361,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleNormalize(SIMDVectorDouble 
 }
 
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(const f64 viewWidth, const f64 viewHeight, const f64 nearZ, const f64 farZ, const f64 rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(const f64 viewWidth, const f64 viewHeight, const f64 nearZ, const f64 farZ, const SIMDVectorDouble rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
@@ -370,7 +370,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(const f64 
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble nearZVector = VectorDoubleReplicate(nearZ);
     const SIMDVectorDouble twoNearZ = VectorDoubleAdd(nearZVector, nearZVector);
-    const SIMDVectorDouble range = VectorDoubleDivide(VectorDoubleReplicate(farZ), VectorDoubleReplicate(rangeDenominator));
+    const SIMDVectorDouble range = VectorDoubleDivide(VectorDoubleReplicate(farZ), rangeDenominator);
     const SIMDVectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleScale(range, rangeNearScale), nearZVector);
 
     SIMDMatrixDouble matrix{};
@@ -381,7 +381,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveImpl(const f64 
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f64 fovAngleY, const f64 aspectRatio, const f64 nearZ, const f64 farZ, const f64 rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f64 fovAngleY, const f64 aspectRatio, const f64 nearZ, const f64 farZ, const SIMDVectorDouble rangeDenominator, const f64 rangeNearScale, const f64 forwardZ)noexcept{
     NWB_ASSERT(nearZ > 0.0 && farZ > 0.0);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0, s_DoubleMatrixPerspectiveFovNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
@@ -393,7 +393,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovImpl(const f
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble height = VectorDoubleDivide(cosFov, sinFov);
     const SIMDVectorDouble width = VectorDoubleDivide(height, VectorDoubleReplicate(aspectRatio));
-    const SIMDVectorDouble range = VectorDoubleDivide(VectorDoubleReplicate(farZ), VectorDoubleReplicate(rangeDenominator));
+    const SIMDVectorDouble range = VectorDoubleDivide(VectorDoubleReplicate(farZ), rangeDenominator);
     const SIMDVectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleReplicate(rangeNearScale), range), VectorDoubleReplicate(nearZ));
 
     SIMDMatrixDouble matrix{};
@@ -411,7 +411,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveOffCenterImpl(
     const f64 viewTop,
     const f64 nearZ,
     const f64 farZ,
-    const f64 rangeDenominator,
+    const SIMDVectorDouble rangeDenominator,
     const f64 centerScale,
     const f64 rangeNearScale,
     const f64 forwardZ
@@ -430,7 +430,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveOffCenterImpl(
     const SIMDVectorDouble twoNearZ = VectorDoubleAdd(nearZVector, nearZVector);
     const SIMDVectorDouble reciprocalWidth = VectorDoubleReciprocal(VectorDoubleSubtract(right, left));
     const SIMDVectorDouble reciprocalHeight = VectorDoubleReciprocal(VectorDoubleSubtract(top, bottom));
-    const SIMDVectorDouble range = VectorDoubleDivide(VectorDoubleReplicate(farZ), VectorDoubleReplicate(rangeDenominator));
+    const SIMDVectorDouble range = VectorDoubleDivide(VectorDoubleReplicate(farZ), rangeDenominator);
     const SIMDVectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleScale(range, rangeNearScale), nearZVector);
     const SIMDVectorDouble offsetX = VectorDoubleMultiply(VectorDoubleScale(VectorDoubleAdd(left, right), centerScale), reciprocalWidth);
     const SIMDVectorDouble offsetY = VectorDoubleMultiply(VectorDoubleScale(VectorDoubleAdd(bottom, top), centerScale), reciprocalHeight);
@@ -443,14 +443,14 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveOffCenterImpl(
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicImpl(const f64 viewWidth, const f64 viewHeight, const f64 nearZ, const f64 rangeDenominator, const f64 rangeNearScale)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicImpl(const f64 viewWidth, const f64 viewHeight, const f64 nearZ, const SIMDVectorDouble rangeDenominator, const f64 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(VectorDoubleGetX(rangeDenominator), 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble nearZVector = VectorDoubleReplicate(nearZ);
-    const SIMDVectorDouble range = VectorDoubleReciprocal(VectorDoubleReplicate(rangeDenominator));
+    const SIMDVectorDouble range = VectorDoubleReciprocal(rangeDenominator);
     const SIMDVectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleScale(range, rangeNearScale), nearZVector);
 
     SIMDMatrixDouble matrix{};
@@ -461,10 +461,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicImpl(const f64
     return matrix;
 }
 
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(const f64 viewLeft, const f64 viewRight, const f64 viewBottom, const f64 viewTop, const f64 nearZ, const f64 rangeDenominator, const f64 rangeNearScale)noexcept{
+NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(const f64 viewLeft, const f64 viewRight, const f64 viewBottom, const f64 viewTop, const f64 nearZ, const SIMDVectorDouble rangeDenominator, const f64 rangeNearScale)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_DoubleMatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_DoubleMatrixProjectionNearEqualEpsilon));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(VectorDoubleGetX(rangeDenominator), 0.0, s_DoubleMatrixProjectionNearEqualEpsilon));
 
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble left = VectorDoubleReplicate(viewLeft);
@@ -474,7 +474,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(
     const SIMDVectorDouble nearZVector = VectorDoubleReplicate(nearZ);
     const SIMDVectorDouble reciprocalWidth = VectorDoubleReciprocal(VectorDoubleSubtract(right, left));
     const SIMDVectorDouble reciprocalHeight = VectorDoubleReciprocal(VectorDoubleSubtract(top, bottom));
-    const SIMDVectorDouble range = VectorDoubleReciprocal(VectorDoubleReplicate(rangeDenominator));
+    const SIMDVectorDouble range = VectorDoubleReciprocal(rangeDenominator);
     const SIMDVectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleScale(range, rangeNearScale), nearZVector);
     const SIMDVectorDouble offsetX = VectorDoubleNegate(VectorDoubleMultiply(VectorDoubleAdd(left, right), reciprocalWidth));
     const SIMDVectorDouble offsetY = VectorDoubleNegate(VectorDoubleMultiply(VectorDoubleAdd(bottom, top), reciprocalHeight));
@@ -940,7 +940,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     SIMDMatrix rotationMatrix = MatrixTranspose(basisAsRows);
     SIMDVectorSingle determinant = MatrixDeterminant(rotationMatrix);
     if(Vector4Less(determinant, VectorZero())){
-        scale = VectorSetByIndex(scale, -VectorGetByIndex(scale, a), a);
+        scale = VectorSelect(scale, VectorNegate(scale), VectorSelectControl(a == 0u, a == 1u, a == 2u, a == 3u));
         basis[a] = VectorNegate(basis[a]);
 
         basisAsRows.v[0] = basis[0];
@@ -998,7 +998,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     SIMDMatrixDouble rotationMatrix = MatrixDoubleTranspose(basisAsRows);
     SIMDVectorDouble determinant = MatrixDoubleDeterminant(rotationMatrix);
     if(VectorDouble4Less(determinant, VectorDoubleZero())){
-        scale = VectorDoubleSetByIndex(scale, -VectorDoubleGetByIndex(scale, a), a);
+        scale = VectorDoubleSelect(scale, VectorDoubleNegate(scale), VectorDoubleSelectControl(a == 0u, a == 1u, a == 2u, a == 3u));
         basis[a] = VectorDoubleNegate(basis[a]);
 
         basisAsRows.v[0] = basis[0];
@@ -1941,84 +1941,84 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleLookAtRH(SIMDVectorDouble 
 
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixPerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, farZ - nearZ, -1.0f, 1.0f);
+    return SIMDMatrixDetail::MatrixPerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, VectorSubtract(VectorReplicate(farZ), VectorReplicate(nearZ)), -1.0f, 1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveLH(f64 viewWidth, f64 viewHeight, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, farZ - nearZ, -1.0, 1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, VectorDoubleSubtract(VectorDoubleReplicate(farZ), VectorDoubleReplicate(nearZ)), -1.0, 1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveRH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixPerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, nearZ - farZ, 1.0f, -1.0f);
+    return SIMDMatrixDetail::MatrixPerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, VectorSubtract(VectorReplicate(nearZ), VectorReplicate(farZ)), 1.0f, -1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveRH(f64 viewWidth, f64 viewHeight, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, nearZ - farZ, 1.0, -1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, VectorDoubleSubtract(VectorDoubleReplicate(nearZ), VectorDoubleReplicate(farZ)), 1.0, -1.0);
 }
 
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, farZ - nearZ, -1.0f, 1.0f);
+    return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, VectorSubtract(VectorReplicate(farZ), VectorReplicate(nearZ)), -1.0f, 1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovLH(f64 fovAngleY, f64 aspectRatio, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, farZ - nearZ, -1.0, 1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, VectorDoubleSubtract(VectorDoubleReplicate(farZ), VectorDoubleReplicate(nearZ)), -1.0, 1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, nearZ - farZ, 1.0f, -1.0f);
+    return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, VectorSubtract(VectorReplicate(nearZ), VectorReplicate(farZ)), 1.0f, -1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveFovRH(f64 fovAngleY, f64 aspectRatio, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, nearZ - farZ, 1.0, -1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, VectorDoubleSubtract(VectorDoubleReplicate(nearZ), VectorDoubleReplicate(farZ)), 1.0, -1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, farZ - nearZ, -1.0f, -1.0f, 1.0f);
+    return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, VectorSubtract(VectorReplicate(farZ), VectorReplicate(nearZ)), -1.0f, -1.0f, 1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveOffCenterLH(f64 viewLeft, f64 viewRight, f64 viewBottom, f64 viewTop, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, farZ - nearZ, -1.0, -1.0, 1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, VectorDoubleSubtract(VectorDoubleReplicate(farZ), VectorDoubleReplicate(nearZ)), -1.0, -1.0, 1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, nearZ - farZ, 1.0f, 1.0f, -1.0f);
+    return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, VectorSubtract(VectorReplicate(nearZ), VectorReplicate(farZ)), 1.0f, 1.0f, -1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoublePerspectiveOffCenterRH(f64 viewLeft, f64 viewRight, f64 viewBottom, f64 viewTop, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, nearZ - farZ, 1.0, 1.0, -1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoublePerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, VectorDoubleSubtract(VectorDoubleReplicate(nearZ), VectorDoubleReplicate(farZ)), 1.0, 1.0, -1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, farZ - nearZ, -1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, VectorSubtract(VectorReplicate(farZ), VectorReplicate(nearZ)), -1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicLH(f64 viewWidth, f64 viewHeight, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicImpl(viewWidth, viewHeight, nearZ, farZ - nearZ, -1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicImpl(viewWidth, viewHeight, nearZ, VectorDoubleSubtract(VectorDoubleReplicate(farZ), VectorDoubleReplicate(nearZ)), -1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicRH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, nearZ - farZ, 1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, VectorSubtract(VectorReplicate(nearZ), VectorReplicate(farZ)), 1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicRH(f64 viewWidth, f64 viewHeight, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicImpl(viewWidth, viewHeight, nearZ, nearZ - farZ, 1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicImpl(viewWidth, viewHeight, nearZ, VectorDoubleSubtract(VectorDoubleReplicate(nearZ), VectorDoubleReplicate(farZ)), 1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ - nearZ, -1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, VectorSubtract(VectorReplicate(farZ), VectorReplicate(nearZ)), -1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterLH(f64 viewLeft, f64 viewRight, f64 viewBottom, f64 viewTop, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ - nearZ, -1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, VectorDoubleSubtract(VectorDoubleReplicate(farZ), VectorDoubleReplicate(nearZ)), -1.0);
 }
 
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, nearZ - farZ, 1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, VectorSubtract(VectorReplicate(nearZ), VectorReplicate(farZ)), 1.0f);
 }
 
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterRH(f64 viewLeft, f64 viewRight, f64 viewBottom, f64 viewTop, f64 nearZ, f64 farZ)noexcept{
-    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, nearZ - farZ, 1.0);
+    return SIMDMatrixDoubleDetail::MatrixDoubleOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, VectorDoubleSubtract(VectorDoubleReplicate(nearZ), VectorDoubleReplicate(farZ)), 1.0);
 }
 
 

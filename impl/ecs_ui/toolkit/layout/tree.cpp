@@ -53,10 +53,9 @@ Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding)noexcept{
         VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(rectangle.width), static_cast<f64>(rectangle.height), 0.0, 0.0), VectorDoubleSet(padding.left, padding.top, 0.0, 0.0)),
         VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0)
     );
-    const f64 width = VectorDoubleGetX(widthHeightValue);
-    const f64 height = VectorDoubleGetY(widthHeightValue);
+    const SIMDVectorDouble size = VectorDoubleSelect(widthHeightValue, VectorDoubleZero(), VectorDoubleGreater(VectorDoubleZero(), widthHeightValue));
     const SIMDVectorSingle origin = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(left, top, 0.0f, 0.0f));
-    return { VectorGetX(origin), VectorGetY(origin), static_cast<f32>(Max(0.0, width)), static_cast<f32>(Max(0.0, height)) };
+    return { VectorGetX(origin), VectorGetY(origin), static_cast<f32>(VectorDoubleGetX(size)), static_cast<f32>(VectorDoubleGetY(size)) };
 }
 
 

@@ -4,6 +4,9 @@
 
 #include <impl/ecs_ui/toolkit/paint.h>
 
+#include <global/floating_point_environment.h>
+#include <global/scope_exit.h>
+
 #include <gtest/gtest.h>
 
 
@@ -134,6 +137,33 @@ TEST_F(UiPaintTests, UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders)
     EXPECT_FLOAT_EQ(snapshot.vertices()[14].position.y, 22.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[2].texCoord.x, 4.0f / 128.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[4].texCoord.x, 24.0f / 128.0f);
+}
+
+TEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
+            NWB_ASSERT(false);
+    });
+    const UiSkinSliceInsets borders[]{ {}, { 4u, 0u, 8u, 0u }, { 0u, 6u, 0u, 2u } };
+    for(usize index = 0u; index < LengthOf(borders); ++index){
+        SCOPED_TRACE(index);
+        UiSkin::RegionVector regions(m_arena);
+        regions.push_back({ Name("panel"), { 0u, 0u, 32u, 24u }, borders[index], {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice });
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 64u, 2.0f, Move(regions));
+        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const bool drawn = m_builder.drawRegion(Name("panel"), { 10.0f, 20.0f, 3.0f, 2.0f });
+        const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+        EXPECT_EQ(exceptions, 0);
+        ASSERT_TRUE(drawn);
+        const auto snapshot = m_builder.freeze();
+        ASSERT_EQ(snapshot.vertices().size(), index == 0u ? 4u : 8u);
+        EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.x, index == 1u ? 11.0f : 13.0f);
+        EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.y, index == 2u ? 21.5f : 22.0f);
+    }
 }
 
 TEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder){

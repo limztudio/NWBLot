@@ -44,8 +44,9 @@ namespace VulkanDetail{
     if(viewport.maxX <= viewport.minX || viewport.maxY < viewport.minY || viewport.minZ < 0.0f || viewport.minZ > 1.0f || viewport.maxZ < 0.0f || viewport.maxZ > 1.0f)
         return false;
 
-    const f32 width = viewport.maxX - viewport.minX;
-    const f32 height = viewport.maxY - viewport.minY;
+    const SIMDVectorSingle extent = VectorSubtract(VectorSet(viewport.maxX, viewport.maxY, 0.0f, 0.0f), VectorSet(viewport.minX, viewport.minY, 0.0f, 0.0f));
+    const f32 width = VectorGetX(extent);
+    const f32 height = VectorGetY(extent);
     return
         static_cast<f64>(width) <= static_cast<f64>(limits.maxViewportDimensions[0u])
         && static_cast<f64>(height) <= static_cast<f64>(limits.maxViewportDimensions[1u])

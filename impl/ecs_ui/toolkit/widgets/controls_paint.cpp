@@ -107,8 +107,8 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     }
     if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
         painted = m_paint.drawRegion(item.style.focus, box.rectangle);
-    origin.x -= item.textBounds.x;
-    origin.y -= item.textBounds.y;
+    const SIMDVectorSingle alignedOrigin = VectorSubtract(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(item.textBounds.x, item.textBounds.y, 0.0f, 0.0f));
+    origin = { VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
     m_paint.pushClip(textClip);
     if(painted)
         painted = m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);

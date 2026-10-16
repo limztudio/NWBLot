@@ -86,8 +86,12 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
     if(!caret)
         return MakeUnexpected(Failure{});
     const Point logicalSize = layout().measure();
-    const f32 rightOverhang = Max(0.0f, m_visualBounds.x + m_visualBounds.width - logicalSize.x);
-    const f32 bottomOverhang = Max(0.0f, m_visualBounds.y + m_visualBounds.height - logicalSize.y);
+    const SIMDVectorSingle visualBoundsOrigin = VectorSet(m_visualBounds.x, m_visualBounds.y, 0.0f, 0.0f);
+    const SIMDVectorSingle visualSize = VectorSet(m_visualBounds.width, m_visualBounds.height, 0.0f, 0.0f);
+    const SIMDVectorSingle overhangExtent = VectorSubtract(VectorAdd(visualBoundsOrigin, visualSize), VectorSet(logicalSize.x, logicalSize.y, 0.0f, 0.0f));
+    const SIMDVectorSingle overhang = VectorSelect(overhangExtent, VectorZero(), VectorGreater(VectorZero(), overhangExtent));
+    const f32 rightOverhang = VectorGetX(overhang);
+    const f32 bottomOverhang = VectorGetY(overhang);
     const f32 maximumScroll = Max(0.0f, m_visualBounds.width + caretWidth - placement.content.width);
     // Scroll offsets start at the visual envelope; reveal its overhang with the logical caret at either text edge.
     const f32 caretEndX = caret->x - m_visualBounds.x + caretWidth + rightOverhang;
@@ -114,8 +118,13 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
         const SIMDVectorSingle origin = VectorSubtract(visualOrigin, VectorSet(placement.scroll, placement.scrollY, placement.scroll, placement.scrollY));
         placement.textOrigin = { VectorGetX(origin), VectorGetY(origin) };
     }
-    else
-        placement.textOrigin = { left - m_visualBounds.x - placement.scroll, top - m_visualBounds.y + Max(0.0f, (placement.content.height - m_visualBounds.height) * 0.5f) };
+    else{
+        const f32 verticalOffset = Max(0.0f, (placement.content.height - m_visualBounds.height) * 0.5f);
+        const SIMDVectorSingle baseOrigin = VectorSubtract(VectorSet(left, top, 0.0f, 0.0f), visualBoundsOrigin);
+        const SIMDVectorSingle scrolled = VectorSubtract(baseOrigin, VectorSet(placement.scroll, 0.0f, 0.0f, 0.0f));
+        const SIMDVectorSingle centered = VectorAdd(baseOrigin, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
+        placement.textOrigin = { VectorGetX(scrolled), VectorGetY(centered) };
+    }
     const SIMDVectorSingle caretOrigin = VectorAdd(VectorSet(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y), VectorSet(caret->x, caret->y, caret->x, caret->y));
     placement.caret = { VectorGetX(caretOrigin), VectorGetY(caretOrigin), caretWidth, caret->height };
     auto selection = m_geometry.rangeOnLine(m_selection, 0u, caretWidth);

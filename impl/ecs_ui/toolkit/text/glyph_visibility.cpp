@@ -96,10 +96,13 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
             return TextGlyphIntersection::Visible;
     }
     const f64 shapedSize = Floor(static_cast<f64>(fontSize) * 64.0 + 0.5) / 64.0;
-    const f64 correction = glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize) / shapedSize;
-    const f64 rasterScale = static_cast<f64>(physicalSize) / fontSize;
+    const SIMDVectorDouble scaleNumerators = VectorDoubleSet(glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize), physicalSize, glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize), 0.0);
+    const SIMDVectorDouble scaleDenominators = VectorDoubleSet(glyph.coverage.known ? 1.0 : shapedSize, fontSize, glyph.coverage.known ? 1.0 : static_cast<f64>(glyph.face->unitsPerEm()), 1.0);
+    const SIMDVectorDouble scales = VectorDoubleDivide(scaleNumerators, scaleDenominators);
+    const f64 correction = VectorDoubleGetX(scales);
+    const f64 rasterScale = VectorDoubleGetY(scales);
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
-    const f64 designMargin = glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize) / glyph.face->unitsPerEm();
+    const f64 designMargin = VectorDoubleGetZ(scales);
     const f64 rasterMargin = Max(1.0, correction) / 64.0 + 2.0 / rasterScale + designMargin;
     const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0);
     const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleSet(rasterMargin, rasterMargin, 0.0, 0.0), VectorDoubleDivide(VectorDoubleSet(0.5, 0.5, 0.0, 0.0), pixelScaleVector));

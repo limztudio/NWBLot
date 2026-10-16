@@ -171,12 +171,12 @@ inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble
 
 [[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)noexcept{
     const SIMDVectorSingle transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
-    return CollisionDetail::SphereCenterRadius(transformedCenter, VectorScale(VectorSplatW(sphereValue), Abs(scale)));
+    return CollisionDetail::SphereCenterRadius(transformedCenter, VectorMultiply(VectorSplatW(sphereValue), scale < 0.0f ? VectorNegate(VectorReplicate(scale)) : VectorReplicate(scale)));
 }
 
 [[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(SIMDVectorDouble sphereValue, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)noexcept{
     const SIMDVectorDouble transformedCenter = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(CollisionDoubleDetail::SphereCenter(sphereValue), scale), rotation), translation);
-    return CollisionDoubleDetail::SphereCenterRadius(transformedCenter, VectorDoubleScale(VectorDoubleSplatW(sphereValue), Abs(scale)));
+    return CollisionDoubleDetail::SphereCenterRadius(transformedCenter, VectorDoubleMultiply(VectorDoubleSplatW(sphereValue), scale < 0.0 ? VectorDoubleNegate(VectorDoubleReplicate(scale)) : VectorDoubleReplicate(scale)));
 }
 
 

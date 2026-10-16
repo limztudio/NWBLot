@@ -343,6 +343,7 @@ template<typename CookEntryT>
 MeshletCookMetrics MeshCookMeshlets::BuildMeshletCookMetrics(const CookEntryT& entry){
     MeshletCookMetrics metrics;
     metrics.meshletCount = static_cast<u32>(entry.meshlets.size());
+    SIMDVectorDouble radiusAndCutoffSums = VectorDoubleZero();
     for(usize meshletIndex = 0u; meshletIndex < entry.meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = entry.meshlets[meshletIndex];
         const MeshletBounds& bounds = entry.meshletBounds[meshletIndex];
@@ -356,18 +357,19 @@ MeshletCookMetrics MeshCookMeshlets::BuildMeshletCookMetrics(const CookEntryT& e
         metrics.vertexCountSum += vertexCount;
         metrics.positionCountSum += MeshletPositionCount(meshlet);
         metrics.attributeCountSum += MeshletAttributeCount(meshlet);
-        metrics.radiusSum += bounds.sphere.w;
-
         if(!MeshletConeEnabled(bounds)){
+            radiusAndCutoffSums = VectorDoubleAdd(radiusAndCutoffSums, VectorDoubleSet(bounds.sphere.w, 0.0, 0.0, 0.0));
             ++metrics.coneDisabledCount;
             continue;
         }
 
         const f32 coneCutoff = static_cast<f32>(MeshletConePackedCutoff(bounds)) * (1.0f / s_MeshletUnorm8Max);
         ++metrics.coneEnabledCount;
-        metrics.coneCutoffSum += coneCutoff;
+        radiusAndCutoffSums = VectorDoubleAdd(radiusAndCutoffSums, VectorDoubleSet(bounds.sphere.w, coneCutoff, 0.0, 0.0));
         metrics.worstConeCutoff = Min(metrics.worstConeCutoff, coneCutoff);
     }
+    metrics.radiusSum = VectorDoubleGetX(radiusAndCutoffSums);
+    metrics.coneCutoffSum = VectorDoubleGetY(radiusAndCutoffSums);
 
     if(metrics.meshletCount == 0u){
         metrics.minPrimitiveCount = 0u;
@@ -384,16 +386,20 @@ void MeshCookMeshlets::LogMeshletCookMetrics(const Path& nwbFilePath, const TStr
     if(metrics.meshletCount == 0u)
         return;
 
-    const f64 invMeshletCount = 1.0 / static_cast<f64>(metrics.meshletCount);
-    const f64 primitiveCountAverage = static_cast<f64>(metrics.primitiveCountSum) * invMeshletCount;
-    const SIMDVectorDouble vertexCountAveragePositionCountAverageValue = (SIMDVectorDouble{ static_cast<f64>(metrics.vertexCountSum), static_cast<f64>(metrics.positionCountSum) } * SIMDVectorDouble{ invMeshletCount, invMeshletCount });
-    const f64 vertexCountAverage = vertexCountAveragePositionCountAverageValue.x;
-    const f64 positionCountAverage = vertexCountAveragePositionCountAverageValue.y;
-    const SIMDVectorDouble attributeCountAverageRadiusAverageValue = (SIMDVectorDouble{ static_cast<f64>(metrics.attributeCountSum), metrics.radiusSum } * SIMDVectorDouble{ invMeshletCount, invMeshletCount });
-    const f64 attributeCountAverage = attributeCountAverageRadiusAverageValue.x;
-    const f64 radiusAverage = attributeCountAverageRadiusAverageValue.y;
-    const f64 coneDisabledPercentage = static_cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
-    const f64 coneCutoffAverage = metrics.coneEnabledCount != 0u ? metrics.coneCutoffSum / static_cast<f64>(metrics.coneEnabledCount) : 0.0;
+    const SIMDVectorDouble reciprocalAndCutoff = VectorDoubleDivide(
+        VectorDoubleSet(1.0, metrics.coneEnabledCount != 0u ? metrics.coneCutoffSum : 0.0, 0.0, 0.0),
+        VectorDoubleSet(static_cast<f64>(metrics.meshletCount), metrics.coneEnabledCount != 0u ? static_cast<f64>(metrics.coneEnabledCount) : 1.0, 1.0, 1.0)
+    );
+    const SIMDVectorDouble invMeshletCount = VectorDoubleSplatX(reciprocalAndCutoff);
+    const SIMDVectorDouble countAverages = VectorDoubleMultiply(VectorDoubleSet(static_cast<f64>(metrics.primitiveCountSum), static_cast<f64>(metrics.vertexCountSum), static_cast<f64>(metrics.positionCountSum), static_cast<f64>(metrics.attributeCountSum)), invMeshletCount);
+    const f64 primitiveCountAverage = VectorDoubleGetX(countAverages);
+    const f64 vertexCountAverage = VectorDoubleGetY(countAverages);
+    const f64 positionCountAverage = VectorDoubleGetZ(countAverages);
+    const f64 attributeCountAverage = VectorDoubleGetW(countAverages);
+    const SIMDVectorDouble radiusAndPercentage = VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleSet(metrics.radiusSum, static_cast<f64>(metrics.coneDisabledCount), 0.0, 0.0), VectorDoubleSet(1.0, s_MeshletPercentScale, 1.0, 1.0)), invMeshletCount);
+    const f64 radiusAverage = VectorDoubleGetX(radiusAndPercentage);
+    const f64 coneDisabledPercentage = VectorDoubleGetY(radiusAndPercentage);
+    const f64 coneCutoffAverage = VectorDoubleGetY(reciprocalAndCutoff);
     const f32 worstConeCutoff = metrics.coneEnabledCount != 0u ? metrics.worstConeCutoff : 0.0f;
     const usize sourceBytes = EstimateMeshletSourceBytes(indices, entry);
     const usize runtimeBytes = EstimateMeshletRuntimeBytes(entry);

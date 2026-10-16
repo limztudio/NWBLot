@@ -69,7 +69,8 @@ bool SelectablePainter::Paint(
     const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
     const f32 verticalOffset = Max(0.0f, ((VectorGetW(content) - textBounds.height) * 0.5f));
     const SIMDVectorSingle textOrigin = VectorAdd(content, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
-    const Point origin{ VectorGetX(textOrigin) - textBounds.x, VectorGetY(textOrigin) - textBounds.y };
+    const SIMDVectorSingle alignedOrigin = VectorSubtract(VectorSwizzle<0, 1, 0, 1>(textOrigin), VectorSet(textBounds.x, textBounds.y, textBounds.x, textBounds.y));
+    const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
     paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
     if(painted)
         painted = text.paint(paint, layout, origin, flags.enabled ? textColor : disabledTextColor);

@@ -119,7 +119,11 @@ bool Builder::paintTooltips(){
         const SIMDVectorSingle inset = InsetRectValue(VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
         const Rect content{ VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
         m_paint.pushClip(content);
-        const bool painted = backgroundPainted && m_text.paint(m_paint, frame.text, { content.x - textBounds->x, content.y - textBounds->y }, frame.style.text);
+        bool painted = false;
+        if(backgroundPainted){
+            const SIMDVectorSingle textOrigin = VectorSubtract(VectorSwizzle<0, 1, 0, 1>(inset), VectorSet(textBounds->x, textBounds->y, textBounds->x, textBounds->y));
+            painted = m_text.paint(m_paint, frame.text, { VectorGetX(textOrigin), VectorGetY(textOrigin) }, frame.style.text);
+        }
         const bool contentPopped = m_paint.popClip();
         const bool popped = m_paint.popClip();
         const bool ended = m_paint.endOverlay();

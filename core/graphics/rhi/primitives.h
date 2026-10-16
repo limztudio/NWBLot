@@ -174,10 +174,7 @@ public:
         , maxY(maxYValue)
     {}
     explicit Rect(const Viewport& viewport)noexcept
-        : minX(static_cast<i32>(Floor(viewport.minX)))
-        , maxX(static_cast<i32>(Ceil(viewport.maxX)))
-        , minY(static_cast<i32>(Floor(viewport.minY)))
-        , maxY(static_cast<i32>(Ceil(viewport.maxY)))
+        : Rect(FromViewport(viewport))
     {}
 
 

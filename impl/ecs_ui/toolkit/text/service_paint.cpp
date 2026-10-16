@@ -47,8 +47,9 @@ namespace __hidden_ui_text_paint{
         return MakeUnexpected(Failure{});
     const f32 x = RoundMeasuredBound(left, false);
     const f32 y = RoundMeasuredBound(top, false);
-    const f64 width = static_cast<f64>(RoundMeasuredBound(right, true)) - x;
-    const f64 height = static_cast<f64>(RoundMeasuredBound(bottom, true)) - y;
+    const SIMDVectorDouble size = VectorDoubleSubtract(VectorDoubleSet(RoundMeasuredBound(right, true), RoundMeasuredBound(bottom, true), 0.0, 0.0), VectorDoubleSet(x, y, 0.0, 0.0));
+    const f64 width = VectorDoubleGetX(size);
+    const f64 height = VectorDoubleGetY(size);
     if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     const Rect result{ x, y, RoundMeasuredBound(width, true), RoundMeasuredBound(height, true) };
@@ -65,18 +66,21 @@ namespace __hidden_ui_text_paint{
     const SdfAtlasPage& page = *atlas.page(glyph.group);
     const SdfAtlasPageBinding& binding = page.binding();
     const auto& pixels = page.pixels();
-    const f64 texelWidth = static_cast<f64>(plane->width) / glyph.width;
-    const f64 texelHeight = static_cast<f64>(plane->height) / glyph.height;
-    const f64 physicalStepX = 1.0 / (texelWidth * display.pixelScaleX);
-    const f64 physicalStepY = 1.0 / (texelHeight * display.pixelScaleY);
+    const SIMDVectorDouble texelSize = VectorDoubleDivide(VectorDoubleSet(plane->width, plane->height, 1.0, 1.0), VectorDoubleSet(glyph.width, glyph.height, 1.0, 1.0));
+    const SIMDVectorDouble physicalStep = VectorDoubleDivide(VectorDoubleReplicate(1.0), VectorDoubleMultiply(texelSize, VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0)));
+    const f64 physicalStepX = VectorDoubleGetX(physicalStep);
+    const f64 physicalStepY = VectorDoubleGetY(physicalStep);
     if(!IsFinite(physicalStepX) || !IsFinite(physicalStepY))
         return MakeUnexpected(Failure{});
     const auto sample = [&](const u32 x, const u32 y)noexcept -> i32{
         return pixels[(static_cast<usize>(y) * binding.width + x) * binding.channelCount + glyph.channel];
     };
     // A derivative lane can sample one physical pixel beyond the quad; one additional texel covers both bilinear neighbors there.
-    const u32 haloX = static_cast<u32>(Min(static_cast<f64>(binding.width), Ceil(physicalStepX) + 1.0));
-    const u32 haloY = static_cast<u32>(Min(static_cast<f64>(binding.height), Ceil(physicalStepY) + 1.0));
+    const SIMDVectorDouble haloLimit = VectorDoubleSet(binding.width, binding.height, 0.0, 0.0);
+    const SIMDVectorDouble haloCandidate = VectorDoubleAdd(VectorDoubleCeiling(physicalStep), VectorDoubleReplicate(1.0));
+    const SIMDVectorDouble halo = VectorDoubleSelect(haloCandidate, haloLimit, VectorDoubleLess(haloLimit, haloCandidate));
+    const u32 haloX = static_cast<u32>(VectorDoubleGetX(halo));
+    const u32 haloY = static_cast<u32>(VectorDoubleGetY(halo));
     const u32 firstX = glyph.x > haloX ? glyph.x - haloX : 0u;
     const u32 firstY = glyph.y > haloY ? glyph.y - haloY : 0u;
     const u32 lastX = Min(binding.width - 1u, glyph.x + glyph.width + haloX);
@@ -94,12 +98,15 @@ namespace __hidden_ui_text_paint{
     }
     // Bilinear directional slopes are bounded by adjacent-texel differences, including helper lanes outside the visible quad.
     // The shader decodes distance = (encoded - 128) * spread / 128, then uses max(fwidth(distance), 0.001).
-    const f64 derivative = static_cast<f64>(gradientX) * physicalStepX + static_cast<f64>(gradientY) * physicalStepY;
+    const SIMDVectorDouble horizontalStep = VectorDoubleSelect(VectorDoubleZero(), physicalStep, s_DoubleSIMDMaskX);
+    const SIMDVectorDouble verticalStep = VectorDoubleSwizzle<1, 2, 3, 3>(physicalStep);
+    const SIMDVectorDouble verticalDerivative = VectorDoubleMultiply(VectorDoubleSet(gradientY, 0.0, 0.0, 0.0), verticalStep);
+    const f64 derivative = VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleSet(gradientX, 0.0, 0.0, 0.0), horizontalStep, verticalDerivative));
     const f64 halfWidth = 0.5 * Max(derivative, 0.001 * 128.0 / binding.spreadPixels);
-    f64 left = glyph.width;
-    f64 top = glyph.height;
-    f64 right = 0.0;
-    f64 bottom = 0.0;
+    const SIMDVectorDouble glyphSize = VectorDoubleSet(glyph.width, glyph.height, 0.0, 0.0);
+    const SIMDVectorDouble halfTexel = VectorDoubleSet(0.5, 0.5, 0.0, 0.0);
+    SIMDVectorDouble supportMinimum = glyphSize;
+    SIMDVectorDouble supportMaximum = VectorDoubleZero();
     bool visible = false;
     for(u32 y = 0u; y <= glyph.height; ++y){
         const u32 y0 = glyph.y + y == 0u ? 0u : glyph.y + y - 1u;
@@ -111,19 +118,20 @@ namespace __hidden_ui_text_paint{
             if(static_cast<f64>(maximum) + halfWidth < 128.0)
                 continue;
             // Texel centers lie at n + 0.5; retain exactly the candidate cell's intersection with the drawn plane.
-            left = Min(left, Max(0.0, static_cast<f64>(x) - 0.5));
-            top = Min(top, Max(0.0, static_cast<f64>(y) - 0.5));
-            right = Max(right, Min(static_cast<f64>(glyph.width), static_cast<f64>(x) + 0.5));
-            bottom = Max(bottom, Min(static_cast<f64>(glyph.height), static_cast<f64>(y) + 0.5));
+            const SIMDVectorDouble position = VectorDoubleSet(x, y, 0.0, 0.0);
+            const SIMDVectorDouble first = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(position, halfTexel));
+            const SIMDVectorDouble last = VectorDoubleMin(glyphSize, VectorDoubleAdd(position, halfTexel));
+            supportMinimum = VectorDoubleSelect(first, supportMinimum, VectorDoubleLess(supportMinimum, first));
+            supportMaximum = VectorDoubleSelect(last, supportMaximum, VectorDoubleGreater(supportMaximum, last));
             visible = true;
         }
     }
     if(!visible)
         return Rect{};
     const SIMDVectorDouble origin = VectorDoubleSet(plane->x, plane->y, 0.0, 0.0);
-    const SIMDVectorDouble scale = VectorDoubleSet(texelWidth, texelHeight, 0.0, 0.0);
-    const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(VectorDoubleSet(left, top, 0.0, 0.0), scale, origin);
-    const SIMDVectorDouble maximum = VectorDoubleMultiplyAddExpression(VectorDoubleSet(right, bottom, 0.0, 0.0), scale, origin);
+    const SIMDVectorDouble scale = VectorDoubleSelect(VectorDoubleZero(), texelSize, s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(supportMinimum, scale, origin);
+    const SIMDVectorDouble maximum = VectorDoubleMultiplyAddExpression(supportMaximum, scale, origin);
     return MeasuredRectangle(minimum, maximum);
 }
 
@@ -157,8 +165,11 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
     const u32 pixelSize = static_cast<u32>(rasterPpem);
     const Point logical = layout.measure();
     const Rect ink = layout.inkBounds();
-    SIMDVectorDouble minimum = VectorDoubleSet(Min(0.0f, ink.x), Min(0.0f, ink.y), 0.0, 0.0);
-    SIMDVectorDouble maximum = VectorDoubleSet(Max(static_cast<f64>(logical.x), static_cast<f64>(ink.x) + ink.width), Max(static_cast<f64>(logical.y), static_cast<f64>(ink.y) + ink.height), 0.0, 0.0);
+    const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
+    const SIMDVectorDouble inkEnd = VectorDoubleAdd(inkOrigin, VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
+    const SIMDVectorDouble logicalSize = VectorDoubleSet(logical.x, logical.y, 0.0, 0.0);
+    SIMDVectorDouble minimum = VectorDoubleSelect(inkOrigin, VectorDoubleZero(), VectorDoubleLess(VectorDoubleZero(), inkOrigin));
+    SIMDVectorDouble maximum = VectorDoubleSelect(inkEnd, logicalSize, VectorDoubleGreater(logicalSize, inkEnd));
     for(const PlacedGlyph& glyph : layout.glyphs()){
         SIMDVectorDouble first;
         SIMDVectorDouble last;
@@ -187,7 +198,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
             const SIMDVectorDouble pixelOrigin = VectorDoubleSet(raster->x, raster->y, 0.0, 0.0);
             const SIMDVectorDouble pixelEnd = VectorDoubleAdd(pixelOrigin, VectorDoubleSet(raster->width, raster->height, 0.0, 0.0));
             // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
-            const SIMDVectorDouble snap = VectorDoubleSet(0.5 / display.pixelScaleX, 0.5 / display.pixelScaleY, 0.0, 0.0);
+            const SIMDVectorDouble snap = VectorDoubleDivide(VectorDoubleSet(0.5, 0.5, 0.0, 0.0), VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0));
             first = VectorDoubleSubtract(VectorDoubleAdd(origin, VectorDoubleDivide(pixelOrigin, scale)), snap);
             last = VectorDoubleAdd(VectorDoubleAdd(origin, VectorDoubleDivide(pixelEnd, scale)), snap);
         }

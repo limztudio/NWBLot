@@ -67,16 +67,18 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
         // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
         const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), 0.5f);
         const SIMDVectorSingle extents = VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f);
-        const f32 depth = VectorGetZ(maxBounds) - VectorGetZ(minBounds);
-        const f32 padding = Max(1.0f, depth);
-        outOrigin = VectorSetZ(center, VectorGetZ(minBounds) - padding);
+        const SIMDVectorSingle depth = VectorSubtract(VectorSplatZ(maxBounds), VectorSplatZ(minBounds));
+        const SIMDVectorSingle padding = VectorMax(s_SIMDOne, depth);
+        outOrigin = VectorSelect(center, VectorSubtract(VectorSplatZ(minBounds), padding), s_SIMDMaskZ);
         outOrientation = s_SIMDIdentityR3;
-        outRightSlope = VectorGetX(extents) / padding;
-        outLeftSlope = -outRightSlope;
-        outTopSlope = VectorGetY(extents) / padding;
-        outBottomSlope = -outTopSlope;
-        outNearPlane = padding;
-        outFarPlane = padding + depth;
+        const SIMDVectorSingle slopes = VectorDivide(VectorSelect(VectorZero(), extents, s_SIMDMaskXY), padding);
+        const SIMDVectorSingle negativeSlopes = VectorNegate(slopes);
+        outRightSlope = VectorGetX(slopes);
+        outLeftSlope = VectorGetX(negativeSlopes);
+        outTopSlope = VectorGetY(slopes);
+        outBottomSlope = VectorGetY(negativeSlopes);
+        outNearPlane = VectorGetX(padding);
+        outFarPlane = VectorGetX(VectorAdd(padding, depth));
         return;
     }
 
@@ -151,16 +153,18 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
         // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
         const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), 0.5);
         const SIMDVectorDouble extents = VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), 0.5);
-        const f64 depth = VectorDoubleGetZ(maxBounds) - VectorDoubleGetZ(minBounds);
-        const f64 padding = Max(1.0, depth);
-        outOrigin = VectorDoubleSetZ(center, VectorDoubleGetZ(minBounds) - padding);
+        const SIMDVectorDouble depth = VectorDoubleSubtract(VectorDoubleSplatZ(maxBounds), VectorDoubleSplatZ(minBounds));
+        const SIMDVectorDouble padding = VectorDoubleMax(s_DoubleSIMDOne, depth);
+        outOrigin = VectorDoubleSelect(center, VectorDoubleSubtract(VectorDoubleSplatZ(minBounds), padding), s_DoubleSIMDMaskZ);
         outOrientation = s_DoubleSIMDIdentityR3;
-        outRightSlope = VectorDoubleGetX(extents) / padding;
-        outLeftSlope = -outRightSlope;
-        outTopSlope = VectorDoubleGetY(extents) / padding;
-        outBottomSlope = -outTopSlope;
-        outNearPlane = padding;
-        outFarPlane = padding + depth;
+        const SIMDVectorDouble slopes = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleZero(), extents, s_DoubleSIMDMaskXY), padding);
+        const SIMDVectorDouble negativeSlopes = VectorDoubleNegate(slopes);
+        outRightSlope = VectorDoubleGetX(slopes);
+        outLeftSlope = VectorDoubleGetX(negativeSlopes);
+        outTopSlope = VectorDoubleGetY(slopes);
+        outBottomSlope = VectorDoubleGetY(negativeSlopes);
+        outNearPlane = VectorDoubleGetX(padding);
+        outFarPlane = VectorDoubleGetX(VectorDoubleAdd(padding, depth));
         return;
     }
 

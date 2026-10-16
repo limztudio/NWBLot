@@ -833,54 +833,40 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionRotationMatrix(const SIMDMat
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationMatrix(const SIMDMatrixDouble& matrix)noexcept{
-    const f64 r22 = matrix.v[2][2];
-    f64 x{};
-    f64 y{};
-    f64 z{};
-    f64 w{};
-
-    if(r22 <= 0.0){
-        const f64 dif10 = matrix.v[1][1] - matrix.v[0][0];
-        const f64 omr22 = 1.0 - r22;
-        if(dif10 <= 0.0){
-            const f64 fourXSqr = omr22 - dif10;
-            const f64 inv4x = SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale / Sqrt(fourXSqr);
-            x = fourXSqr * inv4x;
-            y = (matrix.v[0][1] + matrix.v[1][0]) * inv4x;
-            z = (matrix.v[0][2] + matrix.v[2][0]) * inv4x;
-            w = (matrix.v[2][1] - matrix.v[1][2]) * inv4x;
+    const SIMDVectorDouble r22 = VectorDoubleSplatZ(matrix.v[2]);
+    if(VectorDoubleGetX(r22) <= 0.0){
+        const SIMDVectorDouble dif10 = VectorDoubleSubtract(VectorDoubleSplatY(matrix.v[1]), VectorDoubleSplatX(matrix.v[0]));
+        const SIMDVectorDouble omr22 = VectorDoubleSubtract(s_DoubleSIMDOne, r22);
+        if(VectorDoubleGetX(dif10) <= 0.0){
+            const SIMDVectorDouble fourXSqr = VectorDoubleSubtract(omr22, dif10);
+            const SIMDVectorDouble inv4x = VectorDoubleDivide(s_DoubleSIMDOneHalf, VectorDoubleSqrt(fourXSqr));
+            SIMDVectorDouble numerator = VectorDoubleAdd(VectorDoubleSet(0.0, matrix.v[0][1], matrix.v[0][2], 0.0), VectorDoubleSet(0.0, matrix.v[1][0], matrix.v[2][0], 0.0));
+            numerator = VectorDoubleSelect(numerator, fourXSqr, s_DoubleSIMDMaskX);
+            numerator = VectorDoubleSelect(numerator, VectorDoubleSubtract(VectorDoubleSplatY(matrix.v[2]), VectorDoubleSplatZ(matrix.v[1])), s_DoubleSIMDMaskW);
+            return VectorDoubleMultiply(numerator, inv4x);
         }
-        else{
-            const f64 fourYSqr = omr22 + dif10;
-            const f64 inv4y = SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale / Sqrt(fourYSqr);
-            x = (matrix.v[0][1] + matrix.v[1][0]) * inv4y;
-            y = fourYSqr * inv4y;
-            z = (matrix.v[1][2] + matrix.v[2][1]) * inv4y;
-            w = (matrix.v[0][2] - matrix.v[2][0]) * inv4y;
-        }
+        const SIMDVectorDouble fourYSqr = VectorDoubleAdd(omr22, dif10);
+        const SIMDVectorDouble inv4y = VectorDoubleDivide(s_DoubleSIMDOneHalf, VectorDoubleSqrt(fourYSqr));
+        SIMDVectorDouble numerator = VectorDoubleAdd(VectorDoubleSet(matrix.v[0][1], 0.0, matrix.v[1][2], 0.0), VectorDoubleSet(matrix.v[1][0], 0.0, matrix.v[2][1], 0.0));
+        numerator = VectorDoubleSelect(numerator, fourYSqr, s_DoubleSIMDMaskY);
+        numerator = VectorDoubleSelect(numerator, VectorDoubleSubtract(VectorDoubleSplatZ(matrix.v[0]), VectorDoubleSplatX(matrix.v[2])), s_DoubleSIMDMaskW);
+        return VectorDoubleMultiply(numerator, inv4y);
     }
-    else{
-        const f64 sum10 = matrix.v[1][1] + matrix.v[0][0];
-        const f64 opr22 = 1.0 + r22;
-        if(sum10 <= 0.0){
-            const f64 fourZSqr = opr22 - sum10;
-            const f64 inv4z = SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale / Sqrt(fourZSqr);
-            x = (matrix.v[0][2] + matrix.v[2][0]) * inv4z;
-            y = (matrix.v[1][2] + matrix.v[2][1]) * inv4z;
-            z = fourZSqr * inv4z;
-            w = (matrix.v[1][0] - matrix.v[0][1]) * inv4z;
-        }
-        else{
-            const f64 fourWSqr = opr22 + sum10;
-            const f64 inv4w = SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale / Sqrt(fourWSqr);
-            x = (matrix.v[2][1] - matrix.v[1][2]) * inv4w;
-            y = (matrix.v[0][2] - matrix.v[2][0]) * inv4w;
-            z = (matrix.v[1][0] - matrix.v[0][1]) * inv4w;
-            w = fourWSqr * inv4w;
-        }
+    const SIMDVectorDouble sum10 = VectorDoubleAdd(VectorDoubleSplatY(matrix.v[1]), VectorDoubleSplatX(matrix.v[0]));
+    const SIMDVectorDouble opr22 = VectorDoubleAdd(s_DoubleSIMDOne, r22);
+    if(VectorDoubleGetX(sum10) <= 0.0){
+        const SIMDVectorDouble fourZSqr = VectorDoubleSubtract(opr22, sum10);
+        const SIMDVectorDouble inv4z = VectorDoubleDivide(s_DoubleSIMDOneHalf, VectorDoubleSqrt(fourZSqr));
+        SIMDVectorDouble numerator = VectorDoubleAdd(VectorDoubleSet(matrix.v[0][2], matrix.v[1][2], 0.0, 0.0), VectorDoubleSet(matrix.v[2][0], matrix.v[2][1], 0.0, 0.0));
+        numerator = VectorDoubleSelect(numerator, fourZSqr, s_DoubleSIMDMaskZ);
+        numerator = VectorDoubleSelect(numerator, VectorDoubleSubtract(VectorDoubleSplatX(matrix.v[1]), VectorDoubleSplatY(matrix.v[0])), s_DoubleSIMDMaskW);
+        return VectorDoubleMultiply(numerator, inv4z);
     }
-
-    return SIMDConvertDoubleDetail::MakeF64(x, y, z, w);
+    const SIMDVectorDouble fourWSqr = VectorDoubleAdd(opr22, sum10);
+    const SIMDVectorDouble inv4w = VectorDoubleDivide(s_DoubleSIMDOneHalf, VectorDoubleSqrt(fourWSqr));
+    SIMDVectorDouble numerator = VectorDoubleSubtract(VectorDoubleSet(matrix.v[2][1], matrix.v[0][2], matrix.v[1][0], 0.0), VectorDoubleSet(matrix.v[1][2], matrix.v[2][0], matrix.v[0][1], 0.0));
+    numerator = VectorDoubleSelect(numerator, fourWSqr, s_DoubleSIMDMaskW);
+    return VectorDoubleMultiply(numerator, inv4w);
 }
 
 
@@ -895,7 +881,8 @@ NWB_INLINE void NWB_SIMD_CALL QuaternionToAxisAngle(SIMDVectorSingle& outAxis, f
 
 NWB_INLINE void NWB_SIMD_CALL QuaternionDoubleToAxisAngle(SIMDVectorDouble& outAxis, f64& outAngle, SIMDVectorDouble q)noexcept{
     outAxis = q;
-    outAngle = ACos(VectorDoubleGetW(q)) * 2.0;
+    const SIMDVectorDouble angle = VectorDoubleScale(SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleSplatW(q)), 2.0);
+    outAngle = VectorDoubleGetX(angle);
 }
 
 

@@ -84,7 +84,10 @@ Expected<ProgressMetrics> ProgressLayout::Measure(const ProgressOptions& options
     if(!fillMinimum)
         return MakeUnexpected(Failure{});
     ProgressMetrics candidate;
-    candidate.padding = { Max(style.padding.left, track.padding.left), Max(style.padding.top, track.padding.top), Max(style.padding.right, track.padding.right), Max(style.padding.bottom, track.padding.bottom) };
+    const SIMDVectorSingle stylePadding = VectorSet(style.padding.left, style.padding.top, style.padding.right, style.padding.bottom);
+    const SIMDVectorSingle trackPadding = VectorSet(track.padding.left, track.padding.top, track.padding.right, track.padding.bottom);
+    const SIMDVectorSingle padding = VectorSelect(trackPadding, stylePadding, VectorGreater(stylePadding, trackPadding));
+    candidate.padding = { VectorGetX(padding), VectorGetY(padding), VectorGetZ(padding), VectorGetW(padding) };
     candidate.fillMinimum = *fillMinimum;
     const SIMDVectorDouble innerWidthInnerHeightValue = VectorDoubleAdd(
         VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(candidate.padding.left), static_cast<f64>(candidate.padding.top), 0.0, 0.0), VectorDoubleSet(candidate.padding.right, candidate.padding.bottom, 0.0, 0.0)),
@@ -115,14 +118,15 @@ Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
-    const f64 leftInset = Min(static_cast<f64>(metrics.padding.left), static_cast<f64>(bounds.width));
-    const SIMDVectorDouble geometryPair0Operand0 = VectorDoubleSet(static_cast<f64>(metrics.padding.right), static_cast<f64>(metrics.padding.top), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair0Operand1 = VectorDoubleSet((static_cast<f64>(bounds.width) - leftInset), static_cast<f64>(bounds.height), 0.0, 0.0);
-    const SIMDVectorDouble rightInsetTopInsetValue = VectorDoubleSelect(geometryPair0Operand1, geometryPair0Operand0, VectorDoubleLess(geometryPair0Operand0, geometryPair0Operand1));
-    const f64 rightInset = VectorDoubleGetX(rightInsetTopInsetValue);
-    const f64 topInset = VectorDoubleGetY(rightInsetTopInsetValue);
-    const f64 bottomInset = Min(static_cast<f64>(metrics.padding.bottom), static_cast<f64>(bounds.height) - topInset);
-    const auto content = MakeUiRect<UiRectPrecision::EmptyPaint>(static_cast<f64>(bounds.x) + leftInset, static_cast<f64>(bounds.y) + topInset, static_cast<f64>(bounds.width) - leftInset - rightInset, static_cast<f64>(bounds.height) - topInset - bottomInset);
+    const SIMDVectorDouble boundsSize = VectorDoubleSet(bounds.width, bounds.height, 0.0, 0.0);
+    const SIMDVectorDouble paddingStart = VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0);
+    const SIMDVectorDouble firstInset = VectorDoubleSelect(boundsSize, paddingStart, VectorDoubleLess(paddingStart, boundsSize));
+    const SIMDVectorDouble remaining = VectorDoubleSubtract(boundsSize, firstInset);
+    const SIMDVectorDouble paddingEnd = VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0);
+    const SIMDVectorDouble lastInset = VectorDoubleSelect(remaining, paddingEnd, VectorDoubleLess(paddingEnd, remaining));
+    const SIMDVectorDouble origin = VectorDoubleAdd(VectorDoubleSet(bounds.x, bounds.y, 0.0, 0.0), firstInset);
+    const SIMDVectorDouble size = VectorDoubleSubtract(remaining, lastInset);
+    const auto content = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleGetX(origin), VectorDoubleGetY(origin), VectorDoubleGetX(size), VectorDoubleGetY(size));
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;

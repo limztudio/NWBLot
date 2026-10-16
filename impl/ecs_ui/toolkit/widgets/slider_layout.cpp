@@ -67,8 +67,12 @@ Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, cons
     candidate.padding = style.padding;
     candidate.thumbExtent = style.thumbExtent;
     candidate.trackHeight = style.trackHeight;
-    const f64 width = static_cast<f64>(style.padding.left) + style.padding.right + style.thumbExtent.x;
-    const f64 height = Max(static_cast<f64>(options.height), static_cast<f64>(style.padding.top) + style.padding.bottom + Max(static_cast<f64>(style.thumbExtent.y), static_cast<f64>(style.trackHeight)));
+    const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(style.padding.left, style.padding.top, 0.0, 0.0), VectorDoubleSet(style.padding.right, style.padding.bottom, 0.0, 0.0));
+    const SIMDVectorDouble intrinsic = VectorDoubleAdd(padding, VectorDoubleSet(style.thumbExtent.x, Max(static_cast<f64>(style.thumbExtent.y), static_cast<f64>(style.trackHeight)), 0.0, 0.0));
+    const SIMDVectorDouble minimum = VectorDoubleSet(VectorDoubleGetX(intrinsic), options.height, 0.0, 0.0);
+    const SIMDVectorDouble size = VectorDoubleSelect(intrinsic, minimum, VectorDoubleGreater(minimum, intrinsic));
+    const f64 width = VectorDoubleGetX(size);
+    const f64 height = VectorDoubleGetY(size);
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
@@ -87,20 +91,16 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
-    const f64 leftInset = Min(static_cast<f64>(metrics.padding.left), static_cast<f64>(bounds.width));
-    const SIMDVectorDouble geometryPair0Operand0 = VectorDoubleSet(static_cast<f64>(metrics.padding.right), static_cast<f64>(metrics.padding.top), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair0Operand1 = VectorDoubleSet((static_cast<f64>(bounds.width) - leftInset), static_cast<f64>(bounds.height), 0.0, 0.0);
-    const SIMDVectorDouble rightInsetTopInsetValue = VectorDoubleSelect(geometryPair0Operand1, geometryPair0Operand0, VectorDoubleLess(geometryPair0Operand0, geometryPair0Operand1));
-    const f64 rightInset = VectorDoubleGetX(rightInsetTopInsetValue);
-    const f64 topInset = VectorDoubleGetY(rightInsetTopInsetValue);
-    const f64 bottomInset = Min(static_cast<f64>(metrics.padding.bottom), static_cast<f64>(bounds.height) - topInset);
-    const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0), VectorDoubleSet(leftInset, topInset, 0.0, 0.0));
+    const SIMDVectorDouble boundsSize = VectorDoubleSet(bounds.width, bounds.height, 0.0, 0.0);
+    const SIMDVectorDouble paddingStart = VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0);
+    const SIMDVectorDouble firstInset = VectorDoubleSelect(boundsSize, paddingStart, VectorDoubleLess(paddingStart, boundsSize));
+    const SIMDVectorDouble remaining = VectorDoubleSubtract(boundsSize, firstInset);
+    const SIMDVectorDouble paddingEnd = VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0);
+    const SIMDVectorDouble lastInset = VectorDoubleSelect(remaining, paddingEnd, VectorDoubleLess(paddingEnd, remaining));
+    const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(bounds.x, bounds.y, 0.0, 0.0), firstInset);
     const f64 x = VectorDoubleGetX(xYValue);
     const f64 y = VectorDoubleGetY(xYValue);
-    const SIMDVectorDouble widthHeightValue = VectorDoubleSubtract(
-        VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0), VectorDoubleSet(leftInset, topInset, 0.0, 0.0)),
-        VectorDoubleSet(rightInset, bottomInset, 0.0, 0.0)
-    );
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSubtract(remaining, lastInset);
     const f64 width = VectorDoubleGetX(widthHeightValue);
     const f64 height = VectorDoubleGetY(widthHeightValue);
     const SIMDVectorDouble geometryPair4Operand0 = VectorDoubleSet(static_cast<f64>(metrics.thumbExtent.x), static_cast<f64>(metrics.thumbExtent.y), 0.0, 0.0);
@@ -118,10 +118,11 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(centerStart, y, travel, height);
     if(!centerTravel)
         return MakeUnexpected(Failure{});
-    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(centerStart, y + (height - trackHeight) * 0.5, travel, trackHeight);
+    const SIMDVectorDouble centeredY = VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(height), VectorDoubleSet(trackHeight, thumbHeight, height, height)), VectorDoubleReplicate(0.5)));
+    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(centerStart, VectorDoubleGetX(centeredY), travel, trackHeight);
     if(!track)
         return MakeUnexpected(Failure{});
-    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(thumbX, y + (height - thumbHeight) * 0.5, thumbWidth, thumbHeight);
+    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(thumbX, VectorDoubleGetY(centeredY), thumbWidth, thumbHeight);
     if(!thumb)
         return MakeUnexpected(Failure{});
     candidate.travelBounds = *travelBounds;

@@ -82,15 +82,11 @@ namespace __hidden_gpu_packet_runtime_recorded_graph{
 
 
 template<typename StatisticsT>
-static void AccumulatePacketRecordingStatistics(StatisticsT& statistics, const GpuRecordedPacket& recordedPacket, const bool overlaps)noexcept{
+static void AccumulatePacketRecordingCounts(StatisticsT& statistics, const GpuRecordedPacket& recordedPacket, const bool overlaps)noexcept{
     ++statistics.packetCount;
     statistics.taskCount += recordedPacket.taskCount;
     statistics.commandListCount += recordedPacket.commandListCount;
     statistics.barrierCount += recordedPacket.barrierCount;
-    statistics.commandListAcquisitionSeconds += recordedPacket.commandListAcquisitionSeconds;
-    statistics.graphBarrierRecordingSeconds += recordedPacket.graphBarrierRecordingSeconds;
-    statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
-    statistics.recordingSeconds += recordedPacket.recordingSeconds;
     if(recordedPacket.recordingWorkerIndex != 0u)
         ++statistics.workerRoutedPacketCount;
     // Overlap is graph-wide even when accumulating only one physical queue.
@@ -516,13 +512,19 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(const GpuC
     statistics.readyFrontierElapsedSeconds = storage.readyFrontierElapsedSeconds;
     statistics.readyFrontierWorkerBusySeconds = storage.readyFrontierWorkerBusySeconds;
     statistics.readyFrontierWorkerCapacitySeconds = storage.readyFrontierWorkerCapacitySeconds;
+    SIMDVectorDouble recordingSeconds = VectorDoubleZero();
     for(usize packetIndex = 0u; packetIndex < storage.packetCount; ++packetIndex){
         const GpuRecordedPacket& recordedPacket = storage.packets[packetIndex];
         if(recordedPacket.commandListCount == 0u || recordedPacket.packet != planAccess.packetIdAt(packetIndex))
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingStatistics(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        recordingSeconds = VectorDoubleAdd(recordingSeconds, VectorDoubleSet(recordedPacket.commandListAcquisitionSeconds, recordedPacket.graphBarrierRecordingSeconds, recordedPacket.taskRecordSeconds, recordedPacket.recordingSeconds));
     }
+    statistics.commandListAcquisitionSeconds = VectorDoubleGetX(recordingSeconds);
+    statistics.graphBarrierRecordingSeconds = VectorDoubleGetY(recordingSeconds);
+    statistics.taskRecordSeconds = VectorDoubleGetZ(recordingSeconds);
+    statistics.recordingSeconds = VectorDoubleGetW(recordingSeconds);
     return statistics;
 }
 
@@ -548,6 +550,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         .deviceGeneration = storage.deviceGeneration,
         .queueClass = queueInfo->queueClass,
     };
+    SIMDVectorDouble recordingSeconds = VectorDoubleZero();
     for(usize packetIndex = 0u; packetIndex < storage.packetCount; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
         const GpuRecordedPacket& recordedPacket = storage.packets[packetIndex];
@@ -561,8 +564,13 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         if(packetPlan.queue != queue)
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingStatistics(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        recordingSeconds = VectorDoubleAdd(recordingSeconds, VectorDoubleSet(recordedPacket.commandListAcquisitionSeconds, recordedPacket.graphBarrierRecordingSeconds, recordedPacket.taskRecordSeconds, recordedPacket.recordingSeconds));
     }
+    statistics.commandListAcquisitionSeconds = VectorDoubleGetX(recordingSeconds);
+    statistics.graphBarrierRecordingSeconds = VectorDoubleGetY(recordingSeconds);
+    statistics.taskRecordSeconds = VectorDoubleGetZ(recordingSeconds);
+    statistics.recordingSeconds = VectorDoubleGetW(recordingSeconds);
     return statistics;
 }
 
@@ -708,9 +716,11 @@ void GpuRecordedGraph::addRecordingElapsedSeconds(const f64 elapsedSeconds, cons
 void GpuRecordedGraph::addReadyFrontierStatistics(const f64 elapsedSeconds, const f64 workerBusySeconds, const f64 workerCapacitySeconds, const ArtifactOperation& artifactAccess)noexcept{
     if(!artifactAccess.exclusiveFor(*this) || !m_activeStorage || !m_activeStorage->valid)
         return;
-    m_activeStorage->readyFrontierElapsedSeconds += elapsedSeconds;
-    m_activeStorage->readyFrontierWorkerBusySeconds += workerBusySeconds;
-    m_activeStorage->readyFrontierWorkerCapacitySeconds += workerCapacitySeconds;
+    const SIMDVectorDouble previous = VectorDoubleSet(m_activeStorage->readyFrontierElapsedSeconds, m_activeStorage->readyFrontierWorkerBusySeconds, m_activeStorage->readyFrontierWorkerCapacitySeconds, 0.0);
+    const SIMDVectorDouble total = VectorDoubleAdd(previous, VectorDoubleSet(elapsedSeconds, workerBusySeconds, workerCapacitySeconds, 0.0));
+    m_activeStorage->readyFrontierElapsedSeconds = VectorDoubleGetX(total);
+    m_activeStorage->readyFrontierWorkerBusySeconds = VectorDoubleGetY(total);
+    m_activeStorage->readyFrontierWorkerCapacitySeconds = VectorDoubleGetZ(total);
 }
 
 void GpuRecordedGraph::cachePacketRecordingOverlaps(

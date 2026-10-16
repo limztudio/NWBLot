@@ -10,6 +10,8 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/frame_graph_nodes.h>
 
+#include <global/simd/vector_arithmetic.h>
+
 namespace __hidden_frame_telemetry{
 static constexpr AStringView s_UnknownStageLabel = "Unknown";
 };
@@ -189,6 +191,13 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         const Core::GpuTaskGraphCompileStatistics& compileStatistics = deferredRuntimeStatistics.compile;
         const Core::GpuTaskGraphRecordingStatistics& recordingStatistics = deferredRuntimeStatistics.recording;
         const Core::GpuTaskGraphSubmissionStatistics& submissionStatistics = deferredRuntimeStatistics.submission;
+        const SIMDVectorDouble millisecondsScale = VectorDoubleReplicate(__hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry);
+        const SIMDVectorDouble frameTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.declarationSeconds, compileStatistics.totalSeconds, recordingStatistics.recordingElapsedSeconds, submissionStatistics.submissionSeconds), millisecondsScale);
+        const SIMDVectorDouble compileTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.analysisSeconds, compileStatistics.queueAssignmentSeconds, compileStatistics.planningSeconds, compileStatistics.validationSeconds), millisecondsScale);
+        const SIMDVectorDouble analysisPlanningTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.dependencyAnalysisSeconds, compileStatistics.hazardAnalysisSeconds, compileStatistics.topologicalOrderSeconds, compileStatistics.packetizationSeconds), millisecondsScale);
+        const SIMDVectorDouble planningRecordingTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.resourceStatePlanningSeconds, compileStatistics.packetDependencyPlanningSeconds, recordingStatistics.recordingSeconds, recordingStatistics.commandListAcquisitionSeconds), millisecondsScale);
+        const SIMDVectorDouble recordingFrontierTimingMs = VectorDoubleMultiply(VectorDoubleSet(recordingStatistics.graphBarrierRecordingSeconds, recordingStatistics.taskRecordSeconds, recordingStatistics.readyFrontierElapsedSeconds, recordingStatistics.readyFrontierWorkerBusySeconds), millisecondsScale);
+        const SIMDVectorDouble frontierCapacityMsAndPercent = VectorDoubleMultiply(VectorDoubleSet(recordingStatistics.readyFrontierWorkerCapacitySeconds, recordingStatistics.readyFrontierWorkerUtilization(), 0.0, 0.0), VectorDoubleSet(__hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry, __hidden_frame_graph_export::s_PercentScaleTelemetry, 1.0, 1.0));
         StringAppendFormat(
             m_frameGraphRendererLabel,
             "Renderer Frame\n"
@@ -252,28 +261,28 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             submissionStatistics.timelineWaitCount,
             submissionStatistics.inheritedTimelineWaitElisionCount,
             submissionStatistics.rejectedSubmissionCount,
-            compileStatistics.declarationSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.totalSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.recordingElapsedSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            submissionStatistics.submissionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.analysisSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.queueAssignmentSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.planningSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.validationSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.dependencyAnalysisSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.hazardAnalysisSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.topologicalOrderSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.packetizationSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.resourceStatePlanningSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            compileStatistics.packetDependencyPlanningSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.recordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.commandListAcquisitionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.graphBarrierRecordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.taskRecordSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.readyFrontierElapsedSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.readyFrontierWorkerBusySeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.readyFrontierWorkerCapacitySeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.readyFrontierWorkerUtilization() * __hidden_frame_graph_export::s_PercentScaleTelemetry
+            VectorDoubleGetX(frameTimingMs),
+            VectorDoubleGetY(frameTimingMs),
+            VectorDoubleGetZ(frameTimingMs),
+            VectorDoubleGetW(frameTimingMs),
+            VectorDoubleGetX(compileTimingMs),
+            VectorDoubleGetY(compileTimingMs),
+            VectorDoubleGetZ(compileTimingMs),
+            VectorDoubleGetW(compileTimingMs),
+            VectorDoubleGetX(analysisPlanningTimingMs),
+            VectorDoubleGetY(analysisPlanningTimingMs),
+            VectorDoubleGetZ(analysisPlanningTimingMs),
+            VectorDoubleGetW(analysisPlanningTimingMs),
+            VectorDoubleGetX(planningRecordingTimingMs),
+            VectorDoubleGetY(planningRecordingTimingMs),
+            VectorDoubleGetZ(planningRecordingTimingMs),
+            VectorDoubleGetW(planningRecordingTimingMs),
+            VectorDoubleGetX(recordingFrontierTimingMs),
+            VectorDoubleGetY(recordingFrontierTimingMs),
+            VectorDoubleGetZ(recordingFrontierTimingMs),
+            VectorDoubleGetW(recordingFrontierTimingMs),
+            VectorDoubleGetX(frontierCapacityMsAndPercent),
+            VectorDoubleGetY(frontierCapacityMsAndPercent)
         );
 
         // Borrows immutable plan topology + packet slots under the renderer serialization contract; no overlap with recording/reset/recompile, and never the mutable live registry (recompile can move the owning plan).
@@ -299,6 +308,8 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             if(!commandArenaStatistics.valid())
                 continue;
 
+            const SIMDVectorDouble queueSubmissionAndRecordingMs = VectorDoubleMultiply(VectorDoubleSet(queueStatistics.submissionSeconds, queueRecordingStatistics.recordingSeconds, 0.0, 0.0), millisecondsScale);
+            const SIMDVectorDouble queueRecordingBreakdownMs = VectorDoubleMultiply(VectorDoubleSet(queueRecordingStatistics.commandListAcquisitionSeconds, queueRecordingStatistics.graphBarrierRecordingSeconds, queueRecordingStatistics.taskRecordSeconds, 0.0), millisecondsScale);
             StringAppendFormat(
                 m_frameGraphRendererLabel,
                 "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} inherited wait elisions={} accepted frontier={} recovery submissions={} CPU={:.3f} ms"
@@ -326,7 +337,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 queueStatistics.inheritedTimelineWaitElisionCount,
                 queueStatistics.acceptedFrontierSubmissionCount,
                 queueStatistics.recoverySubmissionCount,
-                queueStatistics.submissionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+                VectorDoubleGetX(queueSubmissionAndRecordingMs),
                 queueCompileStatistics.taskCount,
                 queueCompileStatistics.packetCount,
                 queueCompileStatistics.mergedTaskCount,
@@ -347,10 +358,10 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 queueRecordingStatistics.barrierCount,
                 queueRecordingStatistics.workerRoutedPacketCount,
                 queueRecordingStatistics.parallelPacketCount,
-                queueRecordingStatistics.commandListAcquisitionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-                queueRecordingStatistics.graphBarrierRecordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-                queueRecordingStatistics.taskRecordSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-                queueRecordingStatistics.recordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+                VectorDoubleGetX(queueRecordingBreakdownMs),
+                VectorDoubleGetY(queueRecordingBreakdownMs),
+                VectorDoubleGetZ(queueRecordingBreakdownMs),
+                VectorDoubleGetY(queueSubmissionAndRecordingMs),
                 commandArenaStatistics.workerArenaCount,
                 commandArenaStatistics.commandPoolEpochCount,
                 commandArenaStatistics.pendingCommandPoolEpochCount,

@@ -48,22 +48,6 @@ namespace __hidden_ui_popup_layout{
     }
 }
 
-[[nodiscard]] static f64 Available(const PopupOptions& options, const DisplayMetrics& display, const PopupPlacementSide::Enum side)noexcept{
-    const f64 gap = options.gap;
-    switch(side){
-    case PopupPlacementSide::Below:
-        return Clamp(static_cast<f64>(display.logicalHeight) - options.anchor.y - options.anchor.height - gap, 0.0, static_cast<f64>(display.logicalHeight));
-    case PopupPlacementSide::Above:
-        return Clamp(static_cast<f64>(options.anchor.y) - gap, 0.0, static_cast<f64>(display.logicalHeight));
-    case PopupPlacementSide::Right:
-        return Clamp(static_cast<f64>(display.logicalWidth) - options.anchor.x - options.anchor.width - gap, 0.0, static_cast<f64>(display.logicalWidth));
-    case PopupPlacementSide::Left:
-        return Clamp(static_cast<f64>(options.anchor.x) - gap, 0.0, static_cast<f64>(display.logicalWidth));
-    default:
-        return 0.0;
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -85,11 +69,20 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
     const f32 height = VectorGetY(boundedSize);
     PopupPlacementSide::Enum side = options.side;
     if(side != PopupPlacementSide::Center){
-        const f64 required = side == PopupPlacementSide::Below || side == PopupPlacementSide::Above ? height : width;
-        const f64 preferredRoom = Available(options, display, side);
+        const bool vertical = side == PopupPlacementSide::Below || side == PopupPlacementSide::Above;
+        const f64 required = vertical ? height : width;
+        const f64 anchorOrigin = vertical ? options.anchor.y : options.anchor.x;
+        const f64 anchorExtent = vertical ? options.anchor.height : options.anchor.width;
+        const f64 displayExtent = vertical ? display.logicalHeight : display.logicalWidth;
+        // Validated f32 coordinates make both f64 room expressions finite even when only one side is needed.
+        const SIMDVectorDouble distance = VectorDoubleSubtract(VectorDoubleSubtract(VectorDoubleSubtract(VectorDoubleSet(displayExtent, anchorOrigin, 0.0, 0.0), VectorDoubleSet(anchorOrigin, 0.0, 0.0, 0.0)), VectorDoubleSet(anchorExtent, 0.0, 0.0, 0.0)), VectorDoubleSet(options.gap, options.gap, 0.0, 0.0));
+        const SIMDVectorDouble maximum = VectorDoubleReplicate(displayExtent);
+        const SIMDVectorDouble room = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleSelect(distance, maximum, VectorDoubleGreater(distance, maximum)), VectorDoubleGreater(distance, VectorDoubleZero()));
+        const bool forward = side == PopupPlacementSide::Below || side == PopupPlacementSide::Right;
+        const f64 preferredRoom = forward ? VectorDoubleGetX(room) : VectorDoubleGetY(room);
         if(preferredRoom < required){
             const PopupPlacementSide::Enum opposite = Opposite(side);
-            const f64 oppositeRoom = Available(options, display, opposite);
+            const f64 oppositeRoom = forward ? VectorDoubleGetY(room) : VectorDoubleGetX(room);
             if(oppositeRoom >= required || oppositeRoom > preferredRoom)
                 side = opposite;
         }

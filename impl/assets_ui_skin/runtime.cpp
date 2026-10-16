@@ -12,6 +12,7 @@
 #include <core/common/log.h>
 
 #include <global/simplemath.h>
+#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,8 +62,7 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
         && IsFinite(padding.top) && padding.top >= 0.0f
         && IsFinite(padding.right) && padding.right >= 0.0f
         && IsFinite(padding.bottom) && padding.bottom >= 0.0f
-        && IsFinite(padding.left + padding.right)
-        && IsFinite(padding.top + padding.bottom)
+        && VectorIsFinite(VectorAdd(VectorSet(padding.left, padding.top, 0.0f, 0.0f), VectorSet(padding.right, padding.bottom, 0.0f, 0.0f)), VectorComponentMask::s_XY)
         && IsFinite(region.minimumWidth) && region.minimumWidth >= 0.0f
         && IsFinite(region.minimumHeight) && region.minimumHeight >= 0.0f
     ;
@@ -171,8 +171,7 @@ bool UiSkin::validatePayload()const{
         !m_texture.valid() || m_texture.name() == Name("")
         || m_atlasWidth == 0u || m_atlasHeight == 0u
         || !IsFinite(m_referenceDensity) || m_referenceDensity <= 0.0f
-        || !IsFinite(static_cast<f32>(m_atlasWidth) / m_referenceDensity)
-        || !IsFinite(static_cast<f32>(m_atlasHeight) / m_referenceDensity)
+        || !VectorIsFinite(VectorDivide(VectorSet(static_cast<f32>(m_atlasWidth), static_cast<f32>(m_atlasHeight), 0.0f, 0.0f), VectorReplicate(m_referenceDensity)), VectorComponentMask::s_XY)
         || m_regions.empty()
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid"));

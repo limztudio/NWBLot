@@ -62,6 +62,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
     const SIMDVectorSingle checkboxMark = VectorAdd(origin, VectorSet(247.0f, 95.0f, 0.0f, 0.0f));
     const SIMDVectorSingle progressTrack = VectorAdd(origin, VectorSet(12.0f, 132.0f, 0.0f, 0.0f));
     const SIMDVectorSingle progressFill = VectorAdd(origin, VectorSet(14.0f, 134.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle editNormal = VectorAdd(origin, VectorSet(12.0f, 158.0f, 0.0f, 0.0f));
     return
         paint.drawRegion(s_Panel, { x, y, s_PanelWidth, 170.0f + captionHeight })
         && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), 122.0f, 30.0f })
@@ -74,7 +75,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
         && paint.drawRegion(s_CheckboxMark, { VectorGetX(checkboxMark), VectorGetY(checkboxMark), 16.0f, 16.0f })
         && paint.drawRegion(s_ProgressTrack, { VectorGetX(progressTrack), VectorGetY(progressTrack), 256.0f, 16.0f })
         && paint.drawRegion(s_ProgressFill, { VectorGetX(progressFill), VectorGetY(progressFill), 168.0f, 12.0f })
-        && paint.drawRegion(s_EditNormal, { x + 12.0f, y + 158.0f, 256.0f, captionHeight })
+        && paint.drawRegion(s_EditNormal, { VectorGetX(editNormal), VectorGetY(editNormal), 256.0f, captionHeight })
     ;
 }
 
@@ -151,10 +152,12 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
     const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(18.0f, 162.0f, 0.0f, 0.0f));
     const SIMDVectorSingle koreanOrigin = VectorAdd(origin, VectorSet(18.0f, 162.0f + caption->height, 0.0f, 0.0f));
-    const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(20.0f, 12.0f + (30.0f - normal->height) * 0.5f, 0.0f, 0.0f));
-    const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(154.0f, 12.0f + (30.0f - hover->height) * 0.5f, 0.0f, 0.0f));
-    const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(20.0f, 50.0f + (30.0f - pressed->height) * 0.5f, 0.0f, 0.0f));
-    const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(154.0f, 50.0f + (30.0f - disabled->height) * 0.5f, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonTextOffsets = VectorScale(VectorSubtract(VectorReplicate(30.0f), VectorSet(normal->height, hover->height, pressed->height, disabled->height)), 0.5f);
+    const SIMDVectorSingle buttonTextY = VectorAdd(VectorSet(12.0f, 12.0f, 50.0f, 50.0f), buttonTextOffsets);
+    const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(20.0f, VectorGetX(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(154.0f, VectorGetY(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(20.0f, VectorGetZ(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(154.0f, VectorGetW(buttonTextY), 0.0f, 0.0f));
     const SIMDVectorSingle editOrigin = VectorAdd(origin, VectorSet(20.0f, 88.0f + (32.0f - edit->height) * 0.5f, 0.0f, 0.0f));
     const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), 244.0f, caption->height })
         && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin), 244.0f, korean->height });

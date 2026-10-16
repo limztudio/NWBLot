@@ -18,7 +18,7 @@ namespace SIMDVectorDetail{
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL NormalizeOrV(SIMDVectorSingle value, SIMDVectorSingle fallback, SIMDVectorSingle lengthSquared, const f32 minLengthSquared, SIMDVectorSingle componentMask)noexcept{
-    const SIMDVectorSingle validLength = VectorAndInt(VectorGreater(lengthSquared, VectorReplicate(Max(0.0f, minLengthSquared))), VectorEqualInt(VectorOrInt(VectorIsNaN(lengthSquared), VectorIsInfinite(lengthSquared)), VectorFalseInt()));
+    const SIMDVectorSingle validLength = VectorAndInt(VectorGreater(lengthSquared, VectorMax(VectorZero(), VectorReplicate(minLengthSquared))), VectorEqualInt(VectorOrInt(VectorIsNaN(lengthSquared), VectorIsInfinite(lengthSquared)), VectorFalseInt()));
     SIMDVectorSingle normalized = VectorAndInt(VectorMultiply(value, VectorReciprocalSqrt(lengthSquared)), componentMask);
     fallback = VectorAndInt(fallback, componentMask);
     const SIMDVectorSingle validNormalized = VectorEqualInt(VectorOrInt(VectorIsNaN(normalized), VectorIsInfinite(normalized)), VectorFalseInt());
@@ -75,7 +75,7 @@ namespace SIMDVectorDoubleDetail{
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL NormalizeOrV(SIMDVectorDouble value, SIMDVectorDouble fallback, SIMDVectorDouble lengthSquared, const f64 minLengthSquared, SIMDVectorDouble componentMask)noexcept{
     const SIMDVectorDouble validLength = VectorDoubleAndInt(
-        VectorDoubleGreater(lengthSquared, VectorDoubleReplicate(Max(0.0, minLengthSquared))),
+        VectorDoubleGreater(lengthSquared, VectorDoubleMax(VectorDoubleZero(), VectorDoubleReplicate(minLengthSquared))),
         VectorDoubleEqualInt(VectorDoubleOrInt(VectorDoubleIsNaN(lengthSquared), VectorDoubleIsInfinite(lengthSquared)), VectorDoubleFalseInt())
     );
     SIMDVectorDouble normalized = VectorDoubleAndInt(VectorDoubleMultiply(value, VectorDoubleReciprocalSqrt(lengthSquared)), componentMask);

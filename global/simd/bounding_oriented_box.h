@@ -57,7 +57,7 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
     SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents, SIMDVectorSingle& outOrientation
 )noexcept{
     outCenter = VectorAdd(Vector3Rotate(VectorScale(boxCenter, scale), rotation), translation);
-    outExtents = VectorScale(boxExtents, Abs(scale));
+    outExtents = VectorMultiply(boxExtents, scale < 0.0f ? VectorNegate(VectorReplicate(scale)) : VectorReplicate(scale));
     outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, boxOrientation));
 }
 
@@ -94,7 +94,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
     SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents, SIMDVectorDouble& outOrientation
 )noexcept{
     outCenter = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(boxCenter, scale), rotation), translation);
-    outExtents = VectorDoubleScale(boxExtents, Abs(scale));
+    outExtents = VectorDoubleMultiply(boxExtents, scale < 0.0 ? VectorDoubleNegate(VectorDoubleReplicate(scale)) : VectorDoubleReplicate(scale));
     outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(rotation, boxOrientation));
 }
 

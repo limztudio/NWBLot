@@ -10,6 +10,7 @@
 #include <core/os/linux/wayland/text_input.h>
 
 #include <global/thread.h>
+#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -234,8 +235,11 @@ static void DispatchScroll(WaylandContext& context){
     if(!context.scrollPending || !context.frame)
         return;
 
-    f64 xoffset = context.scrollDiscreteX != 0 ? static_cast<f64>(context.scrollDiscreteX) : (context.scrollX / s_WaylandScrollAxisUnit);
-    f64 yoffset = context.scrollDiscreteY != 0 ? -static_cast<f64>(context.scrollDiscreteY) : (-context.scrollY / s_WaylandScrollAxisUnit);
+    const SIMDVectorDouble scroll = VectorDoubleSet(context.scrollDiscreteX != 0 ? static_cast<f64>(context.scrollDiscreteX) : context.scrollX, context.scrollDiscreteY != 0 ? -static_cast<f64>(context.scrollDiscreteY) : -context.scrollY, 0.0, 0.0);
+    const SIMDVectorDouble units = VectorDoubleSet(context.scrollDiscreteX != 0 ? 1.0 : s_WaylandScrollAxisUnit, context.scrollDiscreteY != 0 ? 1.0 : s_WaylandScrollAxisUnit, 1.0, 1.0);
+    const SIMDVectorDouble offsets = VectorDoubleDivide(scroll, units);
+    const f64 xoffset = VectorDoubleGetX(offsets);
+    const f64 yoffset = VectorDoubleGetY(offsets);
 
     if(xoffset != 0.0 || yoffset != 0.0)
         context.frame->input().mouseScrollUpdate(xoffset, yoffset);

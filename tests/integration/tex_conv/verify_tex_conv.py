@@ -191,7 +191,7 @@ def read_raw_pair(path: pathlib.Path) -> dict:
     metadata = metadata_path.read_text(encoding="utf-8")
     assignments = re.findall(r"asset\.(\w+)\s*=\s*([^;]+);", metadata)
     fields = dict(assignments)
-    required = {"format", "dimension", "resolution", "mip_count", "alpha_mode"}
+    required = {"format", "dimension", "resolution", "alpha_mode"}
     if len(fields) != len(assignments) or set(fields) not in (required, required | {"alpha_constant_unorm8"}):
         raise AssertionError(f"texture metadata contains missing, duplicate, or unsupported fields: {metadata_path}\n{metadata}")
     try:
@@ -207,11 +207,9 @@ def read_raw_pair(path: pathlib.Path) -> dict:
     payload_format = formats[values["format"]]
     alpha_mode = alpha_modes[values["alpha_mode"]]
     resolution = values["resolution"]
-    count = values["mip_count"]
     if not isinstance(resolution, list) or len(resolution) != (3 if dimension == 2 else 2) or any(type(value) is not int or value <= 0 for value in resolution):
         raise AssertionError(f"invalid texture resolution: {metadata_path}")
-    if type(count) is not int or count <= 0:
-        raise AssertionError(f"invalid texture mip count: {metadata_path}")
+    count = max(resolution).bit_length()
     width, height = resolution[:2]
     depth = resolution[2] if dimension == 2 else 1
     if dimension == 1 and width != height:

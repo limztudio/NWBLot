@@ -91,7 +91,8 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
     geometry_matches &= all(0.0 <= offset <= maximum + 0.05 for offset, maximum in zip(snapshot["scroll"], snapshot["maximum"]))
     enabled, focused = bool(snapshot["enabled"]), bool(snapshot["focus"])
     background = (29, 33, 40) if not enabled else (18, 26, 37) if focused else (15, 20, 28)
-    probe("edit_atlas", (bx + bw - 4.0, by + bh - 6.0), background, 5 if focused else 8)
+    # The compressed rounded corner contains border colors; sample the uniform fill as the single-line edit probes do.
+    probe("edit_atlas", (bx + bw - 16.0, by + bh - 6.0), background, 5 if focused else 8)
     probe("horizontal_clip_gutter", (bx + bw + 4.0, by + bh / 2.0), panel, 8)
     thumb_color = ((49, 100, 63) if skin == "alternate" else (45, 60, 80)) if enabled else \
         ((54, 60, 42) if skin == "alternate" else (37, 43, 52))

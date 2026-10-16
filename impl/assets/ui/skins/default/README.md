@@ -3,7 +3,7 @@
 `atlas.nwb` is the `ui_skin` asset at `engine/ui/skins/default/atlas`. It names regions in one texture asset,
 `engine/ui/skins/default/texture`, described by `texture.nwb` and its same-basename raw linear UASTC blocks in `texture.tex`.
 Its typography role sets the default widget font size to 16 logical UI units; font glyph data stays in separate Font and FontAtlas assets.
-The generator can recreate `source.png` artwork as straight-alpha sRGB color; that image is not checked in or required at runtime. The texture converter decodes source RGB to linear, generates the complete mip chain, writes its format/resolution/mip/alpha descriptors to `.nwb`, and writes only UASTC blocks to `.tex`. Cooking validates those descriptors and packages the raw blocks.
+The generator can recreate `source.png` artwork as straight-alpha sRGB color; that image is not checked in or required at runtime. The texture converter decodes source RGB to linear, generates the complete mip chain, writes its format/dimension/resolution/alpha descriptors to `.nwb`, and writes only UASTC blocks to `.tex`. Cooking validates those descriptors and packages the raw blocks.
 
 Atlas rectangles use top-left pixel coordinates. The reference density is one artwork pixel per logical UI unit.
 Panels and control backgrounds use six-pixel nine-slice borders, with separate content padding. Icons are sprites.

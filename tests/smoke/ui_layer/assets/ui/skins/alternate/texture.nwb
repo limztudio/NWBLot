@@ -4,5 +4,4 @@ texture asset;
 asset.format = "uastc_ldr_4x4";
 asset.dimension = "2d";
 asset.resolution = [256, 256];
-asset.mip_count = 9;
 asset.alpha_mode = "embedded_ldr";

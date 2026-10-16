@@ -49,7 +49,6 @@ static constexpr AStringView s_TextureTestMetadata =
     "asset.format = \"uastc_ldr_4x4\";\n"
     "asset.dimension = \"2d\";\n"
     "asset.resolution = [7, 5];\n"
-    "asset.mip_count = 3;\n"
     "asset.alpha_mode = \"embedded_ldr\";\n"
 ;
 
@@ -291,7 +290,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         AStringView assignment;
         TStringView diagnostic;
     };
-    constexpr Array<ObsoleteField, 23u> s_ObsoleteFields = {{
+    constexpr Array<ObsoleteField, 24u> s_ObsoleteFields = {{
         { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
         { "asset.data = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'data'") },
         { "asset.file = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'file'") },
@@ -307,6 +306,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", NWB_TEXT("unsupported asset field 'payload_layout'") },
         { "asset.mip_address_mode = \"clamp\";\n", NWB_TEXT("unsupported asset field 'mip_address_mode'") },
         { "asset.mips = [];\n", NWB_TEXT("unsupported asset field 'mips'") },
+        { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
         { "asset.has_alpha = 1;\n", NWB_TEXT("unsupported asset field 'has_alpha'") },
         { "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
         { "asset.alpha_payload_offset_bytes = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
@@ -337,11 +337,10 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingRequiredRawLayoutDescriptors){
         AStringView assignment;
         TStringView diagnostic;
     };
-    constexpr Array<RequiredField, 5u> s_RequiredFields = {{
+    constexpr Array<RequiredField, 4u> s_RequiredFields = {{
         { "asset.format = \"uastc_ldr_4x4\";\n", NWB_TEXT("field 'format' is required") },
         { "asset.dimension = \"2d\";\n", NWB_TEXT("field 'dimension' is required") },
         { "asset.resolution = [7, 5];\n", NWB_TEXT("resolution must contain exactly") },
-        { "asset.mip_count = 3;\n", NWB_TEXT("field 'mip_count' is required") },
         { "asset.alpha_mode = \"embedded_ldr\";\n", NWB_TEXT("field 'alpha_mode' is required") },
     }};
     for(const RequiredField& field : s_RequiredFields){
@@ -379,9 +378,9 @@ TEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadin
         { "asset.resolution = [-1, 5];", NWB_TEXT("positive u32 integer") },
         { "asset.resolution = [7.5, 5];", NWB_TEXT("positive u32 integer") },
         { "asset.resolution = [4294967296, 5];", NWB_TEXT("positive u32 integer") },
-        { "asset.mip_count = 0;", NWB_TEXT("field 'mip_count' must be an integer") },
-        { "asset.mip_count = 2;", NWB_TEXT("complete mip chain") },
-        { "asset.mip_count = 4;", NWB_TEXT("complete mip chain") },
+        { "asset.mip_count = 0;", NWB_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.mip_count = 2;", NWB_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.mip_count = 4;", NWB_TEXT("unsupported asset field 'mip_count'") },
         { "asset.alpha_mode = \"straight\";", NWB_TEXT("unsupported alpha_mode") },
         { "asset.alpha_mode = \"constant_unorm8\";", NWB_TEXT("field 'alpha_constant_unorm8' is required") },
         { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 255;", NWB_TEXT("field 'alpha_constant_unorm8' must be an integer in [0, 254]") },

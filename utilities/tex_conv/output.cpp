@@ -111,7 +111,6 @@ Expected<AString> BuildMetadata(const PreparedTexture& payload){
         output << ", " << payload.depth;
     output
         << "];" << s_NewLine
-        << "asset.mip_count = " << payload.mipCount << ";" << s_NewLine
         << "asset.alpha_mode = \"" << alphaMode << "\";" << s_NewLine
     ;
     if(payload.alphaMode == TextureAlphaMode::ConstantUnorm8)

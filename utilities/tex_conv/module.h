@@ -79,7 +79,7 @@ bool IsSupportedInputPath(const Path& path);
 bool IsHdrInputPath(const Path& path);
 Expected<OutputPaths> ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument);
 bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force);
-Expected<PreparedTexture> PrepareTexture(const Vector<Path>& inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource);
+Expected<PreparedTexture> PrepareTexture(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource);
 bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, bool force);
 
 int Run(int argc, char** argv);

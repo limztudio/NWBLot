@@ -9,7 +9,6 @@ texture asset;
 asset.format = "uastc_ldr_4x4";
 asset.dimension = "2d";
 asset.resolution = [7, 5];
-asset.mip_count = 3;
 asset.alpha_mode = "embedded_ldr";
 ```
 
@@ -20,10 +19,9 @@ The metadata file implicitly selects the same-directory `.tex` file with the sam
 | `format` | `uastc_ldr_4x4` or `uastc_hdr_4x4` |
 | `dimension` | `2d`, `cube`, or `volume` |
 | `resolution` | Positive integer `[width, height]` for 2D/cube or `[width, height, depth]` for volumes; cube faces must be square |
-| `mip_count` | The complete chain through 1 by 1, and depth 1 for volumes |
 | `alpha_mode` | `opaque`, `embedded_ldr`, `constant_unorm8`, or `separate_uastc_ldr_4x4`, subject to the format rules below |
 
-LDR blocks use `opaque` or `embedded_ldr`. HDR color blocks use `opaque`, `constant_unorm8`, or `separate_uastc_ldr_4x4`. Only `constant_unorm8` requires and permits `alpha_constant_unorm8`, an integer from 0 through 254; opaque alpha uses 255 internally. Metadata does not contain file references, source color spaces, individual width/height/depth fields, block geometry, mip offsets, or version fields. Unknown fields are rejected.
+LDR blocks use `opaque` or `embedded_ldr`. HDR color blocks use `opaque`, `constant_unorm8`, or `separate_uastc_ldr_4x4`. Only `constant_unorm8` requires and permits `alpha_constant_unorm8`, an integer from 0 through 254; opaque alpha uses 255 internally. The cooker derives the complete mip count from the resolution. Metadata does not contain file references, source color spaces, individual width/height/depth fields, block geometry, mip counts or offsets, or version fields. Unknown fields are rejected.
 
 The raw `.tex` file contains no header or mip table. Each primary mip stores its independently addressed planes followed by their row-major 4 by 4, 16-byte UASTC blocks. Plane count is one for 2D, six in `+X, -X, +Y, -Y, +Z, -Z` order for a cube, or the reduced depth for a volume. Mips run from the base resolution through the complete chain. Separate HDR alpha is a second LDR UASTC stream after the entire primary stream, with identical mip and plane layout. Opaque, embedded, and constant modes have only the primary stream.
 

@@ -53,8 +53,8 @@ struct EncodedMip{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Vector<EncodedMip>> BuildMipLevels(const TextureEncodeInput& entry){
-    Vector<EncodedMip> mipLevels;
+[[nodiscard]] static Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> BuildMipLevels(const TextureEncodeInput& entry, Core::Alloc::ScratchArena& scratchArena){
+    ::Vector<EncodedMip, Core::Alloc::ScratchArena> mipLevels(scratchArena);
 
     const auto mipCountResult = TextureFormat::ComputeCompleteMipCount(entry.dimension, entry.width, entry.height, entry.depth);
     if(!mipCountResult){
@@ -305,7 +305,7 @@ struct EncodedMip{
 Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_encode_uastc;
 
-    auto mipLevels = BuildMipLevels(input);
+    auto mipLevels = BuildMipLevels(input, scratchArena);
     if(!mipLevels)
         return MakeUnexpected(Failure{});
     const EncodedMip& lastMip = mipLevels->back();

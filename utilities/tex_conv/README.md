@@ -93,7 +93,6 @@ texture asset;
 asset.format = "uastc_ldr_4x4";
 asset.dimension = "2d";
 asset.resolution = [7, 5];
-asset.mip_count = 3;
 asset.alpha_mode = "embedded_ldr";
 ```
 
@@ -103,7 +102,6 @@ The current metadata fields are:
 - `dimension`: `2d`, `cube`, or `volume`;
 - `resolution`: `[width, height]` for 2D/cube or
   `[width, height, depth]` for a volume;
-- `mip_count`: the complete mip chain length for that resolution;
 - `alpha_mode`: `opaque`, `embedded_ldr`, `constant_unorm8`, or
   `separate_uastc_ldr_4x4`;
 - `alpha_constant_unorm8`: an integer in `[0, 254]`, present only for
@@ -112,8 +110,9 @@ The current metadata fields are:
 LDR allows opaque or embedded alpha. HDR allows opaque, constant, or separate
 alpha. All dimensions are positive, cube faces are square, and all prepared RGB
 values are linear. Metadata contains no source color-space flag, data filename,
-separate width/height/depth fields, version, mip table, or byte offsets.
-Unknown fields are rejected.
+separate width/height/depth fields, version, mip count or table, or byte offsets.
+The cooker derives the complete mip chain length from the resolution. Unknown
+fields are rejected.
 
 The converter's mip generation filter is a linear-space box filter. Runtime
 nearest/linear interpolation belongs to the separate Sampler asset's

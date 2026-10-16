@@ -37,7 +37,6 @@ static constexpr AStringView s_DiagnosticPrefix = "Texture meta";
 static constexpr AStringView s_FormatField = "format";
 static constexpr AStringView s_DimensionField = "dimension";
 static constexpr AStringView s_ResolutionField = "resolution";
-static constexpr AStringView s_MipCountField = "mip_count";
 static constexpr AStringView s_AlphaModeField = "alpha_mode";
 static constexpr AStringView s_AlphaConstantField = "alpha_constant_unorm8";
 
@@ -149,7 +148,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
     if(!alphaMode)
         return MakeUnexpected(Failure{});
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, [alphaMode = *alphaMode](const AStringView fieldName)noexcept{
-        return fieldName == s_FormatField || fieldName == s_DimensionField || fieldName == s_ResolutionField || fieldName == s_MipCountField || fieldName == s_AlphaModeField
+        return fieldName == s_FormatField || fieldName == s_DimensionField || fieldName == s_ResolutionField || fieldName == s_AlphaModeField
             || (alphaMode == TextureAlphaMode::ConstantUnorm8 && fieldName == s_AlphaConstantField);
     }))
         return MakeUnexpected(Failure{});
@@ -159,12 +158,11 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
     if(!format || !dimension)
         return MakeUnexpected(Failure{});
     const auto resolution = ReadResolution(nwbFilePath, asset, *dimension);
-    const auto mipCount = ReadUnsignedField(nwbFilePath, asset, s_MipCountField, 1u, Limit<u32>::s_Max);
-    if(!resolution || !mipCount)
+    if(!resolution)
         return MakeUnexpected(Failure{});
     const auto completeMipCount = TextureFormat::ComputeCompleteMipCount(*dimension, resolution->width, resolution->height, resolution->depth);
-    if(!completeMipCount || *mipCount != *completeMipCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': mip_count must describe a complete mip chain"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    if(!completeMipCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution cannot describe a complete mip chain"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -174,7 +172,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
     entry.depth = resolution->depth;
     entry.dimension = *dimension;
     entry.payloadFormat = *format;
-    entry.mipCount = *mipCount;
+    entry.mipCount = *completeMipCount;
     entry.alphaMode = *alphaMode;
     if(entry.alphaMode == TextureAlphaMode::ConstantUnorm8){
         const auto constant = ReadUnsignedField(nwbFilePath, asset, s_AlphaConstantField, 0u, TextureFormat::s_MaxConstantAlphaUnorm8);

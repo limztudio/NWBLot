@@ -104,7 +104,8 @@ int Run(const int argc, char** argv){
         {
             const AStringView outputPathText(outputArgument);
             TextureDimension::Enum dimension = TextureDimension::Texture2D;
-            Vector<Path> inputPaths;
+            Core::Alloc::ScratchArena scratchArena(Name("utilities/tex_conv/encode"));
+            ::Vector<Path, Core::Alloc::ScratchArena> inputPaths(scratchArena);
             AlphaSource alphaSource;
 
             const u32 modeCount = static_cast<u32>(!inputArgument.empty()) + static_cast<u32>(!cubeArguments.empty()) + static_cast<u32>(!volumeArguments.empty());
@@ -115,6 +116,7 @@ int Run(const int argc, char** argv){
 
             if(!inputArgument.empty()){
                 const AStringView inputPathText(inputArgument);
+                inputPaths.reserve(1u);
                 inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
             }
             else if(!cubeArguments.empty()){
@@ -166,7 +168,7 @@ int Run(const int argc, char** argv){
             if(!outputPaths || !ValidateOutputPaths(*outputPaths, force))
                 return TexConvCliDetail::s_TexConvExitFailure;
 
-            const auto payload = PrepareTexture(inputPaths, dimension, !linear, alphaSource);
+            const auto payload = PrepareTexture(scratchArena, inputPaths, dimension, !linear, alphaSource);
             if(!payload)
                 return TexConvCliDetail::s_TexConvExitFailure;
             if(!WriteOutputs(*outputPaths, *payload, force))

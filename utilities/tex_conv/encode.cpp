@@ -27,7 +27,6 @@ namespace __hidden_encode{
 
 
 inline constexpr f32 s_UastcHdrMaximum = 65216.0f;
-inline constexpr Name s_EncodeScratchArena("utilities/tex_conv/encode");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,7 +96,7 @@ inline constexpr Name s_EncodeScratchArena("utilities/tex_conv/encode");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PreparedTexture> PrepareTexture(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
+Expected<PreparedTexture> PrepareTexture(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
     if(inputPaths.empty() || inputPaths.size() > Limit<u32>::s_Max)
         return MakeUnexpected(Failure{});
     if(
@@ -159,7 +158,6 @@ Expected<PreparedTexture> PrepareTexture(const Vector<Path>& inputPaths, const T
         input.planes.push_back(Move(*plane));
     }
 
-    Core::Alloc::ScratchArena scratchArena(__hidden_encode::s_EncodeScratchArena);
     return EncodeLinearTexture(Move(input), scratchArena);
 }
 

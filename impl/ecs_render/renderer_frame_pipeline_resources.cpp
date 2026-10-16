@@ -178,7 +178,7 @@ void RendererFramePipeline::invalidateResources(){
     m_deferredSystem.invalidateResources();
 }
 
-void RendererFramePipeline::update(Core::ECS::World& world, f32 delta){
+void RendererFramePipeline::update(Core::ECS::World& world, f32 delta)noexcept{
     static_cast<void>(world);
     static_cast<void>(delta);
 }

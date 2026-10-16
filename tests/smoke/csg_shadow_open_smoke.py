@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 
 from csg_shadow_reference import BYTE_TOLERANCE, TRANSMISSION, region_pixels
 from csg_shadow_smoke import capture_environment
@@ -164,7 +165,9 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--working-directory", type=Path, required=True)
-    parser.add_argument("--output-directory", type=Path, required=True)
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument("--output-directory", type=Path, help="Use the exact evidence directory with the existing freshness checks.")
+    output.add_argument("--output-root", type=Path, help="Preserve prior evidence and create a unique child directory for this run.")
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--route", choices=("hardware", "software"), required=True)
     parser.add_argument("--warning-policy", choices=("enabled", "disabled"), required=True, help="Build warning-log capability; canonical fin disables ordinary warnings.")
@@ -175,12 +178,18 @@ def parse_args(argv):
     args = parser.parse_args(argv)
     if args.frames < 120 or not math.isfinite(args.timeout) or args.timeout <= 0.:
         parser.error("at least 120 capture frames and a finite positive timeout are required")
-    args.output_directory = args.output_directory.resolve()
+    if args.output_directory is not None:
+        args.output_directory = args.output_directory.resolve()
     return args
 
 
 def main(argv):
     args = parse_args(argv)
+    if args.output_root is not None:
+        root = args.output_root.resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        args.output_directory = Path(tempfile.mkdtemp(prefix="csg_open_shadow_", dir=root))
+        print(f"Open-shadow capture evidence: {args.output_directory}", flush=True)
     args.output_directory.mkdir(parents=True, exist_ok=True)
     if any(args.output_directory.iterdir()):
         print("open-shadow output directory must be fresh", file=sys.stderr)

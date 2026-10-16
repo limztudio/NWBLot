@@ -28,6 +28,7 @@ namespace CommonArenaScope{
 inline constexpr Name s_InitializerArena("core/common/initializer");
 inline constexpr Name s_ApplicationEntryArgsArena("core/common/application_entry_args");
 inline constexpr Name s_NameSymbolsArena("core/common/name_symbols");
+inline constexpr Name s_NameSymbolsScratchArena("core/common/name_symbols/serialize_scratch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

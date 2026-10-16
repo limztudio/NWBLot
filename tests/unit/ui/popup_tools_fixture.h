@@ -32,7 +32,7 @@ using namespace UiWidgetTests;
 
 class PopupToolsSource final : public IListDataSource{
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return generation; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
     [[nodiscard]] virtual u64 revision()const override{
         if(closeComboOnRevision){
             ComboState* state = closeComboOnRevision;
@@ -41,10 +41,10 @@ public:
         }
         return contentRevision;
     }
-    [[nodiscard]] virtual u64 rowCount()const override{ return count; }
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ return index < count ? index + 1u : 0u; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? index + 1u : 0u; }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
         u64 index = 0u;
         if(value == 0u || value > count)
             return MakeUnexpected(Failure{});
@@ -52,7 +52,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         u64 index = 0u;
         if(start >= count)
             return MakeUnexpected(Failure{});
@@ -96,7 +96,7 @@ public:
         return index < count && index < 5u ? s_Labels[index] : StringView{};
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return index < count && index + 1u != 3u; }
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
 
 
 public:
@@ -162,7 +162,7 @@ protected:
         return m_builder.tooltip("tip", "anchor", "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId anchor(const AStringView parent = "panel")const{ return id("anchor", parent); }
+    [[nodiscard]] WidgetId anchor(const AStringView parent = "panel")const noexcept{ return id("anchor", parent); }
 
     [[nodiscard]] const HitTarget* menuHost()const noexcept{
         for(const HitTarget& entry : m_context.input().targets()){

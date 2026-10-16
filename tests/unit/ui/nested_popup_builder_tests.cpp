@@ -56,8 +56,8 @@ protected:
 
 
 
-    [[nodiscard]] WidgetId parentId()const{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
-    [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }
+    [[nodiscard]] WidgetId parentId()const noexcept{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
+    [[nodiscard]] WidgetId childId()const noexcept{ return MakeWidgetId(parentId(), "child"); }
 
     [[nodiscard]] bool beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());

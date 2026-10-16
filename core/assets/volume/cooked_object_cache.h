@@ -44,7 +44,8 @@ struct CookedObjectPayloadView{
     AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& seenVirtualPathHashes
+    VirtualPathHashSet& seenVirtualPathHashes,
+    ScratchArena& scratchArena
 );
 [[nodiscard]] Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Core::Assets::AssetBytes& inOutObjectBytes);
 

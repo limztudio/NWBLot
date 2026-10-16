@@ -42,7 +42,7 @@ public:
 
 
 protected:
-    virtual void startNativeRequest(ClipboardRequestToken, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)override{}
+    virtual void startNativeRequest(ClipboardRequestToken, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{}
 };
 
 inline constexpr UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };

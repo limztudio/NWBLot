@@ -55,7 +55,7 @@ static bool ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const C
 
     SourceMeshStreams& streams = *streamsResult;
     MeshCookSourceStreams::CopySourceStreams(streams, outEntry);
-    return MeshCookMeshlets::BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry, cpuScheduler);
+    return MeshCookMeshlets::BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry, cpuScheduler, scratchArena);
 }
 
 static bool ValidateMeshAssetFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){

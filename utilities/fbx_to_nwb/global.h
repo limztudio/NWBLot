@@ -48,7 +48,9 @@ namespace UtilityDetail{
 
 
 inline constexpr Name s_UtilityArena("utilities/fbx_to_nwb/utility");
-inline constexpr Name s_SourceTangentRebuildScratch("utilities/fbx_to_nwb/source_tangent_rebuild");
+inline constexpr Name s_MeshBuildScratch("utilities/fbx_to_nwb/mesh_build");
+inline constexpr Name s_MeshRefreshScratch("utilities/fbx_to_nwb/mesh_refresh");
+inline constexpr Name s_AssetWriteScratch("utilities/fbx_to_nwb/asset_write");
 
 inline Core::Alloc::GlobalArena& Arena(){
     static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
@@ -78,6 +80,12 @@ using HashMap = DefaultHashMap<K, V, Core::Alloc::GlobalArena, UtilityDetail::Ar
 
 template<typename T>
 using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+
+template<typename T>
+using UtilityScratchVector = ::Vector<T, Core::Alloc::ScratchArena>;
+
+template<typename K, typename V, typename Hash = Hasher<K>, typename Equal = EqualTo<K>>
+using UtilityScratchMap = ::HashMap<K, V, Core::Alloc::ScratchArena, Hash, Equal>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

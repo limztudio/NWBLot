@@ -4,6 +4,8 @@
 
 #include "telemetry_test_helpers.h"
 
+#include <core/alloc/scratch.h>
+
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
 
@@ -159,7 +161,8 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
     ASSERT_EQ(report.summary.parseFailureCount, 0u);
@@ -212,7 +215,8 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult3);
     report = Move(*reportResult3);
     ASSERT_EQ(report.summary.frameGraphFrameCount, s_ExpectedDualCount);
@@ -223,7 +227,7 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
 
     recorder.clear();
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
-    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult4);
     report = Move(*reportResult4);
     ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
@@ -279,7 +283,8 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, original.data(), original.size(), 4u));
 
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult5);
     report = Move(*reportResult5);
     EXPECT_EQ(report.summary.eventCount, 4u);

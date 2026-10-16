@@ -72,7 +72,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         u64 index = 0u;
         if(start >= count)
             return MakeUnexpected(Failure{});
@@ -92,7 +92,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual StringView text(u64)const override{ return "row"; }
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
 
     [[nodiscard]] virtual bool enabled(const u64 index)const override{
         ++enabledCalls;
@@ -101,7 +101,7 @@ public:
         return index < count && keyValue != disabledKey;
     }
 
-    void arm(const CallbackStage::Enum stage, const CallbackMutation::Enum mutation, const u64 selected = 8u){
+    void arm(const CallbackStage::Enum stage, const CallbackMutation::Enum mutation, const u64 selected = 8u)noexcept{
         m_stage = stage;
         m_mutation = mutation;
         m_selected = selected;

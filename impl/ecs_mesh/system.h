@@ -46,7 +46,7 @@ public:
 
 
 public:
-    virtual void update(Core::ECS::World& world, f32 delta)override;
+    virtual void update(Core::ECS::World& world, f32 delta)noexcept override;
 
 public:
     [[nodiscard]] MeshComponent* findMesh(Core::ECS::EntityID entity);

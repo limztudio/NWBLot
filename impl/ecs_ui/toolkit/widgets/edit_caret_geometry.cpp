@@ -101,8 +101,7 @@ namespace __hidden_ui_edit_caret_geometry{
 }
 
 [[nodiscard]] static u32 LineForByte(const TextLayout& layout, const usize byte)noexcept{
-    const auto next = LowerBound(layout.lines().begin(), layout.lines().end(), byte, [](const TextLine& line, usize value)noexcept{ return line.byteBegin <= value; }
-    );
+    const auto next = LowerBound(layout.lines().begin(), layout.lines().end(), byte, [](const TextLine& line, usize value)noexcept{ return line.byteBegin <= value; });
     return static_cast<u32>(next - layout.lines().begin() - 1);
 }
 
@@ -129,8 +128,7 @@ namespace __hidden_ui_edit_caret_geometry{
     if(line.clusterCount != 0u){
         const auto firstCluster = layout.clusters().begin() + line.firstCluster;
         const auto lastCluster = firstCluster + line.clusterCount;
-        const auto cluster = LowerBound(firstCluster, lastCluster, byte, [](const TextCluster& item, usize value)noexcept{ return item.byteEnd < value; }
-        );
+        const auto cluster = LowerBound(firstCluster, lastCluster, byte, [](const TextCluster& item, usize value)noexcept{ return item.byteEnd < value; });
         if(cluster == lastCluster || byte < cluster->byteBegin)
             return MakeUnexpected(Failure{});
         if(byte == cluster->byteBegin || byte == cluster->byteEnd)

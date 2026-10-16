@@ -148,7 +148,7 @@ AString NodeName(const ufbx_node* node, const usize fallbackIndex){
     return out.str();
 }
 
-Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices){
+Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     SkeletonOutputData outData;
 
     if(joints.size() != bindPoseMatrices.size()){
@@ -164,9 +164,9 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
         return MakeUnexpected(Failure{});
     }
 
-    HashMap<const ufbx_node*, usize> sourceJointLookup;
+    UtilityScratchMap<const ufbx_node*, usize> sourceJointLookup(scratchArena);
     sourceJointLookup.reserve(joints.size());
-    UtilityVector<AString> sortNames;
+    UtilityScratchVector<AString> sortNames(scratchArena);
     sortNames.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         ufbx_node* joint = joints[jointIndex];
@@ -182,7 +182,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
         sortNames.push_back(NodeName(joint, jointIndex));
     }
 
-    UtilityVector<u32> parentIndices;
+    UtilityScratchVector<u32> parentIndices(scratchArena);
     parentIndices.resize(joints.size(), s_MissingSourceStreamIndex);
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         const ufbx_node* parent = joints[jointIndex]->parent;
@@ -194,7 +194,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
             parentIndices[jointIndex] = static_cast<u32>(foundParent.value());
     }
 
-    UtilityVector<u32> parentDepths;
+    UtilityScratchVector<u32> parentDepths(scratchArena);
     parentDepths.resize(joints.size(), 0u);
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         u32 depth = 0u;
@@ -210,7 +210,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
         parentDepths[jointIndex] = depth;
     }
 
-    UtilityVector<usize> sortedJointIndices;
+    UtilityScratchVector<usize> sortedJointIndices(scratchArena);
     sortedJointIndices.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
         sortedJointIndices.push_back(jointIndex);
@@ -276,7 +276,7 @@ u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
     return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
 }
 
-Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh){
+Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena){
     PositionAlignedSkinnedMesh result;
     SourceMeshStreams& outMesh = result.mesh;
     UtilityVector<MeshSkinInfluence>& outPositionSkin = result.skin;
@@ -293,7 +293,7 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
     outMesh.positions.reserve(sourceMesh.vertexRefs.size());
     outPositionSkin.reserve(sourceMesh.vertexRefs.size());
 
-    HashMap<u64, u32> positionSkinLookup;
+    UtilityScratchMap<u64, u32> positionSkinLookup(scratchArena);
     positionSkinLookup.reserve(sourceMesh.vertexRefs.size());
     for(const SourceVertexRef& sourceRef : sourceMesh.vertexRefs){
         const u64 key = PositionSkinKey(sourceRef.position, sourceRef.skin);

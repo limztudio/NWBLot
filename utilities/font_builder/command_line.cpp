@@ -52,7 +52,7 @@ int Run(const int argc, char** argv){
                 }
                 Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
                 auto payload = Bake(options, UtilityDetail::Arena(), scratch);
-                if(!payload || !WriteOutputs(options, *payload))
+                if(!payload || !WriteOutputs(options, *payload, scratch))
                     return 1;
                 NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups"), PathToString<tchar>(options.output), payload->glyphs.size(), payload->groups.size());
                 return 0;

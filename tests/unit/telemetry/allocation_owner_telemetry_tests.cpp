@@ -5,6 +5,8 @@
 #include <tests/common/test_context.h>
 #include <tests/unit/telemetry/telemetry_test_helpers.h>
 
+#include <core/alloc/scratch.h>
+
 #include <core/common/name_symbols.h>
 #include <core/perf/session.h>
 #include <core/telemetry/session.h>
@@ -359,7 +361,8 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     EXPECT_NE(FindOwnerEvent(testArena.arena, capture.view(), heapName, Perf::MemorySource::HeapBacking), nullptr);
 
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, capture.view());
+    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/json_checks"));
+    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, capture.view(), scratchArena);
     ASSERT_TRUE(reportResult1);
     report = Move(*reportResult1);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -371,7 +374,6 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     ASSERT_NE(deltaBegin, AStringView::npos);
     const AStringView ownerFields = ownerRecord.substr(0u, deltaBegin);
     const AStringView deltaFields = ownerRecord.substr(deltaBegin);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/json_checks"));
     ExpectJsonNumber(scratchArena, ownerFields, "frameIndex", 43u);
     ExpectJsonNumber(scratchArena, ownerFields, "reservedBytes", retired.reservedBytes);
     ExpectJsonNumber(scratchArena, ownerFields, "usedBytes", retired.usedBytes);
@@ -437,7 +439,8 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
     const Telemetry::PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, capture.view());
+    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/shared_arena_peak_json_checks"));
+    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, capture.view(), scratchArena);
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -445,7 +448,6 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
     const AStringView record = FindOwnerJsonRecord(json, ownerName, "\"source\": \"arena\"");
     ASSERT_FALSE(record.empty());
     EXPECT_NE(record.find("\"peakBasis\": \"largestArena\""), AStringView::npos);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/shared_arena_peak_json_checks"));
     ExpectJsonNumber(scratchArena, record, "usedBytes", firstBytes);
     ExpectJsonNumber(scratchArena, record, "peakUsedBytes", Max(firstBytes, secondBytes));
 }
@@ -466,7 +468,8 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
         ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
     }
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/heap_json_checks"));
+    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult3);
     report = Move(*reportResult3);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -487,7 +490,6 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"arena\"").empty());
     const AStringView heapRecord = FindOwnerJsonRecord(json, owner, "\"source\": \"heapBacking\"");
     ASSERT_FALSE(heapRecord.empty());
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/heap_json_checks"));
     ExpectJsonNumber(scratchArena, heapRecord, "usedBytes", 300u);
     ExpectJsonNumber(scratchArena, heapRecord, "peakUsedBytes", 3000u);
 }
@@ -522,7 +524,8 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, firstOwner, "Producer Display Name", MakeSnapshot(firstOwner, Perf::MemorySource::ExplicitScope), TelemetryTestDetail::MakeTestMemoryDelta(-1), 93u));
     ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, unknownOwner, unknownHashText, MakeSnapshot(unknownOwner, Perf::MemorySource::HeapBacking), TelemetryTestDetail::MakeTestMemoryDelta(-1), 94u));
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult4);
     report = Move(*reportResult4);
     const AStringView beforeJson(report.json.data(), report.json.size());
@@ -533,7 +536,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     AString<Core::Alloc::GlobalArena> namesymText(testArena.arena);
     StringAppendFormat(namesymText, "{}\tproducer=runtime\n{}\truntime\tOwners/Loaded First\n{}\truntime\tOwners/Loaded Second\n", NameSymbols::s_FileHeader, firstHashText, secondHashText);
     ASSERT_TRUE(NameSymbols::LoadFromMemory(AStringView(namesymText.data(), namesymText.size())));
-    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult5);
     report = Move(*reportResult5);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);

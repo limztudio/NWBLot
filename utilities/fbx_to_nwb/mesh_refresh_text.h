@@ -43,9 +43,9 @@ struct SkinReference{
 [[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs)noexcept;
 [[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName);
 [[nodiscard]] AString WriteSkinInfluenceList(const UtilityVector<MeshSkinInfluence>& influences);
-[[nodiscard]] bool AddReplacement(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText);
-[[nodiscard]] bool AppendMeshReplacements(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after);
-[[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityVector<TextReplacement>& replacements);
+[[nodiscard]] bool AddReplacement(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText);
+[[nodiscard]] bool AppendMeshReplacements(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after);
+[[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityScratchVector<TextReplacement>& replacements);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

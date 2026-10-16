@@ -52,7 +52,7 @@ nested geometry easier to inspect.
 python -m launcher smoke refraction --config dbg --refraction-case torus
 ```
 
-Generate all eighty-eight actual framebuffer captures and a portable offline gallery:
+Generate all 128 framebuffer captures across 32 cases and four variants, plus a portable offline gallery:
 
 ```powershell
 python tests/smoke/refraction_gallery_smoke.py `

@@ -68,7 +68,7 @@ public:
         return index < count && rawKey(index) != disabled;
     }
 
-    void resetCounters()const{
+    void resetCounters()const noexcept{
         keyCalls = 0u;
         lookupCalls = 0u;
         searchCalls = 0u;
@@ -133,9 +133,9 @@ protected:
         return prepare(generation, options, bounds) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId host(const AStringView key = "combo")const{ return id(key, "panel"); }
-    [[nodiscard]] WidgetId popup(const AStringView key = "combo")const{ return MakeWidgetId(host(key), "popup"); }
-    [[nodiscard]] WidgetId list(const AStringView key = "combo")const{ return MakeWidgetId(host(key), "rows"); }
+    [[nodiscard]] WidgetId host(const AStringView key = "combo")const noexcept{ return id(key, "panel"); }
+    [[nodiscard]] WidgetId popup(const AStringView key = "combo")const noexcept{ return MakeWidgetId(host(key), "popup"); }
+    [[nodiscard]] WidgetId list(const AStringView key = "combo")const noexcept{ return MakeWidgetId(host(key), "rows"); }
 
     [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = "combo")const noexcept{
         return MakeWidgetPartId(MakeWidgetId(list(combo), "rows"), key);

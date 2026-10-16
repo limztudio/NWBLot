@@ -54,14 +54,10 @@ bool MergeGatheredGraphicsAsset(const Name& virtualPath, Core::Assets::AssetByte
 
     Core::Assets::AssetArena& arena = existingPayload.get_allocator().arena();
     Core::Alloc::ScratchArena scratchArena(Name("assets_graphics/gather"));
-    Core::GraphicsBytes incomingBytes(arena);
-    incomingBytes.reserve(incomingSize);
-    BinaryDetail::AppendBytesNoReserveUnchecked(incomingBytes, incomingPayload, incomingSize);
-
-    auto parsedRecords = Core::ShaderArchive::DeserializeIndex(arena, existingPayload);
+    auto parsedRecords = Core::ShaderArchive::DeserializeIndex(arena, { existingPayload.data(), existingPayload.size() });
     if(!parsedRecords)
         return false;
-    auto parsedIncomingRecords = Core::ShaderArchive::DeserializeIndex(arena, incomingBytes);
+    auto parsedIncomingRecords = Core::ShaderArchive::DeserializeIndex(arena, { static_cast<const u8*>(incomingPayload), incomingSize });
     if(!parsedIncomingRecords)
         return false;
     auto& records = *parsedRecords;

@@ -35,7 +35,17 @@ void ConfigureCompressor(basisu::basis_compressor_params& parameters, basisu::jo
     parameters.m_pJob_pool = &jobPool;
 }
 
-[[nodiscard]] bool EncodeMip(basisu::basis_compressor_params& parameters, const basist::basis_tex_format format, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload, const MipEncoderDiagnostics& diagnostics, bool* const inOutHasAlpha){
+[[nodiscard]] bool EncodeMip(
+    Core::Alloc::ScratchArena& scratchArena,
+    basisu::basis_compressor_params& parameters,
+    const basist::basis_tex_format format,
+    const u32 planeCount,
+    const u32 width,
+    const u32 height,
+    TexturePayload& inOutPayload,
+    const MipEncoderDiagnostics& diagnostics,
+    bool* const inOutHasAlpha
+){
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
         NWB_LOGGER_ERROR(diagnostics.initializeFailure);
@@ -51,7 +61,7 @@ void ConfigureCompressor(basisu::basis_compressor_params& parameters, basisu::jo
         NWB_LOGGER_ERROR(diagnostics.incompleteFailure);
         return false;
     }
-    if(!AppendCanonicalMip(backendOutput, 0u, planeCount, width, height, inOutPayload))
+    if(!AppendCanonicalMip(scratchArena, backendOutput, 0u, planeCount, width, height, inOutPayload))
         return false;
     if(inOutHasAlpha)
         *inOutHasAlpha = *inOutHasAlpha || compressor.get_any_source_image_has_alpha();
@@ -90,7 +100,7 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
 // Basis slices are source-major; m_source_file_index restores on-disk plane order.
 
 
-[[nodiscard]] bool AppendCanonicalMip(const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload){
+[[nodiscard]] bool AppendCanonicalMip(Core::Alloc::ScratchArena& scratchArena, const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload){
     if(planeCount == 0u || backendOutput.m_slice_desc.size() != backendOutput.m_slice_image_data.size())
         return false;
 
@@ -112,7 +122,7 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
         return false;
     }
 
-    Vector<usize> sliceForPlane(planeCount, s_InvalidBackendSlice);
+    ::Vector<usize, Core::Alloc::ScratchArena> sliceForPlane(planeCount, s_InvalidBackendSlice, scratchArena);
     for(usize backendSliceIndex = 0u; backendSliceIndex < backendOutput.m_slice_desc.size(); ++backendSliceIndex){
         const basisu::basisu_backend_slice_desc& descriptor = backendOutput.m_slice_desc[backendSliceIndex];
         if(descriptor.m_mip_index != backendMipIndex)

@@ -9,6 +9,7 @@
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_csg/components.h>
 
+#include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
@@ -48,13 +49,14 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
         }
     }
     const u32 expectedSlices = csg ? (rayCapacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
-    Vector<u32, NWB::Core::Telemetry::TelemetryArena> uniquePackets(context.objectArena);
+    Core::Alloc::ScratchArena scratchArena(Name("tests/reflection_slice_packets/scratch"));
+    Vector<u32, Core::Alloc::ScratchArena> uniquePackets(scratchArena);
     uniquePackets.reserve(expectedSlices);
-    Vector<Name, NWB::Core::Telemetry::TelemetryArena> sliceIdentities(context.objectArena);
+    Vector<Name, Core::Alloc::ScratchArena> sliceIdentities(scratchArena);
     sliceIdentities.reserve(expectedSlices);
     for(u32 slice = 0u; slice < expectedSlices; ++slice)
         sliceIdentities.push_back(csg ? NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice) : Name("render.reflection.hardware"));
-    Vector<u8, NWB::Core::Telemetry::TelemetryArena> observedSlices(context.objectArena);
+    Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
     observedSlices.resize(expectedSlices, 0u);
     u32 hardwareNodes = 0u;
     u32 indexedSlices = 0u;

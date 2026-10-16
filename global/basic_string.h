@@ -49,6 +49,12 @@ using AInteropString = BasicInteropString<char>;
 using WInteropString = BasicInteropString<wchar>;
 using TInteropString = BasicInteropString<tchar>;
 
+template<typename T>
+using BasicStreamBuffer = std::basic_streambuf<T>;
+using AStreamBuffer = BasicStreamBuffer<char>;
+using WStreamBuffer = BasicStreamBuffer<wchar>;
+using TStreamBuffer = BasicStreamBuffer<tchar>;
+
 template<typename T, typename ArenaT>
 using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 template<typename ArenaT>

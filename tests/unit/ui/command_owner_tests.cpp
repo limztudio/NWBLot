@@ -71,13 +71,13 @@ public:
 
 
 protected:
-    void bind(const HitTarget& owner){
+    void bind(const HitTarget& owner)noexcept{
         m_targets[0u].commandOwner = owner.id;
         m_targets[0u].commandOwnerDeclarationGeneration = owner.declarationGeneration;
         m_targets[0u].commandControl = owner.control;
     }
 
-    void clearBinding(){
+    void clearBinding()noexcept{
         m_targets[0u].commandOwner = {};
         m_targets[0u].commandOwnerDeclarationGeneration = 0u;
         m_targets[0u].commandControl = {};

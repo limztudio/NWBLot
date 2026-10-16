@@ -19,6 +19,7 @@
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
@@ -523,7 +524,8 @@ public:
         const BenchmarkMaterialRef& material = s_SkinningBenchmarkMaterial;
         const u32 characterCount = m_staticPreview ? 1u : (m_fastSmoke ? s_FastSmokeCharacterCount : s_CharacterCount);
         m_entities.reserve(characterCount);
-        Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> modelOwners(m_context.objectArena);
+        NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/skinning_culling/model_owners"));
+        Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::ScratchArena> modelOwners(scratchArena);
         modelOwners.reserve(characterCount);
 
         for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){

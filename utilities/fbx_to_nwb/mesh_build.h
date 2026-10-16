@@ -43,15 +43,22 @@ public:
         const SIMDVectorSingle skinWeights
     )noexcept;
     template<typename VisitTriangle>
-    [[nodiscard]] static bool VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, UtilityVector<u32>& inOutTriangleIndices, VisitTriangle&& visitTriangle);
-    [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, UtilityVector<u32>& inOutTriangleIndices);
+    [[nodiscard]] static bool VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, UtilityScratchVector<u32>& inOutTriangleIndices, VisitTriangle&& visitTriangle);
+    [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
+        const ufbx_mesh& mesh,
+        const ufbx_node& node,
+        const ImportOptions& options,
+        const bool wantsSkinning,
+        UtilityScratchVector<u32>& inOutTriangleIndices,
+        Core::Alloc::ScratchArena& scratchArena
+    );
     static bool AppendInstanceMesh(
         const MeshInstance& instance,
         const ImportOptions& options,
         const bool wantsSkinning,
         const NormalMode::Enum normalMode,
         const Vec4& defaultColor,
-        UtilityVector<u32>& inOutTriangleIndices,
+        UtilityScratchVector<u32>& inOutTriangleIndices,
         SourceMeshBuildContext& inOutMesh,
         FbxSkinDetail::ExportContext& inOutSkinContext,
         bool& inOutSawVertexColors,
@@ -70,7 +77,7 @@ public:
 
 
 template<typename VisitTriangle>
-[[nodiscard]] bool FbxMeshBuild::VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, UtilityVector<u32>& inOutTriangleIndices, VisitTriangle&& visitTriangle){
+[[nodiscard]] bool FbxMeshBuild::VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, UtilityScratchVector<u32>& inOutTriangleIndices, VisitTriangle&& visitTriangle){
     if(!FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
         return false;
     for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){

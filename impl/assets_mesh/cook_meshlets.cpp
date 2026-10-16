@@ -123,13 +123,13 @@ bool MeshCookMeshlets::AddVisitedMeshletTriangle(
     const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const u32 triangleIndex,
-    Core::Assets::AssetVector<u32>& localSourceVertexRefs,
-    Core::Assets::AssetVector<u32>& localTriangleIndices,
+    Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
+    Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
-    Core::Assets::AssetVector<u32>& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
+    Vector<u32, Core::Alloc::ScratchArena>& frontier,
+    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
     if(!AddMeshletTriangleToBuilder(nwbFilePath, metaKind, triangle, localSourceVertexRefs, meshlet, primitiveIndices))
@@ -152,15 +152,15 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
     const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const usize seedSearchOffset,
-    Core::Assets::AssetVector<u32>& localSourceVertexRefs,
-    Core::Assets::AssetVector<u32>& localTriangleIndices,
+    Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
+    Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
     Core::CpuTaskScheduler& cpuScheduler,
-    Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates,
-    Core::Assets::AssetVector<u32>& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
+    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
+    Vector<u32, Core::Alloc::ScratchArena>& frontier,
+    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
 ){
     while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
         if(frontier.empty()){

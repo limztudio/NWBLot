@@ -28,7 +28,7 @@ public:
         static_cast<void>(graph);
         return Core::GpuTaskGraphOutputLayer{};
     }
-    virtual void acceptTaskGraphOutputLayer(const u64, const Core::QueueSubmissionToken&)override{
+    virtual void acceptTaskGraphOutputLayer(const u64, const Core::QueueSubmissionToken&)noexcept override{
         ++m_acceptanceCount;
     }
 

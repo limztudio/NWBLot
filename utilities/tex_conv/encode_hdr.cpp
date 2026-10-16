@@ -301,7 +301,7 @@ struct HdrAlphaMips{
     return alpha;
 }
 
-[[nodiscard]] bool EncodeHdrMip(const HdrImagePlanes& planes, const TextureDimension::Enum dimension, TexturePayload& inOutPayload){
+[[nodiscard]] bool EncodeHdrMip(Core::Alloc::ScratchArena& scratchArena, const HdrImagePlanes& planes, const TextureDimension::Enum dimension, TexturePayload& inOutPayload){
     if(!ValidateHdrRgbPlanes(planes))
         return false;
 
@@ -319,14 +319,14 @@ struct HdrAlphaMips{
     parameters.m_source_images_hdr = planes;
     parameters.m_mip_gen = false;
 
-    return EncodeBackendDetail::EncodeMip(parameters, basist::basis_tex_format::cUASTC_HDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
+    return EncodeBackendDetail::EncodeMip(scratchArena, parameters, basist::basis_tex_format::cUASTC_HDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
         NWB_TEXT("tex_conv: Basis Universal failed to initialize an HDR mip encoder."),
         NWB_TEXT("tex_conv: UASTC HDR mip encoding failed"),
         NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR mip.")
     });
 }
 
-[[nodiscard]] bool EncodeHdrAlphaMip(const ImagePlanes& planes, const TextureDimension::Enum dimension, TexturePayload& inOutPayload){
+[[nodiscard]] bool EncodeHdrAlphaMip(Core::Alloc::ScratchArena& scratchArena, const ImagePlanes& planes, const TextureDimension::Enum dimension, TexturePayload& inOutPayload){
     if(planes.empty() || planes.size() > Limit<u32>::s_Max)
         return false;
 
@@ -355,7 +355,7 @@ struct HdrAlphaMips{
     parameters.m_source_images = planes;
     parameters.m_mip_gen = false;
 
-    return EncodeBackendDetail::EncodeMip(parameters, basist::basis_tex_format::cUASTC_LDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
+    return EncodeBackendDetail::EncodeMip(scratchArena, parameters, basist::basis_tex_format::cUASTC_LDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
         NWB_TEXT("tex_conv: Basis Universal failed to initialize an HDR alpha mip encoder."),
         NWB_TEXT("tex_conv: UASTC HDR alpha mip encoding failed"),
         NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR alpha mip.")
@@ -387,7 +387,7 @@ struct HdrAlphaMips{
     return true;
 }
 
-[[nodiscard]] bool EncodeHdrAlphaMips(const VolumeMips& alphaMips, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, TexturePayload& inOutPayload){
+[[nodiscard]] bool EncodeHdrAlphaMips(Core::Alloc::ScratchArena& scratchArena, const VolumeMips& alphaMips, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, TexturePayload& inOutPayload){
     if(alphaMips.empty())
         return false;
 
@@ -395,7 +395,7 @@ struct HdrAlphaMips{
     ResetPayload(alphaPayload, dimension, width, height, depth, TexturePayloadFormat::UastcLdr4x4, false);
     alphaPayload.mips.reserve(alphaMips.size());
     for(const ImagePlanes& alphaMip : alphaMips){
-        if(!EncodeHdrAlphaMip(alphaMip, dimension, alphaPayload))
+        if(!EncodeHdrAlphaMip(scratchArena, alphaMip, dimension, alphaPayload))
             return false;
     }
     if(!ValidateHdrAlphaPayloadLayout(inOutPayload, alphaPayload))
@@ -405,7 +405,7 @@ struct HdrAlphaMips{
     return true;
 }
 
-[[nodiscard]] Expected<TexturePayload> EncodeHdrMipChain(HdrVolumeMips& inOutMipPlanes, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth){
+[[nodiscard]] Expected<TexturePayload> EncodeHdrMipChain(Core::Alloc::ScratchArena& scratchArena, HdrVolumeMips& inOutMipPlanes, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth){
     TexturePayload payload;
     if(inOutMipPlanes.empty())
         return MakeUnexpected(Failure{});
@@ -417,7 +417,7 @@ struct HdrAlphaMips{
     ResetPayload(payload, dimension, width, height, depth, TexturePayloadFormat::UastcHdr4x4, false);
     payload.mips.reserve(inOutMipPlanes.size());
     for(const HdrImagePlanes& mipPlanes : inOutMipPlanes){
-        if(!EncodeHdrMip(mipPlanes, dimension, payload))
+        if(!EncodeHdrMip(scratchArena, mipPlanes, dimension, payload))
             return MakeUnexpected(Failure{});
     }
 
@@ -425,13 +425,13 @@ struct HdrAlphaMips{
     payload.alphaConstantUnorm8 = alpha->constantUnorm8;
     payload.hasAlpha = alpha->mode != TextureAlphaMode::Opaque;
     if(alpha->mode == TextureAlphaMode::SeparateUastcLdr4x4){
-        if(!EncodeHdrAlphaMips(alpha->mips, dimension, width, height, depth, payload))
+        if(!EncodeHdrAlphaMips(scratchArena, alpha->mips, dimension, width, height, depth, payload))
             return MakeUnexpected(Failure{});
     }
     return payload;
 }
 
-[[nodiscard]] Expected<TexturePayload> EncodeHdr2DOrCube(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const AlphaSource& alphaSource){
+[[nodiscard]] Expected<TexturePayload> EncodeHdr2DOrCube(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const TextureDimension::Enum dimension, const AlphaSource& alphaSource){
     const u32 planeCount = dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
         return MakeUnexpected(Failure{});
@@ -462,10 +462,10 @@ struct HdrAlphaMips{
             return MakeUnexpected(Failure{});
         mipPlanes[mipIndex] = Move(*mip);
     }
-    return EncodeHdrMipChain(mipPlanes, dimension, width, height, 1u);
+    return EncodeHdrMipChain(scratchArena, mipPlanes, dimension, width, height, 1u);
 }
 
-[[nodiscard]] Expected<TexturePayload> EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource){
+[[nodiscard]] Expected<TexturePayload> EncodeHdrVolume(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const AlphaSource& alphaSource){
     auto sourcePlanes = LoadPlanesFromFiles<HdrPlaneLoader>(inputPaths);
     if(!sourcePlanes || !ValidateHdrRgbPlanes(*sourcePlanes) || !ApplyHdrAlphaSource(alphaSource, *sourcePlanes))
         return MakeUnexpected(Failure{});
@@ -489,7 +489,7 @@ struct HdrAlphaMips{
             return MakeUnexpected(Failure{});
         mipVolumes[mipIndex] = Move(*mip);
     }
-    return EncodeHdrMipChain(mipVolumes, TextureDimension::Texture3D, width, height, depth);
+    return EncodeHdrMipChain(scratchArena, mipVolumes, TextureDimension::Texture3D, width, height, depth);
 }
 
 

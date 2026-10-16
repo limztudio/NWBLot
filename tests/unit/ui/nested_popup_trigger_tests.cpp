@@ -44,12 +44,12 @@ protected:
     }
 
 
-    [[nodiscard]] WidgetId parentId()const{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
-    [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }
-    [[nodiscard]] WidgetId fieldId()const{ return MakeWidgetId(childId(), "combo"); }
-    [[nodiscard]] WidgetId rowsId()const{ return MakeWidgetId(fieldId(), "rows"); }
-    [[nodiscard]] WidgetId anchorId()const{ return MakeWidgetId(childId(), "anchor"); }
-    [[nodiscard]] WidgetId menuRows()const{ return MakeWidgetId(MakeWidgetId(childId(), "menu"), "rows"); }
+    [[nodiscard]] WidgetId parentId()const noexcept{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
+    [[nodiscard]] WidgetId childId()const noexcept{ return MakeWidgetId(parentId(), "child"); }
+    [[nodiscard]] WidgetId fieldId()const noexcept{ return MakeWidgetId(childId(), "combo"); }
+    [[nodiscard]] WidgetId rowsId()const noexcept{ return MakeWidgetId(fieldId(), "rows"); }
+    [[nodiscard]] WidgetId anchorId()const noexcept{ return MakeWidgetId(childId(), "anchor"); }
+    [[nodiscard]] WidgetId menuRows()const noexcept{ return MakeWidgetId(MakeWidgetId(childId(), "menu"), "rows"); }
 
     [[nodiscard]] WidgetId comboRow(const u64 key)const noexcept{
         return MakeWidgetPartId(MakeWidgetId(rowsId(), "rows"), key);

@@ -28,7 +28,7 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CrashBytes = Vector<u8, LogArena>;
+using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 inline constexpr u32 s_MaxWindowsStackFrames = 128u;
 inline constexpr char s_HexDigitFirst = '0';
@@ -83,9 +83,9 @@ struct MinidumpRecords{
 };
 
 struct DumpMemoryReader{
-    Vector<DumpMemoryRange, LogArena> ranges;
+    Vector<DumpMemoryRange, Core::Alloc::ScratchArena> ranges;
 
-    explicit DumpMemoryReader(LogArena& arena)
+    explicit DumpMemoryReader(Core::Alloc::ScratchArena& arena)
         : ranges(arena)
     {}
 };
@@ -158,6 +158,36 @@ template<typename T>
 }
 
 [[nodiscard]] static Expected<void> BuildDumpMemoryReader(const DumpImage& dumpImage, DumpMemoryReader& outReader){
+    usize rangeCapacity = 0u;
+    const MINIDUMP_STREAM_TYPE streamTypes[] = { ThreadListStream, MemoryListStream, Memory64ListStream };
+    for(const MINIDUMP_STREAM_TYPE streamType : streamTypes){
+        const auto selected = ReadMinidumpStream(dumpImage, streamType);
+        if(!selected)
+            return MakeUnexpected(Failure{});
+        if(!*selected)
+            continue;
+        const DumpImage& stream = **selected;
+        u64 count = 0u;
+        if(streamType == Memory64ListStream){
+            const auto decoded = stream.read<ULONG64>(0u);
+            if(!decoded)
+                return MakeUnexpected(Failure{});
+            count = *decoded;
+        }
+        else{
+            const auto decoded = stream.read<ULONG32>(0u);
+            if(!decoded)
+                return MakeUnexpected(Failure{});
+            count = *decoded;
+        }
+        const usize recordsOffset = streamType == ThreadListStream ? offsetof(MINIDUMP_THREAD_LIST, Threads) : streamType == MemoryListStream ? offsetof(MINIDUMP_MEMORY_LIST, MemoryRanges) : offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges);
+        const usize recordStride = streamType == ThreadListStream ? sizeof(MINIDUMP_THREAD) : streamType == MemoryListStream ? sizeof(MINIDUMP_MEMORY_DESCRIPTOR) : sizeof(MINIDUMP_MEMORY_DESCRIPTOR64);
+        if(recordsOffset > stream.byteCount || count > static_cast<u64>((stream.byteCount - recordsOffset) / recordStride) || count > static_cast<u64>(Limit<usize>::s_Max - rangeCapacity))
+            return MakeUnexpected(Failure{});
+        rangeCapacity += static_cast<usize>(count);
+    }
+    outReader.ranges.reserve(rangeCapacity);
+
     const auto threadStream = ReadMinidumpStream(dumpImage, ThreadListStream);
     if(!threadStream)
         return MakeUnexpected(Failure{});
@@ -462,9 +492,9 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     return decodedAnyFrame;
 }
 
-bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport, Core::Alloc::ScratchArena& scratchArena){
     const Path dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
-    CrashBytes dumpBytes{arena};
+    CrashBytes dumpBytes{scratchArena};
     if(!ReadBinaryFile(dumpPath, dumpBytes) || dumpBytes.empty()){
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=";
         outReport += CrashNames::s_ProcessDumpFileName;
@@ -479,7 +509,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
         return false;
     }
 
-    DumpMemoryReader memoryReader(arena);
+    DumpMemoryReader memoryReader(scratchArena);
     if(!BuildDumpMemoryReader(dumpImage, memoryReader)){
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=minidump contains invalid memory ranges\n";
         return false;

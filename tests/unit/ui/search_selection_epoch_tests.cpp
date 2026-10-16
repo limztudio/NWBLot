@@ -51,7 +51,7 @@ public:
         return m_query.setSelection(m_anchor, m_caret);
     }
 
-    [[nodiscard]] u64 calls()const{ return m_calls; }
+    [[nodiscard]] u64 calls()const noexcept{ return m_calls; }
 
 
 private:
@@ -89,7 +89,7 @@ public:
 
     void arm(const SelectionMutation::Enum mutation){ m_probe.arm(mutation); }
     [[nodiscard]] u64 mutationCalls()const{ return m_probe.calls(); }
-    [[nodiscard]] u64 textCalls()const{ return m_textCalls; }
+    [[nodiscard]] u64 textCalls()const noexcept{ return m_textCalls; }
 
 
 private:
@@ -121,11 +121,11 @@ public:
     [[nodiscard]] virtual bool filter(const AStringView query)override{
         return m_probe.apply() && m_source.filter(query);
     }
-    [[nodiscard]] virtual const IListDataSource& filtered()const override{ return m_view; }
+    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return m_view; }
 
     void armFilter(const SelectionMutation::Enum mutation){ m_probe.arm(mutation); }
     [[nodiscard]] u64 filterMutationCalls()const{ return m_probe.calls(); }
-    [[nodiscard]] SelectionView& view(){ return m_view; }
+    [[nodiscard]] SelectionView& view()noexcept{ return m_view; }
 
 
 private:

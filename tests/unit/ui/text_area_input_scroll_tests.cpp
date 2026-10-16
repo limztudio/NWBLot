@@ -102,8 +102,8 @@ protected:
 
     [[nodiscard]] bool wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
 
-    [[nodiscard]] WidgetId area()const{ return id("area", "panel"); }
-    [[nodiscard]] WidgetId part(const AStringView key)const{ return MakeWidgetId(area(), key); }
+    [[nodiscard]] WidgetId area()const noexcept{ return id("area", "panel"); }
+    [[nodiscard]] WidgetId part(const AStringView key)const noexcept{ return MakeWidgetId(area(), key); }
 
     [[nodiscard]] bool framePopup(const u64 generation, PopupState& popup){
         PopupOptions options;

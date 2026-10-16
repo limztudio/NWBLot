@@ -151,7 +151,7 @@ Name ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringVi
     return Name(derivedHash);
 }
 
-Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, const GraphicsVector<Record>& records){
+Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, const Span<const Record> records){
     GraphicsBytes binary(arena);
 
     if(records.size() > Limit<u32>::s_Max){
@@ -236,7 +236,11 @@ Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, cons
     return binary;
 }
 
-Expected<GraphicsVector<ShaderArchive::Record>> ShaderArchive::DeserializeIndex(GraphicsArena& arena, const GraphicsBytes& binary){
+Expected<GraphicsVector<ShaderArchive::Record>> ShaderArchive::DeserializeIndex(GraphicsArena& arena, const BinaryByteView binary){
+    if(binary.size() != 0u && binary.data() == nullptr){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: nonempty byte view has no data"));
+        return MakeUnexpected(Failure{});
+    }
 
     usize cursor = 0;
 

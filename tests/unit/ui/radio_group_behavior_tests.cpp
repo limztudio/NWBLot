@@ -91,7 +91,7 @@ public:
         }
         return MakeUnexpected(Failure{});
     }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         u64 index = 0u;
         ++findCalls;
         if(start >= count || count > s_RadioGroupMaxChoices)
@@ -113,7 +113,7 @@ public:
         }
         return MakeUnexpected(Failure{});
     }
-    [[nodiscard]] virtual StringView text(u64)const override{ return "choice"; }
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "choice"; }
     [[nodiscard]] virtual bool enabled(const u64 index)const override{
         callback(CallbackPhase::Enabled);
         return index < s_RadioGroupMaxChoices && rows[static_cast<usize>(index)].enabled;

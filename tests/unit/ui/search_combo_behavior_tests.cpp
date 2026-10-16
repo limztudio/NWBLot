@@ -38,8 +38,8 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return generation; }
-    [[nodiscard]] virtual u64 revision()const override{ return revisionValue; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
 
     [[nodiscard]] virtual u64 rowCount()const override{
         if(changeQueryOnCount){
@@ -50,9 +50,9 @@ public:
         return count;
     }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ return index < count ? start + index + 1u : 0u; }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? start + index + 1u : 0u; }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
         u64 index = 0u;
         if(keyValue <= start || keyValue - start > count)
             return MakeUnexpected(Failure{});
@@ -60,7 +60,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 first, bool)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 first, bool)const noexcept override{
         u64 index = 0u;
         if(first >= count)
             return MakeUnexpected(Failure{});
@@ -68,8 +68,8 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual StringView text(u64)const override{ return "match"; }
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return index < count; }
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "match"; }
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count; }
 
 
 public:
@@ -103,15 +103,15 @@ public:
         return generation;
     }
 
-    [[nodiscard]] virtual u64 revision()const override{ return revisionValue; }
-    [[nodiscard]] virtual u64 rowCount()const override{ return count; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         ++keyCalls;
         return index < count ? index + 1u : 0u;
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
         u64 index = 0u;
         ++lookupCalls;
         if(keyValue == 0u || keyValue > count)
@@ -120,7 +120,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const noexcept override{
         u64 index = 0u;
         if(start >= count)
             return MakeUnexpected(Failure{});
@@ -128,8 +128,8 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual StringView text(u64)const override{ return "full row"; }
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return index < count; }
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "full row"; }
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count; }
 
     [[nodiscard]] virtual bool filter(const AStringView query)override{
         ++filterCalls;
@@ -163,7 +163,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] virtual const IListDataSource& filtered()const override{ return view; }
+    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return view; }
 
 
 private:

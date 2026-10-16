@@ -143,7 +143,8 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
         return result;
     }
 
-    auto report = BuildTelemetryReport(arena, recorder.view());
+    Core::Alloc::ScratchArena scratchArena(Name("logger/telemetry/report"));
+    auto report = BuildTelemetryReport(arena, recorder.view(), scratchArena);
     if(!report){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
         result.type = Core::Common::LogType::Error;

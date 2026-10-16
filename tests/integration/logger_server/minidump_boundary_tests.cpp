@@ -5,6 +5,7 @@
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
+#include <core/alloc/scratch.h>
 #include <core/crash/package_names.h>
 
 #include <global/filesystem/operations.h>
@@ -90,12 +91,13 @@ protected:
         summary.platform = "windows";
         summary.threadId = 1u;
         Log::CrashSymbolicationConfig config(m_testArena.arena);
-        return Log::BuildCrashSymbolicationReport(m_testArena.arena, m_directory, summary, config);
+        return Log::BuildCrashSymbolicationReport(m_testArena.arena, m_directory, summary, config, m_scratchArena);
     }
 
 
 protected:
     Tests::TestArena<> m_testArena;
+    Core::Alloc::ScratchArena m_scratchArena{ Name("tests/minidump_boundary/scratch") };
     ::Path<Core::Alloc::GlobalArena> m_directory;
     Tests::CapturingLogger m_logger;
     Core::Common::LoggerRegistrationGuard m_loggerGuard;

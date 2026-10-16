@@ -105,7 +105,7 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 // Keeping the toggle in the smoke project makes the current-frame -> re-bootstrap transition deterministic without adding a renderer test control.
 class FrameLaggedAsyncLightingToggleInputHandler final : public NWB::Core::IInputEventHandler{
 public:
-    bool keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)override{
+    virtual bool keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept override{
         static_cast<void>(scancode);
         static_cast<void>(mods);
         if(key != NWB::Core::Key::F1)
@@ -136,7 +136,7 @@ public:
 
 
 public:
-    virtual bool shouldRenderUnfocused()override{ return true; }
+    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
 };
 #endif
 

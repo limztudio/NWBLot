@@ -144,7 +144,7 @@ public:
     [[nodiscard]] bool validateResources(u32 width, u32 height, u32 sampleCount);
     void invalidateResources();
 
-    void update(Core::ECS::World& world, f32 delta);
+    void update(Core::ECS::World& world, f32 delta)noexcept;
 
     [[nodiscard]] bool prepareResources(Core::Framebuffer* framebuffer);
     void render(Core::Framebuffer* framebuffer);

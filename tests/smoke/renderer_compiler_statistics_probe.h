@@ -64,7 +64,7 @@ public:
     [[nodiscard]] bool start(Impl::RendererSystem& renderer, AStringView path);
     void stop();
     [[nodiscard]] bool write()const;
-    virtual bool shouldRenderUnfocused()override{ return true; }
+    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
     virtual void render(Core::Framebuffer*)override;
 
 

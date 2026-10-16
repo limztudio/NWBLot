@@ -29,8 +29,7 @@ namespace MaterialBindDetail{
 Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena){
     Metascript::Document doc(arena);
     CookString bindText{arena};
-    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, "Material bind", bindText, doc, [&](const AStringView text){ return doc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }
-    ))
+    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, "Material bind", bindText, doc, [&](const AStringView text){ return doc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }))
         return MakeUnexpected(Failure{});
     return doc;
 }

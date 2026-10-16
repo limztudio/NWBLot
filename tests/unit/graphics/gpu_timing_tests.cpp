@@ -65,12 +65,12 @@ public:
         ++m_nextScopeIndex;
         return { .index = index, .generation = 1u };
     }
-    virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)override{
+    virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)noexcept override{
         static_cast<void>(scope);
         static_cast<void>(seconds);
         static_cast<void>(sampleFrameIndex);
     }
-    virtual void publishFrame(const u64 publishFrameIndex)override{ static_cast<void>(publishFrameIndex); }
+    virtual void publishFrame(const u64 publishFrameIndex)noexcept override{ static_cast<void>(publishFrameIndex); }
 
 
 private:

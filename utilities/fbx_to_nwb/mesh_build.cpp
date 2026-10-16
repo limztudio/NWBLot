@@ -110,8 +110,15 @@ bool FbxMeshBuild::IsFiniteSourceTriangleCorner(
 }
 
 
-Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, UtilityVector<u32>& inOutTriangleIndices){
-    PositionNormalMap outNormals;
+Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
+    const ufbx_mesh& mesh,
+    const ufbx_node& node,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    UtilityScratchVector<u32>& inOutTriangleIndices,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    PositionNormalMap outNormals(scratchArena);
     outNormals.reserve(mesh.num_vertices);
 
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
@@ -156,7 +163,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
     const bool wantsSkinning,
     const NormalMode::Enum normalMode,
     const Vec4& defaultColor,
-    UtilityVector<u32>& inOutTriangleIndices,
+    UtilityScratchVector<u32>& inOutTriangleIndices,
     SourceMeshBuildContext& inOutMesh,
     FbxSkinDetail::ExportContext& inOutSkinContext,
     bool& inOutSawVertexColors,
@@ -197,9 +204,9 @@ bool FbxMeshBuild::AppendInstanceMesh(
         clusterJoints = Move(*jointMap);
     }
 
-    PositionNormalMap smoothNormals;
+    PositionNormalMap smoothNormals(inOutMesh.scratchArena);
     if(normalMode == NormalMode::Smooth){
-        auto normals = BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices);
+        auto normals = BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, inOutMesh.scratchArena);
         if(!normals)
             return false;
         smoothNormals = Move(*normals);

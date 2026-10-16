@@ -242,7 +242,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInsta
 Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection, const ImportOptions& options, bool wantsSkinning, const Vec4& defaultColor, Core::CpuTaskScheduler& cpuScheduler);
 
 [[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept;
-[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler);
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler);
 
 bool WriteNwbAsset(

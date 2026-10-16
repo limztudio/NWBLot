@@ -40,7 +40,7 @@ template<typename T>
 using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
-using CookEntryPathHashSet = CookHashSet<NameHash>;
+using CookEntryPathHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

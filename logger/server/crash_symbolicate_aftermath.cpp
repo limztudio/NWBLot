@@ -94,7 +94,7 @@ struct AftermathDecoder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport, Core::Alloc::ScratchArena& scratchArena){
     static_cast<void>(config);
 
     const Path dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
@@ -103,10 +103,11 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
 
 #if !defined(NWB_WITH_AFTERMATH)
     static_cast<void>(arena);
+    static_cast<void>(scratchArena);
     outReport += s_AftermathSectionHeader;
     outReport += s_AftermathSkippedReport;
 #else
-    Vector<u8, LogArena> dumpBytes(arena);
+    Vector<u8, Core::Alloc::ScratchArena> dumpBytes(scratchArena);
     if(!ReadBinaryFile(dumpPath, dumpBytes) || dumpBytes.empty()){
         outReport += "\n[aftermath]\nstatus=read_failed\n";
         return;
@@ -124,7 +125,7 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
         return;
     }
 
-    Vector<char, LogArena> json(arena);
+    Vector<char, Core::Alloc::ScratchArena> json(scratchArena);
     u32 jsonSize = 0u;
     {
         GFSDK_Aftermath_GpuCrashDump_Decoder decoder = nullptr;

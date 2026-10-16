@@ -4,6 +4,8 @@
 
 #include <tests/common/test_context.h>
 
+#include <core/alloc/scratch.h>
+
 #include <gtest/gtest.h>
 
 #include <global/algorithm.h>
@@ -59,11 +61,6 @@ constexpr u32 s_ThirdElementIndex = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using AString = NWB::Tests::TestAString;
-template<typename T>
-using Vector = NWB::Tests::TestVector<T>;
 
 
 static u32 s_DiagnosticEventCaptureCount = 0u;
@@ -146,7 +143,9 @@ public:
 
 
 TEST(Global, ExhaustedPodReadsPreserveCursor){
-    Vector<u8> binary;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> binary(scratchArena);
+    binary.reserve(4u);
     const u32 writtenValue = 0x11223344u;
     AppendPOD(binary, writtenValue);
 
@@ -224,6 +223,7 @@ TEST(Global, FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice){
 
 
 TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     ::AutoRegistrationQueue<u32, NWB::Core::Alloc::GlobalArena> queue(NWB::Tests::s_TestArena);
     const auto equal = [](const u32 lhs, const u32 rhs)noexcept{ return lhs == rhs; };
 
@@ -231,7 +231,8 @@ TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
     queue.appendUnique(7u, equal);
     queue.appendUnique(19u, equal);
 
-    Vector<u32> values;
+    ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
+    values.reserve(6u);
     queue.copyTo(values);
     ASSERT_EQ(values.size(), s_ExpectedDualCount);
     EXPECT_EQ(values[0u], 7u);
@@ -246,8 +247,10 @@ TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
 }
 
 TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     constexpr AStringView s_Maps = "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n" "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n";
-    Vector<LinuxProcessMemoryMapEntry> entries;
+    ::Vector<LinuxProcessMemoryMapEntry, NWB::Core::Alloc::ScratchArena> entries(scratchArena);
+    entries.reserve(2u);
     ParseLinuxProcessMemoryMaps(s_Maps, entries);
     ASSERT_EQ(entries.size(), s_ExpectedDualCount);
     const auto first = FindLinuxProcessMemoryMapForAddress(entries, 0x1000u);
@@ -304,7 +307,9 @@ TEST(Global, DiagnosticEventTextViewsStopAtNullOrBufferBounds){
 }
 
 TEST(Global, TruncatedStringReadsDoNotAdvanceCursor){
-    Vector<u8> truncated;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> truncated(scratchArena);
+    truncated.reserve(5u);
     AppendPOD(truncated, static_cast<u32>(4u));
     truncated.push_back(static_cast<u8>('x'));
     usize cursor = 0u;
@@ -359,13 +364,16 @@ TEST(Global, TextUtilitiesRejectNullShortAndOverflowingInput){
 }
 
 TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
-    Vector<u8> stringTable;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> stringTable(scratchArena);
+    stringTable.reserve(16u);
     const auto alphaOffset = AppendStringTableText(stringTable, s_ALPHA);
     const auto betaOffset = AppendStringTableText(stringTable, s_BETA);
     ASSERT_TRUE(alphaOffset);
     ASSERT_TRUE(betaOffset);
 
-    Vector<u8> prefixedBinary;
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> prefixedBinary(scratchArena);
+    prefixedBinary.reserve(17u);
     prefixedBinary.push_back(0xFFu);
     prefixedBinary.insert(prefixedBinary.end(), stringTable.begin(), stringTable.end());
     const auto parsed = ReadStringTableText(prefixedBinary, 1u, stringTable.size(), *betaOffset);
@@ -378,19 +386,25 @@ TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
 }
 
 TEST(Global, InvalidStringTableReads){
-    Vector<u8> unterminated;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> unterminated(scratchArena);
+    unterminated.reserve(2u);
     unterminated.push_back(static_cast<u8>('a'));
     unterminated.push_back(static_cast<u8>('b'));
     EXPECT_FALSE(ReadStringTableText(unterminated, 0u, unterminated.size(), 0u));
 
-    Vector<u8> emptyText;
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> emptyText(scratchArena);
+    emptyText.reserve(1u);
     emptyText.push_back(0u);
     EXPECT_FALSE(ReadStringTableText(emptyText, 0u, emptyText.size(), 0u));
 }
 
 TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
-    Vector<u8> binary;
-    Vector<u16> source;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> binary(scratchArena);
+    binary.reserve(6u);
+    ::Vector<u16, NWB::Core::Alloc::ScratchArena> source(scratchArena);
+    source.reserve(3u);
     source.push_back(1u);
     source.push_back(s_ExpectedDualCount);
     source.push_back(static_cast<u16>(0xBEEFu));
@@ -398,7 +412,8 @@ TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
     ASSERT_TRUE(AppendBinaryVectorPayload(binary, source));
 
     usize cursor = 0u;
-    Vector<u16> parsed;
+    ::Vector<u16, NWB::Core::Alloc::ScratchArena> parsed(scratchArena);
+    parsed.reserve(4u);
     ASSERT_TRUE(ReadBinaryVectorPayload(binary, cursor, static_cast<u64>(source.size()), parsed));
 
     cursor = 0u;
@@ -409,7 +424,9 @@ TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
 }
 
 TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
-    Vector<u8> vectorBinary;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> vectorBinary(scratchArena);
+    vectorBinary.reserve(6u);
     const u16 values[] = { 4u, 5u, 6u };
     for(const u16 value : values)
         AppendPOD(vectorBinary, value);
@@ -422,12 +439,15 @@ TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
 }
 
 TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
-    Vector<u8> truncated;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> truncated(scratchArena);
+    truncated.reserve(5u);
     const u32 source = 0x12345678u;
     AppendPOD(truncated, source);
 
     usize cursor = 0u;
-    Vector<u32> parsed;
+    ::Vector<u32, NWB::Core::Alloc::ScratchArena> parsed(scratchArena);
+    parsed.reserve(4u);
     parsed.push_back(0xAABBCCDDu);
     EXPECT_EQ(ReadBinaryVectorPayload(truncated, cursor, s_ExpectedDualCount, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
     EXPECT_EQ(cursor, 0u);
@@ -435,7 +455,9 @@ TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
 }
 
 TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
-    Vector<u32> values;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
+    values.reserve(3u);
     values.push_back(1u);
     values.push_back(s_ExpectedDualCount);
     values.push_back(3u);
@@ -452,7 +474,9 @@ TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
 }
 
 TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
-    Vector<u32> values;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
+    values.reserve(4u);
     values.push_back(1u);
     values.push_back(s_ExpectedDualCount);
     values.push_back(3u);

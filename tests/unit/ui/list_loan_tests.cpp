@@ -35,16 +35,16 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return 91u; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return 91u; }
     [[nodiscard]] virtual u64 revision()const override{ mutate(MutationKind::RevisionScroll); return 1u; }
-    [[nodiscard]] virtual u64 rowCount()const override{ return 50u; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return 50u; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const override{
         mutate(MutationKind::KeySelect);
         return index < 50u ? index + 1u : 0u;
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
         u64 index = 0u;
         if(keyValue == 0u || keyValue > 50u)
             return MakeUnexpected(Failure{});
@@ -52,7 +52,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const noexcept override{
         u64 index = 0u;
         if(start >= 50u)
             return MakeUnexpected(Failure{});
@@ -70,12 +70,12 @@ public:
         return index < 50u;
     }
 
-    void arm(const MutationKind::Enum kind, const u64 keyValue = 8u){
+    void arm(const MutationKind::Enum kind, const u64 keyValue = 8u)noexcept{
         m_kind = kind;
         m_key = keyValue;
     }
 
-    [[nodiscard]] u64 mutations()const{ return m_mutations; }
+    [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
 
 
 private:

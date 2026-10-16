@@ -9,6 +9,8 @@
 
 #include <core/common/log.h>
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,6 +22,7 @@ NWB_FBX_TO_NWB_BEGIN
 
 
 Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection, const ImportOptions& options, const bool wantsSkinning, const Vec4& defaultColor, Core::CpuTaskScheduler& cpuScheduler){
+    Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_MeshBuildScratch);
     MeshBuildResult result;
     const auto estimatedTriangleCorners = FbxMeshBuild::EstimateSelectedTriangleCorners(instances, selection);
     if(!estimatedTriangleCorners)
@@ -33,11 +36,19 @@ Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances
 
     bool usedDefaultUvs = false;
     FbxSourceMeshStreams::ReserveSourceMeshStreams(result.mesh, *estimatedTriangleCorners, wantsSkinning);
-    SourceMeshBuildContext meshContext{ result.mesh };
+    SourceMeshBuildContext meshContext{ result.mesh, scratchArena };
     FbxSourceMeshStreams::ReserveSourceMeshBuildContext(meshContext, *estimatedTriangleCorners, wantsSkinning);
 
-    UtilityVector<u32> triangleIndices;
-    FbxSkinDetail::ExportContext skinContext;
+    usize maxFaceTriangles = 0u;
+    for(const usize instanceIndex : selection)
+        maxFaceTriangles = Max(maxFaceTriangles, static_cast<usize>(instances[instanceIndex].mesh->max_face_triangles));
+    const auto triangleIndexCapacity = TryMultiply<usize>(maxFaceTriangles, s_TriangleIndexCount);
+    if(!triangleIndexCapacity){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
+        return MakeUnexpected(Failure{});
+    }
+    UtilityScratchVector<u32> triangleIndices(*triangleIndexCapacity, scratchArena);
+    FbxSkinDetail::ExportContext skinContext(scratchArena);
     for(const usize instanceIndex : selection){
         NWB_ASSERT(instanceIndex < instances.size());
         if(!FbxMeshBuild::AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs)){
@@ -50,8 +61,7 @@ Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances
         return MakeUnexpected(Failure{});
     }
     if(*normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(result.mesh)){
-        FbxSourceMeshStreams::DropSourceMeshTangents(result.mesh);
-        Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_SourceTangentRebuildScratch);
+        FbxSourceMeshStreams::DropSourceMeshTangents(result.mesh, scratchArena);
         const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(result.mesh, usedDefaultUvs, scratchArena);
         if(!tangentReport)
             return MakeUnexpected(Failure{});
@@ -67,7 +77,7 @@ Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances
         result.inverseBindMatrices = Move(skinContext.inverseBindMatrices);
     }
 
-    if(!CanonicalizeSourceMeshStreams(result.mesh, cpuScheduler))
+    if(!CanonicalizeSourceMeshStreams(result.mesh, cpuScheduler, scratchArena))
         return MakeUnexpected(Failure{});
     return result;
 }

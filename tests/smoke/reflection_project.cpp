@@ -134,7 +134,7 @@ public:
         return true;
     }
 
-    virtual bool shouldRenderUnfocused()override{ return true; }
+    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
 };
 
 

@@ -102,7 +102,7 @@ TEST(AssetsFontMetadata, BunchRejectsInvalidAndDuplicateChildrenWithoutPublicati
         expanded = Move(*expandedResult);
     }
     ASSERT_EQ(expanded.size(), 2u);
-    Core::Assets::CookEntryPathHashSet parsedPaths(0, Hasher<NameHash>(), EqualTo<NameHash>(), testArena.arena);
+    Core::Assets::CookEntryPathHashSet parsedPaths(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     Core::Assets::CookEntryParseContext parseContext{ testArena.arena, scheduler, scratchArena, parsedPaths };
     const Core::Assets::ExpandedAssetMetadata* atlasChild = nullptr;
     for(const Core::Assets::ExpandedAssetMetadata& child : expanded){

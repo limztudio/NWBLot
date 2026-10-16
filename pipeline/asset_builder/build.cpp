@@ -85,7 +85,7 @@ bool BuildAssets(const AssetBuildOptions& options){
     if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, plannedFileCount))
         return false;
 
-    Assets::AssetsVolumeCookDetail::VirtualPathHashSet seenVirtualPathHashes{arena};
+    Assets::AssetsVolumeCookDetail::VirtualPathHashSet seenVirtualPathHashes{scratchArena};
     if(plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
         seenVirtualPathHashes.reserve(static_cast<usize>(plannedFileCount));
 
@@ -93,7 +93,7 @@ bool BuildAssets(const AssetBuildOptions& options){
         if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
             return false;
     }
-    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, resolvedPaths, configurationSafeName, parsedMetadata, manifest, seenVirtualPathHashes))
+    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, resolvedPaths, configurationSafeName, parsedMetadata, manifest, seenVirtualPathHashes, scratchArena))
         return false;
 
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest))

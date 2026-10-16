@@ -6,6 +6,7 @@ import io
 import math
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -734,6 +735,55 @@ class CausticExteriorTests(unittest.TestCase):
         self.assertLess(hit[3].normal[2], -0.9)
         self.assertIsNone(mesh.intersect((0, 0.85, -0.701), (0.0, 0.0, -1.0)))
         self.assertIsNone(mesh.intersect((2.0, 0.85, -2.2), (0.0, 0.0, 1.0)))
+
+
+class OpticalEvidenceOutputTests(unittest.TestCase):
+    def test_repeated_output_root_runs_keep_prior_evidence_and_use_disjoint_children(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "runs"
+            retained = root / "completed" / "proof.txt"
+            retained.parent.mkdir(parents=True)
+            retained.write_text("retained evidence", encoding="utf-8")
+            destinations = []
+
+            def record_capture(args):
+                destination = args.output_directory
+                self.assertFalse(any(destination.iterdir()))
+                (destination / "proof.txt").write_text(f"new evidence {len(destinations)}", encoding="utf-8")
+                destinations.append(destination)
+                return 0
+
+            required = ["--executable", LIT_APP_EXE, "--working-directory", LIT_RUNTIME, "--output-root", str(root), "--queue-boundaries"]
+            with patch.object(smoke, "run_queue_boundary_suite", side_effect=record_capture):
+                self.assertEqual(smoke.main(required), 0)
+                self.assertEqual(smoke.main(required), 0)
+            self.assertEqual(len(set(destinations)), 2)
+            self.assertTrue(all(destination.parent == root for destination in destinations))
+            self.assertEqual(retained.read_text(encoding="utf-8"), "retained evidence")
+            for index, destination in enumerate(destinations):
+                self.assertEqual((destination / "proof.txt").read_text(encoding="utf-8"), f"new evidence {index}")
+
+    def test_nonempty_exact_output_directory_is_rejected_without_overwriting_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            retained = output / "proof.txt"
+            retained.write_text("retained evidence", encoding="utf-8")
+            required = ["--executable", LIT_APP_EXE, "--working-directory", LIT_RUNTIME, "--output-directory", str(output), "--queue-boundaries"]
+            with (
+                patch.object(smoke, "run_queue_boundary_suite") as capture,
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit) as rejection,
+            ):
+                smoke.main(required)
+            self.assertEqual(rejection.exception.code, 2)
+            capture.assert_not_called()
+            self.assertEqual(retained.read_text(encoding="utf-8"), "retained evidence")
+
+    def test_exact_directory_and_output_root_cannot_be_requested_together(self):
+        required = ["--executable", LIT_APP_EXE, "--working-directory", LIT_RUNTIME, "--output-directory", LIT_OUTPUT, "--output-root", "runs"]
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as rejection:
+            smoke.main(required)
+        self.assertEqual(rejection.exception.code, 2)
 
 
 if __name__ == LIT_MAIN:

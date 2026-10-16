@@ -4,6 +4,8 @@
 
 #include "telemetry_test_helpers.h"
 
+#include <core/alloc/scratch.h>
+
 #include <gtest/gtest.h>
 
 #include "frame_graph_test_helpers.h"
@@ -67,7 +69,8 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 42u, nodes, edges, 9u));
 
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult1);
     report = Move(*reportResult1);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
@@ -122,7 +125,8 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 44u, nodes, edges, 8u));
 
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
     const AStringView dot(report.graph.data(), report.graph.size());
@@ -147,7 +151,8 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     exactRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(exactRecorder, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
     Log::TelemetryReport exactReport(testArena.arena);
-    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, exactRecorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, exactRecorder.view(), scratchArena);
     ASSERT_TRUE(reportResult3);
     exactReport = Move(*reportResult3);
     const AStringView exactJson(exactReport.json.data(), exactReport.json.size());
@@ -159,7 +164,7 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     absentRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(absentRecorder, 59u, nodes, edges, 19u));
     Log::TelemetryReport absentReport(testArena.arena);
-    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, absentRecorder.view());
+    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, absentRecorder.view(), scratchArena);
     ASSERT_TRUE(reportResult4);
     absentReport = Move(*reportResult4);
     const AStringView absentJson(absentReport.json.data(), absentReport.json.size());
@@ -191,7 +196,8 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     }
 
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult5);
     report = Move(*reportResult5);
     EXPECT_EQ(report.summary.eventCount, LengthOf(unsupportedVersions) + 1u);
@@ -211,7 +217,8 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 53u, nodes, edges, 13u));
 
     Log::TelemetryReport report(testArena.arena);
-    auto reportResult6 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    auto reportResult6 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult6);
     report = Move(*reportResult6);
 

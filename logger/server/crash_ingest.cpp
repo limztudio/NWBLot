@@ -29,7 +29,7 @@ namespace __hidden_logger_crash_ingest{
 
 
 using CrashText = CrashReportText;
-using CrashBytes = Vector<u8, LogArena>;
+using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
@@ -115,8 +115,8 @@ struct ArchiveFileHeader{
     return WriteBinaryFile(outputPath, fileBytes);
 }
 
-[[nodiscard]] static Expected<void, AStringView> ExtractCrashArchive(LogArena& arena, const Path& archivePath, const Path& packageDirectory){
-    CrashBytes archiveBytes{arena};
+[[nodiscard]] static Expected<void, AStringView> ExtractCrashArchive(LogArena& arena, const Path& archivePath, const Path& packageDirectory, Core::Alloc::ScratchArena& scratchArena){
+    CrashBytes archiveBytes{scratchArena};
     if(!ReadBinaryFile(archivePath, archiveBytes)){
         return MakeUnexpected(AStringView("failed to read crash archive"));
     }
@@ -382,7 +382,8 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     CrashIngestResult result(arena);
     const Path packageDirectory = CrashExtractedPackageDirectory(arena, config.storageDirectory, archivePath);
 
-    const auto extracted = Ingest::ExtractCrashArchive(arena, archivePath, packageDirectory);
+    Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_upload"));
+    const auto extracted = Ingest::ExtractCrashArchive(arena, archivePath, packageDirectory, scratchArena);
     if(!extracted)
         return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, extracted.error());
 
@@ -391,7 +392,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
         return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, summaryResult.error());
     const CrashPackageSummary& summary = *summaryResult;
 
-    CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
+    CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication, scratchArena);
     // Report-write failure retains the valid package and in-memory report; it is not a malformed crash.
     if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));

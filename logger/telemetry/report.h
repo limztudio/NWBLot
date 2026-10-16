@@ -7,6 +7,7 @@
 
 #include <logger/global.h>
 
+#include <core/alloc/scratch.h>
 #include <core/telemetry/diagnostic.h>
 #include <core/telemetry/frame_graph.h>
 #include <core/telemetry/perf.h>
@@ -87,7 +88,7 @@ struct TelemetryReport{
 
 [[nodiscard]] AStringView EventKindText(Telemetry::EventKind::Enum kind)noexcept;
 [[nodiscard]] AStringView PerfTimingSourceText(Telemetry::PerfTimingSource::Enum source)noexcept;
-[[nodiscard]] Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events);
+[[nodiscard]] Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

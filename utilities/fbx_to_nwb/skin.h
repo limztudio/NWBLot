@@ -31,7 +31,12 @@ struct ExportContext{
     UtilityVector<ufbx_node*> joints;
     UtilityVector<JointMatrix> bindPoseMatrices;
     UtilityVector<JointMatrix> inverseBindMatrices;
-    HashMap<ufbx_node*, u16> jointLookup;
+    UtilityScratchMap<ufbx_node*, u16> jointLookup;
+
+
+    explicit ExportContext(Core::Alloc::ScratchArena& scratchArena)
+        : jointLookup(scratchArena)
+    {}
 };
 
 struct SkinInfluenceResult{

@@ -246,7 +246,7 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config){
+CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena){
     namespace Symbolicate = LoggerCrashSymbolicateDetail;
 
     CrashReportText detailReport{arena};
@@ -268,14 +268,14 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
 
     if(summary.platform == LoggerCrashSymbolicateDetail::s_WindowsPlatformName){
 #if defined(NWB_PLATFORM_WINDOWS)
-        if(!Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, config, detailReport))
+        if(!Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, config, detailReport, scratchArena))
             NWB_LOGGER_WARNING(NWB_TEXT("Windows minidump stack could not be fully decoded"));
 #else
         detailReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=Windows minidump resolver is only available on Windows logserver builds\n";
 #endif
     }
     else if(summary.platform == LoggerCrashSymbolicateDetail::s_LinuxPlatformName){
-        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, detailReport);
+        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, detailReport, scratchArena);
     }
     else if(summary.platform == LoggerCrashSymbolicateDetail::s_AndroidPlatformName){
         Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, detailReport);
@@ -286,7 +286,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
 
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash");
     Symbolicate::AppendRadeonGpuDetectiveSummary(arena, packageDirectory, config, detailReport);
-    Symbolicate::AppendAftermathGpuDumpSummary(arena, packageDirectory, config, detailReport);
+    Symbolicate::AppendAftermathGpuDumpSummary(arena, packageDirectory, config, detailReport, scratchArena);
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata");
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs");

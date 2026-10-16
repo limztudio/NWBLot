@@ -13,6 +13,7 @@
 #include <global/containers.h>
 #include <global/filesystem.h>
 #include <global/limit.h>
+#include <global/span.h>
 #include <global/text_utils.h>
 #include <global/type.h>
 

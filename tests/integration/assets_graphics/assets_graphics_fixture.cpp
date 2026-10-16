@@ -465,7 +465,7 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> AssetsGrap
     if(!loadedIndex || indexBinary.empty())
         return MakeUnexpected(Failure{});
 
-    auto deserialized = NWB::Core::ShaderArchive::DeserializeIndex(testArena.arena, indexBinary);
+    auto deserialized = NWB::Core::ShaderArchive::DeserializeIndex(testArena.arena, { indexBinary.data(), indexBinary.size() });
     EXPECT_TRUE(deserialized);
     return deserialized;
 }

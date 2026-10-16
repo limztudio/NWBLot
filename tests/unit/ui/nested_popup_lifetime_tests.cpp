@@ -36,10 +36,10 @@ protected:
             state.open();
     }
 
-    [[nodiscard]] WidgetId parentId()const{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
-    [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }
-    [[nodiscard]] WidgetId fieldId()const{ return MakeWidgetId(parentId(), "combo"); }
-    [[nodiscard]] WidgetId menuRows()const{ return MakeWidgetId(MakeWidgetId(parentId(), "menu"), "rows"); }
+    [[nodiscard]] WidgetId parentId()const noexcept{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
+    [[nodiscard]] WidgetId childId()const noexcept{ return MakeWidgetId(parentId(), "child"); }
+    [[nodiscard]] WidgetId fieldId()const noexcept{ return MakeWidgetId(parentId(), "combo"); }
+    [[nodiscard]] WidgetId menuRows()const noexcept{ return MakeWidgetId(MakeWidgetId(parentId(), "menu"), "rows"); }
 
     [[nodiscard]] bool beginParent(const u64 generation){
         if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions()))

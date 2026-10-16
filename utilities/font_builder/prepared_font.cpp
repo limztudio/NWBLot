@@ -21,7 +21,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const BakeOptions& options, const Impl::FontAtlasPayload& atlas){
+Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const BakeOptions& options, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch){
     Core::Assets::AssetArena& arena = atlas.glyphs.get_allocator().arena();
     auto source = ReadFontSourceInput(options.source, arena);
     if(!source)
@@ -31,7 +31,7 @@ Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const BakeOpti
         return MakeUnexpected(AStringView("source changed during bake"));
     }
 
-    Core::Assets::AssetVector<Impl::PreparedFontImageView> images(arena);
+    Vector<Impl::PreparedFontImageView, Core::Alloc::ScratchArena> images(scratch);
     images.reserve(atlas.groups.size());
     for(const auto& group : atlas.groups){
         images.push_back(Impl::PreparedFontImageView{ .width = group.width, .height = group.height, .channelCount = group.channelCount, .pixels = { group.pixels.data(), group.pixels.size() }, });

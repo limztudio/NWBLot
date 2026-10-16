@@ -68,7 +68,7 @@ struct alignas(Float4) PositionNormalCalculation{
     SIMDVectorSingle value = {};
 };
 
-using PositionNormalMap = HashMap<PositionKey, PositionNormalCalculation, PositionKeyHasher, PositionKeyEqual>;
+using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalCalculation, PositionKeyHasher, PositionKeyEqual>;
 
 
 struct MeshSkinInfluenceHasher{
@@ -102,15 +102,16 @@ struct SourceVertexRefEqual{
     }
 };
 
-using Vec2IndexMap = HashMap<Vec2, u32>;
-using Vec3IndexMap = HashMap<Vec3, u32>;
-using Vec4IndexMap = HashMap<Vec4, u32>;
-using MeshSkinInfluenceIndexMap = HashMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
-using SourceVertexRefIndexMap = HashMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
+using Vec2IndexMap = UtilityScratchMap<Vec2, u32>;
+using Vec3IndexMap = UtilityScratchMap<Vec3, u32>;
+using Vec4IndexMap = UtilityScratchMap<Vec4, u32>;
+using MeshSkinInfluenceIndexMap = UtilityScratchMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
+using SourceVertexRefIndexMap = UtilityScratchMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
 
 
 struct SourceMeshBuildContext{
     SourceMeshStreams& mesh;
+    Core::Alloc::ScratchArena& scratchArena;
     Vec3IndexMap positions;
     Vec3IndexMap normals;
     Vec4IndexMap tangents;
@@ -119,8 +120,16 @@ struct SourceMeshBuildContext{
     MeshSkinInfluenceIndexMap skin;
     SourceVertexRefIndexMap vertexRefs;
 
-    explicit SourceMeshBuildContext(SourceMeshStreams& sourceMesh)
+    SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)
         : mesh(sourceMesh)
+        , scratchArena(sourceScratchArena)
+        , positions(sourceScratchArena)
+        , normals(sourceScratchArena)
+        , tangents(sourceScratchArena)
+        , uv0(sourceScratchArena)
+        , colors(sourceScratchArena)
+        , skin(sourceScratchArena)
+        , vertexRefs(sourceScratchArena)
     {}
 };
 
@@ -133,8 +142,8 @@ public:
     static void ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const bool wantsSkinning);
     static void ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning);
     [[nodiscard]] static bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept;
-    static void DropSourceMeshTangents(SourceMeshStreams& mesh);
-    [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityVector<u32>& inOutTriangleIndices);
+    static void DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices);
     template<typename Value, typename Lookup>
     [[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName);
     [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena);

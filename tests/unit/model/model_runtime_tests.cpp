@@ -6,6 +6,8 @@
 
 #include <tests/common/capturing_logger.h>
 
+#include <core/alloc/scratch.h>
+
 #include <global/arena_memory.h>
 
 #include <gtest/gtest.h>
@@ -37,8 +39,11 @@ TEST(ModelRuntime, RemovingMultipleModelsDestroysEveryOwnedObjectInOneSync){
     const auto retainedOwner = context.makeOwner();
     const auto retainedObject = context.makeObject(retainedOwner);
     const auto unrelated = world.createEntity().id();
-    Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> removedOwners(context.testWorld.arena);
-    Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> removedObjects(context.testWorld.arena);
+    Core::Alloc::ScratchArena scratchArena(Name("tests/model_runtime/removed_ids"));
+    Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> removedOwners(scratchArena);
+    removedOwners.reserve(4u);
+    Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> removedObjects(scratchArena);
+    removedObjects.reserve(68u);
     for(const usize objectCount : { 1u, 0u, 64u, 3u }){
         const auto owner = context.makeOwner();
         removedOwners.push_back(owner);

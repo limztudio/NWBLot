@@ -8,10 +8,8 @@
 
 #include <global/basic_string.h>
 #include <global/containers.h>
+#include <global/numeric_text.h>
 #include <global/sync.h>
-
-#include <iostream>
-#include <sstream>
 
 #include "rgd_data_types.h"
 #include "rgd_parsing_utils.h"
@@ -82,8 +80,8 @@ public:
 private:
     AStringStream<Core::Alloc::ScratchArena> m_sink;
     ScopedLock<Futex> m_lock;
-    std::streambuf* m_coutBuffer;
-    std::streambuf* m_cerrBuffer;
+    AStreamBuffer* m_coutBuffer;
+    AStreamBuffer* m_cerrBuffer;
 };
 
 
@@ -154,7 +152,7 @@ AInteropString AssembleTextSummary(Core::Alloc::ScratchArena& scratchArena, cons
                 const RgdEventOccurrence& pageFaultEvent = contents.kmd_crash_data.events[eventIndex];
                 const VmPageFaultEvent& pageFault = static_cast<const VmPageFaultEvent&>(*pageFaultEvent.rgd_event);
 
-                txt << "Offending VA: 0x" << std::hex << pageFault.faultVmAddress << std::dec << '\n' << '\n';
+                txt << "Offending VA: 0x" << StreamHex << pageFault.faultVmAddress << StreamDec << '\n' << '\n';
 
                 AInteropString resourceInfo;
                 if(resourceHistoryReady && !resourceSerializer.GetVirtualAddressHistoryInfo(config, pageFault.faultVmAddress, resourceInfo))

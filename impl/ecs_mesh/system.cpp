@@ -27,7 +27,7 @@ MeshSystem::MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
     readAccess<SkinnedMeshBindingComponent>();
 }
 
-void MeshSystem::update(Core::ECS::World& world, f32 delta){
+void MeshSystem::update(Core::ECS::World& world, f32 delta)noexcept{
     static_cast<void>(world);
     static_cast<void>(delta);
 }
@@ -89,17 +89,14 @@ void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
 }
 
 void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; }
-        ) != m_runtimeMeshProviders.end()
-    )
+    if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; }) != m_runtimeMeshProviders.end())
         return;
 
     m_runtimeMeshProviders.push_back(&provider);
 }
 
 void MeshSystem::unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; }
-    );
+    const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; });
     if(found == m_runtimeMeshProviders.end())
         return;
 

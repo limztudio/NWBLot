@@ -165,7 +165,7 @@ private:
         }
     }
 
-    void resetInterval(){
+    void resetInterval()noexcept{
         m_intervalSeconds = 0.0;
         m_intervalFrames = 0u;
         for(ScopeState& scope : m_scopes)

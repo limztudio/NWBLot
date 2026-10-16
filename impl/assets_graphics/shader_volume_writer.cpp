@@ -152,7 +152,7 @@ static bool GetVariantBytecode(
 }
 
 
-static Expected<usize> ReserveShaderIndexRecords(const PreparedShaderVector& preparedEntries, Core::GraphicsVector<Core::ShaderArchive::Record>& inOutShaderIndexRecords){
+static Expected<usize> ReserveShaderIndexRecords(const PreparedShaderVector& preparedEntries, Vector<Core::ShaderArchive::Record, ScratchArena>& inOutShaderIndexRecords){
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
@@ -174,7 +174,7 @@ static Expected<usize> ReserveShaderIndexRecords(const PreparedShaderVector& pre
 
 static bool AppendShaderIndexToManifest(
     ShaderCook::CookArena& cookArena,
-    const Core::GraphicsVector<Core::ShaderArchive::Record>& shaderIndexRecords,
+    const Span<const Core::ShaderArchive::Record> shaderIndexRecords,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
@@ -232,7 +232,7 @@ bool AppendPreparedShadersToManifest(
     VirtualPathHashSet& inOutSeenVirtualPathHashes,
     ScratchArena& scratchArena
 ){
-    Core::GraphicsVector<Core::ShaderArchive::Record> shaderIndexRecords{cookArena};
+    Vector<Core::ShaderArchive::Record, ScratchArena> shaderIndexRecords{scratchArena};
     const auto shaderRecordCount = __hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords);
     if(!shaderRecordCount)
         return false;

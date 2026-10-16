@@ -145,7 +145,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 240 LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_open_smoke")
             add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke.py" --warning-policy "$<IF:$<CONFIG:fin>,disabled,enabled>" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
-                    --working-directory "${_nwb_transparent_multi_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_open" --route "${_nwb_csg_route}")
+                    --working-directory "${_nwb_transparent_multi_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_open" --route "${_nwb_csg_route}")
             set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 900 LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
         endforeach()
         foreach(_nwb_csg_route IN ITEMS hardware software)
@@ -257,11 +257,11 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set_tests_properties(nwb_csg_reflection_capture_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 600)
 
         add_test(NAME nwb_csg_reflection_collection_reuse_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke.py" "--csg-reuse" "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
-                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_reflection_collection_reuse" "--timeout" "180" ${_nwb_reflection_logserver_args})
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-root" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_reflection_collection_reuse" "--timeout" "180" ${_nwb_reflection_logserver_args})
         set_tests_properties(nwb_csg_reflection_collection_reuse_capture_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 1200)
 
         add_test(NAME nwb_reflection_queue_boundary_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke.py" "--queue-boundaries" "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
-                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/reflection_queue_boundaries" ${_nwb_reflection_logserver_args})
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-root" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/reflection_queue_boundaries" ${_nwb_reflection_logserver_args})
         set_tests_properties(nwb_reflection_queue_boundary_capture_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 900)
 
         foreach(_nwb_reflection_suite IN ITEMS rough temporal optical feedback feedback_diagnostics_off)
@@ -559,7 +559,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "--expect-log-message" "SkinnedCausticSmokeProject: skinned glass refractor over ground created" "--expect-log-message" "SkinnedCausticSmokeProject: shutdown")
 
         add_test(NAME nwb_skinned_caustic_csg_transition_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke.py" --executable "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
-                --working-directory "${_nwb_skinning_culling_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout 180 ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
+                --working-directory "${_nwb_skinning_culling_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout 180 ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
         set_tests_properties(nwb_skinned_caustic_csg_transition_smoke PROPERTIES RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 690)
 
         # The crowd stresses scene updates and opaque/transparent shadows across two lights.

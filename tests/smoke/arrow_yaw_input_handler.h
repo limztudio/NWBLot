@@ -18,7 +18,7 @@ namespace NWB::Tests::Smoke{
 
 class ArrowYawInputHandler final : public Core::IInputEventHandler{
 public:
-    bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override{
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override{
         static_cast<void>(scancode);
         static_cast<void>(mods);
 

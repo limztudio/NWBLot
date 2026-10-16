@@ -196,7 +196,7 @@ AStringView PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
     }
 }
 
-Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events){
+Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, Core::Alloc::ScratchArena& scratchArena){
     TelemetryReport report(arena);
     if(events.valid())
         report.perfCsv.reserve(TelemetryReportDetail::EstimatePerfCsvReserve(events.eventCount()));
@@ -206,11 +206,11 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
         return MakeUnexpected(Failure{});
 
     report.summary.eventCount = events.eventCount();
-    AString<TelemetryArena> memoryRecords(arena);
+    AString<Core::Alloc::ScratchArena> memoryRecords(scratchArena);
 
-    TelemetryReportDetail::GraphTimingMap timingByFrameAndScope(0, TelemetryReportDetail::GraphTimingKeyHasher(), EqualTo<TelemetryReportDetail::GraphTimingKey>(), arena);
+    TelemetryReportDetail::GraphTimingMap timingByFrameAndScope(0, TelemetryReportDetail::GraphTimingKeyHasher(), EqualTo<TelemetryReportDetail::GraphTimingKey>(), scratchArena);
     timingByFrameAndScope.reserve(events.eventCount());
-    TelemetryReportDetail::FrameGraphReportRecords frameGraphs(arena);
+    TelemetryReportDetail::FrameGraphReportRecords frameGraphs(scratchArena);
     frameGraphs.reserve(events.eventCount());
 
     for(usize i = 0u; i < events.eventCount(); ++i){

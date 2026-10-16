@@ -17,7 +17,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const BakeOptions& options, const Impl::FontAtlasPayload& atlas);
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const BakeOptions& options, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

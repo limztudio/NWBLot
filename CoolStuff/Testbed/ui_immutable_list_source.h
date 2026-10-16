@@ -68,7 +68,9 @@ class UiFilteredListSource : public UiImmutableListSource<Source, LabelCount, Di
 private:
     class View final : public NWB::Impl::Ui::IListDataSource, NoCopy{
     public:
-        explicit View(const UiFilteredListSource& source) : m_source(source){}
+        explicit View(const UiFilteredListSource& source)noexcept
+            : m_source(source)
+        {}
 
 
     public:

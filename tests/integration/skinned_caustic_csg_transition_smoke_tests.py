@@ -5,7 +5,11 @@ from array import array
 from copy import deepcopy
 from pathlib import Path
 import sys
+import tempfile
+from contextlib import redirect_stderr
+from io import StringIO
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import skinned_caustic_csg_transition_smoke as smoke
@@ -106,6 +110,54 @@ class SkinnedCausticTransitionTests(unittest.TestCase):
                 series[variant][sample]["receiver"] = deepcopy(series[variant][sample - 1]["receiver"])
         with self.assertRaises(SmokeFailure):
             smoke.compare_series(series)
+
+
+class SkinnedTransitionOutputTests(unittest.TestCase):
+    def test_repeated_output_root_runs_preserve_completed_variant_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "runs"
+            retained = root / "completed" / "proof.txt"
+            retained.parent.mkdir(parents=True)
+            retained.write_text("retained evidence", encoding="utf-8")
+            destinations = []
+
+            def capture(args, variant):
+                if variant == smoke.VARIANTS[0]:
+                    self.assertFalse(any(args.output_directory.iterdir()))
+                    destinations.append(args.output_directory)
+                output = args.output_directory / variant
+                output.mkdir()
+                (output / "proof.txt").write_text(f"capture {len(destinations)}", encoding="utf-8")
+                return 0
+
+            required = ["--executable", "app.exe", "--working-directory", "runtime", "--output-root", str(root)]
+            with patch.object(smoke, "capture", side_effect=capture), patch.object(smoke, "analyze", return_value={"status": "passed"}):
+                self.assertEqual(smoke.main(required), 0)
+                self.assertEqual(smoke.main(required), 0)
+            self.assertEqual(len(set(destinations)), 2)
+            self.assertTrue(all(destination.parent == root for destination in destinations))
+            self.assertEqual(retained.read_text(encoding="utf-8"), "retained evidence")
+            for index, destination in enumerate(destinations, 1):
+                self.assertEqual((destination / smoke.VARIANTS[0] / "proof.txt").read_text(encoding="utf-8"), f"capture {index}")
+
+    def test_nonempty_exact_variant_directory_keeps_freshness_rejection_and_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            retained = output / smoke.VARIANTS[0] / "proof.txt"
+            retained.parent.mkdir()
+            retained.write_text("retained evidence", encoding="utf-8")
+            required = ["--executable", "app.exe", "--working-directory", "runtime", "--output-directory", str(output)]
+            with patch.object(smoke.subprocess, "run") as launch, redirect_stderr(StringIO()):
+                self.assertEqual(smoke.main(required), 1)
+            launch.assert_not_called()
+            self.assertEqual(retained.read_text(encoding="utf-8"), "retained evidence")
+
+    def test_output_root_rejects_analysis_only_and_ambiguous_destinations(self):
+        for extra in (["--analysis-only"], ["--output-directory", "output"]):
+            required = ["--output-root", "runs", *extra]
+            with self.subTest(extra=extra), redirect_stderr(StringIO()), self.assertRaises(SystemExit) as rejection:
+                smoke.main(required)
+            self.assertEqual(rejection.exception.code, 2)
 
 
 if __name__ == "__main__":

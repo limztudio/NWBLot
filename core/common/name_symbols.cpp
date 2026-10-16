@@ -7,6 +7,7 @@
 #include "arena_names.h"
 
 #include <core/alloc/general.h>
+#include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>
 #include <global/arena_memory.h>
@@ -118,8 +119,8 @@ public:
         return m_symbols.size();
     }
 
-    void appendFileText(SymbolArena& arena, SymbolString& outText)const{
-        Vector<SymbolRecordView, SymbolArena> records(arena);
+    void appendFileText(Alloc::ScratchArena& scratchArena, SymbolString& outText)const{
+        Vector<SymbolRecordView, Alloc::ScratchArena> records(scratchArena);
         records.reserve(m_symbols.size());
         for(const auto& symbol : m_symbols)
             records.push_back(SymbolRecordView{ symbol.first, &symbol.second });
@@ -173,8 +174,9 @@ public:
     }
 
     void serialize(SymbolString& outText){
+        Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
         recordArenaOwnerSymbols();
-        m_symbols.appendFileText(m_arena, outText);
+        m_symbols.appendFileText(scratchArena, outText);
     }
 
     [[nodiscard]] bool writeDefaultFile(){
@@ -232,9 +234,10 @@ private:
     }
 
     [[nodiscard]] bool writeFile(const ::Path<SymbolArena>& path){
+        Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
         recordArenaOwnerSymbols();
         SymbolString fileText(m_arena);
-        m_symbols.appendFileText(m_arena, fileText);
+        m_symbols.appendFileText(scratchArena, fileText);
         return ::WriteTextFile(path, AStringView(fileText.data(), fileText.size()));
     }
 

@@ -229,9 +229,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload){
+bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
     Core::Assets::AssetArena& arena = payload.glyphs.get_allocator().arena();
-    auto fontBinary = BuildPreparedFont(options, payload);
+    auto fontBinary = BuildPreparedFont(options, payload, scratch);
     MetadataString metadata(arena);
     if(!fontBinary){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: prepared font failed: {}"), StringConvert(fontBinary.error()));

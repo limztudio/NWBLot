@@ -28,7 +28,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ ++metadataCalls; return generation; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ ++metadataCalls; return generation; }
 
     [[nodiscard]] virtual u64 revision()const override{
         ++metadataCalls;
@@ -41,7 +41,7 @@ public:
         return contentRevision;
     }
 
-    [[nodiscard]] virtual u64 rowCount()const override{ ++metadataCalls; return count; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ ++metadataCalls; return count; }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
         const StringView value = ComboSource::text(index);

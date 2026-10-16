@@ -169,7 +169,7 @@ template<typename Value, typename WriteValue>
     return out.str();
 }
 
-[[nodiscard]] bool AddReplacement(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText){
+[[nodiscard]] bool AddReplacement(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), StringConvert(variableName), StringConvert(fieldName));
@@ -182,7 +182,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool AppendMeshReplacements(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after){
+[[nodiscard]] bool AppendMeshReplacements(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after){
     if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
         return false;
     if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
@@ -210,7 +210,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityVector<TextReplacement>& replacements){
+[[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityScratchVector<TextReplacement>& replacements){
     Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
             return lhs.begin > rhs.begin;
         }

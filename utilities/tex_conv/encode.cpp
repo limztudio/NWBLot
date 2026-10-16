@@ -138,7 +138,7 @@ private:
     return true;
 }
 
-[[nodiscard]] static Expected<TexturePayload> Encode2DOrCube(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
+[[nodiscard]] static Expected<TexturePayload> Encode2DOrCube(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
     TexturePayload payload;
     const u32 planeCount = dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
@@ -208,7 +208,7 @@ private:
     u32 mipWidth = payload.width;
     u32 mipHeight = payload.height;
     for(u32 mipIndex = 0u; mipIndex < mipCount; ++mipIndex){
-        if(!EncodeBackendDetail::AppendCanonicalMip(backendOutput, mipIndex, planeCount, mipWidth, mipHeight, payload))
+        if(!EncodeBackendDetail::AppendCanonicalMip(scratchArena, backendOutput, mipIndex, planeCount, mipWidth, mipHeight, payload))
             return MakeUnexpected(Failure{});
         mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
         mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
@@ -280,7 +280,7 @@ private:
         }, NWB_TEXT("tex_conv: failed to generate a volume mip level."));
 }
 
-[[nodiscard]] static bool EncodeVolumeMip(const ImagePlanes& planes, const bool srgb, TexturePayload& inOutPayload, bool& inOutHasAlpha){
+[[nodiscard]] static bool EncodeVolumeMip(Core::Alloc::ScratchArena& scratchArena, const ImagePlanes& planes, const bool srgb, TexturePayload& inOutPayload, bool& inOutHasAlpha){
     if(planes.empty() || planes.size() > Limit<u32>::s_Max)
         return false;
 
@@ -301,14 +301,14 @@ private:
     parameters.m_source_images = planes;
     parameters.m_mip_gen = false;
 
-    return EncodeBackendDetail::EncodeMip(parameters, basist::basis_tex_format::cUASTC_LDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
+    return EncodeBackendDetail::EncodeMip(scratchArena, parameters, basist::basis_tex_format::cUASTC_LDR_4x4, static_cast<u32>(planes.size()), width, height, inOutPayload, {
         NWB_TEXT("tex_conv: Basis Universal failed to initialize a volume mip encoder."),
         NWB_TEXT("tex_conv: UASTC volume mip encoding failed"),
         NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC volume mip.")
     }, &inOutHasAlpha);
 }
 
-[[nodiscard]] static Expected<TexturePayload> EncodeVolume(const Vector<Path>& inputPaths, const bool srgb, const AlphaSource& alphaSource){
+[[nodiscard]] static Expected<TexturePayload> EncodeVolume(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const bool srgb, const AlphaSource& alphaSource){
     TexturePayload payload;
     auto sourcePlanes = EncodeBackendDetail::LoadPlanesFromFiles<EncodeBackendDetail::LdrPlaneLoader>(inputPaths);
     if(!sourcePlanes || !ApplyAlphaSource(alphaSource, *sourcePlanes))
@@ -338,7 +338,7 @@ private:
     payload.mips.reserve(mipCount);
     bool hasAlpha = false;
     for(u32 mipIndex = 0u; mipIndex < mipCount; ++mipIndex){
-        if(!EncodeVolumeMip(mipVolumes[mipIndex], srgb, payload, hasAlpha))
+        if(!EncodeVolumeMip(scratchArena, mipVolumes[mipIndex], srgb, payload, hasAlpha))
             return MakeUnexpected(Failure{});
     }
     payload.hasAlpha = hasAlpha;
@@ -355,7 +355,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TexturePayload> EncodeTexture(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
+Expected<TexturePayload> EncodeTexture(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
     if(inputPaths.empty())
         return MakeUnexpected(Failure{});
 
@@ -377,19 +377,19 @@ Expected<TexturePayload> EncodeTexture(const Vector<Path>& inputPaths, const Tex
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a 2D texture requires exactly one input image."));
             return MakeUnexpected(Failure{});
         }
-        return hdrInput ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource) : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource);
+        return hdrInput ? EncodeBackendDetail::EncodeHdr2DOrCube(scratchArena, inputPaths, dimension, alphaSource) : __hidden_encode::Encode2DOrCube(scratchArena, inputPaths, dimension, srgb, alphaSource);
     case TextureDimension::TextureCube:
         if(inputPaths.size() != TextureFormat::s_TextureCubeFaceCount){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a cubemap requires exactly six ordered face images."));
             return MakeUnexpected(Failure{});
         }
-        return hdrInput ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource) : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource);
+        return hdrInput ? EncodeBackendDetail::EncodeHdr2DOrCube(scratchArena, inputPaths, dimension, alphaSource) : __hidden_encode::Encode2DOrCube(scratchArena, inputPaths, dimension, srgb, alphaSource);
     case TextureDimension::Texture3D:
         if(inputPaths.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a volume texture requires one or more ordered Z slices."));
             return MakeUnexpected(Failure{});
         }
-        return hdrInput ? EncodeBackendDetail::EncodeHdrVolume(inputPaths, alphaSource) : __hidden_encode::EncodeVolume(inputPaths, srgb, alphaSource);
+        return hdrInput ? EncodeBackendDetail::EncodeHdrVolume(scratchArena, inputPaths, alphaSource) : __hidden_encode::EncodeVolume(scratchArena, inputPaths, srgb, alphaSource);
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported texture dimension."));
         return MakeUnexpected(Failure{});

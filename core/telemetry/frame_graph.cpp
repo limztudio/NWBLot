@@ -10,6 +10,7 @@
 
 #include <global/algorithm.h>
 #include <global/binary.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +29,7 @@ namespace __hidden_telemetry_frame_graph{
 
 
 [[nodiscard]] static bool BuildFrameGraphPayloadImpl(
-    TelemetryArena& arena,
+    Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
@@ -41,6 +42,7 @@ static constexpr f64 s_DoublePrecisionEpsilon = 2.220446049250313080847263336181
 static constexpr f64 s_SubmissionRoundingLimit = 0.5;
 static constexpr f64 s_SubmissionRoundingScale = 2.0;
 inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStatisticsValidation");
+inline constexpr Name s_FrameGraphPayloadScratch("core/telemetry/frame_graph/payload_scratch");
 
 
 [[nodiscard]] static bool IsValidStringTableText(const AStringView text)noexcept{
@@ -531,8 +533,8 @@ template<typename NodeContainer>
 [[nodiscard]] static bool ValidatePacketSubmissionStatisticsTable(
     Alloc::ScratchArena& scratchArena,
     const NodeContainer& nodes,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
+    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics
 ){
     for(usize statisticsIndex = 0u; statisticsIndex < packetSubmissionStatistics.size(); ++statisticsIndex){
         const FrameGraphPacketSubmissionStatisticsRecord& statistics = packetSubmissionStatistics[statisticsIndex];
@@ -607,7 +609,9 @@ bool BuildFrameGraphPayload(TelemetryArena& arena, const u64 frameIndex, const F
 }
 
 bool BuildFrameGraphPayload(TelemetryArena& arena, const u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, TelemetryBytes& outPayload){
-    return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(arena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, nullptr, outPayload);
+    static_cast<void>(arena);
+    Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_FrameGraphPayloadScratch);
+    return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, nullptr, outPayload);
 }
 
 bool BuildFrameGraphPayload(
@@ -619,7 +623,9 @@ bool BuildFrameGraphPayload(
     const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     TelemetryBytes& outPayload
 ){
-    return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(arena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, &packetSubmissionStatistics, outPayload);
+    static_cast<void>(arena);
+    Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_FrameGraphPayloadScratch);
+    return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, &packetSubmissionStatistics, outPayload);
 }
 
 
@@ -633,7 +639,7 @@ namespace __hidden_telemetry_frame_graph{
 
 
 bool BuildFrameGraphPayloadImpl(
-    TelemetryArena& arena,
+    Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
@@ -646,13 +652,13 @@ bool BuildFrameGraphPayloadImpl(
     if(!FitsU32(nodes.size()) || !FitsU32(edges.size()) || !FitsU32(physicalQueueRuntimeStatistics.size()) || (packetSubmissionStatistics && !FitsU32(packetSubmissionStatistics->size())))
         return false;
 
-    FrameGraphPhysicalQueueRuntimeStatisticsRecords orderedPhysicalQueueRuntimeStatistics(arena);
+    Vector<FrameGraphPhysicalQueueRuntimeStatisticsRecord, Alloc::ScratchArena> orderedPhysicalQueueRuntimeStatistics(scratchArena);
     orderedPhysicalQueueRuntimeStatistics.reserve(physicalQueueRuntimeStatistics.size());
     for(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics)
         orderedPhysicalQueueRuntimeStatistics.push_back(record);
     Sort(orderedPhysicalQueueRuntimeStatistics.begin(), orderedPhysicalQueueRuntimeStatistics.end(), __hidden_telemetry_frame_graph::PhysicalQueueRuntimeStatisticsRecordLess);
 
-    FrameGraphPacketSubmissionStatisticsRecords orderedPacketSubmissionStatistics(arena);
+    Vector<FrameGraphPacketSubmissionStatisticsRecord, Alloc::ScratchArena> orderedPacketSubmissionStatistics(scratchArena);
     if(packetSubmissionStatistics){
         orderedPacketSubmissionStatistics.reserve(packetSubmissionStatistics->size());
         for(const FrameGraphPacketSubmissionStatisticsRecord& record : *packetSubmissionStatistics)
@@ -704,7 +710,6 @@ bool BuildFrameGraphPayloadImpl(
 
     const bool hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
     if(hasPacketSubmissionStatistics){
-        Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_PacketStatisticsValidationScratch);
         if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(scratchArena, nodes, orderedPhysicalQueueRuntimeStatistics, orderedPacketSubmissionStatistics))
             return false;
     }
@@ -722,9 +727,9 @@ bool BuildFrameGraphPayloadImpl(
     )
         return false;
 
-    TelemetryBytes stringTable(arena);
+    Vector<u8, Alloc::ScratchArena> stringTable(scratchArena);
     stringTable.reserve(stringTableBytes);
-    Vector<EncodedFrameGraphNode, TelemetryArena> encodedNodes(arena);
+    Vector<EncodedFrameGraphNode, Alloc::ScratchArena> encodedNodes(scratchArena);
     encodedNodes.reserve(nodes.size());
 
     for(const FrameGraphNodeDesc& node : nodes){

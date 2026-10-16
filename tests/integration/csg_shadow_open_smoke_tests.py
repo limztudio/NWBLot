@@ -4,10 +4,13 @@
 from pathlib import Path
 import sys
 import unittest
+import tempfile
+from unittest.mock import patch
 from contextlib import redirect_stderr
 from io import StringIO
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
+import csg_shadow_open_smoke as smoke
 from csg_shadow_open_smoke import CASES, COUNTS, LENGTHS, OPEN_CAPACITY_MESSAGE, REGIONS, compare_frames, expected_open_rgb, parse_args, validate_runtime
 from csg_shadow_reference import expected_rgb, region_pixels
 from generate_csg_shadow_open_meshes import open_sheets, validate_open_sheets
@@ -161,6 +164,50 @@ class CsgOpenShadowTests(unittest.TestCase):
         mesh.indices[2] = mesh.indices[0]
         with self.assertRaisesRegex(AssertionError, "connected"):
             validate_open_sheets(mesh, 65)
+
+
+class CsgOpenShadowOutputTests(unittest.TestCase):
+    def test_repeated_output_root_runs_preserve_prior_and_first_capture_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "runs"
+            retained = root / "completed" / "proof.txt"
+            retained.parent.mkdir(parents=True)
+            retained.write_text("retained evidence", encoding="utf-8")
+            destinations = []
+
+            def capture_case(args, case):
+                if case == CASES[0]:
+                    self.assertFalse(any(args.output_directory.iterdir()))
+                    destinations.append(args.output_directory)
+                (args.output_directory / (case + ".txt")).write_text(f"capture {len(destinations)}", encoding="utf-8")
+                return None, {"case": case}
+
+            required = ["--executable", "app.exe", "--working-directory", "runtime", "--output-root", str(root), "--route", "software", "--warning-policy", "enabled"]
+            with patch.object(smoke, "capture_case", side_effect=capture_case), patch.object(smoke, "compare_frames", side_effect=lambda frames: {}):
+                self.assertEqual(smoke.main(required), 0)
+                self.assertEqual(smoke.main(required), 0)
+            self.assertEqual(len(set(destinations)), 2)
+            self.assertTrue(all(destination.parent == root for destination in destinations))
+            self.assertEqual(retained.read_text(encoding="utf-8"), "retained evidence")
+            for index, destination in enumerate(destinations, 1):
+                self.assertEqual((destination / (CASES[0] + ".txt")).read_text(encoding="utf-8"), f"capture {index}")
+
+    def test_nonempty_exact_output_directory_still_rejects_without_capture_or_overwrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            retained = output / "proof.txt"
+            retained.write_text("retained evidence", encoding="utf-8")
+            required = ["--executable", "app.exe", "--working-directory", "runtime", "--output-directory", str(output), "--route", "software", "--warning-policy", "enabled"]
+            with patch.object(smoke, "capture_case") as capture, redirect_stderr(StringIO()):
+                self.assertEqual(smoke.main(required), 1)
+            capture.assert_not_called()
+            self.assertEqual(retained.read_text(encoding="utf-8"), "retained evidence")
+
+    def test_exact_output_directory_and_root_are_mutually_exclusive(self):
+        required = ["--executable", "app.exe", "--working-directory", "runtime", "--output-directory", "output", "--output-root", "runs", "--route", "software", "--warning-policy", "enabled"]
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit) as rejection:
+            smoke.parse_args(required)
+        self.assertEqual(rejection.exception.code, 2)
 
 
 if __name__ == "__main__":

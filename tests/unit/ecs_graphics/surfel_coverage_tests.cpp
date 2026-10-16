@@ -25,7 +25,7 @@ struct ShaderFloat3{
 
 
 public:
-    explicit ShaderFloat3(float value) : x(value), y(value), z(value){}
+    explicit ShaderFloat3(float value)noexcept : x(value), y(value), z(value){}
     ShaderFloat3(float red, float green, float blue)noexcept : x(red), y(green), z(blue){}
 };
 
@@ -37,7 +37,7 @@ struct ShaderFloat4{
 
 
 public:
-    ShaderFloat4(ShaderFloat3 rgb, float alpha) : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
+    ShaderFloat4(ShaderFloat3 rgb, float alpha)noexcept : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
 };
 using float3 = ShaderFloat3;
 using float4 = ShaderFloat4;

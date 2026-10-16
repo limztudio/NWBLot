@@ -50,8 +50,6 @@ namespace __hidden_ecs_graphics_tests{
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeTriangleIndices;
 using NWB::Tests::NearlyEqual;
-template<typename T>
-using Vector = NWB::Tests::TestVector<T>;
 
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
 
@@ -467,7 +465,7 @@ static void AppendRuntimeVertex(NWB::Impl::MeshSkinningRuntimeInstance& instance
     instance.colors.push_back(MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f));
 }
 
-static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
+static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Alloc::ScratchArena& scratchArena){
     NWB::Impl::MeshSkinningRuntimeInstance instance(NWB::Tests::TestDetail::Arena());
     instance.entity = NWB::Core::ECS::EntityID(1u, 0u);
     instance.handle.value = 42u;
@@ -480,8 +478,10 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
     instance.meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u), });
     instance.meshlets.back().skinBase = 0u;
     instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 2.0f), NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f), });
-    Vector<NWB::Impl::MeshletPositionStreamRef> meshletPositionStreamRefs;
-    Vector<NWB::Impl::MeshletAttributeStreamRef> meshletAttributeStreamRefs;
+    ::Vector<NWB::Impl::MeshletPositionStreamRef, NWB::Core::Alloc::ScratchArena> meshletPositionStreamRefs(scratchArena);
+    meshletPositionStreamRefs.reserve(instance.restPositions.size());
+    ::Vector<NWB::Impl::MeshletAttributeStreamRef, NWB::Core::Alloc::ScratchArena> meshletAttributeStreamRefs(scratchArena);
+    meshletAttributeStreamRefs.reserve(instance.restPositions.size());
     NWB::Tests::AppendSequentialMeshletRefs(instance.restPositions.size(), meshletPositionStreamRefs, meshletAttributeStreamRefs, instance.meshletLocalVertexRefs);
     for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex){
         instance.attributeSkins.push_back(static_cast<u32>(vertexIndex));
@@ -527,7 +527,9 @@ static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(const NWB::Impl
 TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
     NWB::Impl::SkeletonPoseComponent pose = MakeTwoJointSkeletonPose(MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f), MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f));
 
-    Vector<NWB::Impl::SkeletonJointMatrix> resolvedJoints;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    ::Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::ScratchArena> resolvedJoints(scratchArena);
+    resolvedJoints.reserve(pose.localJoints.size());
     ASSERT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints));
     pose.parentJoints[1u] = 1u;
     EXPECT_FALSE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints));
@@ -539,14 +541,16 @@ TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
 TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     constexpr u32 s_ExpectedDualCount = 2u;
 
-    NWB::Impl::MeshSkinningRuntimeInstance instance = MakeTriangleInstance();
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Impl::MeshSkinningRuntimeInstance instance = MakeTriangleInstance(scratchArena);
     AssignSingleJointSkin(instance, 0u);
     instance.handle.value = 517u;
 
     NWB::Impl::SkeletonJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
     joints.joints.push_back(MakeIdentityJointMatrix());
 
-    Vector<NWB::Impl::SkeletonJointMatrix> jointMatrices;
+    ::Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::ScratchArena> jointMatrices(scratchArena);
+    jointMatrices.reserve(joints.joints.size());
     CapturingLogger runtimeValidationLogger;
     NWB::Core::Common::LoggerRegistrationGuard runtimeValidationLoggerRegistrationGuard(runtimeValidationLogger);
 

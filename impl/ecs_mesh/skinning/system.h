@@ -216,7 +216,7 @@ public:
 
 
 public:
-    virtual void update(Core::ECS::World& world, f32 delta)override;
+    virtual void update(Core::ECS::World& world, f32 delta)noexcept override;
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;

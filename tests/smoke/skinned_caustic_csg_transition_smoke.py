@@ -12,6 +12,7 @@ import re
 import statistics
 import subprocess
 import sys
+import tempfile
 
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text)
 
@@ -191,21 +192,30 @@ def analyze(directory):
             "The 30-second warmup precedes live transitions; this is a posed-geometry/caustic lifetime test, not a settled post-transition GI quality qualification."]}
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path)
     parser.add_argument("--working-directory", type=Path)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--output-directory", type=Path, required=True)
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument("--output-directory", type=Path, help="Use the exact evidence directory with the existing freshness checks.")
+    output.add_argument("--output-root", type=Path, help="Preserve prior evidence and create a unique child directory for this run.")
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--analysis-only", action="store_true")
     parser.add_argument("--no-gpu-validation", dest="gpu_validation", action="store_false", default=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.analysis_only and args.output_root is not None:
+        parser.error("--analysis-only requires --output-directory with existing captured evidence")
     if not args.analysis_only and (not args.executable or not args.working_directory):
         parser.error("acquisition requires an executable and working directory")
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("timeout must be positive and finite")
     try:
+        if args.output_root is not None:
+            root = args.output_root.resolve()
+            root.mkdir(parents=True, exist_ok=True)
+            args.output_directory = Path(tempfile.mkdtemp(prefix="skinned_caustic_transition_", dir=root))
+            print(f"Skinned transition capture evidence: {args.output_directory}", flush=True)
         args.output_directory.mkdir(parents=True, exist_ok=True)
         if not args.analysis_only:
             for variant in VARIANTS:

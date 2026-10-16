@@ -99,13 +99,13 @@ TEST(Mesh, DegenerateUvsUseStableTangentFallback){
 }
 
 TEST(Mesh, RejectsDegenerateTangentFrameTriangle){
-    Vector<TangentFrameRebuildVertex> vertices;
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    ::Vector<TangentFrameRebuildVertex, NWB::Core::Alloc::ScratchArena> vertices(scratchArena);
     vertices.reserve(3u);
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
     const Vector<u32> indices = NWB::Tests::MakeTriangleIndices();
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
 
     EXPECT_FALSE(RebuildTangentFrames(scratchArena, vertices, indices));
 }

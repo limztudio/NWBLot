@@ -154,7 +154,7 @@ public:
     template<typename CookEntryT>
     static void LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry);
     template<typename CookEntryT>
-    [[nodiscard]] static Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry);
+    [[nodiscard]] static Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry, Core::Alloc::ScratchArena& scratchArena);
     template<typename PositionAtT, typename VisitFaceNormalsT>
     [[nodiscard]] static MeshletBoundsCalculation CalculateMeshletBounds(const u32 positionCount, const u32 primitiveCount, const PositionAtT& positionAt, const VisitFaceNormalsT& visitFaceNormals);
     template<typename CookEntryT>
@@ -204,7 +204,7 @@ public:
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     [[nodiscard]] static Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidate(
     const MeshletTrianglePrecompute& trianglePrecompute,
-    const Core::Assets::AssetVector<u32>& frontier,
+    const Vector<u32, Core::Alloc::ScratchArena>& frontier,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& scoreState,
     const MeshletDesc& meshlet,
@@ -229,14 +229,14 @@ public:
     const MeshletDesc& meshlet,
     const VertexRefVectorT& localVertexRefs,
     Core::CpuTaskScheduler& cpuScheduler,
-    Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates
+    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates
     );
     template<typename FrontierVectorT>
-    static void ClearMeshletFrontier(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags);
+    static void ClearMeshletFrontier(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags);
     template<typename FrontierVectorT>
-    static void RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags, const usize frontierOffset);
+    static void RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags, const usize frontierOffset);
     template<typename FrontierVectorT>
-    static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags);
+    static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags);
     template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
     [[nodiscard]] static bool AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, VertexRefVectorT& localSourceVertexRefs, MeshletDesc& meshlet, PrimitiveIndexVectorT& primitiveIndices);
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
@@ -246,28 +246,28 @@ public:
     const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const u32 triangleIndex,
-    Core::Assets::AssetVector<u32>& localSourceVertexRefs,
-    Core::Assets::AssetVector<u32>& localTriangleIndices,
+    Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
+    Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
-    Core::Assets::AssetVector<u32>& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
+    Vector<u32, Core::Alloc::ScratchArena>& frontier,
+    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
     );
     [[nodiscard]] static bool GrowMeshletFromFrontier(
     const Path& nwbFilePath,
     const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const usize seedSearchOffset,
-    Core::Assets::AssetVector<u32>& localSourceVertexRefs,
-    Core::Assets::AssetVector<u32>& localTriangleIndices,
+    Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
+    Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
     Core::CpuTaskScheduler& cpuScheduler,
-    Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates,
-    Core::Assets::AssetVector<u32>& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
+    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
+    Vector<u32, Core::Alloc::ScratchArena>& frontier,
+    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
     );
     template<typename PositionRefVectorT>
     [[nodiscard]] static Expected<u16> FindMeshletPositionRef(const PositionRefVectorT& refs, const MeshletPositionStreamRef& ref);
@@ -292,7 +292,7 @@ public:
     LocalVertexRefVectorT& outLocalVertexRefs
     );
     template<typename CookEntryT>
-    static bool BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, CookEntryT& entry, Core::CpuTaskScheduler& cpuScheduler);
+    static bool BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, CookEntryT& entry, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 
 
 public:
@@ -423,7 +423,7 @@ void MeshCookMeshlets::LogMeshletCookMetrics(const Path& nwbFilePath, const TStr
 
 
 template<typename CookEntryT>
-Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry){
+Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry, Core::Alloc::ScratchArena& scratchArena){
     MeshletTrianglePrecompute data(entry.positions.get_allocator().arena());
 
     const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
@@ -446,8 +446,7 @@ Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleD
     for(usize positionIndex = 0u; positionIndex < entry.positions.size(); ++positionIndex)
         data.positionTriangleOffsets[positionIndex + 1u] += data.positionTriangleOffsets[positionIndex];
 
-    Core::Assets::AssetVector<u32> positionTriangleCursor(entry.positions.get_allocator().arena());
-    positionTriangleCursor.insert(positionTriangleCursor.end(), data.positionTriangleOffsets.begin(), data.positionTriangleOffsets.end());
+    Vector<u32, Core::Alloc::ScratchArena> positionTriangleCursor(data.positionTriangleOffsets.begin(), data.positionTriangleOffsets.end(), scratchArena);
 
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         MeshletTriangleData& triangle = data.triangles[triangleIndex];
@@ -716,7 +715,7 @@ void MeshCookMeshlets::UpdateBestMeshletCandidateIfBetter(
 template<typename TriangleIndexVectorT, typename VertexRefVectorT>
 Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestMeshletFrontierCandidate(
     const MeshletTrianglePrecompute& trianglePrecompute,
-    const Core::Assets::AssetVector<u32>& frontier,
+    const Vector<u32, Core::Alloc::ScratchArena>& frontier,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& scoreState,
     const MeshletDesc& meshlet,
@@ -769,7 +768,7 @@ Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestDisconnectedMeshlet
     const MeshletDesc& meshlet,
     const VertexRefVectorT& localVertexRefs,
     Core::CpuTaskScheduler& cpuScheduler,
-    Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates
+    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates
 ){
     const usize triangleCount = trianglePrecompute.triangles.size();
     if(searchOffset >= triangleCount)
@@ -812,7 +811,7 @@ Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestDisconnectedMeshlet
 
 
 template<typename FrontierVectorT>
-void MeshCookMeshlets::ClearMeshletFrontier(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags){
+void MeshCookMeshlets::ClearMeshletFrontier(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags){
     for(const u32 triangleIndex : frontier)
         frontierFlags[triangleIndex] = 0u;
     frontier.clear();
@@ -820,7 +819,7 @@ void MeshCookMeshlets::ClearMeshletFrontier(FrontierVectorT& frontier, Core::Ass
 
 
 template<typename FrontierVectorT>
-void MeshCookMeshlets::RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags, const usize frontierOffset){
+void MeshCookMeshlets::RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags, const usize frontierOffset){
     const u32 triangleIndex = frontier[frontierOffset];
     frontierFlags[triangleIndex] = 0u;
     frontier[frontierOffset] = frontier.back();
@@ -829,7 +828,7 @@ void MeshCookMeshlets::RemoveMeshletFrontierCandidate(FrontierVectorT& frontier,
 
 
 template<typename FrontierVectorT>
-void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags){
+void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
     for(const u32 positionIndex : triangle.positions){
         const u32 triangleOffsetBegin = trianglePrecompute.positionTriangleOffsets[positionIndex];
@@ -970,7 +969,7 @@ template<
 
 
 template<typename CookEntryT>
-bool MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, CookEntryT& entry, Core::CpuTaskScheduler& cpuScheduler){
+bool MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, CookEntryT& entry, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
     entry.meshlets.clear();
     entry.meshletBounds.clear();
     entry.meshletPositionStreamRefs.clear();
@@ -984,28 +983,29 @@ bool MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView 
     entry.meshletLocalVertexRefs.reserve(indices.size());
     entry.meshletPrimitiveIndices.reserve(indices.size());
 
-    auto precomputed = PrecomputeMeshletTriangleData(nwbFilePath, metaKind, indices, entry);
+    auto precomputed = PrecomputeMeshletTriangleData(nwbFilePath, metaKind, indices, entry, scratchArena);
     if(!precomputed)
         return false;
     MeshletTrianglePrecompute& trianglePrecompute = *precomputed;
 
     MeshletDesc current;
-    Core::Assets::AssetVector<u32> localSourceVertexRefs(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<MeshletPositionStreamRef> localPositionRefs(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<MeshletAttributeStreamRef> localAttributeRefs(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<u32> localAttributeSkins(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<MeshletLocalVertexRef> localVertexRefs(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<u32> localTriangleIndices(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<MeshletCandidateSearchResult> parallelCandidates(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<u32> frontier(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<u8> frontierFlags(entry.positions.get_allocator().arena());
+    Vector<u32, Core::Alloc::ScratchArena> localSourceVertexRefs(scratchArena);
+    Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> localPositionRefs(scratchArena);
+    Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> localAttributeRefs(scratchArena);
+    Vector<u32, Core::Alloc::ScratchArena> localAttributeSkins(scratchArena);
+    Vector<MeshletLocalVertexRef, Core::Alloc::ScratchArena> localVertexRefs(scratchArena);
+    Vector<u32, Core::Alloc::ScratchArena> localTriangleIndices(scratchArena);
+    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena> parallelCandidates(scratchArena);
+    Vector<u32, Core::Alloc::ScratchArena> frontier(scratchArena);
+    Vector<u8, Core::Alloc::ScratchArena> frontierFlags(scratchArena);
     localSourceVertexRefs.reserve(s_MeshMaxMeshletVertices);
     localPositionRefs.reserve(s_MeshMaxMeshletVertices);
     localAttributeRefs.reserve(s_MeshMaxMeshletVertices);
     localAttributeSkins.reserve(s_MeshMaxMeshletVertices);
     localVertexRefs.reserve(s_MeshMaxMeshletVertices);
     localTriangleIndices.reserve(s_MeshMaxMeshletTriangles);
-    frontier.reserve(s_MeshMaxMeshletTriangles * s_MeshletTriangleIndexCount);
+    parallelCandidates.reserve((static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription);
+    frontier.reserve(trianglePrecompute.triangles.size());
     frontierFlags.resize(trianglePrecompute.triangles.size(), 0u);
 
     MeshletScoreState scoreState;

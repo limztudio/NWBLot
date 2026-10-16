@@ -109,7 +109,7 @@ static AssetVolumeObjectFileHeader BuildObjectFileHeader(const Core::Assets::IAs
     return header;
 }
 
-static bool HeaderMatches(const AssetVolumeObjectFileHeader& lhs, const AssetVolumeObjectFileHeader& rhs){
+static bool HeaderMatches(const AssetVolumeObjectFileHeader& lhs, const AssetVolumeObjectFileHeader& rhs)noexcept{
     return lhs.magic == rhs.magic && lhs.version == rhs.version && lhs.headerSize == rhs.headerSize && lhs.assetTypeHash == rhs.assetTypeHash && lhs.payloadSize == rhs.payloadSize && lhs.payloadHash == rhs.payloadHash && lhs.cookKeyHash == rhs.cookKeyHash;
 }
 
@@ -225,15 +225,13 @@ private:
 
 struct RegistryObjectBucketManifest{
     AssetsVolumeCookDetail::AssetVolumePackManifest manifest;
-    Core::Assets::CookEntryPathHashSet seenVirtualPathHashes;
 
     explicit RegistryObjectBucketManifest(Core::Assets::AssetArena& arena)
         : manifest(arena)
-        , seenVirtualPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), arena)
     {}
 };
 
-using RegistryObjectBucketManifestVector = Core::Assets::CookVector<RegistryObjectBucketManifest>;
+using RegistryObjectBucketManifestVector = Vector<RegistryObjectBucketManifest, Core::Assets::ScratchArena>;
 
 static bool BuildRegistryObjectBucketManifestEntries(
     Core::Alloc::GlobalArena& arena,
@@ -242,10 +240,10 @@ static bool BuildRegistryObjectBucketManifestEntries(
     Core::Assets::CookEntryRegistry& entryRegistry,
     const usize bucketIndex,
     AssetsVolumeCookDetail::AssetVolumePackManifest& bucketManifest,
-    Core::Assets::CookEntryPathHashSet& bucketSeenVirtualPathHashes,
     Futex& objectCacheWriteMutex
 ){
     Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_CookArena);
+    Core::Assets::CookEntryPathHashSet bucketSeenVirtualPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     AssetVolumeObjectCacheWriter cookedAssetWriter(arena, resolvedPaths.cacheDirectory, configurationSafeName, bucketManifest, scratchArena, objectCacheWriteMutex);
     Core::Assets::CookEntryWriteContext cookEntryWriteContext{ cookedAssetWriter, bucketSeenVirtualPathHashes };
     return entryRegistry.writeBucket(bucketIndex, cookEntryWriteContext);
@@ -300,13 +298,14 @@ bool BuildRegistryObjectManifestEntries(
     const AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& seenVirtualPathHashes
+    VirtualPathHashSet& seenVirtualPathHashes,
+    ScratchArena& scratchArena
 ){
     const usize bucketCount = parsedMetadata.entryRegistry.bucketCount();
     if(bucketCount == 0u)
         return true;
 
-    __hidden_cooked_object_cache::RegistryObjectBucketManifestVector bucketManifests(arena);
+    __hidden_cooked_object_cache::RegistryObjectBucketManifestVector bucketManifests(scratchArena);
     bucketManifests.reserve(bucketCount);
     for(usize bucketIndex = 0u; bucketIndex < bucketCount; ++bucketIndex)
         bucketManifests.emplace_back(arena);
@@ -318,7 +317,7 @@ bool BuildRegistryObjectManifestEntries(
             return;
 
         __hidden_cooked_object_cache::RegistryObjectBucketManifest& bucketManifest = bucketManifests[bucketIndex];
-        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(arena, resolvedPaths, configurationSafeName, parsedMetadata.entryRegistry, bucketIndex, bucketManifest.manifest, bucketManifest.seenVirtualPathHashes, objectCacheWriteMutex))
+        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(arena, resolvedPaths, configurationSafeName, parsedMetadata.entryRegistry, bucketIndex, bucketManifest.manifest, objectCacheWriteMutex))
             return;
 
         failed.store(true, MemoryOrder::release);

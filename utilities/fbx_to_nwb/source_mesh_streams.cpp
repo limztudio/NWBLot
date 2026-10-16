@@ -53,14 +53,14 @@ bool FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams
 }
 
 
-void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh){
+void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena){
     mesh.tangents.clear();
 
-    SourceVertexRefIndexMap compactLookup;
+    SourceVertexRefIndexMap compactLookup(scratchArena);
     compactLookup.reserve(mesh.vertexRefs.size());
     UtilityVector<SourceVertexRef> compactVertexRefs;
     compactVertexRefs.reserve(mesh.vertexRefs.size());
-    UtilityVector<u32> vertexRefRemap;
+    UtilityScratchVector<u32> vertexRefRemap(scratchArena);
     vertexRefRemap.reserve(mesh.vertexRefs.size());
 
     for(SourceVertexRef ref : mesh.vertexRefs){
@@ -86,7 +86,7 @@ void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 
-bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityVector<u32>& inOutTriangleIndices){
+bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){
     if(mesh.max_face_triangles > Limit<usize>::s_Max / s_TriangleIndexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return false;
@@ -107,7 +107,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
     NWB_ASSERT(!mesh.indices.empty());
     NWB_ASSERT((mesh.indices.size() % s_TriangleIndexCount) == 0u);
 
-    UtilityVector<RebuildVertex> rebuildVertices;
+    UtilityScratchVector<RebuildVertex> rebuildVertices(scratchArena);
     rebuildVertices.reserve(mesh.vertexRefs.size());
     for(const SourceVertexRef& ref : mesh.vertexRefs){
         NWB_ASSERT(ref.position < mesh.positions.size());
@@ -119,7 +119,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
         rebuildVertices.push_back(RebuildVertex{ Float4(position.x, position.y, position.z, 0.0f), Float4(normal.x, normal.y, normal.z, 0.0f), Float4(1.0f, 0.0f, 0.0f, 1.0f), mesh.uv0[ref.uv0], });
     }
 
-    UtilityVector<u32> rebuildIndices;
+    UtilityScratchVector<u32> rebuildIndices(scratchArena);
     rebuildIndices.reserve(mesh.indices.size());
     for(usize indexBase = 0u; indexBase < mesh.indices.size(); indexBase += s_TriangleIndexCount){
         const u32 i0 = mesh.indices[indexBase + 0u];
@@ -154,7 +154,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
         return MakeUnexpected(Failure{});
     }
 
-    Vec4IndexMap tangentLookup;
+    Vec4IndexMap tangentLookup(scratchArena);
     tangentLookup.reserve(mesh.vertexRefs.size());
     mesh.tangents.clear();
     for(usize vertexRefIndex = 0u; vertexRefIndex < mesh.vertexRefs.size(); ++vertexRefIndex){

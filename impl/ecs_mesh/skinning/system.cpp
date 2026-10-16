@@ -252,7 +252,7 @@ MeshSkinningSystem::~MeshSkinningSystem()noexcept{
     m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(*this);
 }
 
-void MeshSkinningSystem::update(Core::ECS::World& world, const f32 delta){
+void MeshSkinningSystem::update(Core::ECS::World& world, const f32 delta)noexcept{
     static_cast<void>(world);
     static_cast<void>(delta);
 }

@@ -64,13 +64,23 @@ struct MipEncoderDiagnostics{
     TStringView processFailure;
     TStringView incompleteFailure;
 };
-[[nodiscard]] bool EncodeMip(basisu::basis_compressor_params& parameters, basist::basis_tex_format format, u32 planeCount, u32 width, u32 height, TexturePayload& inOutPayload, const MipEncoderDiagnostics& diagnostics, bool* inOutHasAlpha = nullptr);
+[[nodiscard]] bool EncodeMip(
+    Core::Alloc::ScratchArena& scratchArena,
+    basisu::basis_compressor_params& parameters,
+    basist::basis_tex_format format,
+    u32 planeCount,
+    u32 width,
+    u32 height,
+    TexturePayload& inOutPayload,
+    const MipEncoderDiagnostics& diagnostics,
+    bool* inOutHasAlpha = nullptr
+);
 void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb)noexcept;
 [[nodiscard]] bool ValidateBackendOutput(const basisu::basisu_backend_output& backendOutput, const basist::basis_tex_format expectedFormat);
-[[nodiscard]] bool AppendCanonicalMip(const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload);
+[[nodiscard]] bool AppendCanonicalMip(Core::Alloc::ScratchArena& scratchArena, const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload);
 [[nodiscard]] Expected<basisu::imagef> LoadAlphaMask(const AlphaSource& alphaSource, const u32 expectedWidth, const u32 expectedHeight);
-[[nodiscard]] Expected<TexturePayload> EncodeHdr2DOrCube(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const AlphaSource& alphaSource);
-[[nodiscard]] Expected<TexturePayload> EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource);
+[[nodiscard]] Expected<TexturePayload> EncodeHdr2DOrCube(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const TextureDimension::Enum dimension, const AlphaSource& alphaSource);
+[[nodiscard]] Expected<TexturePayload> EncodeHdrVolume(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const AlphaSource& alphaSource);
 [[nodiscard]] Expected<VolumeMipDims> ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth)noexcept;
 struct VolumeMipSliceRange{
     u32 first = 0u;
@@ -107,7 +117,7 @@ struct HdrPlaneLoader{
     }
 };
 template<typename PlaneLoader>
-[[nodiscard]] Expected<basisu::vector<typename PlaneLoader::Plane>> LoadPlanesFromFiles(const Vector<Path>& inputPaths){
+[[nodiscard]] Expected<basisu::vector<typename PlaneLoader::Plane>> LoadPlanesFromFiles(const Span<const Path> inputPaths){
     using Plane = typename PlaneLoader::Plane;
     basisu::vector<Plane> planes;
     if(inputPaths.empty())

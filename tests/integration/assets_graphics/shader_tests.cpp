@@ -79,6 +79,37 @@ TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
     EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_PROJECT_SHADERS_TEST_SHADER), "", Name(s_PS)));
 }
 
+TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmittingUnalignedRecords){
+    TestArena testArena;
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    Core::GraphicsVector<Core::ShaderArchive::Record> records(testArena.arena);
+    Core::ShaderArchive::Record record(testArena.arena);
+    record.shaderName = Name(s_PROJECT_SHADERS_TEST_SHADER);
+    record.variantName.assign(Core::ShaderArchive::s_DefaultVariant);
+    record.stage = Name(s_PS);
+    record.virtualPathHash = Name("shader/unaligned/default/ps").hash();
+    record.sourceChecksum = 0x12345678u;
+    records.push_back(Move(record));
+    const auto encoded = Core::ShaderArchive::SerializeIndex(testArena.arena, records);
+    ASSERT_TRUE(encoded);
+
+    alignas(u32) u8 unalignedStorage[2048u] = {};
+    ASSERT_LT(encoded->size(), LengthOf(unalignedStorage));
+    u8* const unalignedBytes = unalignedStorage + 1u;
+    NWB_MEMCPY(unalignedBytes, sizeof(unalignedStorage) - 1u, encoded->data(), encoded->size());
+    const auto admitted = Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() });
+    ASSERT_TRUE(admitted);
+    ASSERT_EQ(admitted->size(), 1u);
+    EXPECT_EQ(admitted->front().shaderName, records.front().shaderName);
+    EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
+    EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { nullptr, encoded->size() }));
+    EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() - 1u }));
+    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("nonempty byte view has no data")));
+    EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
+}
+
 static constexpr u32 PackSpirvStringWord(const char a, const char b, const char c, const char d)noexcept{
     return static_cast<u32>(static_cast<u8>(a)) | (static_cast<u32>(static_cast<u8>(b)) << 8u) | (static_cast<u32>(static_cast<u8>(c)) << 16u) | (static_cast<u32>(static_cast<u8>(d)) << 24u);
 }

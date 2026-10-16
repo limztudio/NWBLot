@@ -57,12 +57,12 @@ public:
         return ComboSource::enabled(index);
     }
 
-    void arm(const MutationKind::Enum kind, const u64 key = 8u){
+    void arm(const MutationKind::Enum kind, const u64 key = 8u)noexcept{
         m_kind = kind;
         m_key = key;
     }
 
-    [[nodiscard]] u64 mutations()const{ return m_mutations; }
+    [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
 
 
 private:
@@ -105,8 +105,8 @@ public:
         return ComboSource::text(index);
     }
 
-    void arm(){ m_armed = true; }
-    [[nodiscard]] u64 mutations()const{ return m_mutations; }
+    void arm()noexcept{ m_armed = true; }
+    [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
 
 
 private:

@@ -77,8 +77,7 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Ve
     outLoop.reserve(edges.size());
     outLoop.push_back(cursor);
     {
-        const auto seed = ::FindIf(remaining.begin(), remaining.end(), [cursor](const CsgDeformCutLoopEdge& edge)noexcept{ return edge.first == cursor || edge.second == cursor; }
-        );
+        const auto seed = ::FindIf(remaining.begin(), remaining.end(), [cursor](const CsgDeformCutLoopEdge& edge)noexcept{ return edge.first == cursor || edge.second == cursor; });
         if(seed == remaining.end())
             return false;
         cursor = seed->first == cursor ? seed->second : seed->first;

@@ -44,18 +44,18 @@ namespace __hidden_ui_text_font{
 
 class ScaledFont final : NoCopy{
 public:
-    ScaledFont(hb_face_t& face, f32 size)
+    ScaledFont(hb_face_t& face, f32 size)noexcept
         : m_font(hb_font_create(&face))
     {
         hb_ot_font_set_funcs(m_font);
         const i32 scale = static_cast<i32>(size * 64.0f + 0.5f);
         hb_font_set_scale(m_font, scale, scale);
     }
-    ~ScaledFont(){ hb_font_destroy(m_font); }
+    ~ScaledFont()noexcept{ hb_font_destroy(m_font); }
 
 
 public:
-    [[nodiscard]] bool valid()const{ return m_font != hb_font_get_empty(); }
+    [[nodiscard]] bool valid()const noexcept{ return m_font != hb_font_get_empty(); }
     [[nodiscard]] hb_font_t& get()const noexcept{ return *m_font; }
 
 
@@ -65,10 +65,10 @@ private:
 
 class ShapeBuffer final : NoCopy{
 public:
-    ShapeBuffer()
+    ShapeBuffer()noexcept
         : m_buffer(hb_buffer_create())
     {}
-    ~ShapeBuffer(){ hb_buffer_destroy(m_buffer); }
+    ~ShapeBuffer()noexcept{ hb_buffer_destroy(m_buffer); }
 
 
 public:
@@ -101,7 +101,7 @@ private:
         return arena.allocate(alignof(MaxAlign), static_cast<usize>(size));
     }
 
-    static void Release(FT_Memory memory, void* block){
+    static void Release(FT_Memory memory, void* block)noexcept{
         if(block){
             auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
             arena.deallocate(block, alignof(MaxAlign), 0u);

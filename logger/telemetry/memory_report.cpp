@@ -98,7 +98,7 @@ void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& 
     out += TelemetryMemoryReportDetail::s_MemorySourcesSectionFooter;
 }
 
-void AppendTelemetryMemoryRecordJson(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::PerfMemoryPayload& payload, const u32 streamId){
+void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, const Core::Telemetry::PerfMemoryPayload& payload, const u32 streamId){
     if(!out.empty())
         out += TelemetryMemoryReportDetail::s_MemoryRecordSeparator;
     out += TelemetryMemoryReportDetail::s_MemoryRecordOpen;

@@ -7,6 +7,7 @@
 
 #include <logger/global.h>
 
+#include <core/alloc/scratch.h>
 #include <core/telemetry/frame_graph.h>
 
 
@@ -41,7 +42,7 @@ struct FrameGraphReportRecord{
     {}
 };
 
-using FrameGraphReportRecords = Vector<FrameGraphReportRecord, TelemetryArena>;
+using FrameGraphReportRecords = Vector<FrameGraphReportRecord, Core::Alloc::ScratchArena>;
 
 struct FrameGraphOwnerStatisticsRange{
     usize physicalQueueBegin = 0u;
@@ -66,7 +67,7 @@ struct GraphTimingKeyHasher{
     usize operator()(const GraphTimingKey& key)const noexcept;
 };
 
-using GraphTimingMap = HashMap<GraphTimingKey, f64, TelemetryArena, GraphTimingKeyHasher, EqualTo<GraphTimingKey>>;
+using GraphTimingMap = HashMap<GraphTimingKey, f64, Core::Alloc::ScratchArena, GraphTimingKeyHasher, EqualTo<GraphTimingKey>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

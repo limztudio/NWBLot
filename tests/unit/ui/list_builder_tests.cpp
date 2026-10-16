@@ -165,7 +165,7 @@ protected:
         return m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId host()const{ return id("list", "panel"); }
+    [[nodiscard]] WidgetId host()const noexcept{ return id("list", "panel"); }
 
     [[nodiscard]] WidgetId row(const u64 key)const noexcept{
         return MakeWidgetPartId(MakeWidgetId(host(), "rows"), key);

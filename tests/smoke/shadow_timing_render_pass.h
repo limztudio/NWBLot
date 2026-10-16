@@ -32,7 +32,7 @@ public:
 public:
     [[nodiscard]] bool start();
     void stop();
-    virtual bool shouldRenderUnfocused()override{ return true; }
+    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
 
 
 private:

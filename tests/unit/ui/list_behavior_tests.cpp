@@ -25,18 +25,18 @@ using namespace NWB::Impl::Ui;
 
 class RangeSource final : public IListDataSource{
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return generation; }
-    [[nodiscard]] virtual u64 revision()const override{ return revisionValue; }
-    [[nodiscard]] virtual u64 rowCount()const override{ return count; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         ++keyCalls;
         if(index >= count)
             return 0u;
         return reversed ? count - index : index + 1u;
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
         u64 index = 0u;
         ++lookupCalls;
         if(changeRevisionOnLookup){
@@ -49,7 +49,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         u64 index = 0u;
         ++findCalls;
         if(start >= count)
@@ -74,14 +74,14 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual StringView text(u64)const override{ return "row"; }
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
 
     [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         ++enabledCalls;
         return index < count && (index < disabledBegin || index >= disabledEnd);
     }
 
-    void clearCalls(){
+    void clearCalls()noexcept{
         keyCalls = 0u;
         lookupCalls = 0u;
         findCalls = 0u;

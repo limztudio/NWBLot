@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 from reflection_optical_reference import DENSE_CASES, decode_radiance, pixel_reference
 from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_statistics, validate_frame, validate_statistics
@@ -454,7 +455,9 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--working-directory", type=Path, required=True)
-    parser.add_argument("--output-directory", type=Path, required=True)
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument("--output-directory", type=Path, help="Use this exact empty evidence directory.")
+    output.add_argument("--output-root", type=Path, help="Preserve prior evidence and create a unique child directory for this run.")
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--timeout", type=float, default=90)
     parser.add_argument("--application-arg", action="append", default=[])
@@ -466,7 +469,13 @@ def main(argv):
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("timeout must be finite and positive")
     args.require_hardware = True
-    args.output_directory = args.output_directory.resolve()
+    if args.output_root is not None:
+        root = args.output_root.resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        args.output_directory = Path(tempfile.mkdtemp(prefix="reflection_optical_", dir=root))
+        print(f"Reflection optical capture evidence: {args.output_directory}", flush=True)
+    else:
+        args.output_directory = args.output_directory.resolve()
     if args.output_directory.exists() and any(args.output_directory.iterdir()):
         parser.error("output directory must be empty; completed evidence is never overwritten")
     args.output_directory.mkdir(parents=True, exist_ok=True)

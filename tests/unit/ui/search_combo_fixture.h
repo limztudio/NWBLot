@@ -32,8 +32,8 @@ namespace FilterMode{
 
 class FilterView final : public IListDataSource{
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return generation; }
-    [[nodiscard]] virtual u64 revision()const override{ return contentRevision; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return contentRevision; }
     [[nodiscard]] virtual u64 rowCount()const noexcept override{
         return mode == FilterMode::Empty ? 0u : mode == FilterMode::Second ? full->count / 2u : full->count;
     }
@@ -42,7 +42,7 @@ public:
         return mode == FilterMode::Second ? index * 2u + 2u : index + 1u;
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
         u64 index = 0u;
         if(value == 0u || value > full->count || mode == FilterMode::Empty || (mode == FilterMode::Second && value % 2u != 0u))
             return MakeUnexpected(Failure{});
@@ -147,7 +147,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] virtual const IListDataSource& filtered()const override{ return alternateView ? alternate : view; }
+    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return alternateView ? alternate : view; }
 
 
 private:
@@ -215,7 +215,7 @@ public:
         return true;
     }
 
-    void text(const AStringView value){ nextText = value; changeText = true; }
+    void text(const AStringView value)noexcept{ nextText = value; changeText = true; }
 
 
 private:
@@ -279,7 +279,7 @@ protected:
         return prepareSearch(generation) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId query(const AStringView key = "combo")const{ return MakeWidgetId(host(key), "query"); }
+    [[nodiscard]] WidgetId query(const AStringView key = "combo")const noexcept{ return MakeWidgetId(host(key), "query"); }
 
     [[nodiscard]] bool openSearch(const u64 generation){
         const HitTarget* field = target(host());

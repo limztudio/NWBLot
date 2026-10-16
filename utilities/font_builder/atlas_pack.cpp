@@ -48,7 +48,7 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
         if(glyphs[index].record.drawable != 0u)
             order.push_back(index);
     }
-    Sort(order.begin(), order.end(), [&glyphs](u32 left, u32 right){
+    Sort(order.begin(), order.end(), [&glyphs](u32 left, u32 right)noexcept{
         const auto& a = glyphs[left].record;
         const auto& b = glyphs[right].record;
         if(a.height != b.height)

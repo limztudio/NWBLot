@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/alloc/scratch.h>
 #include <core/task/gpu/task_graph.h>
 
 #include <global/text_utils.h>
@@ -84,7 +85,8 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
     constexpr usize s_Count = 64u;
     context.resources.resize(s_Count);
     context.sets.resize(s_Count);
-    Vector<Name, Core::Alloc::GlobalArena> identities(context.inputArena);
+    Core::Alloc::ScratchArena scratchArena(Name("tests/graph_import_index/identities"));
+    Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_Count);
     for(usize index = 0u; index < s_Count; ++index){
         NameHash hash = ComputeNameHash("tests/graph_import_index/full_identity");

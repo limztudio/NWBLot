@@ -184,7 +184,7 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadShader
     NWB::Core::Assets::AssetBytes indexBinary{arena};
     if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
         return MakeUnexpected(Failure{});
-    return NWB::Core::ShaderArchive::DeserializeIndex(arena, indexBinary);
+    return NWB::Core::ShaderArchive::DeserializeIndex(arena, { indexBinary.data(), indexBinary.size() });
 }
 
 #if !defined(NWB_FINAL)

@@ -257,7 +257,7 @@ Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoColl
 }
 
 bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwbFiles, ParsedAssetMetadata& outMetadata, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena){
-    CookEntryPathHashSet seenPropertyAssetPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), cookArena);
+    CookEntryPathHashSet seenPropertyAssetPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
 
     seenPropertyAssetPathHashes.reserve(nwbFiles.size());
 

@@ -50,7 +50,6 @@ namespace __hidden_ui_gpu_texture_images{
     if(
         (format.kind != Core::FormatKind::Normalized && format.kind != Core::FormatKind::Float)
         || format.hasDepth || format.hasStencil || !(format.hasRed || format.hasGreen || format.hasBlue || format.hasAlpha)
-        || format.isSRGB
         || resource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
         || !resource.readinessToken.valid() || !resource.readinessToken.hasPhysicalQueueIdentity()
     )

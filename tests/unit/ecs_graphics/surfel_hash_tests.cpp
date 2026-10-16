@@ -5,7 +5,6 @@
 #include <gtest/gtest.h>
 
 #include <global/simd/type.h>
-#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -44,9 +43,7 @@ public:
 using int3 = ShaderInt3;
 
 float3 operator/(const float3 value, const f32 divisor)noexcept{
-    float3 result;
-    StoreFloat(VectorDivide(LoadFloat(value), VectorReplicate(divisor)), result);
-    return result;
+    return float3(value.x / divisor, value.y / divisor, value.z / divisor);
 }
 
 bool operator==(const int3 first, const int3 second)noexcept{
@@ -54,9 +51,7 @@ bool operator==(const int3 first, const int3 second)noexcept{
 }
 
 float3 FloorShaderVector(const float3 value)noexcept{
-    float3 result;
-    StoreFloat(VectorFloor(LoadFloat(value)), result);
-    return result;
+    return float3(Floor(value.x), Floor(value.y), Floor(value.z));
 }
 
 bool AllShaderLanes(const bool value)noexcept{ return value; }

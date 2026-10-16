@@ -18,7 +18,7 @@ bool Builder::paintImage(const Item& item, const LayoutBox& box){
     if(item.image >= m_scope->m_images.size())
         return false;
     const ImageFrame& frame = m_scope->m_images[item.image];
-    const auto placement = ImageLayout::Place(box.rectangle, visibleClip(box.clip));
+    const auto placement = ImageLayout::Place(box.rectangle, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))));
     if(!placement)
         return false;
     m_paint.pushClip(placement->clip);

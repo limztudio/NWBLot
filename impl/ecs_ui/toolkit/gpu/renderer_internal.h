@@ -188,7 +188,7 @@ struct GpuFrameSlot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Native commands and command IR use the same projection and physical clip bounds.
+// Call-scoped calculation scratch shared by native commands and command IR; never retained or uploaded.
 struct GpuRasterGeometry{
     SIMDVectorSingle pixelScale;
     SIMDVectorSingle targetSize;

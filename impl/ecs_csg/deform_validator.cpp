@@ -33,10 +33,6 @@ bool CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const 
     ;
 }
 
-bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex)noexcept{
-    return CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color));
-}
-
 f32 CsgDeformValidator::ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept{
     return options.distanceEpsilon > s_MinEpsilon ? options.distanceEpsilon : s_MinEpsilon;
 }
@@ -58,7 +54,8 @@ bool CsgDeformValidator::ValidTopology(NotNull<const CsgDeformTriangle*> triangl
 
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformValidator::FiniteInput(NotNull<const CsgDeformVertex*> vertices, const usize vertexCount)noexcept{
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        if(!CsgDeformValidator::FiniteVertex(vertices.get()[vertexIndex])){
+        const CsgDeformVertex& vertex = vertices.get()[vertexIndex];
+        if(!FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color))){
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
         }
     }

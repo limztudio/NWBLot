@@ -76,7 +76,7 @@ struct MeshletVertexCounts{
 };
 
 struct MeshletConeScore{
-    f32 cutoff = -1.0f;
+    SIMDVectorSingle cutoff = s_SIMDNegativeOne;
     bool enabled = false;
 };
 
@@ -86,9 +86,9 @@ struct MeshletScoreState{
     SIMDVectorSingle centroidSum;
     SIMDVectorSingle normalSum;
     SIMDVectorSingle normalAxis;
+    SIMDVectorSingle radius = VectorZero();
+    SIMDVectorSingle coneCutoff = s_SIMDNegativeOne;
     u32 primitiveCount = 0u;
-    f32 radius = 0.0f;
-    f32 coneCutoff = -1.0f;
     bool coneEnabled = false;
 };
 
@@ -128,8 +128,8 @@ static constexpr f32 s_TriangleVertexCount = 3.0f;
 struct MeshletBoundsCalculation{
     SIMDVectorSingle center = {};
     SIMDVectorSingle coneAxis = {};
-    f32 radius = 0.0f;
-    f32 coneCutoff = -1.0f;
+    SIMDVectorSingle radius = VectorZero();
+    SIMDVectorSingle coneCutoff = s_SIMDNegativeOne;
 };
 
 
@@ -165,16 +165,16 @@ public:
     [[nodiscard]] static MeshletVertexCounts CountMeshletMissingVertices(const VertexRefVectorT& localVertexRefs, const MeshletTriangleData& triangle);
     static void ResetMeshletScoreState(MeshletScoreState& state)noexcept;
     static void AccumulateMeshletScoreBounds(const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount], SIMDVectorSingle& minBounds, SIMDVectorSingle& maxBounds)noexcept;
-    [[nodiscard]] static f32 PredictMeshletScoreRadius(const MeshletScoreState& state, const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount])noexcept;
-    [[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept;
-    [[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept;
-    static void UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, f32& coneCutoff)noexcept;
+    [[nodiscard]] static SIMDVectorSingle PredictMeshletScoreRadius(const MeshletScoreState& state, const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount])noexcept;
+    [[nodiscard]] static SIMDVectorSingle MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept;
+    static void UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, SIMDVectorSingle& coneCutoff)noexcept;
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
     [[nodiscard]] static MeshletConeScore ComputeMeshletScoreConeCutoff(const TriangleIndexVectorT& triangleIndices, const SIMDVectorSingle axis, const u32 extraTriangleIndex, const bool hasExtraTriangle, const TriangleAreaNormalAtT& triangleAreaNormalAt);
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-    [[nodiscard]] static f32 PredictMeshletScoreConeWidening(const TriangleIndexVectorT& triangleIndices, const MeshletScoreState& state, const u32 triangleIndex, const SIMDVectorSingle triangleAreaNormal, const TriangleAreaNormalAtT& triangleAreaNormalAt);
+    [[nodiscard]] static SIMDVectorSingle PredictMeshletScoreConeWidening(const TriangleIndexVectorT& triangleIndices, const MeshletScoreState& state, const u32 triangleIndex, const SIMDVectorSingle triangleAreaNormal, const TriangleAreaNormalAtT& triangleAreaNormalAt);
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-    [[nodiscard]] static f32 ScoreMeshletCandidate(
+    [[nodiscard]] static SIMDVectorSingle ScoreMeshletCandidate(
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& state,
     const u32 triangleIndex,
@@ -499,7 +499,7 @@ MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(const u32 posi
         const SIMDVectorSingle delta = VectorSubtract(positionAt(localPositionIndex), result.center);
         radiusSquared = VectorMax(radiusSquared, Vector3LengthSq(delta));
     }
-    result.radius = VectorGetX(VectorSqrt(radiusSquared));
+    result.radius = VectorSqrt(radiusSquared);
 
     SIMDVectorSingle areaWeightedNormal = VectorZero();
     u32 validFaceNormalCount = 0u;
@@ -513,14 +513,14 @@ MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(const u32 posi
 
     result.coneAxis = NormalizeMeshletDirectionOrZero(areaWeightedNormal);
     if(validFaceNormalCount == primitiveCount && ::FrameValidDirection(result.coneAxis)){
-        result.coneCutoff = 1.0f;
+        result.coneCutoff = s_SIMDOne;
         visitFaceNormals([&](const SIMDVectorSingle meshletFaceNormal)noexcept{
             const SIMDVectorSingle faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);
             if(::FrameValidDirection(faceNormal))
-                result.coneCutoff = VectorGetX(VectorMin(VectorReplicate(result.coneCutoff), Vector3Dot(result.coneAxis, faceNormal)));
+                result.coneCutoff = VectorMin(result.coneCutoff, Vector3Dot(result.coneAxis, faceNormal));
         });
-        if(result.coneCutoff <= 0.0f)
-            result.coneCutoff = -1.0f;
+        if(VectorGetX(result.coneCutoff) <= 0.0f)
+            result.coneCutoff = s_SIMDNegativeOne;
     }
 
     return result;
@@ -563,7 +563,7 @@ MeshletBounds MeshCookMeshlets::BuildMeshletBounds(const CookEntryT& entry, cons
     const MeshletBoundsCalculation calculation = CalculateMeshletBounds(positionCount, MeshletPrimitiveCount(meshlet), positionAt, visitFaceNormals);
 
     MeshletBounds bounds;
-    StoreFloat(VectorSetW(calculation.center, calculation.radius * s_MeshletBoundsRadiusInflation), bounds.sphere);
+    StoreFloat(VectorSelect(calculation.center, VectorScale(calculation.radius, s_MeshletBoundsRadiusInflation), s_SIMDMaskW), bounds.sphere);
     bounds.conePacked = PackMeshletCone(calculation.coneAxis, calculation.coneCutoff);
     return bounds;
 }
@@ -613,7 +613,7 @@ MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(const TriangleI
         return {};
 
     bool hasNormal = false;
-    f32 coneCutoff = 1.0f;
+    SIMDVectorSingle coneCutoff = s_SIMDOne;
     for(const u32 triangleIndex : triangleIndices){
         const SIMDVectorSingle triangleAreaNormal = triangleAreaNormalAt(triangleIndex);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
@@ -623,7 +623,7 @@ MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(const TriangleI
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
 
-    if(!hasNormal || coneCutoff <= 0.0f)
+    if(!hasNormal || VectorGetX(coneCutoff) <= 0.0f)
         return {};
 
     return MeshletConeScore{ coneCutoff, true };
@@ -631,22 +631,22 @@ MeshletConeScore MeshCookMeshlets::ComputeMeshletScoreConeCutoff(const TriangleI
 
 
 template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-f32 MeshCookMeshlets::PredictMeshletScoreConeWidening(const TriangleIndexVectorT& triangleIndices, const MeshletScoreState& state, const u32 triangleIndex, const SIMDVectorSingle triangleAreaNormal, const TriangleAreaNormalAtT& triangleAreaNormalAt){
+SIMDVectorSingle MeshCookMeshlets::PredictMeshletScoreConeWidening(const TriangleIndexVectorT& triangleIndices, const MeshletScoreState& state, const u32 triangleIndex, const SIMDVectorSingle triangleAreaNormal, const TriangleAreaNormalAtT& triangleAreaNormalAt){
     if(!state.coneEnabled)
-        return 0.0f;
+        return VectorZero();
 
     const SIMDVectorSingle predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal));
     const auto predictedCone = ComputeMeshletScoreConeCutoff(triangleIndices, predictedAxis, triangleIndex, true, triangleAreaNormalAt);
     if(!predictedCone.enabled)
-        return 1.0f;
+        return s_SIMDOne;
 
     // Widening is the positive part of (state - predicted); the difference and the zero floor both stay on SIMD lanes.
-    return VectorGetX(VectorMax(VectorSubtract(VectorReplicate(state.coneCutoff), VectorReplicate(predictedCone.cutoff)), VectorZero()));
+    return VectorMax(VectorSubtract(state.coneCutoff, predictedCone.cutoff), VectorZero());
 }
 
 
 template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
-f32 MeshCookMeshlets::ScoreMeshletCandidate(
+SIMDVectorSingle MeshCookMeshlets::ScoreMeshletCandidate(
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& state,
     const u32 triangleIndex,
@@ -656,20 +656,17 @@ f32 MeshCookMeshlets::ScoreMeshletCandidate(
     const u32 missingVertexCount,
     const bool disconnected
 ){
-    const f32 predictedRadius = PredictMeshletScoreRadius(state, triangleVectors.positions);
-    // Radius growth is the positive part of (predicted - current); difference and zero floor stay on SIMD lanes.
-    const f32 predictedRadiusGrowth = VectorGetX(VectorMax(VectorSubtract(VectorReplicate(predictedRadius), VectorReplicate(state.radius)), VectorZero()));
-    const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleVectors.centroid);
-    const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleVectors.areaNormal);
-    const f32 coneWidening = PredictMeshletScoreConeWidening(triangleIndices, state, triangleIndex, triangleVectors.areaNormal, triangleAreaNormalAt);
-    return s_MeshletScoreSharedVertexWeight * static_cast<f32>(sharedVertexCount)
-        - s_MeshletScoreNewVertexWeight * static_cast<f32>(missingVertexCount)
-        - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
-        - s_MeshletScoreCentroidWeight * centroidDistance
-        + s_MeshletScoreNormalWeight * normalCoherence
-        - s_MeshletScoreConePenaltyWeight * coneWidening
-        - (disconnected ? s_MeshletScoreDisconnectedPenalty : 0.0f)
-    ;
+    const SIMDVectorSingle predictedRadius = PredictMeshletScoreRadius(state, triangleVectors.positions);
+    const SIMDVectorSingle predictedRadiusGrowth = VectorMax(VectorSubtract(predictedRadius, state.radius), VectorZero());
+    const SIMDVectorSingle centroidDistance = MeshletScoreCentroidDistance(state, triangleVectors.centroid);
+    const SIMDVectorSingle normalCoherence = MeshletScoreNormalCoherence(state, triangleVectors.areaNormal);
+    const SIMDVectorSingle coneWidening = PredictMeshletScoreConeWidening(triangleIndices, state, triangleIndex, triangleVectors.areaNormal, triangleAreaNormalAt);
+    SIMDVectorSingle score = VectorSubtract(VectorScale(VectorReplicate(static_cast<f32>(sharedVertexCount)), s_MeshletScoreSharedVertexWeight), VectorScale(VectorReplicate(static_cast<f32>(missingVertexCount)), s_MeshletScoreNewVertexWeight));
+    score = VectorNegativeMultiplySubtractExpression(VectorReplicate(s_MeshletScoreRadiusWeight), predictedRadiusGrowth, score);
+    score = VectorNegativeMultiplySubtractExpression(VectorReplicate(s_MeshletScoreCentroidWeight), centroidDistance, score);
+    score = VectorMultiplyAddExpression(VectorReplicate(s_MeshletScoreNormalWeight), normalCoherence, score);
+    score = VectorNegativeMultiplySubtractExpression(VectorReplicate(s_MeshletScoreConePenaltyWeight), coneWidening, score);
+    return VectorSubtract(score, VectorReplicate(disconnected ? s_MeshletScoreDisconnectedPenalty : 0.0f));
 }
 
 
@@ -707,7 +704,7 @@ void MeshCookMeshlets::UpdateBestMeshletCandidateIfBetter(
     const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex)noexcept{
         return trianglePrecompute.triangleCalculations[otherTriangleIndex].vectors.areaNormal;
     };
-    const f32 score = ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, triangleVectors, triangleAreaNormalAt, vertexCounts->shared, vertexCounts->missing, disconnected);
+    const f32 score = VectorGetX(ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, triangleVectors, triangleAreaNormalAt, vertexCounts->shared, vertexCounts->missing, disconnected));
     if(found && (score < outCandidate.score || (score == outCandidate.score && triangleIndex > outCandidate.triangleIndex)))
         return;
 
@@ -874,7 +871,7 @@ bool MeshCookMeshlets::AddMeshletTriangleToBuilder(const Path& nwbFilePath, cons
 template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
 void MeshCookMeshlets::AddMeshletTriangleToScoreState(const TriangleIndexVectorT& triangleIndices, const MeshletTriangleVectors& triangleVectors, const TriangleAreaNormalAtT& triangleAreaNormalAt, MeshletScoreState& state){
     AccumulateMeshletScoreBounds(triangleVectors.positions, state.minBounds, state.maxBounds);
-    state.radius = AabbTests::Radius(state.minBounds, state.maxBounds);
+    state.radius = Vector3Length(AabbTests::Extents(state.minBounds, state.maxBounds));
     state.centroidSum = VectorAdd(state.centroidSum, triangleVectors.centroid);
     state.normalSum = VectorAdd(state.normalSum, triangleVectors.areaNormal);
     state.normalAxis = NormalizeMeshletDirectionOrZero(state.normalSum);

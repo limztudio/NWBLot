@@ -3,6 +3,7 @@
 
 
 #include "tree.h"
+#include "../rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -46,12 +47,18 @@ bool LayoutTree::arrangeNode(const u32 index)noexcept{
     LayoutBox& box = work.box;
     if(!IsValidRectangle(box.rectangle))
         return false;
-    box.content = Inset(box.rectangle, description.padding);
-    box.clip = Intersect(box.rectangle, work.inheritedClip);
+    const SIMDVectorSingle rectangle = VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.width, box.rectangle.height);
+    const SIMDVectorSingle padding = VectorSet(description.padding.left, description.padding.top, description.padding.right, description.padding.bottom);
+    const SIMDVectorSingle inheritedClip = VectorSet(work.inheritedClip.x, work.inheritedClip.y, work.inheritedClip.width, work.inheritedClip.height);
+    const SIMDVectorSingle content = Inset(rectangle, padding);
+    const SIMDVectorSingle clip = IntersectRectValue(rectangle, inheritedClip);
+    box.content = { VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) };
+    box.clip = { VectorGetX(clip), VectorGetY(clip), VectorGetZ(clip), VectorGetW(clip) };
     box.hit = box.clip;
     if(!IsValidRectangle(box.content) || !IsValidRectangle(box.clip))
         return false;
-    const Rect childClip = description.clipChildren ? Intersect(work.inheritedClip, box.content) : work.inheritedClip;
+    const SIMDVectorSingle childClipValue = description.clipChildren ? IntersectRectValue(inheritedClip, content) : inheritedClip;
+    const Rect childClip{ VectorGetX(childClipValue), VectorGetY(childClipValue), VectorGetZ(childClipValue), VectorGetW(childClipValue) };
     const bool row = description.direction == LayoutDirection::Row;
     const bool column = description.direction == LayoutDirection::Column;
     f64 consumed = 0.0;

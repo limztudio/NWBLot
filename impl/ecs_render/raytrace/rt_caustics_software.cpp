@@ -84,7 +84,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
     const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, 2u, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 temporalDecay = causticTemporalDecay();
-    const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
+    const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
     const bool inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{ targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
@@ -126,7 +126,7 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList&
 
     // Normalize temporal accumulation to retain non-temporal brightness.
     const f32 temporalDecay = causticTemporalDecay();
-    const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
+    const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
 
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
     const RayTracingCausticsTaskDetail::CausticResolvePassResources irradiance{ targets.causticIrradiance.get(), targets.bindless.causticIrradiance.slot(), targets.bindless.causticIrradianceStorage.slot() };

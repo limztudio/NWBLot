@@ -6,6 +6,7 @@
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
+#include <global/simd/convert.h>
 #include <global/scope_exit.h>
 
 
@@ -24,12 +25,12 @@ namespace __hidden_builder_slider{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Point> MinimumSize(const UiSkinRegion& region, const f32 density)noexcept{
+[[nodiscard]] static Expected<SIMDVectorSingle> LoadMinimumSize(const UiSkinRegion& region, const SIMDVectorDouble density)noexcept{
     if(!IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble horizontalVerticalValue = VectorDoubleDivide(
         VectorDoubleSet(static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom), 0.0, 0.0),
-        VectorDoubleReplicate(density)
+        density
     );
     const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
     const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleSelect(VectorDoubleZero(), horizontalVerticalValue, s_DoubleSIMDMaskXY);
@@ -38,7 +39,7 @@ namespace __hidden_builder_slider{
     const f64 height = VectorDoubleGetY(widthHeightValue);
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
-    return Point{ static_cast<f32>(width), static_cast<f32>(height) };
+    return ConvertVectorDoubleToSingle(widthHeightValue);
 }
 
 
@@ -109,19 +110,19 @@ bool Builder::prepareSlider(SliderFrame& frame){
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.thumbFallback);
     if(!track || !normal)
         return false;
-    const auto trackMinimum = __hidden_builder_slider::MinimumSize(*track, m_skin->referenceDensity());
+    const auto trackMinimum = __hidden_builder_slider::LoadMinimumSize(*track, VectorDoubleReplicate(m_skin->referenceDensity()));
     if(!trackMinimum)
         return false;
-    frame.m_style.trackHeight = VectorGetY(VectorMax(VectorSet(trackMinimum->x, frame.m_style.trackHeight, 0.0f, 0.0f), VectorSet(trackMinimum->x, trackMinimum->y, 0.0f, 0.0f)));
+    frame.m_style.trackHeight = VectorGetY(VectorMax(VectorSet(VectorGetX(*trackMinimum), frame.m_style.trackHeight, 0.0f, 0.0f), VectorSet(VectorGetX(*trackMinimum), VectorGetY(*trackMinimum), 0.0f, 0.0f)));
     const UiSkinRegion* thumbs[]{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
             continue;
-        const auto minimum = __hidden_builder_slider::MinimumSize(*thumb, m_skin->referenceDensity());
+        const auto minimum = __hidden_builder_slider::LoadMinimumSize(*thumb, VectorDoubleReplicate(m_skin->referenceDensity()));
         if(!minimum)
             return false;
         const SIMDVectorSingle currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y, frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
-        const SIMDVectorSingle minimumSize = VectorSet(minimum->x, minimum->y, minimum->x, minimum->y);
+        const SIMDVectorSingle minimumSize = VectorSet(VectorGetX(*minimum), VectorGetY(*minimum), VectorGetX(*minimum), VectorGetY(*minimum));
         const SIMDVectorSingle maximumSize = VectorSelect(minimumSize, currentSize, VectorGreater(currentSize, minimumSize));
         frame.m_style.thumbExtent = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
     }
@@ -129,7 +130,7 @@ bool Builder::prepareSlider(SliderFrame& frame){
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const SIMDVectorDouble paddedSize = VectorDoubleAdd(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleSet(frame.m_metrics.padding.left, frame.m_metrics.padding.top, 0.0, 0.0), VectorDoubleSet(frame.m_metrics.padding.right, frame.m_metrics.padding.bottom, 0.0, 0.0)), VectorDoubleSet(frame.m_metrics.thumbExtent.x, frame.m_metrics.thumbExtent.y, 0.0, 0.0)), VectorDoubleSet(trackMinimum->x, 0.0, 0.0, 0.0));
+    const SIMDVectorDouble paddedSize = VectorDoubleAdd(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleSet(frame.m_metrics.padding.left, frame.m_metrics.padding.top, 0.0, 0.0), VectorDoubleSet(frame.m_metrics.padding.right, frame.m_metrics.padding.bottom, 0.0, 0.0)), VectorDoubleSet(frame.m_metrics.thumbExtent.x, frame.m_metrics.thumbExtent.y, 0.0, 0.0)), VectorDoubleSet(VectorGetX(*trackMinimum), 0.0, 0.0, 0.0));
     const f64 width = VectorDoubleGetX(paddedSize);
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;

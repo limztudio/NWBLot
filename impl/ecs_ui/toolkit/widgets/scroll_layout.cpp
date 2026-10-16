@@ -25,18 +25,16 @@ namespace __hidden_ui_scroll_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVectorDouble geometryPair0Operand0 = VectorDoubleSet(static_cast<f64>(lhs.x), static_cast<f64>(lhs.y), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair0Operand1 = VectorDoubleSet(static_cast<f64>(rhs.x), static_cast<f64>(rhs.y), 0.0, 0.0);
-    const SIMDVectorDouble xYValue = VectorDoubleSelect(geometryPair0Operand1, geometryPair0Operand0, VectorDoubleGreater(geometryPair0Operand0, geometryPair0Operand1));
-    const f64 x = VectorDoubleGetX(xYValue);
-    const f64 y = VectorDoubleGetY(xYValue);
-    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(lhs.x), static_cast<f64>(lhs.y), 0.0, 0.0), VectorDoubleSet(lhs.width, lhs.height, 0.0, 0.0));
-    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(rhs.x), static_cast<f64>(rhs.y), 0.0, 0.0), VectorDoubleSet(rhs.width, rhs.height, 0.0, 0.0));
-    const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleLess(geometryPair1Operand0, geometryPair1Operand1));
-    const SIMDVectorDouble extent = VectorDoubleSubtract(rightBottomValue, xYValue);
+[[nodiscard]] static SIMDVectorDouble Intersect(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+    const SIMDVectorDouble lhsOrigin = VectorDoubleSwizzle<0, 1, 0, 1>(lhs);
+    const SIMDVectorDouble rhsOrigin = VectorDoubleSwizzle<0, 1, 0, 1>(rhs);
+    const SIMDVectorDouble origin = VectorDoubleSelect(rhsOrigin, lhsOrigin, VectorDoubleGreater(lhsOrigin, rhsOrigin));
+    const SIMDVectorDouble lhsEnd = VectorDoubleAdd(lhsOrigin, VectorDoubleSwizzle<2, 3, 2, 3>(lhs));
+    const SIMDVectorDouble rhsEnd = VectorDoubleAdd(rhsOrigin, VectorDoubleSwizzle<2, 3, 2, 3>(rhs));
+    const SIMDVectorDouble end = VectorDoubleSelect(rhsEnd, lhsEnd, VectorDoubleLess(lhsEnd, rhsEnd));
+    const SIMDVectorDouble extent = VectorDoubleSubtract(end, origin);
     const SIMDVectorDouble size = VectorDoubleSelect(extent, VectorDoubleZero(), VectorDoubleGreater(VectorDoubleZero(), extent));
-    return { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(VectorDoubleGetX(size)), static_cast<f32>(VectorDoubleGetY(size)) };
+    return VectorDoubleSelect(VectorDoubleSwizzle<0, 1, 0, 1>(size), origin, s_DoubleSIMDMaskXY);
 }
 
 
@@ -89,7 +87,8 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(const Rect& bounds, const Rect
     candidate.viewport = { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(VectorDoubleGetX(viewportSize)), static_cast<f32>(availableHeight) };
     if(!IsValidUiRect(candidate.viewport))
         return MakeUnexpected(Failure{});
-    candidate.contentClip = Intersect(candidate.viewport, inheritedClip);
+    const SIMDVectorDouble contentClip = Intersect(VectorDoubleSet(candidate.viewport.x, candidate.viewport.y, candidate.viewport.width, candidate.viewport.height), VectorDoubleSet(inheritedClip.x, inheritedClip.y, inheritedClip.width, inheritedClip.height));
+    candidate.contentClip = { static_cast<f32>(VectorDoubleGetX(contentClip)), static_cast<f32>(VectorDoubleGetY(contentClip)), static_cast<f32>(VectorDoubleGetZ(contentClip)), static_cast<f32>(VectorDoubleGetW(contentClip)) };
     candidate.scrollbarVisible = barWidth > 0.0 && availableHeight > 0.0;
     if(candidate.scrollbarVisible){
         const SIMDVectorDouble trackOrigin = VectorDoubleSubtract(VectorDoubleAdd(xYValue, VectorDoubleSet(availableWidth, 0.0, 0.0, 0.0)), VectorDoubleSet(barWidth, 0.0, 0.0, 0.0));

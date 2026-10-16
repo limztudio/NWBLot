@@ -27,13 +27,6 @@ bool HasArea(const Rect& rectangle)noexcept{
     return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width > 0.0f && rectangle.height > 0.0f && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
 }
 
-Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    if(!HasArea(lhs) || !HasArea(rhs))
-        return {};
-    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height));
-    return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
-}
-
 bool EqualClip(const Rect& lhs, const Rect& rhs)noexcept{
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height;
 }
@@ -106,7 +99,13 @@ void PaintBuilder::reserve(const usize quadCount, const usize clipDepth){
 
 void PaintBuilder::pushClip(const Rect& clip){
     NWB_ASSERT(m_recording);
-    m_clips.push_back(__hidden_ui_paint::Intersect(m_clips.back(), clip));
+    const Rect& parent = m_clips.back();
+    Rect next;
+    if(__hidden_ui_paint::HasArea(parent) && __hidden_ui_paint::HasArea(clip)){
+        const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(parent.x, parent.y, parent.width, parent.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
+        next = { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
+    }
+    m_clips.push_back(next);
 }
 
 bool PaintBuilder::popClip()noexcept{
@@ -163,7 +162,10 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     NWB_ASSERT(IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a));
     NWB_ASSERT(color.a >= 0.0f && color.a <= 1.0f);
     const Rect clip = m_clips.back();
-    const Rect visible = __hidden_ui_paint::Intersect(rectangle, clip);
+    if(!__hidden_ui_paint::HasArea(rectangle) || !__hidden_ui_paint::HasArea(clip))
+        return;
+    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
+    const Rect visible{ VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
     if(!__hidden_ui_paint::HasArea(visible) || color.a <= 0.0f)
         return;
     if(m_snapshot.m_vertices.size() > Limit<u32>::s_Max - 4u || m_snapshot.m_indices.size() > Limit<u32>::s_Max - 6u){

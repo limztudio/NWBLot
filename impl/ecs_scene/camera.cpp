@@ -53,7 +53,7 @@ namespace __hidden_camera{
     if(!projection)
         return MakeUnexpected(Failure{});
 
-    return SceneCameraView{ entity, &transform, &camera, *projection };
+    return SceneCameraView{ entity, &transform, &camera, StoreCameraProjection(*projection) };
 }
 
 [[nodiscard]] Core::ECS::EntityID ResolveActiveCamera(Core::ECS::World& world){

@@ -101,7 +101,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     return CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalfVerticalFov, nearPlane, farPlane);
 }
 
-[[nodiscard]] inline Expected<CameraProjection> TryBuildCameraProjection(
+[[nodiscard]] inline Expected<SIMDMatrix> TryBuildCameraProjection(
     const SIMDVectorSingle verticalFovRadians,
     const SIMDVectorSingle nearPlane,
     const SIMDVectorSingle farPlane,
@@ -121,16 +121,21 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     if(!CameraProjectionValuesValid(projectionParams, aspectRatio, *tanHalfFov, nearPlane, farPlane))
         return MakeUnexpected(Failure{});
 
+    return SIMDMatrix{ .v = { projectionParams, VectorMergeX(aspectRatio, *tanHalfFov, nearPlane, farPlane), VectorZero(), VectorZero() } };
+}
+
+// Explicit boundary for retaining a projection; calculation helpers return SIMD rows.
+[[nodiscard]] inline CameraProjection StoreCameraProjection(const SIMDMatrix& values)noexcept{
     CameraProjection projection;
-    StoreFloat(projectionParams, projection.projectionParams);
-    projection.aspectRatio = VectorGetX(aspectRatio);
-    projection.tanHalfVerticalFov = VectorGetX(*tanHalfFov);
-    projection.nearPlane = VectorGetX(nearPlane);
-    projection.farPlane = VectorGetX(farPlane);
+    StoreFloat(values.v[0], projection.projectionParams);
+    projection.aspectRatio = VectorGetX(values.v[1]);
+    projection.tanHalfVerticalFov = VectorGetY(values.v[1]);
+    projection.nearPlane = VectorGetZ(values.v[1]);
+    projection.farPlane = VectorGetW(values.v[1]);
     return projection;
 }
 
-[[nodiscard]] inline CameraProjection BuildDefaultCameraProjection(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio)noexcept{
+[[nodiscard]] inline CameraProjection StoreDefaultCameraProjection(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio)noexcept{
     const auto defaultProjection = TryBuildCameraProjection(
         VectorReplicate(CameraDefaults::s_VerticalFovRadians),
         VectorReplicate(CameraDefaults::s_NearPlane),
@@ -139,7 +144,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
         VectorReplicate(fallbackAspectRatio)
     );
     if(defaultProjection)
-        return *defaultProjection;
+        return StoreCameraProjection(*defaultProjection);
 
     CameraProjection projection;
     projection.projectionParams = Float4(1.0f, 1.0f, 1.0f, 0.0f);

@@ -112,6 +112,7 @@ using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Allo
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 
 
+// Call-scoped calculation scratch; retained scene/GPU values use Float storage.
 struct CsgClipWorkBounds{
     SIMDVectorSingle minBounds = VectorZero();
     SIMDVectorSingle maxBounds = VectorZero();

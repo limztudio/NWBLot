@@ -22,7 +22,7 @@ bool Builder::paintWindow(){
     const WindowState& state = *m_scope->m_window.state;
     const WidgetStyle& style = m_scope->m_window.style;
     const Rect bounds = WindowLayout::Visible(state, m_scope->m_window.metrics);
-    const Rect clip = visibleClip(bounds);
+    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(bounds)));
     m_paint.pushClip(clip);
     const bool painted = m_paint.drawRegion(style.window, bounds);
     const bool popped = m_paint.popClip();
@@ -41,7 +41,7 @@ bool Builder::paintWindowTitle(){
     const WidgetStyle& style = m_scope->m_window.style;
     const WindowMetrics& metrics = m_scope->m_window.metrics;
     const Rect header{ state.bounds.x, state.bounds.y, state.bounds.width, metrics.titleHeight };
-    const Rect clip = visibleClip(header);
+    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(header)));
     m_paint.pushClip(clip);
     bool painted = m_paint.drawRegion(style.windowTitle, header);
     const InputRouter& input = m_context.input();
@@ -95,7 +95,7 @@ bool Builder::paintWindowResize(){
     const WindowState& state = *m_scope->m_window.state;
     const WidgetStyle& style = m_scope->m_window.style;
     const Rect corner = WindowLayout::Resize(state, m_scope->m_window.metrics);
-    const Rect clip = visibleClip(WindowLayout::Visible(state, m_scope->m_window.metrics));
+    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(WindowLayout::Visible(state, m_scope->m_window.metrics))));
     m_paint.pushClip(clip);
     const UiSkinRegion* resize = region(style.windowResize, style.windowResize);
     bool painted = true;

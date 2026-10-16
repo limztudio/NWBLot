@@ -41,7 +41,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         return;
     }
 
-    const f32 clearDepthValue = clearDepth ? VulkanTextureDetail::ClampClearFloat(depth, 0.0f, 1.0f) : 0.0f;
+    const f32 clearDepthValue = clearDepth ? VectorGetX(VectorSaturate(VectorReplicate(depth))) : 0.0f;
 
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = clearDepthValue;
@@ -119,7 +119,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
-    const f32 clearDepthValue = clearDepth ? VulkanTextureDetail::ClampClearFloat(depth, 0.0f, 1.0f) : 0.0f;
+    const f32 clearDepthValue = clearDepth ? VectorGetX(VectorSaturate(VectorReplicate(depth))) : 0.0f;
     if(!m_renderPassActive && desc.sampleCount != 1u){
         rejectCommandRecording(s_OperationName, NWB_TEXT("bounded multisampled clears require active rendering"));
         return;

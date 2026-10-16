@@ -70,7 +70,7 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& 
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
     const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, 2u, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 temporalDecay = causticTemporalDecay();
-    const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
+    const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
     const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{ targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };

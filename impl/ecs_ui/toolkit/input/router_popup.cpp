@@ -31,10 +31,8 @@ namespace __hidden_ui_router_popup{
     ;
 }
 
-[[nodiscard]] static bool Focusable(const HitTarget* target)noexcept{
-    if(!target || !target->enabled || !target->focusable)
-        return false;
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target->rectangle.x, target->rectangle.y, target->rectangle.width, target->rectangle.height), VectorSet(target->clip.x, target->clip.y, target->clip.width, target->clip.height));
+[[nodiscard]] static bool Focusable(const SIMDVectorSingle rectangle, const SIMDVectorSingle clip)noexcept{
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(rectangle, clip);
     return (VectorMoveMask(VectorGreater(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
 }
 
@@ -143,7 +141,11 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
     const PopupToken nextTop = m_stagedPopups.empty() ? PopupToken{} : m_stagedPopups.back().scope.token;
     const auto eligible = [this](const WidgetId id, const u64 declaration, const PopupToken& scope)noexcept{
         const HitTarget* target = findTarget(id, declaration);
-        return __hidden_ui_router_popup::Focusable(target) && target->popup == scope;
+        return
+            target && target->enabled && target->focusable
+            && __hidden_ui_router_popup::Focusable(VectorSet(target->rectangle.x, target->rectangle.y, target->rectangle.width, target->rectangle.height), VectorSet(target->clip.x, target->clip.y, target->clip.width, target->clip.height))
+            && target->popup == scope
+        ;
     };
     // Rebuild the return chain for the accepted order, including insertions beneath a retained top popup.
     WidgetId candidateFocus = m_popups.empty() ? m_focus : m_popups.front().restoreFocus;
@@ -197,7 +199,10 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
         }
         if(!candidateFocus.valid() && staged.scope.autofocus){
             for(const auto& target : m_targets){
-                if(target.popup == candidatePopup && __hidden_ui_router_popup::Focusable(&target)){
+                if(
+                    target.popup == candidatePopup && target.enabled && target.focusable
+                    && __hidden_ui_router_popup::Focusable(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height))
+                ){
                     candidateFocus = target.id;
                     candidateDeclaration = target.declarationGeneration;
                     break;

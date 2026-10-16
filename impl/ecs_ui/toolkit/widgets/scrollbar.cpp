@@ -8,6 +8,7 @@
 
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
+#include <global/simd/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,61 +26,88 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidBar(const ScrollbarPlacement& bar, const ScrollAxis::Enum axis)noexcept{
+[[nodiscard]] static SIMDMatrixDouble LoadBarValues(const ScrollbarPlacement& bar)noexcept{
+    if(!IsFinite(bar.track.x) || !IsFinite(bar.track.y) || !IsFinite(bar.track.width) || !IsFinite(bar.track.height) || !IsFinite(bar.thumb.x) || !IsFinite(bar.thumb.y) || !IsFinite(bar.thumb.width) || !IsFinite(bar.thumb.height) || !IsFinite(bar.contentExtent) || !IsFinite(bar.viewportExtent) || !IsFinite(bar.maximum) || !IsFinite(bar.offset))
+        return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
+    return SIMDMatrixDouble{ .v = {
+        VectorDoubleSet(bar.track.x, bar.track.y, bar.track.width, bar.track.height),
+        VectorDoubleSet(bar.thumb.x, bar.thumb.y, bar.thumb.width, bar.thumb.height),
+        VectorDoubleSet(bar.contentExtent, bar.viewportExtent, bar.maximum, bar.offset),
+        VectorDoubleReplicate(bar.visible ? 1.0 : 0.0)
+    } };
+}
+
+[[nodiscard]] static bool ValidBar(const SIMDMatrixDouble& values, const ScrollAxis::Enum axis)noexcept{
+    for(u32 index = 0u; index < 3u; ++index){
+        if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u)
+            return false;
+    }
+    const f32 trackX = static_cast<f32>(VectorDoubleGetX(values.v[0]));
+    const f32 trackY = static_cast<f32>(VectorDoubleGetY(values.v[0]));
+    const f32 trackWidth = static_cast<f32>(VectorDoubleGetZ(values.v[0]));
+    const f32 trackHeight = static_cast<f32>(VectorDoubleGetW(values.v[0]));
+    const f32 thumbX = static_cast<f32>(VectorDoubleGetX(values.v[1]));
+    const f32 thumbY = static_cast<f32>(VectorDoubleGetY(values.v[1]));
+    const f32 thumbWidth = static_cast<f32>(VectorDoubleGetZ(values.v[1]));
+    const f32 thumbHeight = static_cast<f32>(VectorDoubleGetW(values.v[1]));
+    const f64 contentExtent = VectorDoubleGetX(values.v[2]);
+    const f64 viewportExtent = VectorDoubleGetY(values.v[2]);
+    const f64 maximum = VectorDoubleGetZ(values.v[2]);
+    const f64 offset = VectorDoubleGetW(values.v[2]);
+    if(contentExtent < 0.0 || viewportExtent < 0.0)
+        return false;
+    const SIMDVectorDouble expectedMaximum = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleSplatX(values.v[2]), VectorDoubleSplatY(values.v[2])));
     if(
-        !IsValidUiRect(bar.track) || !IsValidUiRect(bar.thumb)
-        || !IsFinite(bar.contentExtent) || bar.contentExtent < 0.0
-        || !IsFinite(bar.viewportExtent) || bar.viewportExtent < 0.0
-        || !IsFinite(bar.maximum) || bar.maximum != VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(bar.contentExtent), VectorDoubleReplicate(bar.viewportExtent))))
-        || !IsFinite(bar.offset) || bar.offset < 0.0 || bar.offset > bar.maximum
-        || (bar.viewportExtent > 0.0 && bar.maximum > 0.0 && bar.maximum >= bar.contentExtent)
+        trackWidth < 0.0f || trackHeight < 0.0f || thumbWidth < 0.0f || thumbHeight < 0.0f
+        || !IsFinite(trackX + trackWidth) || !IsFinite(trackY + trackHeight) || !IsFinite(thumbX + thumbWidth) || !IsFinite(thumbY + thumbHeight)
+        || contentExtent < 0.0 || viewportExtent < 0.0 || maximum != VectorDoubleGetX(expectedMaximum)
+        || offset < 0.0 || offset > maximum || (viewportExtent > 0.0 && maximum > 0.0 && maximum >= contentExtent)
     )
         return false;
-    if(!bar.visible){
-        return bar.track.x == 0.0f && bar.track.y == 0.0f && bar.track.width == 0.0f && bar.track.height == 0.0f && bar.thumb.x == 0.0f && bar.thumb.y == 0.0f && bar.thumb.width == 0.0f && bar.thumb.height == 0.0f;
-    }
-    if(bar.maximum <= 0.0 || bar.track.width <= 0.0f || bar.track.height <= 0.0f)
+    if(VectorDoubleGetX(values.v[3]) == 0.0)
+        return trackX == 0.0f && trackY == 0.0f && trackWidth == 0.0f && trackHeight == 0.0f && thumbX == 0.0f && thumbY == 0.0f && thumbWidth == 0.0f && thumbHeight == 0.0f;
+    if(maximum <= 0.0 || trackWidth <= 0.0f || trackHeight <= 0.0f)
         return false;
     if(axis == ScrollAxis::Horizontal){
         return
-            bar.viewportExtent == static_cast<f64>(bar.track.width)
-            && bar.thumb.y == bar.track.y && bar.thumb.height == bar.track.height
-            && bar.thumb.x >= bar.track.x && bar.thumb.width <= bar.track.width
-            && bar.thumb.x + bar.thumb.width <= bar.track.x + bar.track.width
+            viewportExtent == static_cast<f64>(trackWidth) && thumbY == trackY && thumbHeight == trackHeight
+            && thumbX >= trackX && thumbWidth <= trackWidth && thumbX + thumbWidth <= trackX + trackWidth
         ;
     }
     return
-        bar.viewportExtent == static_cast<f64>(bar.track.height)
-        && bar.thumb.x == bar.track.x && bar.thumb.width == bar.track.width
-        && bar.thumb.y >= bar.track.y && bar.thumb.height <= bar.track.height
-        && bar.thumb.y + bar.thumb.height <= bar.track.y + bar.track.height
+        viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth
+        && thumbY >= trackY && thumbHeight <= trackHeight && thumbY + thumbHeight <= trackY + trackHeight
     ;
 }
 
-[[nodiscard]] static bool MoveThumb(const f64 offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
-    bar.offset = VectorDoubleGetX(VectorDoubleMin(VectorDoubleReplicate(offset), VectorDoubleReplicate(bar.maximum)));
-    if(!bar.visible)
-        return true;
-    const f32 trackOrigin = axis == ScrollAxis::Horizontal ? bar.track.x : bar.track.y;
-    const f32 trackExtent = axis == ScrollAxis::Horizontal ? bar.track.width : bar.track.height;
-    const f32 thumbExtent = axis == ScrollAxis::Horizontal ? bar.thumb.width : bar.thumb.height;
-    const SIMDVectorDouble travel = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(trackExtent), VectorDoubleReplicate(thumbExtent)));
-    const SIMDVectorDouble positionValue = VectorDoubleAdd(VectorDoubleReplicate(trackOrigin), VectorDoubleMultiply(travel, VectorDoubleDivide(VectorDoubleReplicate(bar.offset), VectorDoubleReplicate(bar.maximum))));
-    const f64 position = VectorDoubleGetX(positionValue);
-    if(!IsFinite(position) || position < -Limit<f32>::s_Max || position > Limit<f32>::s_Max)
-        return false;
-    const SIMDVectorSingle first = VectorReplicate(trackOrigin);
-    const SIMDVectorSingle last = VectorMax(first, VectorSubtract(VectorAdd(first, VectorReplicate(trackExtent)), VectorReplicate(thumbExtent)));
-    const SIMDVectorSingle positionSingle = VectorReplicate(static_cast<f32>(position));
-    const f32 origin = VectorGetX(VectorSelect(first, VectorMin(last, positionSingle), VectorGreater(positionSingle, first)));
-    if(axis == ScrollAxis::Horizontal)
-        bar.thumb.x = origin;
-    else
-        bar.thumb.y = origin;
-    return ValidBar(bar, axis);
+[[nodiscard]] static Expected<SIMDVectorDouble> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const bool visible)noexcept{
+    const SIMDVectorDouble acceptedOffset = VectorDoubleMin(offset, maximum);
+    if(!visible)
+        return VectorDoubleSelect(VectorDoubleZero(), acceptedOffset, s_DoubleSIMDMaskX);
+    const SIMDVectorDouble trackValues = ConvertVectorSingleToDouble(track);
+    const SIMDVectorDouble travel = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleSplatY(trackValues), VectorDoubleSplatZ(trackValues)));
+    const SIMDVectorDouble position = VectorDoubleAdd(VectorDoubleSplatX(trackValues), VectorDoubleMultiply(travel, VectorDoubleDivide(acceptedOffset, maximum)));
+    if(!IsFinite(VectorDoubleGetX(position)) || VectorDoubleGetX(position) < -Limit<f32>::s_Max || VectorDoubleGetX(position) > Limit<f32>::s_Max)
+        return MakeUnexpected(Failure{});
+    const SIMDVectorSingle first = VectorSplatX(track);
+    const SIMDVectorSingle last = VectorMax(first, VectorSubtract(VectorAdd(first, VectorSplatY(track)), VectorSplatZ(track)));
+    const SIMDVectorSingle positionSingle = ConvertVectorDoubleToSingle(position);
+    const SIMDVectorSingle origin = VectorSelect(first, VectorMin(last, positionSingle), VectorGreater(positionSingle, first));
+    return VectorDoubleSelect(acceptedOffset, ConvertVectorSingleToDouble(origin), s_DoubleSIMDMaskY);
 }
 
-[[nodiscard]] static Expected<ScrollbarPlacement> BuildBar(const f64 contentExtent, const f64 viewportExtent, const Rect& track, const f32 minThumb, const f64 offset, const ScrollAxis::Enum axis)noexcept{
+[[nodiscard]] static bool StoreBarOffset(const SIMDVectorDouble offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
+    const SIMDVectorSingle track = axis == ScrollAxis::Horizontal ? VectorSet(bar.track.x, bar.track.width, bar.thumb.width, 0.0f) : VectorSet(bar.track.y, bar.track.height, bar.thumb.height, 0.0f);
+    const auto values = MoveThumb(offset, VectorDoubleReplicate(bar.maximum), track, bar.visible);
+    if(!values)
+        return false;
+    bar.offset = VectorDoubleGetX(*values);
+    if(bar.visible)
+        (axis == ScrollAxis::Horizontal ? bar.thumb.x : bar.thumb.y) = static_cast<f32>(VectorDoubleGetY(*values));
+    return !bar.visible || ValidBar(LoadBarValues(bar), axis);
+}
+
+[[nodiscard]] static Expected<ScrollbarPlacement> StoreBarPlacement(const f64 contentExtent, const f64 viewportExtent, const Rect& track, const f32 minThumb, const f64 offset, const ScrollAxis::Enum axis)noexcept{
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
@@ -102,7 +130,7 @@ namespace __hidden_ui_scrollbar{
         else
             candidate.thumb.height = VectorGetX(VectorMin(VectorReplicate(thumbExtent), VectorReplicate(track.height)));
     }
-    if(!MoveThumb(offset, axis, candidate) || !ValidBar(candidate, axis))
+    if(!StoreBarOffset(VectorDoubleReplicate(offset), axis, candidate) || !ValidBar(LoadBarValues(candidate), axis))
         return MakeUnexpected(Failure{});
     return candidate;
 }
@@ -207,11 +235,11 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
             return MakeUnexpected(Failure{});
         candidate.corner = *corner;
     }
-    const auto horizontalBar = BuildBar(contentWidth, viewportWidth, horizontalTrack, minThumb, previousScroll.x, ScrollAxis::Horizontal);
+    const auto horizontalBar = StoreBarPlacement(contentWidth, viewportWidth, horizontalTrack, minThumb, previousScroll.x, ScrollAxis::Horizontal);
     if(!horizontalBar)
         return MakeUnexpected(Failure{});
     candidate.horizontal = *horizontalBar;
-    const auto verticalBar = BuildBar(contentHeight, viewportHeight, verticalTrack, minThumb, previousScroll.y, ScrollAxis::Vertical);
+    const auto verticalBar = StoreBarPlacement(contentHeight, viewportHeight, verticalTrack, minThumb, previousScroll.y, ScrollAxis::Vertical);
     if(!verticalBar)
         return MakeUnexpected(Failure{});
     candidate.vertical = *verticalBar;
@@ -224,11 +252,11 @@ bool ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement
         !IsValidUiExtent(scroll) || !IsValidUiRect(out.viewport) || !IsValidUiRect(out.contentClip) || !IsValidUiRect(out.corner)
         || out.horizontal.viewportExtent != static_cast<f64>(out.viewport.width)
         || out.vertical.viewportExtent != static_cast<f64>(out.viewport.height)
-        || !ValidBar(out.horizontal, ScrollAxis::Horizontal) || !ValidBar(out.vertical, ScrollAxis::Vertical)
+        || !ValidBar(LoadBarValues(out.horizontal), ScrollAxis::Horizontal) || !ValidBar(LoadBarValues(out.vertical), ScrollAxis::Vertical)
     )
         return false;
     ScrollViewportPlacement candidate = out;
-    if(!MoveThumb(scroll.x, ScrollAxis::Horizontal, candidate.horizontal) || !MoveThumb(scroll.y, ScrollAxis::Vertical, candidate.vertical))
+    if(!StoreBarOffset(VectorDoubleReplicate(scroll.x), ScrollAxis::Horizontal, candidate.horizontal) || !StoreBarOffset(VectorDoubleReplicate(scroll.y), ScrollAxis::Vertical, candidate.vertical))
         return false;
     out = candidate;
     return true;

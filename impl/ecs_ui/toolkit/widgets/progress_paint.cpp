@@ -18,7 +18,7 @@ bool Builder::paintProgress(const Item& item, const LayoutBox& box){
     if(item.progress >= m_scope->m_progress.size())
         return false;
     const ProgressFrame& frame = m_scope->m_progress[item.progress];
-    const auto placement = ProgressLayout::Place(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction);
+    const auto placement = ProgressLayout::Place(box.rectangle, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), frame.metrics, frame.fraction);
     if(!placement)
         return false;
     m_paint.pushClip(placement->clip);

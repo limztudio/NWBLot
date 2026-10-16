@@ -145,12 +145,12 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     }
     state.m_compositionGeneration = model.compositionGeneration();
     item.textArea = static_cast<u32>(m_scope->m_textAreas.size());
-    const Point minimum = editMinimumSize();
+    const SIMDVectorSingle minimum = loadEditMinimumSize();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle textSize = VectorAdd(VectorAdd(VectorSet(minimum.x, item.editView.visualBounds().height, 0.0f, 0.0f), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle intrinsic = VectorMax(VectorSet(minimum.x, minimum.y, 0.0f, 0.0f), textSize);
+    const SIMDVectorSingle textSize = VectorAdd(VectorAdd(VectorSelect(VectorSelect(VectorZero(), minimum, s_SIMDMaskX), VectorReplicate(item.editView.visualBounds().height), s_SIMDMaskY), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
+    const SIMDVectorSingle intrinsic = VectorMax(VectorSelect(VectorZero(), minimum, s_SIMDMaskXY), textSize);
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){

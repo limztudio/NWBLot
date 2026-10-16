@@ -109,8 +109,8 @@ namespace MeshletRefDeltaWidth{
     return width == MeshletRefDeltaWidth::U32 || (width == MeshletRefDeltaWidth::U16 && delta <= static_cast<u32>(Limit<u16>::s_Max)) || (width == MeshletRefDeltaWidth::U8 && delta <= static_cast<u32>(Limit<u8>::s_Max));
 }
 
-[[nodiscard]] NWB_INLINE u32 PackMeshletConeCutoffUnorm8(const f32 value)noexcept{
-    return static_cast<u32>(VectorGetX(VectorScale(VectorSaturate(VectorReplicate(value)), s_MeshletUnorm8Max)));
+[[nodiscard]] NWB_INLINE u32 PackMeshletConeCutoffUnorm8(const SIMDVectorSingle value)noexcept{
+    return static_cast<u32>(VectorGetX(VectorScale(VectorSaturate(value), s_MeshletUnorm8Max)));
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FoldMeshletConeOctAxis(SIMDVectorSingle axis)noexcept{
@@ -144,23 +144,22 @@ namespace MeshletRefDeltaWidth{
     return Vector3NormalizeOr(axis, VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_MeshletConeAxisLengthSquaredEpsilon);
 }
 
-[[nodiscard]] NWB_INLINE f32 ConservativePackedMeshletConeCutoff(const SIMDVectorSingle axis, const f32 cutoff, const u32 packedAxis)noexcept{
-    const SIMDVectorSingle unpackedAxis = UnpackMeshletConeOct16Axis(packedAxis);
+[[nodiscard]] NWB_INLINE SIMDVectorSingle ConservativePackedMeshletConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle cutoff, const SIMDVectorSingle unpackedAxis)noexcept{
     const SIMDVectorSingle normalizedAxis = Vector3NormalizeOr(axis, unpackedAxis, s_MeshletConeAxisLengthSquaredEpsilon);
     const SIMDVectorSingle axisDot = VectorClamp(Vector3Dot(normalizedAxis, unpackedAxis), s_SIMDNegativeOne, s_SIMDOne);
-    const SIMDVectorSingle safeCutoff = VectorSaturate(VectorReplicate(cutoff));
+    const SIMDVectorSingle safeCutoff = VectorSaturate(cutoff);
     const SIMDVectorSingle cosineTerms = VectorMergeX(safeCutoff, axisDot, VectorZero(), VectorZero());
     const SIMDVectorSingle sineTerms = VectorSqrt(VectorMax(VectorZero(), VectorSubtract(s_SIMDOne, VectorMultiply(cosineTerms, cosineTerms))));
     const SIMDVectorSingle conservativeCutoff = VectorSubtract(VectorMultiply(safeCutoff, axisDot), VectorMultiply(VectorSplatX(sineTerms), VectorSplatY(sineTerms)));
-    return VectorGetX(conservativeCutoff);
+    return conservativeCutoff;
 }
 
-[[nodiscard]] NWB_INLINE u32 PackMeshletCone(const SIMDVectorSingle axis, const f32 cutoff)noexcept{
-    if(cutoff <= 0.0f)
+[[nodiscard]] NWB_INLINE u32 PackMeshletCone(const SIMDVectorSingle axis, const SIMDVectorSingle cutoff)noexcept{
+    if(VectorGetX(cutoff) <= 0.0f)
         return 0u;
 
     const u32 packedAxis = PackMeshletConeOct16(axis);
-    const u32 packedCutoff = PackMeshletConeCutoffUnorm8(ConservativePackedMeshletConeCutoff(axis, cutoff, packedAxis));
+    const u32 packedCutoff = PackMeshletConeCutoffUnorm8(ConservativePackedMeshletConeCutoff(axis, cutoff, UnpackMeshletConeOct16Axis(packedAxis)));
     if(packedCutoff == 0u)
         return 0u;
 

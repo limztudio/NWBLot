@@ -35,16 +35,24 @@ namespace __hidden_ui_glyph_visibility{
     return IsFinite(fontSize) && fontSize >= 1.0f / 64.0f && fontSize <= 2048.0f;
 }
 
-[[nodiscard]] static TextGlyphIntersection::Enum IntersectBounds(const f64 left, const f64 top, const f64 right, const f64 bottom, const Rect& clip)noexcept{
+[[nodiscard]] static TextGlyphIntersection::Enum IntersectBounds(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorSingle clip)noexcept{
+    const f64 left = VectorDoubleGetX(minimum);
+    const f64 top = VectorDoubleGetY(minimum);
+    const f64 right = VectorDoubleGetX(maximum);
+    const f64 bottom = VectorDoubleGetY(maximum);
+    const f32 clipX = VectorGetX(clip);
+    const f32 clipY = VectorGetY(clip);
+    const f32 clipWidth = VectorGetZ(clip);
+    const f32 clipHeight = VectorGetW(clip);
     if(
         !IsFinite(left) || left < -Limit<f32>::s_Max || left > Limit<f32>::s_Max
         || !IsFinite(top) || top < -Limit<f32>::s_Max || top > Limit<f32>::s_Max
         || !IsFinite(right) || right < left || right > Limit<f32>::s_Max
         || !IsFinite(bottom) || bottom < top || bottom > Limit<f32>::s_Max
-        || right - left > Limit<f32>::s_Max || bottom - top > Limit<f32>::s_Max || !IsValidUiRect(clip)
+        || right - left > Limit<f32>::s_Max || bottom - top > Limit<f32>::s_Max
     )
         return TextGlyphIntersection::Invalid;
-    if(right <= left || bottom <= top || clip.width <= 0.0f || clip.height <= 0.0f || right <= clip.x || bottom <= clip.y || left >= static_cast<f64>(clip.x) + clip.width || top >= static_cast<f64>(clip.y) + clip.height)
+    if(right <= left || bottom <= top || clipWidth <= 0.0f || clipHeight <= 0.0f || right <= clipX || bottom <= clipY || left >= static_cast<f64>(clipX) + clipWidth || top >= static_cast<f64>(clipY) + clipHeight)
         return TextGlyphIntersection::Invisible;
     return TextGlyphIntersection::Visible;
 }
@@ -127,7 +135,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
     const SIMDVectorDouble correctedEnd = VectorDoubleMultiply(inkEnd, correctionVector);
     const SIMDVectorDouble maximumEnd = VectorDoubleSelect(correctedEnd, inkEnd, VectorDoubleGreater(inkEnd, correctedEnd));
     const SIMDVectorDouble rightBottom = VectorDoubleAdd(VectorDoubleAdd(position, maximumEnd), margin);
-    return IntersectBounds(VectorDoubleGetX(leftTop), VectorDoubleGetY(leftTop), VectorDoubleGetX(rightBottom), VectorDoubleGetY(rightBottom), clip);
+    return IntersectBounds(leftTop, rightBottom, VectorSet(clip.x, clip.y, clip.width, clip.height));
 }
 
 Expected<Rect> TextGlyphVisibility::AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
@@ -181,7 +189,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Intersect(const Rect& rectangle
     if(!IsValidUiRect(rectangle) || !IsValidUiRect(clip))
         return TextGlyphIntersection::Invalid;
     const SIMDVectorDouble end = VectorDoubleAdd(VectorDoubleSet(rectangle.x, rectangle.y, 0.0, 0.0), VectorDoubleSet(rectangle.width, rectangle.height, 0.0, 0.0));
-    return IntersectBounds(rectangle.x, rectangle.y, VectorDoubleGetX(end), VectorDoubleGetY(end), clip);
+    return IntersectBounds(VectorDoubleSet(rectangle.x, rectangle.y, 0.0, 0.0), end, VectorSet(clip.x, clip.y, clip.width, clip.height));
 }
 
 

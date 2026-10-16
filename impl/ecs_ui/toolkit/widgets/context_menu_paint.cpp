@@ -33,7 +33,7 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const UiSkinRegion* background = region(frame.popupStyle.background, frame.popupStyle.fallback);
     if(!anchorBox || !background || !contextMenuMatches(frame))
         return false;
-    const Rect clip = visibleClip(anchorBox->clip);
+    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(anchorBox->clip)));
     if(
         !anchor.enabled || clip.width <= 0.0f || clip.height <= 0.0f
         || anchorBox->rectangle.x >= (clip.x + clip.width) || anchorBox->rectangle.y >= (clip.y + clip.height)

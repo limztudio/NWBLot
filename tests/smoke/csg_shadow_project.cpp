@@ -83,7 +83,7 @@ struct Box{
     Float3U maximum;
 };
 
-[[nodiscard]] static Box BoxFromBounds(const SIMDVectorSingle minimum, const SIMDVectorSingle maximum)noexcept{
+[[nodiscard]] static Box StoreBoxBounds(const SIMDVectorSingle minimum, const SIMDVectorSingle maximum)noexcept{
     Box box;
     StoreFloat(minimum, box.minimum);
     StoreFloat(maximum, box.maximum);
@@ -268,7 +268,7 @@ private:
             const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(slot % 3u), slot < 3u ? 1.0f : -1.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
             const SIMDVectorSingle center = VectorScale(VectorMultiply(grid, VectorSet(2.0f, 1.0f, 0.0f, 0.0f)), xyScale);
             const SIMDVectorSingle halfExtent = VectorScale(VectorSet(0.7f, 0.7f, 0.0f, 0.0f), xyScale);
-            const Box box = BoxFromBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
+            const Box box = StoreBoxBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
             const bool hole = slot == 0u || slot == 3u;
             const f32 holeHalfWidth = m_pointLight ? 0.36f : 0.24f;
             const SIMDVectorSingle holeOffsets = VectorScale(VectorSet(0.3f, 0.4f, 0.0f, 0.0f), xyScale);
@@ -276,8 +276,8 @@ private:
             const SIMDVectorSingle holeExtent = VectorSetX(holeOffsets, holeHalfWidth);
             const SIMDVectorSingle solidExtent = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
             Box cutter = hole
-                ? BoxFromBounds(VectorSetZ(VectorSubtract(holeCenter, holeExtent), -7.2f), VectorSetZ(VectorAdd(holeCenter, holeExtent), -4.8f))
-                : BoxFromBounds(VectorSetZ(VectorSubtract(center, solidExtent), -6.0f), VectorSetZ(VectorAdd(center, solidExtent), -4.8f));
+                ? StoreBoxBounds(VectorSetZ(VectorSubtract(holeCenter, holeExtent), -7.2f), VectorSetZ(VectorAdd(holeCenter, holeExtent), -4.8f))
+                : StoreBoxBounds(VectorSetZ(VectorSubtract(center, solidExtent), -6.0f), VectorSetZ(VectorAdd(center, solidExtent), -4.8f));
             if(slot == 5u){
                 const SIMDVectorSingle shift = VectorSet(20.0f, 0.0f, 0.0f, 0.0f);
                 StoreFloat(VectorAdd(LoadFloat(cutter.minimum), shift), cutter.minimum);
@@ -316,7 +316,7 @@ private:
             const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(slot % 3u), slot < 3u ? 1.0f : -1.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
             const SIMDVectorSingle center = VectorMultiply(grid, VectorSet(2.0f, 1.0f, 0.0f, 0.0f));
             const SIMDVectorSingle halfExtent = VectorSet(0.7f, 0.7f, 0.0f, 0.0f);
-            const Box box = BoxFromBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
+            const Box box = StoreBoxBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
             const auto entity = createBox(box, true);
             AddStaticCsgMeshReceiver(*m_world, entity, s_AnalyticGroups[slot], false, true);
         }
@@ -356,7 +356,7 @@ private:
             for(u32 pair = 0u; pair < 3u; ++pair){
                 const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-7.0f), VectorScale(VectorReplicate(static_cast<f32>(pair)), 0.8f));
                 const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.4f, 0.0f, 0.0f));
-                if(!createBox(BoxFromBounds(VectorSet(0.5f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(1.9f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
+                if(!createBox(StoreBoxBounds(VectorSet(0.5f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(1.9f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
                     return false;
             }
         }
@@ -364,7 +364,7 @@ private:
             for(u32 pair = 0u; pair < 2u; ++pair){
                 const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-6.5f), VectorReplicate(static_cast<f32>(pair)));
                 const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
-                if(!createBox(BoxFromBounds(VectorSet(-1.9f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(-0.5f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
+                if(!createBox(StoreBoxBounds(VectorSet(-1.9f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(-0.5f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
                     return false;
             }
             if(!createBox({ Float3U(0.5f, -0.7f, -6.6f), Float3U(1.9f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
@@ -377,7 +377,7 @@ private:
                 const f32 x = tile == 0u ? -1.2f : 1.2f;
                 const SIMDVectorSingle center = VectorSet(x, 0.0f, 0.0f, 0.0f);
                 const SIMDVectorSingle halfExtent = VectorSet(0.7f, 0.7f, 0.0f, 0.0f);
-                const Box bounds = BoxFromBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
+                const Box bounds = StoreBoxBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
                 const auto receiver = createBox(bounds, true, meshes[tile]);
                 AddStaticCsgMeshReceiver(*m_world, receiver, s_OpenGroups[tile], false, true);
                 auto entity = m_world->createEntity();

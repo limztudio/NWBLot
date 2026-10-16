@@ -39,14 +39,15 @@ struct ExportContext{
     {}
 };
 
-struct SkinInfluenceResult{
-    MeshSkinInfluence influence;
+// Import calculation scratch; joint IDs and weights are stored only by the owning mesh builder.
+struct SkinInfluenceCalculation{
+    SIMDVectorSingle joints;
     SIMDVectorSingle weights;
 };
 
 Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context);
 
-Expected<SkinInfluenceResult> BuildInfluence(ufbx_skin_deformer* skin, const UtilityVector<u16>& clusterJoints, u32 logicalVertex);
+Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const UtilityVector<u16>& clusterJoints, u32 logicalVertex);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -26,11 +26,11 @@ NWB_FBX_TO_NWB_BEGIN
 
 class FbxMeshBuild final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVectorSingle ToVector(const ufbx_vec3 value, const f32 w = 0.0f)noexcept;
+    [[nodiscard]] static SIMDVectorSingle LoadUfbxVector(const ufbx_vec3 value, const f32 w = 0.0f)noexcept;
     [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position)noexcept;
-    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
-    [[nodiscard]] static SIMDVectorSingle BuildCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
-    [[nodiscard]] static Expected<SIMDVectorSingle> BuildCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept;
+    [[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
+    [[nodiscard]] static SIMDVectorSingle LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
+    [[nodiscard]] static Expected<SIMDVectorSingle> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept;
     [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept;
     [[nodiscard]] static bool IsFiniteSourceTriangleCorner(
         const SIMDVectorSingle position,

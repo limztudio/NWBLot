@@ -16,7 +16,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVectorSingle FbxMeshBuild::ToVector(const ufbx_vec3 value, const f32 w)noexcept{
+SIMDVectorSingle FbxMeshBuild::LoadUfbxVector(const ufbx_vec3 value, const f32 w)noexcept{
     return VectorSet(static_cast<f32>(value.x), static_cast<f32>(value.y), static_cast<f32>(value.z), w);
 }
 
@@ -26,7 +26,7 @@ PositionKey FbxMeshBuild::MakePositionKey(const SIMDVectorSingle position)noexce
 }
 
 
-SIMDVectorSingle FbxMeshBuild::BuildCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept{
+SIMDVectorSingle FbxMeshBuild::LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 position = {};
     if(options.bakeTransforms){
         position = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_position : &mesh.skinned_position, cornerIndex);
@@ -37,11 +37,11 @@ SIMDVectorSingle FbxMeshBuild::BuildCornerOutputPositionVector(const ufbx_mesh& 
         position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
     }
 
-    return VectorScale(ToVector(position), static_cast<f32>(options.scale));
+    return VectorScale(LoadUfbxVector(position), static_cast<f32>(options.scale));
 }
 
 
-SIMDVectorSingle FbxMeshBuild::BuildCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept{
+SIMDVectorSingle FbxMeshBuild::LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 normal = {};
     if(options.bakeTransforms){
         normal = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal, cornerIndex);
@@ -52,12 +52,12 @@ SIMDVectorSingle FbxMeshBuild::BuildCornerOutputNormalVector(const ufbx_mesh& me
         normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
     }
 
-    const auto outputNormal = Vector3TryNormalize(ToVector(normal));
+    const auto outputNormal = Vector3TryNormalize(LoadUfbxVector(normal));
     return outputNormal ? *outputNormal : VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 }
 
 
-Expected<SIMDVectorSingle> FbxMeshBuild::BuildCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
+Expected<SIMDVectorSingle> FbxMeshBuild::LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
     if(!mesh.vertex_tangent.exists)
         return MakeUnexpected(Failure{});
 
@@ -65,7 +65,7 @@ Expected<SIMDVectorSingle> FbxMeshBuild::BuildCornerOutputTangentVector(const uf
     if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
         tangent = ufbx_transform_direction(&normalToWorld, tangent);
 
-    const auto outputTangent = Vector3TryNormalize(ToVector(tangent));
+    const auto outputTangent = Vector3TryNormalize(LoadUfbxVector(tangent));
     if(!outputTangent)
         return MakeUnexpected(Failure{});
 
@@ -75,7 +75,7 @@ Expected<SIMDVectorSingle> FbxMeshBuild::BuildCornerOutputTangentVector(const uf
         if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
             bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
 
-        const auto outputBitangent = Vector3TryNormalize(ToVector(bitangent));
+        const auto outputBitangent = Vector3TryNormalize(LoadUfbxVector(bitangent));
         if(outputBitangent){
             const SIMDVectorSingle tangentSpaceBitangent = Vector3Cross(normal, *outputTangent);
             const SIMDVectorSingle bitangentDot = Vector3Dot(tangentSpaceBitangent, *outputBitangent);
@@ -124,7 +124,7 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
         SIMDVectorSingle positions[s_TriangleIndexCount] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
-            positions[triangleCornerIndex] = BuildCornerOutputPositionVector(mesh, node, options, wantsSkinning, cornerIndices[triangleCornerIndex]);
+            positions[triangleCornerIndex] = LoadCornerOutputPositionVector(mesh, node, options, wantsSkinning, cornerIndices[triangleCornerIndex]);
         }
 
         const SIMDVectorDouble areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
@@ -214,17 +214,19 @@ bool FbxMeshBuild::AppendInstanceMesh(
 
     return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
         SourceTriangleCorner triangleCorners[s_TriangleIndexCount] = {};
+        SIMDVectorSingle trianglePositions[s_TriangleIndexCount] = {};
+        SIMDVectorSingle triangleNormals[s_TriangleIndexCount] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
             const u32 cornerIndex = cornerIndices[triangleCornerIndex];
             const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
 
             SourceTriangleCorner corner;
-            const SIMDVectorSingle position = BuildCornerOutputPositionVector(*mesh, *node, options, wantsSkinning, cornerIndex);
-            StoreFloat(position, corner.position);
+            const SIMDVectorSingle position = LoadCornerOutputPositionVector(*mesh, *node, options, wantsSkinning, cornerIndex);
+            trianglePositions[triangleCornerIndex] = position;
 
             SIMDVectorSingle normal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
             if(normalMode == NormalMode::Imported){
-                normal = BuildCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+                normal = LoadCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
             }
             else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(position));
@@ -239,7 +241,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
                 }
                 normal = *generatedNormal;
             }
-            StoreFloat(normal, corner.normal);
+            triangleNormals[triangleCornerIndex] = normal;
 
             SIMDVectorSingle uv0 = VectorZero();
             if(importUvs){
@@ -262,7 +264,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
 
             SIMDVectorSingle tangent = VectorZero();
             if(importTangents){
-                const auto importedTangent = BuildCornerOutputTangentVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex, normal);
+                const auto importedTangent = LoadCornerOutputTangentVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex, normal);
                 corner.hasTangent = importedTangent.has_value();
                 if(importedTangent){
                     tangent = *importedTangent;
@@ -272,10 +274,13 @@ bool FbxMeshBuild::AppendInstanceMesh(
 
             SIMDVectorSingle skinWeights = VectorZero();
             if(wantsSkinning){
-                const auto influence = FbxSkinDetail::BuildInfluence(skin, clusterJoints, logicalVertex);
+                const auto influence = FbxSkinDetail::LoadInfluence(skin, clusterJoints, logicalVertex);
                 if(!influence)
                     return false;
-                corner.skin = influence->influence;
+                UInt4 jointIds;
+                StoreInt(influence->joints, jointIds);
+                for(usize slot = 0u; slot < s_MeshSkinInfluenceCount; ++slot)
+                    corner.skin.joint[slot] = static_cast<u16>(jointIds.raw[slot]);
                 skinWeights = influence->weights;
                 StoreFloat(skinWeights, corner.skin.weight);
             }
@@ -288,22 +293,25 @@ bool FbxMeshBuild::AppendInstanceMesh(
             triangleCorners[triangleCornerIndex] = corner;
         }
 
-        if(!::TriangleHasArea(LoadFloat(triangleCorners[0u].position), LoadFloat(triangleCorners[1u].position), LoadFloat(triangleCorners[2u].position), options.triangleAreaLengthSquaredEpsilon))
+        if(!::TriangleHasArea(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u], options.triangleAreaLengthSquaredEpsilon))
             return true;
 
         if(normalMode == NormalMode::Regenerate){
-            const SIMDVectorDouble faceNormal64 = BuildTriangleAreaNormal64(LoadFloat(triangleCorners[0u].position), LoadFloat(triangleCorners[1u].position), LoadFloat(triangleCorners[2u].position));
+            const SIMDVectorDouble faceNormal64 = BuildTriangleAreaNormal64(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u]);
             const SIMDVectorSingle faceNormal = ConvertVectorDoubleToSingle(faceNormal64);
             const auto normalizedFaceNormal = Vector3TryNormalize(faceNormal);
             if(!normalizedFaceNormal){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
                 return false;
             }
-            for(SourceTriangleCorner& corner : triangleCorners)
-                StoreFloat(*normalizedFaceNormal, corner.normal);
+            for(SIMDVectorSingle& normal : triangleNormals)
+                normal = *normalizedFaceNormal;
         }
 
-        for(const SourceTriangleCorner& corner : triangleCorners){
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
+            SourceTriangleCorner& corner = triangleCorners[triangleCornerIndex];
+            StoreFloat(trianglePositions[triangleCornerIndex], corner.position);
+            StoreFloat(triangleNormals[triangleCornerIndex], corner.normal);
             const auto vertexRefIndex = FbxSourceMeshStreams::InternSourceCorner(inOutMesh, corner, wantsSkinning);
             if(!vertexRefIndex)
                 return false;

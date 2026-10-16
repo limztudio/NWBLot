@@ -477,7 +477,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Al
 
     instance.meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u), });
     instance.meshlets.back().skinBase = 0u;
-    instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 2.0f), NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f), });
+    instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 2.0f), NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_SIMDOne), });
     ::Vector<NWB::Impl::MeshletPositionStreamRef, NWB::Core::Alloc::ScratchArena> meshletPositionStreamRefs(scratchArena);
     meshletPositionStreamRefs.reserve(instance.restPositions.size());
     ::Vector<NWB::Impl::MeshletAttributeStreamRef, NWB::Core::Alloc::ScratchArena> meshletAttributeStreamRefs(scratchArena);

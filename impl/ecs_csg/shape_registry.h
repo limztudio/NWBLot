@@ -35,6 +35,7 @@ inline constexpr Float4 s_CsgCapsuleDefaultRadiusHalfHeight = Float4(1.0f, 1.0f,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Call-scoped calculation scratch; retained scene/GPU values use Float storage.
 struct CsgShapeBounds{
     SIMDVectorSingle minBounds = VectorZero();
     SIMDVectorSingle maxBounds = VectorZero();

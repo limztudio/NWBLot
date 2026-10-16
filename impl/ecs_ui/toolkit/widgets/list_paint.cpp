@@ -121,7 +121,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     ListFrame& frame = m_scope->m_lists[item.list];
     if(!listMatches(frame))
         return false;
-    const Rect clip = visibleClip(box.clip);
+    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
     ScrollPlacement placement;
     if(!measureListPlacement(frame, box, clip, placement))
         return false;

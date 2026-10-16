@@ -116,42 +116,27 @@ Core::ECS::EntityID CreateSpotLightEntity(
     return lightEntity.id();
 }
 
-SceneLight BuildDefaultSceneLight(const SIMDVectorSingle forward)noexcept{
-    SceneLight light;
-    StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(forward), light.direction);
-    StoreFloat(s_SIMDOne, light.colorIntensity);
-    light.type = LightType::Directional;
-    return light;
-}
+namespace __hidden_lighting{
 
-Expected<SceneLight> TryBuildSceneLight(
+[[nodiscard]] Expected<SIMDMatrix> TryBuildSceneLightVectors(
     const SIMDVectorSingle position,
     const SIMDVectorSingle rotation,
     const SIMDVectorSingle colorIntensity,
     const f32 range,
     const f32 innerConeCos,
     const f32 outerConeCos,
-    const f32 angularRadius,
-    const f32 sourceRadius,
-    const LightType::Enum type,
-    const bool enableCaustics
+    const LightType::Enum type
 )noexcept{
-    SceneLight light;
+    SIMDMatrix light{ .v = { VectorSet(0.0f, 0.0f, 0.0f, 1.0f), VectorSet(0.0f, 0.0f, -1.0f, 1.0f), colorIntensity, VectorZero() } };
     if(!__hidden_lighting::IsValidLightColorIntensity(colorIntensity))
         return MakeUnexpected(Failure{});
-
-    StoreFloat(colorIntensity, light.colorIntensity);
-    light.type = type;
-    light.enableCaustics = enableCaustics;
-    light.angularRadius = angularRadius;
-    light.sourceRadius = sourceRadius;
 
     switch(type){
     case LightType::Directional:{
         if(!__hidden_lighting::IsValidLightRotation(rotation))
             return MakeUnexpected(Failure{});
 
-        StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)), light.direction);
+        light.v[1] = __hidden_lighting::BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation));
         return light;
     }
     case LightType::Point:{
@@ -160,8 +145,7 @@ Expected<SceneLight> TryBuildSceneLight(
         if(!IsFinite(range) || range <= 0.0f)
             return MakeUnexpected(Failure{});
 
-        StoreFloat(VectorSetW(position, 1.0f), light.position);
-        light.range = range;
+        light.v[0] = VectorSetW(position, 1.0f);
         return light;
     }
     case LightType::Spot:{
@@ -175,15 +159,16 @@ Expected<SceneLight> TryBuildSceneLight(
         if(!__hidden_lighting::IsValidLightCone(innerConeCos, outerConeCos))
             return MakeUnexpected(Failure{});
 
-        StoreFloat(VectorSetW(position, innerConeCos), light.position);
-        StoreFloat(VectorSetW(__hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)), outerConeCos), light.direction);
-        light.range = range;
+        light.v[0] = VectorSetW(position, innerConeCos);
+        light.v[1] = VectorSetW(__hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)), outerConeCos);
         return light;
     }
     default:
         return MakeUnexpected(Failure{});
     }
 }
+
+};
 
 usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, SceneLight* outLights, const usize maxLights){
     if(maxLights == 0u)
@@ -199,28 +184,38 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultF
         static_cast<void>(entity);
 
         const SIMDVectorSingle colorIntensity = LoadFloat(light.colorIntensity);
-        Expected<SceneLight> resolvedLight = MakeUnexpected(Failure{});
+        Expected<SIMDMatrix> resolvedLight = MakeUnexpected(Failure{});
         switch(light.type){
         case LightType::Directional:
-            resolvedLight = TryBuildSceneLight(s_SIMDZero, LoadFloat(transform.rotation), colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.angularRadius, light.sourceRadius, light.type, light.enableCaustics);
+            resolvedLight = __hidden_lighting::TryBuildSceneLightVectors(s_SIMDZero, LoadFloat(transform.rotation), colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.type);
             break;
         case LightType::Point:
-            resolvedLight = TryBuildSceneLight(LoadFloat(transform.position), s_SIMDIdentityR3, colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.angularRadius, light.sourceRadius, light.type, light.enableCaustics);
+            resolvedLight = __hidden_lighting::TryBuildSceneLightVectors(LoadFloat(transform.position), s_SIMDIdentityR3, colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.type);
             break;
         case LightType::Spot:
-            resolvedLight = TryBuildSceneLight(LoadFloat(transform.position), LoadFloat(transform.rotation), colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.angularRadius, light.sourceRadius, light.type, light.enableCaustics);
+            resolvedLight = __hidden_lighting::TryBuildSceneLightVectors(LoadFloat(transform.position), LoadFloat(transform.rotation), colorIntensity, light.range, light.innerConeCos, light.outerConeCos, light.type);
             break;
         default:
             break;
         }
         if(resolvedLight){
-            outLights[count] = *resolvedLight;
+            SceneLight& destination = outLights[count];
+            StoreFloat(resolvedLight->v[0], destination.position);
+            StoreFloat(resolvedLight->v[1], destination.direction);
+            StoreFloat(colorIntensity, destination.colorIntensity);
+            destination.range = light.type == LightType::Directional ? 0.0f : light.range;
+            destination.angularRadius = light.angularRadius;
+            destination.sourceRadius = light.sourceRadius;
+            destination.type = light.type;
+            destination.enableCaustics = light.enableCaustics;
             ++count;
         }
     }
 
     if(count == 0u){
-        outLights[0] = BuildDefaultSceneLight(defaultForward);
+        outLights[0] = SceneLight{};
+        StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(defaultForward), outLights[0].direction);
+        StoreFloat(s_SIMDOne, outLights[0].colorIntensity);
         count = 1u;
     }
 

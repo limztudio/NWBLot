@@ -464,12 +464,11 @@ inline constexpr f32 s_CausticIntensity = 2.0f;
 
 // Resolve exposure on SIMD lanes; photon-count changes preserve brightness.
 // Decay path is VectorNegativeMultiplySubtract(decay, intensity, intensity) = intensity * (1 - decay); the temporal gate is a lane select, so both candidates stay on lanes and no scalar branch computes the surviving candidate.
-[[nodiscard]] NWB_INLINE f32 EffectiveCausticIntensity(const f32 temporalDecay)noexcept{
-    const SIMDVectorSingle decayLanes = VectorReplicate(temporalDecay);
+[[nodiscard]] NWB_INLINE SIMDVectorSingle EffectiveCausticIntensity(const SIMDVectorSingle decayLanes)noexcept{
     const SIMDVectorSingle intensityLanes = VectorReplicate(s_CausticIntensity);
     const SIMDVectorSingle decayedLanes = VectorNegativeMultiplySubtract(decayLanes, intensityLanes, intensityLanes);
     const SIMDVectorSingle gate = VectorGreater(decayLanes, VectorZero());
-    return VectorGetX(VectorSelect(intensityLanes, decayedLanes, gate));
+    return VectorSelect(intensityLanes, decayedLanes, gate);
 }
 
 // Runtime refractor bounds are inflated because emission uses bind-pose AABBs.

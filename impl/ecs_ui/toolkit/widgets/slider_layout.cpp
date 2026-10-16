@@ -28,20 +28,31 @@ namespace __hidden_ui_slider_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidMetrics(const SliderMetrics& metrics)noexcept{
-    if(
-        !IsValidUiPadding(metrics.padding) || !IsFinite(metrics.thumbExtent.x) || metrics.thumbExtent.x <= 0.0f
-        || !IsFinite(metrics.thumbExtent.y) || metrics.thumbExtent.y <= 0.0f
-        || !IsFinite(metrics.trackHeight) || metrics.trackHeight <= 0.0f
-        || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y)
-    )
+[[nodiscard]] static SIMDMatrixDouble LoadMetrics(const SliderMetrics& metrics)noexcept{
+    if(!IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom) || !IsFinite(metrics.thumbExtent.x) || !IsFinite(metrics.thumbExtent.y) || !IsFinite(metrics.trackHeight) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y))
+        return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
+    return SIMDMatrixDouble{ .v = {
+        VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
+        VectorDoubleSet(metrics.thumbExtent.x, metrics.thumbExtent.y, metrics.trackHeight, 0.0),
+        VectorDoubleSet(metrics.contentSize.x, metrics.contentSize.y, 0.0, 0.0),
+        VectorDoubleZero()
+    } };
+}
+
+[[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
+    if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[0]), VectorDoubleIsInfinite(values.v[0]))) != 0u
+        || VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[1]), VectorDoubleIsInfinite(values.v[1]))) != 0u
+        || VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[2]), VectorDoubleIsInfinite(values.v[2]))) != 0u
+        || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[0], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW
+        || (VectorDoubleMoveMask(VectorDoubleGreater(values.v[1], VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXYZ) != VectorDoubleComponentMask::s_DoubleXYZ)
         return false;
-    const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0), VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0));
-    const SIMDVectorDouble size = VectorDoubleAdd(padding, VectorDoubleMax(VectorDoubleSet(metrics.thumbExtent.x, metrics.thumbExtent.y, 0.0, 0.0), VectorDoubleSet(metrics.thumbExtent.x, metrics.trackHeight, 0.0, 0.0)));
+    const SIMDVectorDouble padding = VectorDoubleAdd(values.v[0], VectorDoubleSwizzle<2, 3, 2, 3>(values.v[0]));
+    const SIMDVectorDouble size = VectorDoubleAdd(padding, VectorDoubleMax(values.v[1], VectorDoubleSwizzle<0, 2, 0, 2>(values.v[1])));
     const f64 width = VectorDoubleGetX(size);
     const f64 height = VectorDoubleGetY(size);
-    return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height);
+    return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && VectorDoubleGetX(values.v[2]) >= static_cast<f32>(width) && VectorDoubleGetY(values.v[2]) >= static_cast<f32>(height);
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,14 +87,14 @@ Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, cons
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
-    if(!ValidMetrics(candidate))
+    if(!ValidMetrics(LoadMetrics(candidate)))
         return MakeUnexpected(Failure{});
     return candidate;
 }
 
 Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& clip, const SliderMetrics& metrics, const f64 normalized)noexcept{
     using namespace __hidden_ui_slider_layout;
-    if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(metrics) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
+    if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(LoadMetrics(metrics)) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
         return MakeUnexpected(Failure{});
     SliderPlacement candidate;
     candidate.bounds = bounds;

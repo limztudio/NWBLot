@@ -63,6 +63,7 @@ inline constexpr u32 s_UvComponentMask = 0x3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Calculation scratch for one rebuild; never retained in mesh or asset storage.
 struct alignas(Float4) TangentFrameAccumulator{
     SIMDVectorSingle normal = {};
     SIMDVectorSingle tangent = {};
@@ -85,6 +86,7 @@ static_assert((sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator
     return Vector3IsFinite(position) && VectorIsFinite(uv0, s_UvComponentMask);
 }
 
+// Transient SIMD calculation result consumed by the owning rebuild boundary.
 struct TangentFrameDirections{
     SIMDVectorSingle tangent;
     SIMDVectorSingle bitangent;

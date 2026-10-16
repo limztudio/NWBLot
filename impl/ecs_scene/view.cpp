@@ -54,30 +54,20 @@ void BuildSceneViewBasisVectors(const SIMDVectorSingle rotation, SIMDVectorSingl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneViewBasis BuildDefaultSceneViewBasis()noexcept{
-    SceneViewBasis basis;
+SIMDMatrix BuildDefaultSceneViewBasis()noexcept{
     SIMDVectorSingle right;
     SIMDVectorSingle up;
     SIMDVectorSingle forward;
     __hidden_scene::BuildDefaultSceneViewBasisVectors(right, up, forward);
-    StoreFloat(right, basis.right);
-    StoreFloat(up, basis.up);
-    StoreFloat(forward, basis.forward);
-    StoreFloat(VectorSet(0.0f, 0.0f, 0.0f, __hidden_scene::s_DefaultSceneViewDepthOffset), basis.positionDepthBias);
-    return basis;
+    return SIMDMatrix{ .v = { right, up, forward, VectorSet(0.0f, 0.0f, 0.0f, __hidden_scene::s_DefaultSceneViewDepthOffset) } };
 }
 
-SceneViewBasis BuildSceneViewBasis(const SIMDVectorSingle position, const SIMDVectorSingle rotation)noexcept{
-    SceneViewBasis basis;
+SIMDMatrix BuildSceneViewBasis(const SIMDVectorSingle position, const SIMDVectorSingle rotation)noexcept{
     SIMDVectorSingle right;
     SIMDVectorSingle up;
     SIMDVectorSingle forward;
     __hidden_scene::BuildSceneViewBasisVectors(rotation, right, up, forward);
-    StoreFloat(right, basis.right);
-    StoreFloat(up, basis.up);
-    StoreFloat(forward, basis.forward);
-    StoreFloat(position, basis.positionDepthBias);
-    return basis;
+    return SIMDMatrix{ .v = { right, up, forward, position } };
 }
 
 

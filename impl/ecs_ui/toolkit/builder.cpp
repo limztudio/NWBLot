@@ -198,8 +198,8 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
         return nullptr;
     }
     item.textBounds = *textBounds;
-    Point minimum;
-    Point measured{ item.textBounds.width, item.textBounds.height };
+    SIMDVectorSingle minimum = VectorZero();
+    SIMDVectorSingle measured = VectorSet(item.textBounds.width, item.textBounds.height, item.textBounds.width, item.textBounds.height);
     if(kind == WidgetKind::Selectable){
         const auto metrics = SelectablePainter::Measure(*m_skin, m_listStyle.row);
         if(!metrics){
@@ -208,23 +208,23 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
         }
         item.padding = metrics->padding;
         const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
-        const SIMDVectorSingle paddedMeasure = VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), paddingSize);
-        measured = { VectorGetX(paddedMeasure), VectorGetY(paddedMeasure) };
-        minimum = metrics->minimum;
+        measured = VectorAdd(measured, paddingSize);
+        minimum = VectorSet(metrics->minimum.x, metrics->minimum.y, metrics->minimum.x, metrics->minimum.y);
     }
     else if(kind == WidgetKind::Button){
         if(!region(m_style.button, m_style.button)){
             m_context.fail();
             return nullptr;
         }
-        buttonMetrics(minimum, item.padding);
-        const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
-        const SIMDVectorSingle paddedMeasure = VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), paddingSize);
-        measured = { VectorGetX(paddedMeasure), VectorGetY(paddedMeasure) };
+        SIMDVectorSingle paddingValue = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
+        loadButtonMetrics(minimum, paddingValue);
+        const SIMDVectorSingle paddingSize = VectorAdd(VectorSwizzle<0, 1, 0, 1>(paddingValue), VectorSwizzle<2, 3, 2, 3>(paddingValue));
+        measured = VectorAdd(measured, paddingSize);
+        item.padding = { VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
     }
     else if(kind == WidgetKind::Checkbox){
         const Name names[]{ m_style.checkbox, m_style.checkboxHover, m_style.checkboxChecked, m_style.checkboxDisabled };
-        item.checkboxExtent = m_style.checkboxExtent;
+        SIMDVectorSingle checkboxExtent = VectorReplicate(m_style.checkboxExtent);
         if(!region(m_style.checkbox, m_style.checkbox)){
             m_context.fail();
             return nullptr;
@@ -232,18 +232,17 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
         for(const auto& name : names){
             const UiSkinRegion* skinRegion = region(name, m_style.checkbox);
             const SIMDVectorSingle regionMinimum = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
-            item.checkboxExtent = VectorGetX(VectorMax(VectorReplicate(item.checkboxExtent), VectorMax(regionMinimum, VectorSplatY(regionMinimum))));
+            checkboxExtent = VectorSplatX(VectorMax(checkboxExtent, VectorMax(regionMinimum, VectorSplatY(regionMinimum))));
         }
-        const SIMDVectorSingle content = VectorMax(VectorSet(measured.x, measured.y, 0.0f, 0.0f), VectorSet(measured.x, item.checkboxExtent, 0.0f, 0.0f));
-        const SIMDVectorSingle checkboxSize = VectorAdd(content, VectorAdd(VectorSet(item.checkboxExtent, 0.0f, 0.0f, 0.0f), VectorSet(m_style.gap, 0.0f, 0.0f, 0.0f)));
-        measured = { VectorGetX(checkboxSize), VectorGetY(checkboxSize) };
+        const SIMDVectorSingle measuredSize = VectorSelect(VectorZero(), measured, s_SIMDMaskXY);
+        const SIMDVectorSingle content = VectorMax(measuredSize, VectorSelect(measuredSize, checkboxExtent, s_SIMDMaskY));
+        measured = VectorAdd(content, VectorAdd(VectorSelect(VectorZero(), checkboxExtent, s_SIMDMaskX), VectorSet(m_style.gap, 0.0f, 0.0f, 0.0f)));
+        item.checkboxExtent = VectorGetX(checkboxExtent);
     }
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle measuredValue = VectorSet(measured.x, measured.y, measured.x, measured.y);
-    const SIMDVectorSingle minimumValue = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-    const SIMDVectorSingle intrinsic = VectorSelect(minimumValue, measuredValue, VectorGreater(measuredValue, minimumValue));
+    const SIMDVectorSingle intrinsic = VectorSelect(minimum, measured, VectorGreater(measured, minimum));
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
@@ -262,20 +261,16 @@ const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)
     return found ? found : m_skin->findRegion(fallback);
 }
 
-void Builder::buttonMetrics(Point& size, Insets& padding)const noexcept{
+void Builder::loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept{
     const Name names[]{ m_style.button, m_style.buttonHover, m_style.buttonPressed, m_style.buttonDisabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_style.button);
         if(!skinRegion)
             continue;
-        const SIMDVectorSingle sizeCurrent = VectorSet(size.x, size.y, size.x, size.y);
         const SIMDVectorSingle sizeCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
-        const SIMDVectorSingle sizeMaximum = VectorSelect(sizeCandidate, sizeCurrent, VectorGreater(sizeCurrent, sizeCandidate));
-        size = { VectorGetX(sizeMaximum), VectorGetY(sizeMaximum) };
-        const SIMDVectorSingle paddingCurrent = VectorSet(padding.left, padding.top, padding.right, padding.bottom);
+        size = VectorSelect(sizeCandidate, size, VectorGreater(size, sizeCandidate));
         const SIMDVectorSingle paddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVectorSingle paddingMaximum = VectorSelect(paddingCandidate, paddingCurrent, VectorGreater(paddingCurrent, paddingCandidate));
-        padding = { VectorGetX(paddingMaximum), VectorGetY(paddingMaximum), VectorGetZ(paddingMaximum), VectorGetW(paddingMaximum) };
+        padding = VectorSelect(paddingCandidate, padding, VectorGreater(padding, paddingCandidate));
     }
 }
 

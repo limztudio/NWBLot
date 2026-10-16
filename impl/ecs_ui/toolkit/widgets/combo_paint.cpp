@@ -31,7 +31,7 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!field || !arrow)
         return false;
-    const Rect clip = visibleClip(box.clip);
+    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
     m_paint.pushClip(clip);
     const bool fieldPainted = m_paint.drawRegion(field->name, box.rectangle);
     const SIMDVectorSingle content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));

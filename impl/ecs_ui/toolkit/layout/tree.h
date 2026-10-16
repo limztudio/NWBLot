@@ -7,6 +7,8 @@
 
 #include "../paint.h"
 
+#include <global/simd/type.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,8 +78,7 @@ private:
 private:
     [[nodiscard]] static bool IsValidDescription(const LayoutNodeDesc& description)noexcept;
     [[nodiscard]] static bool IsValidRectangle(const Rect& rectangle)noexcept;
-    [[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept;
-    [[nodiscard]] static Rect Inset(const Rect& rectangle, const Insets& padding)noexcept;
+    [[nodiscard]] static SIMDVectorSingle Inset(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept;
 
 
 public:

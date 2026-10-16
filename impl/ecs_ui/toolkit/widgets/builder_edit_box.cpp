@@ -91,12 +91,12 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
         item.integerEdit = static_cast<u32>(m_scope->m_integerEdits.size());
     if(floatFrame)
         item.floatEdit = static_cast<u32>(m_scope->m_floatEdits.size());
-    const Point minimum = editMinimumSize();
+    const SIMDVectorSingle minimum = loadEditMinimumSize();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle textSize = VectorAdd(VectorAdd(VectorSet(minimum.x, item.editView.visualBounds().height, 0.0f, 0.0f), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle intrinsic = VectorMax(VectorSet(minimum.x, minimum.y, 0.0f, 0.0f), textSize);
+    const SIMDVectorSingle textSize = VectorAdd(VectorAdd(VectorSelect(VectorSelect(VectorZero(), minimum, s_SIMDMaskX), VectorReplicate(item.editView.visualBounds().height), s_SIMDMaskY), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
+    const SIMDVectorSingle intrinsic = VectorMax(VectorSelect(VectorZero(), minimum, s_SIMDMaskXY), textSize);
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
@@ -109,16 +109,14 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     return result;
 }
 
-Point Builder::editMinimumSize()const noexcept{
-    Point minimum{ 120.0f, 0.0f };
+SIMDVectorSingle Builder::loadEditMinimumSize()const noexcept{
+    SIMDVectorSingle minimum = VectorSet(120.0f, 0.0f, 120.0f, 0.0f);
     const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
         if(skinRegion){
-            const SIMDVectorSingle minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
             const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
-            const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent, VectorGreater(minimumCurrent, minimumCandidate));
-            minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
+            minimum = VectorSelect(minimumCandidate, minimum, VectorGreater(minimum, minimumCandidate));
         }
     }
     return minimum;
@@ -166,7 +164,7 @@ bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarg
     if(!numericEditMatches(item))
         return false;
     const f32 caretWidth = (1.0f / m_paint.displayMetrics().pixelScaleX);
-    const auto arranged = item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), { item.editState->scroll, 0.0f }, caretWidth);
+    const auto arranged = item.editView.arrange(box.rectangle, item.padding, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), { item.editState->scroll, 0.0f }, caretWidth);
     if(!arranged)
         return false;
     const EditBoxPlacement& placement = *arranged;
@@ -176,7 +174,7 @@ bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarg
     item.editState->scroll = placement.scroll;
     HitTarget target = navigation ? *navigation : HitTarget{};
     target.rectangle = box.rectangle;
-    target.clip = visibleClip(box.clip);
+    target.clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
     target.enabled = item.editOptions.enabled;
     target.focusable = item.editOptions.enabled;
     target.textEditable = item.editOptions.enabled;

@@ -25,9 +25,7 @@ public:
     [[nodiscard]] static SIMDVectorSingle KeepWVec(SIMDVectorSingle normalizedVec, SIMDVectorSingle sourceVec)noexcept;
     [[nodiscard]] static SIMDVectorSingle TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept;
     [[nodiscard]] static SIMDVectorSingle UpAxisVec()noexcept;
-    // Storage conversion stays at these boundaries; the cores use SIMD lanes.
-    [[nodiscard]] static CsgDeformVertex MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight)noexcept;
-    [[nodiscard]] static bool NormalizeDeformVertex(CsgDeformVertex& vertex)noexcept;
+    static void NormalizeDeformVertex(SIMDVectorSingle& normal, SIMDVectorSingle& tangent)noexcept;
     [[nodiscard]] static Expected<u32> SplitEdgeVertex(CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits, const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance);
     static void EmitTriangle(CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles, const u32 first, const u32 second, const u32 third);
     // Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.

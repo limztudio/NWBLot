@@ -64,15 +64,17 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     Fnv64AppendValue(hash, instances.size());
     for(usize index = 0u; index < instances.size(); ++index){
         const SceneSwBvhInstanceGpu& instance = instances[index];
-        Float4 aabbMin{};
-        Float4 aabbMax{};
-        StoreFloat(VectorSetW(primitives[index].aabbMin, 0.0f), aabbMin);
-        StoreFloat(VectorSetW(primitives[index].aabbMax, 0.0f), aabbMax);
 
         Fnv64AppendValue(hash, instance.worldToObject);
         Fnv64AppendValue(hash, instance.primitiveCount);
-        Fnv64AppendValue(hash, aabbMin);
-        Fnv64AppendValue(hash, aabbMax);
+        Fnv64AppendValue(hash, VectorGetX(primitives[index].aabbMin));
+        Fnv64AppendValue(hash, VectorGetY(primitives[index].aabbMin));
+        Fnv64AppendValue(hash, VectorGetZ(primitives[index].aabbMin));
+        Fnv64AppendValue(hash, 0.0f);
+        Fnv64AppendValue(hash, VectorGetX(primitives[index].aabbMax));
+        Fnv64AppendValue(hash, VectorGetY(primitives[index].aabbMax));
+        Fnv64AppendValue(hash, VectorGetZ(primitives[index].aabbMax));
+        Fnv64AppendValue(hash, 0.0f);
         Fnv64AppendValue(hash, primitives[index].transparentOccluder);
     }
     return hash;

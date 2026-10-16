@@ -28,10 +28,6 @@ namespace __hidden_ui_edit_box_layout{
     return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
 }
 
-[[nodiscard]] static Rect Intersection(const Rect& first, const Rect& second)noexcept{
-    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(first.x, first.y, first.width, first.height), VectorSet(second.x, second.y, second.width, second.height));
-    return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,9 +73,12 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
         return MakeUnexpected(Failure{});
     EditBoxPlacement placement;
     placement.bounds = bounds;
-    placement.frameClip = __hidden_ui_edit_box_layout::Intersection(bounds, clip);
+    const SIMDVectorSingle clipValue = VectorSet(clip.x, clip.y, clip.width, clip.height);
+    const SIMDVectorSingle frameClip = IntersectRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), clipValue);
+    placement.frameClip = { VectorGetX(frameClip), VectorGetY(frameClip), VectorGetZ(frameClip), VectorGetW(frameClip) };
     placement.content = viewport;
-    placement.clip = __hidden_ui_edit_box_layout::Intersection(viewport, clip);
+    const SIMDVectorSingle contentClip = IntersectRectValue(VectorSet(viewport.x, viewport.y, viewport.width, viewport.height), clipValue);
+    placement.clip = { VectorGetX(contentClip), VectorGetY(contentClip), VectorGetZ(contentClip), VectorGetW(contentClip) };
     const f32 left = viewport.x;
     const f32 top = viewport.y;
     const auto caret = m_geometry.caretRect(m_caret);

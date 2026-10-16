@@ -33,6 +33,7 @@ namespace __hidden_csg_clip_resolve{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Call-scoped calculation scratch; retained scene/GPU values use Float storage.
 struct CsgResolvedClipCutter{
     SIMDMatrix worldToShape;
     CsgClipWorkBounds workBounds;
@@ -138,7 +139,7 @@ struct CsgReceiverLocalSpace{
     return localSpace;
 }
 
-[[nodiscard]] static CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(const CsgReceiverCpuBounds& receiverBounds, const Scene::TransformComponent* transform)noexcept{
+[[nodiscard]] static CsgReceiverLocalSpace LoadCsgReceiverLocalSpace(const CsgReceiverCpuBounds& receiverBounds, const Scene::TransformComponent* transform)noexcept{
     const bool boundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
     const SIMDVectorSingle localMinBounds = boundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
     const SIMDVectorSingle localMaxBounds = boundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
@@ -352,7 +353,7 @@ Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawI
     const Scene::TransformComponent* transform
 )const{
     CsgReceiverClipDrawInfo info;
-    const __hidden_csg_clip_resolve::CsgReceiverLocalSpace receiverLocalSpace = __hidden_csg_clip_resolve::BuildCsgReceiverLocalSpace(receiverBounds, transform);
+    const __hidden_csg_clip_resolve::CsgReceiverLocalSpace receiverLocalSpace = __hidden_csg_clip_resolve::LoadCsgReceiverLocalSpace(receiverBounds, transform);
 
     const bool resolved = __hidden_csg_clip_resolve::ForEachReceiverClipCutter(
         m_csgShapeRegistry,
@@ -399,7 +400,7 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
 
     if(!receiverBounds.valid())
         return MakeUnexpected(Failure{});
-    const __hidden_csg_clip_resolve::CsgReceiverLocalSpace receiverLocalSpace = __hidden_csg_clip_resolve::BuildCsgReceiverLocalSpace(receiverBounds, transform);
+    const __hidden_csg_clip_resolve::CsgReceiverLocalSpace receiverLocalSpace = __hidden_csg_clip_resolve::LoadCsgReceiverLocalSpace(receiverBounds, transform);
 
     const auto worldToReceiver = __hidden_csg_clip_resolve::BuildCsgReceiverWorldToLocal(receiverLocalSpace.localToWorldPtr());
     if(!worldToReceiver)

@@ -81,6 +81,7 @@ public:
     [[nodiscard]] u64 contentHash()const noexcept;
 };
 
+// Call-scoped calculation scratch; retained scene/GPU values use Float storage.
 struct OpticalWorldBounds{
     SIMDVectorSingle minimum;
     SIMDVectorSingle maximum;

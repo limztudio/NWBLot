@@ -45,8 +45,8 @@ void MeshCookMeshlets::ResetMeshletScoreState(MeshletScoreState& state)noexcept{
     state.normalSum = VectorZero();
     state.normalAxis = VectorZero();
     state.primitiveCount = 0u;
-    state.radius = 0.0f;
-    state.coneCutoff = -1.0f;
+    state.radius = VectorZero();
+    state.coneCutoff = s_SIMDNegativeOne;
     state.coneEnabled = false;
 }
 
@@ -56,41 +56,41 @@ void MeshCookMeshlets::AccumulateMeshletScoreBounds(const SIMDVectorSingle (&tri
 }
 
 
-f32 MeshCookMeshlets::PredictMeshletScoreRadius(const MeshletScoreState& state, const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount])noexcept{
+SIMDVectorSingle MeshCookMeshlets::PredictMeshletScoreRadius(const MeshletScoreState& state, const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount])noexcept{
     SIMDVectorSingle minBounds = state.minBounds;
     SIMDVectorSingle maxBounds = state.maxBounds;
     AccumulateMeshletScoreBounds(trianglePositions, minBounds, maxBounds);
 
-    return AabbTests::Radius(minBounds, maxBounds);
+    return Vector3Length(AabbTests::Extents(minBounds, maxBounds));
 }
 
 
-f32 MeshCookMeshlets::MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept{
+SIMDVectorSingle MeshCookMeshlets::MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept{
     if(state.primitiveCount == 0u)
-        return 0.0f;
+        return VectorZero();
 
     const SIMDVectorSingle meshletCentroid = VectorDivide(state.centroidSum, VectorReplicate(static_cast<f32>(state.primitiveCount)));
-    return VectorGetX(Vector3Length(VectorSubtract(triangleCentroid, meshletCentroid)));
+    return Vector3Length(VectorSubtract(triangleCentroid, meshletCentroid));
 }
 
 
-f32 MeshCookMeshlets::MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept{
+SIMDVectorSingle MeshCookMeshlets::MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept{
     const SIMDVectorSingle candidateNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!::FrameValidDirection(state.normalAxis) || !::FrameValidDirection(candidateNormal))
-        return 0.0f;
+        return VectorZero();
 
-    return VectorGetX(Vector3Dot(state.normalAxis, candidateNormal));
+    return Vector3Dot(state.normalAxis, candidateNormal);
 }
 
 
-void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, f32& coneCutoff)noexcept{
+void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, SIMDVectorSingle& coneCutoff)noexcept{
     const SIMDVectorSingle faceNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!::FrameValidDirection(faceNormal))
         return;
 
     hasNormal = true;
     // Cutoff tracks the minimum dot over faces; both candidates stay replicated on SIMD lanes.
-    coneCutoff = VectorGetX(VectorMin(VectorReplicate(coneCutoff), Vector3Dot(axis, faceNormal)));
+    coneCutoff = VectorMin(coneCutoff, Vector3Dot(axis, faceNormal));
 }
 
 

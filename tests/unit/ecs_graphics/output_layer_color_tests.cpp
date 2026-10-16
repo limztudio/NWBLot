@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 
-#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -38,18 +37,15 @@ public:
 using float3 = ShaderFloat3;
 
 [[nodiscard]] ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble result = SIMDVectorDouble{ a.x, a.y, a.z, 0. } + SIMDVectorDouble{ b.x, b.y, b.z, 0. };
-    return { result.x, result.y, result.z };
+    return { a.x + b.x, a.y + b.y, a.z + b.z };
 }
 
 [[nodiscard]] ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble result = SIMDVectorDouble{ a.x, a.y, a.z, 0. } * SIMDVectorDouble{ b.x, b.y, b.z, 0. };
-    return { result.x, result.y, result.z };
+    return { a.x * b.x, a.y * b.y, a.z * b.z };
 }
 
 [[nodiscard]] ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble result = SIMDVectorDouble{ a.x, a.y, a.z, 0. } / SIMDVectorDouble{ b.x, b.y, b.z, 1. };
-    return { result.x, result.y, result.z };
+    return { a.x / b.x, a.y / b.y, a.z / b.z };
 }
 
 [[nodiscard]] f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
@@ -57,10 +53,7 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble first{ a.x, a.y, a.z, 0. };
-    const SIMDVectorDouble second{ b.x, b.y, b.z, 0. };
-    const SIMDVectorDouble result = (first > second) ? first : second;
-    return { result.x, result.y, result.z };
+    return { a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z };
 }
 
 [[nodiscard]] f32 saturate(const f32 a)noexcept{
@@ -68,12 +61,8 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
-    const SIMDVectorDouble value{ a.x, a.y, a.z, 0. };
-    const SIMDVectorDouble zero{ 0., 0., 0., 0. };
-    const SIMDVectorDouble one{ 1., 1., 1., 1. };
-    const SIMDVectorDouble lower = (value > zero) ? value : zero;
-    const SIMDVectorDouble result = (lower > one) ? one : lower;
-    return { result.x, result.y, result.z };
+    const ShaderFloat3 lower(a.x > 0. ? a.x : 0., a.y > 0. ? a.y : 0., a.z > 0. ? a.z : 0.);
+    return { lower.x > 1. ? 1. : lower.x, lower.y > 1. ? 1. : lower.y, lower.z > 1. ? 1. : lower.z };
 }
 
 [[nodiscard]] ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{

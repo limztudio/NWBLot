@@ -5,6 +5,7 @@
 #include "layout.h"
 
 #include <global/simd/vector_arithmetic.h>
+#include <global/simd/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,16 +31,16 @@ namespace __hidden_ui_text_layout{
     return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
 }
 
-[[nodiscard]] static Expected<Rect> TranslateInk(const Point& position, const Rect& ink)noexcept{
-    const SIMDVectorDouble leftTopValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(position.x), static_cast<f64>(position.y), 0.0, 0.0), VectorDoubleSet(ink.x, ink.y, 0.0, 0.0));
-    const f64 left = VectorDoubleGetX(leftTopValue);
-    const f64 top = VectorDoubleGetY(leftTopValue);
-    if(!FitsCoordinate(left) || !FitsCoordinate(top) || !FitsCoordinate(left + ink.width) || !FitsCoordinate(top + ink.height))
+[[nodiscard]] static Expected<SIMDVectorDouble> TranslateInk(const SIMDVectorDouble position, const SIMDVectorDouble ink)noexcept{
+    const SIMDVectorDouble origin = VectorDoubleAdd(position, ink);
+    const SIMDVectorDouble end = VectorDoubleAdd(origin, VectorDoubleSwizzle<2, 3, 2, 3>(ink));
+    if(!FitsCoordinate(VectorDoubleGetX(origin)) || !FitsCoordinate(VectorDoubleGetY(origin)) || !FitsCoordinate(VectorDoubleGetX(end)) || !FitsCoordinate(VectorDoubleGetY(end)))
         return MakeUnexpected(Failure{});
-    const Rect rectangle{ static_cast<f32>(left), static_cast<f32>(top), ink.width, ink.height };
-    if(!IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height))
+    const SIMDVectorSingle rectangle = ConvertVectorDoubleToSingle(VectorDoubleSelect(ink, origin, s_DoubleSIMDMaskXY));
+    const SIMDVectorSingle roundedEnd = VectorAdd(VectorSelect(VectorZero(), rectangle, s_SIMDMaskXY), VectorSwizzle<2, 3, 2, 3>(rectangle));
+    if(!IsFinite(VectorGetX(roundedEnd)) || !IsFinite(VectorGetY(roundedEnd)))
         return MakeUnexpected(Failure{});
-    return rectangle;
+    return ConvertVectorSingleToDouble(rectangle);
 }
 
 [[nodiscard]] static bool ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction)noexcept{
@@ -78,31 +79,27 @@ namespace __hidden_ui_text_layout{
     return true;
 }
 
-[[nodiscard]] static bool IncludeInk(Rect& bounds, bool& hasInk, const Rect& ink)noexcept{
-    if(ink.width <= 0.0f || ink.height <= 0.0f)
+[[nodiscard]] static bool IncludeInk(SIMDVectorDouble& bounds, bool& hasInk, const SIMDVectorDouble ink)noexcept{
+    if(VectorDoubleGetZ(ink) <= 0.0 || VectorDoubleGetW(ink) <= 0.0)
         return true;
     if(!hasInk){
         bounds = ink;
         hasInk = true;
         return true;
     }
-    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleSet(static_cast<f64>(ink.x), static_cast<f64>(ink.y), 0.0, 0.0);
-    const SIMDVectorDouble leftTopValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleLess(geometryPair1Operand0, geometryPair1Operand1));
-    const f64 left = VectorDoubleGetX(leftTopValue);
-    const f64 top = VectorDoubleGetY(leftTopValue);
-    const SIMDVectorDouble geometryPair2Operand0 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0), VectorDoubleSet(bounds.width, bounds.height, 0.0, 0.0));
-    const SIMDVectorDouble geometryPair2Operand1 = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(ink.x), static_cast<f64>(ink.y), 0.0, 0.0), VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
-    const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleGreater(geometryPair2Operand0, geometryPair2Operand1));
-    const SIMDVectorDouble size = VectorDoubleSubtract(rightBottomValue, leftTopValue);
-    const f64 width = VectorDoubleGetX(size);
-    const f64 height = VectorDoubleGetY(size);
-    if(!FitsCoordinate(width) || !FitsCoordinate(height))
+    const SIMDVectorDouble origin = VectorDoubleSelect(ink, bounds, VectorDoubleLess(bounds, ink));
+    const SIMDVectorDouble boundsEnd = VectorDoubleAdd(bounds, VectorDoubleSwizzle<2, 3, 2, 3>(bounds));
+    const SIMDVectorDouble inkEnd = VectorDoubleAdd(ink, VectorDoubleSwizzle<2, 3, 2, 3>(ink));
+    const SIMDVectorDouble end = VectorDoubleSelect(inkEnd, boundsEnd, VectorDoubleGreater(boundsEnd, inkEnd));
+    const SIMDVectorDouble size = VectorDoubleSubtract(end, origin);
+    if(!FitsCoordinate(VectorDoubleGetX(size)) || !FitsCoordinate(VectorDoubleGetY(size)))
         return false;
-    const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(width), static_cast<f32>(height) };
-    if(!IsFinite(combined.x + combined.width) || !IsFinite(combined.y + combined.height))
+    const SIMDVectorDouble rectangle = VectorDoubleSelect(VectorDoubleSwizzle<0, 1, 0, 1>(size), origin, s_DoubleSIMDMaskXY);
+    const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(rectangle);
+    const SIMDVectorSingle roundedEnd = VectorAdd(VectorSelect(VectorZero(), rounded, s_SIMDMaskXY), VectorSwizzle<2, 3, 2, 3>(rounded));
+    if(!IsFinite(VectorGetX(roundedEnd)) || !IsFinite(VectorGetY(roundedEnd)))
         return false;
-    bounds = combined;
+    bounds = ConvertVectorSingleToDouble(rounded);
     return true;
 }
 
@@ -210,6 +207,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
     result.m_clusters.reserve(request.text.size());
     result.m_lines.reserve(1u);
     bool hasInk = false;
+    SIMDVectorDouble inkBounds = VectorDoubleZero();
     usize byteBegin = 0u;
     while(true){
         usize byteEnd = byteBegin;
@@ -259,10 +257,11 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
                 if(!__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y) || !__hidden_ui_text_layout::FitsCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
-                const auto ink = __hidden_ui_text_layout::TranslateInk(position, glyph.ink);
-                if(!ink || !__hidden_ui_text_layout::IncludeInk(result.m_inkBounds, hasInk, *ink))
+                const SIMDVectorDouble positionValue = VectorDoubleSet(position.x, position.y, 0.0, 0.0);
+                const auto ink = __hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.ink.x, glyph.ink.y, glyph.ink.width, glyph.ink.height));
+                if(!ink || !__hidden_ui_text_layout::IncludeInk(inkBounds, hasInk, *ink))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(position, glyph.coverage.ink))
+                if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.coverage.ink.x, glyph.coverage.ink.y, glyph.coverage.ink.width, glyph.coverage.ink.height)))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 result.m_glyphs.push_back({ glyph.face, glyph.glyphId,
                     line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage });
@@ -294,6 +293,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             break;
         byteBegin = breakEnd;
     }
+    result.m_inkBounds = { static_cast<f32>(VectorDoubleGetX(inkBounds)), static_cast<f32>(VectorDoubleGetY(inkBounds)), static_cast<f32>(VectorDoubleGetZ(inkBounds)), static_cast<f32>(VectorDoubleGetW(inkBounds)) };
     return result;
 }
 

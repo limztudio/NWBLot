@@ -99,7 +99,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
         return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::NoKeptGeometry, stats });
     }
     for(const CsgDeformVertex& vertex : outVertices){
-        if(!CsgDeformValidator::FiniteVertex(vertex)){
+        if(!CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color))){
             return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::NonFiniteInput, stats });
         }
     }

@@ -47,20 +47,6 @@ static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to 
 static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
 
 
-// Fallback when a world declares no lights: one neutral directional light.
-[[nodiscard]] SceneLight BuildDefaultSceneLight(SIMDVectorSingle forward)noexcept;
-[[nodiscard]] Expected<SceneLight> TryBuildSceneLight(
-    SIMDVectorSingle position,
-    SIMDVectorSingle rotation,
-    SIMDVectorSingle colorIntensity,
-    f32 range,
-    f32 innerConeCos,
-    f32 outerConeCos,
-    f32 angularRadius,
-    f32 sourceRadius,
-    LightType::Enum type,
-    bool enableCaustics
-)noexcept;
 [[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, SIMDVectorSingle defaultForward, SceneLight* outLights, usize maxLights);
 
 

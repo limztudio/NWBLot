@@ -39,12 +39,12 @@ using CandidatePointer = NotNull<const Candidate*>;
     return scaleNonzero && rotationNonzero;
 }
 
-[[nodiscard]] bool ValidCandidate(const Candidate& candidate){
+[[nodiscard]] bool ValidCandidate(const Candidate& candidate, const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale){
     if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
         return false;
     if(candidate.mutableTypedByteCount != 0u && !candidate.mutableTypedBytes)
         return false;
-    return ValidCandidateLanes(LoadFloat(candidate.position), LoadFloat(candidate.rotation), LoadFloat(candidate.scale));
+    return ValidCandidateLanes(position, rotation, scale);
 }
 
 struct CandidateHasher{
@@ -190,7 +190,7 @@ void RendererOpticalVolumeSelection::select(const CoincidentOpticalVolumeCandida
     // Inspect membership each frame; components may change without structural mutation.
     for(usize index = 0u; index < candidateCount; ++index){
         const Candidate& candidate = candidates[index];
-        if(!ValidCandidate(candidate))
+        if(!ValidCandidate(candidate, LoadFloat(candidate.position), LoadFloat(candidate.rotation), LoadFloat(candidate.scale)))
             continue;
         const CandidatePointer current(&candidate);
         auto [entry, inserted] = representatives.emplace(current, current);

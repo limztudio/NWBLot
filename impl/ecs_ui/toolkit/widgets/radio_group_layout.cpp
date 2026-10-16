@@ -28,23 +28,38 @@ namespace __hidden_ui_radio_group_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidMetrics(const RadioGroupMetrics& metrics)noexcept{
-    if(
-        metrics.count > s_RadioGroupMaxChoices || !IsValidUiPadding(metrics.padding) || !IsValidUiExtent(metrics.contentSize)
-        || !IsFinite(metrics.rowHeight) || metrics.rowHeight <= 0.0f
-        || !IsFinite(metrics.indicatorExtent) || metrics.indicatorExtent <= 0.0f || metrics.indicatorExtent > metrics.rowHeight
-        || !IsFinite(metrics.gap) || metrics.gap < 0.0f || !IsFinite(metrics.rowGap) || metrics.rowGap < 0.0f
-        || !IsFinite(metrics.markInset) || metrics.markInset < 0.0f || metrics.markInset > 0.5f
-    )
+[[nodiscard]] static SIMDMatrixDouble LoadMetrics(const RadioGroupMetrics& metrics)noexcept{
+    if(metrics.count > s_RadioGroupMaxChoices || !IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom) || !IsFinite(metrics.rowHeight) || !IsFinite(metrics.indicatorExtent) || !IsFinite(metrics.gap) || !IsFinite(metrics.rowGap) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y) || !IsFinite(metrics.markInset))
+        return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
+    return SIMDMatrixDouble{ .v = {
+        VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
+        VectorDoubleSet(metrics.rowHeight, metrics.indicatorExtent, metrics.gap, metrics.rowGap),
+        VectorDoubleSet(metrics.contentSize.x, metrics.contentSize.y, metrics.markInset, metrics.count),
+        VectorDoubleZero()
+    } };
+}
+
+[[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
+    for(u32 index = 0u; index < 3u; ++index){
+        if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u
+            || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[index], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW)
+            return false;
+    }
+    const u32 count = static_cast<u32>(VectorDoubleGetW(values.v[2]));
+    const f64 rowHeight = VectorDoubleGetX(values.v[1]);
+    const f64 indicatorExtent = VectorDoubleGetY(values.v[1]);
+    if(count > s_RadioGroupMaxChoices || rowHeight <= 0.0 || indicatorExtent <= 0.0 || indicatorExtent > rowHeight || VectorDoubleGetZ(values.v[2]) > 0.5)
         return false;
-    const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0), VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0));
-    const SIMDVectorDouble rowExtents = VectorDoubleMultiply(VectorDoubleSet(metrics.count, metrics.count == 0u ? 0u : metrics.count - 1u, 0.0, 0.0), VectorDoubleSet(metrics.rowHeight, metrics.rowGap, 0.0, 0.0));
-    const f64 labelWidth = metrics.count == 0u ? 0.0 : VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(metrics.indicatorExtent), VectorDoubleReplicate(metrics.gap)));
-    const SIMDVectorDouble size = VectorDoubleAdd(VectorDoubleAdd(padding, VectorDoubleSet(labelWidth, VectorDoubleGetX(rowExtents), 0.0, 0.0)), VectorDoubleSwizzle<2, 1, 2, 3>(rowExtents));
+    const SIMDVectorDouble padding = VectorDoubleAdd(values.v[0], VectorDoubleSwizzle<2, 3, 2, 3>(values.v[0]));
+    const SIMDVectorDouble rowExtents = VectorDoubleMultiply(VectorDoubleSet(count, count == 0u ? 0u : count - 1u, 0.0, 0.0), VectorDoubleSwizzle<0, 3, 0, 3>(values.v[1]));
+    const SIMDVectorDouble labelWidth = count == 0u ? VectorDoubleZero() : VectorDoubleAdd(VectorDoubleSplatY(values.v[1]), VectorDoubleSplatZ(values.v[1]));
+    const SIMDVectorDouble labelAndRows = VectorDoubleSelect(labelWidth, VectorDoubleSplatX(rowExtents), s_DoubleSIMDMaskY);
+    const SIMDVectorDouble size = VectorDoubleAdd(VectorDoubleAdd(padding, labelAndRows), VectorDoubleSwizzle<2, 1, 2, 3>(rowExtents));
     const f64 height = VectorDoubleGetY(size);
     const f64 minimumWidth = VectorDoubleGetX(size);
-    return height <= Limit<f32>::s_Max && metrics.contentSize.y == static_cast<f32>(height) && minimumWidth <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(minimumWidth);
+    return height <= Limit<f32>::s_Max && VectorDoubleGetY(values.v[2]) == static_cast<f32>(height) && minimumWidth <= Limit<f32>::s_Max && VectorDoubleGetX(values.v[2]) >= static_cast<f32>(minimumWidth);
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,14 +100,14 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
-    if(!ValidMetrics(candidate))
+    if(!ValidMetrics(LoadMetrics(candidate)))
         return MakeUnexpected(Failure{});
     return candidate;
 }
 
 Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const Rect& clip, const RadioGroupChoices& choices, const RadioGroupMetrics& metrics)noexcept{
     using namespace __hidden_ui_radio_group_layout;
-    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !ValidMetrics(metrics) || choices.count != metrics.count)
+    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !ValidMetrics(LoadMetrics(metrics)) || choices.count != metrics.count)
         return MakeUnexpected(Failure{});
     RadioGroupPlacement candidate;
     candidate.bounds = bounds;

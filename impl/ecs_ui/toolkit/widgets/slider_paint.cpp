@@ -26,7 +26,7 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     auto normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
     if(!normalized)
         return false;
-    const Rect clip = visibleClip(box.clip);
+    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
     auto placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement || !SliderBehavior::Admit(frame.m_state, frame.m_options, *placement))
         return false;

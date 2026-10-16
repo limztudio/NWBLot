@@ -26,6 +26,8 @@
 #include "widgets/tooltip_style.h"
 #include "widgets/context_menu.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -129,12 +131,17 @@ public:
 
 
 private:
+    [[nodiscard]] static SIMDVectorSingle LoadRectangle(const Rect& rectangle)noexcept{ return VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height); }
+    [[nodiscard]] static Rect StoreRectangle(const SIMDVectorSingle rectangle)noexcept{ return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) }; }
+
+
+private:
     [[nodiscard]] bool declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
     [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const noexcept;
     [[nodiscard]] bool beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
     [[nodiscard]] Item* addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
-    void buttonMetrics(Point& size, Insets& padding)const noexcept;
+    void loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept;
     [[nodiscard]] bool paintPanel();
     [[nodiscard]] bool paintWindow();
     [[nodiscard]] bool paintWindowTitle();
@@ -154,7 +161,7 @@ private:
     [[nodiscard]] bool floatEditMatches(const FloatEditFrame& frame)const noexcept;
     [[nodiscard]] bool numericEditMatches(const Item& item)const noexcept;
     [[nodiscard]] bool numericStateAvailable(const EditBoxState& state)const noexcept;
-    [[nodiscard]] Point editMinimumSize()const noexcept;
+    [[nodiscard]] SIMDVectorSingle loadEditMinimumSize()const noexcept;
     [[nodiscard]] bool prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);
@@ -215,7 +222,7 @@ private:
     [[nodiscard]] bool validatePopupFamily();
     void releasePopupFamily()noexcept;
     [[nodiscard]] bool reserveCompoundPopup(const WidgetState& widget, const PopupToken& token);
-    [[nodiscard]] Rect visibleClip(const Rect& clip)const noexcept;
+    [[nodiscard]] SIMDVectorSingle loadVisibleClip(SIMDVectorSingle clip)const noexcept;
 
 
 private:

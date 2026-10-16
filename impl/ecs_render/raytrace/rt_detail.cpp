@@ -181,7 +181,7 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
         // The parent AABB is the union of every bin (suffix at index 0); the SAH parent-area divisor is folded out by comparing costs on the same slice, so the un-normalized cost ct*SA + SA_L*cost_L + SA_R*cost_R is minimized directly.
         const SIMDVectorSingle parentMin = suffixMin[0u];
         const SIMDVectorSingle parentMax = suffixMax[0u];
-        const f32 parentArea = AabbTests::SurfaceArea(parentMin, parentMax);
+        const SIMDVectorSingle parentArea = AabbTests::SurfaceArea(parentMin, parentMax);
 
         SIMDVectorSingle leftMin = VectorReplicate(s_RayTracingFiniteInfinity);
         SIMDVectorSingle leftMax = VectorReplicate(-s_RayTracingFiniteInfinity);
@@ -198,13 +198,13 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
             if(leftCount == 0u || rightCount == 0u)
                 continue; // boundary puts every instance on one side -> not a real split
 
-            const f32 leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
-            const f32 rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
+            const SIMDVectorSingle leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
+            const SIMDVectorSingle rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
             // SAH cost on lanes: parent*s_Traversal + left*leftCost + right*rightCost via multiply-add chains.
             const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(
-                VectorReplicate(leftArea),
+                leftArea,
                 VectorReplicate(leftCost),
-                VectorMultiplyAdd(VectorReplicate(rightArea), VectorReplicate(suffixCost[k]), VectorMultiply(VectorReplicate(parentArea), VectorReplicate(s_SceneBvhSahTraversalCost)))
+                VectorMultiplyAdd(rightArea, VectorReplicate(suffixCost[k]), VectorMultiply(parentArea, VectorReplicate(s_SceneBvhSahTraversalCost)))
             );
             const f32 cost = VectorGetX(sahCostLanes);
             if(cost < bestCost){

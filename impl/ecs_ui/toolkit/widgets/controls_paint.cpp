@@ -21,12 +21,12 @@ bool Builder::paintPanel(){
     const LayoutBox* panel = m_scope->m_layout.box(0u);
     if(!panel)
         return false;
-    m_paint.pushClip(visibleClip(panel->clip));
+    m_paint.pushClip(StoreRectangle(loadVisibleClip(LoadRectangle(panel->clip))));
     const bool painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
     const bool popped = m_paint.popClip();
     HitTarget barrier;
     barrier.rectangle = panel->rectangle;
-    barrier.clip = visibleClip(panel->clip);
+    barrier.clip = StoreRectangle(loadVisibleClip(LoadRectangle(panel->clip)));
     if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
         return false;
     return paintItems();
@@ -65,7 +65,7 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     const bool pressed = input.pressed(item.state.id);
     const bool focused = input.focus() == item.state.id;
     const bool interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
-    m_paint.pushClip(visibleClip(box.clip));
+    m_paint.pushClip(StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))));
     bool painted = true;
     Point origin{ box.rectangle.x, box.rectangle.y };
     Rect textClip = box.rectangle;
@@ -121,7 +121,7 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     if(interactive || item.annotated){
         HitTarget target;
         target.rectangle = box.rectangle;
-        target.clip = visibleClip(box.clip);
+        target.clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
         // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
         target.enabled = item.enabled;
         target.focusable = item.enabled && interactive;
@@ -147,10 +147,9 @@ bool Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& 
     return m_context.addTarget(item.state, target);
 }
 
-Rect Builder::visibleClip(const Rect& clip)const noexcept{
+SIMDVectorSingle Builder::loadVisibleClip(const SIMDVectorSingle clip)const noexcept{
     const DisplayMetrics& display = m_paint.displayMetrics();
-    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(0.0f, 0.0f, display.logicalWidth, display.logicalHeight), VectorSet(clip.x, clip.y, clip.width, clip.height));
-    return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
+    return IntersectRectValue(VectorSet(0.0f, 0.0f, display.logicalWidth, display.logicalHeight), clip);
 }
 
 

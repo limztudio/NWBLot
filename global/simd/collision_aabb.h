@@ -18,6 +18,7 @@ namespace AabbTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Calculation result only; callers store retained bounds in Float/Double storage types.
 struct Bounds{
     SIMDVectorSingle minBounds;
     SIMDVectorSingle maxBounds;
@@ -30,8 +31,8 @@ void NWB_SIMD_CALL ExpandTriangle(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMD
 [[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorSingle lhsMinBounds, SIMDVectorSingle lhsMaxBounds, SIMDVectorSingle rhsMinBounds, SIMDVectorSingle rhsMaxBounds)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL Center(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL Extents(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
-[[nodiscard]] f32 NWB_SIMD_CALL SurfaceArea(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
-[[nodiscard]] f32 NWB_SIMD_CALL Radius(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
+[[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL SurfaceArea(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
+[[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL Radius(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 [[nodiscard]] Expected<Bounds> NWB_SIMD_CALL Transform(const SIMDMatrix& localToWorld, SIMDVectorSingle localMinBounds, SIMDVectorSingle localMaxBounds)noexcept;
 
 
@@ -50,6 +51,7 @@ namespace AabbDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Calculation result only; callers store retained bounds in Float/Double storage types.
 struct Bounds{
     SIMDVectorDouble minBounds;
     SIMDVectorDouble maxBounds;
@@ -62,8 +64,8 @@ void NWB_SIMD_CALL ExpandTriangle(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMD
 [[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorDouble lhsMinBounds, SIMDVectorDouble lhsMaxBounds, SIMDVectorDouble rhsMinBounds, SIMDVectorDouble rhsMaxBounds)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL Center(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL Extents(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
-[[nodiscard]] f64 NWB_SIMD_CALL SurfaceArea(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
-[[nodiscard]] f64 NWB_SIMD_CALL Radius(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
+[[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL SurfaceArea(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
+[[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL Radius(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 [[nodiscard]] Expected<Bounds> NWB_SIMD_CALL Transform(const SIMDMatrixDouble& localToWorld, SIMDVectorDouble localMinBounds, SIMDVectorDouble localMaxBounds)noexcept;
 
 
@@ -154,26 +156,26 @@ NWB_INLINE void NWB_SIMD_CALL AabbDoubleTests::ExpandTriangle(const SIMDVectorDo
     return VectorDoubleSetW(VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), CollisionDoubleDetail::s_DoubleHalf), 0.0);
 }
 
-[[nodiscard]] NWB_INLINE f32 NWB_SIMD_CALL AabbTests::SurfaceArea(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL AabbTests::SurfaceArea(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     const SIMDVectorSingle extent = VectorSubtract(maxBounds, minBounds);
     const SIMDVectorSingle pairProducts = VectorMultiply(extent, VectorSwizzle<1, 2, 0, 3>(extent));
     const SIMDVectorSingle area = VectorScale(VectorAdd(VectorAdd(VectorSplatX(pairProducts), VectorSplatZ(pairProducts)), VectorSplatY(pairProducts)), 2.0f);
-    return VectorGetX(area);
+    return area;
 }
 
-[[nodiscard]] NWB_INLINE f64 NWB_SIMD_CALL AabbDoubleTests::SurfaceArea(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL AabbDoubleTests::SurfaceArea(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     const SIMDVectorDouble extent = VectorDoubleSubtract(maxBounds, minBounds);
     const SIMDVectorDouble pairProducts = VectorDoubleMultiply(extent, VectorDoubleSwizzle<1, 2, 0, 3>(extent));
     const SIMDVectorDouble area = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleSplatX(pairProducts), VectorDoubleSplatZ(pairProducts)), VectorDoubleSplatY(pairProducts)), 2.0);
-    return VectorDoubleGetX(area);
+    return area;
 }
 
-[[nodiscard]] NWB_INLINE f32 NWB_SIMD_CALL AabbTests::Radius(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
-    return VectorGetX(Vector3Length(AabbTests::Extents(minBounds, maxBounds)));
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL AabbTests::Radius(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
+    return Vector3Length(AabbTests::Extents(minBounds, maxBounds));
 }
 
-[[nodiscard]] NWB_INLINE f64 NWB_SIMD_CALL AabbDoubleTests::Radius(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
-    return VectorDoubleGetX(VectorDouble3Length(AabbDoubleTests::Extents(minBounds, maxBounds)));
+[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL AabbDoubleTests::Radius(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
+    return VectorDouble3Length(AabbDoubleTests::Extents(minBounds, maxBounds));
 }
 
 

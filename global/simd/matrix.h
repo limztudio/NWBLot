@@ -1053,14 +1053,6 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     return VectorDouble3Dot(row0, VectorDouble3Cross(row1, row2));
 }
 
-[[nodiscard]] NWB_INLINE f32 NWB_SIMD_CALL MatrixLinearDeterminant(const SIMDMatrix& matrix)noexcept{
-    return VectorGetX(MatrixLinearDeterminantV(matrix));
-}
-
-[[nodiscard]] NWB_INLINE f64 NWB_SIMD_CALL MatrixDoubleLinearDeterminant(const SIMDMatrixDouble& matrix)noexcept{
-    return VectorDoubleGetX(MatrixDoubleLinearDeterminantV(matrix));
-}
-
 [[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsInvertibleAffine(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 determinantEpsilon)noexcept{
     if(!MatrixIsAffine(matrix, affineEpsilon))
         return false;

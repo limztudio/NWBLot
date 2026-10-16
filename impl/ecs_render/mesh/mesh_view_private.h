@@ -118,8 +118,8 @@ inline void BuildMeshViewFrustumVectors(
 
 inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     MeshViewGpuData state;
-    NWB::Impl::Scene::SceneViewBasis viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
-    NWB::Impl::Scene::CameraProjection projection = NWB::Impl::Scene::BuildDefaultCameraProjection(fallbackAspectRatio);
+    SIMDMatrix viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
+    NWB::Impl::Scene::CameraProjection projection = NWB::Impl::Scene::StoreDefaultCameraProjection(fallbackAspectRatio);
 
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
@@ -127,10 +127,10 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
         projection = cameraView.projection;
     }
 
-    const SIMDVectorSingle positionDepthBias = LoadFloat(viewBasis.positionDepthBias);
-    const SIMDVectorSingle right = VectorSetW(LoadFloat(viewBasis.right), 0.0f);
-    const SIMDVectorSingle up = VectorSetW(LoadFloat(viewBasis.up), 0.0f);
-    const SIMDVectorSingle forward = VectorSetW(LoadFloat(viewBasis.forward), 0.0f);
+    const SIMDVectorSingle positionDepthBias = viewBasis.v[3];
+    const SIMDVectorSingle right = VectorSetW(viewBasis.v[0], 0.0f);
+    const SIMDVectorSingle up = VectorSetW(viewBasis.v[1], 0.0f);
+    const SIMDVectorSingle forward = VectorSetW(viewBasis.v[2], 0.0f);
     const SIMDVectorSingle projectionParams = LoadFloat(projection.projectionParams);
     const SIMDVectorSingle tanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
     const SIMDVectorSingle aspectRatio = VectorReplicate(projection.aspectRatio);

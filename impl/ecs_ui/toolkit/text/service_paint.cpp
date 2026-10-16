@@ -38,7 +38,7 @@ namespace __hidden_ui_text_paint{
     return BitCast<f32>((upper == (rounded > 0.0f)) ? bits + 1u : bits - 1u);
 }
 
-[[nodiscard]] static Expected<Rect> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDouble> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
     const f64 left = VectorDoubleGetX(minimum);
     const f64 top = VectorDoubleGetY(minimum);
     const f64 right = VectorDoubleGetX(maximum);
@@ -52,16 +52,19 @@ namespace __hidden_ui_text_paint{
     const f64 height = VectorDoubleGetY(size);
     if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
-    const Rect result{ x, y, RoundMeasuredBound(width, true), RoundMeasuredBound(height, true) };
-    if(!IsValidUiRect(result))
+    const f32 roundedWidth = RoundMeasuredBound(width, true);
+    const f32 roundedHeight = RoundMeasuredBound(height, true);
+    if(!IsFinite(roundedWidth) || roundedWidth < 0.0f || !IsFinite(roundedHeight) || roundedHeight < 0.0f || !IsFinite(x + roundedWidth) || !IsFinite(y + roundedHeight))
         return MakeUnexpected(Failure{});
-    return result;
+    return VectorDoubleSet(x, y, roundedWidth, roundedHeight);
 }
 
-[[nodiscard]] static Expected<Rect> MeasureSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display){
+[[nodiscard]] static Expected<SIMDVectorDouble> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display){
     const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, {});
-    if(!plane || plane->width <= 0.0f || plane->height <= 0.0f)
-        return plane;
+    if(!plane)
+        return MakeUnexpected(Failure{});
+    if(plane->width <= 0.0f || plane->height <= 0.0f)
+        return VectorDoubleSet(plane->x, plane->y, plane->width, plane->height);
     const FontAtlasGlyph& glyph = *atlas.glyph(placed.glyphId);
     const SdfAtlasPage& page = *atlas.page(glyph.group);
     const SdfAtlasPageBinding& binding = page.binding();
@@ -128,7 +131,7 @@ namespace __hidden_ui_text_paint{
         }
     }
     if(!visible)
-        return Rect{};
+        return VectorDoubleZero();
     const SIMDVectorDouble origin = VectorDoubleSet(plane->x, plane->y, 0.0, 0.0);
     const SIMDVectorDouble scale = VectorDoubleSelect(VectorDoubleZero(), texelSize, s_DoubleSIMDMaskXY);
     const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(supportMinimum, scale, origin);
@@ -176,13 +179,13 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
         SIMDVectorDouble first;
         SIMDVectorDouble last;
         if(const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize)){
-            const auto support = MeasureSdfSupport(glyph, *atlas, layout.fontSize(), display);
+            const auto support = LoadSdfSupport(glyph, *atlas, layout.fontSize(), display);
             if(!support)
                 return MakeUnexpected(Failure{});
-            if(support->width <= 0.0f || support->height <= 0.0f)
+            if(VectorDoubleGetZ(*support) <= 0.0 || VectorDoubleGetW(*support) <= 0.0)
                 continue;
-            first = VectorDoubleSet(support->x, support->y, 0.0, 0.0);
-            last = VectorDoubleAdd(first, VectorDoubleSet(support->width, support->height, 0.0, 0.0));
+            first = VectorDoubleSelect(VectorDoubleZero(), *support, s_DoubleSIMDMaskXY);
+            last = VectorDoubleAdd(first, VectorDoubleSwizzle<2, 3, 2, 3>(*support));
         }
         else{
             if(!glyph.face || !glyph.face->valid())
@@ -207,7 +210,10 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
         minimum = VectorDoubleSelect(minimum, first, VectorDoubleLess(first, minimum));
         maximum = VectorDoubleSelect(maximum, last, VectorDoubleGreater(last, maximum));
     }
-    return MeasuredRectangle(minimum, maximum);
+    const auto rectangle = MeasuredRectangle(minimum, maximum);
+    if(!rectangle)
+        return MakeUnexpected(Failure{});
+    return Rect{ static_cast<f32>(VectorDoubleGetX(*rectangle)), static_cast<f32>(VectorDoubleGetY(*rectangle)), static_cast<f32>(VectorDoubleGetZ(*rectangle)), static_cast<f32>(VectorDoubleGetW(*rectangle)) };
 }
 
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){

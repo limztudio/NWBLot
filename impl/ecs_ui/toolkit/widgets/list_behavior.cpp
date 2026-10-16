@@ -81,19 +81,17 @@ struct KeyResolution{
     return key;
 }
 
-[[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const ControlAction& action)noexcept{
-    if(!IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0 || !IsFinite(action.maximum) || action.maximum < 0.0)
+[[nodiscard]] static Expected<SIMDVectorDouble> WheelOffset(const SIMDVectorDouble current, const SIMDVectorDouble delta, const SIMDVectorDouble step, const SIMDVectorDouble maximum)noexcept{
+    if(!IsFinite(VectorDoubleGetX(delta)) || !IsFinite(VectorDoubleGetX(step)) || VectorDoubleGetX(step) <= 0.0 || !IsFinite(VectorDoubleGetX(maximum)) || VectorDoubleGetX(maximum) < 0.0)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble maximum = VectorDoubleReplicate(action.maximum);
-    const SIMDVectorDouble step = VectorDoubleReplicate(action.step);
-    SIMDVectorDouble candidateValue = VectorDoubleMin(VectorDoubleReplicate(current), maximum);
-    if(action.delta > 0.0){
+    SIMDVectorDouble candidateValue = VectorDoubleMin(current, maximum);
+    if(VectorDoubleGetX(delta) > 0.0){
         const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(candidateValue, step));
-        candidateValue = action.delta >= distanceInSteps ? VectorDoubleZero()
-            : VectorDoubleSubtract(candidateValue, VectorDoubleMultiply(VectorDoubleReplicate(action.delta), step));
+        candidateValue = VectorDoubleGetX(delta) >= distanceInSteps ? VectorDoubleZero()
+            : VectorDoubleSubtract(candidateValue, VectorDoubleMultiply(delta, step));
     }
-    else if(action.delta < 0.0){
-        const SIMDVectorDouble reverseDelta = VectorDoubleNegate(VectorDoubleReplicate(action.delta));
+    else if(VectorDoubleGetX(delta) < 0.0){
+        const SIMDVectorDouble reverseDelta = VectorDoubleNegate(delta);
         const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(maximum, candidateValue), step));
         candidateValue = VectorDoubleGetX(reverseDelta) >= distanceInSteps ? maximum
             : VectorDoubleAdd(candidateValue, VectorDoubleMultiply(reverseDelta, step));
@@ -101,7 +99,7 @@ struct KeyResolution{
     const f64 candidate = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())));
     if(!IsFinite(candidate))
         return MakeUnexpected(Failure{});
-    return candidate;
+    return VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero()));
 }
 
 
@@ -162,8 +160,8 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
     )
         return false;
     if(action.kind == ControlActionKind::Wheel){
-        const auto offset = WheelOffset(state.m_scroll.offset(), action);
-        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(*offset))
+        const auto offset = WheelOffset(VectorDoubleReplicate(state.m_scroll.offset()), VectorDoubleReplicate(action.delta), VectorDoubleReplicate(action.step), VectorDoubleReplicate(action.maximum));
+        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(VectorDoubleGetX(*offset)))
             return false;
         state.m_ensureCursor = false;
         result.valid = true;

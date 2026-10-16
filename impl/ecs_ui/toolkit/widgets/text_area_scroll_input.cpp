@@ -23,52 +23,41 @@ namespace __hidden_text_area_scroll_input{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<f32> Step(const f64 offset, const f64 delta, const f64 step, const f64 maximum)noexcept{
-    if(!IsFinite(offset) || !IsFinite(delta) || !IsFinite(step) || step < 0.0 || !IsFinite(maximum) || maximum < 0.0)
+[[nodiscard]] static Expected<SIMDVectorDouble> Step(const SIMDVectorDouble offset, const SIMDVectorDouble delta, const SIMDVectorDouble step, const SIMDVectorDouble maximum)noexcept{
+    if(!IsFinite(VectorDoubleGetX(offset)) || !IsFinite(VectorDoubleGetX(delta)) || !IsFinite(VectorDoubleGetX(step)) || VectorDoubleGetX(step) < 0.0 || !IsFinite(VectorDoubleGetX(maximum)) || VectorDoubleGetX(maximum) < 0.0)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble offsetValue = VectorDoubleReplicate(offset);
-    const SIMDVectorDouble maximumValue = VectorDoubleReplicate(maximum);
-    const SIMDVectorDouble stepValue = VectorDoubleReplicate(step);
-    SIMDVectorDouble nextValue = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximumValue, offsetValue), VectorDoubleGreater(offsetValue, VectorDoubleZero()));
-    if(step > 0.0 && delta > 0.0){
-        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(maximumValue, nextValue), stepValue));
-        nextValue = delta >= distanceInSteps ? maximumValue
-            : VectorDoubleAdd(nextValue, VectorDoubleMultiply(VectorDoubleReplicate(delta), stepValue));
+    SIMDVectorDouble next = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, offset), VectorDoubleGreater(offset, VectorDoubleZero()));
+    if(VectorDoubleGetX(step) > 0.0 && VectorDoubleGetX(delta) > 0.0){
+        const SIMDVectorDouble distanceInSteps = VectorDoubleDivide(VectorDoubleSubtract(maximum, next), step);
+        next = VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(delta, distanceInSteps)) != 0u ? maximum : VectorDoubleAdd(next, VectorDoubleMultiply(delta, step));
     }
-    else if(step > 0.0 && delta < 0.0){
-        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(nextValue, stepValue));
-        const f64 reverseDelta = VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(delta)));
-        nextValue = reverseDelta >= distanceInSteps ? VectorDoubleZero()
-            : VectorDoubleAdd(nextValue, VectorDoubleMultiply(VectorDoubleReplicate(delta), stepValue));
+    else if(VectorDoubleGetX(step) > 0.0 && VectorDoubleGetX(delta) < 0.0){
+        const SIMDVectorDouble distanceInSteps = VectorDoubleDivide(next, step);
+        next = VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(VectorDoubleNegate(delta), distanceInSteps)) != 0u ? VectorDoubleZero() : VectorDoubleAdd(next, VectorDoubleMultiply(delta, step));
     }
-    const f64 next = VectorDoubleGetX(nextValue);
-    if(!IsFinite(next) || next > static_cast<f64>(Limit<f32>::s_Max))
+    if(!IsFinite(VectorDoubleGetX(next)) || VectorDoubleGetX(next) > static_cast<f64>(Limit<f32>::s_Max))
         return MakeUnexpected(Failure{});
-    return static_cast<f32>(next);
+    return next;
 }
 
-[[nodiscard]] static bool Drag(const PointerGesture& gesture, const bool horizontal, Point& scroll)noexcept{
-    const f64 track = horizontal ? gesture.referenceRectangle.width : gesture.referenceRectangle.height;
-    const f64 thumb = horizontal ? gesture.targetRectangle.width : gesture.targetRectangle.height;
-    const SIMDVectorDouble startDelta = VectorDoubleSubtract(
-        VectorDoubleSet(horizontal ? gesture.targetRectangle.x : gesture.targetRectangle.y, horizontal ? gesture.position.x : gesture.position.y, 0.0, 0.0),
-        VectorDoubleSet(horizontal ? gesture.referenceRectangle.x : gesture.referenceRectangle.y, horizontal ? gesture.origin.x : gesture.origin.y, 0.0, 0.0)
-    );
-    const f64 start = VectorDoubleGetX(startDelta);
-    const f64 delta = VectorDoubleGetY(startDelta);
-    const f64 travel = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(track), VectorDoubleReplicate(thumb)));
-    if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(start) || !IsFinite(delta) || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
-        return false;
-    const SIMDVectorDouble normalized = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleSplatX(startDelta), VectorDoubleSplatY(startDelta)), VectorDoubleReplicate(travel));
+[[nodiscard]] static SIMDMatrixDouble LoadDragValues(const PointerGesture& gesture, const bool horizontal)noexcept{
+    return SIMDMatrixDouble{ .v = {
+        VectorDoubleSubtract(VectorDoubleSet(horizontal ? gesture.targetRectangle.x : gesture.targetRectangle.y, horizontal ? gesture.position.x : gesture.position.y, 0.0, 0.0), VectorDoubleSet(horizontal ? gesture.referenceRectangle.x : gesture.referenceRectangle.y, horizontal ? gesture.origin.x : gesture.origin.y, 0.0, 0.0)),
+        VectorDoubleSubtract(VectorDoubleReplicate(horizontal ? gesture.referenceRectangle.width : gesture.referenceRectangle.height), VectorDoubleReplicate(horizontal ? gesture.targetRectangle.width : gesture.targetRectangle.height)),
+        VectorDoubleReplicate(gesture.maximum),
+        VectorDoubleZero()
+    } };
+}
+
+[[nodiscard]] static Expected<SIMDVectorDouble> Drag(const SIMDVectorDouble startDelta, const SIMDVectorDouble travel, const SIMDVectorDouble maximum)noexcept{
+    if(!IsFinite(VectorDoubleGetX(travel)) || VectorDoubleGetX(travel) <= 0.0 || !IsFinite(VectorDoubleGetX(startDelta)) || !IsFinite(VectorDoubleGetY(startDelta)) || !IsFinite(VectorDoubleGetX(maximum)) || VectorDoubleGetX(maximum) < 0.0)
+        return MakeUnexpected(Failure{});
+    const SIMDVectorDouble normalized = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleSplatX(startDelta), VectorDoubleSplatY(startDelta)), travel);
     const SIMDVectorDouble clamped = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalized), VectorDoubleGreater(normalized, VectorDoubleZero()));
-    const f64 next = VectorDoubleGetX(VectorDoubleMultiply(clamped, VectorDoubleReplicate(gesture.maximum)));
-    if(!IsFinite(next) || next > static_cast<f64>(Limit<f32>::s_Max))
-        return false;
-    if(horizontal)
-        scroll.x = static_cast<f32>(next);
-    else
-        scroll.y = static_cast<f32>(next);
-    return true;
+    const SIMDVectorDouble next = VectorDoubleMultiply(clamped, maximum);
+    if(!IsFinite(VectorDoubleGetX(next)) || VectorDoubleGetX(next) > static_cast<f64>(Limit<f32>::s_Max))
+        return MakeUnexpected(Failure{});
+    return next;
 }
 
 
@@ -99,15 +88,21 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
         const u64 verticalSequence = haveVertical ? vertical->updateSequence : Limit<u64>::s_Max;
         const u64 actionSequence = haveAction ? action->id.sequence : Limit<u64>::s_Max;
         if(haveHorizontal && horizontalSequence <= verticalSequence && horizontalSequence <= actionSequence){
-            if(!__hidden_text_area_scroll_input::Drag(*horizontal, true, scroll))
+            const SIMDMatrixDouble values = __hidden_text_area_scroll_input::LoadDragValues(*horizontal, true);
+            const auto next = __hidden_text_area_scroll_input::Drag(values.v[0], values.v[1], values.v[2]);
+            if(!next)
                 return false;
+            scroll.x = static_cast<f32>(VectorDoubleGetX(*next));
             manual = true;
             horizontal = m_context.takePartPointerGesture(item.state, horizontalId, enabled);
             haveHorizontal = horizontal && horizontal->control == token;
         }
         else if(haveVertical && verticalSequence <= actionSequence){
-            if(!__hidden_text_area_scroll_input::Drag(*vertical, false, scroll))
+            const SIMDMatrixDouble values = __hidden_text_area_scroll_input::LoadDragValues(*vertical, false);
+            const auto next = __hidden_text_area_scroll_input::Drag(values.v[0], values.v[1], values.v[2]);
+            if(!next)
                 return false;
+            scroll.y = static_cast<f32>(VectorDoubleGetX(*next));
             manual = true;
             vertical = m_context.takePartPointerGesture(item.state, verticalId, enabled);
             haveVertical = vertical && vertical->control == token;
@@ -115,13 +110,14 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
         else{
             Point next = scroll;
             if(action->kind == ControlActionKind::Wheel){
-                const auto x = __hidden_text_area_scroll_input::Step(scroll.x, action->deltaX, action->stepX, action->maximumX);
+                const auto x = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(scroll.x), VectorDoubleReplicate(action->deltaX), VectorDoubleReplicate(action->stepX), VectorDoubleReplicate(action->maximumX));
                 if(!x)
                     return false;
-                const auto y = __hidden_text_area_scroll_input::Step(scroll.y, VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(action->delta))), action->step, action->maximum);
+                const f32 nextX = static_cast<f32>(VectorDoubleGetX(*x));
+                const auto y = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(scroll.y), VectorDoubleNegate(VectorDoubleReplicate(action->delta)), VectorDoubleReplicate(action->step), VectorDoubleReplicate(action->maximum));
                 if(!y)
                     return false;
-                next = { *x, *y };
+                next = { nextX, static_cast<f32>(VectorDoubleGetX(*y)) };
                 manual = true;
             }
             else if(action->kind == ControlActionKind::Activate && action->value >= 1u && action->value <= 4u){
@@ -129,10 +125,10 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
                 const bool x = action->value <= 2u;
                 const f64 direction = action->value == 1u || action->value == 3u ? -1.0 : 1.0;
                 const ScrollbarPlacement& bar = x ? accepted.horizontal : accepted.vertical;
-                const auto stepped = __hidden_text_area_scroll_input::Step(x ? scroll.x : scroll.y, direction, bar.viewportExtent, bar.maximum);
+                const auto stepped = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(x ? scroll.x : scroll.y), VectorDoubleReplicate(direction), VectorDoubleReplicate(bar.viewportExtent), VectorDoubleReplicate(bar.maximum));
                 if(!stepped)
                     return false;
-                (x ? next.x : next.y) = *stepped;
+                (x ? next.x : next.y) = static_cast<f32>(VectorDoubleGetX(*stepped));
                 manual = true;
             }
             scroll = next;

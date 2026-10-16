@@ -7,6 +7,7 @@
 
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
+#include <global/simd/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,24 +39,20 @@ bool LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
     return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
 }
 
-Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height));
-    return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
-}
-
-Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding)noexcept{
-    const SIMDVectorSingle paddingStart = VectorSet(padding.left, padding.top, padding.left, padding.top);
-    const SIMDVectorSingle rectangleSize = VectorSet(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+SIMDVectorSingle LayoutTree::Inset(const SIMDVectorSingle rectangle, const SIMDVectorSingle padding)noexcept{
+    const SIMDVectorSingle paddingStart = VectorSwizzle<0, 1, 0, 1>(padding);
+    const SIMDVectorSingle rectangleSize = VectorSwizzle<2, 3, 2, 3>(rectangle);
     const SIMDVectorSingle firstInset = VectorSelect(rectangleSize, paddingStart, VectorLess(paddingStart, rectangleSize));
-    const f32 left = VectorGetX(firstInset);
-    const f32 top = VectorGetY(firstInset);
-    const SIMDVectorDouble widthHeightValue = VectorDoubleSubtract(
-        VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(rectangle.width), static_cast<f64>(rectangle.height), 0.0, 0.0), VectorDoubleSet(padding.left, padding.top, 0.0, 0.0)),
-        VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0)
-    );
-    const SIMDVectorDouble size = VectorDoubleSelect(widthHeightValue, VectorDoubleZero(), VectorDoubleGreater(VectorDoubleZero(), widthHeightValue));
-    const SIMDVectorSingle origin = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(left, top, 0.0f, 0.0f));
-    return { VectorGetX(origin), VectorGetY(origin), static_cast<f32>(VectorDoubleGetX(size)), static_cast<f32>(VectorDoubleGetY(size)) };
+    const SIMDVectorDouble rectangleDouble = ConvertVectorSingleToDouble(rectangle);
+    const SIMDVectorDouble paddingDouble = ConvertVectorSingleToDouble(padding);
+    const SIMDVectorDouble rectangleExtent = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleSwizzle<2, 3, 2, 3>(rectangleDouble), s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble paddingFirst = VectorDoubleSelect(VectorDoubleZero(), paddingDouble, s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble paddingLast = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleSwizzle<2, 3, 2, 3>(paddingDouble), s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble extent = VectorDoubleSubtract(VectorDoubleSubtract(rectangleExtent, paddingFirst), paddingLast);
+    const SIMDVectorDouble size = VectorDoubleSelect(extent, VectorDoubleZero(), VectorDoubleGreater(VectorDoubleZero(), extent));
+    const SIMDVectorSingle origin = VectorAdd(VectorSelect(VectorZero(), rectangle, s_SIMDMaskXY), VectorSelect(VectorZero(), firstInset, s_SIMDMaskXY));
+    const SIMDVectorSingle sizeSingle = ConvertVectorDoubleToSingle(size);
+    return VectorSelect(VectorSwizzle<0, 1, 0, 1>(sizeSingle), origin, s_SIMDMaskXY);
 }
 
 

@@ -39,18 +39,10 @@ namespace __hidden_frame_graph_validators{
 #endif
 
 template<usize Count>
-[[nodiscard]] static bool DurationsAreOrdinary(const f64(&durations)[Count])noexcept{
+[[nodiscard]] static bool DurationsAreOrdinary(const SIMDVectorDouble(&durations)[Count])noexcept{
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
-    usize index = 0u;
-    for(; index + 3u < Count; index += 4u){
-        SIMDVectorDouble pack;
-        __builtin_memcpy(&pack, durations + index, sizeof(pack));
+    for(const SIMDVectorDouble pack : durations){
         if(HasExceptionalDurationPack(pack))
-            return false;
-    }
-    for(; index < Count; ++index){
-        const u64 magnitude = BitCast<u64>(durations[index]) & 0x7FFFFFFFFFFFFFFFull;
-        if(magnitude >= 0x7FF0000000000000ull || (magnitude != 0u && magnitude < 0x0010000000000000ull))
             return false;
     }
     return true;
@@ -60,55 +52,23 @@ template<usize Count>
 }
 
 template<usize Count>
-[[nodiscard]] static bool DurationsAreValid(const f64(&durations)[Count])noexcept{
+[[nodiscard]] static bool DurationsAreValid(const SIMDVectorDouble(&durations)[Count])noexcept{
 #pragma STDC FENV_ACCESS ON
-    usize index = 0u;
-    for(; index + 3u < Count; index += 4u){
-        SIMDVectorDouble pack;
-        __builtin_memcpy(&pack, durations + index, sizeof(pack));
+    for(const SIMDVectorDouble pack : durations){
         if(__builtin_reduce_or(pack < SIMDVectorDouble{}) != 0)
             return false;
     }
-    for(; index < Count; ++index){
-        if(durations[index] < 0.0)
-            return false;
-    }
     return true;
 }
 
-template<usize Count>
-[[nodiscard]] static bool DurationsDoNotExceed(const f64(&durations)[Count], const f64(&limits)[Count])noexcept{
+[[nodiscard]] static bool DurationsDoNotExceed(const SIMDVectorDouble durations, const SIMDVectorDouble limits)noexcept{
 #pragma STDC FENV_ACCESS ON
-    usize index = 0u;
-    for(; index + 3u < Count; index += 4u){
-        SIMDVectorDouble pack, limitPack;
-        __builtin_memcpy(&pack, durations + index, sizeof(pack));
-        __builtin_memcpy(&limitPack, limits + index, sizeof(limitPack));
-        if(__builtin_reduce_or(pack > limitPack) != 0)
-            return false;
-    }
-    for(; index < Count; ++index){
-        if(durations[index] > limits[index])
-            return false;
-    }
-    return true;
+    return __builtin_reduce_or(durations > limits) == 0;
 }
 
-template<usize Count>
-[[nodiscard]] static bool DurationsAreZero(const f64(&durations)[Count])noexcept{
+[[nodiscard]] static bool DurationsAreZero(const SIMDVectorDouble durations)noexcept{
 #pragma STDC FENV_ACCESS ON
-    usize index = 0u;
-    for(; index + 3u < Count; index += 4u){
-        SIMDVectorDouble pack;
-        __builtin_memcpy(&pack, durations + index, sizeof(pack));
-        if(__builtin_reduce_or(pack != SIMDVectorDouble{}) != 0)
-            return false;
-    }
-    for(; index < Count; ++index){
-        if(durations[index] != 0.0)
-            return false;
-    }
-    return true;
+    return __builtin_reduce_or(durations != SIMDVectorDouble{}) == 0;
 }
 
 
@@ -554,35 +514,16 @@ bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)no
 }
 
 bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
-    const f64 durations[] = {
-        statistics.compile.declarationSeconds,
-        statistics.compile.analysisSeconds,
-        statistics.compile.validationSeconds,
-        statistics.compile.dependencyAnalysisSeconds,
-        statistics.compile.hazardAnalysisSeconds,
-        statistics.compile.topologicalOrderSeconds,
-        statistics.compile.queueAssignmentSeconds,
-        statistics.compile.planningSeconds,
-        statistics.compile.packetizationSeconds,
-        statistics.compile.resourceStatePlanningSeconds,
-        statistics.compile.packetDependencyPlanningSeconds,
-        statistics.compile.totalSeconds,
-        statistics.recording.commandListAcquisitionSeconds,
-        statistics.recording.graphBarrierRecordingSeconds,
-        statistics.recording.taskRecordSeconds,
-        statistics.recording.recordingSeconds,
-        statistics.recording.recordingElapsedSeconds,
-        statistics.recording.readyFrontierElapsedSeconds,
-        statistics.recording.readyFrontierWorkerBusySeconds,
-        statistics.recording.readyFrontierWorkerCapacitySeconds,
-        statistics.submission.submissionSeconds,
+    const SIMDVectorDouble durations[] = {
+        VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds),
+        VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds),
+        VectorDoubleSet(statistics.compile.packetizationSeconds, statistics.compile.resourceStatePlanningSeconds, statistics.compile.packetDependencyPlanningSeconds, statistics.compile.totalSeconds),
+        VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
+        VectorDoubleSet(statistics.recording.recordingElapsedSeconds, statistics.recording.readyFrontierElapsedSeconds, statistics.recording.readyFrontierWorkerBusySeconds, statistics.recording.readyFrontierWorkerCapacitySeconds),
+        VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
     };
     if(!__hidden_frame_graph_validators::DurationsAreOrdinary(durations))
         return ScalarIsValidFrameGraphRuntimeStatistics(statistics);
-#else
-    return ScalarIsValidFrameGraphRuntimeStatistics(statistics);
-#endif
 
     if(!statistics.present || statistics.graphGeneration == 0u || statistics.planGeneration == 0u || statistics.recordingAttemptGeneration == 0u || statistics.deviceGeneration == 0u)
         return false;
@@ -630,13 +571,12 @@ bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& stati
 }
 
 bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
-    const f64 durations[] = { statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds, statistics.submission.submissionSeconds, };
+    const SIMDVectorDouble durations[] = {
+        VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
+        VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
+    };
     if(!__hidden_frame_graph_validators::DurationsAreOrdinary(durations))
         return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics);
-#else
-    return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics);
-#endif
 
     if(
         statistics.graphGeneration == 0u
@@ -700,10 +640,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
             || recording.barrierCount != 0u
             || recording.workerRoutedPacketCount != 0u
             || recording.parallelPacketCount != 0u
-            || !__hidden_frame_graph_validators::DurationsAreZero<4u>({
-                recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds,
-                recording.taskRecordSeconds, recording.recordingSeconds
-            })
+            || !__hidden_frame_graph_validators::DurationsAreZero(durations[0u])
         )
     )
         return false;
@@ -741,41 +678,17 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
 }
 
 bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
-    const f64 durations[] = {
-        ownerStatistics.compile.declarationSeconds,
-        ownerStatistics.compile.analysisSeconds,
-        ownerStatistics.compile.validationSeconds,
-        ownerStatistics.compile.dependencyAnalysisSeconds,
-        ownerStatistics.compile.hazardAnalysisSeconds,
-        ownerStatistics.compile.topologicalOrderSeconds,
-        ownerStatistics.compile.queueAssignmentSeconds,
-        ownerStatistics.compile.planningSeconds,
-        ownerStatistics.compile.packetizationSeconds,
-        ownerStatistics.compile.resourceStatePlanningSeconds,
-        ownerStatistics.compile.packetDependencyPlanningSeconds,
-        ownerStatistics.compile.totalSeconds,
-        ownerStatistics.recording.commandListAcquisitionSeconds,
-        ownerStatistics.recording.graphBarrierRecordingSeconds,
-        ownerStatistics.recording.taskRecordSeconds,
-        ownerStatistics.recording.recordingSeconds,
-        ownerStatistics.recording.recordingElapsedSeconds,
-        ownerStatistics.recording.readyFrontierElapsedSeconds,
-        ownerStatistics.recording.readyFrontierWorkerBusySeconds,
-        ownerStatistics.recording.readyFrontierWorkerCapacitySeconds,
-        ownerStatistics.submission.submissionSeconds,
-
-        statistics.recording.commandListAcquisitionSeconds,
-        statistics.recording.graphBarrierRecordingSeconds,
-        statistics.recording.taskRecordSeconds,
-        statistics.recording.recordingSeconds,
-        statistics.submission.submissionSeconds,
-        };
+    const SIMDVectorDouble durations[] = {
+        VectorDoubleSet(ownerStatistics.compile.declarationSeconds, ownerStatistics.compile.analysisSeconds, ownerStatistics.compile.validationSeconds, ownerStatistics.compile.dependencyAnalysisSeconds),
+        VectorDoubleSet(ownerStatistics.compile.hazardAnalysisSeconds, ownerStatistics.compile.topologicalOrderSeconds, ownerStatistics.compile.queueAssignmentSeconds, ownerStatistics.compile.planningSeconds),
+        VectorDoubleSet(ownerStatistics.compile.packetizationSeconds, ownerStatistics.compile.resourceStatePlanningSeconds, ownerStatistics.compile.packetDependencyPlanningSeconds, ownerStatistics.compile.totalSeconds),
+        VectorDoubleSet(ownerStatistics.recording.commandListAcquisitionSeconds, ownerStatistics.recording.graphBarrierRecordingSeconds, ownerStatistics.recording.taskRecordSeconds, ownerStatistics.recording.recordingSeconds),
+        VectorDoubleSet(ownerStatistics.recording.recordingElapsedSeconds, ownerStatistics.recording.readyFrontierElapsedSeconds, ownerStatistics.recording.readyFrontierWorkerBusySeconds, ownerStatistics.recording.readyFrontierWorkerCapacitySeconds),
+        VectorDoubleSet(ownerStatistics.submission.submissionSeconds, statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds),
+        VectorDoubleSet(statistics.recording.recordingSeconds, statistics.submission.submissionSeconds, 0.0, 0.0),
+    };
     if(!__hidden_frame_graph_validators::DurationsAreOrdinary(durations))
         return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(statistics, ownerStatistics);
-#else
-    return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(statistics, ownerStatistics);
-#endif
 
     if(
         !IsValidFrameGraphRuntimeStatistics(ownerStatistics)
@@ -827,8 +740,8 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
         || recording.parallelPacketCount > ownerRecording.parallelPacketCount
     )
         return false;
-    const f64 recordingDurations[]{ recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds };
-    const f64 ownerRecordingDurations[]{ ownerRecording.commandListAcquisitionSeconds, ownerRecording.graphBarrierRecordingSeconds, ownerRecording.taskRecordSeconds, ownerRecording.recordingSeconds };
+    const SIMDVectorDouble recordingDurations = VectorDoubleSet(recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds);
+    const SIMDVectorDouble ownerRecordingDurations = VectorDoubleSet(ownerRecording.commandListAcquisitionSeconds, ownerRecording.graphBarrierRecordingSeconds, ownerRecording.taskRecordSeconds, ownerRecording.recordingSeconds);
     if(!__hidden_frame_graph_validators::DurationsDoNotExceed(recordingDurations, ownerRecordingDurations))
         return false;
     if(recording.taskCount - recording.packetCount > ownerRecording.taskCount - ownerRecording.packetCount || recording.commandListCount - recording.packetCount > ownerRecording.commandListCount - ownerRecording.packetCount)

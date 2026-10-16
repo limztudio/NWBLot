@@ -17,21 +17,9 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(Float4) SceneViewBasis{
-    // Persistent view-basis storage; helpers convert at this boundary.
-    Float4 right = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    Float4 up = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    Float4 forward = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    Float4 positionDepthBias = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-};
-
-static_assert(IsStandardLayout_V<SceneViewBasis>, "SceneViewBasis must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<SceneViewBasis>, "SceneViewBasis must stay cheap to pass by value");
-static_assert(alignof(SceneViewBasis) >= alignof(Float4), "SceneViewBasis must keep storage vectors aligned");
-
-
-[[nodiscard]] SceneViewBasis BuildDefaultSceneViewBasis()noexcept;
-[[nodiscard]] SceneViewBasis BuildSceneViewBasis(SIMDVectorSingle position, SIMDVectorSingle rotation)noexcept;
+// Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
+[[nodiscard]] SIMDMatrix BuildDefaultSceneViewBasis()noexcept;
+[[nodiscard]] SIMDMatrix BuildSceneViewBasis(SIMDVectorSingle position, SIMDVectorSingle rotation)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

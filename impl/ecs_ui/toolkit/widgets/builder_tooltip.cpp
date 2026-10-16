@@ -73,7 +73,7 @@ bool Builder::paintTooltips(){
             return false;
         if(!frame.state->visible())
             continue;
-        const Rect clip = visibleClip(box->clip);
+        const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box->clip)));
         const Point& pointer = m_context.input().pointerPosition();
         const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(box->rectangle.x, box->rectangle.y, box->rectangle.width, box->rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
         const f32 left = VectorGetX(visibleBounds);

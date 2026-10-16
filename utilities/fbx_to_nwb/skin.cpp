@@ -32,15 +32,6 @@ static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale)noexcept{
-    ufbx_matrix matrix = {};
-    const f64 inverseScale = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(s_UniformScaleNumerator), VectorDoubleReplicate(scale)));
-    matrix.m00 = inverseScale;
-    matrix.m11 = inverseScale;
-    matrix.m22 = inverseScale;
-    return matrix;
-}
-
 bool FiniteUfbxMatrix(const ufbx_matrix& matrix)noexcept{
     for(usize i = 0u; i < s_JointMatrixElementCount; ++i){
         if(!IsFinite(static_cast<f64>(matrix.v[i])))
@@ -49,11 +40,12 @@ bool FiniteUfbxMatrix(const ufbx_matrix& matrix)noexcept{
     return true;
 }
 
-JointMatrix ToJointMatrix(const ufbx_matrix& matrix)noexcept{
-    JointMatrix result{};
-    result.rows[0] = Vec4{ static_cast<f32>(matrix.m00), static_cast<f32>(matrix.m01), static_cast<f32>(matrix.m02), static_cast<f32>(matrix.m03), };
-    result.rows[1] = Vec4{ static_cast<f32>(matrix.m10), static_cast<f32>(matrix.m11), static_cast<f32>(matrix.m12), static_cast<f32>(matrix.m13), };
-    result.rows[2] = Vec4{ static_cast<f32>(matrix.m20), static_cast<f32>(matrix.m21), static_cast<f32>(matrix.m22), static_cast<f32>(matrix.m23), };
+SIMDMatrix LoadJointMatrix(const ufbx_matrix& matrix)noexcept{
+    SIMDMatrix result{};
+    result.v[0u] = VectorSet(static_cast<f32>(matrix.m00), static_cast<f32>(matrix.m01), static_cast<f32>(matrix.m02), static_cast<f32>(matrix.m03));
+    result.v[1u] = VectorSet(static_cast<f32>(matrix.m10), static_cast<f32>(matrix.m11), static_cast<f32>(matrix.m12), static_cast<f32>(matrix.m13));
+    result.v[2u] = VectorSet(static_cast<f32>(matrix.m20), static_cast<f32>(matrix.m21), static_cast<f32>(matrix.m22), static_cast<f32>(matrix.m23));
+    result.v[3u] = VectorSet(0.0f, 0.0f, 0.0f, 1.0f);
     return result;
 }
 
@@ -72,59 +64,6 @@ AStringView NodeDisplayName(const ufbx_node* node)noexcept{
     if(!node->name.data || node->name.length == 0u)
         return s_UnnamedNodeLabel;
     return AStringView(node->name.data, node->name.length);
-}
-
-ufbx_matrix BuildMeshFromOutputMatrix(const MeshInstance& instance, const ImportOptions& options)noexcept{
-    const ufbx_matrix scaleInverse = MakeInverseUniformScaleMatrix(options.scale);
-    if(!options.bakeTransforms)
-        return scaleInverse;
-
-    const ufbx_matrix nodeMeshToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
-    return ufbx_matrix_mul(&nodeMeshToWorldInverse, &scaleInverse);
-}
-
-Expected<u16> FindOrAddJoint(ExportContext& context, ufbx_skin_cluster* cluster, const ufbx_matrix& inverseBind){
-    if(!cluster || !cluster->bone_node){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
-        return MakeUnexpected(Failure{});
-    }
-    if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= s_InvertibleMatrixDeterminantEpsilon){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
-        return MakeUnexpected(Failure{});
-    }
-
-    const JointMatrix convertedMatrix = ToJointMatrix(inverseBind);
-    const SIMDMatrix convertedMatrixValue = LoadFloat(convertedMatrix);
-    const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
-    if(!FiniteUfbxMatrix(bindPose)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
-        return MakeUnexpected(Failure{});
-    }
-    const JointMatrix convertedBindPose = ToJointMatrix(bindPose);
-    auto foundJoint = context.jointLookup.find(cluster->bone_node);
-    if(foundJoint != context.jointLookup.end()){
-        const usize jointIndex = static_cast<usize>(foundJoint.value());
-        NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
-        NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
-        if(!NearlyEqualJointMatrices(LoadFloat(context.inverseBindMatrices[jointIndex]), convertedMatrixValue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), StringConvert(NodeDisplayName(cluster->bone_node)));
-            return MakeUnexpected(Failure{});
-        }
-
-        return foundJoint.value();
-    }
-
-    if(context.joints.size() >= s_MaxSkeletonJointCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
-        return MakeUnexpected(Failure{});
-    }
-
-    const u16 joint = static_cast<u16>(context.joints.size());
-    context.joints.push_back(cluster->bone_node);
-    context.bindPoseMatrices.push_back(convertedBindPose);
-    context.inverseBindMatrices.push_back(convertedMatrix);
-    context.jointLookup.emplace(cluster->bone_node, joint);
-    return joint;
 }
 
 Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context){
@@ -152,7 +91,15 @@ Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, 
     context.inverseBindMatrices.reserve(reservedJointCount);
     context.jointLookup.reserve(reservedJointCount);
     outClusterJoints.reserve(skin->clusters.count);
-    ufbx_matrix meshFromOutput;
+    const f64 inverseScale = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(s_UniformScaleNumerator), VectorDoubleReplicate(options.scale)));
+    ufbx_matrix meshFromOutput = {};
+    meshFromOutput.m00 = inverseScale;
+    meshFromOutput.m11 = inverseScale;
+    meshFromOutput.m22 = inverseScale;
+    if(options.bakeTransforms){
+        const ufbx_matrix nodeMeshToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
+        meshFromOutput = ufbx_matrix_mul(&nodeMeshToWorldInverse, &meshFromOutput);
+    }
     for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
         ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];
         if(!cluster){
@@ -160,21 +107,58 @@ Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, 
             return MakeUnexpected(Failure{});
         }
 
-        if(clusterIndex == 0u)
-            meshFromOutput = BuildMeshFromOutputMatrix(instance, options);
-        const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
-        const auto joint = FindOrAddJoint(context, cluster, inverseBind);
-        if(!joint)
+        if(!cluster->bone_node){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
             return MakeUnexpected(Failure{});
-        outClusterJoints.push_back(*joint);
+        }
+        const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
+        if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= s_InvertibleMatrixDeterminantEpsilon){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
+            return MakeUnexpected(Failure{});
+        }
+
+        const SIMDMatrix inverseBindValue = LoadJointMatrix(inverseBind);
+        const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
+        if(!FiniteUfbxMatrix(bindPose)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
+            return MakeUnexpected(Failure{});
+        }
+        auto foundJoint = context.jointLookup.find(cluster->bone_node);
+        if(foundJoint != context.jointLookup.end()){
+            const usize jointIndex = static_cast<usize>(foundJoint.value());
+            NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
+            NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
+            const SIMDMatrix existingInverseBind = LoadFloat(context.inverseBindMatrices[jointIndex]);
+            if(!NearlyEqualJointMatrices(existingInverseBind, inverseBindValue)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), StringConvert(NodeDisplayName(cluster->bone_node)));
+                return MakeUnexpected(Failure{});
+            }
+            outClusterJoints.push_back(foundJoint.value());
+            continue;
+        }
+
+        if(context.joints.size() >= s_MaxSkeletonJointCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
+            return MakeUnexpected(Failure{});
+        }
+
+        JointMatrix storedInverseBind{};
+        JointMatrix storedBindPose{};
+        StoreFloat(inverseBindValue, storedInverseBind);
+        StoreFloat(LoadJointMatrix(bindPose), storedBindPose);
+        const u16 joint = static_cast<u16>(context.joints.size());
+        context.joints.push_back(cluster->bone_node);
+        context.bindPoseMatrices.push_back(storedBindPose);
+        context.inverseBindMatrices.push_back(storedInverseBind);
+        context.jointLookup.emplace(cluster->bone_node, joint);
+        outClusterJoints.push_back(joint);
     }
 
     return outClusterJoints;
 }
 
-Expected<SkinInfluenceResult> BuildInfluence(ufbx_skin_deformer* skin, const UtilityVector<u16>& clusterJoints, const u32 logicalVertex){
-    SkinInfluenceResult result;
-    result.weights = VectorZero();
+Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const UtilityVector<u16>& clusterJoints, const u32 logicalVertex){
+    SkinInfluenceCalculation result{ VectorZero(), VectorZero() };
     if(!skin || logicalVertex >= skin->vertices.count){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer does not contain weights for every logical vertex"));
         return MakeUnexpected(Failure{});
@@ -205,7 +189,7 @@ Expected<SkinInfluenceResult> BuildInfluence(ufbx_skin_deformer* skin, const Uti
             return MakeUnexpected(Failure{});
         }
 
-        result.influence.joint[writtenInfluenceCount] = clusterJoints[weight.cluster_index];
+        result.joints = VectorSetIntByIndex(result.joints, clusterJoints[weight.cluster_index], writtenInfluenceCount);
         result.weights = VectorSetByIndex(result.weights, static_cast<f32>(value), writtenInfluenceCount);
         weightSum += value;
         ++writtenInfluenceCount;

@@ -202,7 +202,7 @@ private:
         m_receiver = createSkinnedReceiverInstance(Float4(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_CsgReceiverTint.x, s_CsgReceiverTint.y, s_CsgReceiverTint.z, ReceiverAlpha()), true);
     }
 
-    [[nodiscard]] SIMDVectorSingle resolveCutterAnchorLocalCenter()const{
+    [[nodiscard]] SIMDVectorSingle loadCutterAnchorLocalCenter()const{
         const SIMDVectorSingle fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
@@ -309,7 +309,7 @@ public:
         createReceiver();
         SyncSmokeModelRuntimes(*m_world);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
-        const SIMDVectorSingle cutterLocalCenter = resolveCutterAnchorLocalCenter();
+        const SIMDVectorSingle cutterLocalCenter = loadCutterAnchorLocalCenter();
         StoreFloat(cutterLocalCenter, m_cutterLocalCenter);
         createCutter(cutterLocalCenter);
         NWB_FATAL_ASSERT_MSG(

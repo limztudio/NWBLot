@@ -69,39 +69,33 @@ namespace __hidden_ui_slider_behavior{
     ;
 }
 
-[[nodiscard]] static f64 ClampValue(const f64 value, const f64 minimum, const f64 maximum)noexcept{
-    const SIMDVectorDouble current = VectorDoubleReplicate(value);
-    const SIMDVectorDouble lower = VectorDoubleReplicate(minimum);
-    const SIMDVectorDouble upper = VectorDoubleReplicate(maximum);
-    return VectorDoubleGetX(VectorDoubleSelect(
-        VectorDoubleSelect(current, upper, VectorDoubleGreater(current, upper)),
-        lower, VectorDoubleLess(current, lower)
-    ));
+[[nodiscard]] static SIMDVectorDouble ClampValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
+    return VectorDoubleSelect(VectorDoubleSelect(value, maximum, VectorDoubleGreater(value, maximum)), minimum, VectorDoubleLess(value, minimum));
 }
 
-[[nodiscard]] static f64 KeyStep(const SliderOptions& options)noexcept{
-    if(options.keyStep > 0.0)
-        return options.keyStep;
-    const SIMDVectorDouble spanValue = VectorDoubleSubtract(VectorDoubleReplicate(options.maximum), VectorDoubleReplicate(options.minimum));
-    const f64 span = VectorDoubleGetX(spanValue);
-    if(IsFinite(span)){
-        const f64 step = VectorDoubleGetX(VectorDoubleDivide(spanValue, VectorDoubleReplicate(100.0)));
-        return step == 0.0 ? span : step;
+[[nodiscard]] static SIMDVectorDouble KeyStep(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble configuredStep)noexcept{
+    if(VectorDoubleGetIntX(VectorDoubleGreater(configuredStep, VectorDoubleZero())) != 0u)
+        return configuredStep;
+    const SIMDVectorDouble span = VectorDoubleSubtract(maximum, minimum);
+    if(IsFinite(VectorDoubleGetX(span))){
+        const SIMDVectorDouble step = VectorDoubleDivide(span, VectorDoubleReplicate(100.0));
+        return VectorDoubleSelect(step, span, VectorDoubleEqual(step, VectorDoubleZero()));
     }
-    const SIMDVectorDouble scaledBounds = VectorDoubleDivide(VectorDoubleSet(options.maximum, options.minimum, options.maximum, options.minimum), VectorDoubleReplicate(100.0));
-    return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleSplatX(scaledBounds), VectorDoubleSplatY(scaledBounds)));
+    return VectorDoubleSubtract(VectorDoubleDivide(maximum, VectorDoubleReplicate(100.0)), VectorDoubleDivide(minimum, VectorDoubleReplicate(100.0)));
 }
 
-[[nodiscard]] static f64 StepValue(const f64 value, const SliderOptions& options, const f64 step, const bool increasing)noexcept{
-    const f64 current = ClampValue(value, options.minimum, options.maximum);
-    const SIMDVectorDouble currentValue = VectorDoubleReplicate(current);
-    const SIMDVectorDouble stepValue = VectorDoubleReplicate(step);
+[[nodiscard]] static SIMDVectorDouble StepValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble step, const bool increasing)noexcept{
+    const SIMDVectorDouble current = ClampValue(value, minimum, maximum);
     if(increasing){
-        const f64 distance = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(options.maximum), currentValue));
-        return step >= distance ? options.maximum : ClampValue(VectorDoubleGetX(VectorDoubleAdd(currentValue, stepValue)), options.minimum, options.maximum);
+        const SIMDVectorDouble distance = VectorDoubleSubtract(maximum, current);
+        if(VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(step, distance)) != 0u)
+            return maximum;
+        return ClampValue(VectorDoubleAdd(current, step), minimum, maximum);
     }
-    const f64 distance = VectorDoubleGetX(VectorDoubleSubtract(currentValue, VectorDoubleReplicate(options.minimum)));
-    return step >= distance ? options.minimum : ClampValue(VectorDoubleGetX(VectorDoubleSubtract(currentValue, stepValue)), options.minimum, options.maximum);
+    const SIMDVectorDouble distance = VectorDoubleSubtract(current, minimum);
+    if(VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(step, distance)) != 0u)
+        return minimum;
+    return ClampValue(VectorDoubleSubtract(current, step), minimum, maximum);
 }
 
 
@@ -155,25 +149,23 @@ Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, 
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
         return MakeUnexpected(Failure{});
-    f64 value = minimum;
+    const SIMDVectorDouble lower = VectorDoubleReplicate(minimum);
+    const SIMDVectorDouble upper = VectorDoubleReplicate(maximum);
+    const SIMDVectorDouble fraction = VectorDoubleReplicate(normalized);
+    SIMDVectorDouble value = lower;
     if(normalized == 1.0)
-        value = maximum;
+        value = upper;
     else if(normalized > 0.0 && minimum != maximum){
-        const SIMDVectorDouble lower = VectorDoubleReplicate(minimum);
-        const SIMDVectorDouble upper = VectorDoubleReplicate(maximum);
-        const SIMDVectorDouble fraction = VectorDoubleReplicate(normalized);
         if(minimum < 0.0 && maximum > 0.0)
-            value = VectorDoubleGetX(VectorDoubleAdd(
-                VectorDoubleMultiply(lower, VectorDoubleSubtract(VectorDoubleSplatOne(), fraction)),
-                VectorDoubleMultiply(upper, fraction)
-            ));
+            value = VectorDoubleAdd(VectorDoubleMultiply(lower, VectorDoubleSubtract(VectorDoubleSplatOne(), fraction)), VectorDoubleMultiply(upper, fraction));
         else
-            value = VectorDoubleGetX(VectorDoubleAdd(lower, VectorDoubleMultiply(VectorDoubleSubtract(upper, lower), fraction)));
-        value = ClampValue(value, minimum, maximum);
+            value = VectorDoubleAdd(lower, VectorDoubleMultiply(VectorDoubleSubtract(upper, lower), fraction));
+        value = ClampValue(value, lower, upper);
     }
-    if(!IsFinite(value))
+    const f64 result = VectorDoubleGetX(value);
+    if(!IsFinite(result))
         return MakeUnexpected(Failure{});
-    return value;
+    return result;
 }
 
 bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
@@ -216,31 +208,38 @@ bool SliderBehavior::Apply(SliderState& state, const SliderOptions& options, con
         result = accepted;
         return true;
     }
-    f64 value = state.m_value;
+    const SIMDVectorDouble lower = VectorDoubleReplicate(options.minimum);
+    const SIMDVectorDouble upper = VectorDoubleReplicate(options.maximum);
+    SIMDVectorDouble step = VectorDoubleZero();
+    SIMDVectorDouble nextValue = VectorDoubleReplicate(state.m_value);
     switch(action.kind){
     case ControlActionKind::Left:
     case ControlActionKind::Down:
-        value = StepValue(value, options, KeyStep(options), false);
+        step = KeyStep(lower, upper, VectorDoubleReplicate(options.keyStep));
+        nextValue = StepValue(nextValue, lower, upper, step, false);
         break;
     case ControlActionKind::Right:
     case ControlActionKind::Up:
-        value = StepValue(value, options, KeyStep(options), true);
+        step = KeyStep(lower, upper, VectorDoubleReplicate(options.keyStep));
+        nextValue = StepValue(nextValue, lower, upper, step, true);
         break;
     case ControlActionKind::PageDown:
     case ControlActionKind::PageUp:
+        step = KeyStep(lower, upper, VectorDoubleReplicate(options.keyStep));
         for(u32 index = 0u; index < 10u; ++index)
-            value = StepValue(value, options, KeyStep(options), action.kind == ControlActionKind::PageUp);
+            nextValue = StepValue(nextValue, lower, upper, step, action.kind == ControlActionKind::PageUp);
         break;
     case ControlActionKind::Home:
-        value = options.minimum;
+        nextValue = lower;
         break;
     case ControlActionKind::End:
-        value = options.maximum;
+        nextValue = upper;
         break;
     default:
         result = accepted;
         return true;
     }
+    const f64 value = VectorDoubleGetX(nextValue);
     if(!IsFinite(value))
         return false;
     accepted.valueChanged = accepted.valueChanged || BitCast<u64>(state.m_value) != BitCast<u64>(value);

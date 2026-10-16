@@ -32,7 +32,7 @@ struct FrameRecoveryGraphTask{
 
     // The transaction owns the timing reservation this recovery tail may retire.
     // The armed/retire flags are caller-owned outputs the tail clears.
-    // All three are references (not nullable pointers) so a missing binding fails at declaration time instead of silently skipping recovery inside Record/Accepted.
+    // All three are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GpuTimingFrameTransaction& frameTimingTransaction;
         bool& armed;

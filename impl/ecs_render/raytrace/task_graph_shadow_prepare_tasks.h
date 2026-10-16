@@ -35,7 +35,7 @@ struct ShadowPrepareGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
 
     // The raytracing system, the preparation outcome, the frame targets, and the timing ticket are required: the prepare task always preflights shadow resources for this frame.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         ShadowPreparationOutcome& outcome;
@@ -63,7 +63,7 @@ struct ShadowPrepareSoftwareBvhBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The raytracing system and the timing ticket are required: every enqueued software BVH build records against this frame's ticket.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         PreparedMeshSwBvhBuild build;

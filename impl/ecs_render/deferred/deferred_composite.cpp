@@ -61,7 +61,7 @@ struct DeferredCompositeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The deferred system, the frame targets, and the timing ticket are required: the pass always records against this frame's targets.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` from the shared record helper.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         DeferredFrameTargets& targets;

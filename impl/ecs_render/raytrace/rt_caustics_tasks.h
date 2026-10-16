@@ -46,7 +46,7 @@ static void ConfirmCausticAccumulatorClears(Payload& payload){
 struct CausticAccumulatorDecayGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: decay always brackets the caustic-photon timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: decay always brackets the caustic-photon timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -94,7 +94,7 @@ template<bool Hardware>
 struct CausticProducerGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: photons always record against this frame's ticket and publish dispatch. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: photons always record against this frame's ticket and publish dispatch. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -158,7 +158,7 @@ using HardwareCausticsGraphTask = CausticProducerGraphTask<true>;
 struct CausticGeometryDownsampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: geometry downsample always brackets the caustic-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: geometry downsample always brackets the caustic-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -250,7 +250,7 @@ using CausticResolveUpsampleGraphTask = CausticResolvePhaseGraphTask<&RendererRa
 struct CausticResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
-    // All bindings are required: resolve always closes the caustic-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: resolve always closes the caustic-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GpuTimingSubmissionTicket& timingTicket;
         const bool& causticProducerDispatched;

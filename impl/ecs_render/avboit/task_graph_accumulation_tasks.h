@@ -44,7 +44,7 @@ namespace RendererTaskGraphDetail{
 struct AvboitAccumulationComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -98,7 +98,7 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         };
     };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -133,7 +133,7 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
 struct AvboitAccumulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The avboit system, the frame targets, and the timing ticket are required: accumulation always records against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // The avboit system, the frame targets, and the timing ticket are required: accumulation always records against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererAvboitSystem& avboitSystem;
         DeferredFrameTargets& targets;

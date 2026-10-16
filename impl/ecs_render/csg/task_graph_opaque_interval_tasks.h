@@ -55,7 +55,7 @@ namespace ECSRenderDetail{
 
 
 // The material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: every interval record pass works against this frame's bindings.
-// References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+// Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
 struct CsgOpaqueIntervalRecordInputs{
     RendererMaterialSystem& materialSystem;
     RendererCsgSystem& csgSystem;
@@ -117,7 +117,7 @@ struct CsgIntervalSampleGraphTask{
 
     // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: interval sample always rasterizes this frame's CSG pass.
     // The compute-emulation timing stays optional: it is bound only when the emulation output is graph-owned.
-    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;

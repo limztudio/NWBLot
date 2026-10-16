@@ -39,7 +39,7 @@ struct OpaqueRegularComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The material system, the frame targets, the timing-ticket slot, and the setup readiness flags are required: compute emulation always generates against this frame's bindings.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
@@ -71,7 +71,7 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
     };
 
     // The material system, the frame targets, the timing-ticket slot, the setup readiness flags, and the opaque timing slot are required: shared emulation always brackets its phase with the frame timing.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;

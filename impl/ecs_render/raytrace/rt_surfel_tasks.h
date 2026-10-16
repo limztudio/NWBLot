@@ -80,7 +80,7 @@ struct SurfelGiAgeFreeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // All bindings are required: age/free always brackets the async surfel range for this frame.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -126,7 +126,7 @@ struct SurfelGiHashBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // All bindings are required: hash-build always records against this frame's ticket and brackets the shared async surfel range.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -160,7 +160,7 @@ struct SurfelGiSpawnGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // All bindings are required: spawn always records against this frame's ticket and brackets the shared async surfel range.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -194,7 +194,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // All bindings are required: trace-args always records against this frame's ticket and brackets the shared async surfel range.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -228,7 +228,7 @@ struct SurfelGiTraceGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // All bindings are required: trace always records against this frame's ticket and brackets the shared async surfel range.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -266,7 +266,7 @@ struct SurfelGiResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // All bindings are required: resolve always records against this frame's ticket and brackets the shared async surfel range.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -299,7 +299,7 @@ struct SurfelGiResolveGraphTask{
 struct SurfelGiGraphTask{
     // The raytracing system, the frame targets, and the timing ticket are required: the fallback upsample always records against this frame's ticket.
     // The async timing stays optional: only the resolve-owning route brackets the shared async surfel range.
-    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -353,7 +353,7 @@ struct SurfelGiGraphTask{
 // The typed clear primitives own the four persistent-buffer writes.
 // Keep this tiny final task the renderer's CPU mirror still becomes pending only after every clear recorded, and becomes initialized only after their shared packet accepts.
 // The raytracing system is required: the lifecycle always records against this frame's system.
-// A reference (not a nullable pointer) carries that binding so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+// A reference (not a nullable pointer) carries that binding, so a missing binding fails at declaration time.
 struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 

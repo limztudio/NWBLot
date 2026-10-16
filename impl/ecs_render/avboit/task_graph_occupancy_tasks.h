@@ -48,7 +48,7 @@ struct AvboitPreGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
     // The avboit system, the frame targets, the timing ticket, and the intervals timing slot are required: the pre-pass always records against this frame's ticket.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererAvboitSystem& avboitSystem;
         DeferredFrameTargets& targets;
@@ -82,7 +82,7 @@ struct AvboitPreGraphTask{
 struct AvboitOccupancyComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -136,7 +136,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         };
     };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -172,7 +172,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
 struct AvboitOccupancyGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The avboit system, the frame targets, and the timing ticket are required: occupancy always records against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // The avboit system, the frame targets, and the timing ticket are required: occupancy always records against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         bool hasTransparentRenderers = false;
         bool occupancyPhasePrepared = false;
@@ -209,7 +209,7 @@ struct AvboitOccupancyGraphTask{
 struct AvboitDepthWarpGraphTask{
     // The avboit system, the frame targets, and the timing ticket are required: depth warp always dispatches against this frame's targets.
     // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
-    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     using Payload = AvboitComputeEffectRecordInputs;
 
 

@@ -36,7 +36,7 @@ struct SceneShadingSetupGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
     // The deferred system, the timing-ticket slot, and the ready flag are required: setup always uploads scene shading for this frame and publishes readiness.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         Core::GpuTimingSubmissionTicket*& timingTicket;

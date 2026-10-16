@@ -114,7 +114,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The skinning system and the timing ticket are required: deformation always records against this frame's ticket.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         MeshSkinningSystem& system;
         Core::GpuTimingSubmissionTicket& timingTicket;
@@ -138,7 +138,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The skinning system and the timing ticket are required: bounds/repack always records against this frame's ticket.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         MeshSkinningSystem& system;
         Core::GpuTimingSubmissionTicket& timingTicket;

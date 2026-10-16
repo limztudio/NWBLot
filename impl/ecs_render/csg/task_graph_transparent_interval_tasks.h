@@ -60,7 +60,7 @@ struct TransparentCsgIntervalRecordInputs{
 
 struct AvboitCsgReceiverSpanGraphTask{
     // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     using Payload = TransparentCsgIntervalRecordInputs;
 
 
@@ -78,7 +78,7 @@ public:
 // Interval combine maps visible span/peel inputs to removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
     // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     using Payload = TransparentCsgIntervalRecordInputs;
 
 

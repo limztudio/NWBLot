@@ -41,7 +41,7 @@ struct DeferredPresentGraphTask{
 
     // The deferred system, the graphics runtime, the frame targets, the async-final timing slot, the timing ticket, and the shadow-visibility task are required: present always closes the async-final range when shadow visibility runs on compute.
     // Only the output-layer contributor stays optional.
-    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         Core::GraphicsRuntime& graphics;

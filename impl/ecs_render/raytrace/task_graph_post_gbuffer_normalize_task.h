@@ -37,7 +37,7 @@ struct PostGbufferNormalizeGraphTask{
 
     // The raytracing system and the timing-ticket slot are required: the slot always points at the normalize ticket selected by the graphics prefix.
     // Async timing and the shadow-visibility task are optional: async timing only spans one packet on the compute route, and the shadow task lookup may be absent when no visibility pass runs.
-    // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;

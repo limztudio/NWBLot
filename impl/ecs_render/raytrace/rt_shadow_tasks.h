@@ -56,7 +56,7 @@ inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::Command
 struct ShadowVisibilityOpaqueGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: opaque producer always records against this frame's ticket and brackets the shared async/shadow timing. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: opaque producer always records against this frame's ticket and brackets the shared async/shadow timing. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -152,7 +152,7 @@ struct ShadowVisibilityOpaqueGraphTask{
 struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: first wavelet always brackets the opaque-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: first wavelet always brackets the opaque-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -217,7 +217,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
 struct ShadowVisibilityOpaqueResolveTailGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: resolve tail always closes the opaque-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: resolve tail always closes the opaque-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -266,7 +266,7 @@ struct ShadowTransparentSoftTraceGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
 
-    // All bindings are required: transparent trace always records against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: transparent trace always records against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -306,7 +306,7 @@ struct ShadowTransparentSoftTraceGraphTask{
 struct ShadowTransparentSoftTemporalMergeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: temporal merge always brackets the transparent-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: temporal merge always brackets the transparent-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -368,7 +368,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
 struct ShadowTransparentSoftFirstWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: first wavelet always brackets the transparent-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: first wavelet always brackets the transparent-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -443,7 +443,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
 struct ShadowTransparentSoftFoldGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: terminal fold always closes the shared async/shadow/resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: terminal fold always closes the shared async/shadow/resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -526,7 +526,7 @@ struct ShadowVisibilityGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
 
-    // All bindings are required: visibility always records against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // All bindings are required: visibility always records against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         bool hardwareShadowSupported = false;
         RendererRayTracingSystem& raytracingSystem;

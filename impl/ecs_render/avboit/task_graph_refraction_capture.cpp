@@ -84,7 +84,7 @@ namespace __hidden_refraction_capture{
 
 struct CaptureDrawTask{
     // The material system and the frame targets are required: capture always draws against this frame's targets.
-    // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
+    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         const DeferredFrameTargets& deferredTargets;

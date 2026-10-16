@@ -50,11 +50,11 @@ old acquired generation to a new final consumer.
 
 Coordinates use the snapshot's logical units and saved pixel scales. Vertex RGB is
 premultiplied linear Rec.709. The skin shader reads the atlas at base mip with a
-linear clamp sampler; sRGB textures decode during sampling, and sampled straight
-alpha is combined with premultiplied tint. The raster blends source-one over
-inverse-source-alpha and keeps the layer linear. The default skin and custom skins
-use the same path. The final compositor applies SDR attachment encoding or HDR10
-encoding once. UI-only HDR uses the shared 203-nit paper-white helper.
+linear clamp sampler. Texture RGB is already linear from `tex_conv` preparation;
+sampled straight alpha is combined with premultiplied tint. The raster blends
+source-one over inverse-source-alpha and keeps the layer linear. The default skin
+and custom skins use the same path. The final compositor applies SDR attachment
+encoding or HDR10 encoding once. UI-only HDR uses the shared 203-nit paper-white helper.
 
 `renderStandalone(acquired)` supplies UI-only presentation over black using the
 same layer and an exact imported acquired backbuffer with a graph presentation

@@ -22,6 +22,10 @@ CACHE_DIRECTORY = "--cache-directory"
 CONFIGURATION = "--configuration"
 TEXTURE_IDENTITY = "engine/ui/texture"
 TEXTURE_MAGIC = 0x54455831
+TEXTURE_VERSION = 4
+TEXTURE_HEADER = struct.Struct("<9IQ")
+TEXTURE_MIP = struct.Struct("<6I2Q")
+UASTC_BLOCK_BYTES = 16
 SKIN_MAGIC = 0x55495331
 SKIN_VERSION = 3
 NAME_HASH_BYTES = 64
@@ -99,6 +103,30 @@ def _read_current_artifacts(directory: pathlib.Path, helpers: types.ModuleType) 
     return artifacts
 
 
+def _cooked_texture_primary_range(texture: bytes) -> tuple[int, int]:
+    if len(texture) < TEXTURE_HEADER.size:
+        raise AssertionError("skin package contains a truncated cooked texture header")
+    magic, version, dimension, width, height, depth, mip_count, _, payload_format, payload_size = TEXTURE_HEADER.unpack_from(texture)
+    if magic != TEXTURE_MAGIC or version != TEXTURE_VERSION:
+        raise AssertionError("skin package did not preserve the current cooked texture format")
+    if (width, height) != ATLAS_EXTENT:
+        raise AssertionError("packaged texture changed the copied sidecar dimensions")
+    if dimension != 0 or depth != 1 or payload_format != 0:
+        raise AssertionError("copied skin texture must use a two-dimensional LDR primary stream")
+    payload_begin = TEXTURE_HEADER.size + mip_count * TEXTURE_MIP.size
+    if mip_count == 0 or payload_begin > len(texture) or payload_size != len(texture) - payload_begin:
+        raise AssertionError("skin package contains a truncated cooked texture mip table or payload")
+    primary_size = 0
+    for index in range(mip_count):
+        _, _, _, _, _, reserved, offset, size = TEXTURE_MIP.unpack_from(texture, TEXTURE_HEADER.size + index * TEXTURE_MIP.size)
+        if reserved != 0 or offset != primary_size or size == 0 or size % UASTC_BLOCK_BYTES != 0:
+            raise AssertionError("copied skin texture has an invalid UASTC primary stream layout")
+        primary_size += size
+    if primary_size != payload_size:
+        raise AssertionError("copied LDR skin texture has bytes outside its primary stream")
+    return payload_begin, payload_begin + primary_size
+
+
 def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
     if len(payloads) != 2:
         raise AssertionError("skin package must contain exactly the selected skin and its texture")
@@ -116,7 +144,7 @@ def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
     texture_identity = by_magic[TEXTURE_MAGIC]
     skin = payloads[skin_identity]
     texture = payloads[texture_identity]
-    if len(skin) < 80 or len(texture) < 24:
+    if len(skin) < 80:
         raise AssertionError("skin package contains a truncated skin or texture header")
     if struct.unpack_from("<I", skin, 4)[0] != SKIN_VERSION:
         raise AssertionError("skin package did not write the current skin version")
@@ -124,8 +152,7 @@ def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
         raise AssertionError("packaged skin refers to a texture identity absent from the package")
     if struct.unpack_from("<II", skin, 72) != ATLAS_EXTENT:
         raise AssertionError("packaged skin changed the declared atlas extent")
-    if struct.unpack_from("<II", texture, 16) != ATLAS_EXTENT:
-        raise AssertionError("packaged texture changed the copied sidecar dimensions")
+    _cooked_texture_primary_range(texture)
     return skin_identity, texture_identity
 
 
@@ -139,17 +166,24 @@ def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pa
     helpers.run_command(build_command, fixture)
     original = _read_current_artifacts(artifacts, helpers)
     skin_identity, texture_identity = _package_identities(original)
+    payload_begin, primary_end = _cooked_texture_primary_range(original[texture_identity])
+    if original[texture_identity][payload_begin:primary_end] != sidecar.read_bytes():
+        raise AssertionError("cooker changed the paired raw texture sidecar bytes")
     helpers.run_command(gather_command, fixture)
     if helpers.read_volume(packed) != original:
         raise AssertionError("gathered skin volume differs from its exact two built payloads")
 
     blocks = bytearray(sidecar.read_bytes())
-    if len(blocks) < 32:
+    if len(blocks) % UASTC_BLOCK_BYTES != 0:
+        raise AssertionError("raw texture sidecar has an incomplete UASTC block")
+    if len(blocks) < 2 * UASTC_BLOCK_BYTES:
         raise AssertionError("shipped texture sidecar has fewer than two complete UASTC blocks")
-    replacement = next((blocks[index:index + 16] for index in range(16, len(blocks), 16) if blocks[index:index + 16] != blocks[:16]), None)
+    first_block = blocks[:UASTC_BLOCK_BYTES]
+    replacement = next((blocks[index:index + UASTC_BLOCK_BYTES] for index in range(UASTC_BLOCK_BYTES, len(blocks), UASTC_BLOCK_BYTES)
+        if blocks[index:index + UASTC_BLOCK_BYTES] != first_block), None)
     if replacement is None:
         raise AssertionError("shipped texture has no distinct complete block for sidecar invalidation")
-    blocks[:16] = replacement
+    blocks[:UASTC_BLOCK_BYTES] = replacement
     sidecar.write_bytes(blocks)
     helpers.run_command(build_command, fixture)
     refreshed = _read_current_artifacts(artifacts, helpers)
@@ -159,6 +193,9 @@ def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pa
         raise AssertionError("texture sidecar change unexpectedly changed the skin payload")
     if refreshed[texture_identity] == original[texture_identity]:
         raise AssertionError("texture sidecar change reused a stale cooked texture")
+    payload_begin, primary_end = _cooked_texture_primary_range(refreshed[texture_identity])
+    if refreshed[texture_identity][payload_begin:primary_end] != sidecar.read_bytes():
+        raise AssertionError("sidecar rebuild did not preserve the changed raw texture bytes")
     helpers.run_command(gather_command, fixture)
     if helpers.read_volume(packed) != refreshed:
         raise AssertionError("texture sidecar change was not reflected in the republished volume")

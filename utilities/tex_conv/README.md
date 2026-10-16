@@ -1,104 +1,146 @@
 # tex_conv
 
-`tex_conv` converts LDR and HDR images into a pair of NWB texture files. Its directory
-launcher is discovered automatically by the repository root, so it can be
-built and run with:
+`tex_conv` converts LDR and HDR images into prepared linear UASTC texture assets.
+It owns source color conversion, float mip filtering, alpha transport selection,
+and UASTC encoding. The asset cooker validates the descriptive metadata and
+packages the same-stem raw block payload.
+
+The directory launcher is discovered automatically by the repository root:
 
     python -m launcher tex-conv --build-only --config dbg
     python -m launcher tex-conv --working-directory . -- --help
     python -m launcher tex-conv --working-directory . -- assets/textures/foobar.png
 
-The build-only command prepares the converter without processing an image. The launcher
-configures and builds as needed; see [the launcher guide](../../launcher/README.md) for build options.
+The build-only command prepares the converter without processing an image.
+The launcher configures and builds as needed; see [the launcher guide](../../launcher/README.md).
 
-A single positional image produces a 2D texture. Cubemaps and volume textures
-use explicit ordered image lists:
+A single positional image produces a 2D texture. Cubemaps and volumes use
+explicit ordered image lists:
 
     python -m launcher tex-conv --working-directory . -- --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
     python -m launcher tex-conv --working-directory . -- --volume z0.png z1.png z2.png z3.png --output fog
 
-`--cube` always takes exactly six square faces in `+X, -X, +Y, -Y, +Z, -Z`
-order. `--volume` takes one or more same-sized slices in ascending Z order. This
-writes `foobar.nwb` and `foobar.tex` beside the first input unless `--output`
-selects a different base name. `--linear` marks and filters the image data as
-linear data; HDR sources are always linear. `--force` is required to replace either existing output file.
+`--cube` takes six square faces in `+X, -X, +Y, -Y, +Z, -Z` order.
+`--volume` takes one or more same-sized slices in ascending Z order.
+The converter writes `foobar.nwb` and `foobar.tex` beside the first input unless
+`--output` selects a different base name. `--force` is required to replace either
+existing output file.
 
-Publication stages both files before moving existing regular outputs to sibling
-`.old` backups. It removes the backups after both replacements succeed and
-restores the previous outputs on failure. Existing `.tmp` or `.old` work paths
-cause refusal. If the filesystem also refuses rollback, the converter reports the
-failure and retains the previous `.old` files for recovery.
-The transaction handles one conversion's reported failures and exception unwind;
-it does not atomically swap the pair against process crashes or concurrent writers.
+## Source interpretation and filtering
 
-Use `--alpha` to choose an alpha source independently of the RGB image:
+Ordinary LDR input is interpreted as sRGB. `--linear` declares LDR input to be
+linear data instead. HDR input is always linear. The image decoder expands input
+to float RGBA; the converter applies the sRGB transfer function to RGB before
+filtering or encoding. Alpha always represents linear coverage.
+
+Accepted inputs are PNG, JPEG/JFIF, TGA, QOI, OpenEXR (`.exr`), and Radiance (`.hdr`).
+One texture cannot mix LDR and HDR RGB inputs. LDR RGB must be finite and in
+`[0, 1]`; HDR RGB must be finite and in `[0, 65216]`. Original alpha must be
+finite and in `[0, 1]`. Unsupported images and invalid values fail before
+publication.
+
+The converter generates a complete mip chain in linear float space. Cube faces
+filter independently. Volume mips reduce all three dimensions, weighting source
+Z slabs by their overlap with each destination interval so odd depths preserve
+coverage. Alpha filtering uses straight linear coverage. LDR quantization to
+UNORM8 happens after color conversion and mip filtering. HDR encoding retains
+floating-point RGB above 1.0. Basis encoding uses one worker for reproducible
+output.
+
+LDR UASTC is an 8-bit normalized target, so linearized dark colors have less
+precision than an sRGB-encoded 8-bit representation. UI artwork follows the
+same conversion and storage rules as other color textures.
+
+## Alpha sources
+
+Use `--alpha` to choose alpha independently of RGB:
 
     python -m launcher tex-conv --working-directory . -- rgb.png --alpha opacity.png
     python -m launcher tex-conv --working-directory . -- rgb.exr --alpha black
     python -m launcher tex-conv --working-directory . -- rgb.hdr --alpha white
 
-`--alpha path` takes the mask image's red channel, normalized to `[0, 1]`.
-The mask must match the source width and height; for cubemaps and volumes the
-same mask is applied to every face or slice. `--alpha white` and `--alpha black`
-select constant 1.0 and 0.0 alpha. Without `--alpha`, the converter keeps the
-input's alpha if it has one, otherwise it uses opaque alpha.
+`--alpha path` takes the mask image's red channel, clamped to `[0, 1]`.
+The mask must match the source width and height; the same mask applies to every
+cube face or volume slice. `--alpha white` and `--alpha black` select constant
+1.0 and 0.0. Without `--alpha`, source alpha is retained or defaults to opaque
+when the image has no alpha channel.
 
-All texture modes accept PNG, JPEG/JFIF, TGA, and QOI LDR images plus OpenEXR
-(`.exr`) and Radiance (`.hdr`) HDR images. A single conversion must use only
-LDR or only HDR source images. The input decoder is the vendored Basis Universal
-encoder; unsupported formats fail rather than silently producing a different
-texture type.
+Alpha transport is derived from the quantized mip chain. LDR UASTC stores
+opaque or embedded alpha. HDR UASTC is RGB-only, so opaque alpha needs no extra
+stream, constant alpha below 255 is stored in metadata, and variable alpha
+uses a trailing UASTC LDR stream. Every alpha mask texel stores `(a, a, a, 255)`
+and is decoded from red. The alpha stream mirrors the primary mip and slice
+layout.
 
-## File contract
+## Prepared file contract
 
-The `.tex` file has no container header. Its payload is selected by the metadata
-format. LDR input is encoded as a contiguous sequence of standard UASTC LDR
-4x4 blocks. Every block is 16 bytes and follows the pinned UASTC texture
-specification's LSB-first bit layout (revision
-`b624c07ad3c659e7b0f0badcb36e9a6b8820a99d`). Edge blocks are the normal
-clamped 4x4 UASTC blocks produced by the encoder.
+Each texture is an implicit same-basename pair: `foobar.nwb` describes the
+texture, and `foobar.tex` holds its raw linear UASTC blocks. The first UASTC block
+starts at byte zero. The payload contains no container header, mip table, or
+footer. Shared block dimensions and checked mip layout arithmetic live in
+[global/texture_payload.h](../../global/texture_payload.h).
 
-HDR input is encoded as a contiguous sequence of linear UASTC HDR 4x4 RGB
-blocks. UASTC HDR 4x4 is directly valid ASTC HDR 4x4 data; it also transcodes
-to BC6H or `RGBA16_FLOAT` when needed. RGB values must be finite and in
-`[0, 65216]`, preserving radiance above 1.0. Because this Basis HDR path is
-RGB-only, variable alpha is stored as a second, trailing same-layout UASTC LDR
-mask stream. Each mask texel is encoded as `(a, a, a, 255)` and decoded from
-its red channel. Opaque HDR has no mask stream; non-white constant alpha is
-stored in metadata without a mask stream.
+Every UASTC block covers 4x4 texels and occupies 16 bytes. Payload order is
+mip-major, then slice-major; cube faces retain the input face order and volume
+slices retain ascending Z order. A variable HDR alpha stream immediately follows
+the complete primary stream and mirrors its mip/slice layout.
 
-The converter selects `asset.format = "uastc_ldr_4x4";` for LDR and
-`asset.format = "uastc_hdr_4x4";` for HDR. The sibling `.nwb` is readable
-metascript metadata containing only author-controlled choices:
+For example, a 7x5 LDR 2D texture with alpha has this metadata:
 
-- `format`, `dimension` (`2d`, `cube`, or `volume`), positive `width` and
-  `height`, and `data`, the same-directory `.tex` filename without path components;
-- positive `depth` for volumes only; 2D and cube textures infer depth 1;
-- for LDR, `color_space` (`linear` or `srgb`) and numeric `has_alpha` (0 or 1);
-- for HDR, `alpha_mode` (`opaque`, `constant_unorm8`, or `uastc_ldr_4x4`),
-  with `alpha_constant_unorm8` required only for `constant_unorm8` (integer
-  0..254; use `opaque` for 255).
+```cpp
+texture asset;
 
-HDR is always linear, and its alpha presence follows `alpha_mode`. The cooker
-derives those values, fixed block dimensions and byte size, the complete mip chain,
-block grids, slice counts, byte offsets and sizes, and any trailing HDR alpha range.
-Do not author block/layout/address fields, `mip_count`, `mips`, HDR `color_space`
-or `has_alpha`, or alpha payload offsets/counts. Metadata also has no version or
-specification-revision fields. Unknown fields fail cooking.
+asset.format = "uastc_ldr_4x4";
+asset.dimension = "2d";
+asset.resolution = [7, 5];
+asset.mip_count = 3;
+asset.alpha_mode = "embedded_ldr";
+```
 
-The raw sidecar uses a fixed mip-major, then slice-major byte order: each mip's
-planes are contiguous before the next mip. A 2D mip has one plane, cube planes
-retain `+X, -X, +Y, -Y, +Z, -Z` order, and volume planes retain ascending Z order.
-Volume mips reduce all three dimensions, including depth, until they reach 1x1x1.
-A separate HDR alpha stream starts immediately after RGB and mirrors the whole
-RGB mip/slice layout. None of this byte layout is configurable in `.nwb`.
+The current metadata fields are:
 
-For example, a 7x5 2D source has a derived three-level chain: 7x5 uses 64 bytes
-at offset 0, 3x2 uses 16 bytes at offset 64, and 1x1 uses 16 bytes at offset 80.
-The primary stream therefore contains exactly 96 bytes. A variable-alpha HDR
-source appends another 96-byte stream. The cooker computes these ranges from
-the semantic fields and rejects a sidecar whose total byte count differs.
+- `format`: `uastc_ldr_4x4` or `uastc_hdr_4x4`;
+- `dimension`: `2d`, `cube`, or `volume`;
+- `resolution`: `[width, height]` for 2D/cube or
+  `[width, height, depth]` for a volume;
+- `mip_count`: the complete mip chain length for that resolution;
+- `alpha_mode`: `opaque`, `embedded_ldr`, `constant_unorm8`, or
+  `separate_uastc_ldr_4x4`;
+- `alpha_constant_unorm8`: an integer in `[0, 254]`, present only for
+  `constant_unorm8`.
 
-## Library result contracts
+LDR allows opaque or embedded alpha. HDR allows opaque, constant, or separate
+alpha. All dimensions are positive, cube faces are square, and all prepared RGB
+values are linear. Metadata contains no source color-space flag, data filename,
+separate width/height/depth fields, version, mip table, or byte offsets.
+Unknown fields are rejected.
 
-`ResolveOutputPaths` returns `Expected<OutputPaths>`, and `EncodeTexture` returns `Expected<TexturePayload>`. Decoders and mip producers return their owned candidates through the same contract. Check success before moving payloads or starting paired publication; append/alpha helpers retain existing payload/image storage and capacity. Transaction ownership flags remain live cleanup state, including a staged path created before a later write fails. See [produced values and expected failures](../../docs/expected_results.md).
+The converter's mip generation filter is a linear-space box filter. Runtime
+nearest/linear interpolation belongs to the separate Sampler asset's
+`mip_filter` field; textures do not carry an ignored interpolation setting.
+
+Cooking derives block grids, mip dimensions, slice counts, and byte ranges from
+the descriptors and checks the complete raw byte count. It packages the blocks
+without source decoding, color conversion, filtering, or re-encoding. The cooked
+runtime asset carries its internal header and mip records; the authored `.tex`
+file remains the raw block stream. Runtime sampling always uses linear formats.
+
+## Publication and result contracts
+
+Publication stages both files before moving existing regular outputs to sibling
+`.old` backups. It removes the backups after both replacements succeed and
+restores previous outputs on failure. Existing `.tmp` or `.old` work paths
+cause refusal. If the filesystem also refuses rollback, the converter reports
+the failure and retains previous `.old` files for recovery.
+The transaction handles one conversion's reported failures and exception unwind;
+it does not atomically swap the pair against process crashes or concurrent writers.
+
+`ResolveOutputPaths` returns `Expected<OutputPaths>`, and `PrepareTexture` returns
+`Expected<PreparedTexture>`. Check success before moving a result or beginning
+paired publication. Transaction ownership flags remain live cleanup state,
+including a staged path created before a later write fails.
+See [produced values and expected failures](../../docs/expected_results.md).
+
+The converter integration tests exercise LDR/HDR encoding, linear color
+conversion, complete cube and volume mip chains, alpha overrides, prepared
+binary admission, and failed-publication recovery.

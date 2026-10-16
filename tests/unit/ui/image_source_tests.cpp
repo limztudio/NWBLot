@@ -28,9 +28,7 @@ struct TextureDescription{
     u32 depth = 1u;
     TextureDimension::Enum dimension = TextureDimension::Texture2D;
     TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
-    TextureColorSpace::Enum colorSpace = TextureColorSpace::Srgb;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::EmbeddedLdr;
-    bool hasAlpha = true;
     u8 alphaConstant = TextureFormat::s_OpaqueAlphaUnorm8;
     u8 seed = 37u;
 };
@@ -38,7 +36,7 @@ struct TextureDescription{
 class UiImageSourceTests : public testing::Test{
 protected:
     static void Install(Texture& texture, const TextureDescription& description, Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes){
-        texture.setPayload(description.colorSpace, description.hasAlpha, description.width, description.height, Move(mips), Move(bytes), description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
+        texture.setPayload(description.width, description.height, Move(mips), Move(bytes), description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
     }
 
     [[nodiscard]] static bool Prepare(Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}){
@@ -146,9 +144,7 @@ TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsA
         TextureDescription replacement;
         replacement.width = 1u;
         replacement.height = 1u;
-        replacement.colorSpace = TextureColorSpace::Linear;
         replacement.alphaMode = TextureAlphaMode::Opaque;
-        replacement.hasAlpha = false;
         replacement.seed = 91u;
         ASSERT_TRUE(Prepare(callerArena, texture, replacement));
         EXPECT_EQ(texture.payloadBytes().size(), 16u);
@@ -204,10 +200,8 @@ TEST_F(UiImageSourceTests, CopiedSharedHandleRetainsTheSameImmutableVersionAfter
 
 TEST_F(UiImageSourceTests, SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream){
     TextureDescription description;
-    description.colorSpace = TextureColorSpace::Linear;
     description.format = TexturePayloadFormat::UastcHdr4x4;
     description.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
-    description.hasAlpha = true;
     Texture texture(m_inputArena, Name("tests/ui/image/hdr"));
     ASSERT_TRUE(Prepare(m_inputArena, texture, description));
     ASSERT_TRUE(texture.validatePayload());
@@ -251,7 +245,7 @@ TEST_F(UiImageSourceTests, RejectsMissingAssetIdentityAndEmptyTexturePayload){
 }
 
 TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUsableVersions){
-    for(u32 variant = 0u; variant < 8u; ++variant){
+    for(u32 variant = 0u; variant < 7u; ++variant){
         Texture texture(m_inputArena, Name("tests/ui/image/invalid_metadata"));
         ASSERT_TRUE(Prepare(m_inputArena, texture));
         TextureDescription description;
@@ -261,9 +255,8 @@ TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUs
         case 2u: description.depth = 0u; break;
         case 3u: description.depth = 2u; break;
         case 4u: description.dimension = static_cast<TextureDimension::Enum>(255u); break;
-        case 5u: description.colorSpace = static_cast<TextureColorSpace::Enum>(255u); break;
-        case 6u: description.format = static_cast<TexturePayloadFormat::Enum>(255u); break;
-        case 7u: description.alphaMode = static_cast<TextureAlphaMode::Enum>(255u); break;
+        case 5u: description.format = static_cast<TexturePayloadFormat::Enum>(255u); break;
+        case 6u: description.alphaMode = static_cast<TextureAlphaMode::Enum>(255u); break;
         }
         Texture::MipLevelVector mips(m_inputArena);
         mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
@@ -297,7 +290,7 @@ TEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata)
 }
 
 TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
-    for(u32 variant = 0u; variant < 8u; ++variant){
+    for(u32 variant = 0u; variant < 6u; ++variant){
         Texture texture(m_inputArena, Name("tests/ui/image/invalid_transport"));
         ASSERT_TRUE(Prepare(m_inputArena, texture));
         TextureDescription description;
@@ -310,7 +303,6 @@ TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
         case 1u: bytes.push_back(0u); break;
         case 2u:
             description.format = TexturePayloadFormat::UastcHdr4x4;
-            description.colorSpace = TextureColorSpace::Linear;
             description.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
             break;
         case 3u: description.format = TexturePayloadFormat::UastcHdr4x4; break;
@@ -318,12 +310,7 @@ TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
             description.alphaMode = TextureAlphaMode::ConstantUnorm8;
             description.alphaConstant = 77u;
             break;
-        case 5u: description.hasAlpha = false; break;
-        case 6u:
-            description.format = TexturePayloadFormat::UastcHdr4x4;
-            description.colorSpace = TextureColorSpace::Linear;
-            break;
-        case 7u: description.alphaConstant = 77u; break;
+        case 5u: description.alphaConstant = 77u; break;
         }
         Install(texture, description, Move(mips), Move(bytes));
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture)) << variant;

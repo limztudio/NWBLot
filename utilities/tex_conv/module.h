@@ -43,34 +43,18 @@ struct AlphaSource{
     {}
 };
 
-struct MipLevel{
-    u64 offsetBytes = 0u;
-    u64 sizeBytes = 0u;
-
-    u32 level = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 blocksX = 0u;
-    u32 blocksY = 0u;
-    u32 sliceCount = 1u;
-};
-
-struct TexturePayload{
-    Vector<MipLevel> mips;
+struct PreparedTexture{
     Vector<u8> bytes;
-    // Present only for HDR textures using SeparateUastcLdr4x4. It is written immediately after bytes in the same .tex sidecar.
-    Vector<u8> alphaBytes;
 
     u32 width = 0u;
     u32 height = 0u;
     u32 depth = 1u;
+    u32 mipCount = 0u;
 
     TextureDimension::Enum dimension = TextureDimension::Texture2D;
     TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
     u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-    bool srgb = false;
-    bool hasAlpha = false;
 };
 
 struct OutputPaths{
@@ -95,8 +79,8 @@ bool IsSupportedInputPath(const Path& path);
 bool IsHdrInputPath(const Path& path);
 Expected<OutputPaths> ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument);
 bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force);
-Expected<TexturePayload> EncodeTexture(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource);
-bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload, bool force);
+Expected<PreparedTexture> PrepareTexture(const Vector<Path>& inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource);
+bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, bool force);
 
 int Run(int argc, char** argv);
 

@@ -461,8 +461,6 @@ TEST(AssetsUiSkin, TextureValidationRejectsIdentityDimensionAndExtentMismatch){
         Texture::MipLevelVector mips(testArena.arena);
         Core::Assets::AssetBytes payload(testArena.arena);
         texture.setPayload(
-            TextureColorSpace::Srgb,
-            true,
             variant == 1u ? 63u : 64u,
             variant == 2u ? 31u : 32u,
             Move(mips),

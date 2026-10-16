@@ -21,18 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace TextureColorSpace{
-    static constexpr u8 s_TextureColorSpaceLinearBase = 0u;
-    enum Enum : u8{
-        Linear = s_TextureColorSpaceLinearBase,
-        Srgb,
-    };
-};
-
-[[nodiscard]] inline bool IsValidTextureColorSpace(const TextureColorSpace::Enum colorSpace)noexcept{
-    return colorSpace == TextureColorSpace::Linear || colorSpace == TextureColorSpace::Srgb;
-}
-
 struct TextureMipLevel{
     u32 width = 0u;
     u32 height = 0u;
@@ -76,9 +64,8 @@ public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 public:
+    // Cooked RGB values use the engine's linear working space; alpha is linear coverage.
     void setPayload(
-        const TextureColorSpace::Enum colorSpace,
-        const bool hasAlpha,
         const u32 width,
         const u32 height,
         MipLevelVector&& mipLevels,
@@ -89,8 +76,6 @@ public:
         const TextureAlphaMode::Enum alphaMode,
         const u8 alphaConstantUnorm8
     )noexcept{
-        m_colorSpace = colorSpace;
-        m_hasAlpha = hasAlpha;
         m_width = width;
         m_height = height;
         m_dimension = dimension;
@@ -102,8 +87,6 @@ public:
         m_payloadBytes = Move(payloadBytes);
     }
 
-    [[nodiscard]] TextureColorSpace::Enum colorSpace()const noexcept{ return m_colorSpace; }
-    [[nodiscard]] bool hasAlpha()const noexcept{ return m_hasAlpha; }
     [[nodiscard]] u32 width()const noexcept{ return m_width; }
     [[nodiscard]] u32 height()const noexcept{ return m_height; }
     [[nodiscard]] TextureDimension::Enum dimension()const noexcept{ return m_dimension; }
@@ -131,11 +114,9 @@ private:
     u32 m_height = 0u;
     u32 m_depth = 1u;
 
-    TextureColorSpace::Enum m_colorSpace = TextureColorSpace::Linear;
     TextureDimension::Enum m_dimension = TextureDimension::Texture2D;
     TexturePayloadFormat::Enum m_payloadFormat = TexturePayloadFormat::UastcLdr4x4;
     TextureAlphaMode::Enum m_alphaMode = TextureAlphaMode::Opaque;
-    bool m_hasAlpha = false;
     u8 m_alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
 
     MipLevelVector m_mipLevels;

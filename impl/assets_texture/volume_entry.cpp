@@ -10,8 +10,6 @@
 
 #include "cook.h"
 
-#include "binary_payload.h"
-
 #include <core/assets/cook_entry_registry.h>
 
 
@@ -37,7 +35,7 @@ static Expected<TextureCookEntry> ParseTextureDocument(const Path& assetRoot, co
 static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<TextureCookEntry, Texture, TextureAssetCodec>(
         registry,
-        TextureBinaryPayload::s_TextureAssetKindLabel,
+        NWB_TEXT("texture"),
         &ParseTextureDocument,
         [](TextureCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildTextureAsset(entry, arena); },
         false

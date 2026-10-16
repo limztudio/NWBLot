@@ -72,9 +72,7 @@ void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expect
         EXPECT_EQ(a.texture().height(), e.texture().height());
         EXPECT_EQ(a.texture().dimension(), e.texture().dimension());
         EXPECT_EQ(a.texture().depth(), e.texture().depth());
-        EXPECT_EQ(a.texture().colorSpace(), e.texture().colorSpace());
         EXPECT_EQ(a.texture().payloadFormat(), e.texture().payloadFormat());
-        EXPECT_EQ(a.texture().hasAlpha(), e.texture().hasAlpha());
         EXPECT_EQ(a.texture().alphaMode(), e.texture().alphaMode());
         EXPECT_EQ(a.texture().alphaConstantUnorm8(), e.texture().alphaConstantUnorm8());
         EXPECT_EQ(a.texture().payloadBytes(), e.texture().payloadBytes());

@@ -6,7 +6,7 @@
 
 
 #include "algorithm.h"
-#include "basic_string.h"
+#include "string_view.h"
 #include "expected.h"
 #include "type.h"
 
@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Texture payload ABI shared by the asset cooker, runtime loader, and tex_conv.
+// Linear UASTC block layouts and the internal cooked texture binary contract.
 
 
 namespace TextureDimension{
@@ -85,14 +85,13 @@ namespace TextureFormat{
 
 inline constexpr AStringView s_UastcLdr4x4Format = "uastc_ldr_4x4";
 inline constexpr AStringView s_UastcHdr4x4Format = "uastc_hdr_4x4";
-inline constexpr AStringView s_AlphaOpaqueMode = "opaque";
-inline constexpr AStringView s_AlphaConstantUnorm8Mode = "constant_unorm8";
-inline constexpr AStringView s_AlphaUastcLdr4x4Mode = "uastc_ldr_4x4";
-inline constexpr AStringView s_LinearColorSpace = "linear";
-inline constexpr AStringView s_SrgbColorSpace = "srgb";
 inline constexpr AStringView s_Texture2DDimension = "2d";
 inline constexpr AStringView s_TextureCubeDimension = "cube";
 inline constexpr AStringView s_Texture3DDimension = "volume";
+inline constexpr AStringView s_OpaqueAlphaMode = "opaque";
+inline constexpr AStringView s_EmbeddedLdrAlphaMode = "embedded_ldr";
+inline constexpr AStringView s_ConstantUnorm8AlphaMode = "constant_unorm8";
+inline constexpr AStringView s_SeparateUastcLdr4x4AlphaMode = "separate_uastc_ldr_4x4";
 inline constexpr AStringView s_TextureDataExtension = ".tex";
 inline constexpr u32 s_UastcBlockWidth = 4u;
 inline constexpr u32 s_UastcBlockHeight = 4u;
@@ -105,12 +104,6 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct TexturePayloadBlockLayout{
-    u32 blockWidth;
-    u32 blockHeight;
-    u32 bytesPerBlock;
-};
 
 struct TextureMipPlaneBlockLayout{
     u32 blocksX;
@@ -157,34 +150,86 @@ struct TextureMipPlaneBlockLayout{
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] inline Expected<TexturePayloadBlockLayout> GetTexturePayloadBlockLayout(const TexturePayloadFormat::Enum format)noexcept{
-    switch(format){
-    case TexturePayloadFormat::UastcLdr4x4:
-    case TexturePayloadFormat::UastcHdr4x4:
-        return TexturePayloadBlockLayout{ s_UastcBlockWidth, s_UastcBlockHeight, s_UastcBytesPerBlock };
-    default:
-        return MakeUnexpected(Failure{});
-    }
-}
-
 [[nodiscard]] inline Expected<TextureMipPlaneBlockLayout> ComputeMipPlaneBlockLayout(const TexturePayloadFormat::Enum format, const u32 width, const u32 height)noexcept{
-    if(width == 0u || height == 0u)
+    if(!IsValidTexturePayloadFormat(format) || width == 0u || height == 0u)
         return MakeUnexpected(Failure{});
-    const auto layout = GetTexturePayloadBlockLayout(format);
-    if(!layout)
-        return MakeUnexpected(layout.error());
 
-    const u64 blocksX64 = DivideUp(static_cast<u64>(width), static_cast<u64>(layout->blockWidth));
-    const u64 blocksY64 = DivideUp(static_cast<u64>(height), static_cast<u64>(layout->blockHeight));
+    const u64 blocksX64 = DivideUp(static_cast<u64>(width), static_cast<u64>(s_UastcBlockWidth));
+    const u64 blocksY64 = DivideUp(static_cast<u64>(height), static_cast<u64>(s_UastcBlockHeight));
     if(blocksX64 > Limit<u32>::s_Max || blocksY64 > Limit<u32>::s_Max || blocksX64 > Limit<u64>::s_Max / blocksY64)
         return MakeUnexpected(Failure{});
 
     const u64 blockCount = blocksX64 * blocksY64;
-    if(blockCount > Limit<u64>::s_Max / layout->bytesPerBlock)
+    if(blockCount > Limit<u64>::s_Max / s_UastcBytesPerBlock)
         return MakeUnexpected(Failure{});
 
-    return TextureMipPlaneBlockLayout{ .blocksX = static_cast<u32>(blocksX64), .blocksY = static_cast<u32>(blocksY64), .planeByteCount = blockCount * layout->bytesPerBlock, };
+    return TextureMipPlaneBlockLayout{ .blocksX = static_cast<u32>(blocksX64), .blocksY = static_cast<u32>(blocksY64), .planeByteCount = blockCount * s_UastcBytesPerBlock, };
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TextureBinaryPayload{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_TextureMagic = 0x54455831u; // TEX1
+inline constexpr u32 s_TextureVersion = 4u;
+
+static constexpr usize s_PackedAlignBytes = 1u;
+
+// alphaInfo stores its mode in bits 0..7 and the UNORM8 constant in bits 8..15; the high half must remain zero.
+#pragma pack(push, 1)
+struct HeaderBinary{
+    u32 magic = s_TextureMagic;
+    u32 version = s_TextureVersion;
+    u32 dimension = 0u;
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 depth = 0u;
+    u32 mipCount = 0u;
+    u32 alphaInfo = 0u;
+    u32 payloadFormat = 0u;
+    u64 payloadByteCount = 0u;
+};
+#pragma pack(pop)
+static constexpr usize s_HeaderBinaryByteSize = 44u;
+static_assert(sizeof(HeaderBinary) == s_HeaderBinaryByteSize, "Texture V4 header layout drifted");
+static_assert(alignof(HeaderBinary) == s_PackedAlignBytes, "Texture V4 header must stay packed");
+static_assert(IsStandardLayout_V<HeaderBinary>, "Texture V4 header must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<HeaderBinary>, "Texture V4 header must stay binary-serializable");
+
+inline constexpr u32 s_AlphaInfoModeMask = 0x000000FFu;
+inline constexpr u32 s_AlphaInfoConstantShift = 8u;
+inline constexpr u32 s_AlphaInfoConstantMask = 0x0000FF00u;
+inline constexpr u32 s_AlphaInfoReservedMask = 0xFFFF0000u;
+
+#pragma pack(push, 1)
+struct MipLevelBinary{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 sliceCount = 0u;
+    u32 blockCountX = 0u;
+    u32 blockCountY = 0u;
+    u32 reserved = 0u;
+    u64 offsetBytes = 0u;
+    u64 sizeBytes = 0u;
+};
+#pragma pack(pop)
+static constexpr usize s_MipLevelBinaryByteSize = 40u;
+static_assert(sizeof(MipLevelBinary) == s_MipLevelBinaryByteSize, "Texture mip level layout drifted");
+static_assert(alignof(MipLevelBinary) == s_PackedAlignBytes, "Texture mip level must stay packed");
+static_assert(IsStandardLayout_V<MipLevelBinary>, "Texture mip level must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<MipLevelBinary>, "Texture mip level must stay binary-serializable");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

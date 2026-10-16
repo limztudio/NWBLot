@@ -35,9 +35,8 @@ namespace __hidden_ui_gpu_texture_images{
         && texture.dimension() == TextureDimension::Texture2D && texture.depth() == 1u
         && texture.width() != 0u && texture.height() != 0u
         && !texture.mipLevels().empty() && !texture.payloadBytes().empty()
-        && IsValidTextureColorSpace(texture.colorSpace()) && IsValidTexturePayloadFormat(texture.payloadFormat())
+        && IsValidTexturePayloadFormat(texture.payloadFormat())
         && IsValidTextureAlphaMode(texture.alphaMode())
-        && (!IsHdrTexturePayloadFormat(texture.payloadFormat()) || texture.colorSpace() == TextureColorSpace::Linear)
     ;
 }
 
@@ -51,7 +50,6 @@ namespace __hidden_ui_gpu_texture_images{
     if(
         (format.kind != Core::FormatKind::Normalized && format.kind != Core::FormatKind::Float)
         || format.hasDepth || format.hasStencil || !(format.hasRed || format.hasGreen || format.hasBlue || format.hasAlpha)
-        || format.isSRGB != (version.m_source->texture().colorSpace() == TextureColorSpace::Srgb)
         || resource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
         || !resource.readinessToken.valid() || !resource.readinessToken.hasPhysicalQueueIdentity()
     )

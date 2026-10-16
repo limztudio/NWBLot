@@ -122,7 +122,7 @@ Graphics consumers and tests use neutral contracts from `core/graphics/rhi/` and
 
 The Vulkan backend validates required device capabilities at startup. `VK_EXT_descriptor_buffer` is required by the renderer. Windows ARM64 disables native mesh shaders by default; eligible engine meshes use persistent indexed raster, while geometry paths without a compatible indexed archive stage use compute emulation. A qualified adapter can opt into native mesh shaders before graphics instance creation.
 
-Texture cooking and runtime format selection account for device format support, including BC and ASTC-capable GPUs. See [Renderer Feature Paths](https://github.com/limztudio/NWBLot/wiki/Renderer-Feature-Paths) and [Texture Conversion](https://github.com/limztudio/NWBLot/wiki/Texture-Conversion) for the current contracts.
+The runtime texture loader selects formats according to device support, including BC and ASTC-capable GPUs. `tex_conv` writes raw linear UASTC blocks to `.tex` and the format, resolution, mip count, and alpha layout to its same-basename `.nwb` pair. Texture cooking derives the checked mip layout from that metadata and packages the raw blocks. See [Renderer Feature Paths](https://github.com/limztudio/NWBLot/wiki/Renderer-Feature-Paths) and [Texture Conversion](https://github.com/limztudio/NWBLot/wiki/Texture-Conversion) for the current contracts.
 
 ## Macro and namespace ownership
 

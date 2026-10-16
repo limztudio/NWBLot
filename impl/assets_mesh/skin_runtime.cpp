@@ -38,6 +38,32 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
+    usize cursor = 0u;
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, cursor, SkinBinaryPayload::s_SkinMagic, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("skin"));
+    if(!headerResult)
+        return false;
+    const SkinBinaryPayload::HeaderBinary& header = *headerResult;
+
+    if(header.padding0 != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin::loadBinary failed: reserved header fields must be zero"));
+        return false;
+    }
+    Skin candidate(m_influences.get_allocator().arena(), virtualPath());
+    candidate.m_mesh.virtualPath = Name(header.meshNameHash);
+    candidate.m_skeleton.virtualPath = Name(header.skeletonNameHash);
+
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.influenceCount, candidate.m_influences, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("influences")))
+        return false;
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.inverseBindMatrixCount, candidate.m_inverseBindMatrices, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("inverse bind matrices")))
+        return false;
+
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skin::loadBinary")) || !candidate.validatePayload())
+        return false;
+    *this = Move(candidate);
+    return true;
+}
+
 bool Skin::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("Skin::validatePayload")))
         return false;
@@ -75,32 +101,6 @@ bool Skin::validatePayload()const{
             return false;
         }
     }
-    return true;
-}
-
-bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, cursor, SkinBinaryPayload::s_SkinMagic, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("skin"));
-    if(!headerResult)
-        return false;
-    const SkinBinaryPayload::HeaderBinary& header = *headerResult;
-
-    if(header.padding0 != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::loadBinary failed: reserved header fields must be zero"));
-        return false;
-    }
-    Skin candidate(m_influences.get_allocator().arena(), virtualPath());
-    candidate.m_mesh.virtualPath = Name(header.meshNameHash);
-    candidate.m_skeleton.virtualPath = Name(header.skeletonNameHash);
-
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.influenceCount, candidate.m_influences, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("influences")))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.inverseBindMatrixCount, candidate.m_inverseBindMatrices, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("inverse bind matrices")))
-        return false;
-
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skin::loadBinary")) || !candidate.validatePayload())
-        return false;
-    *this = Move(candidate);
     return true;
 }
 

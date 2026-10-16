@@ -29,7 +29,7 @@ public:
 
 
 protected:
-    [[nodiscard]] EditCommandRequest translate(const i32 key, const bool control = false, const bool shift = false, const bool alt = false, const bool repeat = false){
+    [[nodiscard]] EditCommandRequest translate(const i32 key, const bool control = false, const bool shift = false, const bool alt = false, const bool repeat = false)noexcept{
         const i32 modifiers = (control ? Core::InputModifier::Control : 0) | (shift ? Core::InputModifier::Shift : 0) | (alt ? Core::InputModifier::Alt : 0);
         return TranslateEditCommand(m_bindings.resolve(key, modifiers), repeat);
     }

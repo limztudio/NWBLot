@@ -5,7 +5,9 @@
 #include <utilities/font_builder/bake.h>
 
 #include <impl/assets_font_atlas/model.h>
+
 #include <tests/common/capturing_logger.h>
+
 #include <gtest/gtest.h>
 
 

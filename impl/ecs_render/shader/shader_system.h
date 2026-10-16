@@ -62,6 +62,7 @@ class RendererShaderSystem final : NoCopy{
 public:
     RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver);
 
+
 public:
     void invalidateResources();
     template<typename TShader>

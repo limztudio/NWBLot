@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
 #include "slang_compiler.h"
 
 #include <core/assets/paths.h>

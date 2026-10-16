@@ -2,16 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/standalone_runtime.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include "project_entry.h"
 #include "profile_names.h"
+
 #include <logger/client/module.h>
 
+#include <core/alloc/standalone_runtime.h>
+#include <core/common/application_entry.h>
 #include <core/common/command_line.h>
 #include <core/common/module.h>
 #include <core/crash/module.h>
@@ -76,13 +73,12 @@ inline constexpr i32 s_UninitializedFrameExtent = 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CallbackShutdownGuard : NoCopy{
+class CallbackShutdownGuard final : NoCopy{
 public:
     explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks, NWB::Core::CpuTaskScope& tasks)noexcept
         : m_callbacks(callbacks)
         , m_tasks(tasks)
     {}
-
     ~CallbackShutdownGuard()noexcept(false){
         if(!m_active)
             return;
@@ -104,6 +100,8 @@ public:
         m_tasks.wait();
     }
 
+
+public:
     void activate()noexcept{ m_active = true; }
 
 private:
@@ -485,8 +483,6 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_loader::s_LoaderExitFailure; });
 }
 
-
-#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

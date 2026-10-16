@@ -52,6 +52,8 @@ struct ExtensionMember{
     ExtensionState& state;
     AssetVector<u8> bytes;
 
+
+public:
     ExtensionMember(AssetArena& arena, ExtensionState& inState)
         : state(inState)
         , bytes(arena)
@@ -68,6 +70,8 @@ struct alignas(128u) AlignedExtension{
     ExtensionState& state;
     usize identity;
 
+
+public:
     AlignedExtension(AssetArena& arena, ExtensionState& inState, const bool fail = false)
         : member(arena, inState)
         , state(inState)
@@ -85,6 +89,8 @@ struct TextExtension{
     ExtensionState& state;
     AssetVector<AssetString> strings;
 
+
+public:
     TextExtension(AssetArena& arena, ExtensionState& inState)
         : state(inState)
         , strings(arena)
@@ -103,6 +109,8 @@ struct ReentrantExtension{
     usize identity;
     ReentrantExtension* nested = nullptr;
 
+
+public:
     ReentrantExtension(ParsedAssetMetadata& metadata, const Name& name, ExtensionState& inState, const bool recurse)
         : state(inState)
         , identity(++state.constructions)
@@ -118,6 +126,8 @@ struct ReentrantExtension{
 struct ThrowingExtensionHasher{
     NotNull<bool*> fail;
 
+
+public:
     [[nodiscard]] usize operator()(const Name& key)const{
         if(*fail)
             throw InsertionFailure{};
@@ -129,6 +139,8 @@ struct RegistryBorrowingExtension{
     const CookEntryRegistry& registry;
     usize& observedBucketCount;
 
+
+public:
     ~RegistryBorrowingExtension()noexcept{
         observedBucketCount = registry.bucketCount();
     }

@@ -9,8 +9,6 @@
 #include "backend_core_context.h"
 #include "backend_queue.h"
 #include "backend_forward.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -18,6 +16,8 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
+
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -229,6 +229,7 @@ private:
     [[nodiscard]] VkBufferView getView(Format::Enum format, u64 byteOffset, u64 byteSize);
     [[nodiscard]] bool isRetainedStateKnown()const noexcept;
     void setRetainedStateKnown(bool known)noexcept;
+
 
 private:
     BufferDesc m_desc;

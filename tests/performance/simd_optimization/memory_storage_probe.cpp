@@ -46,6 +46,8 @@ struct AlignedBytes final{
     void* storage;
     u8* data;
 
+
+public:
     explicit AlignedBytes(usize count)
         : storage(::operator new(count, AlignValT{ s_Alignment }))
         , data(::new(storage) u8[count])
@@ -210,6 +212,8 @@ struct GuardedBytes final{
     usize accessibleBytes = 0u;
     usize mappingBytes = 0u;
 
+
+public:
     GuardedBytes(){
         const isize systemPageBytes = static_cast<isize>(sysconf(_SC_PAGESIZE));
         if(systemPageBytes <= 0)

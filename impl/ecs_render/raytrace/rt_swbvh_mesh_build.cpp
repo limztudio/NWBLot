@@ -23,6 +23,20 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortKeysHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortPayloadHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhVisitCounterHeapHandle);
+        return;
+    }
+    m_rayTracingState.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+}
+
 bool RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
@@ -68,20 +82,6 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRay
     meshResources.blasBackingFresh = true;
     meshResources.blasRefitsSinceRebuild = 0u;
     return true;
-}
-
-void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortKeysHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortPayloadHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhVisitCounterHeapHandle);
-        return;
-    }
-    m_rayTracingState.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 

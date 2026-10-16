@@ -7,6 +7,7 @@
 #include <global/text_utils.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 
@@ -45,10 +46,14 @@ struct ResourceSetContext{
     Core::GpuGraphResourceSetId result;
     bool ready = false;
 
+
+public:
     explicit ResourceSetContext(const usize count){
         ready = fill(count);
     }
 
+
+public:
     [[nodiscard]] bool fill(const usize count){
         members.clear();
         members.reserve(count);
@@ -65,7 +70,7 @@ struct ResourceSetContext{
         return true;
     }
 
-    [[nodiscard]] Core::GpuGraphResourceSetDesc description(const Name& identity)const{
+    [[nodiscard]] Core::GpuGraphResourceSetDesc description(const Name& identity)const noexcept{
         return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Members").setMembers(members.data(), members.size());
     }
 };

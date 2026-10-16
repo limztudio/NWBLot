@@ -183,6 +183,131 @@ void RendererFramePipeline::update(Core::ECS::World& world, f32 delta){
     static_cast<void>(delta);
 }
 
+bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
+    m_shadowPreparationOutcome.resourcesValid = false;
+    m_shadowPreparationOutcome.ready = false;
+    m_preparedHasTransparentRenderers = false;
+    m_preparedRefractionActive = false;
+    m_preparedRefractionResources = RayTracingRefractionGraphResources{};
+    m_preparedTaskGraphPresentationContributor = nullptr;
+    m_preparedTaskGraphOutputLayerContributor = nullptr;
+
+    if(!framebuffer)
+        return false;
+
+    const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
+    const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
+    if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
+
+    if(m_frameTargets.surfelResolveFactor != static_cast<u32>(m_surfelGiQualitySettings.resolveResolution) || m_frameTargets.shadowReceiverFactor != m_raytracingSystem.requestedShadowReceiverFactor()){
+        const Core::TextureDesc& presentationDesc = presentationFrame.backBuffer.texture->getDescription();
+        if(!validateResources(presentationDesc.width, presentationDesc.height, presentationDesc.sampleCount))
+            return false;
+    }
+
+    m_meshSystem.pruneRuntimeMeshResources();
+    m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
+
+    if(!m_frameTargets.valid())
+        return true;
+    DeferredFrameTargets& deferredTargets = m_frameTargets;
+
+    m_reflectionSystem.pollStatistics();
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+    if(m_preparedHasTransparentRenderers)
+        m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
+    else
+        m_opticalVolumes.reset();
+    m_preparedCsgFrameState = HasCsgFrameCandidates(m_world) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
+    m_preparedCsgFrameStateValid = true;
+    const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
+    if(!m_reflectionSystem.prepareResources(deferredTargets.width, deferredTargets.height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), hasCsgFrameWork && m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings))
+        return false;
+
+    if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
+        return false;
+
+    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete renderer view is the safe prepass capacity bound for either material pass.
+    const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
+
+    if(!m_materialSystem.prepareMaterialPassResources(deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
+        return false;
+
+    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState))
+        return false;
+
+    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
+    const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
+    if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
+        return false;
+    if(hasCsgFrameWork && !materialBuffers.valid())
+        return false;
+
+    // All material passes have now established their frame buffers. Create CSG resources once from this renderer-owned prepass so draw paths only consume the prepared layouts and handles.
+    if(hasCsgFrameWork && !m_csgSystem.prepareCsgFrameResources(csgReceiverRangeCount, static_cast<usize>(m_preparedCsgFrameState.cutterCount)))
+        return false;
+
+    // Resource selection and capacity growth happen before shared-graph compilation.
+    // The first deferred packet records the corresponding GPU work later, after every selected handle has been imported declaratively.
+    m_raytracingSystem.discardSurfelResourceInitialization();
+    if(!m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets, scratchArena)){
+        m_shadowPreparationOutcome.resourcesValid = false;
+        m_shadowPreparationOutcome.ready = false;
+        m_raytracingSystem.discardPreflightShadowVisibilityResources();
+        return false;
+    }
+    m_shadowPreparationOutcome.resourcesValid = true;
+    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its neutral material context only after that preflight has selected the current generation.
+    const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
+    m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
+    ++m_reflectionFrameIndex;
+
+    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the prepared snapshot and never creates resources.
+    const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
+    m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
+    const bool hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;
+    if(m_preparedRefractionActive && hasTransparentCsgFrameWork && !m_csgSystem.prepareRefractionIntervalCapResources(deferredTargets))
+        return false;
+    m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
+    m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;
+    if(!m_refractionEnabled){
+        m_preparedRefractionResources.pipeline = m_preparedRefractionResources.screenFallbackPipeline;
+        m_preparedRefractionResources.usesHardwareTrace = false;
+        m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    }
+
+    if(Core::IGpuTaskGraphOutputLayerContributor* const contributor = m_graphics.taskGraphOutputLayerContributor()){
+        if(contributor->prepareTaskGraphOutputLayer(presentationFrame))
+            m_preparedTaskGraphOutputLayerContributor = contributor;
+        else if(m_graphics.isDeviceRecreationRequested()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: output layer requested recreation during preparation"));
+            return false;
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
+    }
+
+    if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
+        if(contributor->prepareTaskGraphPresentation(presentationFrame))
+            m_preparedTaskGraphPresentationContributor = contributor;
+        else if(m_graphics.isDeviceRecreationRequested()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
+            return false;
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
+    }
+
+    return true;
+}
+
 bool RendererFramePipeline::prepareGpuTimingScopes(){
     auto& device = m_graphics.getDevice();
     // A timestamp range consumes a begin/end query pair. High-frequency raster/mesh scopes may emit many ranges; the sort and interval-clear scopes each emit two ranges.
@@ -332,18 +457,29 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     m_deferredLightingTaskGraphScheduled = false;
 }
 
-void RendererFramePipeline::resetGraphicsPrefixTaskState()noexcept{
-    m_graphicsPrefixOpaqueComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
-        task = {};
-    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
-    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
-    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
-    m_graphicsPrefixGbufferTask = {};
-    m_graphicsPrefixCsgReceiverSpanTask = {};
-    m_graphicsPrefixCsgIntervalCombineTask = {};
-    m_graphicsPrefixCsgIntervalSampleTask = {};
-    m_graphicsPrefixTask = {};
+void RendererFramePipeline::resetFrameTaskState(){
+    m_deferredBindlessSlotsUploadTask = {};
+    m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_csgTraceContextUploadTask = {};
+    m_causticEmissionTargetsUploadTask = {};
+    m_surfelFrameConstantsUploadTask = {};
+    m_shadowInstanceMaterialUploadTask = {};
+    m_shadowInstanceUploadTask = {};
+    m_shadowMaterialTypedUploadTask = {};
+    m_sceneBvhNodesUploadTask = {};
+    m_sceneBvhInstancesUploadTask = {};
+    m_deferredLaggedLightingHistorySlotsUploadTask = {};
+    m_graphicsPrefixMeshViewSetupTask = {};
+    m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixDeferredClearTask = {};
+    resetGraphicsPrefixTaskState();
+    m_graphicsPrefixMeshViewSetupReady = false;
+    m_graphicsPrefixSceneShadingSetupReady = false;
+    resetSharedDeferredFrameTaskState();
+    m_deferredFrameRecoveryArmed = false;
+    m_deferredFrameRecoveryRetiresTiming = false;
+    m_deferredPresentationOverlayRequired = false;
+    resetDeferredTaskGraphRuntime();
 }
 
 void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{
@@ -363,6 +499,7 @@ void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{
     m_deferredCausticResolveUpsampleTask = {};
     m_deferredCausticProducerDispatched = false;
 }
+
 
 void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
     m_deferredShadowVisibilityOpaqueTask = {};
@@ -404,155 +541,18 @@ void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
 }
 
 
-void RendererFramePipeline::resetFrameTaskState(){
-    m_deferredBindlessSlotsUploadTask = {};
-    m_rayTraceMaterialContextSlotsUploadTask = {};
-    m_csgTraceContextUploadTask = {};
-    m_causticEmissionTargetsUploadTask = {};
-    m_surfelFrameConstantsUploadTask = {};
-    m_shadowInstanceMaterialUploadTask = {};
-    m_shadowInstanceUploadTask = {};
-    m_shadowMaterialTypedUploadTask = {};
-    m_sceneBvhNodesUploadTask = {};
-    m_sceneBvhInstancesUploadTask = {};
-    m_deferredLaggedLightingHistorySlotsUploadTask = {};
-    m_graphicsPrefixMeshViewSetupTask = {};
-    m_graphicsPrefixSceneShadingSetupTask = {};
-    m_graphicsPrefixDeferredClearTask = {};
-    resetGraphicsPrefixTaskState();
-    m_graphicsPrefixMeshViewSetupReady = false;
-    m_graphicsPrefixSceneShadingSetupReady = false;
-    resetSharedDeferredFrameTaskState();
-    m_deferredFrameRecoveryArmed = false;
-    m_deferredFrameRecoveryRetiresTiming = false;
-    m_deferredPresentationOverlayRequired = false;
-    resetDeferredTaskGraphRuntime();
-}
-
-
-bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
-    m_shadowPreparationOutcome.resourcesValid = false;
-    m_shadowPreparationOutcome.ready = false;
-    m_preparedHasTransparentRenderers = false;
-    m_preparedRefractionActive = false;
-    m_preparedRefractionResources = RayTracingRefractionGraphResources{};
-    m_preparedTaskGraphPresentationContributor = nullptr;
-    m_preparedTaskGraphOutputLayerContributor = nullptr;
-
-    if(!framebuffer)
-        return false;
-
-    const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
-    const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
-    if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
-        m_graphics.requestDeviceRecreation();
-        return false;
-    }
-
-    if(m_frameTargets.surfelResolveFactor != static_cast<u32>(m_surfelGiQualitySettings.resolveResolution) || m_frameTargets.shadowReceiverFactor != m_raytracingSystem.requestedShadowReceiverFactor()){
-        const Core::TextureDesc& presentationDesc = presentationFrame.backBuffer.texture->getDescription();
-        if(!validateResources(presentationDesc.width, presentationDesc.height, presentationDesc.sampleCount))
-            return false;
-    }
-
-    m_meshSystem.pruneRuntimeMeshResources();
-    m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
-    m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
-    m_preparedCsgFrameState = CsgFrameState{};
-    m_preparedCsgFrameStateValid = false;
-
-    if(!m_frameTargets.valid())
-        return true;
-    DeferredFrameTargets& deferredTargets = m_frameTargets;
-
-    m_reflectionSystem.pollStatistics();
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
-    if(m_preparedHasTransparentRenderers)
-        m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
-    else
-        m_opticalVolumes.reset();
-    m_preparedCsgFrameState = HasCsgFrameCandidates(m_world) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
-    m_preparedCsgFrameStateValid = true;
-    const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
-    if(!m_reflectionSystem.prepareResources(deferredTargets.width, deferredTargets.height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), hasCsgFrameWork && m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings))
-        return false;
-
-    if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
-        return false;
-
-    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete renderer view is the safe prepass capacity bound for either material pass.
-    const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
-
-    if(!m_materialSystem.prepareMaterialPassResources(deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
-        return false;
-
-    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState))
-        return false;
-
-    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
-    const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
-    if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
-        return false;
-    if(hasCsgFrameWork && !materialBuffers.valid())
-        return false;
-
-    // All material passes have now established their frame buffers. Create CSG resources once from this renderer-owned prepass so draw paths only consume the prepared layouts and handles.
-    if(hasCsgFrameWork && !m_csgSystem.prepareCsgFrameResources(csgReceiverRangeCount, static_cast<usize>(m_preparedCsgFrameState.cutterCount)))
-        return false;
-
-    // Resource selection and capacity growth happen before shared-graph compilation.
-    // The first deferred packet records the corresponding GPU work later, after every selected handle has been imported declaratively.
-    m_raytracingSystem.discardSurfelResourceInitialization();
-    if(!m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets, scratchArena)){
-        m_shadowPreparationOutcome.resourcesValid = false;
-        m_shadowPreparationOutcome.ready = false;
-        m_raytracingSystem.discardPreflightShadowVisibilityResources();
-        return false;
-    }
-    m_shadowPreparationOutcome.resourcesValid = true;
-    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its neutral material context only after that preflight has selected the current generation.
-    const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
-    m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
-    ++m_reflectionFrameIndex;
-
-    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the prepared snapshot and never creates resources.
-    const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
-    m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
-    const bool hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;
-    if(m_preparedRefractionActive && hasTransparentCsgFrameWork && !m_csgSystem.prepareRefractionIntervalCapResources(deferredTargets))
-        return false;
-    m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
-    m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;
-    if(!m_refractionEnabled){
-        m_preparedRefractionResources.pipeline = m_preparedRefractionResources.screenFallbackPipeline;
-        m_preparedRefractionResources.usesHardwareTrace = false;
-        m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    }
-
-    if(Core::IGpuTaskGraphOutputLayerContributor* const contributor = m_graphics.taskGraphOutputLayerContributor()){
-        if(contributor->prepareTaskGraphOutputLayer(presentationFrame))
-            m_preparedTaskGraphOutputLayerContributor = contributor;
-        else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: output layer requested recreation during preparation"));
-            return false;
-        }
-        else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
-    }
-
-    if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
-        if(contributor->prepareTaskGraphPresentation(presentationFrame))
-            m_preparedTaskGraphPresentationContributor = contributor;
-        else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
-            return false;
-        }
-        else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
-    }
-
-    return true;
+void RendererFramePipeline::resetGraphicsPrefixTaskState()noexcept{
+    m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
+        task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
+    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
+    m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
+    m_graphicsPrefixCsgIntervalCombineTask = {};
+    m_graphicsPrefixCsgIntervalSampleTask = {};
+    m_graphicsPrefixTask = {};
 }
 
 

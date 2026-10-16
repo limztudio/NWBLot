@@ -64,14 +64,28 @@ inline constexpr AdoptRefT s_AdoptRef{};
 template<RefCountClass T, typename Deleter = DefaultDeleter<T>>
 class RefCountPtr{
     static_assert(!IsRValueReference<Deleter>::value, "The supplied Deleter cannot be a r-value reference.");
+
+
 public:
     typedef Deleter deleter_type;
     typedef T element_type;
     typedef RefCountPtr<element_type, deleter_type> this_type;
     typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
+
+
 private:
     template<typename U>
     using EnableUFromRawPtr = typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value>::type;
+
+
+protected:
+    static void InternalAddRef(pointer p)noexcept{
+        if(p){
+            using RefCountPtrDetail::RefCountAddReference;
+            RefCountAddReference(p);
+        }
+    }
+
 
 public:
     constexpr RefCountPtr()noexcept
@@ -275,12 +289,6 @@ public:
 
 
 protected:
-    static void InternalAddRef(pointer p)noexcept{
-        if(p){
-            using RefCountPtrDetail::RefCountAddReference;
-            RefCountAddReference(p);
-        }
-    }
     u32 internalRelease(pointer& target)noexcept{
         u32 newCount = 0;
         if(target){
@@ -311,6 +319,7 @@ public:
     explicit RefCounter(Args&&... args)
         : T(Forward<Args>(args)...)
     {}
+
 
 public:
     u32 addReference()noexcept{ return m_referenceCount.fetch_add(1, MemoryOrder::relaxed) + 1; }

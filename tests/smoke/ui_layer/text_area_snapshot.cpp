@@ -148,8 +148,7 @@ void UiTextAreaSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
         const u32 parts = index == 1u || index == 10u || (index >= 18u && index <= 20u) ? 3u : 2u;
         for(u32 part = 0u; part < parts; ++part){
-            context.paint.fillRect({ 8.0f + static_cast<f32>(marker) * 8.0f, y, 6.0f, 10.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ 8.0f + static_cast<f32>(marker) * 8.0f, y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }
     }

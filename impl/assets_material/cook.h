@@ -77,6 +77,8 @@ struct MaterialCookEntry{
         , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
 
+
+public:
     void reset()noexcept{
         virtualPath.clear();
         materialInterface.clear();

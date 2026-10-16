@@ -19,6 +19,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc){
+    return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(desc, SurfelGiInitializationLifecycleGraphTask::Payload{ .raytracingSystem = *this, });
+}
+
 Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
@@ -103,6 +107,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
     );
 }
 
+
 Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
@@ -115,11 +120,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
-}
-
-
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc){
-    return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(desc, SurfelGiInitializationLifecycleGraphTask::Payload{ .raytracingSystem = *this, });
 }
 
 

@@ -84,6 +84,8 @@ struct ConnectionInfo{
         Core::Alloc::CoreFree(buffer);
     }
 
+
+public:
     [[nodiscard]] bool append(const BinaryByteView uploadData){
         const usize appendSize = uploadData.size();
         if(appendSize == 0u)
@@ -314,32 +316,6 @@ Server* g_ServerLogger = nullptr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Server::CrashIngestUpdate(Server* self){
-    for(;;){
-        self->m_crashIngestSemaphore.acquire();
-
-        while(const auto crashUpload = self->tryDequeueCrashUpload()){
-            LogArena ingestArena(__hidden_logger_server::s_CrashIngestArena);
-
-            CrashIngestConfig ingestConfig(ingestArena);
-            ingestConfig.storageDirectory = self->m_crashIngestConfig.storageDirectory;
-            ingestConfig.symbolication.symbolStoreDirectory = self->m_crashIngestConfig.symbolication.symbolStoreDirectory;
-            ingestConfig.retention = self->m_crashIngestConfig.retention;
-
-            const Path archivePath(ingestArena, AStringView(crashUpload->path));
-            CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
-            self->enqueue(Move(ingestResult.message), ingestResult.type);
-        }
-
-        if(self->m_crashIngestExit.load(MemoryOrder::acquire))
-            break;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
     static_cast<void>(version);
 
@@ -444,6 +420,32 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void Server::CrashIngestUpdate(Server* self){
+    for(;;){
+        self->m_crashIngestSemaphore.acquire();
+
+        while(const auto crashUpload = self->tryDequeueCrashUpload()){
+            LogArena ingestArena(__hidden_logger_server::s_CrashIngestArena);
+
+            CrashIngestConfig ingestConfig(ingestArena);
+            ingestConfig.storageDirectory = self->m_crashIngestConfig.storageDirectory;
+            ingestConfig.symbolication.symbolStoreDirectory = self->m_crashIngestConfig.symbolication.symbolStoreDirectory;
+            ingestConfig.retention = self->m_crashIngestConfig.retention;
+
+            const Path archivePath(ingestArena, AStringView(crashUpload->path));
+            CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
+            self->enqueue(Move(ingestResult.message), ingestResult.type);
+        }
+
+        if(self->m_crashIngestExit.load(MemoryOrder::acquire))
+            break;
+    }
+}
+
+
 Server::Server()
     : UpdateBaseType("NWB::Log::Server")
     , m_daemon(nullptr)
@@ -503,6 +505,26 @@ void Server::internalDestroy(){
     stopCrashIngestWorker();
 }
 
+bool Server::internalUpdate(){
+    MessageType msg = MakeMessageType(BaseType::arena());
+    while(tryDequeue(msg)){
+        const auto type = Get<1>(msg);
+        LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
+        Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
+
+        Frame::Print(formattedMessage, type);
+        if(!m_processedMessageFile.writeLine(formattedMessage)){
+            constexpr TStringView s_WriteFailure = NWB_TEXT("Log server: failed to write processed message to file.");
+            Frame::Print(s_WriteFailure, Core::Common::LogType::Error);
+#if defined(NWB_PLATFORM_WINDOWS)
+            NWB_TCERR << s_WriteFailure << static_cast<tchar>('\n');
+#endif
+        }
+    }
+
+    return true;
+}
+
 bool Server::enqueueCrashUpload(const Path& path){
     PendingCrashUpload upload;
     const AString<LogArena> pathText = PathToString<char>(BaseType::arena(), path);
@@ -535,26 +557,6 @@ Expected<PendingCrashUpload> Server::tryDequeueCrashUpload(){
     if(!m_crashUploads.try_pop(upload))
         return MakeUnexpected(Failure{});
     return upload;
-}
-
-bool Server::internalUpdate(){
-    MessageType msg = MakeMessageType(BaseType::arena());
-    while(tryDequeue(msg)){
-        const auto type = Get<1>(msg);
-        LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
-        Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
-
-        Frame::Print(formattedMessage, type);
-        if(!m_processedMessageFile.writeLine(formattedMessage)){
-            constexpr TStringView s_WriteFailure = NWB_TEXT("Log server: failed to write processed message to file.");
-            Frame::Print(s_WriteFailure, Core::Common::LogType::Error);
-#if defined(NWB_PLATFORM_WINDOWS)
-            NWB_TCERR << s_WriteFailure << static_cast<tchar>('\n');
-#endif
-        }
-    }
-
-    return true;
 }
 
 

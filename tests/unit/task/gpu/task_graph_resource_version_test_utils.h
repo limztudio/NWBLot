@@ -46,13 +46,13 @@ using TaskGraphTestUtils::DedicatedComputeQueue;
 using TaskGraphTestUtils::GraphicsQueue;
 using TaskGraphTestUtils::GraphicsCommands;
 
-[[nodiscard]] inline Graphics::GpuTaskResourceRange BufferRange(const u64 byteOffset, const u64 byteSize){
+[[nodiscard]] inline Graphics::GpuTaskResourceRange BufferRange(const u64 byteOffset, const u64 byteSize)noexcept{
     Graphics::GpuTaskResourceRange range;
     range.bufferRange = Graphics::BufferRange(byteOffset, byteSize);
     return range;
 }
 
-[[nodiscard]] inline Graphics::GpuTaskResourceRange TextureRange(const Graphics::MipLevel baseMipLevel, const Graphics::MipLevel numMipLevels, const Graphics::ArraySlice baseArraySlice, const Graphics::ArraySlice numArraySlices){
+[[nodiscard]] inline Graphics::GpuTaskResourceRange TextureRange(const Graphics::MipLevel baseMipLevel, const Graphics::MipLevel numMipLevels, const Graphics::ArraySlice baseArraySlice, const Graphics::ArraySlice numArraySlices)noexcept{
     Graphics::GpuTaskResourceRange range;
     range.textureSubresources = Graphics::TextureSubresourceSet(baseMipLevel, numMipLevels, baseArraySlice, numArraySlices);
     return range;
@@ -71,11 +71,11 @@ using TaskGraphTestUtils::GraphicsCommands;
     return graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(resource).setRange(range).setOrigin(origin));
 }
 
-[[nodiscard]] inline Graphics::GpuTaskResourceUse ResourceUse(const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskResourceRange& range, const Graphics::ResourceStates::Mask state, const Graphics::GpuTaskResourceAccess::Enum access){
+[[nodiscard]] inline Graphics::GpuTaskResourceUse ResourceUse(const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskResourceRange& range, const Graphics::ResourceStates::Mask state, const Graphics::GpuTaskResourceAccess::Enum access)noexcept{
     return Graphics::GpuTaskResourceUse{ .resource = resource, .range = range, .requiredState = state, .access = access, };
 }
 
-[[nodiscard]] inline Graphics::GpuTaskResourceVersionUse VersionUse(const Graphics::GpuGraphResourceVersionId version, const Graphics::GpuTaskResourceVersionRole::Enum role){
+[[nodiscard]] inline Graphics::GpuTaskResourceVersionUse VersionUse(const Graphics::GpuGraphResourceVersionId version, const Graphics::GpuTaskResourceVersionRole::Enum role)noexcept{
     return Graphics::GpuTaskResourceVersionUse{ .version = version, .role = role, };
 }
 
@@ -89,11 +89,11 @@ struct VersionConsumerUses{
     Graphics::GpuTaskResourceVersionUse versionUse;
 };
 
-[[nodiscard]] inline VersionProducerUses ProducerUses(const Graphics::GpuGraphResourceId resource, const Graphics::GpuGraphResourceVersionId version, const Graphics::GpuTaskResourceRange& range = BufferRange(0u, 64u)){
+[[nodiscard]] inline VersionProducerUses ProducerUses(const Graphics::GpuGraphResourceId resource, const Graphics::GpuGraphResourceVersionId version, const Graphics::GpuTaskResourceRange& range = BufferRange(0u, 64u))noexcept{
     return VersionProducerUses{ .resourceUse = ResourceUse(resource, range, Graphics::ResourceStates::UnorderedAccess, Graphics::GpuTaskResourceAccess::Write), .versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Produce), };
 }
 
-[[nodiscard]] inline VersionConsumerUses ConsumerUses(const Graphics::GpuGraphResourceId resource, const Graphics::GpuGraphResourceVersionId version, const Graphics::GpuTaskResourceRange& range = BufferRange(0u, 64u)){
+[[nodiscard]] inline VersionConsumerUses ConsumerUses(const Graphics::GpuGraphResourceId resource, const Graphics::GpuGraphResourceVersionId version, const Graphics::GpuTaskResourceRange& range = BufferRange(0u, 64u))noexcept{
     return VersionConsumerUses{ .resourceUse = ResourceUse(resource, range, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read), .versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume), };
 }
 

@@ -7,9 +7,6 @@
 
 #include "module.h"
 #include "backend_forward.h"
-
-#include <core/graphics/rhi/resource_state_handoff_key.h>
-#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -17,6 +14,9 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
+
+#include <core/graphics/rhi/resource_state_handoff_key.h>
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,6 +41,7 @@ public:
 public:
     [[nodiscard]] const BindingLayoutDesc* getDescription()const noexcept{ return m_isBindless ? nullptr : &m_desc; }
     [[nodiscard]] const BindlessLayoutDesc* getBindlessDesc()const noexcept{ return m_isBindless ? &m_bindlessDesc : nullptr; }
+
 
 public:
     // Descriptor-buffer metadata; layouts must be pure resource or sampler sets.
@@ -77,6 +78,7 @@ class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
     friend class DescriptorBufferManager;
     friend class GpuDescriptorHeap;
     friend class TrackedCommandBuffer;
+
 
 public:
     AccelStruct(const VulkanContext& context, ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive);

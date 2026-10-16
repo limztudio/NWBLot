@@ -199,8 +199,12 @@ struct CausticResolveRecordInputs{
 
 template<auto Dispatch>
 struct CausticResolvePhaseGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = CausticResolveRecordInputs;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
@@ -215,8 +219,12 @@ struct CausticResolvePhaseGraphTask{
 
 template<u32 PassIndex>
 struct CausticResolveWaveletGraphTaskDefinition{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = CausticResolveRecordInputs;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);

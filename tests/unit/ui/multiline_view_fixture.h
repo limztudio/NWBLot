@@ -8,6 +8,7 @@
 #include "widget_fixture.h"
 
 #include <impl/ecs_ui/toolkit/widgets/edit_box.h>
+
 #include "fixture_text_shaping.h"
 
 #include <tests/common/font_fixture.h>
@@ -89,8 +90,7 @@ inline void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, 
             if(first.color.r != color.r || first.color.g != color.g || first.color.b != color.b || first.color.a != color.a)
                 continue;
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            output.push_back({ first.position.x, first.position.y,
-                opposite.position.x - first.position.x, opposite.position.y - first.position.y });
+            output.push_back({ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y });
         }
     }
 }
@@ -148,8 +148,7 @@ protected:
     }
 
     [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
-        m_paint.begin({ 500.0f, 500.0f, 1.0f, 1.0f }, 1u, 1u,
-            Core::Assets::AssetRef<UiSkin>("tests/ui/widgets/multiline_view/skin"), m_skin);
+        m_paint.begin({ 500.0f, 500.0f, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/widgets/multiline_view/skin"), m_skin);
         if(!m_view.paint(m_text, m_paint, m_skin, m_placement, style, flags))
             return MakeUnexpected(Failure{});
         EXPECT_FALSE(m_paint.popClip());

@@ -245,6 +245,8 @@ public:
         LoggerDetail::g_loggerRegistration = m_previous;
     }
 
+
+public:
     [[nodiscard]] ILogger* previousLogger()const noexcept{ return m_previous ? &m_previous->logger : nullptr; }
 
 

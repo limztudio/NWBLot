@@ -317,6 +317,34 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     return ready;
 }
 
+void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
+    static_cast<void>(framebuffer);
+
+    if(!submitFrameSkinningGraph())
+        NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));
+}
+
+void MeshSkinningSystem::invalidateResources(){
+    resetFrameTaskGraph();
+    m_acceptedSkinningState.reset();
+    for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
+        releaseRuntimeResourceBindlessHeapHandles(it.value());
+    m_runtimeResources.clear();
+    m_runtimeMeshCache.clear();
+
+    m_skinningBindingLayout.reset();
+    m_skinningComputeShader.reset();
+    m_skinningComputePipeline.reset();
+    m_boundsBindingLayout.reset();
+    m_boundsComputeShader.reset();
+    m_boundsComputePipeline.reset();
+    m_localBoundsComputeShader.reset();
+    m_localBoundsComputePipeline.reset();
+    m_repackBindingLayout.reset();
+    m_repackComputeShader.reset();
+    m_repackComputePipeline.reset();
+}
+
 Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity){
     RuntimeMeshHandle runtimeMesh;
     if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
@@ -872,13 +900,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     return true;
 }
 
-void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
-    static_cast<void>(framebuffer);
-
-    if(!submitFrameSkinningGraph())
-        NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));
-}
-
 void MeshSkinningSystem::pruneRuntimeResources(){
     if(m_runtimeResources.empty())
         return;
@@ -915,27 +936,6 @@ void MeshSkinningSystem::resetFrameTaskGraph(){
     m_frameTaskGraphAnalysis.reset();
     m_frameTaskGraphQueueAssignments.reset();
     m_frameCompiledGraph.reset();
-}
-
-void MeshSkinningSystem::invalidateResources(){
-    resetFrameTaskGraph();
-    m_acceptedSkinningState.reset();
-    for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
-        releaseRuntimeResourceBindlessHeapHandles(it.value());
-    m_runtimeResources.clear();
-    m_runtimeMeshCache.clear();
-
-    m_skinningBindingLayout.reset();
-    m_skinningComputeShader.reset();
-    m_skinningComputePipeline.reset();
-    m_boundsBindingLayout.reset();
-    m_boundsComputeShader.reset();
-    m_boundsComputePipeline.reset();
-    m_localBoundsComputeShader.reset();
-    m_localBoundsComputePipeline.reset();
-    m_repackBindingLayout.reset();
-    m_repackComputeShader.reset();
-    m_repackComputePipeline.reset();
 }
 
 

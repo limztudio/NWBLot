@@ -28,7 +28,7 @@ NWB_BEGIN
 namespace Tests::Smoke{
 
 template<typename Source>
-[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const bool reverse){
+[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const bool reverse)noexcept(noexcept(start >= source.rowCount()) && noexcept(static_cast<bool>(source.enabled(start)))){
     u64 index = 0u;
     if(start >= source.rowCount())
         return MakeUnexpected(Failure{});
@@ -91,7 +91,7 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
     return EncodeSmokeColor(static_cast<u64>(Max(0.0f, value) + 0.5f));
 }
 
-[[nodiscard]] inline u64 HashSmokeText(const AStringView text){
+[[nodiscard]] inline u64 HashSmokeText(const AStringView text)noexcept{
     u32 hash = 2166136261u;
     for(const char value : text)
         hash = (hash ^ static_cast<u8>(value)) * 16777619u;
@@ -118,27 +118,24 @@ inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT&
     usize marker = 0u;
     for(const u64 value : values){
         for(u32 part = 0u; part < 2u; ++part){
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
         }
     }
     for(const u64 bit : bits){
         for(u32 part = 0u; part < 6u; ++part){
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
-                EncodeSmokeColor(bit >> (part * 12u)));
+            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(bit >> (part * 12u)));
         }
     }
     for(u32 part = 0u; part < 2u; ++part){
-        context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
-            EncodeSmokeColor(sequence >> (part * 12u)));
+        context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(sequence >> (part * 12u)));
     }
 }
 
-[[nodiscard]] inline u32 HashSmokeText32(const AStringView text){
+[[nodiscard]] inline u32 HashSmokeText32(const AStringView text)noexcept{
     return static_cast<u32>(HashSmokeText(text));
 }
 
-[[nodiscard]] inline bool SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right){
+[[nodiscard]] inline bool SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right)noexcept{
     return SameSmokeRect(left.bounds, right.bounds) && SameSmokeRect(left.content, right.content) && SameSmokeRect(left.caret, right.caret) && left.scroll == right.scroll;
 }
 

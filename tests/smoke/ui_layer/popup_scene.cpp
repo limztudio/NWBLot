@@ -213,8 +213,7 @@ void UiPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const f32 y = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index <= current.size(); ++index){
         const u32 value = index == current.size() ? m_sequence : current[index];
-        context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, y, 14.0f, 12.0f },
-            EncodeSmokeColor(value));
+        context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, y, 14.0f, 12.0f }, EncodeSmokeColor(value));
     }
 }
 

@@ -39,6 +39,8 @@ struct PresentationFpsSample{
     u64 lastPresentationCount = 0u;
     f64 wallSeconds = 0.0;
 
+
+public:
     [[nodiscard]] u64 presentations()const noexcept{ return lastPresentationCount - firstPresentationCount; }
     [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? presentations() / wallSeconds : 0.0; }
 };

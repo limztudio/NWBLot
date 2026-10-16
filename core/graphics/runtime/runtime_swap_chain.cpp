@@ -62,25 +62,6 @@ Expected<SwapChainTransitionTicket> GraphicsRuntime::backBufferResizing(){
     return Move(*ticket);
 }
 
-bool GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height, const bool vsyncEnabled){
-    auto transitionTicket = backBufferResizing();
-    if(!transitionTicket)
-        return false;
-
-    m_swapChainState.backBufferWidth = width;
-    m_swapChainState.backBufferHeight = height;
-    m_swapChainState.vsyncEnabled = vsyncEnabled;
-    if(!m_backend->commitSwapChainResize(Move(*transitionTicket))){
-        requestDeviceRecreation();
-        return false;
-    }
-    if(!backBufferResized()){
-        requestDeviceRecreation();
-        return false;
-    }
-    return true;
-}
-
 bool GraphicsRuntime::backBufferResized(){
     for(auto* renderPass : m_renderPasses)
         renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
@@ -115,6 +96,25 @@ void GraphicsRuntime::displayScaleChanged(){
 
     for(auto* renderPass : m_renderPasses)
         renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
+}
+
+bool GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height, const bool vsyncEnabled){
+    auto transitionTicket = backBufferResizing();
+    if(!transitionTicket)
+        return false;
+
+    m_swapChainState.backBufferWidth = width;
+    m_swapChainState.backBufferHeight = height;
+    m_swapChainState.vsyncEnabled = vsyncEnabled;
+    if(!m_backend->commitSwapChainResize(Move(*transitionTicket))){
+        requestDeviceRecreation();
+        return false;
+    }
+    if(!backBufferResized()){
+        requestDeviceRecreation();
+        return false;
+    }
+    return true;
 }
 
 

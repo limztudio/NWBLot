@@ -23,7 +23,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 UiSearchComboSmokeSource::View::key(const u64 index)const{
+u64 UiSearchComboSmokeSource::View::key(const u64 index)const noexcept{
     if(index >= rowCount())
         return 0u;
     u64 remaining = m_source.reversed() ? rowCount() - 1u - index : index;
@@ -44,7 +44,7 @@ u64 UiSearchComboSmokeSource::View::key(const u64 index)const{
     return 0u;
 }
 
-Expected<u64> UiSearchComboSmokeSource::View::indexOf(const u64 keyValue)const{
+Expected<u64> UiSearchComboSmokeSource::View::indexOf(const u64 keyValue)const noexcept{
     u64 index = 0u;
     if(keyValue == 0u || keyValue > 100000u || keyValue == m_source.removedKey())
         return MakeUnexpected(Failure{});
@@ -63,18 +63,18 @@ Expected<u64> UiSearchComboSmokeSource::View::indexOf(const u64 keyValue)const{
     return MakeUnexpected(Failure{});
 }
 
-Expected<u64> UiSearchComboSmokeSource::View::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> UiSearchComboSmokeSource::View::findEnabled(const u64 start, const bool reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
-StringView UiSearchComboSmokeSource::View::text(const u64 index)const{
+StringView UiSearchComboSmokeSource::View::text(const u64 index)const noexcept{
     const auto fullIndex = m_source.m_rows.indexOf(key(index));
     if(!fullIndex)
         return {};
     return m_source.m_rows.text(*fullIndex);
 }
 
-bool UiSearchComboSmokeSource::View::enabled(const u64 index)const{
+bool UiSearchComboSmokeSource::View::enabled(const u64 index)const noexcept{
     return index < rowCount() && key(index) != 5u;
 }
 
@@ -90,7 +90,7 @@ UiSearchComboSmokeSource::UiSearchComboSmokeSource(Core::Alloc::GlobalArena& are
     NWB_FATAL_ASSERT(initialized);
 }
 
-Expected<u64> UiSearchComboSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> UiSearchComboSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     return m_rows.findEnabled(start, reverse);
 }
 

@@ -75,16 +75,6 @@ void EntityManager::destroy(EntityID entityId){
 }
 
 
-void EntityManager::destroyAlive(EntityID entityId){
-    NWB_ASSERT(alive(entityId));
-
-    const u32 index = entityId.index();
-    m_freeIndices.push_back(index);
-    m_generations[index] = static_cast<u16>(((m_generations[index] + 1u) & ECSDetail::s_EntityGenerationMask) | __hidden_entity_id::s_FreeEntityFlag);
-    --m_aliveCount;
-}
-
-
 bool EntityManager::alive(EntityID entityId)const noexcept{
     const u32 index = entityId.index();
     if(index >= static_cast<u32>(m_generations.size()))
@@ -103,6 +93,16 @@ void EntityManager::clear()noexcept{
     m_freeIndices.clear();
     m_nextEntityIndex = 0u;
     m_aliveCount = 0;
+}
+
+
+void EntityManager::destroyAlive(EntityID entityId){
+    NWB_ASSERT(alive(entityId));
+
+    const u32 index = entityId.index();
+    m_freeIndices.push_back(index);
+    m_generations[index] = static_cast<u16>(((m_generations[index] + 1u) & ECSDetail::s_EntityGenerationMask) | __hidden_entity_id::s_FreeEntityFlag);
+    --m_aliveCount;
 }
 
 

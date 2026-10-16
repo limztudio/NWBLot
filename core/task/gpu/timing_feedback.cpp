@@ -200,18 +200,6 @@ bool GpuTaskTimingFeedbackCanSwitch(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuTaskTimingHistorySnapshot::reset()noexcept{
-    if(m_historyIndex)
-        m_historyIndex->clear();
-    if(m_assignmentIndex)
-        m_assignmentIndex->clear();
-    m_histories.clear();
-    m_assignments.clear();
-    m_deviceGeneration = 0u;
-    m_valid = false;
-}
-
-
 const GpuTaskTimingHistory* GpuTaskTimingHistorySnapshot::find(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept{
     if(!m_valid || !key.valid() || !physicalQueue.valid() || physicalQueue.deviceGeneration != m_deviceGeneration)
         return nullptr;
@@ -241,6 +229,18 @@ const GpuTaskTimingAssignmentState* GpuTaskTimingHistorySnapshot::findAssignment
             return &assignment;
     }
     return nullptr;
+}
+
+
+void GpuTaskTimingHistorySnapshot::reset()noexcept{
+    if(m_historyIndex)
+        m_historyIndex->clear();
+    if(m_assignmentIndex)
+        m_assignmentIndex->clear();
+    m_histories.clear();
+    m_assignments.clear();
+    m_deviceGeneration = 0u;
+    m_valid = false;
 }
 
 

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "type_properties.h"
+#include "type.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,15 +41,16 @@ namespace SmartPtrDetail{
 template<typename T, typename Deleter>
 class UniquePointerType{
 private:
-    template<typename U>
-    static typename U::pointer Test(typename U::pointer*);
-
-    template<typename U>
-    static T* Test(...);
+    struct PointerProbe{
+        template<typename U>
+        static typename U::pointer Test(typename U::pointer*);
+        template<typename U>
+        static T* Test(...);
+    };
 
 
 public:
-    typedef decltype(Test<typename RemoveReference<Deleter>::type>(0)) type;
+    typedef decltype(PointerProbe::template Test<typename RemoveReference<Deleter>::type>(0)) type;
 };
 
 template<typename P1, typename P2, bool = IsScalar_V<P1> && !IsPointer_V<P1>>

@@ -3,16 +3,17 @@
 
 
 #include "reflection_roughness_scene.h"
-
 #include "smoke_skinned_scene_helpers.h"
+
+#include <impl/assets_skeleton/asset.h>
 
 #include <core/common/log.h>
 #include <core/assets/manager.h>
+
 #include <global/assert.h>
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
-#include <impl/assets_skeleton/asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

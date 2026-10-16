@@ -48,6 +48,40 @@ namespace __hidden_ui_router_popup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const PopupScope* InputRouter::popupScope(const PopupToken& token)const noexcept{
+    for(const auto& record : m_popups){
+        if(record.scope.token == token)
+            return &record.scope;
+    }
+    return nullptr;
+}
+
+bool InputRouter::allowedByPopup(const HitTarget& target)const noexcept{
+    if(m_popups.empty())
+        return !target.popup.widget.valid();
+    const PopupRecord& top = m_popups.back();
+    return !top.closing && target.popup == top.scope.token;
+}
+
+bool InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
+    PopupToken current = token;
+    for(usize depth = 0u; depth < s_InputMaxPopups && current.valid(); ++depth){
+        if(current == ancestor)
+            return true;
+        bool found = false;
+        for(const auto& record : m_popups){
+            if(record.scope.token == current){
+                current = record.scope.parent;
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+            return false;
+    }
+    return false;
+}
+
 bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
     if(count > s_InputMaxPopups || (count != 0u && !scopes))
         return false;
@@ -93,40 +127,6 @@ bool InputRouter::validPopupTarget(const HitTarget& target)const noexcept{
     for(const auto& record : m_stagedPopups){
         if(record.scope.token == target.popup)
             return target.layer == record.scope.layer;
-    }
-    return false;
-}
-
-const PopupScope* InputRouter::popupScope(const PopupToken& token)const noexcept{
-    for(const auto& record : m_popups){
-        if(record.scope.token == token)
-            return &record.scope;
-    }
-    return nullptr;
-}
-
-bool InputRouter::allowedByPopup(const HitTarget& target)const noexcept{
-    if(m_popups.empty())
-        return !target.popup.widget.valid();
-    const PopupRecord& top = m_popups.back();
-    return !top.closing && target.popup == top.scope.token;
-}
-
-bool InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
-    PopupToken current = token;
-    for(usize depth = 0u; depth < s_InputMaxPopups && current.valid(); ++depth){
-        if(current == ancestor)
-            return true;
-        bool found = false;
-        for(const auto& record : m_popups){
-            if(record.scope.token == current){
-                current = record.scope.parent;
-                found = true;
-                break;
-            }
-        }
-        if(!found)
-            return false;
     }
     return false;
 }

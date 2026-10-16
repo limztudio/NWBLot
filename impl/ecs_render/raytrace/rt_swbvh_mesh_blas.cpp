@@ -23,6 +23,46 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
+    if(!m_preparedMeshBlasBuildsReady)
+        return;
+
+    bool allPlansCurrent = true;
+    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
+        auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
+        if(!meshResourcesResult || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)){
+            allPlansCurrent = false;
+            continue;
+        }
+
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResourcesResult);
+        meshResourcesResult->blasBuildPending = false;
+        // Accepted Shadow Preparation publishes this generation's native final state.
+        meshResourcesResult->blasBackingFresh = false;
+        meshResourcesResult->blasRefitsSinceRebuild = build.refitsAfterBuild;
+        meshResourcesResult->blasBuildAccepted = true;
+        meshResourcesResult->blasGeometryContentRevision = build.geometryContentRevision;
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResourcesResult))){
+            allPlansCurrent = false;
+            continue;
+        }
+        if(build.firstBuild){
+            ++m_blasLedgerFirstBuilds;
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)"), StringConvert(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.vertexCount), static_cast<u64>(build.indexCount));
+        }
+        else if(build.performRefit)
+            ++m_blasLedgerRefits;
+        else
+            ++m_blasLedgerRebuilds;
+        m_blasLedgerUploadedBytes += static_cast<u64>(build.positionByteSize);
+    }
+    // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS rebuild rather than retaining a static-scene hash that may describe the retired generation.
+    if(!allPlansCurrent)
+        m_rayTracingState.m_tlasStaticSceneHashValid = false;
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}"), m_blasLedgerStaticSkipped, m_blasLedgerFirstBuilds, m_blasLedgerRefits, m_blasLedgerRebuilds, m_blasLedgerUploadedBytes);
+    clearPreparedMeshBlasBuilds();
+}
+
 bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena){
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
@@ -44,11 +84,6 @@ bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scra
         }
     }
     return allResourcesReady;
-}
-
-void RendererRayTracingSystem::clearPreparedMeshBlasBuilds()noexcept{
-    m_preparedMeshBlasBuilds.clear();
-    m_preparedMeshBlasBuildsReady = false;
 }
 
 bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena){
@@ -98,44 +133,9 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& c
     return true;
 }
 
-void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
-    if(!m_preparedMeshBlasBuildsReady)
-        return;
-
-    bool allPlansCurrent = true;
-    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(!meshResourcesResult || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)){
-            allPlansCurrent = false;
-            continue;
-        }
-
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResourcesResult);
-        meshResourcesResult->blasBuildPending = false;
-        // Accepted Shadow Preparation publishes this generation's native final state.
-        meshResourcesResult->blasBackingFresh = false;
-        meshResourcesResult->blasRefitsSinceRebuild = build.refitsAfterBuild;
-        meshResourcesResult->blasBuildAccepted = true;
-        meshResourcesResult->blasGeometryContentRevision = build.geometryContentRevision;
-        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResourcesResult))){
-            allPlansCurrent = false;
-            continue;
-        }
-        if(build.firstBuild){
-            ++m_blasLedgerFirstBuilds;
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)"), StringConvert(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.vertexCount), static_cast<u64>(build.indexCount));
-        }
-        else if(build.performRefit)
-            ++m_blasLedgerRefits;
-        else
-            ++m_blasLedgerRebuilds;
-        m_blasLedgerUploadedBytes += static_cast<u64>(build.positionByteSize);
-    }
-    // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS rebuild rather than retaining a static-scene hash that may describe the retired generation.
-    if(!allPlansCurrent)
-        m_rayTracingState.m_tlasStaticSceneHashValid = false;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}"), m_blasLedgerStaticSkipped, m_blasLedgerFirstBuilds, m_blasLedgerRefits, m_blasLedgerRebuilds, m_blasLedgerUploadedBytes);
-    clearPreparedMeshBlasBuilds();
+void RendererRayTracingSystem::clearPreparedMeshBlasBuilds()noexcept{
+    m_preparedMeshBlasBuilds.clear();
+    m_preparedMeshBlasBuildsReady = false;
 }
 
 

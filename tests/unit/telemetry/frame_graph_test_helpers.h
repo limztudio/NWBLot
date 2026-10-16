@@ -23,7 +23,7 @@ Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment();
 
 Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment();
 
-Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision);
+Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision)noexcept;
 
 Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics();
 

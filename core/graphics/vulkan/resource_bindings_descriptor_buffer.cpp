@@ -70,6 +70,19 @@ Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperat
     return idleResult;
 }
 
+void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{
+    NothrowScopedLock operationLock(m_lifecycleOperationMutex);
+    NothrowScopedLock lifecycleLock(m_lifecycleMutex);
+    NothrowScopedLock resourceLock(m_resourceSegment.mutex);
+    NothrowScopedLock samplerLock(m_samplerSegment.mutex);
+
+    m_bindingGeneration = 0u;
+    m_enabled = false;
+    shutdownSegment(m_resourceSegment);
+    shutdownSegment(m_samplerSegment);
+    m_lifecycleTransitioning = false;
+}
+
 bool DescriptorBufferManager::initialize(){
     UniqueLock<Futex> operationLock(m_lifecycleOperationMutex);
 
@@ -174,19 +187,6 @@ bool DescriptorBufferManager::shutdown(){
     return result.has_value();
 }
 
-void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{
-    NothrowScopedLock operationLock(m_lifecycleOperationMutex);
-    NothrowScopedLock lifecycleLock(m_lifecycleMutex);
-    NothrowScopedLock resourceLock(m_resourceSegment.mutex);
-    NothrowScopedLock samplerLock(m_samplerSegment.mutex);
-
-    m_bindingGeneration = 0u;
-    m_enabled = false;
-    shutdownSegment(m_resourceSegment);
-    shutdownSegment(m_samplerSegment);
-    m_lifecycleTransitioning = false;
-}
-
 bool DescriptorBufferManager::isEnabled()const{
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
@@ -217,6 +217,10 @@ u64 DescriptorBufferManager::getTexelBufferAddressAlignmentBytes()const noexcept
 
 u32 DescriptorBufferManager::getMaxTexelBufferElements()const noexcept{
     return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
+}
+
+DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
+    return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
 }
 
 bool DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32 resourceBytes, const u32 samplerBytes, const u64 requiredGeneration){
@@ -265,10 +269,6 @@ bool DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Sized initial descriptor buffers to driver layouts (resource={} bytes, sampler={} bytes)."), *resourceCapacityBytes, *samplerCapacityBytes);
     return true;
-}
-
-DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
-    return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
 }
 
 DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes, const u64 requiredGeneration){

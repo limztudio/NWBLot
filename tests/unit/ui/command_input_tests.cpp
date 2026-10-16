@@ -89,7 +89,7 @@ protected:
         return { m_router.process(), *resolved };
     }
 
-    [[nodiscard]] Expected<ControlAction> take(const HitTarget& host){
+    [[nodiscard]] Expected<ControlAction> take(const HitTarget& host)noexcept{
         return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
     }
 

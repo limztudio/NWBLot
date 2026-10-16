@@ -83,10 +83,8 @@ struct MaterialTypedByteRangeKey{
     Name materialName = s_NameNone;
     u64 typedLayoutHash = 0u;
 
-    friend bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{
-        return lhs.materialName == rhs.materialName && lhs.typedLayoutHash == rhs.typedLayoutHash;
-    }
 };
+inline bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{ return lhs.materialName == rhs.materialName && lhs.typedLayoutHash == rhs.typedLayoutHash; }
 
 struct MaterialTypedByteRangeKeyHasher{
     usize operator()(const MaterialTypedByteRangeKey& key)const{
@@ -131,46 +129,6 @@ inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool RendererMaterialSystem::prepareMaterialPassResources(Core::Framebuffer* framebuffer, const MaterialPipelinePass::Enum pass, const bool transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets){
-    if(!framebuffer)
-        return false;
-
-    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
-    if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
-        return false;
-
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PreparePassArena);
-    MaterialPassDrawItemPartitions drawItems{scratchArena};
-    InstanceGpuDataVector instanceData{scratchArena};
-    CsgFrameGpuData csgFrameData{scratchArena};
-#if defined(NWB_DEBUG)
-    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
-#endif
-    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
-
-    gatherMaterialPassDrawItems(
-        framebuffer,
-        pass,
-        transparent,
-        csgFrameState,
-        drawItems,
-        instanceData,
-        csgFrameData,
-#if defined(NWB_DEBUG)
-        materialTypedRanges,
-#endif
-        materialTypedBytes, RendererResourceLookupMode::CreateMissing, nullptr);
-    if(drawItems.empty())
-        return true;
-
-    const bool drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
-    const bool regularDrawResourcesReady = prepareMaterialPassResourceBindings(drawItems.regular);
-    const bool csgDrawResourcesReady = drawItems.csg.empty() || prepareMaterialPassResourceBindings(drawItems.csg);
-    const bool csgReceiverSurfaceDrawResourcesReady = drawItems.csgReceiverSurface.empty() || prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface);
-
-    return drawBuffersReady && regularDrawResourcesReady && csgDrawResourcesReady && csgReceiverSurfaceDrawResourcesReady;
-}
 
 void RendererMaterialSystem::renderPreparedMaterialPass(
     Core::CommandList& commandList,
@@ -254,6 +212,46 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), __hidden_material_pass::MaterialPassGpuTimingScope(pass), m_graphics.getDevice(), commandList);
         recordPreparedDraws();
     }
+}
+
+bool RendererMaterialSystem::prepareMaterialPassResources(Core::Framebuffer* framebuffer, const MaterialPipelinePass::Enum pass, const bool transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets){
+    if(!framebuffer)
+        return false;
+
+    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
+    if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
+        return false;
+
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PreparePassArena);
+    MaterialPassDrawItemPartitions drawItems{scratchArena};
+    InstanceGpuDataVector instanceData{scratchArena};
+    CsgFrameGpuData csgFrameData{scratchArena};
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
+#endif
+    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
+
+    gatherMaterialPassDrawItems(
+        framebuffer,
+        pass,
+        transparent,
+        csgFrameState,
+        drawItems,
+        instanceData,
+        csgFrameData,
+#if defined(NWB_DEBUG)
+        materialTypedRanges,
+#endif
+        materialTypedBytes, RendererResourceLookupMode::CreateMissing, nullptr);
+    if(drawItems.empty())
+        return true;
+
+    const bool drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
+    const bool regularDrawResourcesReady = prepareMaterialPassResourceBindings(drawItems.regular);
+    const bool csgDrawResourcesReady = drawItems.csg.empty() || prepareMaterialPassResourceBindings(drawItems.csg);
+    const bool csgReceiverSurfaceDrawResourcesReady = drawItems.csgReceiverSurface.empty() || prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface);
+
+    return drawBuffersReady && regularDrawResourcesReady && csgDrawResourcesReady && csgReceiverSurfaceDrawResourcesReady;
 }
 
 void RendererMaterialSystem::gatherMaterialPassDrawItems(

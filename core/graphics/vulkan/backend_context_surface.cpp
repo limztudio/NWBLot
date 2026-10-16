@@ -83,62 +83,6 @@ bool BackendContext::createWindowSurface(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::prepareSwapChainImageRevocation(){
-    for(SwapChainImage& swapChainImage : m_swapChainImages){
-        if(swapChainImage.rhiHandle && !swapChainImage.rhiHandle->canRevokeUnmanagedNativeImage(swapChainImage.image)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity is not revocable."));
-            return false;
-        }
-    }
-
-    for(SwapChainImage& swapChainImage : m_swapChainImages){
-        if(swapChainImage.rhiHandle && !swapChainImage.rhiHandle->prepareRevokeUnmanagedNativeImage(swapChainImage.image)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity could not be prepared for revocation."));
-            return false;
-        }
-    }
-    return true;
-}
-
-void BackendContext::commitPreparedSwapChainDestruction()noexcept{
-    m_swapChainState.swapChainReadbackAvailable = false;
-    resetDirectPresentCommandList();
-
-    {
-        NothrowScopedLock presentationLock(m_framePresentationMutex);
-        resetFramePresentationSignal();
-    }
-    m_frameAcquired = false;
-    m_frameAbandonmentComplete = false;
-    m_swapChainIndex = Limit<u32>::s_Max;
-    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
-
-    for(SwapChainImage& swapChainImage : m_swapChainImages){
-        if(swapChainImage.rhiHandle)
-            swapChainImage.rhiHandle->commitRevokeUnmanagedNativeImage(swapChainImage.image);
-    }
-
-    if(m_swapChain){
-        m_deviceDispatch.vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
-        m_swapChain = VK_NULL_HANDLE;
-    }
-
-    for(SwapChainImage& swapChainImage : m_swapChainImages){
-        if(swapChainImage.rhiHandle)
-            swapChainImage.rhiHandle->releasePreparedRevokeUnmanagedNativeImageIdentity(swapChainImage.image);
-    }
-
-    m_swapChainImages.clear();
-}
-
-bool BackendContext::destroySwapChainAfterCreateFailure(){
-    if(!prepareSwapChainImageRevocation())
-        return false;
-
-    commitPreparedSwapChainDestruction();
-    return true;
-}
-
 bool BackendContext::createVulkanSwapChain(){
     VkResult res = VK_SUCCESS;
 
@@ -433,6 +377,63 @@ bool BackendContext::createVulkanSwapChain(){
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
     }
 
+    return true;
+}
+
+
+bool BackendContext::prepareSwapChainImageRevocation(){
+    for(SwapChainImage& swapChainImage : m_swapChainImages){
+        if(swapChainImage.rhiHandle && !swapChainImage.rhiHandle->canRevokeUnmanagedNativeImage(swapChainImage.image)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity is not revocable."));
+            return false;
+        }
+    }
+
+    for(SwapChainImage& swapChainImage : m_swapChainImages){
+        if(swapChainImage.rhiHandle && !swapChainImage.rhiHandle->prepareRevokeUnmanagedNativeImage(swapChainImage.image)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity could not be prepared for revocation."));
+            return false;
+        }
+    }
+    return true;
+}
+
+void BackendContext::commitPreparedSwapChainDestruction()noexcept{
+    m_swapChainState.swapChainReadbackAvailable = false;
+    resetDirectPresentCommandList();
+
+    {
+        NothrowScopedLock presentationLock(m_framePresentationMutex);
+        resetFramePresentationSignal();
+    }
+    m_frameAcquired = false;
+    m_frameAbandonmentComplete = false;
+    m_swapChainIndex = Limit<u32>::s_Max;
+    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
+
+    for(SwapChainImage& swapChainImage : m_swapChainImages){
+        if(swapChainImage.rhiHandle)
+            swapChainImage.rhiHandle->commitRevokeUnmanagedNativeImage(swapChainImage.image);
+    }
+
+    if(m_swapChain){
+        m_deviceDispatch.vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
+        m_swapChain = VK_NULL_HANDLE;
+    }
+
+    for(SwapChainImage& swapChainImage : m_swapChainImages){
+        if(swapChainImage.rhiHandle)
+            swapChainImage.rhiHandle->releasePreparedRevokeUnmanagedNativeImageIdentity(swapChainImage.image);
+    }
+
+    m_swapChainImages.clear();
+}
+
+bool BackendContext::destroySwapChainAfterCreateFailure(){
+    if(!prepareSwapChainImageRevocation())
+        return false;
+
+    commitPreparedSwapChainDestruction();
     return true;
 }
 

@@ -5,6 +5,7 @@
 #include "baked_font_fixture.h"
 
 #include <global/sha256.h>
+
 #include <hb.h>
 
 

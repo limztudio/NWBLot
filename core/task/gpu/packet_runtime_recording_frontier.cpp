@@ -66,6 +66,7 @@ public:
 public:
     void release()noexcept{ m_active = false; }
 
+
 private:
     const GpuTaskGraph& m_graph;
     const GpuCompiledGraph& m_compiledGraph;
@@ -80,33 +81,6 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuRecordedGraph::ArtifactOperation& artifactAccess,
-    const GpuSubmissionPacketRange& range,
-    GpuRecordedGraph& outRecordedGraph,
-    GpuRecordedGraph::PacketRecordingScratch& scratch,
-    Alloc::ScratchArena& stateFanInScratchArena,
-    GpuCommandIrCapture* const commandIrCapture,
-    GpuSubmissionPacketId* const outFailedPacket
-)const{
-    const usize rangeBegin = range.first.index;
-    const usize rangeEnd = rangeBegin + range.packetCount;
-    // Compiler packet IDs are in stable topological order, preserving state-seed dependencies.
-    for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-        if(!recordPacket(graph, compiledGraph, planAccess, artifactAccess, packet, outRecordedGraph, scratch, stateFanInScratchArena, commandIrCapture)){
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
-        }
-    }
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -433,6 +407,33 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         frontierBegin = frontierEnd;
     }
     completeReadyFrontierTelemetry();
+    return true;
+}
+
+
+bool GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+    const GpuSubmissionPacketRange& range,
+    GpuRecordedGraph& outRecordedGraph,
+    GpuRecordedGraph::PacketRecordingScratch& scratch,
+    Alloc::ScratchArena& stateFanInScratchArena,
+    GpuCommandIrCapture* const commandIrCapture,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    const usize rangeBegin = range.first.index;
+    const usize rangeEnd = rangeBegin + range.packetCount;
+    // Compiler packet IDs are in stable topological order, preserving state-seed dependencies.
+    for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
+        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+        if(!recordPacket(graph, compiledGraph, planAccess, artifactAccess, packet, outRecordedGraph, scratch, stateFanInScratchArena, commandIrCapture)){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+    }
     return true;
 }
 

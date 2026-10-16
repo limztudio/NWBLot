@@ -12,6 +12,7 @@
 
 #include <tests/common/ecs_test_world.h>
 #include <tests/common/capturing_logger.h>
+
 #include <gtest/gtest.h>
 
 

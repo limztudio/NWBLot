@@ -77,6 +77,7 @@ class RendererAvboitSystem final : NoCopy{
 public:
     RendererAvboitSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererAvboitState& avboitState, RendererShaderSystem& shaderSystem, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
 
+
 public:
     [[nodiscard]] bool shouldClearTargets(bool hasTransparentRenderers)const noexcept;
     [[nodiscard]] bool captureTargetClearState()const noexcept;

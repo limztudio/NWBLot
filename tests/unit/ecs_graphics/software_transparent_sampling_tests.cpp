@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/raytrace/software_transparent_sampling.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
+
 #include <gtest/gtest.h>
 
 

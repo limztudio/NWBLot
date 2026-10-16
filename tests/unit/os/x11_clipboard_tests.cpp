@@ -3,6 +3,7 @@
 
 
 #include <core/os/linux/x11/clipboard.h>
+
 #include <tests/common/test_context.h>
 
 #include <global/environment.h>

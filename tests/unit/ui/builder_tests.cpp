@@ -77,11 +77,11 @@ protected:
         return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId id(const AStringView stableKey)const{
+    [[nodiscard]] WidgetId id(const AStringView stableKey)const noexcept{
         return MakeWidgetId(MakeWidgetId(MakeRootId(m_root), "panel"), stableKey);
     }
 
-    [[nodiscard]] const WidgetState* state(const WidgetId widget)const{
+    [[nodiscard]] const WidgetState* state(const WidgetId widget)const noexcept{
         for(const WidgetState& entry : m_context.states().entries()){
             if(entry.id == widget)
                 return &entry;

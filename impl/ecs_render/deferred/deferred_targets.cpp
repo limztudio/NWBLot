@@ -23,34 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& targets){
-    resetLaggedLightingHistoryResources(targets);
-    resetDeferredBindlessFrameResources(targets);
-    targets.framebuffer.reset();
-
-    targets.albedo.reset();
-    targets.normal.reset();
-    targets.worldPosition.reset();
-    targets.specularRoughness.reset();
-    targets.csgCapBackNormal.reset();
-    targets.csgIntervalDepth.reset();
-    targets.csgIntervalId.reset();
-    targets.csgReceiverEventData.reset();
-    targets.csgReceiverEventCount.reset();
-    targets.csgReceiverSpanData.reset();
-    targets.csgReceiverSpanCount.reset();
-    targets.csgRemovedIntervalDepth.reset();
-    targets.csgRemovedIntervalCapNormal.reset();
-    targets.csgRemovedIntervalData.reset();
-    targets.csgRemovedIntervalCount.reset();
-    targets.opaqueColor.reset();
-    targets.compositeColor.reset();
-    targets.depth.reset();
-    targets.shadowVisibility.reset();
-
-    targets = DeferredFrameTargets{};
-}
-
 Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height){
     if(width == 0 || height == 0)
         return MakeUnexpected(Failure{});
@@ -259,6 +231,34 @@ bool RendererDeferredSystem::createDeferredFrameTargetResources(DeferredFrameTar
         return true;
     resetDeferredBindlessFrameResources(targets);
     return false;
+}
+
+void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& targets){
+    resetLaggedLightingHistoryResources(targets);
+    resetDeferredBindlessFrameResources(targets);
+    targets.framebuffer.reset();
+
+    targets.albedo.reset();
+    targets.normal.reset();
+    targets.worldPosition.reset();
+    targets.specularRoughness.reset();
+    targets.csgCapBackNormal.reset();
+    targets.csgIntervalDepth.reset();
+    targets.csgIntervalId.reset();
+    targets.csgReceiverEventData.reset();
+    targets.csgReceiverEventCount.reset();
+    targets.csgReceiverSpanData.reset();
+    targets.csgReceiverSpanCount.reset();
+    targets.csgRemovedIntervalDepth.reset();
+    targets.csgRemovedIntervalCapNormal.reset();
+    targets.csgRemovedIntervalData.reset();
+    targets.csgRemovedIntervalCount.reset();
+    targets.opaqueColor.reset();
+    targets.compositeColor.reset();
+    targets.depth.reset();
+    targets.shadowVisibility.reset();
+
+    targets = DeferredFrameTargets{};
 }
 
 

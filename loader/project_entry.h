@@ -84,6 +84,7 @@ struct ProjectRuntimeContext{
     using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;
     using RequestQuitCallback = Function<void()>;
 
+
     Core::GraphicsRuntime& graphics;
     Core::InputDispatcher& input;
     Core::IClipboardService& clipboard;
@@ -131,7 +132,7 @@ public:
 
 
 ProjectFrameClientSize QueryProjectFrameClientSize();
-TStringView QueryProjectWindowTitle();
+TStringView QueryProjectWindowTitle()noexcept;
 bool ConfigureProjectRuntime(ProjectStartupContext& context);
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 

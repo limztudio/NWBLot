@@ -8,6 +8,7 @@
 #include <core/common/name_symbols.h>
 #include <core/perf/session.h>
 #include <core/telemetry/session.h>
+
 #include <logger/telemetry/report.h>
 
 #include <global/atomic.h>
@@ -44,6 +45,8 @@ struct OwnedAllocation{
     void* pointer = nullptr;
     usize requestedBytes = 0u;
 
+
+public:
     OwnedAllocation(Core::Alloc::GlobalArena& owner, const usize size)
         : arena(owner)
         , pointer(owner.allocate(1u, size))

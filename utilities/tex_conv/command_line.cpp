@@ -6,8 +6,9 @@
 
 #include <core/common/log.h>
 
-#include <CLI.hpp>
 #include <global/terminal_entry.h>
+
+#include <CLI.hpp>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,7 +183,7 @@ int Run(const int argc, char** argv){
             NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
             return TexConvCliDetail::s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return TexConvCliDetail::s_TexConvExitFatal; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return TexConvCliDetail::s_TexConvExitFatal; });
 }
 
 

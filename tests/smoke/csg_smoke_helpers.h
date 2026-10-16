@@ -5,10 +5,12 @@
 #pragma once
 
 
+#include <impl/ecs_csg/components.h>
+
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
+
 #include <global/simd/frame.h>
-#include <impl/ecs_csg/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

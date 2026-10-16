@@ -157,23 +157,6 @@ bool StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, co
     return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
 }
 
-Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
-    const TextureDesc& desc = texture.getCreationDescription();
-    if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
-        return MakeUnexpected(Failure{});
-
-    return getResolvedTransientTextureState(texture, arraySlice, mipLevel);
-}
-
-ResourceStates::Mask StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
-    const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
-    const auto existing = m_textureStates.find(key);
-    if(existing != m_textureStates.end())
-        return existing.value();
-
-    return texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel) ? texture.m_creationDesc.initialState : ResourceStates::Unknown;
-}
-
 void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
     if(!texture)
         return;
@@ -242,26 +225,6 @@ bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const{
     return found == m_bufferUavBarriers.end() || found.value().enableBarriers;
 }
 
-void StateTracker::beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
-    beginTrackingResolvedTransientTexture(texture, resolvedSubresources, state);
-}
-
-void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state){
-    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
-    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
-    const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
-
-    ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
-
-    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-            const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
-            m_textureStates.insert_or_assign(key, state);
-        }
-    }
-}
-
 void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableBarriers){
     auto found = m_textureUavBarriers.find(&texture);
     if(found != m_textureUavBarriers.end()){
@@ -282,6 +245,43 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
 
     if(!m_bufferUavBarriers.emplace(&buffer, BufferUavBarrierPolicyValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
         NWB_ASSERT(false);
+}
+
+Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
+    const TextureDesc& desc = texture.getCreationDescription();
+    if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
+        return MakeUnexpected(Failure{});
+
+    return getResolvedTransientTextureState(texture, arraySlice, mipLevel);
+}
+
+ResourceStates::Mask StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
+    const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+    const auto existing = m_textureStates.find(key);
+    if(existing != m_textureStates.end())
+        return existing.value();
+
+    return texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel) ? texture.m_creationDesc.initialState : ResourceStates::Unknown;
+}
+
+void StateTracker::beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
+    beginTrackingResolvedTransientTexture(texture, resolvedSubresources, state);
+}
+
+void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state){
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
+
+    ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
+
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+            m_textureStates.insert_or_assign(key, state);
+        }
+    }
 }
 
 

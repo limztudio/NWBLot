@@ -8,6 +8,7 @@
 #include <tests/unit/ui/native_input.h>
 
 #include "edit_host_fixture_support.h"
+
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
 
 #include <core/os/clipboard_service.h>
@@ -51,7 +52,7 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(const TextInputSessionToken, const TextInputSessionDesc&)override{
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(const TextInputSessionToken, const TextInputSessionDesc&)noexcept override{
         ++starts;
         return TextInputAdmission::Accepted;
     }
@@ -94,6 +95,13 @@ public:
 using FixtureShaper = UiEditHostFixtureSupport::FixtureShaper;
 
 class UiPopupInputTests : public testing::Test{
+protected:
+    struct DeclaredEdit{
+        Ui::WidgetState widget;
+        Ui::EditBoxResult result;
+    };
+
+
 public:
     UiPopupInputTests()
         : m_arena(Name("tests/ecs_ui/popup_input"))
@@ -117,10 +125,6 @@ protected:
         ASSERT_TRUE(m_childModel.setText("child"));
     }
 
-    struct DeclaredEdit{
-        Ui::WidgetState widget;
-        Ui::EditBoxResult result;
-    };
 
     [[nodiscard]] Expected<DeclaredEdit> declareEdit(const AStringView key, Ui::EditModel& model, const Ui::Rect& bounds){
         const Ui::WidgetState* widget = m_context.declare(key, Ui::WidgetKind::EditBox);

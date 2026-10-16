@@ -47,6 +47,7 @@ struct TopologicalReadyIndex final : NoCopy{
     {}
 
 
+public:
     void initialize(const Vector<u32, Alloc::ScratchArena>& indegrees){
         m_taskCount = indegrees.size();
         usize levelWords = (m_taskCount - 1u) / s_BitsPerWord + 1u;

@@ -106,7 +106,7 @@ public:
     [[nodiscard]] virtual u64 revision()const override{ return revisionValue; }
     [[nodiscard]] virtual u64 rowCount()const override{ return count; }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         ++keyCalls;
         return index < count ? index + 1u : 0u;
     }

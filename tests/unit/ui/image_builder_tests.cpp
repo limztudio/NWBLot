@@ -69,7 +69,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiImageBuilderTests, DeclarationCopiesNameSizeAndStraightTintBeforePaint){
+TEST_F(UiImageBuilderTests, CallerMutationCannotChangeDeferredImageNameSizeOrStraightTint){
     ASSERT_TRUE(panel(1u));
     Name name("image.sprite");
     ImageOptions options = Fixed(80.0f, 32.0f);

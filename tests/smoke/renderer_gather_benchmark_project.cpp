@@ -7,6 +7,7 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_skeleton/components.h>
+
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
@@ -48,6 +49,8 @@ public:
         : IRenderPass(graphics)
     {}
 
+
+public:
     [[nodiscard]] bool prepareQueries(){
         auto& graphics = getGraphics();
         for(const StringView scope : RendererGatherBenchmarkProbe::s_GpuNames){
@@ -80,6 +83,8 @@ public:
     {}
     virtual ~RendererGatherBenchmarkProject()override{ destroyWorld(); }
 
+
+public:
     virtual bool onStartup()override{
         auto requestedWorkload = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_WORKLOAD");
         if(!requestedWorkload)
@@ -324,7 +329,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
-TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_renderer_gather_benchmark::RendererGatherBenchmarkProject>(context);
 }

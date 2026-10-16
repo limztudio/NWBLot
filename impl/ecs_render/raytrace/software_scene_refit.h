@@ -76,6 +76,7 @@ class SoftwareSceneRefitResources final : NoCopy{
 public:
     SoftwareSceneRefitResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
 
+
 public:
     void invalidate();
     [[nodiscard]] SoftwareSceneRefitHandle prepare(

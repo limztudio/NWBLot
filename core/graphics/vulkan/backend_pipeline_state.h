@@ -7,8 +7,6 @@
 
 #include "module.h"
 #include "backend_forward.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -16,6 +14,8 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
+
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -277,6 +277,7 @@ private:
         [[nodiscard]] T& operator[](usize index)noexcept{ return m_storage[index]; }
         [[nodiscard]] const T& operator[](usize index)const noexcept{ return m_storage[index]; }
 
+
     private:
         PersistentUniquePtr<T[]> m_storage;
         usize m_count = 0u;
@@ -326,6 +327,7 @@ public:
     private:
         explicit PendingRecordingLease(GpuDescriptorHeap& heap);
 
+
     public:
         ~PendingRecordingLease()noexcept;
         PendingRecordingLease(const PendingRecordingLease&) = delete;
@@ -336,6 +338,7 @@ public:
 
     public:
         [[nodiscard]] bool valid()const noexcept{ return m_heap != nullptr; }
+
 
     private:
         GpuDescriptorHeap* m_heap = nullptr;

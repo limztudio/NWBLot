@@ -63,14 +63,20 @@ struct GpuDescriptorHandle{
 
     u32 value = s_Invalid;
 
-    constexpr GpuDescriptorHandle() = default;
-    constexpr explicit GpuDescriptorHandle(u32 raw)noexcept : value(raw){}
 
+public:
     static constexpr GpuDescriptorHandle Make(GpuDescriptorClass::Enum cls, u32 slot)noexcept{
         return GpuDescriptorHandle((static_cast<u32>(cls) << s_ClassShift) | (slot & s_SlotMask));
     }
     static constexpr GpuDescriptorHandle Invalid()noexcept{ return GpuDescriptorHandle(s_Invalid); }
 
+
+public:
+    constexpr GpuDescriptorHandle() = default;
+    constexpr explicit GpuDescriptorHandle(u32 raw)noexcept : value(raw){}
+
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return value != s_Invalid; }
     [[nodiscard]] constexpr GpuDescriptorClass::Enum descriptorClass()const noexcept{ return static_cast<GpuDescriptorClass::Enum>(value >> s_ClassShift); }
     [[nodiscard]] constexpr u32 slot()const noexcept{ return value & s_SlotMask; }

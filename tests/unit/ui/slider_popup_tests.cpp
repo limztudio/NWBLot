@@ -43,7 +43,7 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId childHost()const{
+    [[nodiscard]] WidgetId childHost()const noexcept{
         const WidgetId parent = MakeWidgetId(MakeRootId(m_root), "parent");
         return MakeWidgetId(MakeWidgetId(parent, "child"), "slider");
     }

@@ -354,13 +354,6 @@ MStringView Value::asReference()const noexcept{
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
-MString Value::copyString()const{
-    if(!isString())
-        return MString(m_arena);
-    const MStringView sv = asString();
-    return MString(sv.data(), sv.size(), m_arena);
-}
-
 const Value::ListType& Value::asList()const noexcept{
     NWB_ASSERT(m_type == ValueType::List);
     return *m_data.m_list;
@@ -486,6 +479,13 @@ void Value::append(Value&& val){
     }
 
     m_data.m_list->push_back(Move(val));
+}
+
+MString Value::copyString()const{
+    if(!isString())
+        return MString(m_arena);
+    const MStringView sv = asString();
+    return MString(sv.data(), sv.size(), m_arena);
 }
 
 

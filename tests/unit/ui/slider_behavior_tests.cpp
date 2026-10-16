@@ -42,7 +42,7 @@ protected:
         ASSERT_TRUE(refresh());
     }
 
-    [[nodiscard]] bool refresh(){
+    [[nodiscard]] bool refresh()noexcept{
         const auto metrics = SliderLayout::Measure(m_options, {});
         if(!metrics)
             return false;
@@ -56,7 +56,7 @@ protected:
         return SliderBehavior::Admit(m_state, m_options, m_placement);
     }
 
-    [[nodiscard]] bool set(const f64 value){
+    [[nodiscard]] bool set(const f64 value)noexcept{
         return m_state.setValue(value) && refresh();
     }
 

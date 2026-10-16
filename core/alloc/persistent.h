@@ -33,6 +33,13 @@ public:
     using Base::deallocate;
 
 
+private:
+    struct Allocation{
+        void* pointer = nullptr;
+        void* block = nullptr;
+    };
+
+
 public:
     [[nodiscard]] static usize StructureAlignedSize(usize byte);
     [[nodiscard]] static usize StructureAlignedSize(usize byte, usize align);
@@ -50,11 +57,6 @@ public:
 
 
 private:
-    struct Allocation{
-        void* pointer = nullptr;
-        void* block = nullptr;
-    };
-
     [[nodiscard]] Expected<Allocation> allocateLocked(usize align, usize size)noexcept;
     void deallocateBlockLocked(void* block)noexcept;
 

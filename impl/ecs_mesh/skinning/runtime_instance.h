@@ -104,6 +104,8 @@ struct MeshSkinningRuntimeInstance{
         , deformationState(arena)
     {}
 
+
+public:
     [[nodiscard]] bool valid()const{
         return
             entity.valid()

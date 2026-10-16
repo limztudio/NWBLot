@@ -55,6 +55,7 @@ struct GpuTimingScopeDefinition{
     {}
 
 
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return identity && !markerLabel.empty(); }
 };
 

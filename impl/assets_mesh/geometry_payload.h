@@ -53,6 +53,8 @@ protected:
         , m_solidTriangleWords(arena)
     {}
 
+
+protected:
     void setGeometryPayload(
         Core::Assets::AssetVector<Float3U>&& positions,
         Core::Assets::AssetVector<Half4U>&& normals,

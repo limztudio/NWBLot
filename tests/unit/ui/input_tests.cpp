@@ -31,11 +31,11 @@ HitTarget Target(const u64 value, const Rect& rectangle = { 10.0f, 10.0f, 20.0f,
     return target;
 }
 
-InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f }){
+InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f })noexcept{
     return { type, position };
 }
 
-InputEvent KeyEvent(const InputEventType::Enum type, const Core::Key::Enum key, const bool shift = false, const bool repeat = false){
+InputEvent KeyEvent(const InputEventType::Enum type, const Core::Key::Enum key, const bool shift = false, const bool repeat = false)noexcept{
     return { type, {}, key, shift, repeat };
 }
 

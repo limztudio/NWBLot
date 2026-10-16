@@ -32,6 +32,8 @@ private:
     static constexpr usize s_MaxScopesPerDomain = 512u;
     static constexpr usize s_MaxRecords = 262144u;
 
+
+private:
     struct Scope{
         Name name = s_NameNone;
         u64 lastPublication = 0u;

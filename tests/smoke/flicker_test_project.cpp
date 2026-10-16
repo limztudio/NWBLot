@@ -2,12 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "arrow_yaw_input_handler.h"
+#include "fps_probe.h"
+#include "smoke_project_helpers.h"
+#include "smoke_scene_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
+
 #include <loader/project_entry.h>
 
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/simd/frame.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -17,11 +19,11 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include "arrow_yaw_input_handler.h"
-#include "fps_probe.h"
-#include "smoke_project_helpers.h"
-#include "smoke_scene_helpers.h"
-#include "smoke_skinned_scene_helpers.h"
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/frame.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,15 +99,18 @@ private:
         return world;
     }
 
-    void destroyWorld(){
-        DestroySmokeSkinnedRenderWorld(m_context, m_world);
-    }
-
     // Pin yaw for A/B captures that isolate flicker from motion.
     static f32 FrozenYaw(){
         static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
         return s_yaw;
     }
+
+
+private:
+    void destroyWorld(){
+        DestroySmokeSkinnedRenderWorld(m_context, m_world);
+    }
+
 
     void spinCharacters(){
         for(const NWB::Core::ECS::EntityID owner : { m_opaqueOwner, m_transparentOwner }){
@@ -243,7 +248,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Flicker Test");
 }
 

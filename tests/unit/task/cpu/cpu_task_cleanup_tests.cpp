@@ -3,6 +3,7 @@
 
 
 #include <core/task/cpu/scheduler.h>
+
 #include <global/terminal_entry.h>
 #include <global/termination.h>
 #include <global/timer.h>
@@ -37,6 +38,7 @@ struct RetirementProbe{
     Atomic<u32>* retirements;
 
 
+public:
     explicit RetirementProbe(Atomic<u32>& counter)noexcept
         : retirements(&counter)
     {}
@@ -61,6 +63,7 @@ struct ReentrantRetirementProbe{
     bool m_active = true;
 
 
+public:
     ReentrantRetirementProbe(CpuTaskScheduler& scheduler, const CpuTaskHandle& handle, bool& incomplete, usize& outstanding)noexcept
         : m_scheduler(scheduler)
         , m_handle(handle)

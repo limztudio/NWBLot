@@ -7,8 +7,6 @@
 
 #include "module.h"
 #include "backend_forward.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -16,6 +14,8 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
+
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,11 +95,6 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class GpuDescriptorHeap;
 
 
-public:
-    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, u32 queueFamilyIndex, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex);
-    ~TrackedCommandBuffer();
-
-
 private:
     struct TimerQueryRecordingClaim{
         TimerQuery* query = nullptr;
@@ -118,6 +113,13 @@ private:
         bool consumesResetAuthorization = false;
     };
 
+
+public:
+    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, u32 queueFamilyIndex, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex);
+    ~TrackedCommandBuffer();
+
+
+private:
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
     [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;

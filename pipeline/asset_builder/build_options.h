@@ -35,7 +35,6 @@ struct AssetBuildRoot{
     explicit AssetBuildRoot(Core::Assets::AssetArena& arena)noexcept
         : path(arena)
     {}
-
     AssetBuildRoot(Core::Assets::AssetArena& arena, AStringView inPath, const ACompactString& inVirtualRoot)
         : path(inPath, arena)
         , virtualRoot(inVirtualRoot)

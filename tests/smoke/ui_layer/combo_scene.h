@@ -42,9 +42,9 @@ public:
 
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    void observeState();
     [[nodiscard]] Array<u64, 16u> values()const;
     [[nodiscard]] Impl::Ui::Rect cursorRow()const;
+    void observeState();
 
 
 private:

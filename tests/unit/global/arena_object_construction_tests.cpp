@@ -39,6 +39,8 @@ struct OwnedMember{
     ConstructionState& state;
     Vector<u8, Arena> bytes;
 
+
+public:
     OwnedMember(Arena& arena, ConstructionState& constructionState)
         : state(constructionState)
         , bytes(arena)
@@ -57,10 +59,14 @@ struct alignas(128u) ConstructionProbe{
     inline static thread_local Arena* s_Arena = nullptr;
     inline static thread_local ConstructionState* s_State = nullptr;
 
+
+public:
     OwnedMember<Arena> member;
     ConstructionState& state;
     usize index;
 
+
+public:
     ConstructionProbe()
         : ConstructionProbe(*s_Arena, *s_State)
     {}
@@ -104,6 +110,8 @@ struct NestedConstruction{
     GlobalUniquePtr<ConstructionProbe<GlobalArena>> member;
     bool& destroyed;
 
+
+public:
     NestedConstruction(GlobalArena& arena, ConstructionState& state, bool& destructorCalled)
         : member(MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state))
         , destroyed(destructorCalled)
@@ -116,6 +124,8 @@ struct NestedConstruction{
 struct RejectingArena{
     usize attempts = 0u;
 
+
+public:
     template<typename T>
     T* allocate(const usize count)noexcept{
         static_cast<void>(count);

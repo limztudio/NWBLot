@@ -736,7 +736,7 @@ def analyze_texture_smoke_rows(rows_rgb):
 
 def estimate_background_rgb(rows_rgb, width, height):
     samples = []
-    edge = min(max(min(width, height) // 24, 8), 32)
+    edge = min(width, height, max(min(width, height) // 24, 8), 32)
     step = max(min(width, height) // 128, 1)
 
     for y in range(0, edge, step):

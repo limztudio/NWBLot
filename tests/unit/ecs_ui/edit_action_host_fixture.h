@@ -23,6 +23,8 @@ struct ActionRecord{
     Ui::EditAction::Enum action = Ui::EditAction::Submit;
     AString<Alloc::GlobalArena> text;
 
+
+public:
     explicit ActionRecord(Alloc::GlobalArena& arena) : text(arena){}
 };
 

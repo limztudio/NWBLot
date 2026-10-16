@@ -31,6 +31,7 @@ public:
 public:
     void dismiss()noexcept;
 
+
 private:
     Path m_directoryPath;
     AStringView m_operationName;

@@ -207,12 +207,14 @@ struct AvboitOccupancyGraphTask{
 
 
 struct AvboitDepthWarpGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
     // The avboit system, the frame targets, and the timing ticket are required: depth warp always dispatches against this frame's targets.
     // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
     // References (not nullable pointers) carry the required bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     using Payload = AvboitComputeEffectRecordInputs;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 

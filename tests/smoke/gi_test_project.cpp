@@ -2,15 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "framebuffer_capture.h"
+#include "gpu_pass_timing_probe.h"
+#include "csg_gi_scene.h"
+#include "presentation_fps_probe.h"
+#include "smoke_environment.h"
+#include "smoke_project_helpers.h"
+#include "smoke_scene_helpers.h"
+
 #include <loader/project_entry.h>
 
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/simd/frame.h>
-#include <global/simd/constant.h>
-#include <global/simd/quaternion.h>
-#include <global/simdmath.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -20,12 +21,14 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include "gpu_pass_timing_probe.h"
-#include "csg_gi_scene.h"
-#include "presentation_fps_probe.h"
-#include "smoke_environment.h"
-#include "smoke_project_helpers.h"
-#include "smoke_scene_helpers.h"
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/frame.h>
+#include <global/simd/constant.h>
+#include <global/simd/quaternion.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,6 +89,7 @@ static constexpr Float4 s_WhiteReceiverTint(0.92f, 0.92f, 0.92f, 1.0f);
 static constexpr Float4 s_RedBounceTint(0.84f, 0.10f, 0.08f, 1.0f);
 static constexpr Float4 s_BlueBounceTint(0.08f, 0.14f, 0.86f, 1.0f);
 static constexpr Float4 s_BlackEnclosureTint(0.0f, 0.0f, 0.0f, 1.0f);
+static constexpr f32 s_ComplexMinLiveWarmupSeconds = 30.0f;
 static constexpr u32 s_ComplexRandomBodyCount = 20u;
 static constexpr u32 s_ComplexRandomBodySeed = 0x7A31C5E9u;
 
@@ -165,6 +169,10 @@ static constexpr ComplexSceneBox s_ComplexFrontEnclosureBoxes[] = {
 
 class GiTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
+    [[nodiscard]] static bool ShouldCaptureComplex(void* context, const u64)noexcept{
+        return static_cast<GiTestSmokeProject*>(context)->m_complexLiveWarmupComplete;
+    }
+
     [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
         return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
     }
@@ -181,7 +189,13 @@ private:
         return world;
     }
 
+
+private:
     void destroyWorld(){
+        if(m_complexCapture){
+            m_complexCapture->stop();
+            m_complexCapture.reset();
+        }
         m_csgGiScene.stop();
         DestroySmokeRenderWorld(m_context, m_world);
     }
@@ -213,11 +227,11 @@ public:
             const auto settleValue = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GI_SMOKE_MIN_SETTLE_SECONDS");
             if(settleValue){
                 const auto requestedSettleSeconds = ParseF32FromChars(AStringView(settleValue->data(), settleValue->size()));
-                if(!requestedSettleSeconds || !IsFinite(*requestedSettleSeconds) || *requestedSettleSeconds < 0.0f){
-                    NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: invalid NWB_GI_SMOKE_MIN_SETTLE_SECONDS"));
+                if(!requestedSettleSeconds || !IsFinite(*requestedSettleSeconds) || *requestedSettleSeconds < s_ComplexMinLiveWarmupSeconds){
+                    NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: NWB_GI_SMOKE_MIN_SETTLE_SECONDS requires at least 30 live seconds after the presentation warmup"));
                     return false;
                 }
-                m_complexMinSettleSeconds = *requestedSettleSeconds;
+                m_complexMinLiveWarmupSeconds = *requestedSettleSeconds;
             }
         }
         if(m_resolveSwitchEnabled){
@@ -283,8 +297,19 @@ public:
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor"));
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex_scene={}"), m_complexSceneEnabled ? 1u : 0u);
-        if(m_complexSceneEnabled)
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: min_elapsed_settle_seconds={}"), m_complexMinSettleSeconds);
+        if(m_complexSceneEnabled){
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: min_post_presentation_live_warmup_seconds={}"), m_complexMinLiveWarmupSeconds);
+            const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
+            if(captureFreezeFrame != 0u){
+                const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCaptureComplex, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
+                auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("GiTestSmokeProject"), captureFreezeFrame, options);
+                if(!capture || !*capture){
+                    NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: complex GI baseline requires application framebuffer capture"));
+                    return false;
+                }
+                m_complexCapture = Move(*capture);
+            }
+        }
         return true;
     }
 
@@ -300,29 +325,41 @@ public:
             m_world->tick(1.0f / 60.0f);
             return true;
         }
-        f64 elapsedSeconds = 0.0;
-        if(m_complexSceneEnabled){
-            const Timer now = TimerNow();
-            if(!m_complexSceneTimingStarted){
-                m_complexSceneStartTime = now;
-                m_complexSceneTimingStarted = true;
-            }
-            elapsedSeconds = DurationInSeconds<f64>(now, m_complexSceneStartTime);
-        }
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
         const u64 captureProgress = m_complexSceneEnabled ? successfulPresentations : m_rendererBaselineRenderedFrameCount;
-        if(captureFreezeFrame != 0u && captureProgress >= captureFreezeFrame && elapsedSeconds >= m_complexMinSettleSeconds){
+        f64 elapsedLiveSeconds = 0.0;
+        bool liveWarmupComplete = !m_complexSceneEnabled;
+        if(m_complexSceneEnabled && !m_complexLiveWarmupComplete && captureFreezeFrame != 0u && successfulPresentations >= captureFreezeFrame){
+            const Timer now = TimerNow();
+            if(!m_complexLiveWarmupStarted){
+                m_complexLiveWarmupStartTime = now;
+                m_complexLiveWarmupStartPresentations = successfulPresentations;
+                m_complexLiveWarmupStarted = true;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex GI live warmup start graphics_frame={} presentations={} required_presentations={} required_seconds={}")
+                    , m_context.graphics.getFrameIndex(), successfulPresentations, captureFreezeFrame, static_cast<f64>(m_complexMinLiveWarmupSeconds)
+                );
+            }else{
+                elapsedLiveSeconds = DurationInSeconds<f64>(now, m_complexLiveWarmupStartTime);
+                liveWarmupComplete = elapsedLiveSeconds >= m_complexMinLiveWarmupSeconds && successfulPresentations > m_complexLiveWarmupStartPresentations;
+            }
+        }
+        if(m_complexSceneEnabled && liveWarmupComplete && !m_complexLiveWarmupComplete){
+            m_complexLiveWarmupComplete = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex GI live warmup end graphics_frame={} presentations={} elapsed_seconds={}"), m_context.graphics.getFrameIndex(), successfulPresentations, elapsedLiveSeconds);
+        }
+        if(m_complexCapture){
+            m_complexCapture->update();
+            if(m_complexCapture->captureReady() && !m_complexCaptureReceiptLogged){
+                m_complexCaptureReceiptLogged = true;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex GI capture source_frame={}"), m_complexCapture->capturedGraphicsFrameIndex());
+            }
+        }
+        if(!m_complexSceneEnabled && captureFreezeFrame != 0u && captureProgress >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // The complex A/B scene freezes after accepted presentations so framebuffer capture can request the same frame.
-                // Retain the established update-tick boundary for the original baseline profile.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
-                if(m_complexSceneEnabled){
-                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: renderer baseline capture ready after {} successful presentations and {} elapsed seconds; render submission suspended"), successfulPresentations, elapsedSeconds);
-                }else{
-                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
-                }
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
             }
             return true;
         }
@@ -516,6 +553,7 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Tests::Smoke::CsgGiScene m_csgGiScene;
+    UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_complexCapture;
     NWB::Core::ECS::EntityID m_floorEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_redWallEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::s_InvalidEntityId;
@@ -527,9 +565,12 @@ private:
     bool m_resolveSwitchEnabled = false;
     bool m_complexSceneEnabled = false;
     bool m_coverageViewEnabled = false;
-    f32 m_complexMinSettleSeconds = 0.0f;
-    Timer m_complexSceneStartTime = {};
-    bool m_complexSceneTimingStarted = false;
+    f32 m_complexMinLiveWarmupSeconds = s_ComplexMinLiveWarmupSeconds;
+    Timer m_complexLiveWarmupStartTime = {};
+    u64 m_complexLiveWarmupStartPresentations = 0u;
+    bool m_complexLiveWarmupStarted = false;
+    bool m_complexLiveWarmupComplete = false;
+    bool m_complexCaptureReceiptLogged = false;
 };
 
 
@@ -547,7 +588,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB GI Test");
 }
 

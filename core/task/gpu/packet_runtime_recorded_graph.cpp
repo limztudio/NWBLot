@@ -174,6 +174,49 @@ void GpuRecordedGraph::PacketRecordingScratch::reset()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)noexcept{
+    static_assert(IsNothrowDestructible_V<GpuRecordedPacket>);
+    static_assert(IsNothrowDestructible_V<GpuTimingSubmissionTicket>);
+    static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
+    static_assert(IsNothrowDestructible_V<PacketRecordingScratch>);
+
+    for(GpuRecordedPacket& packet : storage.packets){
+        static_assert(noexcept(packet = GpuRecordedPacket{}));
+        packet = {};
+    }
+    for(u8& overlaps : storage.packetRecordingOverlaps)
+        overlaps = 0u;
+    for(GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket : storage.packetTimingTickets){
+        static_assert(noexcept(ticket->abandonWithoutCallbacks()));
+        if(ticket)
+            ticket->abandonWithoutCallbacks();
+    }
+    for(CommandListResourceStateHandoff& stateSeed : storage.packetStateSeeds){
+        static_assert(noexcept(stateSeed.reset()));
+        stateSeed.reset();
+    }
+    static_assert(noexcept(storage.serialRecordingScratch.reset()));
+    storage.serialRecordingScratch.reset();
+    for(PacketRecordingScratch& scratch : storage.packetRecordingScratch){
+        static_assert(noexcept(scratch.reset()));
+        scratch.reset();
+    }
+    storage.timingRecorder = nullptr;
+    storage.graphIdentity = nullptr;
+    storage.recordingElapsedSeconds = 0.0;
+    storage.readyFrontierElapsedSeconds = 0.0;
+    storage.readyFrontierWorkerBusySeconds = 0.0;
+    storage.readyFrontierWorkerCapacitySeconds = 0.0;
+    storage.packetCount = 0u;
+    storage.compiledObjectIdentity = 0u;
+    storage.generation = 0u;
+    storage.planGeneration = 0u;
+    storage.recordingAttemptGeneration = 0u;
+    storage.deviceGeneration = 0u;
+    storage.valid = false;
+}
+
+
 GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)
     : m_arena(arena)
     , m_activeStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
@@ -269,48 +312,6 @@ void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactSto
             }
         }
     }
-}
-
-void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)noexcept{
-    static_assert(IsNothrowDestructible_V<GpuRecordedPacket>);
-    static_assert(IsNothrowDestructible_V<GpuTimingSubmissionTicket>);
-    static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
-    static_assert(IsNothrowDestructible_V<PacketRecordingScratch>);
-
-    for(GpuRecordedPacket& packet : storage.packets){
-        static_assert(noexcept(packet = GpuRecordedPacket{}));
-        packet = {};
-    }
-    for(u8& overlaps : storage.packetRecordingOverlaps)
-        overlaps = 0u;
-    for(GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket : storage.packetTimingTickets){
-        static_assert(noexcept(ticket->abandonWithoutCallbacks()));
-        if(ticket)
-            ticket->abandonWithoutCallbacks();
-    }
-    for(CommandListResourceStateHandoff& stateSeed : storage.packetStateSeeds){
-        static_assert(noexcept(stateSeed.reset()));
-        stateSeed.reset();
-    }
-    static_assert(noexcept(storage.serialRecordingScratch.reset()));
-    storage.serialRecordingScratch.reset();
-    for(PacketRecordingScratch& scratch : storage.packetRecordingScratch){
-        static_assert(noexcept(scratch.reset()));
-        scratch.reset();
-    }
-    storage.timingRecorder = nullptr;
-    storage.graphIdentity = nullptr;
-    storage.recordingElapsedSeconds = 0.0;
-    storage.readyFrontierElapsedSeconds = 0.0;
-    storage.readyFrontierWorkerBusySeconds = 0.0;
-    storage.readyFrontierWorkerCapacitySeconds = 0.0;
-    storage.packetCount = 0u;
-    storage.compiledObjectIdentity = 0u;
-    storage.generation = 0u;
-    storage.planGeneration = 0u;
-    storage.recordingAttemptGeneration = 0u;
-    storage.deviceGeneration = 0u;
-    storage.valid = false;
 }
 
 bool GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
@@ -607,14 +608,6 @@ bool GpuRecordedGraph::copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const GpuRecordedPacket* GpuRecordedGraph::findWithinArtifactOperation(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept{
-    const ArtifactStorage* const storage = m_activeStorage.get();
-    if(!artifactAccess.validFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
-        return nullptr;
-    const GpuRecordedPacket& recordedPacket = storage->packets[packet.index];
-    return recordedPacket.packet == packet && recordedPacket.commandListCount != 0u ? &recordedPacket : nullptr;
-}
-
 void GpuRecordedGraph::discardPacketTimingTicket(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess){
     GpuTimingSubmissionTicket* const ticket = packetTimingTicket(packet, artifactAccess);
     if(!ticket)
@@ -688,6 +681,15 @@ void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(const GpuSubmissio
     static_assert(noexcept(stateSeed->reset()));
     *recordedPacket = {};
     stateSeed->reset();
+}
+
+
+const GpuRecordedPacket* GpuRecordedGraph::findWithinArtifactOperation(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept{
+    const ArtifactStorage* const storage = m_activeStorage.get();
+    if(!artifactAccess.validFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
+        return nullptr;
+    const GpuRecordedPacket& recordedPacket = storage->packets[packet.index];
+    return recordedPacket.packet == packet && recordedPacket.commandListCount != 0u ? &recordedPacket : nullptr;
 }
 
 GpuTimingRecorder* GpuRecordedGraph::timingRecorderWithinArtifactOperation(const ArtifactOperation& artifactAccess)const noexcept{

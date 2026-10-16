@@ -33,6 +33,8 @@ struct PayloadDestroyTask{
     struct Payload{
         u32* destructionCount = nullptr;
 
+
+    public:
         explicit Payload(u32* const value)
             : destructionCount(value)
         {}
@@ -55,6 +57,8 @@ struct PacketLifecycleTask{
         u32* discardedCount = nullptr;
     };
 
+
+public:
     static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken&){
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
@@ -73,6 +77,8 @@ struct ReentrantCompileDuringDeclarationTask{
         bool* compileAttempted = nullptr;
         bool* compileSucceeded = nullptr;
 
+
+    public:
         Payload() = default;
         Payload(const Payload&) = delete;
         Payload(Payload&& other)
@@ -124,6 +130,8 @@ struct ReentrantTelemetryDuringDeclarationTask{
     struct Payload{
         ReentrantTelemetryDuringDeclarationState* state = nullptr;
 
+
+    public:
         explicit Payload(ReentrantTelemetryDuringDeclarationState& value)noexcept
             : state(&value)
         {}
@@ -150,11 +158,16 @@ struct ReentrantTelemetryDuringDeclarationTask{
 
 struct NativeRecordProbeTask{
     static constexpr Graphics::GpuTaskCommandRequirements s_CommandRequirements{ Graphics::GpuQueueCapability::Graphics };
+
+
+public:
     struct Payload{
         u32* recordCount = nullptr;
     };
 
-    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&){
+
+public:
+    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&)noexcept{
         if(payload.recordCount)
             ++*payload.recordCount;
         return true;
@@ -168,13 +181,15 @@ struct MalformedLifecycleTask{
         u32* discardedCount = nullptr;
     };
 
+
+public:
     static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&, const u32 lookalike = 0u){
         static_cast<void>(lookalike);
         if(payload.recordCount)
             ++*payload.recordCount;
         return true;
     }
-    static bool Accepted(Payload& payload, const Graphics::QueueSubmissionToken&){
+    static bool Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
         return true;

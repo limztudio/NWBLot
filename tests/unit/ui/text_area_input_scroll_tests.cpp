@@ -29,6 +29,8 @@ struct ScrollModelRecord{
     bool undo;
     bool redo;
 
+
+public:
     ScrollModelRecord(Core::Alloc::GlobalArena& arena, const EditModel& model)
         : text(arena)
         , revision(model.revision())
@@ -41,6 +43,8 @@ struct ScrollModelRecord{
         , redo(model.canRedo())
     { text.assign(model.text().data(), model.text().size()); }
 
+
+public:
     void expect(const EditModel& model)const{
         EXPECT_EQ(model.text(), AStringView(text));
         EXPECT_EQ(model.revision(), revision);

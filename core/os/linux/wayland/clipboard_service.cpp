@@ -78,31 +78,6 @@ bool WaylandClipboardService::initialize(){
     return true;
 }
 
-void WaylandClipboardService::releaseDevices(){
-    if(m_readToken.valid())
-        finishRead(ClipboardStatus::Unavailable);
-    m_selected = {};
-    m_offers.clear();
-    m_sources[0].reset();
-    m_sources[1].reset();
-    m_writers.clear();
-#if defined(NWB_OS_WITH_PRIMARY_SELECTION)
-    if(m_primaryDevice){
-        zwp_primary_selection_device_v1_destroy(m_primaryDevice);
-        m_primaryDevice = nullptr;
-    }
-#endif
-    if(m_device){
-        if(wl_data_device_get_version(m_device) >= 2u)
-            wl_data_device_release(m_device);
-        else
-            wl_data_device_destroy(m_device);
-        m_device = nullptr;
-    }
-    m_focused = false;
-    m_serial = 0u;
-}
-
 void WaylandClipboardService::observeSerial(const u32 serial){
     NWB_ASSERT(isOwnerThread());
     if(m_seat && serial)
@@ -174,15 +149,6 @@ void WaylandClipboardService::cancelNativeRequest(const ClipboardRequestToken to
     m_received.clear();
 }
 
-void WaylandClipboardService::finishRead(const ClipboardStatus::Enum status){
-    const ClipboardRequestToken token = m_readToken;
-    m_readToken = {};
-    CloseClipboardPipe(m_readFd);
-    if(token.valid() && !completeNativeRequest(token, status, m_received.text()))
-        NWB_FATAL_ASSERT(false);
-    m_received.clear();
-}
-
 void WaylandClipboardService::pumpNativeRequests(){
     const Timer now = TimerNow();
     if(m_readToken.valid()){
@@ -203,6 +169,40 @@ void WaylandClipboardService::pumpNativeRequests(){
     }
     if(wl_display_flush(&m_display) < 0 && errno != EAGAIN && m_readToken.valid())
         finishRead(ClipboardStatus::NativeFailure);
+}
+
+void WaylandClipboardService::releaseDevices(){
+    if(m_readToken.valid())
+        finishRead(ClipboardStatus::Unavailable);
+    m_selected = {};
+    m_offers.clear();
+    m_sources[0].reset();
+    m_sources[1].reset();
+    m_writers.clear();
+#if defined(NWB_OS_WITH_PRIMARY_SELECTION)
+    if(m_primaryDevice){
+        zwp_primary_selection_device_v1_destroy(m_primaryDevice);
+        m_primaryDevice = nullptr;
+    }
+#endif
+    if(m_device){
+        if(wl_data_device_get_version(m_device) >= 2u)
+            wl_data_device_release(m_device);
+        else
+            wl_data_device_destroy(m_device);
+        m_device = nullptr;
+    }
+    m_focused = false;
+    m_serial = 0u;
+}
+
+void WaylandClipboardService::finishRead(const ClipboardStatus::Enum status){
+    const ClipboardRequestToken token = m_readToken;
+    m_readToken = {};
+    CloseClipboardPipe(m_readFd);
+    if(token.valid() && !completeNativeRequest(token, status, m_received.text()))
+        NWB_FATAL_ASSERT(false);
+    m_received.clear();
 }
 
 WaylandClipboardService::Offer* WaylandClipboardService::findOffer(void* const handle, const ClipboardChannel::Enum channel)noexcept{

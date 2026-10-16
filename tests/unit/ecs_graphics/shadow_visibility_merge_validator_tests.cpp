@@ -39,11 +39,15 @@ struct ShadowPacketPlan{
     Core::GpuCompiledGraph compiledGraph;
     Impl::PreparedShadowVisibilityTasks tasks;
 
+
+public:
     ShadowPacketPlan()
         : graph(testArena.arena)
         , compiledGraph(testArena.arena){
     }
 
+
+public:
     [[nodiscard]] bool build(const bool combinedUpsample, const bool temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const bool combinedWavelet = false, const bool combinedTemporal = false, const bool diagnostics = false){
         const Name identities[] = {
             Name("tests/shadow_packet/opaque"), Name("tests/shadow_packet/opaque_wavelet"),

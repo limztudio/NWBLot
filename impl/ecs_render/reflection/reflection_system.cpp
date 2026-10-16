@@ -51,12 +51,6 @@ RendererReflectionSystem::RendererReflectionSystem(Core::Alloc::GlobalArena& are
     , m_feedback(arena, graphics)
 {}
 
-ReflectionCsgDispatchHandle RendererReflectionSystem::createCsgDispatchState(const ReflectionFrameSnapshot& resources)const{
-    if(!resources.hasHardwareWork() || !resources.scene.csgTraceContextBuffer)
-        return {};
-    return ReflectionCsgDispatchHandle(NewArenaObject<ReflectionCsgDispatchControl>(m_arena, resources, m_graphics.gpuTiming()), ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
-}
-
 void RendererReflectionSystem::invalidateResources(){
     m_statistics.invalidateResources();
     releaseTargets();
@@ -241,6 +235,12 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     m_resources.parameters.depthMipCount = depthPyramid.mipCount;
     m_resources.frameParametersSlot = m_descriptors[Parameters].slot();
     return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings) && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled);
+}
+
+ReflectionCsgDispatchHandle RendererReflectionSystem::createCsgDispatchState(const ReflectionFrameSnapshot& resources)const{
+    if(!resources.hasHardwareWork() || !resources.scene.csgTraceContextBuffer)
+        return {};
+    return ReflectionCsgDispatchHandle(NewArenaObject<ReflectionCsgDispatchControl>(m_arena, resources, m_graphics.gpuTiming()), ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
 }
 
 void RendererReflectionSystem::pollStatistics(){

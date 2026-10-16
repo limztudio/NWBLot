@@ -32,28 +32,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MeshAssetCodecAutoRegistrar, MeshAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Mesh::validatePayload()const{
-    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
-    const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
-
-    if(hasIncompleteGeometryPayload()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload"), meshPathText);
-        return false;
-    }
-    const usize triangleCount = meshletPrimitiveIndices().size() / s_MeshletTriangleIndexCount;
-    const u32 tailBits = static_cast<u32>(triangleCount % 32u);
-    if(tailBits != 0u && (solidTriangleWords().back() >> tailBits) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding"), meshPathText);
-        return false;
-    }
-
-    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(*this, 0u, false, NWB_TEXT("Mesh::validatePayload"), meshPathText))
-        return false;
-
-    return true;
-}
-
-
 bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!checkVirtualPath(MeshBinaryPayload::s_MeshLoadBinaryContext))
         return false;
@@ -89,6 +67,28 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!candidate.validatePayload())
         return false;
     *this = Move(candidate);
+    return true;
+}
+
+
+bool Mesh::validatePayload()const{
+    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
+    const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
+
+    if(hasIncompleteGeometryPayload()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload"), meshPathText);
+        return false;
+    }
+    const usize triangleCount = meshletPrimitiveIndices().size() / s_MeshletTriangleIndexCount;
+    const u32 tailBits = static_cast<u32>(triangleCount % 32u);
+    if(tailBits != 0u && (solidTriangleWords().back() >> tailBits) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding"), meshPathText);
+        return false;
+    }
+
+    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(*this, 0u, false, NWB_TEXT("Mesh::validatePayload"), meshPathText))
+        return false;
+
     return true;
 }
 

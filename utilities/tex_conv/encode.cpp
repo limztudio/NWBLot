@@ -45,15 +45,17 @@ using EncodeBackendDetail::s_BasisResampleFilterChannelStart;
 
 class BasisLibrary final{
 public:
-    BasisLibrary() = default;
+    BasisLibrary()noexcept = default;
     ~BasisLibrary(){
         if(m_initialized)
             basisu::basisu_encoder_deinit();
     }
     BasisLibrary(const BasisLibrary&) = delete;
 
+
 public:
     BasisLibrary& operator=(const BasisLibrary&) = delete;
+
 
 public:
     [[nodiscard]] bool initialize(){

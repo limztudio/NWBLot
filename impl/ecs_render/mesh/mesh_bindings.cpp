@@ -22,62 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
-    if(!createMeshGeometryHeapHandles(mesh))
-        return false;
-
-    if(mesh.runtimeLocalBoundsBuffer && !mesh.runtimeLocalBoundsHeapHandle.valid()){
-        auto& device = m_graphics.getDevice();
-        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-        const Core::BufferDesc& desc = mesh.runtimeLocalBoundsBuffer->getCreationDescription();
-        if(!heap.isInitialized() || desc.byteSize < NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE || !desc.canHaveRawViews){
-            releaseMeshGeometryHeapHandles(mesh);
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime local bounds require a complete raw GPU buffer"));
-            return false;
-        }
-        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()))){
-            if(handle.valid())
-                heap.free(handle);
-            releaseMeshGeometryHeapHandles(mesh);
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register runtime local bounds"));
-            return false;
-        }
-        mesh.runtimeLocalBoundsHeapHandle = handle;
-    }
-
-    if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
-        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        const Core::BufferDesc& desc = mesh.runtimeMeshletLocalBoundsBuffer->getCreationDescription();
-        const u64 requiredBytes = static_cast<u64>(mesh.meshletCount) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
-        if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews){
-            const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-            if(handle.valid()){
-                if(heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get())))
-                    mesh.runtimeMeshletLocalBoundsHeapHandle = handle;
-                else
-                    heap.free(handle);
-            }
-        }
-        if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows"), StringConvert(mesh.meshName.resolvedText()));
-        }
-    }
-
-    NWB_ASSERT(meshRenderBindingsReady(mesh));
-    return true;
-}
-
-bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const{
-    if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
-        return false;
-
-    if(mesh.runtimeLocalBoundsBuffer && (!mesh.runtimeLocalBoundsHeapHandle.valid() || mesh.runtimeLocalBoundsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer))
-        return false;
-
-    return true;
-}
-
 bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
@@ -203,6 +147,74 @@ ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSn
     };
 }
 
+bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const{
+    bool ready = true;
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
+        const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
+        ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    });
+    return ready;
+}
+
+void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const{
+    NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
+    for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
+        outInstance.geometryHeapSlots[slotIndex] = 0u;
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
+        outInstance.geometryHeapSlots[bindingSlot] = mesh.geometryHeapHandles[bindingSlot].slot();
+    });
+}
+
+void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles){
+            if(handle.valid())
+                heap.free(handle);
+            handle = Core::GpuDescriptorHandle::Invalid();
+        }
+        if(mesh.swBvhPositionHeapHandle.valid())
+            heap.free(mesh.swBvhPositionHeapHandle);
+        if(mesh.swBvhTriangleIndexHeapHandle.valid())
+            heap.free(mesh.swBvhTriangleIndexHeapHandle);
+        if(mesh.swBvhNodeHeapHandle.valid())
+            heap.free(mesh.swBvhNodeHeapHandle);
+        if(mesh.swBvhParentHeapHandle.valid())
+            heap.free(mesh.swBvhParentHeapHandle);
+        if(mesh.emulationVertexHeapHandle.valid())
+            heap.free(mesh.emulationVertexHeapHandle);
+        if(mesh.runtimeLocalBoundsHeapHandle.valid())
+            heap.free(mesh.runtimeLocalBoundsHeapHandle);
+        if(mesh.runtimeMeshletLocalBoundsHeapHandle.valid())
+            heap.free(mesh.runtimeMeshletLocalBoundsHeapHandle);
+        if(mesh.objectGeometryCache.heapHandle.valid())
+            heap.free(mesh.objectGeometryCache.heapHandle);
+        mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.objectGeometryCache.acceptedContent = false;
+        return;
+    }
+
+    for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles)
+        handle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.objectGeometryCache.acceptedContent = false;
+}
+
 void RendererMeshSystem::releaseMeshFrameHeapHandles(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -215,6 +227,62 @@ void RendererMeshSystem::releaseMeshFrameHeapHandles(){
             heap.free(m_meshState.m_frameBindings.meshView.heapHandle);
     }
     m_meshState.m_frameBindings = {};
+}
+
+bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
+    if(!createMeshGeometryHeapHandles(mesh))
+        return false;
+
+    if(mesh.runtimeLocalBoundsBuffer && !mesh.runtimeLocalBoundsHeapHandle.valid()){
+        auto& device = m_graphics.getDevice();
+        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+        const Core::BufferDesc& desc = mesh.runtimeLocalBoundsBuffer->getCreationDescription();
+        if(!heap.isInitialized() || desc.byteSize < NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE || !desc.canHaveRawViews){
+            releaseMeshGeometryHeapHandles(mesh);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime local bounds require a complete raw GPU buffer"));
+            return false;
+        }
+        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()))){
+            if(handle.valid())
+                heap.free(handle);
+            releaseMeshGeometryHeapHandles(mesh);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register runtime local bounds"));
+            return false;
+        }
+        mesh.runtimeLocalBoundsHeapHandle = handle;
+    }
+
+    if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
+        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+        const Core::BufferDesc& desc = mesh.runtimeMeshletLocalBoundsBuffer->getCreationDescription();
+        const u64 requiredBytes = static_cast<u64>(mesh.meshletCount) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
+        if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews){
+            const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+            if(handle.valid()){
+                if(heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get())))
+                    mesh.runtimeMeshletLocalBoundsHeapHandle = handle;
+                else
+                    heap.free(handle);
+            }
+        }
+        if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows"), StringConvert(mesh.meshName.resolvedText()));
+        }
+    }
+
+    NWB_ASSERT(meshRenderBindingsReady(mesh));
+    return true;
+}
+
+bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const{
+    if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
+        return false;
+
+    if(mesh.runtimeLocalBoundsBuffer && (!mesh.runtimeLocalBoundsHeapHandle.valid() || mesh.runtimeLocalBoundsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer))
+        return false;
+
+    return true;
 }
 
 bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
@@ -271,24 +339,6 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
     return true;
 }
 
-bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const{
-    bool ready = true;
-    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
-        const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
-        ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    });
-    return ready;
-}
-
-void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const{
-    NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
-    for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
-        outInstance.geometryHeapSlots[slotIndex] = 0u;
-    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
-        outInstance.geometryHeapSlots[bindingSlot] = mesh.geometryHeapHandles[bindingSlot].slot();
-    });
-}
-
 bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     const auto inputsReady = [&mesh]()noexcept{
         return
@@ -336,56 +386,6 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     mesh.swBvhTriangleIndexHeapHandle = triangleIndexHandle;
     NWB_ASSERT(inputsReady());
     return true;
-}
-
-void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles){
-            if(handle.valid())
-                heap.free(handle);
-            handle = Core::GpuDescriptorHandle::Invalid();
-        }
-        if(mesh.swBvhPositionHeapHandle.valid())
-            heap.free(mesh.swBvhPositionHeapHandle);
-        if(mesh.swBvhTriangleIndexHeapHandle.valid())
-            heap.free(mesh.swBvhTriangleIndexHeapHandle);
-        if(mesh.swBvhNodeHeapHandle.valid())
-            heap.free(mesh.swBvhNodeHeapHandle);
-        if(mesh.swBvhParentHeapHandle.valid())
-            heap.free(mesh.swBvhParentHeapHandle);
-        if(mesh.emulationVertexHeapHandle.valid())
-            heap.free(mesh.emulationVertexHeapHandle);
-        if(mesh.runtimeLocalBoundsHeapHandle.valid())
-            heap.free(mesh.runtimeLocalBoundsHeapHandle);
-        if(mesh.runtimeMeshletLocalBoundsHeapHandle.valid())
-            heap.free(mesh.runtimeMeshletLocalBoundsHeapHandle);
-        if(mesh.objectGeometryCache.heapHandle.valid())
-            heap.free(mesh.objectGeometryCache.heapHandle);
-        mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::Invalid();
-        mesh.objectGeometryCache.acceptedContent = false;
-        return;
-    }
-
-    for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles)
-        handle = Core::GpuDescriptorHandle::Invalid();
-    mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::Invalid();
-    mesh.objectGeometryCache.acceptedContent = false;
 }
 
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){

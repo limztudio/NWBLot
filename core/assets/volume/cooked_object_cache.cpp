@@ -192,6 +192,7 @@ public:
         , m_objectBinary(arena)
     {}
 
+
 public:
     virtual bool writeCookedAsset(const TStringView assetKind, const Name& virtualPath, const Core::Assets::IAsset& asset, const Core::Assets::IAssetCodec& codec)override{
         m_payloadBinary.clear();
@@ -210,6 +211,7 @@ public:
 
         return AssetsVolumeCookDetail::AppendObjectFilePayloadToManifest(m_manifest, virtualPath, objectPath, AssetsVolumeCookDetail::AssetVolumePayloadIdentity{ header.payloadSize, header.payloadHash, header.cookKeyHash });
     }
+
 
 private:
     const Path& m_cacheDirectory;

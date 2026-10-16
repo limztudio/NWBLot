@@ -97,6 +97,20 @@ bool AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffer
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept{
+    const ECSRenderDetail::ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
+    return {
+        .buffer = cache.buffer,
+        .decoderPipeline = cache.decoderPipeline,
+        .sourceRevision = mesh.runtimeGeometryContentRevision,
+        .heapHandle = cache.heapHandle,
+        .indexByteOffset = cache.indexByteOffset,
+        .indexCount = cache.indexCount,
+        .initialized = cache.initialized,
+        .requiresDecode = !cache.acceptedContent || (mesh.runtimeMesh && (mesh.runtimeGeometryContentRevision == 0u || cache.acceptedContentRevision != mesh.runtimeGeometryContentRevision)),
+    };
+}
+
 bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline){
     if(!decoderPipeline)
         return false;
@@ -148,20 +162,6 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     }
     cache.heapHandle = handle;
     return true;
-}
-
-ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept{
-    const ECSRenderDetail::ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
-    return {
-        .buffer = cache.buffer,
-        .decoderPipeline = cache.decoderPipeline,
-        .sourceRevision = mesh.runtimeGeometryContentRevision,
-        .heapHandle = cache.heapHandle,
-        .indexByteOffset = cache.indexByteOffset,
-        .indexCount = cache.indexCount,
-        .initialized = cache.initialized,
-        .requiresDecode = !cache.acceptedContent || (mesh.runtimeMesh && (mesh.runtimeGeometryContentRevision == 0u || cache.acceptedContentRevision != mesh.runtimeGeometryContentRevision)),
-    };
 }
 
 bool RendererMeshSystem::confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, const bool runtimeMesh){

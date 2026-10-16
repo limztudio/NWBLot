@@ -10,6 +10,7 @@
 #include <core/graphics/rhi/command.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
+
 #include <global/filesystem/operations.h>
 
 
@@ -51,7 +52,7 @@ static void WriteU32LE(u8* const destination, const u32 value){
     destination[3] = static_cast<u8>((value >> 24u) & 0xffu);
 }
 
-static bool IsSupportedSdrFormat(const Core::Format::Enum format){
+static bool IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{
     return format == Core::Format::RGBA8_UNORM || format == Core::Format::RGBA8_UNORM_SRGB || format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
 }
 
@@ -77,6 +78,9 @@ namespace Tests::Smoke{
 
 struct FramebufferCapture::ReadbackTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Transfer };
+
+
+public:
     struct Payload{
         Core::TextureHandle source;
         Core::TextureSlice sourceSlice;
@@ -86,6 +90,8 @@ struct FramebufferCapture::ReadbackTask{
         u64 graphicsFrameIndex = 0u;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.source || !payload.destination || !payload.completionState || context.commandIrCapture)
             return false;
@@ -232,7 +238,7 @@ void FramebufferCapture::finish(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FramebufferCapture::shouldRenderUnfocused(){
+bool FramebufferCapture::shouldRenderUnfocused()noexcept{
     return true;
 }
 
@@ -292,7 +298,7 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
     return true;
 }
 
-bool FramebufferCapture::hasTaskGraphPresentationWork()const{
+bool FramebufferCapture::hasTaskGraphPresentationWork()const noexcept{
     return m_taskGraphPresentationPrepared && m_readback && !m_completionState->acceptedToken.valid() && !m_captureReady && !m_skipped && !m_failed;
 }
 

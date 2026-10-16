@@ -2,14 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "csg_smoke_helpers.h"
+#include "fps_probe.h"
+#include "smoke_project_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
+
 #include <loader/project_entry.h>
 
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/assert.h>
-#include <global/simd/frame.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>
@@ -22,10 +21,13 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include "csg_smoke_helpers.h"
-#include "fps_probe.h"
-#include "smoke_project_helpers.h"
-#include "smoke_skinned_scene_helpers.h"
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/assert.h>
+#include <global/simd/frame.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,25 +124,25 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 }
 
 
-[[nodiscard]] static SIMDVectorSingle BuildReceiverRotation(const f32 animationTime){
+[[nodiscard]] static SIMDVectorSingle BuildReceiverRotation(const f32 animationTime)noexcept{
     return QuaternionRotationRollPitchYaw(0.0f, animationTime * s_ReceiverYawSpeed, 0.0f);
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildCsgReceiverPosition(){
+[[nodiscard]] static SIMDVectorSingle BuildCsgReceiverPosition()noexcept{
     return VectorSet(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f);
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildCutterLocalRotation(const f32 animationTime){
+[[nodiscard]] static SIMDVectorSingle BuildCutterLocalRotation(const f32 animationTime)noexcept{
     const SIMDVectorSingle horizontalCapsule = QuaternionRotationRollPitchYaw(s_PIDIV2, s_PIDIV2, 0.0f);
     const SIMDVectorSingle gentleRoll = QuaternionRotationRollPitchYaw(0.0f, animationTime * s_CutterGentleRollSpeed, 0.0f);
     return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildCutterWorldCenter(const SIMDVectorSingle cutterLocalCenter, const SIMDVectorSingle receiverRotation){
+[[nodiscard]] static SIMDVectorSingle BuildCutterWorldCenter(const SIMDVectorSingle cutterLocalCenter, const SIMDVectorSingle receiverRotation)noexcept{
     return VectorAdd(BuildCsgReceiverPosition(), Vector3Rotate(cutterLocalCenter, receiverRotation));
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildCutterWorldRotation(const f32 animationTime, const SIMDVectorSingle receiverRotation){
+[[nodiscard]] static SIMDVectorSingle BuildCutterWorldRotation(const f32 animationTime, const SIMDVectorSingle receiverRotation)noexcept{
     return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCutterLocalRotation(animationTime)));
 }
 
@@ -163,6 +165,8 @@ private:
         return world;
     }
 
+
+private:
     void destroyWorld(){
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
@@ -392,7 +396,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
     return NWB_TEXT("NWB Transparent Skinned Sphere CSG Smoke");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)

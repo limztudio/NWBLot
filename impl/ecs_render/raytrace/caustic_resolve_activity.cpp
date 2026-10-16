@@ -63,16 +63,11 @@ bool CausticResolveActivitySnapshot::matches(const CausticResolveActivitySnapsho
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererRayTracingSystem::releaseCausticResolveActivity(){
-    auto& activity = m_rayTracingState.m_causticResolve.m_activity;
-    auto& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        for(const Core::GpuDescriptorHandle descriptor : activity.descriptors){
-            if(descriptor.valid())
-                heap.free(descriptor);
-        }
-    }
-    activity = {};
+CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const{
+    const auto& activity = m_rayTracingState.m_causticResolve.m_activity;
+    if(!activity.valid() || activity.halfWidth != DivideUp(targets.width, 2u) || activity.halfHeight != DivideUp(targets.height, 2u))
+        return {};
+    return activity;
 }
 
 bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, const u32 halfHeight){
@@ -104,11 +99,16 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
     return true;
 }
 
-CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const{
-    const auto& activity = m_rayTracingState.m_causticResolve.m_activity;
-    if(!activity.valid() || activity.halfWidth != DivideUp(targets.width, 2u) || activity.halfHeight != DivideUp(targets.height, 2u))
-        return {};
-    return activity;
+void RendererRayTracingSystem::releaseCausticResolveActivity(){
+    auto& activity = m_rayTracingState.m_causticResolve.m_activity;
+    auto& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(heap.isInitialized()){
+        for(const Core::GpuDescriptorHandle descriptor : activity.descriptors){
+            if(descriptor.valid())
+                heap.free(descriptor);
+        }
+    }
+    activity = {};
 }
 
 

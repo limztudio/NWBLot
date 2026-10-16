@@ -62,6 +62,8 @@ struct ResourceUseCollector : NoCopy{
     usize m_count = 0u;
     Optional<Index> m_index;
 
+
+public:
     [[nodiscard]] static bool MergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access)noexcept{
         if(info.requiredState != state)
             return false;
@@ -70,10 +72,14 @@ struct ResourceUseCollector : NoCopy{
         return true;
     }
 
+
+public:
     explicit ResourceUseCollector(Core::Alloc::ScratchArena& scratchArena)
         : m_scratchArena(scratchArena)
     {}
 
+
+public:
     [[nodiscard]] bool add(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
         if(!resource.valid())
             return false;

@@ -45,8 +45,7 @@ public:
                 usize end = begin + 1u;
                 while(end < request.text.size() && (static_cast<u8>(request.text[end]) & 0xc0u) == 0x80u)
                     ++end;
-                run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {},
-                    { 10.0f, 0.0f }, { -1.0f, -8.0f, 12.0f, 10.0f } });
+                run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { 10.0f, 0.0f }, { -1.0f, -8.0f, 12.0f, 10.0f } });
                 begin = end;
             }
             if(request.direction == TextDirection::RightToLeft){

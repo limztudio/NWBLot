@@ -50,20 +50,6 @@ static Expected<ECSRenderDetail::MeshFrameHeapSlots> ResolveMeshFrameHeapSlots(c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererMaterialSystem::setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh){
-    if(!context.materialGeometryStatesGraphOwned){
-        ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
-            context.commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
-        });
-    }
-    if(!context.materialFrameStatesGraphOwned){
-        NWB_ASSERT(context.frameBindings.bindingValid());
-        context.commandList.setBufferState(context.frameBindings.instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        context.commandList.setBufferState(context.frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
-        context.commandList.setBufferState(context.frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    }
-}
-
 bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const{
     return mesh.valid() && frameBindings.bindingValid();
 }
@@ -121,6 +107,20 @@ u32 RendererMaterialSystem::materialPassDrawDispatchFlags(const MaterialPassDraw
     // Carry the owning material's shading-model id in the high bits of the per-draw dispatch word
     flags = (flags & NWB_MESH_DISPATCH_FLAG_MASK) | ((drawItem.shadingModelId & NWB_MESH_DISPATCH_SHADING_MODEL_MASK) << NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT);
     return flags;
+}
+
+void RendererMaterialSystem::setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh){
+    if(!context.materialGeometryStatesGraphOwned){
+        ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
+            context.commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
+        });
+    }
+    if(!context.materialFrameStatesGraphOwned){
+        NWB_ASSERT(context.frameBindings.bindingValid());
+        context.commandList.setBufferState(context.frameBindings.instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(context.frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
+        context.commandList.setBufferState(context.frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    }
 }
 
 bool RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh){

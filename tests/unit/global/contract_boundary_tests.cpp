@@ -42,18 +42,24 @@ void VerifySignedLowerSaturation(){
 struct ThrowingPointerConversion{
     int* value;
 
+
+public:
     [[nodiscard]] operator int*()const{ throw s_ConversionFailure; }
 };
 
 struct NonthrowingPointerConversion{
     int* value;
 
+
+public:
     [[nodiscard]] operator int*()const noexcept{ return value; }
 };
 
 struct PotentiallyThrowingPointerDestruction{
     int* value;
 
+
+public:
     ~PotentiallyThrowingPointerDestruction()noexcept(false){}
     [[nodiscard]] operator int*()const noexcept{ return value; }
 };
@@ -62,11 +68,15 @@ struct ReferenceProbeBase{
     u32 referenceCount = 1u;
     u32& destroyedCount;
 
+
+public:
     explicit ReferenceProbeBase(u32& count)noexcept
         : destroyedCount(count)
     {}
     virtual ~ReferenceProbeBase()noexcept{ ++destroyedCount; }
 
+
+public:
     [[nodiscard]] u32 addReference()noexcept{ return ++referenceCount; }
     [[nodiscard]] u32 release()noexcept{ return --referenceCount; }
 };
@@ -83,6 +93,8 @@ struct StatefulValueDeleter{
     u32 tag;
     u32& deleteCount;
 
+
+public:
     StatefulValueDeleter(const u32 value, u32& count)noexcept
         : tag(value)
         , deleteCount(count)

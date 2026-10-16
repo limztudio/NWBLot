@@ -19,6 +19,7 @@
 #include <core/task/gpu/packet_runtime.h>
 #include <core/task/gpu/queue_assignment_telemetry.h>
 #include <core/telemetry/frame_graph_contributor.h>
+
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/text_utils.h>
@@ -145,9 +146,11 @@ struct SingleQueueCompile{
     Graphics::GpuCompiledGraph compiledGraph;
 
 
+public:
     explicit SingleQueueCompile(TestArena& testArena);
 
 
+public:
     [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
@@ -161,9 +164,11 @@ struct TwoQueueCompile{
     Graphics::GpuCompiledGraph compiledGraph;
 
 
+public:
     explicit TwoQueueCompile(TestArena& testArena);
 
 
+public:
     [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
@@ -178,9 +183,11 @@ struct ThreeQueueCompile{
     Graphics::GpuCompiledGraph compiledGraph;
 
 
+public:
     explicit ThreeQueueCompile(TestArena& testArena);
 
 
+public:
     [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
@@ -195,17 +202,17 @@ struct ThreeQueueCompile{
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(
     const u16 index = 0u,
     const Graphics::GpuQueueCapability::Mask capabilities = QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Transfer)
-);
+)noexcept;
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index = 1u);
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u);
 
-[[nodiscard]] inline Graphics::GpuTaskCommandRequirements GraphicsCommands(){
+[[nodiscard]] inline Graphics::GpuTaskCommandRequirements GraphicsCommands()noexcept{
     return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics };
 }
 
-[[nodiscard]] inline Graphics::GpuTaskCommandRequirements ComputeCommands(){
+[[nodiscard]] inline Graphics::GpuTaskCommandRequirements ComputeCommands()noexcept{
     return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute };
 }
 
@@ -217,7 +224,7 @@ struct TransferOwnershipPair{
 
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(Graphics::GpuTaskGraph& graph, const Graphics::ResourceQueueSharing::Mask queueSharing);
 
-[[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer);
+[[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer)noexcept;
 
 struct ExternalFinalReadPair{
     Graphics::GpuGraphResourceId resource;
@@ -240,7 +247,7 @@ struct ExternalFinalReadPair{
 );
 
 
-[[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard);
+[[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

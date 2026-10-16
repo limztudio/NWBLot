@@ -30,11 +30,11 @@ constexpr u32 s_ExpectedDualCount = 2u;
 using namespace NWB;
 using namespace NWB::Impl;
 
-[[nodiscard]] ReflectionSceneContentStamp Stamp(){
+[[nodiscard]] ReflectionSceneContentStamp Stamp()noexcept{
     return ReflectionSceneContentStamp{1u, s_ExpectedDualCount, 3u, 4u, true};
 }
 
-[[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 1u){
+[[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 1u)noexcept{
     return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Core::CommandQueue::Graphics, };
 }
 
@@ -47,6 +47,9 @@ struct LeaseTask{
     struct Payload{
         ReflectionHistoryReservation reservation;
     };
+
+
+public:
     static void Discarded(Payload& payload){ payload.reservation.discard(); }
 };
 

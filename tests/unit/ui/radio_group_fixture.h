@@ -63,7 +63,7 @@ public:
 
 
 private:
-    [[nodiscard]] u64 rawCount()const;
+    [[nodiscard]] u64 rawCount()const noexcept;
     [[nodiscard]] u64 rawKey(u64 index)const;
     void callback(RadioCallbackSite::Enum site)const;
 
@@ -120,9 +120,9 @@ protected:
     [[nodiscard]] bool declareSource(u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
     [[nodiscard]] bool prepare(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
     [[nodiscard]] bool accept(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
-    [[nodiscard]] WidgetId host()const;
-    [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 key, const RadioGroupState& state)const;
-    [[nodiscard]] Point choicePoint(u64 key)const;
+    [[nodiscard]] WidgetId host()const noexcept;
+    [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 key, const RadioGroupState& state)const noexcept;
+    [[nodiscard]] Point choicePoint(u64 key)const noexcept;
     [[nodiscard]] RadioAcceptedFrame accepted()const;
     void expectAccepted(const RadioAcceptedFrame& saved, bool focus = true, bool popupScopes = true)const;
     [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const;

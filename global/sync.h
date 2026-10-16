@@ -162,6 +162,7 @@ public:
     AtomicBackOff(const AtomicBackOff&) = delete;
     AtomicBackOff& operator=(const AtomicBackOff&) = delete;
 
+
 public:
     void pause()noexcept{
         if(m_count <= s_LoopsBeforeYield){

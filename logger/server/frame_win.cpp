@@ -324,6 +324,34 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
+    HWND listHwnd = nullptr;
+    TStringView itemText;
+    {
+        ScopedLock lock(FrameDetail::s_ListMutex);
+
+        // Worker threads may still drain after store teardown; ignore late prints.
+        if(!FrameDetail::s_Store)
+            return;
+
+        FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
+        itemText = TStringView(FrameDetail::s_Store->messages.back().first());
+        listHwnd = FrameDetail::s_ListHwnd;
+    }
+
+    // SendMessage must run outside s_ListMutex: LB_ADDSTRING re-enters UI draw handlers that take the lock.
+    // Handlers index by itemID; item data is unused and the single worker serializes appends.
+    if(!listHwnd)
+        return;
+
+    SendMessage(listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText.data()));
+
+    const auto numItem = SendMessage(listHwnd, LB_GETCOUNT, 0, 0);
+    if(numItem > 0)
+        SendMessage(listHwnd, LB_SETCURSEL, numItem - 1, 0);
+}
+
+
 Frame::Frame(void* inst){
     {
         ScopedLock lock(FrameDetail::s_ListMutex);
@@ -386,33 +414,6 @@ bool Frame::mainLoop(){
         TranslateMessage(&message);
         DispatchMessage(&message);
     }
-}
-
-void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
-    HWND listHwnd = nullptr;
-    TStringView itemText;
-    {
-        ScopedLock lock(FrameDetail::s_ListMutex);
-
-        // Worker threads may still drain after store teardown; ignore late prints.
-        if(!FrameDetail::s_Store)
-            return;
-
-        FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
-        itemText = TStringView(FrameDetail::s_Store->messages.back().first());
-        listHwnd = FrameDetail::s_ListHwnd;
-    }
-
-    // SendMessage must run outside s_ListMutex: LB_ADDSTRING re-enters UI draw handlers that take the lock.
-    // Handlers index by itemID; item data is unused and the single worker serializes appends.
-    if(!listHwnd)
-        return;
-
-    SendMessage(listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText.data()));
-
-    const auto numItem = SendMessage(listHwnd, LB_GETCOUNT, 0, 0);
-    if(numItem > 0)
-        SendMessage(listHwnd, LB_SETCURSEL, numItem - 1, 0);
 }
 
 

@@ -32,8 +32,7 @@ public:
         ShapedRun run(m_arena);
         run.metrics = { 8.0f, 2.0f, 2.0f };
         for(usize index = 0u; index < request.text.size(); ++index){
-            run.glyphs.push_back({ {}, 1u, static_cast<u32>(index), static_cast<u32>(index + 1u),
-                index == 0u ? m_offset : m_secondOffset, m_advance, m_ink, m_coverage });
+            run.glyphs.push_back({ {}, 1u, static_cast<u32>(index), static_cast<u32>(index + 1u), index == 0u ? m_offset : m_secondOffset, m_advance, m_ink, m_coverage });
         }
         return run;
     }

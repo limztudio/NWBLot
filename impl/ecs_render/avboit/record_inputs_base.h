@@ -73,6 +73,8 @@ struct AvboitRecordInputsBase{
         static_cast<void>(arena);
     }
 
+
+public:
     // Reuse requires the regular emulation plan and excludes CSG/shared plans.
     [[nodiscard]] bool generatedGeometryReusePlansValid()const noexcept{
         const bool generatedGeometryReused = reusedGeometryProducer.valid();

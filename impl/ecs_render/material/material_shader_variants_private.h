@@ -45,7 +45,7 @@ struct ShaderVariantDefineAssignment{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline AStringView VariantSegmentDefineName(const AStringView segment){
+[[nodiscard]] inline AStringView VariantSegmentDefineName(const AStringView segment)noexcept{
     const usize equalPos = segment.find('=');
     return equalPos == AStringView::npos ? AStringView{} : segment.substr(0u, equalPos);
 }

@@ -398,7 +398,7 @@ TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
     for(const AStringView overrideText : s_Overrides){
         TestAString metadata(PaletteMetadata());
         metadata.append(overrideText);
-            EXPECT_FALSE(ParseMetadata(testArena, metadata)) << overrideText;
+        EXPECT_FALSE(ParseMetadata(testArena, metadata)) << overrideText;
     }
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("toolkit_contract must be 'widgets'")));
@@ -445,7 +445,7 @@ TEST(AssetsUiSkin, CookRejectsDuplicateNamesAndAtlasOrSliceOverflow){
     for(const AStringView overrideText : s_Overrides){
         TestAString metadata(PaletteMetadata());
         metadata.append(overrideText);
-            EXPECT_FALSE(ParseMetadata(testArena, metadata)) << overrideText;
+        EXPECT_FALSE(ParseMetadata(testArena, metadata)) << overrideText;
     }
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate region")));
 }

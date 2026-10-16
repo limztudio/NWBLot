@@ -32,6 +32,8 @@ struct AreaModelSnapshot{
     bool undo = false;
     bool redo = false;
 
+
+public:
     AreaModelSnapshot(Core::Alloc::GlobalArena& arena, const EditModel& model)
         : text(arena)
         , instance(model.instanceGeneration())
@@ -95,7 +97,7 @@ protected:
         return seedModel() && frameArea(generation, options, bounds) && m_state.scrollbars().horizontal.visible && m_state.scrollbars().vertical.visible;
     }
 
-    [[nodiscard]] WidgetId popupArea()const{
+    [[nodiscard]] WidgetId popupArea()const noexcept{
         const WidgetId parent = MakeWidgetId(MakeRootId(m_root), "parent");
         return MakeWidgetId(MakeWidgetId(parent, "child"), "area");
     }

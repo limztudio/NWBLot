@@ -27,9 +27,6 @@ struct DeferredFrameTargets;
 
 class FrameExecuteLifecycle final{
 public:
-    FrameExecuteLifecycle() = delete;
-
-
     struct ShadowPrepareStateLifecycleContext{
         RendererFramePipeline* renderer = nullptr;
         Core::Alloc::ScratchArena& scratchArena;
@@ -120,6 +117,8 @@ public:
         bool stateReady = false;
     };
 
+
+public:
     [[nodiscard]] static bool PrepareShadowPrepareTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
     [[nodiscard]] static bool AcceptShadowPrepareTask( void* const rawContext, const Core::QueueSubmissionToken& token );
     [[nodiscard]] static bool PrepareShadowVisibilityTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
@@ -132,6 +131,10 @@ public:
     [[nodiscard]] static bool AcceptHardwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token );
     [[nodiscard]] static bool PrepareDeferredLightingTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
     [[nodiscard]] static bool AcceptDeferredLightingTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+
+
+public:
+    FrameExecuteLifecycle() = delete;
 };
 
 

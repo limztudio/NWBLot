@@ -47,6 +47,8 @@ static constexpr AStringView s_TRAILING_SUFFIX = ".trailing";
 struct OversizedBinarySource{
     static constexpr u8 s_Byte = 0u;
 
+
+public:
     [[nodiscard]] u64 size()const noexcept{ return static_cast<u64>(Limit<StreamSize>::s_Max) + 1u; }
     [[nodiscard]] bool empty()const noexcept{ return false; }
     [[nodiscard]] const u8* data()const noexcept{ return &s_Byte; }
@@ -226,6 +228,8 @@ struct ThrowingCaptureOutput{
     usize byteCount = 0u;
     pid_t childPid = 0;
 
+
+public:
     void clear()noexcept{
         byteCount = 0u;
         childPid = 0;

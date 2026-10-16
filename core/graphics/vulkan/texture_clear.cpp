@@ -78,93 +78,6 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
     retainResource(&texture);
 }
 
-bool CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName){
-    static_cast<void>(valueName);
-    constexpr TStringView s_OperationName = NWB_TEXT("clear color attachment");
-    if(!m_renderPassActive || !m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a color attachment is required"));
-        return false;
-    }
-
-    const auto clearTarget = VulkanTextureDetail::FindTextureColorAttachmentClearTarget(texture, resolvedSubresources, m_renderPassFramebuffer->getDescription());
-    if(!clearTarget){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active color attachments"));
-        return false;
-    }
-
-    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(texture.m_creationDesc, resolvedSubresources.baseMipLevel, rect);
-    if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
-        return true;
-    if(clearTarget->isReadOnly){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active color attachment is read-only"));
-        return false;
-    }
-
-    VkClearAttachment clearAttachment{};
-    clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    clearAttachment.colorAttachment = clearTarget->colorAttachmentIndex;
-    clearAttachment.clearValue.color = clearValue;
-
-    const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(resolvedSubresources, clearTarget->resolvedSubresources, resolvedRect);
-    if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("clear rect is outside the active render area"));
-        return false;
-    }
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
-        return false;
-
-    m_context.deviceDispatch.vkCmdClearAttachments(m_currentCmdBuf->m_cmdBuf, 1u, &clearAttachment, 1u, &clearRect);
-    return true;
-}
-
-bool CommandList::clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
-    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil attachment");
-    if(!m_renderPassActive || !m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a depth/stencil attachment is required"));
-        return false;
-    }
-
-    const FramebufferDesc& fbDesc = m_renderPassFramebuffer->getDescription();
-    const FramebufferAttachment& attachment = fbDesc.depthAttachment;
-    if(attachment.texture != &texture){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not the active depth/stencil attachment"));
-        return false;
-    }
-    if(attachment.isReadOnly){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("active depth/stencil attachment is read-only"));
-        return false;
-    }
-
-    const auto resolvedAttachmentSubresources = VulkanTextureDetail::ResolveTextureAttachmentClearSubresources(texture, attachment, resolvedSubresources);
-    if(!resolvedAttachmentSubresources){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active depth/stencil attachments"));
-        return false;
-    }
-
-    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(texture.m_creationDesc, resolvedSubresources.baseMipLevel, rect);
-    if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
-        return true;
-
-    VkClearAttachment clearAttachment{};
-    if(clearDepth)
-        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(clearStencil)
-        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    clearAttachment.clearValue.depthStencil.depth = depth;
-    clearAttachment.clearValue.depthStencil.stencil = stencil;
-
-    const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(resolvedSubresources, *resolvedAttachmentSubresources, resolvedRect);
-    if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("clear rect is outside the active render area"));
-        return false;
-    }
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
-        return false;
-
-    m_context.deviceDispatch.vkCmdClearAttachments(m_currentCmdBuf->m_cmdBuf, 1u, &clearAttachment, 1u, &clearRect);
-    return true;
-}
-
 void CommandList::clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
     clearDepthStencilTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
 }
@@ -362,6 +275,93 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         return;
 
     retainResource(&texture);
+}
+
+bool CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName){
+    static_cast<void>(valueName);
+    constexpr TStringView s_OperationName = NWB_TEXT("clear color attachment");
+    if(!m_renderPassActive || !m_renderPassFramebuffer){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a color attachment is required"));
+        return false;
+    }
+
+    const auto clearTarget = VulkanTextureDetail::FindTextureColorAttachmentClearTarget(texture, resolvedSubresources, m_renderPassFramebuffer->getDescription());
+    if(!clearTarget){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active color attachments"));
+        return false;
+    }
+
+    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(texture.m_creationDesc, resolvedSubresources.baseMipLevel, rect);
+    if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
+        return true;
+    if(clearTarget->isReadOnly){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("active color attachment is read-only"));
+        return false;
+    }
+
+    VkClearAttachment clearAttachment{};
+    clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    clearAttachment.colorAttachment = clearTarget->colorAttachmentIndex;
+    clearAttachment.clearValue.color = clearValue;
+
+    const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(resolvedSubresources, clearTarget->resolvedSubresources, resolvedRect);
+    if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("clear rect is outside the active render area"));
+        return false;
+    }
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
+        return false;
+
+    m_context.deviceDispatch.vkCmdClearAttachments(m_currentCmdBuf->m_cmdBuf, 1u, &clearAttachment, 1u, &clearRect);
+    return true;
+}
+
+bool CommandList::clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
+    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil attachment");
+    if(!m_renderPassActive || !m_renderPassFramebuffer){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a depth/stencil attachment is required"));
+        return false;
+    }
+
+    const FramebufferDesc& fbDesc = m_renderPassFramebuffer->getDescription();
+    const FramebufferAttachment& attachment = fbDesc.depthAttachment;
+    if(attachment.texture != &texture){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not the active depth/stencil attachment"));
+        return false;
+    }
+    if(attachment.isReadOnly){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("active depth/stencil attachment is read-only"));
+        return false;
+    }
+
+    const auto resolvedAttachmentSubresources = VulkanTextureDetail::ResolveTextureAttachmentClearSubresources(texture, attachment, resolvedSubresources);
+    if(!resolvedAttachmentSubresources){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active depth/stencil attachments"));
+        return false;
+    }
+
+    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(texture.m_creationDesc, resolvedSubresources.baseMipLevel, rect);
+    if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
+        return true;
+
+    VkClearAttachment clearAttachment{};
+    if(clearDepth)
+        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(clearStencil)
+        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    clearAttachment.clearValue.depthStencil.depth = depth;
+    clearAttachment.clearValue.depthStencil.stencil = stencil;
+
+    const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(resolvedSubresources, *resolvedAttachmentSubresources, resolvedRect);
+    if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("clear rect is outside the active render area"));
+        return false;
+    }
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
+        return false;
+
+    m_context.deviceDispatch.vkCmdClearAttachments(m_currentCmdBuf->m_cmdBuf, 1u, &clearAttachment, 1u, &clearRect);
+    return true;
 }
 
 

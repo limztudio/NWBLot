@@ -70,6 +70,17 @@ private:
 
 
 public:
+    template<typename TAsset, typename TResource>
+    [[nodiscard]] static bool CheckLoaderEnter(const AssetRef<TAsset>& assetRef, const TResource& resource, const TStringView owner, const AStringView assetKindText){
+        if(!assetRef.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, StringConvert(assetKindText));
+            return false;
+        }
+        return !resource.valid();
+    }
+
+
+public:
     explicit AssetManager(AssetArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource);
 
 
@@ -89,15 +100,6 @@ public:
 
 
 public:
-    template<typename TAsset, typename TResource>
-    [[nodiscard]] static bool CheckLoaderEnter(const AssetRef<TAsset>& assetRef, const TResource& resource, const TStringView owner, const AStringView assetKindText){
-        if(!assetRef.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, StringConvert(assetKindText));
-            return false;
-        }
-        return !resource.valid();
-    }
-
     template<typename AssetT>
     [[nodiscard]] Expected<UniquePtr<AssetT>> loadTypedSync(const Name& virtualPath, const TStringView ownerName, const AStringView assetKindText)const{
         auto loadedAsset = loadSync(AssetT::AssetTypeName(), virtualPath);

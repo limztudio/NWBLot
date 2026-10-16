@@ -22,7 +22,7 @@ namespace DeletionMutation{
 
 class UiSelectionDeletionTests : public UiEditBoxHostTests{
 protected:
-    [[nodiscard]] UiTextEditOwner owner()const;
+    [[nodiscard]] UiTextEditOwner owner()const noexcept;
     [[nodiscard]] bool seed(bool reverse = false);
     [[nodiscard]] bool mutate(DeletionMutation::Enum mutation);
     void expectBaseline(u64 revision, u64 externalRevision, u64 selectionGeneration)const;
@@ -35,7 +35,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextEditOwner UiSelectionDeletionTests::owner()const{
+UiTextEditOwner UiSelectionDeletionTests::owner()const noexcept{
     return { { 371u }, 3u, m_model.instanceGeneration() };
 }
 

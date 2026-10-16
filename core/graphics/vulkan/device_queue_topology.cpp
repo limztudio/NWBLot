@@ -20,16 +20,8 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Queue* Device::getQueue(const CommandQueue::Enum queueType)noexcept{
-    const u32 index = static_cast<u32>(queueType);
-    return index < static_cast<u32>(CommandQueue::kCount) ? m_primaryQueues[index] : nullptr;
-}
-
-Queue* Device::getQueue(const GpuPhysicalQueueId& queue)noexcept{
-    if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration || queue.index >= m_physicalQueues.size())
-        return nullptr;
-    Queue* const result = m_physicalQueues[queue.index];
-    return result && result->m_physicalQueue == queue ? result : nullptr;
+u16 Device::getPhysicalQueueIndex(const CommandQueue::Enum queue)const noexcept{
+    return getPrimaryPhysicalQueue(queue).index;
 }
 
 GpuPhysicalQueueId Device::getPrimaryPhysicalQueue(const CommandQueue::Enum queue)const noexcept{
@@ -38,10 +30,6 @@ GpuPhysicalQueueId Device::getPrimaryPhysicalQueue(const CommandQueue::Enum queu
         return {};
     const Queue* const result = m_primaryQueues[queueIndex];
     return result ? result->m_physicalQueue : GpuPhysicalQueueId{};
-}
-
-u16 Device::getPhysicalQueueIndex(const CommandQueue::Enum queue)const noexcept{
-    return getPrimaryPhysicalQueue(queue).index;
 }
 
 GpuPhysicalQueueTopology Device::getPhysicalQueueTopology()const noexcept{
@@ -100,6 +88,19 @@ bool Device::matchesPhysicalQueueIdentity(const CommandQueue::Enum queue, const 
 
 bool Device::matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept{
     return getPhysicalQueueInfo(queue) != nullptr;
+}
+
+
+Queue* Device::getQueue(const CommandQueue::Enum queueType)noexcept{
+    const u32 index = static_cast<u32>(queueType);
+    return index < static_cast<u32>(CommandQueue::kCount) ? m_primaryQueues[index] : nullptr;
+}
+
+Queue* Device::getQueue(const GpuPhysicalQueueId& queue)noexcept{
+    if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration || queue.index >= m_physicalQueues.size())
+        return nullptr;
+    Queue* const result = m_physicalQueues[queue.index];
+    return result && result->m_physicalQueue == queue ? result : nullptr;
 }
 
 

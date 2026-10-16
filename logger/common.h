@@ -263,6 +263,7 @@ protected:
 public:
     inline LogArena& arena()noexcept{ return m_arena; }
 
+
 public:
     template<typename... Args>
     inline bool init(Args&&... args){
@@ -285,6 +286,7 @@ public:
         return true;
     }
 
+
 public:
     inline void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(Move(str), m_arena);
@@ -303,6 +305,7 @@ public:
 protected:
     LogArena m_arena;
     MessageQueue m_messageQueue;
+
 
 protected:
     Thread m_thread;
@@ -396,6 +399,7 @@ public:
 protected:
     [[nodiscard]] inline bool workerCanExit()const noexcept{ return true; }
     void internalDestroy(){ m_semaphore.release(); }
+
 
 protected:
     inline void enqueue(MessageType&& data){ LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }

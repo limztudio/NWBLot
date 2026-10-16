@@ -71,7 +71,7 @@ struct MaterialTypedByteContentKey{
     }
 };
 
-inline bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs){
+inline bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept{
     if(lhs.byteHash != rhs.byteHash || lhs.bytes.size() != rhs.bytes.size())
         return false;
     if(lhs.bytes.empty())
@@ -81,13 +81,13 @@ inline bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTyp
 }
 
 struct MaterialTypedByteContentKeyHasher{
-    usize operator()(const MaterialTypedByteContentKey& key)const{
+    usize operator()(const MaterialTypedByteContentKey& key)const noexcept{
         usize seed = Hasher<u64>{}(key.byteHash);
         ::HashCombine(seed, key.bytes.size());
         return seed;
     }
 
-    usize operator()(const MaterialTypedByteContentLookup& lookup)const{
+    usize operator()(const MaterialTypedByteContentLookup& lookup)const noexcept{
         usize seed = Hasher<u64>{}(lookup.byteHash);
         ::HashCombine(seed, lookup.bytes.size());
         return seed;
@@ -97,11 +97,11 @@ struct MaterialTypedByteContentKeyHasher{
 struct MaterialTypedByteContentKeyEqual{
     using is_transparent = void;
 
-    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)const{
+    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)const noexcept{
         return lhs == rhs;
     }
 
-    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const{
+    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const noexcept{
         if(lhs.byteHash != rhs.byteHash || lhs.bytes.size() != rhs.bytes.size())
             return false;
         if(lhs.bytes.empty())

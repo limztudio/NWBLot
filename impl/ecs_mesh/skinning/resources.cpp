@@ -72,37 +72,104 @@ static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(Core::GpuDescri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources){
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        const auto release = [&](Core::GpuDescriptorHandle& handle){
-            if(handle.valid())
-                heap.free(handle);
-            handle = Core::GpuDescriptorHandle::Invalid();
-        };
-        release(resources.bindlessHeapHandles.resourceSlots);
-        release(resources.bindlessHeapHandles.restPosition);
-        release(resources.bindlessHeapHandles.skinnedPosition);
-        release(resources.bindlessHeapHandles.restNormal);
-        release(resources.bindlessHeapHandles.skinnedNormal);
-        release(resources.bindlessHeapHandles.restTangent);
-        release(resources.bindlessHeapHandles.skinnedTangent);
-        release(resources.bindlessHeapHandles.meshletDesc);
-        release(resources.bindlessHeapHandles.positionRefDeltas);
-        release(resources.bindlessHeapHandles.attributeRefDeltas);
-        release(resources.bindlessHeapHandles.attributeSkins);
-        release(resources.bindlessHeapHandles.skinInfluences);
-        release(resources.bindlessHeapHandles.jointPalette);
-        release(resources.bindlessHeapHandles.localVertexRefs);
-        release(resources.bindlessHeapHandles.primitiveIndices);
-        release(resources.bindlessHeapHandles.meshletBounds);
-        release(resources.bindlessHeapHandles.attributeBuffer);
-        release(resources.bindlessHeapHandles.meshletLocalBounds);
-        release(resources.bindlessHeapHandles.localBounds);
+Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload, Core::Alloc::ScratchArena& scratchArena){
+    NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
+
+    const bool hasActiveSkin = payload.hasActiveSkin();
+    NWB_ASSERT(!hasActiveSkin || payload.skinInfluenceCount == instance.skin.size());
+    NWB_ASSERT(payload.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(payload.jointMatrices.size() <= static_cast<usize>(Limit<u32>::s_Max));
+
+    MeshSkinningResourceBuffers buffers = CaptureMeshSkinningResourceBuffers(instance);
+    auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
+    RuntimeResources& resources = it.value();
+    const u32 positionCount = instance.meshletPositionRefCount;
+    const u32 attributeCount = instance.meshletAttributeRefCount;
+    const u32 meshletCount = static_cast<u32>(instance.meshlets.size());
+    const u32 skinCount = static_cast<u32>(payload.skinInfluenceCount);
+    const u32 jointCount = static_cast<u32>(payload.jointMatrices.size());
+    const bool rebuild =
+        inserted
+        || resources.buffers != buffers
+        || resources.editRevision != instance.editRevision
+        || resources.positionCount != positionCount
+        || resources.attributeCount != attributeCount
+        || resources.meshletCount != meshletCount
+        || resources.skinCount != skinCount
+        || resources.jointCount != jointCount
+        || !resources.hasPersistentHeapDescriptors(hasActiveSkin, instance.attributeBuffer != nullptr)
+        || (hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer))
+        || (!hasActiveSkin && resources.usesSkinning())
+    ;
+    if(!rebuild)
+        return RuntimeResourcePreparation{ &resources, false };
+
+    RuntimeResources rebuilt;
+    rebuilt.handle = instance.handle;
+    rebuilt.buffers = Move(buffers);
+    rebuilt.editRevision = instance.editRevision;
+    rebuilt.positionCount = positionCount;
+    rebuilt.attributeCount = attributeCount;
+    rebuilt.meshletCount = meshletCount;
+    rebuilt.skinCount = skinCount;
+    rebuilt.jointCount = jointCount;
+
+    const auto failRebuild = [&](){
+        releaseRuntimeResourceBindlessHeapHandles(rebuilt);
+        return MakeUnexpected(Failure{});
+    };
+
+    if(hasActiveSkin){
+        const auto skinInfluences = MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+        if(!skinInfluences)
+            return failRebuild();
+
+        const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
+        const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
+        if(!skinBufferName || !jointPaletteBufferName){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
+            return failRebuild();
+        }
+
+        rebuilt.skinBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, skinBufferName, skinInfluences->data(), skinInfluences->size(), NWB_TEXT("skin influence"));
+        if(!rebuilt.skinBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
+            return failRebuild();
+        }
+
+        rebuilt.jointPaletteBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, jointPaletteBufferName, payload.jointMatrices.data(), payload.jointMatrices.size(), NWB_TEXT("joint palette"));
+        if(!rebuilt.jointPaletteBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
+            return failRebuild();
+        }
     }
-    resources.bindlessHeapHandles = RuntimeBindlessHeapHandles{};
-    resources.bindlessResourceSlots = MeshSkinningBindlessResourceSlots{};
-    resources.bindlessResourceSlotsUploaded = false;
+
+    const Name bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_bindless_slots");
+    if(!bindlessSlotsBufferName){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
+        return failRebuild();
+    }
+    Core::BufferDesc bindlessSlotsBufferDesc;
+    bindlessSlotsBufferDesc
+        .setByteSize(sizeof(MeshSkinningBindlessResourceSlots))
+        .setIsConstantBuffer(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(bindlessSlotsBufferName)
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rebuilt.bindlessResourceSlotsBuffer = m_graphics.createBuffer(bindlessSlotsBufferDesc);
+    if(!rebuilt.bindlessResourceSlotsBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bindless slot buffer for runtime mesh '{}'"), instance.handle.value);
+        return failRebuild();
+    }
+
+    if(!createRuntimeResourceBindlessHeapHandles(instance, rebuilt))
+        return failRebuild();
+
+    // Rebuilds allocate fresh slots; free the replaced generation before dropping its handles.
+    releaseRuntimeResourceBindlessHeapHandles(resources);
+    resources = Move(rebuilt);
+    return RuntimeResourcePreparation{ &resources, true };
 }
 
 bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources){
@@ -205,104 +272,37 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     return true;
 }
 
-Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload, Core::Alloc::ScratchArena& scratchArena){
-    NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
-
-    const bool hasActiveSkin = payload.hasActiveSkin();
-    NWB_ASSERT(!hasActiveSkin || payload.skinInfluenceCount == instance.skin.size());
-    NWB_ASSERT(payload.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(payload.jointMatrices.size() <= static_cast<usize>(Limit<u32>::s_Max));
-
-    MeshSkinningResourceBuffers buffers = CaptureMeshSkinningResourceBuffers(instance);
-    auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
-    RuntimeResources& resources = it.value();
-    const u32 positionCount = instance.meshletPositionRefCount;
-    const u32 attributeCount = instance.meshletAttributeRefCount;
-    const u32 meshletCount = static_cast<u32>(instance.meshlets.size());
-    const u32 skinCount = static_cast<u32>(payload.skinInfluenceCount);
-    const u32 jointCount = static_cast<u32>(payload.jointMatrices.size());
-    const bool rebuild =
-        inserted
-        || resources.buffers != buffers
-        || resources.editRevision != instance.editRevision
-        || resources.positionCount != positionCount
-        || resources.attributeCount != attributeCount
-        || resources.meshletCount != meshletCount
-        || resources.skinCount != skinCount
-        || resources.jointCount != jointCount
-        || !resources.hasPersistentHeapDescriptors(hasActiveSkin, instance.attributeBuffer != nullptr)
-        || (hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer))
-        || (!hasActiveSkin && resources.usesSkinning())
-    ;
-    if(!rebuild)
-        return RuntimeResourcePreparation{ &resources, false };
-
-    RuntimeResources rebuilt;
-    rebuilt.handle = instance.handle;
-    rebuilt.buffers = Move(buffers);
-    rebuilt.editRevision = instance.editRevision;
-    rebuilt.positionCount = positionCount;
-    rebuilt.attributeCount = attributeCount;
-    rebuilt.meshletCount = meshletCount;
-    rebuilt.skinCount = skinCount;
-    rebuilt.jointCount = jointCount;
-
-    const auto failRebuild = [&](){
-        releaseRuntimeResourceBindlessHeapHandles(rebuilt);
-        return MakeUnexpected(Failure{});
-    };
-
-    if(hasActiveSkin){
-        const auto skinInfluences = MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
-        if(!skinInfluences)
-            return failRebuild();
-
-        const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
-        const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
-        if(!skinBufferName || !jointPaletteBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
-        }
-
-        rebuilt.skinBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, skinBufferName, skinInfluences->data(), skinInfluences->size(), NWB_TEXT("skin influence"));
-        if(!rebuilt.skinBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
-        }
-
-        rebuilt.jointPaletteBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, jointPaletteBufferName, payload.jointMatrices.data(), payload.jointMatrices.size(), NWB_TEXT("joint palette"));
-        if(!rebuilt.jointPaletteBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
-        }
+void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources){
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(heap.isInitialized()){
+        const auto release = [&](Core::GpuDescriptorHandle& handle){
+            if(handle.valid())
+                heap.free(handle);
+            handle = Core::GpuDescriptorHandle::Invalid();
+        };
+        release(resources.bindlessHeapHandles.resourceSlots);
+        release(resources.bindlessHeapHandles.restPosition);
+        release(resources.bindlessHeapHandles.skinnedPosition);
+        release(resources.bindlessHeapHandles.restNormal);
+        release(resources.bindlessHeapHandles.skinnedNormal);
+        release(resources.bindlessHeapHandles.restTangent);
+        release(resources.bindlessHeapHandles.skinnedTangent);
+        release(resources.bindlessHeapHandles.meshletDesc);
+        release(resources.bindlessHeapHandles.positionRefDeltas);
+        release(resources.bindlessHeapHandles.attributeRefDeltas);
+        release(resources.bindlessHeapHandles.attributeSkins);
+        release(resources.bindlessHeapHandles.skinInfluences);
+        release(resources.bindlessHeapHandles.jointPalette);
+        release(resources.bindlessHeapHandles.localVertexRefs);
+        release(resources.bindlessHeapHandles.primitiveIndices);
+        release(resources.bindlessHeapHandles.meshletBounds);
+        release(resources.bindlessHeapHandles.attributeBuffer);
+        release(resources.bindlessHeapHandles.meshletLocalBounds);
+        release(resources.bindlessHeapHandles.localBounds);
     }
-
-    const Name bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_bindless_slots");
-    if(!bindlessSlotsBufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
-        return failRebuild();
-    }
-    Core::BufferDesc bindlessSlotsBufferDesc;
-    bindlessSlotsBufferDesc
-        .setByteSize(sizeof(MeshSkinningBindlessResourceSlots))
-        .setIsConstantBuffer(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(bindlessSlotsBufferName)
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    rebuilt.bindlessResourceSlotsBuffer = m_graphics.createBuffer(bindlessSlotsBufferDesc);
-    if(!rebuilt.bindlessResourceSlotsBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bindless slot buffer for runtime mesh '{}'"), instance.handle.value);
-        return failRebuild();
-    }
-
-    if(!createRuntimeResourceBindlessHeapHandles(instance, rebuilt))
-        return failRebuild();
-
-    // Rebuilds allocate fresh slots; free the replaced generation before dropping its handles.
-    releaseRuntimeResourceBindlessHeapHandles(resources);
-    resources = Move(rebuilt);
-    return RuntimeResourcePreparation{ &resources, true };
+    resources.bindlessHeapHandles = RuntimeBindlessHeapHandles{};
+    resources.bindlessResourceSlots = MeshSkinningBindlessResourceSlots{};
+    resources.bindlessResourceSlotsUploaded = false;
 }
 
 

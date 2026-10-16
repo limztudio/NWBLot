@@ -93,6 +93,27 @@ bool EditModel::move(const EditMove::Enum movement, const bool extend)noexcept{
     return true;
 }
 
+Expected<EditWordRange> EditModel::wordRangeAt(const usize position)const noexcept{
+    using namespace __hidden_ui_edit_navigation;
+    const auto requested = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
+    if(requested == m_boundaries.end() || *requested != position)
+        return MakeUnexpected(Failure{});
+    if(m_text.empty())
+        return EditWordRange{};
+    const auto origin = position == m_text.size() ? requested - 1 : requested;
+    const auto category = [this](const usize byte)noexcept{
+        return m_text[byte] == '\n' ? RunClass::LineBreak : Classify(text(), byte);
+    };
+    const RunClass::Enum run = category(*origin);
+    auto first = origin;
+    auto last = origin + 1;
+    while(first != m_boundaries.begin() && category(*(first - 1)) == run)
+        --first;
+    while(last != m_boundaries.end() - 1 && category(*last) == run)
+        ++last;
+    return EditWordRange{ *first, *last };
+}
+
 bool EditModel::isBoundary(const usize position)const noexcept{
     const auto found = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
     return found != m_boundaries.end() && *found == position;
@@ -131,27 +152,6 @@ usize EditModel::wordBoundary(const usize position, const bool forward)const noe
     while(cursor != m_boundaries.begin() && Classify(text(), *(cursor - 1)) == category)
         --cursor;
     return *cursor;
-}
-
-Expected<EditWordRange> EditModel::wordRangeAt(const usize position)const noexcept{
-    using namespace __hidden_ui_edit_navigation;
-    const auto requested = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
-    if(requested == m_boundaries.end() || *requested != position)
-        return MakeUnexpected(Failure{});
-    if(m_text.empty())
-        return EditWordRange{};
-    const auto origin = position == m_text.size() ? requested - 1 : requested;
-    const auto category = [this](const usize byte)noexcept{
-        return m_text[byte] == '\n' ? RunClass::LineBreak : Classify(text(), byte);
-    };
-    const RunClass::Enum run = category(*origin);
-    auto first = origin;
-    auto last = origin + 1;
-    while(first != m_boundaries.begin() && category(*(first - 1)) == run)
-        --first;
-    while(last != m_boundaries.end() - 1 && category(*last) == run)
-        ++last;
-    return EditWordRange{ *first, *last };
 }
 
 

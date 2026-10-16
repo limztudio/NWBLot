@@ -5,6 +5,7 @@
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
+
 #include <global/text_utils.h>
 
 #include <gtest/gtest.h>
@@ -41,7 +42,7 @@ constexpr usize s_TaskCount = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static i32 SaturateReferenceTerm(const u64 value){
+[[nodiscard]] static i32 SaturateReferenceTerm(const u64 value)noexcept{
     return value > static_cast<u64>(Limit<i32>::s_Max) ? Limit<i32>::s_Max : static_cast<i32>(value);
 }
 

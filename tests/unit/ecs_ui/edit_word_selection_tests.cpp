@@ -20,12 +20,11 @@ using namespace UiEditBoxTestSupport;
 
 class UiEditWordSelectionTests : public UiEditBoxHostTests{
 protected:
-    [[nodiscard]] Ui::Point atByte(const usize byte)const{
+    [[nodiscard]] Ui::Point atByte(const usize byte)const noexcept{
         return { m_placement.textOrigin.x + static_cast<f32>(byte) * 10.0f + 1.0f, m_placement.textOrigin.y + 5.0f };
     }
     [[nodiscard]] bool down(const usize byte, const u64 timestampMs, const bool shift = false){
-        return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = atByte(byte), .shift = shift,
-            .timestampMs = timestampMs });
+        return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = atByte(byte), .shift = shift, .timestampMs = timestampMs });
     }
     [[nodiscard]] bool move(const usize byte){
         return dispatch({ .type = Ui::InputEventType::PointerMove, .position = atByte(byte) });

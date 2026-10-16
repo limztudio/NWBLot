@@ -273,62 +273,6 @@ bool BackendContext::createDevice(){
     return true;
 }
 
-bool BackendContext::createSwapChainResources(){
-    if(!createVulkanSwapChain())
-        return false;
-
-    usize const numPresentSemaphores = m_swapChainImages.size();
-    if(!recreateSemaphores(m_presentSemaphores, numPresentSemaphores, "create present semaphores")){
-        if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
-        return false;
-    }
-
-    const usize numAcquireSyncSlots = Max(static_cast<usize>(m_maxFramesInFlight), m_swapChainImages.size());
-    if(!recreateAcquireSyncSlots(numAcquireSyncSlots)){
-        clearSemaphores(m_presentSemaphores);
-        if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
-        return false;
-    }
-
-    if(!createFrameSyncQueries()){
-        clearSemaphores(m_presentSemaphores);
-        clearAcquireSyncSlots();
-        if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
-        return false;
-    }
-
-    // Direct presentation list is swap-chain lifetime state; create it here so present() only reopens it.
-    resetDirectPresentCommandList();
-    {
-        const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-        if(!primaryGraphicsQueue.valid() || !ensureDirectPresentCommandList(primaryGraphicsQueue)){
-            clearSemaphores(m_presentSemaphores);
-            clearAcquireSyncSlots();
-            resetDirectPresentCommandList();
-            if(!destroySwapChainAfterCreateFailure())
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the direct presentation command list."));
-            return false;
-        }
-    }
-
-    m_swapChainIndex = Limit<u32>::s_Max;
-    m_acquireSyncSlotIndex = 0u;
-    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
-    {
-        ScopedLock presentationLock(m_framePresentationMutex);
-        resetFramePresentationSignal();
-        m_framePresentationClaimsEnabled = true;
-    }
-    m_frameAcquired = false;
-    m_frameAbandonmentComplete = false;
-
-    return true;
-}
-
 bool BackendContext::createSwapChain(){
     ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
     if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_swapChain || !m_swapChainImages.empty()){
@@ -352,9 +296,17 @@ bool BackendContext::createSwapChain(){
     return false;
 }
 
-bool BackendContext::validPreparedTicket(const SwapChainTransitionTicket& ticket, const SwapChainTransitionKind::Enum kind)const noexcept{
-    const SwapChainLifecycleState requiredState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
-    return ticket.valid() && ticket.owner == this && ticket.kind == kind && ticket.epoch == m_swapChainLifecycleEpoch && m_swapChainLifecycleState == requiredState;
+bool BackendContext::destroy(){
+    {
+        ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
+        if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed)
+            return true;
+    }
+
+    auto ticket = prepareSwapChainTransition(SwapChainTransitionKind::Destroy);
+    if(!ticket)
+        return false;
+    return commitDestroy(Move(*ticket));
 }
 
 Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(const SwapChainTransitionKind::Enum kind){
@@ -572,17 +524,65 @@ bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
     return true;
 }
 
-bool BackendContext::destroy(){
-    {
-        ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
-        if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed)
-            return true;
+bool BackendContext::createSwapChainResources(){
+    if(!createVulkanSwapChain())
+        return false;
+
+    usize const numPresentSemaphores = m_swapChainImages.size();
+    if(!recreateSemaphores(m_presentSemaphores, numPresentSemaphores, "create present semaphores")){
+        if(!destroySwapChainAfterCreateFailure())
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
+        return false;
     }
 
-    auto ticket = prepareSwapChainTransition(SwapChainTransitionKind::Destroy);
-    if(!ticket)
+    const usize numAcquireSyncSlots = Max(static_cast<usize>(m_maxFramesInFlight), m_swapChainImages.size());
+    if(!recreateAcquireSyncSlots(numAcquireSyncSlots)){
+        clearSemaphores(m_presentSemaphores);
+        if(!destroySwapChainAfterCreateFailure())
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
         return false;
-    return commitDestroy(Move(*ticket));
+    }
+
+    if(!createFrameSyncQueries()){
+        clearSemaphores(m_presentSemaphores);
+        clearAcquireSyncSlots();
+        if(!destroySwapChainAfterCreateFailure())
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
+        return false;
+    }
+
+    // Direct presentation list is swap-chain lifetime state; create it here so present() only reopens it.
+    resetDirectPresentCommandList();
+    {
+        const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        if(!primaryGraphicsQueue.valid() || !ensureDirectPresentCommandList(primaryGraphicsQueue)){
+            clearSemaphores(m_presentSemaphores);
+            clearAcquireSyncSlots();
+            resetDirectPresentCommandList();
+            if(!destroySwapChainAfterCreateFailure())
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the direct presentation command list."));
+            return false;
+        }
+    }
+
+    m_swapChainIndex = Limit<u32>::s_Max;
+    m_acquireSyncSlotIndex = 0u;
+    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
+    {
+        ScopedLock presentationLock(m_framePresentationMutex);
+        resetFramePresentationSignal();
+        m_framePresentationClaimsEnabled = true;
+    }
+    m_frameAcquired = false;
+    m_frameAbandonmentComplete = false;
+
+    return true;
+}
+
+bool BackendContext::validPreparedTicket(const SwapChainTransitionTicket& ticket, const SwapChainTransitionKind::Enum kind)const noexcept{
+    const SwapChainLifecycleState requiredState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
+    return ticket.valid() && ticket.owner == this && ticket.kind == kind && ticket.epoch == m_swapChainLifecycleEpoch && m_swapChainLifecycleState == requiredState;
 }
 
 

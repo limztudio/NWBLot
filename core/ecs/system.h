@@ -82,6 +82,7 @@ protected:
     }
     void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
 
+
 private:
     Vector<ComponentAccess, Alloc::GlobalArena> m_access;
 };

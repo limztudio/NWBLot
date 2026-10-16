@@ -220,7 +220,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     return CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph, options);
 }
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(const u16 index, const Graphics::GpuQueueCapability::Mask capabilities){
+[[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(const u16 index, const Graphics::GpuQueueCapability::Mask capabilities)noexcept{
     return Graphics::GpuPhysicalQueueInfo{ .familyIndex = 0u, .queueIndex = 0u, .id = Graphics::GpuPhysicalQueueId{ .index = index, .deviceGeneration = 1u }, .queueClass = Graphics::CommandQueue::Graphics, .capabilities = capabilities, .dedicated = false, };
 }
 
@@ -269,7 +269,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     };
 }
 
-[[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer){
+[[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer)noexcept{
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.edges()){
         if(edge.producer == producer && edge.consumer == consumer)
             return &edge;
@@ -330,7 +330,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     return ExternalFinalReadPair{ .resource = resource, .earlierReader = earlierReader, .finalizingReader = graph.addTask(finalizingDesc, samePacket ? graphicsCommands : computeCommands), };
 }
 
-[[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard){
+[[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept{
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
         if(edge.producer == producer && edge.consumer == consumer && edge.resource == resource && edge.hazard == hazard)
             return true;

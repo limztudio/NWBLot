@@ -18,183 +18,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
-    if(m_rayTracingState.m_surfelSpawnPipeline)
-        return true;
-    if(m_rayTracingState.m_surfelSpawnPipelineFailed)
-        return false;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel spawn requires the initialized global descriptor heap"));
-        m_rayTracingState.m_surfelSpawnPipelineFailed = true;
-        return false;
-    }
-
-    if(!m_rayTracingState.m_surfelSpawnBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        m_rayTracingState.m_surfelSpawnBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_surfelSpawnBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
-            m_rayTracingState.m_surfelSpawnPipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelSpawnShader, AssetsGraphicsGi::s_SurfelSpawnShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelSpawn")){
-        m_rayTracingState.m_surfelSpawnPipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_surfelSpawnShader).addBindingLayout(m_rayTracingState.m_surfelSpawnBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_rayTracingState.m_surfelSpawnPipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_surfelSpawnPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn compute pipeline"));
-        m_rayTracingState.m_surfelSpawnPipelineFailed = true;
-        return false;
-    }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel spawn compute pipeline"));
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
-    if(m_rayTracingState.m_surfelAgeFreePipeline)
-        return true;
-    if(m_rayTracingState.m_surfelAgeFreePipelineFailed)
-        return false;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel age-free requires the initialized global descriptor heap"));
-        m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
-        return false;
-    }
-
-    if(!m_rayTracingState.m_surfelAgeFreeBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        m_rayTracingState.m_surfelAgeFreeBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_surfelAgeFreeBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
-            m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelAgeFreeShader, AssetsGraphicsGi::s_SurfelAgeFreeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelAgeFree")){
-        m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_surfelAgeFreeShader).addBindingLayout(m_rayTracingState.m_surfelAgeFreeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_rayTracingState.m_surfelAgeFreePipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_surfelAgeFreePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free compute pipeline"));
-        m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
-        return false;
-    }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel age-free compute pipeline"));
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
-    if(m_rayTracingState.m_surfelHashBuildPipeline)
-        return true;
-    if(m_rayTracingState.m_surfelHashBuildPipelineFailed)
-        return false;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel hash-build requires the initialized global descriptor heap"));
-        m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
-        return false;
-    }
-
-    if(!m_rayTracingState.m_surfelHashBuildBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        m_rayTracingState.m_surfelHashBuildBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_surfelHashBuildBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
-            m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelHashBuildShader, AssetsGraphicsGi::s_SurfelHashBuildShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelHashBuild")){
-        m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_surfelHashBuildShader).addBindingLayout(m_rayTracingState.m_surfelHashBuildBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_rayTracingState.m_surfelHashBuildPipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_surfelHashBuildPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build compute pipeline"));
-        m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
-        return false;
-    }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel hash-build compute pipeline"));
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
-    const bool csg = m_rayTracingState.m_surfelUseCsgTrace;
-    auto& pipeline = csg ? m_rayTracingState.m_surfelTraceCsgPipeline : m_rayTracingState.m_surfelTracePipeline;
-    auto& shader = csg ? m_rayTracingState.m_surfelTraceCsgShader : m_rayTracingState.m_surfelTraceShader;
-    auto& failed = csg ? m_rayTracingState.m_surfelTraceCsgPipelineFailed : m_rayTracingState.m_surfelTracePipelineFailed;
-
-    if(pipeline)
-        return true;
-    if(failed)
-        return false;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace requires the initialized global descriptor heap"));
-        failed = true;
-        return false;
-    }
-
-    if(!m_rayTracingState.m_surfelTraceBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        m_rayTracingState.m_surfelTraceBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_surfelTraceBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
-            failed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceShaderName, csg ? AStringView("NWB_GI_CSG_ENABLED=1") : AStringView("NWB_GI_CSG_ENABLED=0"), "ECSRender_SurfelTrace")){
-        failed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_surfelTraceBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    pipeline = device.createComputePipeline(pipelineDesc);
-    if(!pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
-        failed = true;
-        return false;
-    }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
-    return true;
-}
-
 bool RendererRayTracingSystem::ensureSurfelResources(){
     // Persistent field storage survives window resizes.
     if(!hasSurfelWork())
@@ -411,6 +234,183 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     const bool traceReady = m_rayTracingState.m_surfelUseHwTrace ? ensureSurfelTraceHwPipeline() : ensureSurfelTracePipeline();
     if(!ensureSurfelSpawnPipeline() || !ensureSurfelAgeFreePipeline() || !ensureSurfelHashBuildPipeline() || !traceReady || !ensureSurfelResolvePipeline() || !ensureSurfelUpsamplePipeline() || !ensureSurfelTraceBuildArgsPipeline())
         return false;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
+    if(m_rayTracingState.m_surfelSpawnPipeline)
+        return true;
+    if(m_rayTracingState.m_surfelSpawnPipelineFailed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel spawn requires the initialized global descriptor heap"));
+        m_rayTracingState.m_surfelSpawnPipelineFailed = true;
+        return false;
+    }
+
+    if(!m_rayTracingState.m_surfelSpawnBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        m_rayTracingState.m_surfelSpawnBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_surfelSpawnBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
+            m_rayTracingState.m_surfelSpawnPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelSpawnShader, AssetsGraphicsGi::s_SurfelSpawnShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelSpawn")){
+        m_rayTracingState.m_surfelSpawnPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_surfelSpawnShader).addBindingLayout(m_rayTracingState.m_surfelSpawnBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    m_rayTracingState.m_surfelSpawnPipeline = device.createComputePipeline(pipelineDesc);
+    if(!m_rayTracingState.m_surfelSpawnPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn compute pipeline"));
+        m_rayTracingState.m_surfelSpawnPipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel spawn compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
+    if(m_rayTracingState.m_surfelAgeFreePipeline)
+        return true;
+    if(m_rayTracingState.m_surfelAgeFreePipelineFailed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel age-free requires the initialized global descriptor heap"));
+        m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
+        return false;
+    }
+
+    if(!m_rayTracingState.m_surfelAgeFreeBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        m_rayTracingState.m_surfelAgeFreeBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_surfelAgeFreeBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
+            m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelAgeFreeShader, AssetsGraphicsGi::s_SurfelAgeFreeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelAgeFree")){
+        m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_surfelAgeFreeShader).addBindingLayout(m_rayTracingState.m_surfelAgeFreeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    m_rayTracingState.m_surfelAgeFreePipeline = device.createComputePipeline(pipelineDesc);
+    if(!m_rayTracingState.m_surfelAgeFreePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free compute pipeline"));
+        m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel age-free compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
+    if(m_rayTracingState.m_surfelHashBuildPipeline)
+        return true;
+    if(m_rayTracingState.m_surfelHashBuildPipelineFailed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel hash-build requires the initialized global descriptor heap"));
+        m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
+        return false;
+    }
+
+    if(!m_rayTracingState.m_surfelHashBuildBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        m_rayTracingState.m_surfelHashBuildBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_surfelHashBuildBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
+            m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelHashBuildShader, AssetsGraphicsGi::s_SurfelHashBuildShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelHashBuild")){
+        m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_surfelHashBuildShader).addBindingLayout(m_rayTracingState.m_surfelHashBuildBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    m_rayTracingState.m_surfelHashBuildPipeline = device.createComputePipeline(pipelineDesc);
+    if(!m_rayTracingState.m_surfelHashBuildPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build compute pipeline"));
+        m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel hash-build compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
+    const bool csg = m_rayTracingState.m_surfelUseCsgTrace;
+    auto& pipeline = csg ? m_rayTracingState.m_surfelTraceCsgPipeline : m_rayTracingState.m_surfelTracePipeline;
+    auto& shader = csg ? m_rayTracingState.m_surfelTraceCsgShader : m_rayTracingState.m_surfelTraceShader;
+    auto& failed = csg ? m_rayTracingState.m_surfelTraceCsgPipelineFailed : m_rayTracingState.m_surfelTracePipelineFailed;
+
+    if(pipeline)
+        return true;
+    if(failed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace requires the initialized global descriptor heap"));
+        failed = true;
+        return false;
+    }
+
+    if(!m_rayTracingState.m_surfelTraceBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        m_rayTracingState.m_surfelTraceBindingLayout = device.createBindingLayout(layoutDesc);
+        if(!m_rayTracingState.m_surfelTraceBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
+            failed = true;
+            return false;
+        }
+    }
+
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceShaderName, csg ? AStringView("NWB_GI_CSG_ENABLED=1") : AStringView("NWB_GI_CSG_ENABLED=0"), "ECSRender_SurfelTrace")){
+        failed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_surfelTraceBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    pipeline = device.createComputePipeline(pipelineDesc);
+    if(!pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
+        failed = true;
+        return false;
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
     return true;
 }
 

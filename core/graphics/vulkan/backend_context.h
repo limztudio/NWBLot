@@ -7,9 +7,9 @@
 
 #include "backend.h"
 #include "device_extension_policy.h"
+#include "swap_chain_presentation.h"
 
 #include <core/task/cpu/scheduler.h>
-#include "swap_chain_presentation.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,6 +99,7 @@ private:
     static constexpr StringView s_EnabledInstanceExts[] = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, };
     static constexpr StringView s_DebugRequiredInstanceExts[] = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME, };
 
+
 private:
     static constexpr ExtEntry s_EnabledDeviceExts[] = {
         { VK_KHR_MAINTENANCE1_EXTENSION_NAME, DeviceExtensionFeature::None },
@@ -125,6 +126,11 @@ private:
         { VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME, DeviceExtensionFeature::TextureCompressionAstcHdr },
         { VK_AMD_BUFFER_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
+
+
+private:
+    [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
+    [[nodiscard]] static bool InvokeFramePresentationSignalResolution(void* context, u64 identity, const QueueSubmissionToken& token)noexcept;
 
 
 public:
@@ -174,6 +180,7 @@ public:
     // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal before the next frame instead of allowing it to leak into another present.
     [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
+
 private:
     void initDefaultExtensions();
     bool createVulkanInstance();
@@ -210,9 +217,7 @@ private:
     [[nodiscard]] bool ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue);
     void resetDirectPresentCommandList()noexcept;
     [[nodiscard]] bool recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture);
-    [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
     [[nodiscard]] Expected<QueueSubmissionNativeSignal> prepareFramePresentationSignal(u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept;
-    [[nodiscard]] static bool InvokeFramePresentationSignalResolution(void* context, u64 identity, const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] bool resolveFramePresentationSignal(u64 identity, const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle();
     void resetFramePresentationSignal()noexcept;
@@ -227,6 +232,7 @@ private:
     CpuTaskScheduler& m_cpuScheduler;
     Alloc::GlobalArena& m_arena;
     Common::FrameParam m_platformFrameParam = {};
+
 
 private:
     VulkanExtensionSet m_enabledExtensions;

@@ -59,11 +59,13 @@ struct TransparentCsgIntervalRecordInputs{
 
 
 struct AvboitCsgReceiverSpanGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
     // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
     // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     using Payload = TransparentCsgIntervalRecordInputs;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
@@ -75,11 +77,13 @@ struct AvboitCsgReceiverSpanGraphTask{
 
 // Interval combine maps visible span/peel inputs to removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
     // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
     // References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     using Payload = TransparentCsgIntervalRecordInputs;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 

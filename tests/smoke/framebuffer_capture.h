@@ -13,6 +13,7 @@
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/presentation_contributor.h>
+
 #include <global/filesystem/path.h>
 #include <global/refcount_ptr.h>
 
@@ -52,6 +53,9 @@ private:
         Core::QueueSubmissionToken acceptedToken;
         u64 graphicsFrameIndex = Limit<u64>::s_Max;
     };
+
+
+private:
     using CompletionState = RefCounter<CompletionStateData>;
 
 
@@ -74,14 +78,14 @@ public:
 
 
 public:
-    virtual bool shouldRenderUnfocused()override;
+    virtual bool shouldRenderUnfocused()noexcept override;
     virtual void invalidateResources()override;
     virtual void backBufferResizing()override;
 
 
 public:
     [[nodiscard]] virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
-    [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const override;
+    [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const noexcept override;
     [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, Core::GpuGraphResourceId backbuffer, Core::GpuTaskId previousTask)override;
 
 

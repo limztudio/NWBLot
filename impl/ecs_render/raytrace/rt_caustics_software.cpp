@@ -21,6 +21,60 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, const f32 decayFactor){
+    if(!targets.causticAccumulator || !targets.bindless.causticAccumulatorStorage.valid() || !m_rayTracingState.m_causticAccumulatorDecayPipeline)
+        return false;
+
+    // The task declares the accumulator write and the photon producer dependency.
+    commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
+
+    CausticAccumulatorDecayPushConstants decayPush;
+    decayPush.width = targets.width;
+    decayPush.height = targets.height;
+    decayPush.decayFactor = decayFactor;
+    decayPush.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
+
+    Core::ComputeState decayState;
+    decayState.setPipeline(m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
+    commandList.setComputeState(decayState);
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    NWB_ASSERT(heap.isInitialized());
+    heap.bindCompute(commandList, *m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
+    commandList.setPushConstants(&decayPush, sizeof(decayPush));
+    commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), 1u);
+    return true;
+}
+
+
+bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
+    // Prepare heap-only software pipelines once geometry and emission targets exist.
+    if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery))
+        return true;
+    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || m_rayTracingState.m_sceneBvhInstanceCount == 0u || m_rayTracingState.m_swShadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargetBuffer)
+        return true;
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    return prepareCausticResources(meshView, targets, false);
+}
+
+bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+    // Software photons require a caustic light, refractor, and software scene BVH.
+    const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
+    return
+        !hardwareShadowSupported
+        && m_rayTracingState.m_causticLightCount > 0u
+        && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
+        && m_rayTracingState.m_sceneBvhInstanceCount > 0u
+        && m_rayTracingState.m_swShadowMeshCount > 0u
+        && m_rayTracingState.m_causticEmissionTargetBuffer
+        && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
+        && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && meshView.bindingValid()
+    ;
+}
+
 void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandList& commandList, DeferredFrameTargets& targets, const u32 passIndex){
     NWB_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
     NWB_ASSERT(targets.bindless.valid());
@@ -54,7 +108,6 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
         causticResolveActivitySnapshot(targets)
     );
 }
-
 
 void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(targets.bindless.valid());
@@ -92,59 +145,6 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList&
         fullGroupsY,
         causticResolveActivitySnapshot(targets)
     );
-}
-
-bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, const f32 decayFactor){
-    if(!targets.causticAccumulator || !targets.bindless.causticAccumulatorStorage.valid() || !m_rayTracingState.m_causticAccumulatorDecayPipeline)
-        return false;
-
-    // The task declares the accumulator write and the photon producer dependency.
-    commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-
-    CausticAccumulatorDecayPushConstants decayPush;
-    decayPush.width = targets.width;
-    decayPush.height = targets.height;
-    decayPush.decayFactor = decayFactor;
-    decayPush.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
-
-    Core::ComputeState decayState;
-    decayState.setPipeline(m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
-    commandList.setComputeState(decayState);
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
-    heap.bindCompute(commandList, *m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
-    commandList.setPushConstants(&decayPush, sizeof(decayPush));
-    commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), 1u);
-    return true;
-}
-
-bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
-    // Software photons require a caustic light, refractor, and software scene BVH.
-    const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
-    return
-        !hardwareShadowSupported
-        && m_rayTracingState.m_causticLightCount > 0u
-        && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
-        && m_rayTracingState.m_sceneBvhInstanceCount > 0u
-        && m_rayTracingState.m_swShadowMeshCount > 0u
-        && m_rayTracingState.m_causticEmissionTargetBuffer
-        && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-        && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && meshView.bindingValid()
-    ;
-}
-
-bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
-    // Prepare heap-only software pipelines once geometry and emission targets exist.
-    if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery))
-        return true;
-    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || m_rayTracingState.m_sceneBvhInstanceCount == 0u || m_rayTracingState.m_swShadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargetBuffer)
-        return true;
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return prepareCausticResources(meshView, targets, false);
 }
 
 

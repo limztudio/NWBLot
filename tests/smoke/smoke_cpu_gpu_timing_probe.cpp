@@ -5,6 +5,7 @@
 #include "smoke_cpu_gpu_timing_probe.h"
 
 #include <core/common/log.h>
+
 #include <global/filesystem.h>
 
 

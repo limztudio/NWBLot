@@ -124,6 +124,8 @@ private:
 
 
 public:
+    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
+
     template<typename BindingHandler>
     static void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(handler(s_MeshPositionBindingSlot, false))){
         handler(s_MeshPositionBindingSlot, false);
@@ -178,7 +180,6 @@ public:
     [[nodiscard]] Expected<MeshResources*> findRuntimeMeshResources(const RuntimeMeshDesc& desc);
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
-    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
     [[nodiscard]] bool confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, bool runtimeMesh);
     void pruneRuntimeMeshResources();
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;

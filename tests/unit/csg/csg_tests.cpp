@@ -2,12 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/common/module.h>
-#include <core/ecs/module.h>
+#include <tests/common/ecs_test_world.h>
+
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_csg/deform_edit.h>
 
-#include <tests/common/ecs_test_world.h>
+#include <core/common/module.h>
+#include <core/ecs/module.h>
+
 #include <gtest/gtest.h>
 
 

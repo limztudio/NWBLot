@@ -34,11 +34,11 @@ class FilterView final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const override{ return generation; }
     [[nodiscard]] virtual u64 revision()const override{ return contentRevision; }
-    [[nodiscard]] virtual u64 rowCount()const override{
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{
         return mode == FilterMode::Empty ? 0u : mode == FilterMode::Second ? full->count / 2u : full->count;
     }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         return mode == FilterMode::Second ? index * 2u + 2u : index + 1u;
     }
 
@@ -116,7 +116,7 @@ public:
     [[nodiscard]] virtual u64 rowCount()const override{ return full.rowCount(); }
     [[nodiscard]] virtual u64 key(const u64 index)const override{ return full.key(index); }
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return full.indexOf(key); }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return full.findEnabled(start, reverse);
     }
     [[nodiscard]] virtual StringView text(const u64 index)const override{ return full.text(index); }
@@ -172,7 +172,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)noexcept override{
         ++contextScopedLoans;
         return {};
     }
@@ -243,6 +243,15 @@ public:
 
 
 class SearchFixture : public ComboFixture{
+protected:
+    [[nodiscard]] static SearchComboOptions Options(){
+        SearchComboOptions value;
+        value.combo = NWB::UiComboTests::Options();
+        value.combo.popupHeight = 220.0f;
+        return value;
+    }
+
+
 public:
     SearchFixture()
         : m_searchSource(m_arena)
@@ -257,12 +266,6 @@ protected:
         m_builder.setEditHost(&m_host);
     }
 
-    [[nodiscard]] static SearchComboOptions Options(){
-        SearchComboOptions value;
-        value.combo = NWB::UiComboTests::Options();
-        value.combo.popupHeight = 220.0f;
-        return value;
-    }
 
     [[nodiscard]] bool declareSearch(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))

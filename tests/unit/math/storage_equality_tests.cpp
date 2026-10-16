@@ -6,6 +6,7 @@
 #include <global/simd/type.h>
 #include <global/limit.h>
 #include <global/scope_exit.h>
+
 #include <gtest/gtest.h>
 
 #include <new>
@@ -29,12 +30,12 @@ namespace __hidden_storage_equality_tests{
 
 template<typename Element, usize Count>
 struct RawEqualityStorage{
-    Element raw[Count]{};
-
-    friend bool operator==(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{
-        return MathTypeDetail::EqualArray<RawEqualityStorage, Count>(lhs, rhs);
-    }
+    friend bool operator==(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return MathTypeDetail::EqualArray<RawEqualityStorage, Count>(lhs, rhs); }
     friend bool operator!=(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return !(lhs == rhs); }
+
+
+public:
+    Element raw[Count]{};
 };
 
 template<typename Value, usize Count>
@@ -114,6 +115,8 @@ struct EqualityEnvironmentGuard{
     Expected<FloatingPointEnvironment> original = GetFloatingPointEnvironment();
     u32 originalMxcsr = _mm_getcsr();
 
+
+public:
     ~EqualityEnvironmentGuard(){
         if(original){
             EXPECT_TRUE(SetFloatingPointEnvironment(*original));

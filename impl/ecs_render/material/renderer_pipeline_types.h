@@ -70,7 +70,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
     case MaterialPipelinePass::Opaque:
     case MaterialPipelinePass::CsgReceiverSurface:
@@ -80,7 +80,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent)noexcept{
     switch(pass){
     case MaterialPipelinePass::Opaque:
         return !transparent;
@@ -91,7 +91,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass)noexcept{
     return pass == MaterialPipelinePass::Opaque || MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
@@ -125,7 +125,7 @@ struct MaterialPipelineCsgBindingUse{
     bool intervalSample = false;
 };
 
-[[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(const MaterialPipelineKey& pipelineKey, const MaterialPipelinePass::Enum pass){
+[[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(const MaterialPipelineKey& pipelineKey, const MaterialPipelinePass::Enum pass)noexcept{
     MaterialPipelineCsgBindingUse result;
     result.clip = pipelineKey.csgMode != MaterialPipelineCsgMode::None && MaterialPipelinePassUsesRendererCsgShaderVariant(pass);
     result.avboitClip = result.clip && MaterialPipelinePassUsesRendererAvboit(pass);
@@ -134,10 +134,10 @@ struct MaterialPipelineCsgBindingUse{
     return result;
 }
 struct MaterialPipelineKeyHasher{
-    usize operator()(const MaterialPipelineKey& key)const;
+    usize operator()(const MaterialPipelineKey& key)const noexcept;
 };
 struct MaterialPipelineKeyEqualTo{
-    bool operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const;
+    bool operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept;
 };
 
 struct MaterialSurfaceInfo{

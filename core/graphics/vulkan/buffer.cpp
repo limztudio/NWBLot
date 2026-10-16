@@ -165,18 +165,6 @@ Object Buffer::getNativeHandle(ObjectType objectType){
     return Object(m_buffer);
 }
 
-bool Buffer::isRetainedStateKnown()const noexcept{
-    return m_retainedStateKnown.load(MemoryOrder::acquire);
-}
-
-void Buffer::setRetainedStateKnown(const bool known)noexcept{
-    if(m_creationDesc.keepInitialState)
-        m_retainedStateKnown.store(known, MemoryOrder::release);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     VkResult res = VK_SUCCESS;
@@ -245,6 +233,19 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     releaseUnpublishedView.release();
 
     return view;
+}
+
+bool Buffer::isRetainedStateKnown()const noexcept{
+    return m_retainedStateKnown.load(MemoryOrder::acquire);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void Buffer::setRetainedStateKnown(const bool known)noexcept{
+    if(m_creationDesc.keepInitialState)
+        m_retainedStateKnown.store(known, MemoryOrder::release);
 }
 
 
@@ -362,29 +363,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     }
 
     return buffer;
-}
-
-Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize dataSize, TStringView operationName, const u32 alignment){
-    UploadManager& uploadMgr = m_device.m_uploadManager;
-
-    const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_creationDesc.physicalQueue);
-    const auto staging = uploadMgr.suballocateBuffer(static_cast<u64>(dataSize), m_currentCmdBuf.get(), m_nativeRecordingID, m_creationDesc.physicalQueue, completedUploadVersion, alignment);
-    if(!staging){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
-        return MakeUnexpected(staging.error());
-    }
-
-    return staging;
-}
-
-Expected<BufferSuballocation> CommandList::prepareUploadStaging(const void* data, const usize dataSize, TStringView operationName, const u32 alignment){
-    const auto staging = prepareUploadStaging(dataSize, operationName, alignment);
-    if(!staging)
-        return MakeUnexpected(staging.error());
-
-    VulkanDetail::CopyHostMemory(taskScheduler(), staging->cpuAddress, data, dataSize);
-    return staging;
 }
 
 bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes){
@@ -510,6 +488,29 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
 
     retainResource(&src);
     retainResource(&dest);
+}
+
+Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize dataSize, TStringView operationName, const u32 alignment){
+    UploadManager& uploadMgr = m_device.m_uploadManager;
+
+    const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_creationDesc.physicalQueue);
+    const auto staging = uploadMgr.suballocateBuffer(static_cast<u64>(dataSize), m_currentCmdBuf.get(), m_nativeRecordingID, m_creationDesc.physicalQueue, completedUploadVersion, alignment);
+    if(!staging){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
+        return MakeUnexpected(staging.error());
+    }
+
+    return staging;
+}
+
+Expected<BufferSuballocation> CommandList::prepareUploadStaging(const void* data, const usize dataSize, TStringView operationName, const u32 alignment){
+    const auto staging = prepareUploadStaging(dataSize, operationName, alignment);
+    if(!staging)
+        return MakeUnexpected(staging.error());
+
+    VulkanDetail::CopyHostMemory(taskScheduler(), staging->cpuAddress, data, dataSize);
+    return staging;
 }
 
 

@@ -53,9 +53,9 @@ static void ExpectReservedGeometry(const ScrollViewportPlacement& actual, const 
     UiWidgetTests::ExpectRect(actual.horizontal.track, expected.horizontal.track);
     UiWidgetTests::ExpectRect(actual.vertical.track, expected.vertical.track);
     EXPECT_FLOAT_EQ(actual.horizontal.thumb.width, expected.horizontal.thumb.width);
-        EXPECT_FLOAT_EQ(actual.horizontal.thumb.height, expected.horizontal.thumb.height);
+    EXPECT_FLOAT_EQ(actual.horizontal.thumb.height, expected.horizontal.thumb.height);
     EXPECT_FLOAT_EQ(actual.vertical.thumb.width, expected.vertical.thumb.width);
-        EXPECT_FLOAT_EQ(actual.vertical.thumb.height, expected.vertical.thumb.height);
+    EXPECT_FLOAT_EQ(actual.vertical.thumb.height, expected.vertical.thumb.height);
     EXPECT_DOUBLE_EQ(actual.horizontal.contentExtent, expected.horizontal.contentExtent);
     EXPECT_DOUBLE_EQ(actual.vertical.contentExtent, expected.vertical.contentExtent);
     EXPECT_DOUBLE_EQ(actual.horizontal.viewportExtent, expected.horizontal.viewportExtent);
@@ -199,7 +199,7 @@ TEST(UiScrollbarLayoutTests, ZeroMinimumThumbUsesViewportToContentRatio){
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     EXPECT_FLOAT_EQ(placement.horizontal.thumb.width, 88.36f);
-        EXPECT_FLOAT_EQ(placement.vertical.thumb.height, 38.72f);
+    EXPECT_FLOAT_EQ(placement.vertical.thumb.height, 38.72f);
 }
 
 TEST(UiScrollbarLayoutTests, ZeroThicknessKeepsFullViewportWhileRetainingScrollableExtents){
@@ -340,9 +340,7 @@ TEST(UiScrollbarLayoutTests, InvalidCalculationInputsRejectPlacement){
     const f32 infinity = Limit<f32>::s_Infinity;
     reject({ nan, 20.0f, 112.0f, 112.0f }, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
     reject({ 10.0f, 20.0f, -1.0f, 112.0f }, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
-    reject({ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 112.0f }, bounds, padding,
-        { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f
-    );
+    reject({ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 112.0f }, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
     reject(bounds, { 10.0f, infinity, 112.0f, 112.0f }, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
     reject(bounds, { 10.0f, 20.0f, 112.0f, -1.0f }, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
     reject(bounds, bounds, { -1.0f, 2.0f, 3.0f, 4.0f }, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);

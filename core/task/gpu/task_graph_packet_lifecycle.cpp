@@ -59,17 +59,6 @@ void GpuTaskGraph::DiscardNotificationScope::adoptPacketRecordingClaimWithinLock
 }
 
 
-void GpuTaskGraph::releasePacketRecordingClaimWithinLock()const noexcept{
-    const u32 activeClaimCount = m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed);
-    NWB_FATAL_ASSERT_MSG(activeClaimCount != 0u, "GPU packet recording claim ownership must remain balanced");
-    if(activeClaimCount == 0u)
-        TerminateInvariant();
-    m_activePacketRecordingClaimCount.store(activeClaimCount - 1u, MemoryOrder::release);
-    if(activeClaimCount == 1u)
-        m_activePacketRecordingClaimCount.notify_all();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -453,6 +442,17 @@ void GpuTaskGraph::abortPacketRecording(const GpuCompiledGraph& compiledGraph, c
         TerminateInvariant();
     }
     resolution.complete();
+}
+
+
+void GpuTaskGraph::releasePacketRecordingClaimWithinLock()const noexcept{
+    const u32 activeClaimCount = m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed);
+    NWB_FATAL_ASSERT_MSG(activeClaimCount != 0u, "GPU packet recording claim ownership must remain balanced");
+    if(activeClaimCount == 0u)
+        TerminateInvariant();
+    m_activePacketRecordingClaimCount.store(activeClaimCount - 1u, MemoryOrder::release);
+    if(activeClaimCount == 1u)
+        m_activePacketRecordingClaimCount.notify_all();
 }
 
 

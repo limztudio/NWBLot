@@ -5,6 +5,7 @@
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/task_graph.h>
+
 #include <global/text_utils.h>
 
 #include <gtest/gtest.h>

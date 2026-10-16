@@ -9,6 +9,7 @@
 #include <global/arena_memory.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 
@@ -32,7 +33,7 @@ using namespace NWB::Impl;
 using namespace NWB::ModelTests;
 
 
-[[nodiscard]] static SkeletonJointMatrix Translation(const f32 x){
+[[nodiscard]] static SkeletonJointMatrix Translation(const f32 x)noexcept{
     SkeletonJointMatrix matrix = MatrixIdentity<Float34>();
     matrix._14 = x;
     return matrix;

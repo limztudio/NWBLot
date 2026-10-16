@@ -44,9 +44,11 @@ struct SubmissionBindingFixture{
     u32 hookInvocationCount = 0u;
 
 
+public:
     SubmissionBindingFixture();
 
 
+public:
     [[nodiscard]] bool prepare(usize taskCount, usize mergeGroupSize = 1u);
     [[nodiscard]] Graphics::QueueSubmissionPreSubmitHook hook(u64 identity);
 };
@@ -121,10 +123,7 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
     for(usize reverseIndex = fixture.tasks.size(); reverseIndex != 0u; --reverseIndex){
         const usize index = reverseIndex - 1u;
         const usize first = index - index % 3u;
-        timingBindings.push_back({
-            .task = fixture.tasks[index],
-            .timingTicket = fixture.tickets[first + (index % 3u == 1u ? 1u : 0u)].get(),
-        });
+        timingBindings.push_back({ .task = fixture.tasks[index], .timingTicket = fixture.tickets[first + (index % 3u == 1u ? 1u : 0u)].get(), });
         if(index % 3u == 1u)
             hookBindings.push_back({ .task = fixture.tasks[index], .hook = fixture.hook(index + 1u) });
     }

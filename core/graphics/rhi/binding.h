@@ -98,6 +98,8 @@ struct BindingLayoutDesc{
         : bindings(arena)
     {}
 
+
+public:
     constexpr BindingLayoutDesc& setVisibility(ShaderType::Mask value)noexcept{ visibility = value; return *this; }
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
 };
@@ -166,15 +168,8 @@ struct DescriptorWriteItem{
     static_assert(sizeof(TextureSubresourceSet) == TextureSubresourceSet::s_ByteSize, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
     static_assert(sizeof(BufferRange) == BufferRange::s_ByteSize, "sizeof(BufferRange) is supposed to be 16 bytes");
 
-    // Intentionally uninitialized to avoid clearing large descriptor arrays.
-    DescriptorWriteItem()noexcept{}
 
-    constexpr DescriptorWriteItem& setArrayElement(u32 value)noexcept{ arrayElement = value; return *this; }
-    constexpr DescriptorWriteItem& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
-    constexpr DescriptorWriteItem& setDimension(TextureDimension::Enum value)noexcept{ dimension = value; return *this; }
-    constexpr DescriptorWriteItem& setSubresources(TextureSubresourceSet value)noexcept{ subresources = value; return *this; }
-    constexpr DescriptorWriteItem& setRange(BufferRange value)noexcept{ range = value; return *this; }
-
+public:
     static DescriptorWriteItem Base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension)noexcept{
         DescriptorWriteItem result;
         result.slot = slot;
@@ -189,7 +184,6 @@ struct DescriptorWriteItem{
         result.reserved2 = 0;
         return result;
     }
-
     static DescriptorWriteItem None(u32 slot = 0)noexcept{
         return Base(slot, ResourceType::None, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
     }
@@ -252,6 +246,19 @@ struct DescriptorWriteItem{
         result.range.byteSize = byteSize;
         return result;
     }
+
+
+public:
+    // Intentionally uninitialized to avoid clearing large descriptor arrays.
+    DescriptorWriteItem()noexcept{}
+
+
+public:
+    constexpr DescriptorWriteItem& setArrayElement(u32 value)noexcept{ arrayElement = value; return *this; }
+    constexpr DescriptorWriteItem& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
+    constexpr DescriptorWriteItem& setDimension(TextureDimension::Enum value)noexcept{ dimension = value; return *this; }
+    constexpr DescriptorWriteItem& setSubresources(TextureSubresourceSet value)noexcept{ subresources = value; return *this; }
+    constexpr DescriptorWriteItem& setRange(BufferRange value)noexcept{ range = value; return *this; }
 };
 inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{
     return

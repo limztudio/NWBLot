@@ -53,8 +53,7 @@ protected:
     }
 
     void beginPaint(u64 generation, f32 scale = 1.0f){
-        m_paint.begin({ 800.0f, 600.0f, scale, scale }, generation, 1u,
-            Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        m_paint.begin({ 800.0f, 600.0f, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
     }
 
 

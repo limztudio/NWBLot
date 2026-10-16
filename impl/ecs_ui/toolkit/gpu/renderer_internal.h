@@ -166,6 +166,9 @@ struct GpuFrameData : NoCopy{
 
 
     GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin);
+
+
+public:
     [[nodiscard]] bool prefixComplete(Core::Device& device)const;
     [[nodiscard]] bool complete(Core::Device& device)const;
 };
@@ -195,6 +198,8 @@ struct GpuRasterGeometry{
         , targetSize(VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height), static_cast<f32>(target.width), static_cast<f32>(target.height)))
     {}
 
+
+public:
     [[nodiscard]] bool initializePushConstants(GpuPaintPushConstants& push, const u32 samplerSlot)const noexcept{
         const SIMDVectorSingle projection = VectorMultiply(VectorSet(2.0f, -2.0f, 2.0f, -2.0f), pixelScale);
         const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
@@ -294,30 +299,6 @@ struct GpuOutputTask{
 
 
 struct GpuRendererState final : NoCopy{
-    GpuRendererState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver);
-    [[nodiscard]] static bool MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
-    [[nodiscard]] static bool ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
-    [[nodiscard]] static bool ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
-    [[nodiscard]] static bool ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
-    [[nodiscard]] bool createResources();
-    [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
-    [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
-    [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    [[nodiscard]] GpuVersion<GpuSdfAtlasVersion> prepareSdfPage(const SharedSdfAtlasPage& page);
-    [[nodiscard]] bool prepareSdfPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    [[nodiscard]] GpuVersion<GpuTextureImageVersion> prepareTextureImage(const SharedImageSource& source);
-    [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    void trimImageCache(const DrawSnapshot& snapshot);
-    void evictImageCacheEntry();
-    [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
-    [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
-    [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
-    [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer);
-    [[nodiscard]] Core::GpuTaskId declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
-
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assets;
@@ -341,6 +322,38 @@ struct GpuRendererState final : NoCopy{
     bool m_frameTimingScopePrepared = false;
     bool m_claimed = false;
     bool m_readyToDeclare = false;
+
+
+public:
+    [[nodiscard]] static bool MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
+    [[nodiscard]] static bool ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static bool ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static bool ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
+
+
+public:
+    GpuRendererState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver);
+
+
+public:
+    [[nodiscard]] bool createResources();
+    [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
+    [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
+    [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
+    [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    [[nodiscard]] GpuVersion<GpuSdfAtlasVersion> prepareSdfPage(const SharedSdfAtlasPage& page);
+    [[nodiscard]] bool prepareSdfPages(GpuFrameData& frame);
+    [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    [[nodiscard]] GpuVersion<GpuTextureImageVersion> prepareTextureImage(const SharedImageSource& source);
+    [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
+    [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    void trimImageCache(const DrawSnapshot& snapshot);
+    void evictImageCacheEntry();
+    [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
+    [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
+    [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
+    [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer);
+    [[nodiscard]] Core::GpuTaskId declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
 };
 
 

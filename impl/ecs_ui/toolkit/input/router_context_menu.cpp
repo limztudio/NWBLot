@@ -14,11 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
-    const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
-    return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
-}
-
 Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, const u64 declarationGeneration)noexcept{
     const HitTarget* target = findTarget(id, declarationGeneration);
     if(declarationGeneration == 0u || target == nullptr || !target->contextMenu || !m_windowFocused || !isInteractive(*target))
@@ -32,6 +27,11 @@ Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, c
         return action;
     }
     return MakeUnexpected(Failure{});
+}
+
+bool InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
+    const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
+    return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
 }
 
 void InputRouter::reconcileContextMenus()noexcept{

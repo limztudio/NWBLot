@@ -249,6 +249,7 @@ class GpuTaskTimingHistoryStore;
 class GpuTaskTimingHistorySnapshot final : NoCopy{
     friend class GpuTaskTimingHistoryStore;
 
+
 public:
     explicit GpuTaskTimingHistorySnapshot(GraphicsArena& arena)
         : m_histories(arena)

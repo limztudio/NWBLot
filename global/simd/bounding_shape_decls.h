@@ -31,14 +31,8 @@ struct BoundingDoubleFrustum;
 struct BoundingSphere{
     Float4 centerRadius = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    constexpr BoundingSphere()noexcept = default;
-    constexpr BoundingSphere(const Float3U& centerValue, const f32 radiusValue)noexcept
-        : centerRadius(centerValue.x, centerValue.y, centerValue.z, radiusValue)
-    {}
-    constexpr explicit BoundingSphere(const Float4& centerRadiusValue)noexcept
-        : centerRadius(centerRadiusValue)
-    {}
 
+public:
     [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL TransformSphereValue(SIMDVectorSingle sphereValue, const SIMDMatrix& matrix)noexcept;
     [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL TransformSphereValue(SIMDVectorSingle sphereValue, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorSingle sphereValue, SIMDVectorSingle point)noexcept;
@@ -52,7 +46,24 @@ struct BoundingSphere{
     [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL MergeSphereValues(SIMDVectorSingle sphereValue0, SIMDVectorSingle sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept;
     [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL SphereFromCenterExtentsValue(SIMDVectorSingle centerValue, SIMDVectorSingle extentsValue)noexcept;
     [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL SphereFromCornersValue(const SIMDVectorSingle* corners, usize cornerCount)noexcept;
+    static void CreateMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept;
+    static void CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept;
+    static void CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept;
+    static void CreateFromPoints(BoundingSphere& outSphere, usize count, const Float3U* points, usize stride)noexcept;
+    static void CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept;
 
+
+public:
+    constexpr BoundingSphere()noexcept = default;
+    constexpr BoundingSphere(const Float3U& centerValue, const f32 radiusValue)noexcept
+        : centerRadius(centerValue.x, centerValue.y, centerValue.z, radiusValue)
+    {}
+    constexpr explicit BoundingSphere(const Float4& centerRadiusValue)noexcept
+        : centerRadius(centerRadiusValue)
+    {}
+
+
+public:
     void NWB_SIMD_CALL transform(BoundingSphere& outSphere, const SIMDMatrix& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingSphere& outSphere, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation)const noexcept;
 
@@ -82,12 +93,6 @@ struct BoundingSphere{
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
-
-    static void CreateMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept;
-    static void CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept;
-    static void CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept;
-    static void CreateFromPoints(BoundingSphere& outSphere, usize count, const Float3U* points, usize stride)noexcept;
-    static void CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept;
 };
 
 
@@ -97,15 +102,8 @@ struct BoundingSphere{
 struct BoundingDoubleSphere{
     Double4 centerRadius = Double4(0.0, 0.0, 0.0, 1.0);
 
-    constexpr BoundingDoubleSphere()noexcept = default;
-    template<typename CenterT> requires (IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>)
-    constexpr BoundingDoubleSphere(const CenterT& centerValue, const f64 radiusValue)noexcept
-        : centerRadius(centerValue.x, centerValue.y, centerValue.z, radiusValue)
-    {}
-    constexpr explicit BoundingDoubleSphere(const Double4& centerRadiusValue)noexcept
-        : centerRadius(centerRadiusValue)
-    {}
 
+public:
     [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL TransformSphereValue(SIMDVectorDouble sphereValue, const SIMDMatrixDouble& matrix)noexcept;
     [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL TransformSphereValue(SIMDVectorDouble sphereValue, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorDouble sphereValue, SIMDVectorDouble point)noexcept;
@@ -119,7 +117,26 @@ struct BoundingDoubleSphere{
     [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL MergeSphereValues(SIMDVectorDouble sphereValue0, SIMDVectorDouble sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept;
     [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL SphereFromCenterExtentsValue(SIMDVectorDouble centerValue, SIMDVectorDouble extentsValue)noexcept;
     [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL SphereFromCornersValue(const SIMDVectorDouble* corners, usize cornerCount)noexcept;
+    static void CreateMerged(BoundingDoubleSphere& outSphere, const BoundingDoubleSphere& sphere0, const BoundingDoubleSphere& sphere1)noexcept;
+    static void CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleBox& box)noexcept;
+    static void CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleOrientedBox& box)noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    static void CreateFromPoints(BoundingDoubleSphere& outSphere, usize count, const PointT* points, usize stride)noexcept;
+    static void CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept;
 
+
+public:
+    constexpr BoundingDoubleSphere()noexcept = default;
+    template<typename CenterT> requires (IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>)
+    constexpr BoundingDoubleSphere(const CenterT& centerValue, const f64 radiusValue)noexcept
+        : centerRadius(centerValue.x, centerValue.y, centerValue.z, radiusValue)
+    {}
+    constexpr explicit BoundingDoubleSphere(const Double4& centerRadiusValue)noexcept
+        : centerRadius(centerRadiusValue)
+    {}
+
+
+public:
     void NWB_SIMD_CALL transform(BoundingDoubleSphere& outSphere, const SIMDMatrixDouble& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingDoubleSphere& outSphere, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)const noexcept;
 
@@ -149,13 +166,6 @@ struct BoundingDoubleSphere{
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;
-
-    static void CreateMerged(BoundingDoubleSphere& outSphere, const BoundingDoubleSphere& sphere0, const BoundingDoubleSphere& sphere1)noexcept;
-    static void CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleBox& box)noexcept;
-    static void CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleOrientedBox& box)noexcept;
-    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-    static void CreateFromPoints(BoundingDoubleSphere& outSphere, usize count, const PointT* points, usize stride)noexcept;
-    static void CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept;
 };
 
 
@@ -168,16 +178,8 @@ struct BoundingBox{
     Float4 center;
     Float4 extents = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 
-    constexpr BoundingBox()noexcept = default;
-    constexpr BoundingBox(const Float3U& centerValue, const Float3U& extentsValue)noexcept
-        : center(centerValue.x, centerValue.y, centerValue.z, 0.0f)
-        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0f)
-    {}
-    constexpr BoundingBox(const Float4& centerValue, const Float4& extentsValue)noexcept
-        : center(centerValue)
-        , extents(extentsValue)
-    {}
 
+public:
     static void NWB_SIMD_CALL TransformBoxValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, const SIMDMatrix& matrix, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents)noexcept;
     static void NWB_SIMD_CALL TransformBoxValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle point)noexcept;
@@ -190,7 +192,25 @@ struct BoundingBox{
     )noexcept;
     static void NWB_SIMD_CALL MergeBoxValues(SIMDVectorSingle boxCenter0, SIMDVectorSingle boxExtents0, SIMDVectorSingle boxCenter1, SIMDVectorSingle boxExtents1, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents)noexcept;
     static void NWB_SIMD_CALL CornersValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle* outCorners)noexcept;
+    static void CreateMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept;
+    static void CreateFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept;
+    static void NWB_SIMD_CALL CreateFromPoints(BoundingBox& outBox, SIMDVectorSingle point0, SIMDVectorSingle point1)noexcept;
+    static void CreateFromPoints(BoundingBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
 
+
+public:
+    constexpr BoundingBox()noexcept = default;
+    constexpr BoundingBox(const Float3U& centerValue, const Float3U& extentsValue)noexcept
+        : center(centerValue.x, centerValue.y, centerValue.z, 0.0f)
+        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0f)
+    {}
+    constexpr BoundingBox(const Float4& centerValue, const Float4& extentsValue)noexcept
+        : center(centerValue)
+        , extents(extentsValue)
+    {}
+
+
+public:
     void NWB_SIMD_CALL transform(BoundingBox& outBox, const SIMDMatrix& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingBox& outBox, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation)const noexcept;
     void getCorners(Float3U* corners)const noexcept;
@@ -220,11 +240,6 @@ struct BoundingBox{
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
-
-    static void CreateMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept;
-    static void CreateFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept;
-    static void NWB_SIMD_CALL CreateFromPoints(BoundingBox& outBox, SIMDVectorSingle point0, SIMDVectorSingle point1)noexcept;
-    static void CreateFromPoints(BoundingBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
 };
 
 
@@ -237,18 +252,8 @@ struct BoundingDoubleBox{
     Double4 center;
     Double4 extents = Double4(1.0, 1.0, 1.0, 0.0);
 
-    constexpr BoundingDoubleBox()noexcept = default;
-    template<typename CenterT, typename ExtentsT>
-        requires ((IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>) && (IsSame_V<ExtentsT, Double3> || IsSame_V<ExtentsT, Double3U>))
-    constexpr BoundingDoubleBox(const CenterT& centerValue, const ExtentsT& extentsValue)noexcept
-        : center(centerValue.x, centerValue.y, centerValue.z, 0.0)
-        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0)
-    {}
-    constexpr BoundingDoubleBox(const Double4& centerValue, const Double4& extentsValue)noexcept
-        : center(centerValue)
-        , extents(extentsValue)
-    {}
 
+public:
     static void NWB_SIMD_CALL TransformBoxValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents)noexcept;
     static void NWB_SIMD_CALL TransformBoxValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble point)noexcept;
@@ -261,7 +266,28 @@ struct BoundingDoubleBox{
     )noexcept;
     static void NWB_SIMD_CALL MergeBoxValues(SIMDVectorDouble boxCenter0, SIMDVectorDouble boxExtents0, SIMDVectorDouble boxCenter1, SIMDVectorDouble boxExtents1, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents)noexcept;
     static void NWB_SIMD_CALL CornersValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble* outCorners)noexcept;
+    static void CreateMerged(BoundingDoubleBox& outBox, const BoundingDoubleBox& box0, const BoundingDoubleBox& box1)noexcept;
+    static void CreateFromSphere(BoundingDoubleBox& outBox, const BoundingDoubleSphere& sphere)noexcept;
+    static void NWB_SIMD_CALL CreateFromPoints(BoundingDoubleBox& outBox, SIMDVectorDouble point0, SIMDVectorDouble point1)noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    static void CreateFromPoints(BoundingDoubleBox& outBox, usize count, const PointT* points, usize stride)noexcept;
 
+
+public:
+    constexpr BoundingDoubleBox()noexcept = default;
+    template<typename CenterT, typename ExtentsT>
+        requires ((IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>) && (IsSame_V<ExtentsT, Double3> || IsSame_V<ExtentsT, Double3U>))
+    constexpr BoundingDoubleBox(const CenterT& centerValue, const ExtentsT& extentsValue)noexcept
+        : center(centerValue.x, centerValue.y, centerValue.z, 0.0)
+        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0)
+    {}
+    constexpr BoundingDoubleBox(const Double4& centerValue, const Double4& extentsValue)noexcept
+        : center(centerValue)
+        , extents(extentsValue)
+    {}
+
+
+public:
     void NWB_SIMD_CALL transform(BoundingDoubleBox& outBox, const SIMDMatrixDouble& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingDoubleBox& outBox, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)const noexcept;
     template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
@@ -292,12 +318,6 @@ struct BoundingDoubleBox{
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;
-
-    static void CreateMerged(BoundingDoubleBox& outBox, const BoundingDoubleBox& box0, const BoundingDoubleBox& box1)noexcept;
-    static void CreateFromSphere(BoundingDoubleBox& outBox, const BoundingDoubleSphere& sphere)noexcept;
-    static void NWB_SIMD_CALL CreateFromPoints(BoundingDoubleBox& outBox, SIMDVectorDouble point0, SIMDVectorDouble point1)noexcept;
-    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-    static void CreateFromPoints(BoundingDoubleBox& outBox, usize count, const PointT* points, usize stride)noexcept;
 };
 
 
@@ -311,18 +331,8 @@ struct BoundingOrientedBox{
     Float4 extents = Float4(1.0f, 1.0f, 1.0f, 0.0f);
     Float4 orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    constexpr BoundingOrientedBox()noexcept = default;
-    constexpr BoundingOrientedBox(const Float3U& centerValue, const Float3U& extentsValue, const Float4& orientationValue)noexcept
-        : center(centerValue.x, centerValue.y, centerValue.z, 0.0f)
-        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0f)
-        , orientation(orientationValue)
-    {}
-    constexpr BoundingOrientedBox(const Float4& centerValue, const Float4& extentsValue, const Float4& orientationValue)noexcept
-        : center(centerValue)
-        , extents(extentsValue)
-        , orientation(orientationValue)
-    {}
 
+public:
     static void NWB_SIMD_CALL TransformOrientedBoxValue(
         SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, const SIMDMatrix& matrix, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents, SIMDVectorSingle& outOrientation, bool& outCollapsedToAxisAligned
     )noexcept;
@@ -338,7 +348,24 @@ struct BoundingOrientedBox{
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
         SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
     )noexcept;
+    static void CreateFromPoints(BoundingOrientedBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
 
+
+public:
+    constexpr BoundingOrientedBox()noexcept = default;
+    constexpr BoundingOrientedBox(const Float3U& centerValue, const Float3U& extentsValue, const Float4& orientationValue)noexcept
+        : center(centerValue.x, centerValue.y, centerValue.z, 0.0f)
+        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0f)
+        , orientation(orientationValue)
+    {}
+    constexpr BoundingOrientedBox(const Float4& centerValue, const Float4& extentsValue, const Float4& orientationValue)noexcept
+        : center(centerValue)
+        , extents(extentsValue)
+        , orientation(orientationValue)
+    {}
+
+
+public:
     void NWB_SIMD_CALL transform(BoundingOrientedBox& outBox, const SIMDMatrix& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingOrientedBox& outBox, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation)const noexcept;
     void getCorners(Float3U* corners)const noexcept;
@@ -373,8 +400,6 @@ struct BoundingOrientedBox{
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
-
-    static void CreateFromPoints(BoundingOrientedBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
 };
 
 
@@ -388,20 +413,8 @@ struct BoundingDoubleOrientedBox{
     Double4 extents = Double4(1.0, 1.0, 1.0, 0.0);
     Double4 orientation = Double4(0.0, 0.0, 0.0, 1.0);
 
-    constexpr BoundingDoubleOrientedBox()noexcept = default;
-    template<typename CenterT, typename ExtentsT>
-        requires ((IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>) && (IsSame_V<ExtentsT, Double3> || IsSame_V<ExtentsT, Double3U>))
-    constexpr BoundingDoubleOrientedBox(const CenterT& centerValue, const ExtentsT& extentsValue, const Double4& orientationValue)noexcept
-        : center(centerValue.x, centerValue.y, centerValue.z, 0.0)
-        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0)
-        , orientation(orientationValue)
-    {}
-    constexpr BoundingDoubleOrientedBox(const Double4& centerValue, const Double4& extentsValue, const Double4& orientationValue)noexcept
-        : center(centerValue)
-        , extents(extentsValue)
-        , orientation(orientationValue)
-    {}
 
+public:
     static void NWB_SIMD_CALL TransformOrientedBoxValue(
         SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents, SIMDVectorDouble& outOrientation, bool& outCollapsedToAxisAligned
     )noexcept;
@@ -417,7 +430,27 @@ struct BoundingDoubleOrientedBox{
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
         SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
     )noexcept;
+    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+    static void CreateFromPoints(BoundingDoubleOrientedBox& outBox, usize count, const PointT* points, usize stride)noexcept;
 
+
+public:
+    constexpr BoundingDoubleOrientedBox()noexcept = default;
+    template<typename CenterT, typename ExtentsT>
+        requires ((IsSame_V<CenterT, Double3> || IsSame_V<CenterT, Double3U>) && (IsSame_V<ExtentsT, Double3> || IsSame_V<ExtentsT, Double3U>))
+    constexpr BoundingDoubleOrientedBox(const CenterT& centerValue, const ExtentsT& extentsValue, const Double4& orientationValue)noexcept
+        : center(centerValue.x, centerValue.y, centerValue.z, 0.0)
+        , extents(extentsValue.x, extentsValue.y, extentsValue.z, 0.0)
+        , orientation(orientationValue)
+    {}
+    constexpr BoundingDoubleOrientedBox(const Double4& centerValue, const Double4& extentsValue, const Double4& orientationValue)noexcept
+        : center(centerValue)
+        , extents(extentsValue)
+        , orientation(orientationValue)
+    {}
+
+
+public:
     void NWB_SIMD_CALL transform(BoundingDoubleOrientedBox& outBox, const SIMDMatrixDouble& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingDoubleOrientedBox& outBox, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)const noexcept;
     template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
@@ -453,9 +486,6 @@ struct BoundingDoubleOrientedBox{
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;
-
-    template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-    static void CreateFromPoints(BoundingDoubleOrientedBox& outBox, usize count, const PointT* points, usize stride)noexcept;
 };
 
 
@@ -474,29 +504,8 @@ struct BoundingFrustum{
     f32 nearPlane = 0.0f;
     f32 farPlane = 1.0f;
 
-    constexpr BoundingFrustum()noexcept = default;
-    constexpr BoundingFrustum(const Float3U& originValue, const Float4& orientationValue, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue)noexcept
-        : origin(originValue.x, originValue.y, originValue.z, 0.0f)
-        , orientation(orientationValue)
-        , rightSlope(rightSlopeValue)
-        , leftSlope(leftSlopeValue)
-        , topSlope(topSlopeValue)
-        , bottomSlope(bottomSlopeValue)
-        , nearPlane(nearPlaneValue)
-        , farPlane(farPlaneValue)
-    {}
-    constexpr BoundingFrustum(const Float4& originValue, const Float4& orientationValue, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue)noexcept
-        : origin(originValue)
-        , orientation(orientationValue)
-        , rightSlope(rightSlopeValue)
-        , leftSlope(leftSlopeValue)
-        , topSlope(topSlopeValue)
-        , bottomSlope(bottomSlopeValue)
-        , nearPlane(nearPlaneValue)
-        , farPlane(farPlaneValue)
-    {}
-    explicit BoundingFrustum(const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
 
+public:
     static void NWB_SIMD_CALL TransformFrustumValue(
         SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, const SIMDMatrix& matrix, SIMDVectorSingle& outOrigin,
         SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
@@ -524,7 +533,35 @@ struct BoundingFrustum{
         SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1,
         SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
     )noexcept;
+    static void NWB_SIMD_CALL CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
 
+
+public:
+    constexpr BoundingFrustum()noexcept = default;
+    constexpr BoundingFrustum(const Float3U& originValue, const Float4& orientationValue, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue)noexcept
+        : origin(originValue.x, originValue.y, originValue.z, 0.0f)
+        , orientation(orientationValue)
+        , rightSlope(rightSlopeValue)
+        , leftSlope(leftSlopeValue)
+        , topSlope(topSlopeValue)
+        , bottomSlope(bottomSlopeValue)
+        , nearPlane(nearPlaneValue)
+        , farPlane(farPlaneValue)
+    {}
+    constexpr BoundingFrustum(const Float4& originValue, const Float4& orientationValue, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue)noexcept
+        : origin(originValue)
+        , orientation(orientationValue)
+        , rightSlope(rightSlopeValue)
+        , leftSlope(leftSlopeValue)
+        , topSlope(topSlopeValue)
+        , bottomSlope(bottomSlopeValue)
+        , nearPlane(nearPlaneValue)
+        , farPlane(farPlaneValue)
+    {}
+    explicit BoundingFrustum(const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
+
+
+public:
     void NWB_SIMD_CALL transform(BoundingFrustum& outFrustum, const SIMDMatrix& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingFrustum& outFrustum, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation)const noexcept;
     void getCorners(Float3U* corners)const noexcept;
@@ -578,8 +615,6 @@ struct BoundingFrustum{
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
 
     void getPlanes(SIMDVectorSingle* nearPlaneOut, SIMDVectorSingle* farPlaneOut, SIMDVectorSingle* rightPlaneOut, SIMDVectorSingle* leftPlaneOut, SIMDVectorSingle* topPlaneOut, SIMDVectorSingle* bottomPlaneOut)const noexcept;
-
-    static void NWB_SIMD_CALL CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
 };
 
 
@@ -598,6 +633,39 @@ struct BoundingDoubleFrustum{
     f64 nearPlane = 0.0;
     f64 farPlane = 1.0;
 
+
+public:
+    static void NWB_SIMD_CALL TransformFrustumValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outOrigin,
+        SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
+    )noexcept;
+    static void NWB_SIMD_CALL TransformFrustumValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, f64 scale, SIMDVectorDouble rotation,
+        SIMDVectorDouble translation, SIMDVectorDouble& outOrigin, SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
+    )noexcept;
+    static void NWB_SIMD_CALL CornersValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble* outCorners
+    )noexcept;
+    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble point
+    )noexcept;
+    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2
+    )noexcept;
+    [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane
+    )noexcept;
+    [[nodiscard]] static Expected<f64> NWB_SIMD_CALL IntersectsRayValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble rayOrigin, SIMDVectorDouble direction
+    )noexcept;
+    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
+        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1,
+        SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
+    )noexcept;
+    static void NWB_SIMD_CALL CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, bool rightHandedCoordinates = false)noexcept;
+
+
+public:
     constexpr BoundingDoubleFrustum()noexcept = default;
     template<typename OriginT> requires (IsSame_V<OriginT, Double3> || IsSame_V<OriginT, Double3U>)
     constexpr BoundingDoubleFrustum(
@@ -640,34 +708,8 @@ struct BoundingDoubleFrustum{
     {}
     explicit BoundingDoubleFrustum(const SIMDMatrixDouble& projection, bool rightHandedCoordinates = false)noexcept;
 
-    static void NWB_SIMD_CALL TransformFrustumValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outOrigin,
-        SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
-    )noexcept;
-    static void NWB_SIMD_CALL TransformFrustumValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, f64 scale, SIMDVectorDouble rotation,
-        SIMDVectorDouble translation, SIMDVectorDouble& outOrigin, SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
-    )noexcept;
-    static void NWB_SIMD_CALL CornersValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble* outCorners
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble point
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2
-    )noexcept;
-    [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane
-    )noexcept;
-    [[nodiscard]] static Expected<f64> NWB_SIMD_CALL IntersectsRayValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble rayOrigin, SIMDVectorDouble direction
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1,
-        SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
-    )noexcept;
 
+public:
     void NWB_SIMD_CALL transform(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& matrix)const noexcept;
     void NWB_SIMD_CALL transform(BoundingDoubleFrustum& outFrustum, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)const noexcept;
     template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
@@ -722,8 +764,6 @@ struct BoundingDoubleFrustum{
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;
 
     void getPlanes(SIMDVectorDouble* nearPlaneOut, SIMDVectorDouble* farPlaneOut, SIMDVectorDouble* rightPlaneOut, SIMDVectorDouble* leftPlaneOut, SIMDVectorDouble* topPlaneOut, SIMDVectorDouble* bottomPlaneOut)const noexcept;
-
-    static void NWB_SIMD_CALL CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, bool rightHandedCoordinates = false)noexcept;
 };
 
 

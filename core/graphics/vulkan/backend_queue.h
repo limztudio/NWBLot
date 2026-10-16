@@ -7,8 +7,6 @@
 
 #include "module.h"
 #include "backend_forward.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -16,6 +14,8 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
+
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +33,10 @@ class Queue final : NoCopy{
     friend class TrackedCommandBuffer;
 
 
+public:
+    using SubmissionWait = QueueSubmissionWait;
+
+
 private:
     using CommandBufferList = List<TrackedCommandBufferPtr, Alloc::GlobalArena>;
 
@@ -46,23 +50,11 @@ private:
 
 
 public:
-    Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue);
-    ~Queue()noexcept;
-
-
-public:
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u64 recordingWorkerDomain = 0u, u32 recordingWorkerIndex = 0u);
-    [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
-    [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
-
-    void addWaitSemaphore(VkSemaphore semaphore, u64 value);
-    void addSignalSemaphore(VkSemaphore semaphore, u64 value);
-
-    using SubmissionWait = QueueSubmissionWait;
     struct SubmissionSignal{
         VkSemaphore semaphore = VK_NULL_HANDLE;
         u64 value = 0u;
     };
+
     struct SubmissionCommandListIdentity{
         TrackedCommandBuffer* owner = nullptr;
         u64 recordingLeaseSerial = 0u;
@@ -78,24 +70,11 @@ public:
         usize timelineWaitCount = 0u;
         bool accepted = false;
     };
+
     struct SubmissionFailure{
         u64 lastSubmittedID = 0u;
         VkResult nativeResult = VK_SUCCESS;
     };
-
-    [[nodiscard]] Expected<SubmissionReceipt, SubmissionFailure> submit(
-        CommandList* const* ppCmd,
-        usize numCmd,
-        const SubmissionCommandListIdentity* expectedCommandLists = nullptr,
-        const SubmissionWait* localWaits = nullptr,
-        usize localWaitCount = 0u,
-        const SubmissionSignal* localSignals = nullptr,
-        usize localSignalCount = 0u,
-        bool forceNativeSubmission = false
-    );
-    [[nodiscard]] VkResult updateLastFinishedID();
-
-    void waitForIdle();
 
 
 private:
@@ -122,7 +101,40 @@ private:
         {}
     };
 
+
+private:
     static void UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
+
+
+public:
+    Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue);
+    ~Queue()noexcept;
+
+
+public:
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u64 recordingWorkerDomain = 0u, u32 recordingWorkerIndex = 0u);
+    [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
+    [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
+
+    void addWaitSemaphore(VkSemaphore semaphore, u64 value);
+    void addSignalSemaphore(VkSemaphore semaphore, u64 value);
+
+    [[nodiscard]] Expected<SubmissionReceipt, SubmissionFailure> submit(
+        CommandList* const* ppCmd,
+        usize numCmd,
+        const SubmissionCommandListIdentity* expectedCommandLists = nullptr,
+        const SubmissionWait* localWaits = nullptr,
+        usize localWaitCount = 0u,
+        const SubmissionSignal* localSignals = nullptr,
+        usize localSignalCount = 0u,
+        bool forceNativeSubmission = false
+    );
+    [[nodiscard]] VkResult updateLastFinishedID();
+
+    void waitForIdle();
+
+
+private:
     [[nodiscard]] u64 nextRecordingID()noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     [[nodiscard]] bool validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const;

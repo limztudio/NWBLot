@@ -3,8 +3,11 @@
 
 
 #include "telemetry_test_helpers.h"
+
 #include <gtest/gtest.h>
+
 #include "frame_graph_test_helpers.h"
+
 #include <core/telemetry/frame_graph_registry.h>
 
 

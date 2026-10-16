@@ -14,15 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
-    const auto& owner = source.focusOwner;
-    const HitTarget* focused = findTarget(owner.target, owner.declarationGeneration);
-    return
-        m_windowFocused && source.consumed && owner.target.valid() && m_focus == owner.target && m_focusDeclaration == owner.declarationGeneration
-        && focused != nullptr && focused->focusable && isInteractive(*focused) && focused->popup == owner.popup && focused->control == owner.control
-    ;
-}
-
 bool InputRouter::canSubmitCommand(const InputEvent& event)const noexcept{
     if(event.type != InputEventType::CommandUp || !event.edit || (event.command != InputCommand::Accept && event.command != InputCommand::Submit))
         return false;
@@ -48,6 +39,15 @@ bool InputRouter::pressed(const WidgetId id)const noexcept{
             return true;
     }
     return false;
+}
+
+bool InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
+    const auto& owner = source.focusOwner;
+    const HitTarget* focused = findTarget(owner.target, owner.declarationGeneration);
+    return
+        m_windowFocused && source.consumed && owner.target.valid() && m_focus == owner.target && m_focusDeclaration == owner.declarationGeneration
+        && focused != nullptr && focused->focusable && isInteractive(*focused) && focused->popup == owner.popup && focused->control == owner.control
+    ;
 }
 
 void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result){

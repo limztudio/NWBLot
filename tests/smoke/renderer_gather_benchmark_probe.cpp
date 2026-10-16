@@ -22,6 +22,21 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererGatherBenchmarkProbe::WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots){
+    output << '{';
+    for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
+        if(scope != 0u)
+            output << ',';
+        const auto& snapshot = snapshots[scope];
+        output << '"' << s_ArenaNames[scope] << "\":{\"present\":" << (snapshot.valid() ? "true" : "false")
+            << ",\"frame\":" << snapshot.frameIndex << ",\"reserved\":" << snapshot.reservedBytes
+            << ",\"used\":" << snapshot.usedBytes << ",\"historical_arena_peak\":" << snapshot.peakUsedBytes
+            << ",\"allocations\":" << snapshot.allocationCount << ",\"reallocations\":" << snapshot.reallocationCount
+            << ",\"deallocations\":" << snapshot.deallocationCount << '}';
+    }
+    output << '}';
+}
+
 RendererGatherBenchmarkProbe::RendererGatherBenchmarkProbe(Core::Alloc::GlobalArena& arena)
     : m_cpu(arena)
     , m_gpu(arena)
@@ -141,21 +156,6 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
         output << "{\"type\":\"complete\"}\n";
     output.flush();
     return output.good() && complete;
-}
-
-void RendererGatherBenchmarkProbe::WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots){
-    output << '{';
-    for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
-        if(scope != 0u)
-            output << ',';
-        const auto& snapshot = snapshots[scope];
-        output << '"' << s_ArenaNames[scope] << "\":{\"present\":" << (snapshot.valid() ? "true" : "false")
-            << ",\"frame\":" << snapshot.frameIndex << ",\"reserved\":" << snapshot.reservedBytes
-            << ",\"used\":" << snapshot.usedBytes << ",\"historical_arena_peak\":" << snapshot.peakUsedBytes
-            << ",\"allocations\":" << snapshot.allocationCount << ",\"reallocations\":" << snapshot.reallocationCount
-            << ",\"deallocations\":" << snapshot.deallocationCount << '}';
-    }
-    output << '}';
 }
 
 

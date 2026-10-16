@@ -74,6 +74,7 @@ public:
     [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
     [[nodiscard]] const Name& virtualPath()const noexcept{ return m_virtualPath; }
 
+
 public:
     [[nodiscard]] bool checkVirtualPath(const TStringView failureContext)const{
         if(virtualPath())
@@ -128,12 +129,16 @@ public:
 public:
     [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
 
+
 public:
     [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const = 0;
 
 #if defined(NWB_COOK)
+
+
 public:
     virtual bool serialize(const IAsset& asset, AssetBytes& outBinary)const = 0;
+
 
 public:
     [[nodiscard]] bool checkSerializeAssetType(const IAsset& asset, const TStringView failureContext)const{

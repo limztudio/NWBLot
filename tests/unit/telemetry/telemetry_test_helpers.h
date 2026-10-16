@@ -6,7 +6,9 @@
 
 
 #include <tests/common/test_context.h>
+
 #include <core/telemetry/module.h>
+
 #include <logger/telemetry/report.h>
 
 

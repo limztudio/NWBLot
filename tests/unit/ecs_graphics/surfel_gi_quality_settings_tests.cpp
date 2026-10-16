@@ -5,6 +5,7 @@
 #include <impl/ecs_render/gi/quality_settings.h>
 
 #include <global/limit.h>
+
 #include <gtest/gtest.h>
 
 

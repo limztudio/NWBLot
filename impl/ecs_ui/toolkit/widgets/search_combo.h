@@ -21,6 +21,9 @@ NWB_IMPL_UI_BEGIN
 // The source owns a cached stable-key view and copies the query; filtering must not change its full-source metadata.
 interface ISearchableListDataSource : public IListDataSource{
     virtual ~ISearchableListDataSource()noexcept override = default;
+
+
+public:
     [[nodiscard]] virtual bool filter(AStringView query) = 0;
     [[nodiscard]] virtual const IListDataSource& filtered()const = 0;
 };

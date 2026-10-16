@@ -20,56 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererRayTracingSystem::enableSoftShadowResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
-    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
-    commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-    // Temporal merge writes history before later reads.
-    if(m_rayTracingState.m_softShadowTemporalReady){
-        commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
-        commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
-        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
-        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
-    }
-}
-
-void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex,
-    const u32 softGroupsX,
-    const u32 softGroupsY,
-    const bool splitOpaqueSoftResolve,
-    const bool splitSoftTransparentFold,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
-){
-    // Split resolve declares the trace fence; the direct route retains its UAV fence.
-    if(!splitOpaqueSoftResolve){
-        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-    }
-    dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList,
-        targets,
-        deferredLightingResources,
-        frameIndex,
-        softGroupsX,
-        softGroupsY,
-        true,
-        !splitOpaqueSoftResolve,
-        !splitSoftTransparentFold,
-        !splitSoftTransparentFold,
-        false,
-        false,
-        false,
-        graphOwnsOpaqueTemporalMergeEntryStates,
-        false,
-        !splitOpaqueSoftResolve,
-        false
-    );
-}
-
 void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.shadowVisibility)
         return;
@@ -344,6 +294,66 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     return producedFrameIndex;
 }
 
+bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
+    return m_rayTracingState.m_softTransparentReady;
+}
+
+void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
+    // Trace layouts are push-only; resources come from the global heap.
+    static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
+    layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqSoftPushConstants)));
+}
+
+void RendererRayTracingSystem::enableSoftShadowResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
+    // Temporal merge writes history before later reads.
+    if(m_rayTracingState.m_softShadowTemporalReady){
+        commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
+    }
+}
+
+void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
+    const u32 frameIndex,
+    const u32 softGroupsX,
+    const u32 softGroupsY,
+    const bool splitOpaqueSoftResolve,
+    const bool splitSoftTransparentFold,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
+){
+    // Split resolve declares the trace fence; the direct route retains its UAV fence.
+    if(!splitOpaqueSoftResolve){
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
+    dispatchSoftShadowDenoiseAndTransparentFold(
+        commandList,
+        targets,
+        deferredLightingResources,
+        frameIndex,
+        softGroupsX,
+        softGroupsY,
+        true,
+        !splitOpaqueSoftResolve,
+        !splitSoftTransparentFold,
+        !splitSoftTransparentFold,
+        false,
+        false,
+        false,
+        graphOwnsOpaqueTemporalMergeEntryStates,
+        false,
+        !splitOpaqueSoftResolve,
+        false
+    );
+}
+
 Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -354,16 +364,6 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return MakeUnexpected(Failure{});
     return renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, nullptr, lightSpace);
-}
-
-bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
-    return m_rayTracingState.m_softTransparentReady;
-}
-
-void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
-    // Trace layouts are push-only; resources come from the global heap.
-    static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
-    layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqSoftPushConstants)));
 }
 
 

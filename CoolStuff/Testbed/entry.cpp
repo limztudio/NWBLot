@@ -4,9 +4,6 @@
 
 #include "project.h"
 
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets_graphics/bindless/runtime_abi.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -14,6 +11,10 @@
 #include <impl/ecs_model_renderer/model_renderer.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_ui/module.h>
+
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/telemetry/frame_graph_registry.h>
 #include <core/common/log.h>
 
 
@@ -130,7 +131,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
 }
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return Testbed::__hidden_testbed_entry::s_WindowTitle;
 }
 

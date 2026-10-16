@@ -18,7 +18,7 @@ using namespace UiEditBoxTestSupport;
 
 class UiEditPointerSourceTests : public UiEditBoxHostTests{
 protected:
-    [[nodiscard]] Ui::Point atByte(const usize byte)const{
+    [[nodiscard]] Ui::Point atByte(const usize byte)const noexcept{
         return { m_placement.textOrigin.x + static_cast<f32>(byte) * 10.0f + 1.0f, m_placement.textOrigin.y + 5.0f };
     }
 };

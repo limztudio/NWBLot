@@ -5,6 +5,7 @@
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 
 #include <core/perf/timing.h>
+
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
@@ -40,15 +41,15 @@ namespace __hidden_task_timing_feedback_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
 
 
-[[nodiscard]] static Core::QueueSubmissionToken AcceptedToken(const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& queue){
+[[nodiscard]] static Core::QueueSubmissionToken AcceptedToken(const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& queue)noexcept{
     return Core::QueueSubmissionToken{ .value = 1u, .physicalQueueIndex = queue.index, .deviceGeneration = queue.deviceGeneration, .queue = key.queue, };
 }
 
-[[nodiscard]] static Core::GpuTimingSample PublishedSample(const Core::GpuTimingSampleAttribution attribution, const Name& scopeName, const Core::GpuPhysicalQueueId& queue, const u64 sourceFrameIndex, const f64 durationSeconds){
+[[nodiscard]] static Core::GpuTimingSample PublishedSample(const Core::GpuTimingSampleAttribution attribution, const Name& scopeName, const Core::GpuPhysicalQueueId& queue, const u64 sourceFrameIndex, const f64 durationSeconds)noexcept{
     return Core::GpuTimingSample{ .sourceFrameIndex = sourceFrameIndex, .durationSeconds = durationSeconds, .scopeName = scopeName, .attribution = attribution, .comparableRange = {}, .physicalQueue = queue, .published = true, };
 }
 
-[[nodiscard]] static Core::GpuTimingSample RetiredSample(const Core::GpuTimingSampleAttribution attribution, const Core::GpuPhysicalQueueId& queue){
+[[nodiscard]] static Core::GpuTimingSample RetiredSample(const Core::GpuTimingSampleAttribution attribution, const Core::GpuPhysicalQueueId& queue)noexcept{
     return Core::GpuTimingSample{ .sourceFrameIndex = 0u, .durationSeconds = 0.0, .scopeName = s_NameNone, .attribution = attribution, .comparableRange = {}, .physicalQueue = queue, .published = false, };
 }
 

@@ -72,6 +72,7 @@ class ICookedAssetWriter{
 public:
     virtual ~ICookedAssetWriter() = default;
 
+
 public:
     virtual bool writeCookedAsset(TStringView assetKind, const Name& virtualPath, const IAsset& asset, const IAssetCodec& codec) = 0;
 };
@@ -84,8 +85,10 @@ class ICookEntryBucket : NoCopy{
 public:
     virtual ~ICookEntryBucket() = default;
 
+
 public:
     [[nodiscard]] virtual usize size()const noexcept = 0;
+
 
 public:
     virtual bool parseDocument(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context) = 0;
@@ -176,6 +179,7 @@ public:
     using ValueParseFunction = Expected<EntryT> (*)(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context);
     using BuildAssetFunction = Expected<AssetT> (*)(EntryT& entry, AssetArena& arena);
 
+
 public:
     CookEntryBucket(CookArena& arena, const Name& assetType, const TStringView assetKindText, DocumentParseFunction parseDocument, ValueParseFunction parseValue, BuildAssetFunction buildAsset, const bool logBuildFailure)
         : m_entries(arena)
@@ -187,10 +191,12 @@ public:
         , m_logBuildFailure(logBuildFailure)
     {}
 
+
 public:
     [[nodiscard]] virtual usize size()const noexcept override{ return m_entries.size(); }
     [[nodiscard]] virtual CookVector<EntryT>& entries()noexcept override{ return m_entries; }
     [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept override{ return m_entries; }
+
 
 public:
     virtual bool parseDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context)override{
@@ -242,6 +248,7 @@ public:
         return true;
     }
 
+
 private:
     bool appendParsedEntry(EntryT&& entry, CookEntryParseContext& context){
         if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(m_assetKindText, CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath), context.seenVirtualPathHashes))
@@ -250,6 +257,7 @@ private:
         m_entries.push_back(Move(entry));
         return true;
     }
+
 
 private:
     CookVector<EntryT> m_entries;
@@ -271,12 +279,14 @@ private:
     using BucketVector = CookVector<BucketPtr>;
     using BucketLookup = CookMap<Name, ICookEntryBucket*>;
 
+
 public:
     explicit CookEntryRegistry(CookArena& arena)
         : m_arena(arena)
         , m_buckets(arena)
         , m_lookup(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
+
 
 public:
     template<typename BucketT>
@@ -296,6 +306,7 @@ public:
         m_buckets.push_back(Move(bucket));
         return true;
     }
+
 
 public:
     // The asset label's backing text must outlive this registry.
@@ -384,6 +395,7 @@ public:
         }
         return count;
     }
+
 
 private:
     CookArena& m_arena;

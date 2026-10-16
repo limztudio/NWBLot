@@ -5,13 +5,14 @@
 #pragma once
 
 
-#include <core/assets/manager.h>
-#include <core/ecs/entity.h>
+#include <tests/common/ecs_test_world.h>
+
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_model/system.h>
 #include <impl/ecs_scene/components.h>
 
-#include <tests/common/ecs_test_world.h>
+#include <core/assets/manager.h>
+#include <core/ecs/entity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,6 +52,7 @@ struct RuntimeContext{
     Impl::ModelSystem system{ testWorld.arena, testWorld.world, assetManager };
 
 
+public:
     [[nodiscard]] Core::ECS::EntityID makeOwner(){
         auto entity = testWorld.world.createEntity();
         auto& component = entity.addComponent<Impl::ModelComponent>();

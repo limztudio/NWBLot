@@ -94,11 +94,11 @@ protected:
     [[nodiscard]] bool prepare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
     [[nodiscard]] bool accept(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
     [[nodiscard]] bool sibling(AStringView key = "later");
-    [[nodiscard]] WidgetId host()const;
-    [[nodiscard]] WidgetId track()const;
-    [[nodiscard]] WidgetId thumb()const;
-    [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const;
-    [[nodiscard]] Point thumbPoint()const;
+    [[nodiscard]] WidgetId host()const noexcept;
+    [[nodiscard]] WidgetId track()const noexcept;
+    [[nodiscard]] WidgetId thumb()const noexcept;
+    [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const noexcept;
+    [[nodiscard]] Point thumbPoint()const noexcept;
     [[nodiscard]] SliderAcceptedFrame accepted()const;
     void expectAccepted(const SliderAcceptedFrame& saved, bool popupFocus = true)const;
 

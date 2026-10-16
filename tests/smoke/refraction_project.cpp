@@ -2,22 +2,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.h>
-
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/simd/constant.h>
-#include <global/simd/frame.h>
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_render/module.h>
-
 #include "framebuffer_capture.h"
 #include "smoke_capture_teardown.h"
 #include "refraction_gallery_scene.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
+
+#include <loader/project_entry.h>
+
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_render/module.h>
+
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/constant.h>
+#include <global/simd/frame.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,6 +59,8 @@ private:
         return world;
     }
 
+
+private:
     bool configureFramebufferCapture(){
         auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("RefractionSmokeProject"), 16u);
         if(!capture)
@@ -80,6 +84,8 @@ public:
 
     virtual ~RefractionSmokeProject()override{ DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture); }
 
+
+public:
     virtual bool onStartup()override{
         if(!configureFramebufferCapture())
             return false;
@@ -140,7 +146,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
-TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Refraction Smoke"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Refraction Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_refraction_smoke::RefractionSmokeProject>(context);
 }

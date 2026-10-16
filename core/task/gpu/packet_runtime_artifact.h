@@ -69,6 +69,7 @@ struct GpuTaskGraphExternalResourceHandoff{
 class GpuTaskGraphExternalResourceHandoffSnapshot final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
 
+
 private:
     struct Storage;
 

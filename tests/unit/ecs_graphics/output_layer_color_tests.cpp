@@ -24,6 +24,8 @@ struct ShaderFloat3{
     f64 y;
     f64 z;
 
+
+public:
     ShaderFloat3(const f64 scalar)noexcept
         : x(scalar)
         , y(scalar)

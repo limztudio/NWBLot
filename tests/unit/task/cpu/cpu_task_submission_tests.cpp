@@ -5,6 +5,7 @@
 #include "process_exit.h"
 
 #include <core/task/cpu/scheduler.h>
+
 #include <global/terminal_entry.h>
 #include <global/platform.h>
 #include <global/termination.h>

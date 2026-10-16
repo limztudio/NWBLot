@@ -34,6 +34,8 @@ struct CleanupState{
 struct MoveOnlyCleanup : NoCopy{
     CleanupState* state;
 
+
+public:
     explicit MoveOnlyCleanup(CleanupState& cleanupState)noexcept
         : state(&cleanupState)
     {}
@@ -106,6 +108,8 @@ TEST(ScopeExit, CleanupObservesEarlierCapturedObjectsBeforeTheirDestruction){
     struct Lifetime{
         bool& alive;
 
+
+    public:
         explicit Lifetime(bool& lifetime)noexcept
             : alive(lifetime)
         {

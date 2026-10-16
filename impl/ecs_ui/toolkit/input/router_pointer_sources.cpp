@@ -14,6 +14,28 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{
+    if(!source.valid() || (m_activePointerSource.valid() && m_activePointerSource != source))
+        return false;
+    return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
+        return held.source == source && held.inert;
+    }) == m_pointerSources.end();
+}
+
+bool InputRouter::ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
+    const PointerSource* held = findPointerSource(source, intent);
+    return held != nullptr && held->consumed;
+}
+
+bool InputRouter::wantsPointer()const noexcept{
+    if(!m_pointerSources.empty()){
+        return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [](const PointerSource& held)noexcept{
+            return held.consumed;
+        }) != m_pointerSources.end();
+    }
+    return hasPopup() || m_hover.valid();
+}
+
 InputRouter::PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)noexcept{
     const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
         return current.source == source && current.intent == intent;
@@ -26,63 +48,6 @@ const InputRouter::PointerSource* InputRouter::findPointerSource(const InputSour
         return current.source == source && current.intent == intent;
     });
     return found == m_pointerSources.end() ? nullptr : &*found;
-}
-
-bool InputRouter::ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
-    const PointerSource* held = findPointerSource(source, intent);
-    return held != nullptr && held->consumed;
-}
-
-bool InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{
-    if(!source.valid() || (m_activePointerSource.valid() && m_activePointerSource != source))
-        return false;
-    return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
-        return held.source == source && held.inert;
-    }) == m_pointerSources.end();
-}
-
-bool InputRouter::wantsPointer()const noexcept{
-    if(!m_pointerSources.empty()){
-        return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [](const PointerSource& held)noexcept{
-            return held.consumed;
-        }) != m_pointerSources.end();
-    }
-    return hasPopup() || m_hover.valid();
-}
-
-void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit)noexcept{
-    if(!event.hoverCapable)
-        return;
-    m_hoverPointerSource = event.source;
-    m_pointer = event.position;
-    m_pointerKnown = true;
-    setHoverTarget(hit);
-}
-
-void InputRouter::terminatePointerSource(const InputSource source)noexcept{
-    const bool active = m_activePointerSource == source;
-    const bool unfinished = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
-        return held.source == source;
-    }) != m_pointerSources.end();
-    if(active){
-        cancelPointerPress();
-        m_primaryDown = false;
-        m_pointerSequenceConsumed = false;
-        m_secondaryDown = false;
-        m_secondarySequenceConsumed = false;
-        m_activePointerSource = {};
-    }
-    for(usize index = m_pointerSources.size(); index > 0u; --index){
-        if(m_pointerSources[index - 1u].source == source)
-            m_pointerSources.erase(m_pointerSources.begin() + static_cast<isize>(index - 1u));
-    }
-    // Ordinary mouse release may immediately drop native capture; its completed events and hover remain usable.
-    if(unfinished && m_hoverPointerSource == source){
-        advanceHoverActivity();
-        clearHover();
-        m_pointerKnown = false;
-        m_hoverPointerSource = {};
-    }
 }
 
 void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult& result){
@@ -171,6 +136,41 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         m_pointerSources.erase(m_pointerSources.begin() + index);
         if(!m_primaryDown && !m_secondaryDown)
             m_activePointerSource = {};
+    }
+}
+
+void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit)noexcept{
+    if(!event.hoverCapable)
+        return;
+    m_hoverPointerSource = event.source;
+    m_pointer = event.position;
+    m_pointerKnown = true;
+    setHoverTarget(hit);
+}
+
+void InputRouter::terminatePointerSource(const InputSource source)noexcept{
+    const bool active = m_activePointerSource == source;
+    const bool unfinished = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
+        return held.source == source;
+    }) != m_pointerSources.end();
+    if(active){
+        cancelPointerPress();
+        m_primaryDown = false;
+        m_pointerSequenceConsumed = false;
+        m_secondaryDown = false;
+        m_secondarySequenceConsumed = false;
+        m_activePointerSource = {};
+    }
+    for(usize index = m_pointerSources.size(); index > 0u; --index){
+        if(m_pointerSources[index - 1u].source == source)
+            m_pointerSources.erase(m_pointerSources.begin() + static_cast<isize>(index - 1u));
+    }
+    // Ordinary mouse release may immediately drop native capture; its completed events and hover remain usable.
+    if(unfinished && m_hoverPointerSource == source){
+        advanceHoverActivity();
+        clearHover();
+        m_pointerKnown = false;
+        m_hoverPointerSource = {};
     }
 }
 

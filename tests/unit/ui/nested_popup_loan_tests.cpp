@@ -116,7 +116,7 @@ public:
     [[nodiscard]] virtual u64 rowCount()const override{ return full.rowCount(); }
     [[nodiscard]] virtual u64 key(const u64 index)const override{ return full.key(index); }
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return full.indexOf(key); }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return full.findEnabled(start, reverse);
     }
     [[nodiscard]] virtual StringView text(const u64 index)const override{ return full.text(index); }
@@ -152,6 +152,14 @@ public:
 
 
 class UiNestedPopupLoanTests : public WidgetFixture{
+protected:
+    [[nodiscard]] static ListOptions ListOptions()noexcept{
+        NWB::Impl::Ui::ListOptions options;
+        options.height = { LayoutSizePolicy::Fixed, 150.0f };
+        return options;
+    }
+
+
 public:
     UiNestedPopupLoanTests()
         : m_searchSource(m_arena)
@@ -168,11 +176,6 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] static ListOptions ListOptions(){
-        NWB::Impl::Ui::ListOptions options;
-        options.height = { LayoutSizePolicy::Fixed, 150.0f };
-        return options;
-    }
 
     [[nodiscard]] bool beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions());

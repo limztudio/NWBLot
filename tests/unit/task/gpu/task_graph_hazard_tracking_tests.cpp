@@ -30,7 +30,7 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-[[nodiscard]] static Name IndexedName(const Name& prefix, const usize index){
+[[nodiscard]] static Name IndexedName(const Name& prefix, const usize index)noexcept{
     char text[32u];
     return DeriveName(prefix, FormatDecimal(index, text));
 }

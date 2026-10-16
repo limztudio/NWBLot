@@ -75,7 +75,7 @@ A pending queue-family release must be acquired with its original byte interval.
 
 # CPU scaling coverage
 
-CPU scaling behavior is covered by ordinary enabled unit tests in `tests/unit/task/gpu/` (262 `TEST` cases, no `DISABLED_*` cases): queue placement and scoring, timing-history routing, resource-version analysis, dependency inference, resource-state fragments and epilogue grouping, terminal dependencies, ownership statistics, initial-state handoff validation, replay preflight, submission bindings and validation, resource/pipeline/completion imports, telemetry export, and compiled packet queries. Those tests carry correctness assertions and no wall-clock thresholds; they exercise the CPU pipeline, while native GPU frame performance requires a representative rendering workload. Run them with an optimized build:
+CPU scaling behavior is covered by ordinary enabled unit tests in `tests/unit/task/gpu/` (no `DISABLED_*` cases): queue placement and scoring, timing-history routing, resource-version analysis, dependency inference, resource-state fragments and epilogue grouping, terminal dependencies, ownership statistics, initial-state handoff validation, replay preflight, submission bindings and validation, resource/pipeline/completion imports, telemetry export, and compiled packet queries. Those tests carry correctness assertions and no wall-clock thresholds; they exercise the CPU pipeline, while native GPU frame performance requires a representative rendering workload. Run them with an optimized build:
 
 ```sh
 python -m launcher run nwb_gpu_task_tests --config opt --working-directory . -- --gtest_output=xml:gpu_task_tests.xml

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/edit/multiline_text.h>
+
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>

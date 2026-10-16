@@ -2,19 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/skin_payload.h>
-#include <impl/ecs_mesh/skinning/submission_state.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
 #include <tests/common/meshlet_ref_test_data.h>
 #include <tests/common/test_context.h>
-#include <gtest/gtest.h>
 
-#include <core/common/module.h>
-#include <core/ecs/module.h>
-#include <core/graphics/rhi/device.h>
-#include <core/mesh/classification.h>
+#include <impl/ecs_mesh/skinning/skin_payload.h>
+#include <impl/ecs_mesh/skinning/submission_state.h>
 #include <impl/ecs_mesh/components.h>
 #include <impl/ecs_skeleton/components.h>
 #include <impl/ecs_mesh/module.h>
@@ -30,12 +24,18 @@
 #include <impl/assets_mesh/skin_types.h>
 #include <impl/assets_mesh/asset.h>
 
+#include <core/common/module.h>
+#include <core/ecs/module.h>
+#include <core/graphics/rhi/device.h>
+#include <core/mesh/classification.h>
 #include <core/common/log.h>
 
 #include <global/binary.h>
 #include <global/compile.h>
 #include <global/limit.h>
 #include <global/span.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -430,7 +430,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
+static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z)noexcept{
     NWB::Impl::SkeletonJointMatrix joint = ::MatrixIdentity<Float34>();
     joint.rows[0].w = x;
     joint.rows[1].w = y;
@@ -439,7 +439,7 @@ static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, co
 }
 
 
-static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
+static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix()noexcept{
     NWB::Impl::SkeletonJointMatrix joint = ::MatrixIdentity<Float34>();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
@@ -504,7 +504,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
     return instance;
 }
 
-static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix(){
+static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix()noexcept{
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
 

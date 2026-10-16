@@ -144,6 +144,7 @@ public:
             finalize();
     }
 
+
 public:
     inline void enqueue(Initializerable& item){ m_cursor = m_items.emplace_after(m_cursor, item); }
     template<typename INITIALIZE, typename FINALIZE>

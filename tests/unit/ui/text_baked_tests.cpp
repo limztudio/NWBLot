@@ -10,6 +10,7 @@
 #include <global/filesystem.h>
 
 #include "baked_font_fixture.h"
+
 #include <gtest/gtest.h>
 
 
@@ -94,8 +95,7 @@ protected:
     }
 
     [[nodiscard]] DrawSnapshot paint(f32 scale = 1.f){
-        m_paint.begin({ 800.f, 600.f, scale, scale }, 1u, 1u,
-            Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        m_paint.begin({ 800.f, 600.f, scale, scale }, 1u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
         EXPECT_TRUE(m_text.paint(m_paint, m_layout, { 20.f, 20.f }));
         return m_paint.freeze();
     }

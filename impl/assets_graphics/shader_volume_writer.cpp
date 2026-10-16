@@ -148,7 +148,7 @@ static bool GetVariantBytecode(
         .rayQuery = entry.rayQuery,
         .compilerInputsHaveBom = compilerInputsHaveBom,
     };
-    return SlangShaderCompiler::CompileVariant(compileRequest, outBytecode);
+    return SlangShaderCompiler::CompileVariant(compileRequest, outBytecode, scratchArena);
 }
 
 

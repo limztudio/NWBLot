@@ -127,7 +127,7 @@ protected:
         return declareList(1u) && finishPanel() && m_context.commitFrame(1u);
     }
 
-    [[nodiscard]] WidgetId firstRow()const{
+    [[nodiscard]] WidgetId firstRow()const noexcept{
         return MakeWidgetPartId(MakeWidgetId(id("list", "panel"), "rows"), 1u);
     }
 

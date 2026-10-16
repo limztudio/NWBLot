@@ -7,10 +7,9 @@
 
 #include "coopvec.h"
 #include "hardware_ray_tracing_policy.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "gpu_descriptor_heap.h"
 
+#include <core/task/cpu/scheduler.h>
 #include <core/filesystem/factory.h>
 
 

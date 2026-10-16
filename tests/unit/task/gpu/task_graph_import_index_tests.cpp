@@ -7,6 +7,7 @@
 #include <global/text_utils.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 
@@ -28,11 +29,11 @@ struct GraphStamp{
     usize sets;
 };
 
-[[nodiscard]] static Core::GpuGraphResourceDesc ResourceDescription(const Name& identity, Core::GpuGraphResourceType::Enum type){
+[[nodiscard]] static Core::GpuGraphResourceDesc ResourceDescription(const Name& identity, Core::GpuGraphResourceType::Enum type)noexcept{
     return Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Graph Import Index Resource").setType(type).setInitialState(Core::ResourceStates::Unknown);
 }
 
-[[nodiscard]] static Name IndexedName(const Name& prefix, const usize index){
+[[nodiscard]] static Name IndexedName(const Name& prefix, const usize index)noexcept{
     char text[32u] = {};
     return DeriveName(prefix, FormatDecimal(index, text));
 }
@@ -60,6 +61,8 @@ struct ImportContext{
     Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena> resources{ inputArena };
     Vector<Core::GpuGraphResourceSetId, Core::Alloc::GlobalArena> sets{ inputArena };
 
+
+public:
     void prepare(const usize count){
         genericDescriptions.resize(count);
         setDescriptions.resize(count);

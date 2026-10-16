@@ -2,13 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "smoke_project_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
+#include "gpu_pass_timing_probe.h"
+
 #include <loader/project_entry.h>
 
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/assert.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>
@@ -20,11 +19,13 @@
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include <global/environment.h>
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
 
-#include "smoke_project_helpers.h"
-#include "smoke_skinned_scene_helpers.h"
-#include "gpu_pass_timing_probe.h"
+#include <global/assert.h>
+#include <global/environment.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,7 +144,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return (seed >> 22u) ^ seed;
 }
 
-[[nodiscard]] static bool ShouldAnimateJoint(const u32 jointIndex, const u32 characterIndex, const bool staticPreview){
+[[nodiscard]] static bool ShouldAnimateJoint(const u32 jointIndex, const u32 characterIndex, const bool staticPreview)noexcept{
     const u32 modulo = staticPreview ? s_StaticPreviewAnimatedJointModulo : s_AnimatedJointModulo;
     return jointIndex != 0u && (RandomJointSeed(jointIndex, characterIndex) % modulo) == 0u;
 }
@@ -267,7 +268,7 @@ public:
             m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
     }
 
-    [[nodiscard]] virtual bool hasRuntimeMeshBinding(const NWB::Core::ECS::EntityID entity)const override{
+    [[nodiscard]] virtual bool hasRuntimeMeshBinding(const NWB::Core::ECS::EntityID entity)const noexcept override{
         return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
     }
 
@@ -292,6 +293,8 @@ private:
         return world;
     }
 
+
+private:
     void destroyWorld(){
         if(!m_world.owner())
             return;
@@ -639,7 +642,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Skinning Culling Benchmark");
 }
 

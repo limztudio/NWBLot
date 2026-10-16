@@ -231,6 +231,7 @@ class CommandListResourceStateHandoff final : NoCopy{
     friend class GpuNativePacketRecorder;
     friend class GpuInitialStateHandoffValidation;
 
+
 private:
     struct TextureState{
         Texture* texture = nullptr;

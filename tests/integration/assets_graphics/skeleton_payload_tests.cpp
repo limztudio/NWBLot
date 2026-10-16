@@ -47,6 +47,7 @@ struct SkeletonInputs{
     Skeleton skeleton{ arena, Name("tests/skeleton_payload/skeleton") };
 
 
+public:
     SkeletonInputs(){
         entry.virtualPath = skeleton.virtualPath();
         entry.joints.reserve(4u);

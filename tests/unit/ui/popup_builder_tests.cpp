@@ -62,7 +62,7 @@ public:
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)override{ return {}; }
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
 
-    [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
         ++publications;
         return true;
     }
@@ -87,7 +87,7 @@ protected:
         return m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId ownerId(const AStringView key = "popup")const{
+    [[nodiscard]] WidgetId ownerId(const AStringView key = "popup")const noexcept{
         return MakeWidgetId(MakeRootId(m_root), key);
     }
 };

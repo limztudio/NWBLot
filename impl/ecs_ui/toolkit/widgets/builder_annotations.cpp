@@ -23,20 +23,6 @@ Builder::Item* Builder::annotationAnchor(const AStringView stableKey)noexcept{
     return nullptr;
 }
 
-bool Builder::listStateMatches(const ListFrame& frame)const noexcept{
-    return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
-}
-
-bool Builder::listMatches(const ListFrame& frame)const{
-    return
-        frame.source && listStateMatches(frame)
-        && frame.source->instanceGeneration() == frame.token.contentGeneration && listStateMatches(frame)
-        && frame.source->revision() == frame.token.contentRevision && listStateMatches(frame)
-        && frame.source->rowCount() == frame.rowCount
-        && listStateMatches(frame)
-    ;
-}
-
 bool Builder::paintDeferred(){
     if(!paintDeferredContents() || !validateDeferredSources() || !validateDeferredStates())
         return false;
@@ -150,6 +136,20 @@ void Builder::releaseDeferredLoans()noexcept{
     }
     for(auto& frame : m_scope->m_tooltips)
         frame.state = nullptr;
+}
+
+bool Builder::listStateMatches(const ListFrame& frame)const noexcept{
+    return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
+}
+
+bool Builder::listMatches(const ListFrame& frame)const{
+    return
+        frame.source && listStateMatches(frame)
+        && frame.source->instanceGeneration() == frame.token.contentGeneration && listStateMatches(frame)
+        && frame.source->revision() == frame.token.contentRevision && listStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount
+        && listStateMatches(frame)
+    ;
 }
 
 

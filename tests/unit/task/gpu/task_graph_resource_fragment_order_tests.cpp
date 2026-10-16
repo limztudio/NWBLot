@@ -65,7 +65,7 @@ constexpr usize s_InitialState = Limit<usize>::s_Max;
     return view;
 }
 
-[[nodiscard]] Graphics::GpuTaskResourceRange BufferRange(const u64 offset, const u64 size){
+[[nodiscard]] Graphics::GpuTaskResourceRange BufferRange(const u64 offset, const u64 size)noexcept{
     return Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(offset, size) };
 }
 

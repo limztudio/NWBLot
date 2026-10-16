@@ -139,6 +139,7 @@ class IRuntimeMeshProvider{
 public:
     virtual ~IRuntimeMeshProvider() = default;
 
+
 public:
     [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity) = 0;
     // Attachment identity remains available when buffers or an evaluated pose are not ready yet.
@@ -170,6 +171,7 @@ struct RenderableMeshDesc{
 class IRuntimeMeshRegistry{
 public:
     virtual ~IRuntimeMeshRegistry() = default;
+
 
 public:
     virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider) = 0;

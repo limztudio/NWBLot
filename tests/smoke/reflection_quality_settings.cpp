@@ -7,6 +7,7 @@
 #include "smoke_environment.h"
 
 #include <core/common/log.h>
+
 #include <global/limit.h>
 
 

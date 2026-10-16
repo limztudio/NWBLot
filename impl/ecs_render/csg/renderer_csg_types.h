@@ -180,6 +180,8 @@ struct CsgFrameGpuData{
         , cutters(arena)
     {}
 
+
+public:
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);

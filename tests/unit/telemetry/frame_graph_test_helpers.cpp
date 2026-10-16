@@ -56,7 +56,7 @@ Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment(){
     return assignment;
 }
 
-Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision){
+Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision)noexcept{
     return Telemetry::FrameGraphCompiledTask{ .planGeneration = planGeneration, .packetIndex = packetIndex, .packetizationDecision = packetizationDecision, .present = true, };
 }
 

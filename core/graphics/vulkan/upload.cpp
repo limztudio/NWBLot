@@ -32,6 +32,111 @@ void UploadManager::clear()noexcept{
     m_retiredChunkBytes = 0u;
 }
 
+Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const GpuPhysicalQueueId queue, const u64 completedVersion, const u32 alignment){
+    if(!owner || nativeRecordingID == 0u)
+        return MakeUnexpected(Failure{});
+    if(!m_device.matchesPhysicalQueueIdentity(queue))
+        return MakeUnexpected(Failure{});
+
+    ScopedLock lock(m_mutex);
+    QueueChunkLedger* const ledger = findOrCreateQueueLedgerLocked(queue);
+    if(!ledger)
+        return MakeUnexpected(Failure{});
+
+    const auto trySuballocateFromChunk = [&](BufferChunk& chunk)noexcept -> Expected<BufferSuballocation>{
+        const auto alignedOffset = AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment));
+        if(!alignedOffset)
+            return MakeUnexpected(Failure{});
+        if(*alignedOffset > chunk.size || size > chunk.size - *alignedOffset)
+            return MakeUnexpected(Failure{});
+
+        Buffer* buffer = chunk.buffer.get();
+        void* const cpuAddress = buffer->m_mappedMemory ? static_cast<u8*>(buffer->m_mappedMemory) + *alignedOffset : nullptr;
+
+        chunk.allocated = *alignedOffset + size;
+        return BufferSuballocation{ buffer, *alignedOffset, cpuAddress };
+    };
+
+    for(BufferChunk* chunk = ledger->firstActiveChunk; chunk; chunk = chunk->nextActiveChunk){
+        if(chunk->owner == owner && chunk->nativeRecordingID == nativeRecordingID){
+            const auto result = trySuballocateFromChunk(*chunk);
+            if(result)
+                return result;
+        }
+    }
+
+    for(BufferChunkPtr& retiredChunk : ledger->chunks){
+        if(retiredChunk && !retiredChunk->owner && retiredChunk->nativeRecordingID == 0u && retiredChunk->physicalQueue == queue && retiredChunk->size >= size && retiredChunk->version <= completedVersion){
+            if(m_retiredChunkBytes >= retiredChunk->size)
+                m_retiredChunkBytes -= retiredChunk->size;
+            else
+                m_retiredChunkBytes = 0u;
+            retiredChunk->owner = owner;
+            retiredChunk->nativeRecordingID = nativeRecordingID;
+            retiredChunk->allocated = 0u;
+            retiredChunk->version = completedVersion;
+            linkActiveChunkLocked(*ledger, *retiredChunk);
+
+            return trySuballocateFromChunk(*retiredChunk);
+        }
+    }
+
+    auto chunkSize = Max<u64>(size, m_defaultChunkSize);
+
+    BufferDesc bufferDesc;
+    bufferDesc.byteSize = chunkSize;
+    bufferDesc.cpuAccess = m_isScratchBuffer ? CpuAccessMode::None : CpuAccessMode::Write;
+    bufferDesc.isVolatile = false;
+    bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
+    if(m_isScratchBuffer){
+        bufferDesc.structStride = 1u;
+        bufferDesc.canHaveUAVs = true;
+    }
+
+    BufferHandle bufferHandle = m_device.createBuffer(bufferDesc);
+    if(!bufferHandle)
+        return MakeUnexpected(Failure{});
+
+    ledger->chunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.cpuScheduler, Move(bufferHandle), owner, nativeRecordingID, queue, chunkSize));
+    BufferChunkPtr& currentChunk = ledger->chunks.back();
+    currentChunk->version = completedVersion;
+    linkActiveChunkLocked(*ledger, *currentChunk);
+
+    return trySuballocateFromChunk(*currentChunk);
+}
+
+void UploadManager::submitChunks(
+    const GpuPhysicalQueueId queue,
+    const u64 submittedVersion,
+    const Queue::SubmissionCommandListIdentity* const submittedCommandLists,
+    const usize submittedCommandListCount,
+    const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
+)noexcept{
+    static_assert(noexcept(retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedCommandListCount, submittedOwners)), "accepted upload-chunk retirement must remain non-throwing");
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !submittedCommandLists || submittedCommandListCount == 0u)
+        return;
+
+    NothrowScopedLock lock(m_mutex);
+    retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedCommandListCount, submittedOwners);
+}
+
+void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const u64 reusableVersion){
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
+        return;
+
+    ScopedLock lock(m_mutex);
+    retireOwnerChunksLocked(queue, reusableVersion, true, *owner, nativeRecordingID);
+    trimRetiredChunksLocked(queue, reusableVersion);
+}
+
+void UploadManager::abandonChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID)noexcept{
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
+        return;
+
+    NothrowScopedLock lock(m_mutex);
+    retireOwnerChunksLocked(queue, 0u, true, *owner, nativeRecordingID);
+}
+
 void UploadManager::collectCompletedChunks(){
     for(const GpuPhysicalQueueInfo& queueInfo : m_device.m_physicalQueueInfos){
         const u64 completedVersion = m_device.queueGetCompletedInstance(queueInfo.id);
@@ -164,111 +269,6 @@ void UploadManager::retireOwnerChunksLocked(const GpuPhysicalQueueId queue, cons
             retireChunkLocked(*ledger, *chunk, version, resetAllocated);
         chunk = nextChunk;
     }
-}
-
-Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const GpuPhysicalQueueId queue, const u64 completedVersion, const u32 alignment){
-    if(!owner || nativeRecordingID == 0u)
-        return MakeUnexpected(Failure{});
-    if(!m_device.matchesPhysicalQueueIdentity(queue))
-        return MakeUnexpected(Failure{});
-
-    ScopedLock lock(m_mutex);
-    QueueChunkLedger* const ledger = findOrCreateQueueLedgerLocked(queue);
-    if(!ledger)
-        return MakeUnexpected(Failure{});
-
-    const auto trySuballocateFromChunk = [&](BufferChunk& chunk)noexcept -> Expected<BufferSuballocation>{
-        const auto alignedOffset = AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment));
-        if(!alignedOffset)
-            return MakeUnexpected(Failure{});
-        if(*alignedOffset > chunk.size || size > chunk.size - *alignedOffset)
-            return MakeUnexpected(Failure{});
-
-        Buffer* buffer = chunk.buffer.get();
-        void* const cpuAddress = buffer->m_mappedMemory ? static_cast<u8*>(buffer->m_mappedMemory) + *alignedOffset : nullptr;
-
-        chunk.allocated = *alignedOffset + size;
-        return BufferSuballocation{ buffer, *alignedOffset, cpuAddress };
-    };
-
-    for(BufferChunk* chunk = ledger->firstActiveChunk; chunk; chunk = chunk->nextActiveChunk){
-        if(chunk->owner == owner && chunk->nativeRecordingID == nativeRecordingID){
-            const auto result = trySuballocateFromChunk(*chunk);
-            if(result)
-                return result;
-        }
-    }
-
-    for(BufferChunkPtr& retiredChunk : ledger->chunks){
-        if(retiredChunk && !retiredChunk->owner && retiredChunk->nativeRecordingID == 0u && retiredChunk->physicalQueue == queue && retiredChunk->size >= size && retiredChunk->version <= completedVersion){
-            if(m_retiredChunkBytes >= retiredChunk->size)
-                m_retiredChunkBytes -= retiredChunk->size;
-            else
-                m_retiredChunkBytes = 0u;
-            retiredChunk->owner = owner;
-            retiredChunk->nativeRecordingID = nativeRecordingID;
-            retiredChunk->allocated = 0u;
-            retiredChunk->version = completedVersion;
-            linkActiveChunkLocked(*ledger, *retiredChunk);
-
-            return trySuballocateFromChunk(*retiredChunk);
-        }
-    }
-
-    auto chunkSize = Max<u64>(size, m_defaultChunkSize);
-
-    BufferDesc bufferDesc;
-    bufferDesc.byteSize = chunkSize;
-    bufferDesc.cpuAccess = m_isScratchBuffer ? CpuAccessMode::None : CpuAccessMode::Write;
-    bufferDesc.isVolatile = false;
-    bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
-    if(m_isScratchBuffer){
-        bufferDesc.structStride = 1u;
-        bufferDesc.canHaveUAVs = true;
-    }
-
-    BufferHandle bufferHandle = m_device.createBuffer(bufferDesc);
-    if(!bufferHandle)
-        return MakeUnexpected(Failure{});
-
-    ledger->chunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.cpuScheduler, Move(bufferHandle), owner, nativeRecordingID, queue, chunkSize));
-    BufferChunkPtr& currentChunk = ledger->chunks.back();
-    currentChunk->version = completedVersion;
-    linkActiveChunkLocked(*ledger, *currentChunk);
-
-    return trySuballocateFromChunk(*currentChunk);
-}
-
-void UploadManager::submitChunks(
-    const GpuPhysicalQueueId queue,
-    const u64 submittedVersion,
-    const Queue::SubmissionCommandListIdentity* const submittedCommandLists,
-    const usize submittedCommandListCount,
-    const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
-)noexcept{
-    static_assert(noexcept(retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedCommandListCount, submittedOwners)), "accepted upload-chunk retirement must remain non-throwing");
-    if(!m_device.matchesPhysicalQueueIdentity(queue) || !submittedCommandLists || submittedCommandListCount == 0u)
-        return;
-
-    NothrowScopedLock lock(m_mutex);
-    retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedCommandListCount, submittedOwners);
-}
-
-void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const u64 reusableVersion){
-    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
-        return;
-
-    ScopedLock lock(m_mutex);
-    retireOwnerChunksLocked(queue, reusableVersion, true, *owner, nativeRecordingID);
-    trimRetiredChunksLocked(queue, reusableVersion);
-}
-
-void UploadManager::abandonChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID)noexcept{
-    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
-        return;
-
-    NothrowScopedLock lock(m_mutex);
-    retireOwnerChunksLocked(queue, 0u, true, *owner, nativeRecordingID);
 }
 
 

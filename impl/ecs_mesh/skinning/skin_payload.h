@@ -45,6 +45,8 @@ struct RuntimeSkinPayloadScratch final{
         , jointMatrices(scratchArena)
     {}
 
+
+public:
     [[nodiscard]] bool hasActiveSkin()const noexcept{
         return skinInfluenceCount != 0u && !jointMatrices.empty();
     }

@@ -20,6 +20,7 @@ NWB_CORE_BEGIN
 class GpuNativePacketRecorder final : NoCopy{
     friend class GpuTaskScheduler;
 
+
 private:
     class PacketRecordingExceptionScope;
     class PacketArtifactPublicationScope;

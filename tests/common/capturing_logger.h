@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include <global/global.h>
 #include <core/alloc/general.h>
 #include <core/common/log.h>
+
+#include <global/global.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,15 +50,15 @@ public:
         record(str, type);
     }
 
-    [[nodiscard]] u32 messageCount()const{
+    [[nodiscard]] u32 messageCount()const noexcept{
         ScopedLock lock(m_mutex);
         return m_messageCount;
     }
-    [[nodiscard]] u32 errorCount()const{
+    [[nodiscard]] u32 errorCount()const noexcept{
         ScopedLock lock(m_mutex);
         return m_errorCount;
     }
-    [[nodiscard]] Core::Common::LogType::Enum lastType()const{
+    [[nodiscard]] Core::Common::LogType::Enum lastType()const noexcept{
         ScopedLock lock(m_mutex);
         return m_lastType;
     }

@@ -41,6 +41,8 @@ struct OpaqueRegularComputeEmulationGraphPlan{
         , outputBuffers(arena)
     {}
 
+
+public:
     void reset(){
         meshDrawItems.clear();
         indexedDrawItems.clear();

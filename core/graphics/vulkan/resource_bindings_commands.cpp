@@ -62,6 +62,78 @@ namespace __hidden_vulkan_descriptor_buffer_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void CommandList::setPushConstants(const void* data, usize byteSize){
+    if(!publicCommandStateAccessible())
+        return;
+    if(byteSize == 0)
+        return;
+    if(!VulkanDetail::AreAllPointersValid(data)){
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("data is null"));
+        return;
+    }
+    if(byteSize > UINT32_MAX){
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds uint32 range"));
+        return;
+    }
+
+    const u32 pushConstantByteSize = static_cast<u32>(byteSize);
+    if(!VulkanDetail::IsPushConstantByteSizeValid(pushConstantByteSize, m_context.physicalDeviceProperties.limits.maxPushConstantsSize)){
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size is unaligned or exceeds the device limit"));
+        return;
+    }
+
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
+    u32 activePipelineCount = 0u;
+    u32 pipelinePushConstantByteSize = 0;
+
+    const auto selectPipeline = [&](const VkPipelineLayout candidateLayout, const u32 candidatePushConstantByteSize, const GpuQueueCapability::Mask candidateCapabilities)noexcept{
+        ++activePipelineCount;
+        layout = candidateLayout;
+        requiredCapabilities = candidateCapabilities;
+        pipelinePushConstantByteSize = candidatePushConstantByteSize;
+    };
+
+    if(m_currentGraphicsState.pipeline){
+        auto* gp = m_currentGraphicsState.pipeline;
+        selectPipeline(gp->m_pipelineLayout, gp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
+    }
+    if(m_currentComputeState.pipeline){
+        auto* cp = m_currentComputeState.pipeline;
+        selectPipeline(cp->m_pipelineLayout, cp->m_pushConstantByteSize, GpuQueueCapability::Compute);
+    }
+    if(m_currentMeshletState.pipeline){
+        auto* mp = m_currentMeshletState.pipeline;
+        selectPipeline(mp->m_pipelineLayout, mp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
+    }
+    if(m_currentRayTracingState.shaderTable){
+        auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
+        if(rtp)
+            selectPipeline(rtp->m_pipelineLayout, rtp->m_pushConstantByteSize, GpuQueueCapability::Compute);
+        else
+            ++activePipelineCount;
+    }
+
+    if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("exactly one active valid pipeline layout is required"));
+        return;
+    }
+    if(!recordAndValidateCommandCapability(requiredCapabilities, s_SetPushConstantsOperation))
+        return;
+
+    if(pipelinePushConstantByteSize == 0){
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("active pipeline layout has no push constant range"));
+        return;
+    }
+    if(pushConstantByteSize > pipelinePushConstantByteSize){
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds the active pipeline push constant range"));
+        return;
+    }
+
+    m_context.deviceDispatch.vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
+}
+
+
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const ComputePipeline& pipeline, const GpuDescriptorHandle accelStructHandle){
     constexpr TStringView s_OperationName = NWB_TEXT("bind compute descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
@@ -355,6 +427,10 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void CommandList::ensureDescriptorBuffersBound(DescriptorBufferManager& manager, const DescriptorBufferManager::BindingSnapshot& snapshot){
     if(m_descriptorBuffersBound)
         return;
@@ -363,81 +439,6 @@ void CommandList::ensureDescriptorBuffersBound(DescriptorBufferManager& manager,
     m_currentCmdBuf->m_descriptorBufferManager = &manager;
     m_currentCmdBuf->m_descriptorBufferGeneration = snapshot.generation;
     m_descriptorBuffersBound = true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void CommandList::setPushConstants(const void* data, usize byteSize){
-    if(!publicCommandStateAccessible())
-        return;
-    if(byteSize == 0)
-        return;
-    if(!VulkanDetail::AreAllPointersValid(data)){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("data is null"));
-        return;
-    }
-    if(byteSize > UINT32_MAX){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds uint32 range"));
-        return;
-    }
-
-    const u32 pushConstantByteSize = static_cast<u32>(byteSize);
-    if(!VulkanDetail::IsPushConstantByteSizeValid(pushConstantByteSize, m_context.physicalDeviceProperties.limits.maxPushConstantsSize)){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size is unaligned or exceeds the device limit"));
-        return;
-    }
-
-    VkPipelineLayout layout = VK_NULL_HANDLE;
-    GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
-    u32 activePipelineCount = 0u;
-    u32 pipelinePushConstantByteSize = 0;
-
-    const auto selectPipeline = [&](const VkPipelineLayout candidateLayout, const u32 candidatePushConstantByteSize, const GpuQueueCapability::Mask candidateCapabilities)noexcept{
-        ++activePipelineCount;
-        layout = candidateLayout;
-        requiredCapabilities = candidateCapabilities;
-        pipelinePushConstantByteSize = candidatePushConstantByteSize;
-    };
-
-    if(m_currentGraphicsState.pipeline){
-        auto* gp = m_currentGraphicsState.pipeline;
-        selectPipeline(gp->m_pipelineLayout, gp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
-    }
-    if(m_currentComputeState.pipeline){
-        auto* cp = m_currentComputeState.pipeline;
-        selectPipeline(cp->m_pipelineLayout, cp->m_pushConstantByteSize, GpuQueueCapability::Compute);
-    }
-    if(m_currentMeshletState.pipeline){
-        auto* mp = m_currentMeshletState.pipeline;
-        selectPipeline(mp->m_pipelineLayout, mp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
-    }
-    if(m_currentRayTracingState.shaderTable){
-        auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
-        if(rtp)
-            selectPipeline(rtp->m_pipelineLayout, rtp->m_pushConstantByteSize, GpuQueueCapability::Compute);
-        else
-            ++activePipelineCount;
-    }
-
-    if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("exactly one active valid pipeline layout is required"));
-        return;
-    }
-    if(!recordAndValidateCommandCapability(requiredCapabilities, s_SetPushConstantsOperation))
-        return;
-
-    if(pipelinePushConstantByteSize == 0){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("active pipeline layout has no push constant range"));
-        return;
-    }
-    if(pushConstantByteSize > pipelinePushConstantByteSize){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds the active pipeline push constant range"));
-        return;
-    }
-
-    m_context.deviceDispatch.vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
 }
 
 

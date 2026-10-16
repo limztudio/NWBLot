@@ -3,11 +3,10 @@
 
 
 #include "command.h"
+#include "resource_state_handoff_key.h"
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/backend_selection/resource_validation.h>
-#include "resource_state_handoff_key.h"
-
 #include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>

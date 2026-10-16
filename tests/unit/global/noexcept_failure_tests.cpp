@@ -30,6 +30,8 @@ inline constexpr u32 s_ElementSwapFailure = 0xE206u;
 struct ThrowingFixedVectorAssignment{
     u32 value = 0u;
 
+
+public:
     ThrowingFixedVectorAssignment()noexcept = default;
     ThrowingFixedVectorAssignment(const ThrowingFixedVectorAssignment&)noexcept = default;
     ThrowingFixedVectorAssignment& operator=(const ThrowingFixedVectorAssignment&){
@@ -62,12 +64,16 @@ struct RefCountTarget{};
 struct ThrowingFancyPointer{
     RefCountTarget* target = nullptr;
 
+
+public:
     [[nodiscard]] static ThrowingFancyPointer Borrow(RefCountTarget* value)noexcept{
         ThrowingFancyPointer result;
         result.target = value;
         return result;
     }
 
+
+public:
     ThrowingFancyPointer()noexcept = default;
     ThrowingFancyPointer(RefCountTarget* value){
         if(value)
@@ -90,6 +96,8 @@ u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
 struct FancyPointerDeleter{
     using pointer = ThrowingFancyPointer;
 
+
+public:
     void operator()(pointer)const noexcept{}
 };
 
@@ -104,6 +112,8 @@ struct ThrowingHashValue{
 struct ThrowingByteSource{
     using value_type = u8;
 
+
+public:
     [[nodiscard]] usize size()const noexcept{ return sizeof(u32); }
     [[nodiscard]] const u8* data()const{
         throw s_ReadFailure;

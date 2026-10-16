@@ -10,6 +10,7 @@
 #include <global/text_utils.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 

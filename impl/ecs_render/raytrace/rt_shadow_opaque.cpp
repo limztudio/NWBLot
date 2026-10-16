@@ -92,18 +92,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     );
 }
 
-Expected<u32> RendererRayTracingSystem::renderShadowVisibilityOpaque(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace
-){
-    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
-        return MakeUnexpected(Failure{});
-    return renderShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, lightSpace);
-}
-
 Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
@@ -132,6 +120,18 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTa
             .hardwareShadowSupported = hardwareShadowSupported,
         }
     );
+}
+
+Expected<u32> RendererRayTracingSystem::renderShadowVisibilityOpaque(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const LightSpaceShadowSnapshot* const lightSpace
+){
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
+        return MakeUnexpected(Failure{});
+    return renderShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, lightSpace);
 }
 
 bool RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(

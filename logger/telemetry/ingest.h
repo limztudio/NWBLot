@@ -51,6 +51,8 @@ struct TelemetryIngestResult{
         , graphPath(arena)
     {}
 
+
+public:
     [[nodiscard]] bool ok()const noexcept{
         return storedRaw && decode.ok() && wroteJson && wrotePerfCsv && summary.parseFailureCount == 0u;
     }

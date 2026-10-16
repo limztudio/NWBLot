@@ -16,86 +16,67 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
-    uint32_t queueFamilyCount = 0;
-    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
+    GraphicsVector<AdapterInfo> adapters(m_arena);
+    VkResult res = VK_SUCCESS;
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueFamilyQueryArena);
+    if(!m_vulkanInstance){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
+        return MakeUnexpected(Failure{});
+    }
 
-    Vector<VkQueueFamilyProperties, Alloc::ScratchArena> props(queueFamilyCount, scratchArena);
-    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
+    uint32_t deviceCount = 0;
+    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
+        return MakeUnexpected(Failure{});
+    }
 
-    m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
-    m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
-    m_computeQueueFamily = s_InvalidQueueFamilyIndex;
-    m_asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
-    m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
-    m_transferQueueFamily = s_InvalidQueueFamilyIndex;
-    m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
-    m_presentQueueFamily = s_InvalidQueueFamilyIndex;
+    if(deviceCount == 0){
+        return adapters;
+    }
 
-    const VulkanDetail::RequiredQueueFamilySelection selection = VulkanDetail::SelectRequiredQueueFamilies(props.data(), static_cast<u32>(props.size()), m_deviceParams.enableAsyncComputeLane, m_deviceParams.enableTransferQueue);
-    m_graphicsQueueFamily = selection.graphicsFamily;
-    m_computeQueueFamily = selection.computeFamily;
-    m_asyncComputeQueueFamily = selection.asyncComputeFamily;
-    m_transferQueueFamily = selection.dedicatedTransferFamily;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_AdapterEnumerateArena);
 
-    const bool requirePresentQueue = !m_deviceParams.headlessDevice;
-    const auto familySupportsPresent = [this, physicalDevice](const i32 familyIndex){
-        if(familyIndex == s_InvalidQueueFamilyIndex || !m_windowSurface)
-            return false;
-        VkBool32 supported = VK_FALSE;
-        const VkResult result = m_instanceDispatch.vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, static_cast<u32>(familyIndex), m_windowSurface, &supported);
-        return result == VK_SUCCESS && supported == VK_TRUE;
+    Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
+    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
+        return MakeUnexpected(Failure{});
+    }
+
+    adapters.reserve(deviceCount);
+    for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
+        adapters.emplace_back(m_arena);
+
+    auto fillAdapterInfo = [&](usize i){
+        AdapterInfo adapterInfo(m_arena);
+        VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, devices[i], adapterInfo);
+        adapters[i] = Move(adapterInfo);
     };
-    if(requirePresentQueue){
-        if(familySupportsPresent(m_graphicsQueueFamily))
-            m_presentQueueFamily = m_graphicsQueueFamily;
-        else{
-            for(i32 familyIndex = 0; familyIndex < static_cast<i32>(props.size()); ++familyIndex){
-                if(props[familyIndex].queueCount > 0u && familySupportsPresent(familyIndex)){
-                    m_presentQueueFamily = familyIndex;
-                    break;
-                }
-            }
-        }
+
+    if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
+        m_cpuScheduler.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
+    else{
+        for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
+            fillAdapterInfo(i);
     }
 
-    if(m_graphicsQueueFamily == s_InvalidQueueFamilyIndex || m_computeQueueFamily == s_InvalidQueueFamilyIndex || (m_presentQueueFamily == s_InvalidQueueFamilyIndex && requirePresentQueue))
-        return false;
-
-    // Every active primary family may expose its extra queues through the low-overhead same-class route.
-    // The cross-family opt-in may also register one deterministic alternate family for every already-enabled class; task-level scheduling still has to opt in before compiler routing can cross its ownership boundary.
-    if(m_deviceParams.enableSameClassMultiQueue && m_deviceParams.enableCrossFamilySameClassQueueRouting){
-        for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
-            const VkQueueFamilyProperties& queueFamily = props[i];
-            if(m_secondaryGraphicsQueueFamily == s_InvalidQueueFamilyIndex && i != m_graphicsQueueFamily && queueFamily.queueCount > 0u && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)){
-                m_secondaryGraphicsQueueFamily = i;
-            }
-            if(
-                m_secondaryComputeQueueFamily == s_InvalidQueueFamilyIndex
-                && (m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex || m_computeQueueFamily != m_graphicsQueueFamily)
-                && i != (m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily)
-                && queueFamily.queueCount > 0u
-                && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            )
-                m_secondaryComputeQueueFamily = i;
-            if(
-                m_secondaryTransferQueueFamily == s_InvalidQueueFamilyIndex
-                && m_transferQueueFamily != s_InvalidQueueFamilyIndex
-                && i != m_transferQueueFamily
-                && queueFamily.queueCount > 0u
-                && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
-                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-                && !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-            )
-                m_secondaryTransferQueueFamily = i;
-        }
-    }
-
-    return true;
+    return adapters;
 }
+
+Expected<AdapterInfo> BackendContext::getSelectedAdapterInfo()const{
+    if(!m_rhiDevice || !m_vulkanPhysicalDevice)
+        return MakeUnexpected(Failure{});
+
+    AdapterInfo adapter(m_arena);
+    VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, m_vulkanPhysicalDevice, adapter);
+    return adapter;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 bool BackendContext::pickPhysicalDevice(){
     const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
@@ -326,65 +307,85 @@ bool BackendContext::pickPhysicalDevice(){
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
+    uint32_t queueFamilyCount = 0;
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueFamilyQueryArena);
 
-Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
-    GraphicsVector<AdapterInfo> adapters(m_arena);
-    VkResult res = VK_SUCCESS;
+    Vector<VkQueueFamilyProperties, Alloc::ScratchArena> props(queueFamilyCount, scratchArena);
+    m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
-    if(!m_vulkanInstance){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
-        return MakeUnexpected(Failure{});
-    }
+    m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    m_computeQueueFamily = s_InvalidQueueFamilyIndex;
+    m_asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
+    m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
+    m_transferQueueFamily = s_InvalidQueueFamilyIndex;
+    m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
+    m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
-    uint32_t deviceCount = 0;
-    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
-        return MakeUnexpected(Failure{});
-    }
+    const VulkanDetail::RequiredQueueFamilySelection selection = VulkanDetail::SelectRequiredQueueFamilies(props.data(), static_cast<u32>(props.size()), m_deviceParams.enableAsyncComputeLane, m_deviceParams.enableTransferQueue);
+    m_graphicsQueueFamily = selection.graphicsFamily;
+    m_computeQueueFamily = selection.computeFamily;
+    m_asyncComputeQueueFamily = selection.asyncComputeFamily;
+    m_transferQueueFamily = selection.dedicatedTransferFamily;
 
-    if(deviceCount == 0){
-        return adapters;
-    }
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_AdapterEnumerateArena);
-
-    Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
-    res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
-        return MakeUnexpected(Failure{});
-    }
-
-    adapters.reserve(deviceCount);
-    for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
-        adapters.emplace_back(m_arena);
-
-    auto fillAdapterInfo = [&](usize i){
-        AdapterInfo adapterInfo(m_arena);
-        VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, devices[i], adapterInfo);
-        adapters[i] = Move(adapterInfo);
+    const bool requirePresentQueue = !m_deviceParams.headlessDevice;
+    const auto familySupportsPresent = [this, physicalDevice](const i32 familyIndex){
+        if(familyIndex == s_InvalidQueueFamilyIndex || !m_windowSurface)
+            return false;
+        VkBool32 supported = VK_FALSE;
+        const VkResult result = m_instanceDispatch.vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, static_cast<u32>(familyIndex), m_windowSurface, &supported);
+        return result == VK_SUCCESS && supported == VK_TRUE;
     };
-
-    if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
-        m_cpuScheduler.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
-    else{
-        for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
-            fillAdapterInfo(i);
+    if(requirePresentQueue){
+        if(familySupportsPresent(m_graphicsQueueFamily))
+            m_presentQueueFamily = m_graphicsQueueFamily;
+        else{
+            for(i32 familyIndex = 0; familyIndex < static_cast<i32>(props.size()); ++familyIndex){
+                if(props[familyIndex].queueCount > 0u && familySupportsPresent(familyIndex)){
+                    m_presentQueueFamily = familyIndex;
+                    break;
+                }
+            }
+        }
     }
 
-    return adapters;
-}
+    if(m_graphicsQueueFamily == s_InvalidQueueFamilyIndex || m_computeQueueFamily == s_InvalidQueueFamilyIndex || (m_presentQueueFamily == s_InvalidQueueFamilyIndex && requirePresentQueue))
+        return false;
 
-Expected<AdapterInfo> BackendContext::getSelectedAdapterInfo()const{
-    if(!m_rhiDevice || !m_vulkanPhysicalDevice)
-        return MakeUnexpected(Failure{});
+    // Every active primary family may expose its extra queues through the low-overhead same-class route.
+    // The cross-family opt-in may also register one deterministic alternate family for every already-enabled class; task-level scheduling still has to opt in before compiler routing can cross its ownership boundary.
+    if(m_deviceParams.enableSameClassMultiQueue && m_deviceParams.enableCrossFamilySameClassQueueRouting){
+        for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
+            const VkQueueFamilyProperties& queueFamily = props[i];
+            if(m_secondaryGraphicsQueueFamily == s_InvalidQueueFamilyIndex && i != m_graphicsQueueFamily && queueFamily.queueCount > 0u && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)){
+                m_secondaryGraphicsQueueFamily = i;
+            }
+            if(
+                m_secondaryComputeQueueFamily == s_InvalidQueueFamilyIndex
+                && (m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex || m_computeQueueFamily != m_graphicsQueueFamily)
+                && i != (m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily)
+                && queueFamily.queueCount > 0u
+                && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            )
+                m_secondaryComputeQueueFamily = i;
+            if(
+                m_secondaryTransferQueueFamily == s_InvalidQueueFamilyIndex
+                && m_transferQueueFamily != s_InvalidQueueFamilyIndex
+                && i != m_transferQueueFamily
+                && queueFamily.queueCount > 0u
+                && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+            )
+                m_secondaryTransferQueueFamily = i;
+        }
+    }
 
-    AdapterInfo adapter(m_arena);
-    VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, m_vulkanPhysicalDevice, adapter);
-    return adapter;
+    return true;
 }
 
 

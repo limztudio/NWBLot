@@ -22,7 +22,7 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 
 
-HitTarget Button(const u64 id, const Rect& rectangle, const u32 paintOrder = 0u){
+HitTarget Button(const u64 id, const Rect& rectangle, const u32 paintOrder = 0u)noexcept{
     HitTarget target;
     target.id = { id };
     target.rectangle = rectangle;
@@ -42,11 +42,11 @@ PopupScope Scope(const u64 widget = 100u, const u32 layer = 3u, const u64 openGe
     return scope;
 }
 
-Array<HitTarget, 2u> BaseTargets(){
+Array<HitTarget, 2u> BaseTargets()noexcept{
     return { Button(1u, { 10.0f, 10.0f, 30.0f, 20.0f }), Button(2u, { 60.0f, 10.0f, 30.0f, 20.0f }) };
 }
 
-HitTarget Barrier(const PopupScope& scope){
+HitTarget Barrier(const PopupScope& scope)noexcept{
     HitTarget target;
     target.id = scope.token.widget;
     target.declarationGeneration = scope.token.declarationGeneration;
@@ -58,7 +58,7 @@ HitTarget Barrier(const PopupScope& scope){
     return target;
 }
 
-HitTarget Child(const PopupScope& scope, const u64 id, const Rect& rectangle, const u32 paintOrder){
+HitTarget Child(const PopupScope& scope, const u64 id, const Rect& rectangle, const u32 paintOrder)noexcept{
     HitTarget target = Button(id, rectangle, paintOrder);
     target.clip = scope.bounds;
     target.popup = scope.token;
@@ -66,7 +66,7 @@ HitTarget Child(const PopupScope& scope, const u64 id, const Rect& rectangle, co
     return target;
 }
 
-Array<HitTarget, 5u> Targets(const PopupScope& scope){
+Array<HitTarget, 5u> Targets(const PopupScope& scope)noexcept{
     const auto base = BaseTargets();
     return { base[0u], base[1u], Barrier(scope), Child(scope, scope.token.widget.value + 1u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u), Child(scope, scope.token.widget.value + 2u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u) };
 }

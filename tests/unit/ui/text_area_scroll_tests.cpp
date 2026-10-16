@@ -19,7 +19,7 @@ using namespace NWB::UiTextAreaTests;
 
 class UiTextAreaScrollTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static AStringView DenseText(){
+    [[nodiscard]] static AStringView DenseText()noexcept{
         return "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\n" "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa";
     }
 

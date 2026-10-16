@@ -7,6 +7,7 @@
 #include <core/os/linux/x11/text_input_key_history.h>
 #include <core/os/linux/wayland/text_input_state.h>
 #include <core/os/text_input_text.h>
+
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>

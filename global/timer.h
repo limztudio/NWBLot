@@ -39,6 +39,7 @@ public:
     TimerDelta& operator=(const TimerDelta&)noexcept = default;
     TimerDelta& operator=(TimerDelta&&)noexcept = default;
 
+
 public:
     operator i64()const noexcept{ return m_value; }
 

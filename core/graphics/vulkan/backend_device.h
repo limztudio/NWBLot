@@ -7,8 +7,6 @@
 
 #include "module.h"
 #include "backend_forward.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -17,6 +15,7 @@
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
+#include <core/task/cpu/scheduler.h>
 #include <core/common/log.h>
 
 
@@ -59,8 +58,8 @@ private:
     class SubmissionOperationLease final : NoCopy{
     private:
         [[nodiscard]] static const SubmissionOperationLease*& ActiveLease()noexcept{
-            static thread_local const SubmissionOperationLease* value = nullptr;
-            return value;
+            static thread_local const SubmissionOperationLease* s_Value = nullptr;
+            return s_Value;
         }
 
 
@@ -311,6 +310,7 @@ public:
     [[nodiscard]] u64 queueGetCompletedInstance(CommandQueue::Enum queue);
     [[nodiscard]] u64 queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
+
 
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)noexcept;

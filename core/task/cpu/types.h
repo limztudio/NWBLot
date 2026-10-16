@@ -58,10 +58,10 @@ struct CpuTaskOptions{
 
 struct CpuTaskSchedulerConfig{
     static constexpr u32 s_AutomaticWorkerCount = Limit<u32>::s_Max;
+    static constexpr usize s_DefaultProfileEventCapacity = 4096u;
 
     u32 workerCount = s_AutomaticWorkerCount;
     u32 reservedThreadCount = 1u;
-    static constexpr usize s_DefaultProfileEventCapacity = 4096u;
     usize profileEventCapacity = s_DefaultProfileEventCapacity;
     bool heterogeneous = true;
 };

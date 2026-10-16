@@ -44,14 +44,6 @@ struct ShadowReprojectMergeHeapResources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::softShadowTemporalHistoryUsable()const noexcept{
-    return m_rayTracingState.m_softShadowTemporalReady && m_rayTracingState.m_prevWorldToClipValid && m_rayTracingState.m_softShadowTemporalSeeded;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -394,6 +386,14 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     // RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics submission succeeds.
     if(((dispatchTransparentResolve && !splitTransparentResolve) || dispatchTransparentResolveTail) && m_rayTracingState.m_softShadowTemporalReady)
         m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::softShadowTemporalHistoryUsable()const noexcept{
+    return m_rayTracingState.m_softShadowTemporalReady && m_rayTracingState.m_prevWorldToClipValid && m_rayTracingState.m_softShadowTemporalSeeded;
 }
 
 

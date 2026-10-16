@@ -58,7 +58,7 @@ int Run(const int argc, char** argv){
                 return 0;
             },
             [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); },
-            [](){ return -1; }
+            []()noexcept{ return -1; }
         );
 }
 

@@ -30,24 +30,6 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_textLanguage("en", arena)
 {}
 
-bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
-    if(!balanced() || m_context.failed()){
-        m_context.fail();
-        return false;
-    }
-    const ShapeRequest request{ {}, 16.0f, TextDirection::LeftToRight, scriptTag, language };
-    if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
-        return false;
-    AString<Core::Alloc::GlobalArena> copied(language.data(), language.size(), m_arena);
-    m_textLanguage = Move(copied);
-    m_textScriptTag = scriptTag;
-    return true;
-}
-
-ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
-    return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()) };
-}
-
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
     if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)){
         m_context.fail();
@@ -149,6 +131,24 @@ void Builder::reset()noexcept{
     for(auto& frame : m_popupFrames)
         frame->reset();
     m_popupFrameCount = 0u;
+}
+
+bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
+    if(!balanced() || m_context.failed()){
+        m_context.fail();
+        return false;
+    }
+    const ShapeRequest request{ {}, 16.0f, TextDirection::LeftToRight, scriptTag, language };
+    if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
+        return false;
+    AString<Core::Alloc::GlobalArena> copied(language.data(), language.size(), m_arena);
+    m_textLanguage = Move(copied);
+    m_textScriptTag = scriptTag;
+    return true;
+}
+
+ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
+    return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()) };
 }
 
 bool Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){

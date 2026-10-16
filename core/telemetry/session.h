@@ -77,9 +77,11 @@ public:
         return RecordPerfSessionReport(m_recorder, report, streamId);
     }
 
+
 private:
     void setForwardLogger(Common::ILogger* const forwardLogger)noexcept{ m_textLogCapture.setForwardLogger(forwardLogger); }
     [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger()noexcept{ return m_textLogCapture; }
+
 
 private:
     u64 m_frameIndex = 0u;
@@ -109,6 +111,7 @@ public:
     ~CaptureSessionCaptureScope(){
         m_session.setForwardLogger(m_previousForwardLogger);
     }
+
 
 private:
     CaptureSession& m_session;

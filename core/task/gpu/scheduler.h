@@ -196,6 +196,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
 
+
 private:
     // Records/submits one frontier recovery/finalization task (transaction supplies queue waits; no caller token ladder). Failure rejects the unaccepted task.
     [[nodiscard]] bool recordAndSubmitAcceptedFrontierTask(

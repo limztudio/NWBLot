@@ -105,7 +105,16 @@ struct NativeProcessArguments{
         , argv(owner)
         , arena(owner)
     {}
+    NativeProcessArguments(const NativeProcessArguments&) = default;
+    NativeProcessArguments(NativeProcessArguments&&)noexcept = default;
+    ~NativeProcessArguments()noexcept{
+        // Argument bytes sit above both vector blocks in a scratch arena; retire them before member storage in reverse allocation order.
+        while(!text.empty())
+            text.pop_back();
+    }
 
+
+public:
     [[nodiscard]] bool build(const Span<const AStringView> arguments){
         if(!AreProcessArgumentsValid(arguments))
             return false;
@@ -378,6 +387,19 @@ template<typename ArenaT>
 
 #if defined(NWB_PLATFORM_WINDOWS)
     AString<ArenaT> commandLine{arena};
+    usize commandLineCapacity = arguments.size() - 1u;
+    for(const AStringView argument : arguments){
+        if(argument.size() > (Limit<usize>::s_Max - 2u) / 2u)
+            return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
+        const usize argumentCapacity = argument.size() * 2u + 2u;
+        if(AddOverflows<usize>(commandLineCapacity, argumentCapacity))
+            return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
+        commandLineCapacity += argumentCapacity;
+    }
+    if(commandLineCapacity > commandLine.max_size())
+        return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
+    // Quoting adds at most two bytes per input byte plus surrounding quotes; reserve once so a scratch arena never retains abandoned growth buffers.
+    commandLine.reserve(commandLineCapacity);
     for(const AStringView argument : arguments)
         ProcessExecutionDetail::AppendWindowsCommandLineArgument(commandLine, argument);
 

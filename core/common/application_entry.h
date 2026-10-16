@@ -156,6 +156,7 @@ public:
     [[nodiscard]] isize argc()const noexcept{ return static_cast<isize>(m_argc); }
     [[nodiscard]] wchar** argv()const noexcept{ return m_argv; }
 
+
 private:
     int m_argc = s_EmptyArgCount;
     LPWSTR* m_argv = nullptr;

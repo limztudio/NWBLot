@@ -37,33 +37,6 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
     m_signalSemaphoreValues.push_back(value);
 }
 
-bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const bool prerequisiteObservedComplete, const SubmissionWait* const localWaits, const usize localWaitCount)const noexcept{
-    if(!prerequisite.valid() || prerequisiteObservedComplete)
-        return true;
-    if(prerequisite.matchesPhysicalQueue(m_physicalQueue.index, m_physicalQueue.deviceGeneration))
-        return true;
-    if(!prerequisite.hasPhysicalQueueIdentity() || prerequisite.deviceGeneration != m_device.m_deviceGeneration || prerequisite.physicalQueueIndex >= m_device.m_physicalQueues.size())
-        return false;
-
-    const Queue* const producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
-    if(!producerQueue || producerQueue->m_physicalQueue.deviceGeneration != prerequisite.deviceGeneration || producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
-        return false;
-
-    const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value)noexcept -> bool {
-        return semaphore == producerQueue->m_trackingSemaphore && value >= prerequisite.value;
-    };
-    for(usize waitIndex = 0u; waitIndex < localWaitCount; ++waitIndex){
-        if(coveredBy(localWaits[waitIndex].semaphore, localWaits[waitIndex].value))
-            return true;
-    }
-    const usize waitSemaphoreCount = m_waitSemaphores.size();
-    for(usize waitIndex = 0u; waitIndex < waitSemaphoreCount; ++waitIndex){
-        if(coveredBy(m_waitSemaphores[waitIndex], m_waitSemaphoreValues[waitIndex]))
-            return true;
-    }
-    return false;
-}
-
 Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     CommandList* const* ppCmd,
     const usize numCmd,
@@ -583,6 +556,33 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
     NWB_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
     workerArena->commandBuffersPool.splice(workerArena->commandBuffersPool.end(), source, commandBuffer);
     return next;
+}
+
+bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const bool prerequisiteObservedComplete, const SubmissionWait* const localWaits, const usize localWaitCount)const noexcept{
+    if(!prerequisite.valid() || prerequisiteObservedComplete)
+        return true;
+    if(prerequisite.matchesPhysicalQueue(m_physicalQueue.index, m_physicalQueue.deviceGeneration))
+        return true;
+    if(!prerequisite.hasPhysicalQueueIdentity() || prerequisite.deviceGeneration != m_device.m_deviceGeneration || prerequisite.physicalQueueIndex >= m_device.m_physicalQueues.size())
+        return false;
+
+    const Queue* const producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
+    if(!producerQueue || producerQueue->m_physicalQueue.deviceGeneration != prerequisite.deviceGeneration || producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
+        return false;
+
+    const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value)noexcept -> bool {
+        return semaphore == producerQueue->m_trackingSemaphore && value >= prerequisite.value;
+    };
+    for(usize waitIndex = 0u; waitIndex < localWaitCount; ++waitIndex){
+        if(coveredBy(localWaits[waitIndex].semaphore, localWaits[waitIndex].value))
+            return true;
+    }
+    const usize waitSemaphoreCount = m_waitSemaphores.size();
+    for(usize waitIndex = 0u; waitIndex < waitSemaphoreCount; ++waitIndex){
+        if(coveredBy(m_waitSemaphores[waitIndex], m_waitSemaphoreValues[waitIndex]))
+            return true;
+    }
+    return false;
 }
 
 

@@ -188,6 +188,45 @@ GpuCommandIrCapture::GpuCommandIrCapture(GraphicsArena& arena)
     writeStreamHeader();
 }
 
+
+void GpuCommandIrCapture::reset()noexcept{
+    static_assert(noexcept(m_recordEndOffsets.clear()));
+    static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
+    NWB_FATAL_ASSERT_MSG(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader), "Command IR capture reset requires its reserved stream header storage");
+    if(m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
+        TerminateInvariant();
+
+    // Shrinking resize keeps capacity without allocating.
+    m_recordEndOffsets.clear();
+    m_blobEndOffsets.clear();
+    m_recordSerials.clear();
+    m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
+    m_blobBytes.clear();
+    if(m_rasterOwners){
+        m_rasterOwners->stateOwners.clear();
+        m_rasterOwners->heapOwners.clear();
+    }
+    m_packedDirty = true;
+    if(m_resetEpoch == Limit<u64>::s_Max){
+        NWB_FATAL_ASSERT_MSG(false, "Command IR capture reset epoch exhausted");
+        TerminateInvariant();
+    }
+    ++m_resetEpoch;
+    m_graphGeneration = 0u;
+    m_planGeneration = 0u;
+    m_recordingAttemptGeneration = 0u;
+    writeStreamHeader();
+}
+
+bool GpuCommandIrCapture::beginRecordingAttempt(const u64 recordingAttemptGeneration)noexcept{
+    if(recordingAttemptGeneration == 0u)
+        return false;
+    if(!m_recordEndOffsets.empty() && m_recordingAttemptGeneration != recordingAttemptGeneration)
+        return false;
+    m_recordingAttemptGeneration = recordingAttemptGeneration;
+    return true;
+}
+
 BinaryByteView GpuCommandIrCapture::commandBytes()const{
     if(m_blobBytes.empty())
         return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
@@ -226,6 +265,10 @@ Expected<GpuCommandIrOwnedStream> GpuCommandIrCapture::exportOwned(GraphicsArena
     stream.m_rasterOwners = ownerCandidate;
     return stream;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 GpuCommandIrCaptureCheckpoint GpuCommandIrCapture::checkpoint()const noexcept{
     GpuCommandIrCaptureCheckpoint result;
@@ -270,83 +313,11 @@ bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)n
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void GpuCommandIrCapture::reset()noexcept{
-    static_assert(noexcept(m_recordEndOffsets.clear()));
-    static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
-    NWB_FATAL_ASSERT_MSG(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader), "Command IR capture reset requires its reserved stream header storage");
-    if(m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
-        TerminateInvariant();
-
-    // Shrinking resize keeps capacity without allocating.
-    m_recordEndOffsets.clear();
-    m_blobEndOffsets.clear();
-    m_recordSerials.clear();
-    m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
-    m_blobBytes.clear();
-    if(m_rasterOwners){
-        m_rasterOwners->stateOwners.clear();
-        m_rasterOwners->heapOwners.clear();
-    }
-    m_packedDirty = true;
-    if(m_resetEpoch == Limit<u64>::s_Max){
-        NWB_FATAL_ASSERT_MSG(false, "Command IR capture reset epoch exhausted");
-        TerminateInvariant();
-    }
-    ++m_resetEpoch;
-    m_graphGeneration = 0u;
-    m_planGeneration = 0u;
-    m_recordingAttemptGeneration = 0u;
-    writeStreamHeader();
-}
-
-bool GpuCommandIrCapture::beginRecordingAttempt(const u64 recordingAttemptGeneration)noexcept{
-    if(recordingAttemptGeneration == 0u)
-        return false;
-    if(!m_recordEndOffsets.empty() && m_recordingAttemptGeneration != recordingAttemptGeneration)
-        return false;
-    m_recordingAttemptGeneration = recordingAttemptGeneration;
-    return true;
-}
-
 void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
     if(recordCount > m_recordEndOffsets.size())
         return;
 
     rollbackPrefix(recordCount, recordCount == 0u ? 0u : m_graphGeneration, recordCount == 0u ? 0u : m_planGeneration, recordCount == 0u ? 0u : m_recordingAttemptGeneration);
-}
-
-void GpuCommandIrCapture::rollbackPrefix(const usize recordCount, const u64 graphGeneration, const u64 planGeneration, const u64 attemptGeneration)noexcept{
-    const usize byteOffset = recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[recordCount - 1u];
-    const usize blobEnd = recordCount == 0u ? 0u : m_blobEndOffsets[recordCount - 1u];
-    static_assert(IsNothrowDestructible_V<usize>);
-    static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
-    // Both resizes only shrink, so they cannot allocate.
-    m_recordEndOffsets.resize(recordCount);
-    m_blobEndOffsets.resize(recordCount);
-    m_recordSerials.resize(recordCount);
-    m_commandBytes.resize(byteOffset);
-    m_blobBytes.resize(blobEnd);
-    if(m_rasterOwners){
-        while(!m_rasterOwners->stateOwners.empty() && m_rasterOwners->stateOwners.back().recordIndex >= recordCount)
-            m_rasterOwners->stateOwners.pop_back();
-        while(!m_rasterOwners->heapOwners.empty() && m_rasterOwners->heapOwners.back().recordIndex >= recordCount)
-            m_rasterOwners->heapOwners.pop_back();
-    }
-    m_graphGeneration = graphGeneration;
-    m_planGeneration = planGeneration;
-    m_recordingAttemptGeneration = attemptGeneration;
-    if(recordCount == 0u){
-        if(m_resetEpoch == Limit<u64>::s_Max){
-            NWB_FATAL_ASSERT_MSG(false, "Command IR capture rollback epoch exhausted");
-            TerminateInvariant();
-        }
-        ++m_resetEpoch;
-    }
-    writeStreamHeader();
 }
 
 bool GpuCommandIrCapture::captureCopyBuffer(
@@ -580,6 +551,36 @@ void GpuCommandIrCapture::writeStreamHeader()noexcept{
     header.blobBytes = static_cast<u64>(m_blobBytes.size());
     NWB_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));
     m_packedDirty = true;
+}
+
+void GpuCommandIrCapture::rollbackPrefix(const usize recordCount, const u64 graphGeneration, const u64 planGeneration, const u64 attemptGeneration)noexcept{
+    const usize byteOffset = recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[recordCount - 1u];
+    const usize blobEnd = recordCount == 0u ? 0u : m_blobEndOffsets[recordCount - 1u];
+    static_assert(IsNothrowDestructible_V<usize>);
+    static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
+    // Both resizes only shrink, so they cannot allocate.
+    m_recordEndOffsets.resize(recordCount);
+    m_blobEndOffsets.resize(recordCount);
+    m_recordSerials.resize(recordCount);
+    m_commandBytes.resize(byteOffset);
+    m_blobBytes.resize(blobEnd);
+    if(m_rasterOwners){
+        while(!m_rasterOwners->stateOwners.empty() && m_rasterOwners->stateOwners.back().recordIndex >= recordCount)
+            m_rasterOwners->stateOwners.pop_back();
+        while(!m_rasterOwners->heapOwners.empty() && m_rasterOwners->heapOwners.back().recordIndex >= recordCount)
+            m_rasterOwners->heapOwners.pop_back();
+    }
+    m_graphGeneration = graphGeneration;
+    m_planGeneration = planGeneration;
+    m_recordingAttemptGeneration = attemptGeneration;
+    if(recordCount == 0u){
+        if(m_resetEpoch == Limit<u64>::s_Max){
+            NWB_FATAL_ASSERT_MSG(false, "Command IR capture rollback epoch exhausted");
+            TerminateInvariant();
+        }
+        ++m_resetEpoch;
+    }
+    writeStreamHeader();
 }
 
 

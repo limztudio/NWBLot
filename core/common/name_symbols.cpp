@@ -75,6 +75,8 @@ public:
         : m_symbols(0u, Hasher<NameHash>(), EqualTo<NameHash>(), arena)
     {}
 
+
+public:
     [[nodiscard]] bool insert(SymbolArena& arena, const NameHash& hash, const AStringView text){
         if(NameDetail::IsZeroHash(hash))
             return false;
@@ -152,6 +154,8 @@ public:
         , m_symbols(m_arena)
     {}
 
+
+public:
     [[nodiscard]] bool insert(const NameHash& hash, const AStringView text){
         return m_symbols.insert(m_arena, hash, text);
     }
@@ -269,6 +273,7 @@ private:
 
         return unescapedText;
     }
+
 
 private:
     SymbolArena m_arena;

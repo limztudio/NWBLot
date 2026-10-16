@@ -107,7 +107,7 @@ protected:
         return send(event);
     }
 
-    [[nodiscard]] Expected<ContextMenuAction> take(const u64 id = 1u, const u64 declaration = 3u){
+    [[nodiscard]] Expected<ContextMenuAction> take(const u64 id = 1u, const u64 declaration = 3u)noexcept{
         return m_router.consumeContextMenu({ id }, declaration);
     }
 

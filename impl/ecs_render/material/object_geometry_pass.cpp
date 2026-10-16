@@ -59,30 +59,8 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
     return true;
 }
 
-bool RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem){
-    const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-    const auto& cache = mesh.objectGeometryCache;
-    const Core::ComputePipelineHandle& pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
-    if(!pipeline || pipeline != cache.decoderPipeline || !cache.valid() || !materialPassDrawResourcesReady(mesh, context.frameBindings))
-        return false;
-    Core::ComputeState state;
-    state.setPipeline(pipeline.get());
-    context.commandList.setComputeState(state);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipeline.get());
-    ECSRenderDetail::MeshFrameHeapSlots slots;
-    slots.instance = context.frameBindings.instanceHeapHandle.slot();
-    slots.materialTyped = context.frameBindings.materialTypedHeapHandle.slot();
-    slots.view = context.frameBindings.meshView.heapHandle.slot();
-    slots.generatedVertex = cache.heapHandle.slot();
-    const ECSRenderDetail::ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, slots, 0u);
-    const ECSRenderDetail::MeshComputePushConstants push{ .mesh = meshPush, .generatedIndexByteOffset = cache.indexByteOffset, };
-    context.commandList.setPushConstants(&push, sizeof(push));
-    {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
-
-        context.commandList.dispatch(Max(mesh.meshletCount, 1u));
-    }
-    return true;
+bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings){
+    return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
 }
 
 
@@ -93,10 +71,6 @@ bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const Ma
             return false;
     }
     return true;
-}
-
-bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings){
-    return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
 }
 
 void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems){
@@ -127,6 +101,32 @@ void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(const MaterialPa
             context.commandList.drawIndexed(arguments);
         }
     }
+}
+
+bool RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem){
+    const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+    const auto& cache = mesh.objectGeometryCache;
+    const Core::ComputePipelineHandle& pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
+    if(!pipeline || pipeline != cache.decoderPipeline || !cache.valid() || !materialPassDrawResourcesReady(mesh, context.frameBindings))
+        return false;
+    Core::ComputeState state;
+    state.setPipeline(pipeline.get());
+    context.commandList.setComputeState(state);
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipeline.get());
+    ECSRenderDetail::MeshFrameHeapSlots slots;
+    slots.instance = context.frameBindings.instanceHeapHandle.slot();
+    slots.materialTyped = context.frameBindings.materialTypedHeapHandle.slot();
+    slots.view = context.frameBindings.meshView.heapHandle.slot();
+    slots.generatedVertex = cache.heapHandle.slot();
+    const ECSRenderDetail::ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, slots, 0u);
+    const ECSRenderDetail::MeshComputePushConstants push{ .mesh = meshPush, .generatedIndexByteOffset = cache.indexByteOffset, };
+    context.commandList.setPushConstants(&push, sizeof(push));
+    {
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
+
+        context.commandList.dispatch(Max(mesh.meshletCount, 1u));
+    }
+    return true;
 }
 
 

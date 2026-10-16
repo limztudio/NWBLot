@@ -24,12 +24,6 @@ using namespace NWB::UiWidgetTests;
 
 class UiNestedPopupBuilderTests : public WidgetFixture{
 protected:
-    virtual void SetUp()override{
-        WidgetFixture::SetUp();
-        m_parent.open();
-        m_child.open();
-    }
-
     [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
@@ -50,6 +44,17 @@ protected:
         options.height = { LayoutSizePolicy::Fixed, 30.0f };
         return options;
     }
+
+
+protected:
+    virtual void SetUp()override{
+        WidgetFixture::SetUp();
+        m_parent.open();
+        m_child.open();
+    }
+
+
+
 
     [[nodiscard]] WidgetId parentId()const{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
     [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }

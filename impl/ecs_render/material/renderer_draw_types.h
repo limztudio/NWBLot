@@ -135,6 +135,8 @@ struct MaterialPassDrawItems{
         , computeDrawItems(arena)
     {}
 
+
+public:
     [[nodiscard]] bool empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
     void reserve(const usize capacity){
         meshDrawItems.reserve(capacity);
@@ -154,6 +156,8 @@ struct MaterialPassDrawItemPartitions{
         , csgReceiverSurface(arena)
     {}
 
+
+public:
     [[nodiscard]] bool empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
     void reserve(const usize capacity){
         regular.reserve(capacity);

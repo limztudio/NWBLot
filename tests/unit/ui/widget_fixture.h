@@ -130,14 +130,14 @@ void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>&
     return options;
 }
 
-[[nodiscard]] inline NWB::Impl::Ui::ListOptions LargeLoanListOptions(){
+[[nodiscard]] inline NWB::Impl::Ui::ListOptions LargeLoanListOptions()noexcept{
     NWB::Impl::Ui::ListOptions options;
     options.height = { LayoutSizePolicy::Fixed, 140.0f };
     return options;
 }
 
 template<typename KeyLookup>
-[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const bool backwards, const u64 disabled, KeyLookup&& rawKey){
+[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const bool backwards, const u64 disabled, KeyLookup&& rawKey)noexcept(noexcept(rawKey(start) != disabled)){
     u64 index = 0u;
     if(start >= count)
         return MakeUnexpected(Failure{});
@@ -231,7 +231,7 @@ protected:
         return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const{
+    [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const noexcept{
         return MakeWidgetId(MakeWidgetId(MakeRootId(m_root), parent), child);
     }
 

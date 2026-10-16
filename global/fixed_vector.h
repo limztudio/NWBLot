@@ -19,6 +19,7 @@ class FixedVector : private std::array<T, maxElements>{
 public:
     using Base = std::array<T, maxElements>;
 
+
 public:
     using typename Base::value_type;
     using typename Base::size_type;
@@ -79,9 +80,11 @@ public:
         return Base::operator[](pos);
     }
 
+
 public:
     constexpr reference front(){ return at(0); }
     constexpr const_reference front()const{ return at(0); }
+
 
 public:
     constexpr reference back(){
@@ -99,10 +102,12 @@ public:
         return Base::operator[](m_currentSize - 1);
     }
 
+
 public:
     using Base::data;
     using Base::begin;
     using Base::cbegin;
+
 
 public:
     constexpr iterator end()noexcept{ return iterator(begin()) + m_currentSize; }
@@ -177,6 +182,7 @@ public:
         ++m_currentSize;
         return *slot;
     }
+
 
 private:
     size_type m_currentSize = 0;

@@ -20,27 +20,27 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 UiRadioGroupSmokeSource::instanceGeneration()const{
+u64 UiRadioGroupSmokeSource::instanceGeneration()const noexcept{
     invalidateText();
     return m_generation;
 }
 
-u64 UiRadioGroupSmokeSource::revision()const{
+u64 UiRadioGroupSmokeSource::revision()const noexcept{
     invalidateText();
     return m_revision;
 }
 
-u64 UiRadioGroupSmokeSource::rowCount()const{
+u64 UiRadioGroupSmokeSource::rowCount()const noexcept{
     invalidateText();
     return m_removed == 0u ? 5u : 4u;
 }
 
-u64 UiRadioGroupSmokeSource::key(const u64 index)const{
+u64 UiRadioGroupSmokeSource::key(const u64 index)const noexcept{
     invalidateText();
     return rawKey(index);
 }
 
-Expected<u64> UiRadioGroupSmokeSource::indexOf(const u64 keyValue)const{
+Expected<u64> UiRadioGroupSmokeSource::indexOf(const u64 keyValue)const noexcept{
     u64 index = 0u;
     invalidateText();
     if(keyValue < 10u || keyValue > 50u || keyValue % 10u != 0u || keyValue == m_removed)
@@ -53,7 +53,7 @@ Expected<u64> UiRadioGroupSmokeSource::indexOf(const u64 keyValue)const{
     return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
-Expected<u64> UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool reverseValue)const{
+Expected<u64> UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool reverseValue)const noexcept{
     u64 index = 0u;
     invalidateText();
     const u64 count = m_removed == 0u ? 5u : 4u;
@@ -75,7 +75,7 @@ Expected<u64> UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool r
     return MakeUnexpected(Failure{});
 }
 
-StringView UiRadioGroupSmokeSource::text(const u64 index)const{
+StringView UiRadioGroupSmokeSource::text(const u64 index)const noexcept{
     invalidateText();
     ++m_labelReads;
     constexpr StringView s_Labels[]{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Epsilon" };
@@ -87,7 +87,7 @@ StringView UiRadioGroupSmokeSource::text(const u64 index)const{
     return { m_label.data(), label.size() };
 }
 
-bool UiRadioGroupSmokeSource::enabled(const u64 index)const{
+bool UiRadioGroupSmokeSource::enabled(const u64 index)const noexcept{
     invalidateText();
     const u64 choice = rawKey(index);
     return choice != 0u && choice != 30u;
@@ -116,7 +116,7 @@ void UiRadioGroupSmokeSource::beginFrame()noexcept{
     m_labelReads = 0u;
 }
 
-u64 UiRadioGroupSmokeSource::rawKey(const u64 index)const{
+u64 UiRadioGroupSmokeSource::rawKey(const u64 index)const noexcept{
     const u64 count = m_removed == 0u ? 5u : 4u;
     if(index >= count)
         return 0u;
@@ -127,7 +127,7 @@ u64 UiRadioGroupSmokeSource::rawKey(const u64 index)const{
     return choice;
 }
 
-void UiRadioGroupSmokeSource::invalidateText()const{
+void UiRadioGroupSmokeSource::invalidateText()const noexcept{
     m_label.fill('?');
 }
 

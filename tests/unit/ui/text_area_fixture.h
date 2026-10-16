@@ -40,6 +40,8 @@ struct AreaEvent{
     EditAction::Enum action = EditAction::Submit;
     AreaEventKind::Enum kind = AreaEventKind::Text;
 
+
+public:
     explicit AreaEvent(Core::Alloc::GlobalArena& arena) : text(arena){}
 };
 
@@ -48,6 +50,8 @@ struct AreaPublication{
     EditBoxPlacement placement;
     PopupToken popup;
 
+
+public:
     explicit AreaPublication(Core::Alloc::GlobalArena& arena) : text(arena){}
 };
 
@@ -57,6 +61,8 @@ struct AreaResolution{
     EditNavigationResult result;
     usize caret = 0u;
 
+
+public:
     explicit AreaResolution(Core::Alloc::GlobalArena& arena) : text(arena){}
 };
 
@@ -104,14 +110,14 @@ public:
         m_events.push_back(Move(event));
     }
 
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)noexcept override{
         ++ordinaryLoans;
         return {};
     }
 
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)override{ return {}; }
 
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)override{
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{
         ++actionLoans;
         return {};
     }
@@ -285,7 +291,7 @@ struct AcceptedAreaFrame{
 
 class TextAreaLoanFixture : public TextAreaFixture{
 protected:
-    [[nodiscard]] static TextAreaOptions AreaOptions(){
+    [[nodiscard]] static TextAreaOptions AreaOptions()noexcept{
         TextAreaOptions options;
         options.height = { LayoutSizePolicy::Fixed, 96.0f };
         return options;

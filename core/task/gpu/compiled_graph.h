@@ -374,6 +374,7 @@ class GpuCompiledGraph final : NoCopy{
     friend class GpuTaskScheduler;
     friend class GpuTaskGraphExternalResourceHandoffSnapshot;
 
+
 private:
     static constexpr u32 s_PlanAccessWriterBit = 1u << 31u;
     static constexpr u32 s_PlanAccessReaderMask = s_PlanAccessWriterBit - 1u;
@@ -401,11 +402,13 @@ private:
         bool m_published = false;
     };
 
+
 public:
     // Runtime entry points use a short nonblocking read claim while they derive packet identities or initialize plan-indexed storage before an exact graph attempt can provide the persistent immutable-plan lease.
     // The view is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
     class ReadView final : NoCopy{
         friend class GpuCompiledGraph;
+
 
     private:
         static thread_local ReadView* s_ActiveView;

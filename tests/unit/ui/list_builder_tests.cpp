@@ -56,10 +56,10 @@ public:
         return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
         invalidateText();
         ++searchCalls;
-        return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index){ return rawKey(index); });
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
@@ -76,7 +76,7 @@ public:
         return { temporary.data(), 2u };
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         invalidateText();
         ++enabledCalls;
         return rawKey(index) != disabled;
@@ -84,13 +84,13 @@ public:
 
 
 private:
-    [[nodiscard]] u64 rawKey(const u64 index)const{
+    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
         const u64 forward = reverse ? count - 1u - index : index;
         const u64 value = forward + 1u;
         return value + (removed != 0u && value >= removed ? 1u : 0u);
     }
 
-    void invalidateText()const{
+    void invalidateText()const noexcept{
         temporary.fill('?');
     }
 
@@ -167,7 +167,7 @@ protected:
 
     [[nodiscard]] WidgetId host()const{ return id("list", "panel"); }
 
-    [[nodiscard]] WidgetId row(const u64 key)const{
+    [[nodiscard]] WidgetId row(const u64 key)const noexcept{
         return MakeWidgetPartId(MakeWidgetId(host(), "rows"), key);
     }
 

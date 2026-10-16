@@ -3,6 +3,7 @@
 
 
 #include <core/os/win32/text_input.h>
+
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
@@ -65,6 +66,8 @@ public:
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
+
+public:
     Win32TextInputFixture()
         : m_loggerGuard(m_logger, Common::LoggerBreakPolicy::ReportOnly)
     {}

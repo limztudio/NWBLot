@@ -32,6 +32,9 @@ namespace ReflectionFeedbackCase{
 class ReflectionFeedbackScene final{
 public:
     ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world);
+
+
+public:
     [[nodiscard]] bool create(AStringView caseName, bool finalState);
     [[nodiscard]] bool mutationCase()const noexcept{ return m_case == ReflectionFeedbackCase::Mutation; }
     [[nodiscard]] bool applyMutation();

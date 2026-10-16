@@ -54,8 +54,8 @@ inline constexpr u32 s_MaxWaitMilliseconds = 5000u;
 
 
 static Alloc::GlobalArena& DumpArena(){
-    static Alloc::GlobalArena arena(VulkanArenaScope::s_AftermathDumpArena);
-    return arena;
+    static Alloc::GlobalArena s_Arena(VulkanArenaScope::s_AftermathDumpArena);
+    return s_Arena;
 }
 
 
@@ -77,8 +77,8 @@ struct State{
 };
 
 static State& GetState(){
-    static State state;
-    return state;
+    static State s_State;
+    return s_State;
 }
 
 

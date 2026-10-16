@@ -4,14 +4,14 @@
 
 #include <tests/common/test_context.h>
 
-#include <gtest/gtest.h>
+#include <core/alloc/scratch.h>
+#include <core/mesh/tangent_frame_rebuild.h>
 
 #include <global/simd/type.h>
 #include <global/simd/vector.h>
 #include <global/simdmath.h>
 
-#include <core/alloc/scratch.h>
-#include <core/mesh/tangent_frame_rebuild.h>
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,8 +47,8 @@ public:
 public:
     TangentFrameFixture() = delete;
     TangentFrameFixture(const TangentFrameFixture&) = delete;
-    TangentFrameFixture& operator=(const TangentFrameFixture&) = delete;
     ~TangentFrameFixture() = delete;
+    TangentFrameFixture& operator=(const TangentFrameFixture&) = delete;
 };
 
 

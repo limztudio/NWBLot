@@ -32,12 +32,12 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         mutate(MutationKind::RevisionSelect);
         return ComboSource::revision() + m_revisionDelta;
     }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         mutate(MutationKind::KeySelect);
         return ComboSource::key(index);
     }
@@ -52,7 +52,7 @@ public:
         return ComboSource::text(index);
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         mutate(MutationKind::EnabledOpen);
         return ComboSource::enabled(index);
     }
@@ -66,7 +66,7 @@ public:
 
 
 private:
-    void mutate(const MutationKind::Enum kind)const{
+    void mutate(const MutationKind::Enum kind)const noexcept{
         if(m_kind != kind)
             return;
         m_kind = MutationKind::None;

@@ -123,7 +123,7 @@ static void CopyGlyphVertices(const DrawSnapshot& snapshot, Vector<Vertex, Core:
 
 class IntrinsicRowSource final : public UiComboTests::ComboSource{
 public:
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         ++textCalls;
         return index == specialIndex ? specialText : ordinaryText;
     }

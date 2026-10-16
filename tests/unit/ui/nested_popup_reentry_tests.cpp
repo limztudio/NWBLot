@@ -31,7 +31,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
         observeCallback();
         ++m_metadataCalls;
         return generation;
@@ -48,23 +48,23 @@ public:
         return contentRevision;
     }
 
-    [[nodiscard]] virtual u64 rowCount()const override{
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{
         observeCallback();
         ++m_metadataCalls;
         return count;
     }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         observeCallback();
         return ComboSource::key(index);
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
         observeCallback();
         return ComboSource::indexOf(value);
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
         observeCallback();
         return ComboSource::findEnabled(start, backwards);
     }
@@ -88,7 +88,7 @@ public:
         return value;
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         observeCallback();
         return ComboSource::enabled(index);
     }
@@ -132,7 +132,7 @@ public:
 
 
 private:
-    void observeCallback()const{
+    void observeCallback()const noexcept{
         if(m_attempts != 0u || (m_observer && m_observer->attempts() != 0u))
             ++m_callbacksAfterAttempt;
     }
@@ -187,6 +187,21 @@ struct AcceptedFrame{
 
 class UiNestedPopupReentryTests : public WidgetFixture{
 protected:
+    [[nodiscard]] static PopupOptions ChildOptions(){
+        PopupOptions options;
+        options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
+        options.size = { 300.0f, 300.0f };
+        return options;
+    }
+
+    [[nodiscard]] static ListOptions ListOptions()noexcept{
+        NWB::Impl::Ui::ListOptions options;
+        options.height = { LayoutSizePolicy::Fixed, 150.0f };
+        return options;
+    }
+
+
+protected:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
         m_parent.open();
@@ -197,18 +212,7 @@ protected:
         m_siblingList.select(2u);
     }
 
-    [[nodiscard]] static PopupOptions ChildOptions(){
-        PopupOptions options;
-        options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
-        options.size = { 300.0f, 300.0f };
-        return options;
-    }
 
-    [[nodiscard]] static ListOptions ListOptions(){
-        NWB::Impl::Ui::ListOptions options;
-        options.height = { LayoutSizePolicy::Fixed, 150.0f };
-        return options;
-    }
 
     [[nodiscard]] bool acceptBase(){
         if(!begin(1u) || !m_builder.beginPanel("base", { 0.0f, 0.0f, 180.0f, 100.0f }))

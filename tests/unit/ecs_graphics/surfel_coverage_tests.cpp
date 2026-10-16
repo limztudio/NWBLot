@@ -23,8 +23,10 @@ struct ShaderFloat3{
     float y;
     float z;
 
+
+public:
     explicit ShaderFloat3(float value) : x(value), y(value), z(value){}
-    ShaderFloat3(float red, float green, float blue) : x(red), y(green), z(blue){}
+    ShaderFloat3(float red, float green, float blue)noexcept : x(red), y(green), z(blue){}
 };
 
 struct ShaderFloat4{
@@ -33,12 +35,14 @@ struct ShaderFloat4{
     float z;
     float w;
 
+
+public:
     ShaderFloat4(ShaderFloat3 rgb, float alpha) : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
 };
 using float3 = ShaderFloat3;
 using float4 = ShaderFloat4;
 
-ShaderFloat3 operator/(ShaderFloat3 value, float divisor){
+ShaderFloat3 operator/(ShaderFloat3 value, float divisor)noexcept{
     const SIMDVectorSingle quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorReplicate(divisor));
     return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
 }

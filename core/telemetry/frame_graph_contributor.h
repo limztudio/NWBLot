@@ -83,8 +83,10 @@ public:
     void addEdge(FrameGraphNodeHandle from, FrameGraphNodeHandle to, FrameGraphEdgeKind::Enum kind, u8 flags = 0u);
     void dependsOnByName(FrameGraphNodeHandle from, const Name& dependencyName, u8 flags = 0u);
 
+
 private:
     [[nodiscard]] FrameGraphNodeHandle addNode(const Name& name, AStringView label, FrameGraphNodeKind::Enum kind, const FrameGraphPassMetadata& metadata, u8 flags);
+
 
 private:
     FrameGraphNodeDescs& m_nodes;

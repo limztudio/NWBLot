@@ -38,6 +38,8 @@ struct NumericEvent{
     EditAction::Enum action = EditAction::Submit;
     NumericEventKind::Enum kind = NumericEventKind::Text;
 
+
+public:
     explicit NumericEvent(Core::Alloc::GlobalArena& arena) : text(arena){}
 };
 

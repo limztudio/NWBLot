@@ -55,6 +55,7 @@ public:
         publish();
     }
 
+
 public:
     void complete()noexcept{
         if(!m_active){
@@ -64,6 +65,7 @@ public:
         publish();
     }
 
+
 private:
     void publish()noexcept{
         // Graph lifecycle completion deliberately precedes the transaction-token commit: the last transaction packet resolves its graph binding only after every graph task is terminal.
@@ -71,6 +73,7 @@ private:
         m_transaction.commitAcceptedPacket(m_graph, m_compiledGraph, m_packet, m_token, m_nativeSubmissionInfo);
         m_active = false;
     }
+
 
 private:
     GpuGraphSubmissionTransaction& m_transaction;
@@ -99,29 +102,6 @@ GpuGraphSubmissionTransaction::~GpuGraphSubmissionTransaction()noexcept{
         NWB_FATAL_ASSERT_MSG(false, "GpuGraphSubmissionTransaction destruction requires its active graph attempt to resolve first");
         TerminateInvariant();
     }
-}
-
-
-bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
-    return m_valid && planAccess.valid() && m_generation == planAccess.generation() && m_planGeneration == planAccess.planGeneration() && m_deviceGeneration == planAccess.deviceGeneration() && m_packets.size() == planAccess.packetCount();
-}
-
-
-bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept{
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
-        return false;
-    NothrowScopedLock lock(m_mutex);
-    return validForLocked(planAccess) && m_recordingAttemptGeneration != 0u && m_activeSubmissionBinding.valid() && !m_submissionBindingResolved;
-}
-
-
-bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept{
-    if(!SubmissionOperation::ActiveExclusiveFor(*this))
-        return false;
-
-    NothrowScopedLock lock(m_mutex);
-    return m_valid && m_acceptedSubmissionCount != 0u;
 }
 
 
@@ -192,12 +172,35 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     NothrowScopedLock lock(m_mutex);
     return validForLocked(planAccess);
+}
+
+
+bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+    return m_valid && planAccess.valid() && m_generation == planAccess.generation() && m_planGeneration == planAccess.planGeneration() && m_deviceGeneration == planAccess.deviceGeneration() && m_packets.size() == planAccess.packetCount();
+}
+
+
+bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept{
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    NothrowScopedLock lock(m_mutex);
+    return validForLocked(planAccess) && m_recordingAttemptGeneration != 0u && m_activeSubmissionBinding.valid() && !m_submissionBindingResolved;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept{
+    if(!SubmissionOperation::ActiveExclusiveFor(*this))
+        return false;
+
+    NothrowScopedLock lock(m_mutex);
+    return m_valid && m_acceptedSubmissionCount != 0u;
 }
 
 

@@ -8,6 +8,7 @@
 #include <global/thread.h>
 
 #include <tests/common/capturing_logger.h>
+
 #include <gtest/gtest.h>
 
 

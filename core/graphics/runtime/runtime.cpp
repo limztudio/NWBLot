@@ -37,6 +37,7 @@ public:
     {}
     ~ScopedAcquiredPresentationFrameReset()noexcept{ m_frame = {}; }
 
+
 private:
     AcquiredPresentationFrame& m_frame;
 };
@@ -252,6 +253,47 @@ bool GraphicsRuntime::createInstance(const InstanceParameters& params){
         return false;
 
     m_instanceCreated = true;
+    return true;
+}
+
+bool GraphicsRuntime::runFrame(){
+    // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work, and submission-suspended maintenance.
+    // Detailed phase scopes sit within this aggregate, so consumers must not sum them with it.
+    // Record only a successful call so a failed frame can never be published with a later one.
+    const bool recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled() && m_frameTimingScope.valid();
+    Timer frameTimingBegin;
+    const u64 sampleFrameIndex = m_frameIndex;
+    if(recordFrameTiming){
+        frameTimingBegin = TimerNow();
+    }
+
+    if(!m_frameSubmissionSuspended){
+        if(!recordFrameTiming)
+            return animateRenderPresent();
+
+        CpuTimingPhaseBatch phaseTiming;
+        const bool rendered = animateRenderPresentInternal(&phaseTiming);
+        if(rendered){
+            m_cpuTiming->recordSample(m_frameTimingScope, DurationInSeconds<f64>(TimerNow(), frameTimingBegin), sampleFrameIndex);
+            phaseTiming.flush(*m_cpuTiming, sampleFrameIndex);
+        }
+        return rendered;
+    }
+
+    // Do not let a capture hold hide a device-loss/recreation request.
+    // No backend beginFrame, render, or present call is made here, so the last completed frame stays on screen while the platform loop remains responsive.
+    if(m_deviceRecreationRequested)
+        return false;
+
+    auto& device = getDevice();
+    if(device.requiresRecreation()){
+        requestDeviceRecreation();
+        return false;
+    }
+
+    YieldThread();
+    if(recordFrameTiming)
+        m_cpuTiming->recordSample(m_frameTimingScope, DurationInSeconds<f64>(TimerNow(), frameTimingBegin), sampleFrameIndex);
     return true;
 }
 
@@ -501,47 +543,6 @@ bool GraphicsRuntime::shouldRenderUnfocused()const{
             return true;
     }
     return false;
-}
-
-bool GraphicsRuntime::runFrame(){
-    // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work, and submission-suspended maintenance.
-    // Detailed phase scopes sit within this aggregate, so consumers must not sum them with it.
-    // Record only a successful call so a failed frame can never be published with a later one.
-    const bool recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled() && m_frameTimingScope.valid();
-    Timer frameTimingBegin;
-    const u64 sampleFrameIndex = m_frameIndex;
-    if(recordFrameTiming){
-        frameTimingBegin = TimerNow();
-    }
-
-    if(!m_frameSubmissionSuspended){
-        if(!recordFrameTiming)
-            return animateRenderPresent();
-
-        CpuTimingPhaseBatch phaseTiming;
-        const bool rendered = animateRenderPresentInternal(&phaseTiming);
-        if(rendered){
-            m_cpuTiming->recordSample(m_frameTimingScope, DurationInSeconds<f64>(TimerNow(), frameTimingBegin), sampleFrameIndex);
-            phaseTiming.flush(*m_cpuTiming, sampleFrameIndex);
-        }
-        return rendered;
-    }
-
-    // Do not let a capture hold hide a device-loss/recreation request.
-    // No backend beginFrame, render, or present call is made here, so the last completed frame stays on screen while the platform loop remains responsive.
-    if(m_deviceRecreationRequested)
-        return false;
-
-    auto& device = getDevice();
-    if(device.requiresRecreation()){
-        requestDeviceRecreation();
-        return false;
-    }
-
-    YieldThread();
-    if(recordFrameTiming)
-        m_cpuTiming->recordSample(m_frameTimingScope, DurationInSeconds<f64>(TimerNow(), frameTimingBegin), sampleFrameIndex);
-    return true;
 }
 
 bool GraphicsRuntime::animateRenderPresent(){

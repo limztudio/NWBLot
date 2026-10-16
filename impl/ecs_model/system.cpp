@@ -127,6 +127,14 @@ void ModelSystem::prepare(Core::ECS::World& world){
     syncModelRuntimes();
 }
 
+void ModelSystem::update(Core::ECS::World& world, const f32 delta){
+    static_cast<void>(world);
+    static_cast<void>(delta);
+
+    updateModelObjectTransforms();
+    updateStaticMeshAttachments();
+}
+
 void ModelSystem::syncModelRuntimes(){
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_model/sync_runtime"));
     clearInactiveModelRuntimes(scratchArena);
@@ -135,14 +143,6 @@ void ModelSystem::syncModelRuntimes(){
             ensureModelRuntime(entity, component, scratchArena);
         }
     );
-}
-
-void ModelSystem::update(Core::ECS::World& world, const f32 delta){
-    static_cast<void>(world);
-    static_cast<void>(delta);
-
-    updateModelObjectTransforms();
-    updateStaticMeshAttachments();
 }
 
 void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena){

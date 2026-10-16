@@ -363,15 +363,13 @@ TEST_F(UiPopupToolsBuilderTests, PointerReleaseCommitsOnlyAnEnabledCommand){
     const HitTarget* disabled = menuRow(3u);
     ASSERT_NE(disabled, nullptr);
     EXPECT_FALSE(disabled->enabled);
-    click({ disabled->rectangle.x + disabled->rectangle.width * 0.5f,
-        disabled->rectangle.y + disabled->rectangle.height * 0.5f });
+    click({ disabled->rectangle.x + disabled->rectangle.width * 0.5f, disabled->rectangle.y + disabled->rectangle.height * 0.5f });
     ASSERT_TRUE(acceptTools(3u, false));
     EXPECT_FALSE(m_menuResult.activated);
     ASSERT_TRUE(m_menu.isOpen());
     const HitTarget* enabled = menuRow(5u);
     ASSERT_NE(enabled, nullptr);
-    click({ enabled->rectangle.x + enabled->rectangle.width * 0.5f,
-        enabled->rectangle.y + enabled->rectangle.height * 0.5f });
+    click({ enabled->rectangle.x + enabled->rectangle.width * 0.5f, enabled->rectangle.y + enabled->rectangle.height * 0.5f });
     ASSERT_TRUE(acceptTools(4u, false));
     EXPECT_TRUE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 5u);

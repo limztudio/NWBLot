@@ -672,6 +672,16 @@ class RenderReadyCaptureTests(unittest.TestCase):
     def make_capture(appears_empty_or_white, has_pixel_variation):
         return SimpleNamespace(appears_empty_or_white=appears_empty_or_white, handle=0x4A, has_pixel_variation=has_pixel_variation,)
 
+    def test_sub_eight_pixel_captures_bound_background_sampling_to_existing_rows(self):
+        for width in range(1, 8):
+            for height in range(1, 8):
+                with self.subTest(width=width, height=height):
+                    rows = [[(32, 64, 96)] * width for _ in range(height)]
+                    self.assertEqual(window_capture_smoke.estimate_background_rgb(rows, width, height), (32, 64, 96))
+                    result = window_capture_smoke.capture_result_from_rgb_rows(0, width, height, rows)
+                    self.assertFalse(result.appears_empty_or_white)
+                    self.assertFalse(result.has_pixel_variation)
+
     def test_uniform_gray_is_flat_but_not_a_readiness_placeholder(self):
         analysis = window_capture_smoke.analyze_rgb_rows([[(128, 128, 128), (128, 128, 128)], [(128, 128, 128), (128, 128, 128)],])
 

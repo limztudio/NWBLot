@@ -206,6 +206,15 @@ private:
         return world;
     }
 
+    // Spin bind-pose bodies about Y with staggered phases (BVH + shadows re-resolve per frame).
+    // NWB_STRESS_TEST_SPIN_ANGLE freezes yaw for deterministic A/B.
+    static f32 FrozenYaw(){
+        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
+        return s_yaw;
+    }
+
+
+private:
     void destroyWorld(){
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
@@ -275,12 +284,6 @@ private:
         return entity;
     }
 
-    // Spin bind-pose bodies about Y with staggered phases (BVH + shadows re-resolve per frame).
-    // NWB_STRESS_TEST_SPIN_ANGLE freezes yaw for deterministic A/B.
-    static f32 FrozenYaw(){
-        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
-        return s_yaw;
-    }
 
     void spinCharacters(){
         const f32 yawBase = m_yaw.yaw();
@@ -709,7 +712,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
     return NWB_TEXT("NWB Hardware Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)

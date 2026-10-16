@@ -8,6 +8,7 @@
 #include "smoke_environment.h"
 
 #include <core/perf/report.h>
+
 #include <global/filesystem.h>
 
 
@@ -64,19 +65,23 @@ private:
     };
 
 
+
+
+private:
+    static void WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots);
+
+
 public:
     explicit RendererGatherBenchmarkProbe(Core::Alloc::GlobalArena& arena);
 
+
+public:
     [[nodiscard]] bool poll(const Core::Perf::SessionReport& report, bool memoryEnabled);
 
     [[nodiscard]] bool finished()const noexcept{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
     [[nodiscard]] u32 successfulFrames()const noexcept{ return m_successfulFrames; }
 
     [[nodiscard]] bool write(AStringView path, AStringView workload, bool memoryEnabled, u32 renderers, u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;
-
-
-private:
-    static void WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots);
 
 
 private:

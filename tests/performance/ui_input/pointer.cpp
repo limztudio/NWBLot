@@ -63,6 +63,8 @@ public:
         }
     }
 
+
+public:
     [[nodiscard]] bool initialize(){
         if(!m_router.commitTargets(m_targets.data(), m_targets.size(), ++m_generation))
             return false;

@@ -39,17 +39,17 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
         mutate(CallbackStage::Generation);
         return generation;
     }
 
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         mutate(CallbackStage::Revision);
         return revisionValue;
     }
 
-    [[nodiscard]] virtual u64 rowCount()const override{
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{
         mutate(CallbackStage::Count);
         return count;
     }
@@ -109,7 +109,7 @@ public:
 
 
 private:
-    void mutate(const CallbackStage::Enum stage)const{
+    void mutate(const CallbackStage::Enum stage)const noexcept{
         if(m_stage != stage)
             return;
         m_stage = CallbackStage::None;

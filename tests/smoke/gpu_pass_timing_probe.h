@@ -9,6 +9,7 @@
 
 #include <core/common/log.h>
 #include <core/perf/timing.h>
+
 #include <global/basic_string.h>
 #include <global/containers.h>
 #include <global/filesystem.h>

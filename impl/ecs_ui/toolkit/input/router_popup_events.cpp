@@ -54,20 +54,6 @@ void InputRouter::fencePopup(const PopupToken& token)noexcept{
     reconcileTargets();
 }
 
-void InputRouter::cancelPopupFocus(){
-    for(auto& record : m_popups){
-        // Window focus loss must not restore command focus into an unfocused window.
-        record.restoreFocus = {};
-        record.restoreDeclaration = 0u;
-        record.restorePopup = {};
-        if(record.closing)
-            continue;
-        if(m_popupDismissals.size() < s_InputMaxPopups)
-            m_popupDismissals.push_back({ record.scope.token, PopupDismissReason::FocusLost });
-        record.closing = true;
-    }
-}
-
 void InputRouter::retirePopup(const WidgetId id){
     Array<bool, s_InputMaxPopups> removed{};
     bool found = false;
@@ -135,6 +121,20 @@ void InputRouter::retirePopup(const WidgetId id){
             clearFocus();
     }
     reconcileTargets();
+}
+
+void InputRouter::cancelPopupFocus(){
+    for(auto& record : m_popups){
+        // Window focus loss must not restore command focus into an unfocused window.
+        record.restoreFocus = {};
+        record.restoreDeclaration = 0u;
+        record.restorePopup = {};
+        if(record.closing)
+            continue;
+        if(m_popupDismissals.size() < s_InputMaxPopups)
+            m_popupDismissals.push_back({ record.scope.token, PopupDismissReason::FocusLost });
+        record.closing = true;
+    }
 }
 
 

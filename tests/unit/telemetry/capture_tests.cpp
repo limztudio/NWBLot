@@ -3,8 +3,11 @@
 
 
 #include "telemetry_test_helpers.h"
+
 #include <gtest/gtest.h>
+
 #include <global/thread.h>
+
 #include <tests/common/capturing_logger.h>
 
 

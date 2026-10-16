@@ -20,7 +20,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u64> UiComboSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> UiComboSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     if(m_empty)
         return MakeUnexpected(Failure{});
     return m_rows.findEnabled(start, reverse);

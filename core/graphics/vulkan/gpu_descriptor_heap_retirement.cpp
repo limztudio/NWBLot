@@ -20,6 +20,115 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void GpuDescriptorHeap::collectRetired(){
+    struct QueueCompletion{
+        GpuPhysicalQueueId queue;
+        u64 value = 0u;
+    };
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DescriptorBindingArena);
+    Vector<QueueCompletion, Alloc::ScratchArena> completions(scratchArena);
+
+    {
+        ScopedLock lock(m_mutex);
+        completions.reserve(m_heapUses.size());
+        for(const HeapUse& heapUse : m_heapUses){
+            const QueueSubmissionToken& token = heapUse.submissionToken;
+            if(!token.valid() || !token.hasPhysicalQueueIdentity())
+                continue;
+
+            const GpuPhysicalQueueId queue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
+            bool alreadyTracked = false;
+            for(const QueueCompletion& completion : completions){
+                if(completion.queue == queue){
+                    alreadyTracked = true;
+                    break;
+                }
+            }
+            if(!alreadyTracked)
+                completions.push_back(QueueCompletion{ .queue = queue, .value = 0u, });
+        }
+    }
+
+    for(QueueCompletion& completion : completions)
+        completion.value = m_device.queueGetCompletedInstance(completion.queue);
+
+    ScopedLock lock(m_mutex);
+    const auto heapUseComplete = [&](const HeapUse& heapUse)noexcept -> bool {
+        const QueueSubmissionToken& token = heapUse.submissionToken;
+        if(!token.valid())
+            return heapUse.commandBuffer == nullptr;
+
+        if(!token.hasPhysicalQueueIdentity())
+            return false;
+
+        const GpuPhysicalQueueId queue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
+        for(const QueueCompletion& completion : completions){
+            if(completion.queue == queue)
+                return completion.value >= token.value;
+        }
+        return false;
+    };
+
+    // Admission IDs increase and compaction preserves order; one completed prefix applies to this locked completion snapshot.
+    usize completedHeapUsePrefix = 0u;
+    u64 firstIncompleteHeapUseID = 0u;
+    bool hasIncompleteHeapUse = false;
+    usize keptRetired = 0u;
+    for(usize retiredIndex = 0u; retiredIndex < m_retiredCount; ++retiredIndex){
+        const RetiredSlot& retired = m_retired[retiredIndex];
+        while(!hasIncompleteHeapUse && completedHeapUsePrefix < m_heapUses.size()){
+            const HeapUse& heapUse = m_heapUses[completedHeapUsePrefix];
+            if(heapUse.id > retired.lastRequiredHeapUseID)
+                break;
+            if(!heapUseComplete(heapUse)){
+                firstIncompleteHeapUseID = heapUse.id;
+                hasIncompleteHeapUse = true;
+                break;
+            }
+            ++completedHeapUsePrefix;
+        }
+        const bool canRetire = !hasIncompleteHeapUse || firstIncompleteHeapUseID > retired.lastRequiredHeapUseID;
+
+        if(canRetire){
+            SlotAllocator& allocator = allocatorForClass(retired.handle.descriptorClass());
+            const u32 slot = retired.handle.slot();
+            if(
+                slot < allocator.slotStates.size()
+                && slot < allocator.allocatedClasses.size()
+                && allocator.slotStates[slot] == SlotState::Retired
+                && allocator.allocatedClasses[slot] == static_cast<u8>(retired.handle.descriptorClass())
+                && allocator.freeCount < allocator.freeList.size()
+            ){
+                releaseRetainedDescriptorResource(retired.handle);
+                allocator.slotStates[slot] = SlotState::Free;
+                allocator.allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::kCount);
+                allocator.freeList[allocator.freeCount] = retired.handle.slot();
+                ++allocator.freeCount;
+            }
+            else{
+                TerminateInvariant();
+            }
+        }
+        else{
+            m_retired[keptRetired] = retired;
+            ++keptRetired;
+        }
+    }
+    m_retiredCount = keptRetired;
+
+    usize keptHeapUses = 0u;
+    for(usize heapUseIndex = 0u; heapUseIndex < m_heapUses.size(); ++heapUseIndex){
+        const HeapUse& heapUse = m_heapUses[heapUseIndex];
+        if(heapUseComplete(heapUse))
+            continue;
+
+        m_heapUses[keptHeapUses] = heapUse;
+        ++keptHeapUses;
+    }
+    m_heapUses.resize(keptHeapUses);
+}
+
+
 bool GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept{
     for(const HeapUse& heapUse : m_heapUses){
         if(!heapUse.commandBuffer)
@@ -161,114 +270,6 @@ void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferG
         ++m_retiredCount;
     }
     m_pendingRecordingCount = 0u;
-}
-
-void GpuDescriptorHeap::collectRetired(){
-    struct QueueCompletion{
-        GpuPhysicalQueueId queue;
-        u64 value = 0u;
-    };
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DescriptorBindingArena);
-    Vector<QueueCompletion, Alloc::ScratchArena> completions(scratchArena);
-
-    {
-        ScopedLock lock(m_mutex);
-        completions.reserve(m_heapUses.size());
-        for(const HeapUse& heapUse : m_heapUses){
-            const QueueSubmissionToken& token = heapUse.submissionToken;
-            if(!token.valid() || !token.hasPhysicalQueueIdentity())
-                continue;
-
-            const GpuPhysicalQueueId queue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
-            bool alreadyTracked = false;
-            for(const QueueCompletion& completion : completions){
-                if(completion.queue == queue){
-                    alreadyTracked = true;
-                    break;
-                }
-            }
-            if(!alreadyTracked)
-                completions.push_back(QueueCompletion{ .queue = queue, .value = 0u, });
-        }
-    }
-
-    for(QueueCompletion& completion : completions)
-        completion.value = m_device.queueGetCompletedInstance(completion.queue);
-
-    ScopedLock lock(m_mutex);
-    const auto heapUseComplete = [&](const HeapUse& heapUse)noexcept -> bool {
-        const QueueSubmissionToken& token = heapUse.submissionToken;
-        if(!token.valid())
-            return heapUse.commandBuffer == nullptr;
-
-        if(!token.hasPhysicalQueueIdentity())
-            return false;
-
-        const GpuPhysicalQueueId queue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
-        for(const QueueCompletion& completion : completions){
-            if(completion.queue == queue)
-                return completion.value >= token.value;
-        }
-        return false;
-    };
-
-    // Admission IDs increase and compaction preserves order; one completed prefix applies to this locked completion snapshot.
-    usize completedHeapUsePrefix = 0u;
-    u64 firstIncompleteHeapUseID = 0u;
-    bool hasIncompleteHeapUse = false;
-    usize keptRetired = 0u;
-    for(usize retiredIndex = 0u; retiredIndex < m_retiredCount; ++retiredIndex){
-        const RetiredSlot& retired = m_retired[retiredIndex];
-        while(!hasIncompleteHeapUse && completedHeapUsePrefix < m_heapUses.size()){
-            const HeapUse& heapUse = m_heapUses[completedHeapUsePrefix];
-            if(heapUse.id > retired.lastRequiredHeapUseID)
-                break;
-            if(!heapUseComplete(heapUse)){
-                firstIncompleteHeapUseID = heapUse.id;
-                hasIncompleteHeapUse = true;
-                break;
-            }
-            ++completedHeapUsePrefix;
-        }
-        const bool canRetire = !hasIncompleteHeapUse || firstIncompleteHeapUseID > retired.lastRequiredHeapUseID;
-
-        if(canRetire){
-            SlotAllocator& allocator = allocatorForClass(retired.handle.descriptorClass());
-            const u32 slot = retired.handle.slot();
-            if(
-                slot < allocator.slotStates.size()
-                && slot < allocator.allocatedClasses.size()
-                && allocator.slotStates[slot] == SlotState::Retired
-                && allocator.allocatedClasses[slot] == static_cast<u8>(retired.handle.descriptorClass())
-                && allocator.freeCount < allocator.freeList.size()
-            ){
-                releaseRetainedDescriptorResource(retired.handle);
-                allocator.slotStates[slot] = SlotState::Free;
-                allocator.allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::kCount);
-                allocator.freeList[allocator.freeCount] = retired.handle.slot();
-                ++allocator.freeCount;
-            }
-            else{
-                TerminateInvariant();
-            }
-        }
-        else{
-            m_retired[keptRetired] = retired;
-            ++keptRetired;
-        }
-    }
-    m_retiredCount = keptRetired;
-
-    usize keptHeapUses = 0u;
-    for(usize heapUseIndex = 0u; heapUseIndex < m_heapUses.size(); ++heapUseIndex){
-        const HeapUse& heapUse = m_heapUses[heapUseIndex];
-        if(heapUseComplete(heapUse))
-            continue;
-
-        m_heapUses[keptHeapUses] = heapUse;
-        ++keptHeapUses;
-    }
-    m_heapUses.resize(keptHeapUses);
 }
 
 

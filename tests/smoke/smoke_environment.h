@@ -6,6 +6,7 @@
 
 
 #include <core/alloc/general.h>
+
 #include <global/environment.h>
 #include <global/name.h>
 #include <global/text_utils.h>

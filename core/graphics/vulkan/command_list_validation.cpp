@@ -19,6 +19,45 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_DEBUG)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CommandList::beginTaskCapabilityTracking(const GpuQueueCapability::Mask declaredCapabilities){
+    if(!publicCommandStateAccessible())
+        return;
+    NWB_ASSERT(!m_taskCapabilityTracking);
+    m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    m_taskDeclaredCapabilities = declaredCapabilities;
+    m_taskCapabilityTracking = true;
+}
+
+GpuQueueCapability::Mask CommandList::endTaskCapabilityTracking(){
+    if(!publicCommandStateAccessible())
+        return GpuQueueCapability::None;
+    NWB_ASSERT(m_taskCapabilityTracking);
+    m_taskCapabilityTracking = false;
+    m_taskDeclaredCapabilities = GpuQueueCapability::None;
+    return m_taskCapabilitiesUsed;
+}
+
+void CommandList::cancelTaskCapabilityTracking(){
+    if(!publicCommandStateAccessible())
+        return;
+    m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    m_taskDeclaredCapabilities = GpuQueueCapability::None;
+    m_taskCapabilityTracking = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
 bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     if(!m_currentCmdBuf){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable"));
@@ -263,45 +302,6 @@ void CommandList::discardInvalidCommandBuffer(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_DEBUG)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void CommandList::beginTaskCapabilityTracking(const GpuQueueCapability::Mask declaredCapabilities){
-    if(!publicCommandStateAccessible())
-        return;
-    NWB_ASSERT(!m_taskCapabilityTracking);
-    m_taskCapabilitiesUsed = GpuQueueCapability::None;
-    m_taskDeclaredCapabilities = declaredCapabilities;
-    m_taskCapabilityTracking = true;
-}
-
-GpuQueueCapability::Mask CommandList::endTaskCapabilityTracking(){
-    if(!publicCommandStateAccessible())
-        return GpuQueueCapability::None;
-    NWB_ASSERT(m_taskCapabilityTracking);
-    m_taskCapabilityTracking = false;
-    m_taskDeclaredCapabilities = GpuQueueCapability::None;
-    return m_taskCapabilitiesUsed;
-}
-
-void CommandList::cancelTaskCapabilityTracking(){
-    if(!publicCommandStateAccessible())
-        return;
-    m_taskCapabilitiesUsed = GpuQueueCapability::None;
-    m_taskDeclaredCapabilities = GpuQueueCapability::None;
-    m_taskCapabilityTracking = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -34,6 +34,8 @@ struct EcsTestWorld{
     Core::CpuTaskScheduler taskScheduler;
     Core::ECS::World world;
 
+
+public:
     EcsTestWorld()
         : arena(s_EcsTestWorldArena)
         , taskScheduler(0u)

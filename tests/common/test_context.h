@@ -36,6 +36,8 @@ template<typename Tag = void>
 struct TestArena{
     Core::Alloc::GlobalArena arena;
 
+
+public:
     TestArena()
         : arena(s_TestArena)
     {}
@@ -70,11 +72,11 @@ template<typename T>
 using TestVector = DefaultVector<T, Core::Alloc::GlobalArena, TestDetail::Arena>;
 using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
-[[nodiscard]] inline bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
+[[nodiscard]] inline bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
     return Abs(lhs - rhs) <= epsilon;
 }
 
-[[nodiscard]] inline usize CountText(const AStringView text, const AStringView expected){
+[[nodiscard]] inline usize CountText(const AStringView text, const AStringView expected)noexcept{
     if(expected.empty())
         return 0u;
 
@@ -90,19 +92,19 @@ using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
     return count;
 }
 
-[[nodiscard]] inline bool NearlyEqual3(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
+[[nodiscard]] inline bool NearlyEqual3(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
     return NearlyEqual(VectorGetX(value), x, epsilon) && NearlyEqual(VectorGetY(value), y, epsilon) && NearlyEqual(VectorGetZ(value), z, epsilon);
 }
 
-[[nodiscard]] inline bool NearlyEqual4(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
+[[nodiscard]] inline bool NearlyEqual4(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
     return NearlyEqual(VectorGetX(value), x, epsilon) && NearlyEqual(VectorGetY(value), y, epsilon) && NearlyEqual(VectorGetZ(value), z, epsilon) && NearlyEqual(VectorGetW(value), w, epsilon);
 }
 
-[[nodiscard]] inline bool NearlyEqual3(const Float4& value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
+[[nodiscard]] inline bool NearlyEqual3(const Float4& value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
     return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon);
 }
 
-[[nodiscard]] inline bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
+[[nodiscard]] inline bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
     return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon) && NearlyEqual(value.w, w, epsilon);
 }
 

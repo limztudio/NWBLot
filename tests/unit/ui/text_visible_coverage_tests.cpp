@@ -27,7 +27,7 @@ using namespace NWB::UiTextVisibleTests;
 
 class TextVisibleCoverageTests : public TextVisibleFixture{
 protected:
-    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin){
+    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
         return { origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
     }
 

@@ -67,6 +67,7 @@ private:
 class Recorder final : NoCopy{
     friend EventView;
 
+
 private:
     struct EventSlot{
         EventRecord record;
@@ -85,9 +86,11 @@ private:
     class EventSlotLease final : NoCopy{
         friend Recorder;
 
+
     public:
         explicit EventSlotLease(Recorder& recorder);
         ~EventSlotLease();
+
 
     private:
         Recorder& m_recorder;

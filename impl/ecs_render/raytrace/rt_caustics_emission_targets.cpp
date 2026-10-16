@@ -21,116 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
-    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
-    m_preparedCausticEmissionTargetBytes.clear();
-    m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
-
-    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
-    if(!meshSystemPtr)
-        return true;
-
-    auto rendererView = m_world.view<RendererComponent>();
-    const usize candidateCount = rendererView.candidateCount();
-
-    Vector<NwbCausticEmissionTargetGpu, Core::Alloc::ScratchArena> targets{ scratchArena };
-    targets.reserve(candidateCount);
-
-    SIMDVectorSingle combinedMin = VectorReplicate(s_RayTracingFiniteInfinity);
-    SIMDVectorSingle combinedMax = VectorReplicate(-s_RayTracingFiniteInfinity);
-
-    for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
-            continue;
-
-        const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material);
-        if(!materialInfoResult)
-            continue;
-        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
-        if(!materialInfo || !materialInfo->refractive)
-            continue;
-
-        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
-        if(!meshResult || !meshResult->meshResources.csgLocalBounds.valid())
-            continue;
-
-        const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        const SIMDMatrix objectToWorld = transformPtr ? MatrixAffineTransformation(LoadFloat(transformPtr->scale), VectorZero(), LoadFloat(transformPtr->rotation), LoadFloat(transformPtr->position)) : MatrixIdentity();
-
-        SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
-        SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
-        if(meshResult->resolvedMesh.runtime){
-            // Conservative deformation inflation keeps skinned refractors in the emission domain.
-            constexpr f32 s_BoundsMidpointWeight = 0.5f;
-            const SIMDVectorSingle center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(s_BoundsMidpointWeight));
-            const SIMDVectorSingle half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(s_BoundsMidpointWeight * s_CausticRuntimeBoundsInflation));
-            localMin = VectorSubtract(center, half);
-            localMax = VectorAdd(center, half);
-        }
-        const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
-        if(!worldBounds)
-            continue;
-        const SIMDVectorSingle worldMin = worldBounds->minBounds;
-        const SIMDVectorSingle worldMax = worldBounds->maxBounds;
-
-        combinedMin = VectorMin(combinedMin, worldMin);
-        combinedMax = VectorMax(combinedMax, worldMax);
-
-        NwbCausticEmissionTargetGpu target;
-        StoreFloat(VectorSetW(worldMin, 0.0f), target.aabbMin);
-        StoreFloat(VectorSetW(worldMax, 0.0f), target.aabbMax);
-        targets.push_back(target);
-    }
-
-    const u32 targetCount = static_cast<u32>(targets.size());
-    if(targetCount == 0u){
-        m_rayTracingState.m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
-        m_rayTracingState.m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-        m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
-        return true;
-    }
-
-    if(!ensureCausticEmissionTargetBuffer(targetCount))
-        return false;
-
-    const usize targetByteCount = targets.size() * sizeof(NwbCausticEmissionTargetGpu);
-    m_preparedCausticEmissionTargetBytes.resize(targetByteCount);
-    NWB_MEMCPY(m_preparedCausticEmissionTargetBytes.data(), m_preparedCausticEmissionTargetBytes.size(), targets.data(), targetByteCount);
-
-    StoreFloat(combinedMin, m_rayTracingState.m_causticTargetBoundsMin);
-    StoreFloat(combinedMax, m_rayTracingState.m_causticTargetBoundsMax);
-    m_rayTracingState.m_causticRefractiveInstanceCount = targetCount;
-
-    return true;
-}
-
-Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const{
-    Core::GpuUploadBlobId blob;
-    const u32 targetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
-    if(targetCount == 0u){
-        if(!m_preparedCausticEmissionTargetBytes.empty())
-            return MakeUnexpected(Failure{});
-        return blob;
-    }
-
-    const usize targetByteCount = static_cast<usize>(targetCount) * sizeof(NwbCausticEmissionTargetGpu);
-    if(
-        m_preparedCausticEmissionTargetBytes.size() != targetByteCount
-        || !m_rayTracingState.m_causticEmissionTargetBuffer
-        || m_rayTracingState.m_causticEmissionTargetCapacity < targetCount
-        || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-        || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen caustic emission-target payload no longer matches preflight storage"));
-        return MakeUnexpected(Failure{});
-    }
-
-    blob = graph.copyUploadData(m_preparedCausticEmissionTargetBytes.data(), targetByteCount, alignof(NwbCausticEmissionTargetGpu));
-    if(!(blob.valid()))
-        return MakeUnexpected(Failure{});
-    return blob;
-}
-
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     if(!m_rayTracingState.m_causticEmissionTargetHeapHandle.valid())
         return;
@@ -212,6 +102,116 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     }
     if(!prepareCausticResolveActivity(halfWidth, halfHeight))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic activity buffers unavailable; retaining full wavelet filtering"));
+    return true;
+}
+
+Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const{
+    Core::GpuUploadBlobId blob;
+    const u32 targetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
+    if(targetCount == 0u){
+        if(!m_preparedCausticEmissionTargetBytes.empty())
+            return MakeUnexpected(Failure{});
+        return blob;
+    }
+
+    const usize targetByteCount = static_cast<usize>(targetCount) * sizeof(NwbCausticEmissionTargetGpu);
+    if(
+        m_preparedCausticEmissionTargetBytes.size() != targetByteCount
+        || !m_rayTracingState.m_causticEmissionTargetBuffer
+        || m_rayTracingState.m_causticEmissionTargetCapacity < targetCount
+        || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
+        || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen caustic emission-target payload no longer matches preflight storage"));
+        return MakeUnexpected(Failure{});
+    }
+
+    blob = graph.copyUploadData(m_preparedCausticEmissionTargetBytes.data(), targetByteCount, alignof(NwbCausticEmissionTargetGpu));
+    if(!(blob.valid()))
+        return MakeUnexpected(Failure{});
+    return blob;
+}
+
+bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
+    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
+    m_preparedCausticEmissionTargetBytes.clear();
+    m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
+
+    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystemPtr)
+        return true;
+
+    auto rendererView = m_world.view<RendererComponent>();
+    const usize candidateCount = rendererView.candidateCount();
+
+    Vector<NwbCausticEmissionTargetGpu, Core::Alloc::ScratchArena> targets{ scratchArena };
+    targets.reserve(candidateCount);
+
+    SIMDVectorSingle combinedMin = VectorReplicate(s_RayTracingFiniteInfinity);
+    SIMDVectorSingle combinedMax = VectorReplicate(-s_RayTracingFiniteInfinity);
+
+    for(auto&& [entity, renderer] : rendererView){
+        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
+            continue;
+
+        const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material);
+        if(!materialInfoResult)
+            continue;
+        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
+        if(!materialInfo || !materialInfo->refractive)
+            continue;
+
+        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
+        if(!meshResult || !meshResult->meshResources.csgLocalBounds.valid())
+            continue;
+
+        const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const SIMDMatrix objectToWorld = transformPtr ? MatrixAffineTransformation(LoadFloat(transformPtr->scale), VectorZero(), LoadFloat(transformPtr->rotation), LoadFloat(transformPtr->position)) : MatrixIdentity();
+
+        SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
+        SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
+        if(meshResult->resolvedMesh.runtime){
+            // Conservative deformation inflation keeps skinned refractors in the emission domain.
+            constexpr f32 s_BoundsMidpointWeight = 0.5f;
+            const SIMDVectorSingle center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(s_BoundsMidpointWeight));
+            const SIMDVectorSingle half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(s_BoundsMidpointWeight * s_CausticRuntimeBoundsInflation));
+            localMin = VectorSubtract(center, half);
+            localMax = VectorAdd(center, half);
+        }
+        const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
+        if(!worldBounds)
+            continue;
+        const SIMDVectorSingle worldMin = worldBounds->minBounds;
+        const SIMDVectorSingle worldMax = worldBounds->maxBounds;
+
+        combinedMin = VectorMin(combinedMin, worldMin);
+        combinedMax = VectorMax(combinedMax, worldMax);
+
+        NwbCausticEmissionTargetGpu target;
+        StoreFloat(VectorSetW(worldMin, 0.0f), target.aabbMin);
+        StoreFloat(VectorSetW(worldMax, 0.0f), target.aabbMax);
+        targets.push_back(target);
+    }
+
+    const u32 targetCount = static_cast<u32>(targets.size());
+    if(targetCount == 0u){
+        m_rayTracingState.m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+        m_rayTracingState.m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+        m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
+        return true;
+    }
+
+    if(!ensureCausticEmissionTargetBuffer(targetCount))
+        return false;
+
+    const usize targetByteCount = targets.size() * sizeof(NwbCausticEmissionTargetGpu);
+    m_preparedCausticEmissionTargetBytes.resize(targetByteCount);
+    NWB_MEMCPY(m_preparedCausticEmissionTargetBytes.data(), m_preparedCausticEmissionTargetBytes.size(), targets.data(), targetByteCount);
+
+    StoreFloat(combinedMin, m_rayTracingState.m_causticTargetBoundsMin);
+    StoreFloat(combinedMax, m_rayTracingState.m_causticTargetBoundsMax);
+    m_rayTracingState.m_causticRefractiveInstanceCount = targetCount;
+
     return true;
 }
 

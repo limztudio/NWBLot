@@ -67,6 +67,7 @@ struct TaskGate{
     Atomic<bool> expired{ false };
 
 
+public:
     void block(){
         entered.store(true, MemoryOrder::release);
         if(!CpuTaskTestSupport::WaitUntil(released, s_GateTimeoutMS))
@@ -82,6 +83,7 @@ struct LifetimeProbe{
     u32 value;
 
 
+public:
     LifetimeProbe(Atomic<u32>& counter, u32 payload)noexcept
         : retirements(&counter)
         , value(payload)

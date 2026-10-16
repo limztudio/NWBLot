@@ -218,15 +218,6 @@ void InputRouter::invalidateTarget(const WidgetId id){
     reconcileTargets();
 }
 
-void InputRouter::rebuildLookup(){
-    m_lookup.clear();
-    for(usize index = 0u; index < m_targets.size(); ++index)
-        m_lookup.push_back({ m_targets[index].id.value, static_cast<u32>(index) });
-    Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
-        return lhs.value < rhs.value;
-    });
-}
-
 void InputRouter::clearFocus()noexcept{
     retireCommandFocus();
     m_focus = {};
@@ -275,6 +266,22 @@ bool InputRouter::wouldConsumePointer(const Point& position)const noexcept{
     return hasPopup() || m_capture.valid() || hitTest(position).valid();
 }
 
+void InputRouter::cancelPointerPress()noexcept{
+    m_pointerSubmitArmed = false;
+    m_secondaryOwner = {};
+    for(usize index = 0u; index < m_pointerGestures.size(); ++index){
+        if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
+            m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
+            break;
+        }
+    }
+    m_activeGestureSequence = 0u;
+    m_capture = {};
+    m_capturePopup = {};
+    m_captureDeclaration = 0u;
+    m_captureControl = {};
+}
+
 const HitTarget* InputRouter::findHitTarget(const Point& position)const noexcept{
     if(!IsFinite(position.x) || !IsFinite(position.y))
         return nullptr;
@@ -295,6 +302,15 @@ bool InputRouter::isInteractive(const HitTarget& target)const noexcept{
     const f32 right = VectorGetZ(visibleBounds);
     const f32 bottom = VectorGetW(visibleBounds);
     return target.enabled && right > left && bottom > top && allowedByPopup(target) && (!target.owner.valid() || controlHost(target) != nullptr);
+}
+
+void InputRouter::rebuildLookup(){
+    m_lookup.clear();
+    for(usize index = 0u; index < m_targets.size(); ++index)
+        m_lookup.push_back({ m_targets[index].id.value, static_cast<u32>(index) });
+    Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
+        return lhs.value < rhs.value;
+    });
 }
 
 void InputRouter::reconcileTargets()noexcept{
@@ -358,22 +374,6 @@ void InputRouter::advanceHoverActivity()noexcept{
 void InputRouter::clearHover()noexcept{
     m_hover = {};
     m_hoverIdentity = {};
-}
-
-void InputRouter::cancelPointerPress()noexcept{
-    m_pointerSubmitArmed = false;
-    m_secondaryOwner = {};
-    for(usize index = 0u; index < m_pointerGestures.size(); ++index){
-        if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
-            m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
-            break;
-        }
-    }
-    m_activeGestureSequence = 0u;
-    m_capture = {};
-    m_capturePopup = {};
-    m_captureDeclaration = 0u;
-    m_captureControl = {};
 }
 
 void InputRouter::cancelInteraction()noexcept{

@@ -6,6 +6,7 @@
 #include <impl/ecs_render/components.h>
 
 #include <core/alloc/general.h>
+
 #include <gtest/gtest.h>
 
 #include <global/floating_point_environment.h>

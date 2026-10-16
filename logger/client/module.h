@@ -87,6 +87,7 @@ protected:
         return !m_hasPendingPayload && !m_messageCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
     }
 
+
 protected:
     inline void enqueue(MessageType&& data){
         this->m_messageQueue.emplace(Move(data));
@@ -114,6 +115,7 @@ private:
     AString<LogArena> m_telemetryUrl;
     ClientPayloadKind::Enum m_pendingPayloadKind;
     bool m_hasPendingPayload;
+
 
 private:
     Atomic<usize> m_messageCount;
@@ -147,6 +149,7 @@ public:
 protected:
     bool internalInit(BasicStringView<tchar> logFileNameBase = {});
     bool internalUpdate();
+
 
 protected:
     using UpdateBaseType::enqueue;

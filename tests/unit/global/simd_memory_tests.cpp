@@ -52,9 +52,12 @@ struct AlignedPacketView{
     using value_type = AlignedPacket;
 
 
+public:
     const AlignedPacket* values = nullptr;
     usize valueCount = 0u;
 
+
+public:
     [[nodiscard]] bool empty()const noexcept{ return valueCount == 0u; }
 
     [[nodiscard]] usize size()const noexcept{ return valueCount; }
@@ -71,6 +74,8 @@ struct GuardedBytes final : NoCopy{
     usize accessibleBytes = 0u;
     usize mappingBytes = 0u;
 
+
+public:
     GuardedBytes()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
         SYSTEM_INFO systemInfo{};

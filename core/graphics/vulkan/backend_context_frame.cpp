@@ -18,6 +18,19 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(void* const context, const u64 identity, const GpuPhysicalQueueId& executionQueue){
+    if(!context)
+        return MakeUnexpected(Failure{});
+    return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(identity, executionQueue);
+}
+
+bool BackendContext::InvokeFramePresentationSignalResolution(void* const context, const u64 identity, const QueueSubmissionToken& token)noexcept{
+    if(!context)
+        return false;
+    return static_cast<BackendContext*>(context)->resolveFramePresentationSignal(identity, token);
+}
+
+
 Texture* BackendContext::getBackBuffer(u32 index)const noexcept{
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
@@ -47,10 +60,175 @@ QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexc
     return QueueSubmissionPreSubmitHook{ .context = this, .identity = m_framePresentationClaimIdentity, .invoke = &BackendContext::InvokeFramePresentationSignalPreparation, .resolved = &BackendContext::InvokeFramePresentationSignalResolution, };
 }
 
-Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(void* const context, const u64 identity, const GpuPhysicalQueueId& executionQueue){
-    if(!context)
-        return MakeUnexpected(Failure{});
-    return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(identity, executionQueue);
+bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
+    NothrowScopedLock presentationLock(m_framePresentationMutex);
+    return m_framePresentationClaimsEnabled
+        && claim.context == this
+        && claim.identity != 0u
+        && claim.identity == m_framePresentationClaimIdentity
+        && claim.invoke == &BackendContext::InvokeFramePresentationSignalPreparation
+        && claim.resolved == &BackendContext::InvokeFramePresentationSignalResolution
+        && m_framePresentationSignalState == FramePresentationSignalState::Accepted
+        && token.valid()
+        && token.queue == m_framePresentationSubmission.queue
+        && token.value == m_framePresentationSubmission.value
+        && token.physicalQueueIndex == m_framePresentationSubmission.physicalQueueIndex
+        && token.deviceGeneration == m_framePresentationSubmission.deviceGeneration
+    ;
+}
+
+bool BackendContext::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
+    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
+    const bool result = cancelFramePresentationSignalDeferred(&claim, lifecycleLock);
+    DeviceHandle device = m_rhiDevice;
+    if(lifecycleLock.owns_lock())
+        lifecycleLock.unlock();
+    if(!result && device && device->isDeviceLost())
+        device->captureDeviceLoss(VulkanArenaScope::s_PresentationSignalCancellationContext);
+    return result;
+}
+
+void BackendContext::clearSemaphores(SemaphoreVector& semaphores)noexcept{
+    if(m_vulkanDevice){
+        for(auto& semaphore : semaphores){
+            if(semaphore)
+                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
+            semaphore = VK_NULL_HANDLE;
+        }
+    }
+    semaphores.clear();
+}
+
+bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
+    VkResult res = VK_SUCCESS;
+
+    clearSemaphores(semaphores);
+    semaphores.reserve(count);
+
+    VkSemaphoreCreateInfo semInfo = {};
+    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    for(usize i = 0u; i < count; ++i){
+        VkSemaphore sem = VK_NULL_HANDLE;
+        res = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}. {}"), StringConvert(operationName), ResultToString(res));
+            clearSemaphores(semaphores);
+            return false;
+        }
+        semaphores.push_back(sem);
+    }
+
+    return true;
+}
+
+void BackendContext::clearAcquireSyncSlots()noexcept{
+    if(m_vulkanDevice){
+        for(AcquireSyncSlot& slot : m_acquireSyncSlots){
+            if(slot.fence)
+                m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
+            if(slot.semaphore)
+                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
+            slot = {};
+        }
+    }
+    m_acquireSyncSlots.clear();
+    m_acquireSyncSlotIndex = 0u;
+    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
+}
+
+bool BackendContext::recreateAcquireSyncSlots(const usize count){
+    clearAcquireSyncSlots();
+    m_acquireSyncSlots.reserve(count);
+
+    VkSemaphoreCreateInfo semaphoreInfo = {};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    for(usize index = 0u; index < count; ++index){
+        AcquireSyncSlot slot;
+        ScopeExit destroyUnpublishedSlot([&]()noexcept{
+            if(slot.fence)
+                m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
+            if(slot.semaphore)
+                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
+        });
+
+        VkResult result = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &slot.semaphore);
+        if(result == VK_SUCCESS)
+            result = m_deviceDispatch.vkCreateFence(m_vulkanDevice, &fenceInfo, nullptr, &slot.fence);
+        if(result != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire synchronization slot {}. {}"), index, ResultToString(result));
+            clearAcquireSyncSlots();
+            return false;
+        }
+        m_acquireSyncSlots.push_back(slot);
+        destroyUnpublishedSlot.release();
+    }
+    return true;
+}
+
+bool BackendContext::prepareAcquireSyncSlot(AcquireSyncSlot& slot){
+    if(slot.state == AcquireSyncSlotState::Idle){
+        return slot.semaphore != VK_NULL_HANDLE && slot.fence != VK_NULL_HANDLE && !slot.consumerToken.valid();
+    }
+    if(slot.state != AcquireSyncSlotState::ConsumerAccepted || !m_rhiDevice || !m_rhiDevice->waitForSubmissionTokenInternal(slot.consumerToken, Device::DeviceLossDiagnosticPolicy::Defer))
+        return false;
+
+    VkResult result = m_deviceDispatch.vkWaitForFences(m_vulkanDevice, 1u, &slot.fence, VK_TRUE, UINT64_MAX);
+    if(result == VK_SUCCESS)
+        result = m_deviceDispatch.vkResetFences(m_vulkanDevice, 1u, &slot.fence);
+    if(result != VK_SUCCESS){
+        if(result == VK_ERROR_DEVICE_LOST)
+            m_rhiDevice->markDeviceLost();
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to prepare an acquire synchronization slot for reuse. {}"), ResultToString(result));
+        return false;
+    }
+
+    slot.consumerToken = {};
+    slot.state = AcquireSyncSlotState::Idle;
+    return true;
+}
+
+bool BackendContext::waitAcquireSyncSlotsForLifecycle(){
+    if(!m_vulkanDevice)
+        return m_acquireSyncSlots.empty();
+
+    for(AcquireSyncSlot& slot : m_acquireSyncSlots){
+        if(slot.state == AcquireSyncSlotState::Idle)
+            continue;
+        const VkResult result = m_deviceDispatch.vkWaitForFences(m_vulkanDevice, 1u, &slot.fence, VK_TRUE, UINT64_MAX);
+        if(result == VK_SUCCESS)
+            continue;
+        if(result == VK_ERROR_DEVICE_LOST && m_rhiDevice)
+            m_rhiDevice->markDeviceLost();
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to join a WSI acquire fence during lifecycle transition. {}"), ResultToString(result));
+        return false;
+    }
+    return true;
+}
+
+bool BackendContext::createFrameSyncQueries(){
+    if(!m_rhiDevice)
+        return false;
+
+    // One fence per in-flight frame, created with device/swap-chain resources so present() only recycles.
+    while(!m_framesInFlight.empty())
+        m_framesInFlight.pop();
+    m_queryPool.clear();
+    m_queryPool.reserve(m_maxFramesInFlight);
+
+    for(u32 index = 0u; index < m_maxFramesInFlight; ++index){
+        EventQueryHandle query = m_rhiDevice->createEventQuery();
+        if(!query){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create frame synchronization query {} of {}"), index + 1u, m_maxFramesInFlight);
+            m_queryPool.clear();
+            return false;
+        }
+        m_queryPool.push_back(Move(query));
+    }
+
+    return true;
 }
 
 Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSignal(const u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept{
@@ -89,12 +267,6 @@ Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSi
     m_framePresentationQueue = executionQueue;
     m_framePresentationSignalState = FramePresentationSignalState::Queued;
     return signal;
-}
-
-bool BackendContext::InvokeFramePresentationSignalResolution(void* const context, const u64 identity, const QueueSubmissionToken& token)noexcept{
-    if(!context)
-        return false;
-    return static_cast<BackendContext*>(context)->resolveFramePresentationSignal(identity, token);
 }
 
 bool BackendContext::resolveFramePresentationSignal(const u64 identity, const QueueSubmissionToken& token)noexcept{
@@ -138,23 +310,6 @@ bool BackendContext::resolveFramePresentationSignal(const u64 identity, const Qu
     return resolved;
 }
 
-bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
-    NothrowScopedLock presentationLock(m_framePresentationMutex);
-    return m_framePresentationClaimsEnabled
-        && claim.context == this
-        && claim.identity != 0u
-        && claim.identity == m_framePresentationClaimIdentity
-        && claim.invoke == &BackendContext::InvokeFramePresentationSignalPreparation
-        && claim.resolved == &BackendContext::InvokeFramePresentationSignalResolution
-        && m_framePresentationSignalState == FramePresentationSignalState::Accepted
-        && token.valid()
-        && token.queue == m_framePresentationSubmission.queue
-        && token.value == m_framePresentationSubmission.value
-        && token.physicalQueueIndex == m_framePresentationSubmission.physicalQueueIndex
-        && token.deviceGeneration == m_framePresentationSubmission.deviceGeneration
-    ;
-}
-
 bool BackendContext::replaceFramePresentationSemaphoreAfterIdle(){
     if(!m_vulkanDevice || m_framePresentationSemaphore == VK_NULL_HANDLE || m_framePresentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[m_framePresentationSwapChainIndex] != m_framePresentationSemaphore)
         return false;
@@ -182,17 +337,6 @@ void BackendContext::resetFramePresentationSignal()noexcept{
     m_framePresentationClaimIdentity = 0u;
     m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     m_framePresentationSignalState = FramePresentationSignalState::Idle;
-}
-
-bool BackendContext::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
-    UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
-    const bool result = cancelFramePresentationSignalDeferred(&claim, lifecycleLock);
-    DeviceHandle device = m_rhiDevice;
-    if(lifecycleLock.owns_lock())
-        lifecycleLock.unlock();
-    if(!result && device && device->isDeviceLost())
-        device->captureDeviceLoss(VulkanArenaScope::s_PresentationSignalCancellationContext);
-    return result;
 }
 
 bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* const claim, UniqueLock<Futex>& lifecycleLock){
@@ -291,149 +435,6 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
     }
     resetFramePresentationSignal();
     m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
-    return true;
-}
-
-void BackendContext::clearSemaphores(SemaphoreVector& semaphores)noexcept{
-    if(m_vulkanDevice){
-        for(auto& semaphore : semaphores){
-            if(semaphore)
-                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
-            semaphore = VK_NULL_HANDLE;
-        }
-    }
-    semaphores.clear();
-}
-
-bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
-    VkResult res = VK_SUCCESS;
-
-    clearSemaphores(semaphores);
-    semaphores.reserve(count);
-
-    VkSemaphoreCreateInfo semInfo = {};
-    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    for(usize i = 0u; i < count; ++i){
-        VkSemaphore sem = VK_NULL_HANDLE;
-        res = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}. {}"), StringConvert(operationName), ResultToString(res));
-            clearSemaphores(semaphores);
-            return false;
-        }
-        semaphores.push_back(sem);
-    }
-
-    return true;
-}
-
-bool BackendContext::createFrameSyncQueries(){
-    if(!m_rhiDevice)
-        return false;
-
-    // One fence per in-flight frame, created with device/swap-chain resources so present() only recycles.
-    while(!m_framesInFlight.empty())
-        m_framesInFlight.pop();
-    m_queryPool.clear();
-    m_queryPool.reserve(m_maxFramesInFlight);
-
-    for(u32 index = 0u; index < m_maxFramesInFlight; ++index){
-        EventQueryHandle query = m_rhiDevice->createEventQuery();
-        if(!query){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create frame synchronization query {} of {}"), index + 1u, m_maxFramesInFlight);
-            m_queryPool.clear();
-            return false;
-        }
-        m_queryPool.push_back(Move(query));
-    }
-
-    return true;
-}
-
-void BackendContext::clearAcquireSyncSlots()noexcept{
-    if(m_vulkanDevice){
-        for(AcquireSyncSlot& slot : m_acquireSyncSlots){
-            if(slot.fence)
-                m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
-            if(slot.semaphore)
-                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
-            slot = {};
-        }
-    }
-    m_acquireSyncSlots.clear();
-    m_acquireSyncSlotIndex = 0u;
-    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
-}
-
-bool BackendContext::recreateAcquireSyncSlots(const usize count){
-    clearAcquireSyncSlots();
-    m_acquireSyncSlots.reserve(count);
-
-    VkSemaphoreCreateInfo semaphoreInfo = {};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    VkFenceCreateInfo fenceInfo = {};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    for(usize index = 0u; index < count; ++index){
-        AcquireSyncSlot slot;
-        ScopeExit destroyUnpublishedSlot([&]()noexcept{
-            if(slot.fence)
-                m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
-            if(slot.semaphore)
-                m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
-        });
-
-        VkResult result = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &slot.semaphore);
-        if(result == VK_SUCCESS)
-            result = m_deviceDispatch.vkCreateFence(m_vulkanDevice, &fenceInfo, nullptr, &slot.fence);
-        if(result != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire synchronization slot {}. {}"), index, ResultToString(result));
-            clearAcquireSyncSlots();
-            return false;
-        }
-        m_acquireSyncSlots.push_back(slot);
-        destroyUnpublishedSlot.release();
-    }
-    return true;
-}
-
-bool BackendContext::prepareAcquireSyncSlot(AcquireSyncSlot& slot){
-    if(slot.state == AcquireSyncSlotState::Idle){
-        return slot.semaphore != VK_NULL_HANDLE && slot.fence != VK_NULL_HANDLE && !slot.consumerToken.valid();
-    }
-    if(slot.state != AcquireSyncSlotState::ConsumerAccepted || !m_rhiDevice || !m_rhiDevice->waitForSubmissionTokenInternal(slot.consumerToken, Device::DeviceLossDiagnosticPolicy::Defer))
-        return false;
-
-    VkResult result = m_deviceDispatch.vkWaitForFences(m_vulkanDevice, 1u, &slot.fence, VK_TRUE, UINT64_MAX);
-    if(result == VK_SUCCESS)
-        result = m_deviceDispatch.vkResetFences(m_vulkanDevice, 1u, &slot.fence);
-    if(result != VK_SUCCESS){
-        if(result == VK_ERROR_DEVICE_LOST)
-            m_rhiDevice->markDeviceLost();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to prepare an acquire synchronization slot for reuse. {}"), ResultToString(result));
-        return false;
-    }
-
-    slot.consumerToken = {};
-    slot.state = AcquireSyncSlotState::Idle;
-    return true;
-}
-
-bool BackendContext::waitAcquireSyncSlotsForLifecycle(){
-    if(!m_vulkanDevice)
-        return m_acquireSyncSlots.empty();
-
-    for(AcquireSyncSlot& slot : m_acquireSyncSlots){
-        if(slot.state == AcquireSyncSlotState::Idle)
-            continue;
-        const VkResult result = m_deviceDispatch.vkWaitForFences(m_vulkanDevice, 1u, &slot.fence, VK_TRUE, UINT64_MAX);
-        if(result == VK_SUCCESS)
-            continue;
-        if(result == VK_ERROR_DEVICE_LOST && m_rhiDevice)
-            m_rhiDevice->markDeviceLost();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to join a WSI acquire fence during lifecycle transition. {}"), ResultToString(result));
-        return false;
-    }
     return true;
 }
 

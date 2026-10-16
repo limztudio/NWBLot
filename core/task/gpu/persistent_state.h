@@ -27,6 +27,7 @@ public:
     class Candidate final : NoCopy{
         friend class GpuPersistentResourceStateCache;
 
+
     public:
         explicit Candidate(const GpuPersistentResourceStateCache& owner)
             : m_owner(owner)

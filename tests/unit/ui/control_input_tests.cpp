@@ -114,7 +114,7 @@ protected:
             ++target.control.contentRevision;
     }
 
-    [[nodiscard]] Expected<ControlAction> take(){
+    [[nodiscard]] Expected<ControlAction> take()noexcept{
         return m_router.consumeControlAction(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
     }
 

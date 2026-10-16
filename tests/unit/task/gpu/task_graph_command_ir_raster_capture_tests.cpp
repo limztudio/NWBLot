@@ -32,6 +32,8 @@ using namespace TaskGraphTestUtils;
 struct OwnerReleaseProbe{
     u32* releases = nullptr;
 
+
+public:
     explicit OwnerReleaseProbe(u32& value)noexcept : releases(&value){}
     OwnerReleaseProbe(const OwnerReleaseProbe&) = delete;
     OwnerReleaseProbe(OwnerReleaseProbe&& other)noexcept : releases(Exchange(other.releases, nullptr)){}

@@ -12,7 +12,9 @@
 #include <global/text_utils.h>
 
 #include <cerrno>
+
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 #include <tbb/scalable_allocator.h>
 

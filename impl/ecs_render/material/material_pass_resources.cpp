@@ -104,35 +104,6 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
     return prepareMaterialPassResourceBindingsImpl(drawItems, true);
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, const bool computeEmulation){
-    if(drawItems.empty())
-        return true;
-
-    bool ready = true;
-    for(const MaterialPassDrawItem& drawItem : drawItems){
-        if(!ready)
-            break;
-
-        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
-
-        if(!computeEmulation){
-            ready = pipelineResources.meshletPipeline && mesh.valid();
-            continue;
-        }
-
-        ready = pipelineResources.computePipeline
-            && pipelineResources.emulationPipeline
-            && mesh.valid()
-            && mesh.emulationVertexBuffer
-            && mesh.emulationVertexHeapHandle.valid()
-            && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-            && (!pipelineResources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
-        ;
-    }
-    return ready;
-}
-
 bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
         return true;
@@ -242,6 +213,35 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDa
     const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
     for(InstanceGpuData& instance : instanceData)
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
+}
+
+bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, const bool computeEmulation){
+    if(drawItems.empty())
+        return true;
+
+    bool ready = true;
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        if(!ready)
+            break;
+
+        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
+        const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
+
+        if(!computeEmulation){
+            ready = pipelineResources.meshletPipeline && mesh.valid();
+            continue;
+        }
+
+        ready = pipelineResources.computePipeline
+            && pipelineResources.emulationPipeline
+            && mesh.valid()
+            && mesh.emulationVertexBuffer
+            && mesh.emulationVertexHeapHandle.valid()
+            && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            && (!pipelineResources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
+        ;
+    }
+    return ready;
 }
 
 

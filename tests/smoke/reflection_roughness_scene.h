@@ -8,6 +8,7 @@
 #include "smoke_scene_helpers.h"
 
 #include <loader/project_entry.h>
+
 #include <impl/assets_skeleton/asset.h>
 
 
@@ -33,6 +34,9 @@ namespace ReflectionRoughnessCase{
 class ReflectionRoughnessScene final{
 public:
     ReflectionRoughnessScene(ProjectRuntimeContext& context, Core::ECS::World& world, Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness);
+
+
+public:
     [[nodiscard]] bool create(AStringView caseName, bool finalState);
     [[nodiscard]] bool mutationCase()const noexcept{ return m_case >= ReflectionRoughnessCase::Camera && m_case <= ReflectionRoughnessCase::Deform; }
     [[nodiscard]] bool deforming()const noexcept{ return m_case == ReflectionRoughnessCase::Deform || m_case == ReflectionRoughnessCase::StaticDeform; }

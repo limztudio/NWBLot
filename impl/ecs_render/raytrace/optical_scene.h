@@ -69,6 +69,9 @@ struct RayTracingOpticalSceneGather{
     bool unspecifiedBoundariesOnly = true;
 
     explicit RayTracingOpticalSceneGather(Core::Alloc::ScratchArena& arena, usize capacity);
+
+
+public:
     void append(Core::ECS::EntityID entity, const RendererComponent& renderer, bool transparent, const Float3U& boundsMin, const Float3U& boundsMax, bool boundsValid);
     void appendRuntime(Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, Core::GpuDescriptorHandle boundsDescriptor, const Float34U& objectToWorld);
     void markIncomplete()noexcept{

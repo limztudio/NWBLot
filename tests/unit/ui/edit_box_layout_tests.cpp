@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/widgets/edit_box.h>
+
 #include "fixture_text_shaping.h"
 
 #include <tests/common/font_fixture.h>
@@ -411,8 +412,7 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
     EditBoxPaintFlags flags;
     flags.focused = true;
     for(const f32 scale : { 1.0f, 2.0f }){
-        paint.begin({ 200.0f, 100.0f, scale, scale }, static_cast<u64>(scale), 1u,
-            Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
+        paint.begin({ 200.0f, 100.0f, scale, scale }, static_cast<u64>(scale), 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
         ASSERT_TRUE(m_view.paint(service, paint, skin, m_placement, {}, flags));
         EXPECT_FALSE(paint.popClip());
         const auto snapshot = paint.freeze();

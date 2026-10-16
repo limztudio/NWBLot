@@ -11,7 +11,6 @@
 #include "skin_selection.h"
 
 #include <impl/ecs_ui/toolkit/input/pointer.h>
-
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
 #include <core/ecs/system.h>

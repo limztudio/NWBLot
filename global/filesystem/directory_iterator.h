@@ -81,6 +81,8 @@ private:
         : BaseType(path)
     {}
 
+
+private:
     [[nodiscard]] Expected<void, ErrorCode> collect(const Path<ArenaT>& path){
         ErrorCode iterationError;
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -153,6 +155,8 @@ private:
         : BaseType(path)
     {}
 
+
+private:
     [[nodiscard]] Expected<void, ErrorCode> collect(const Path<ArenaT>& path){
         const auto directory = DirectoryIterator<ArenaT>::Create(path);
         if(!directory)

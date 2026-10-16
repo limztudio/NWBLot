@@ -2,21 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.h>
-
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/simd/frame.h>
-#include <global/simdmath.h>
-#include <impl/ecs_csg/module.h>
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_render/module.h>
-
 #include "csg_smoke_helpers.h"
 #include "framebuffer_capture.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
+
+#include <loader/project_entry.h>
+
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_render/module.h>
+
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/frame.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,6 +102,8 @@ private:
         return world;
     }
 
+
+private:
     bool readMode(){
         if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_ARM")){
             const AStringView arm(value->data(), value->size());
@@ -390,6 +394,8 @@ public:
 
     virtual ~CsgShadowSmokeProject()override{ destroyWorld(); }
 
+
+public:
     virtual bool onStartup()override{
         if(!readMode())
             return false;
@@ -488,7 +494,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
-TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB CSG Shadow Smoke"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB CSG Shadow Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_csg_shadow_smoke::CsgShadowSmokeProject>(context);
 }

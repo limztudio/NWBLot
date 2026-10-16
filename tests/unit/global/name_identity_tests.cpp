@@ -37,11 +37,13 @@ struct NameSymbolCallbackProbe{
     u32 recordCount = 0u;
     u32 resolveCount = 0u;
 
+
+public:
     NameSymbolCallbackProbe(){
         SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
             ++static_cast<NameSymbolCallbackProbe*>(context)->recordCount;
         }, this);
-        SetNameSymbolResolveCallback([](const NameHash&, char*, usize, void* context){
+        SetNameSymbolResolveCallback([](const NameHash&, char*, usize, void* context)noexcept{
             ++static_cast<NameSymbolCallbackProbe*>(context)->resolveCount;
             return false;
         }, this);

@@ -28,9 +28,6 @@ struct DeferredFrameTargets;
 // Separated from RendererFramePipeline::render(): the history-copy context plus its recorded/accepted callbacks are one functionality — build filtered subsets for the three return states, then commit them together on acceptance.
 class FrameExecuteHistoryCopy final{
 public:
-    FrameExecuteHistoryCopy() = delete;
-
-
     struct Context{
         Core::Alloc::ScratchArena& scratchArena;
         RendererFramePipeline* renderer = nullptr;
@@ -43,8 +40,13 @@ public:
     };
 
 
+public:
     [[nodiscard]] static bool PrepareHistoryCopyFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
     [[nodiscard]] static bool AcceptHistoryCopyFinalState(void* rawContext, const Core::QueueSubmissionToken& token);
+
+
+public:
+    FrameExecuteHistoryCopy() = delete;
 };
 
 

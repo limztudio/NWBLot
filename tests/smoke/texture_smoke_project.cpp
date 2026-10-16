@@ -2,21 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.h>
-
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/simd/frame.h>
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/module.h>
-
 #include "framebuffer_capture.h"
 #include "smoke_capture_teardown.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
+
+#include <loader/project_entry.h>
+
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_render/module.h>
+
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/frame.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +77,8 @@ private:
         return world;
     }
 
+
+private:
     bool configureFramebufferCapture(){
         auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("TextureSmokeProject"), s_FramebufferCaptureDefaultFrameCount);
         if(!capture)
@@ -163,7 +167,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Texture Smoke");
 }
 

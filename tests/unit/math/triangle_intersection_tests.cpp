@@ -5,6 +5,7 @@
 #include <core/common/module.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 #include <global/floating_point_environment.h>

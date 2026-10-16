@@ -115,6 +115,8 @@ struct GraphicsPipelineDesc{
 
     ~GraphicsPipelineDesc();
 
+
+public:
     constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
     constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value)noexcept{ patchControlPoints = value; return *this; }
     GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value)noexcept;
@@ -140,6 +142,8 @@ struct ComputePipelineDesc{
 
     ~ComputePipelineDesc();
 
+
+public:
     ComputePipelineDesc& setComputeShader(const ShaderHandle& value)noexcept;
     ComputePipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
@@ -159,6 +163,8 @@ struct MeshletPipelineDesc{
 
     ~MeshletPipelineDesc();
 
+
+public:
     constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
     MeshletPipelineDesc& setTaskShader(const ShaderHandle& value)noexcept;
     MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value)noexcept;
@@ -179,6 +185,8 @@ struct RayTracingPipelineShaderDesc{
 
     ~RayTracingPipelineShaderDesc();
 
+
+public:
     RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value)noexcept;
     RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value)noexcept;
     RayTracingPipelineShaderDesc& setExportName(AStringView value)noexcept{ exportName = value; return *this; }
@@ -195,6 +203,8 @@ struct RayTracingPipelineHitGroupDesc{
 
     ~RayTracingPipelineHitGroupDesc();
 
+
+public:
     RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value)noexcept;
     RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value)noexcept;
     RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value)noexcept;
@@ -222,6 +232,8 @@ struct RayTracingPipelineDesc{
     {}
     ~RayTracingPipelineDesc();
 
+
+public:
     RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value);
     RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value);
     RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value);

@@ -5,6 +5,7 @@
 #include <impl/ecs_ui/clipboard_publications.h>
 
 #include <core/os/clipboard_service.h>
+
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>

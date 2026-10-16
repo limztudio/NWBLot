@@ -3,6 +3,7 @@
 
 
 #include <core/os/clipboard_service.h>
+
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>

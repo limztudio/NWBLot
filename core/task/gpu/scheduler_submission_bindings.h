@@ -53,6 +53,9 @@ struct TaskSubmissionBindings : NoCopy{
 
 
     // The caller holds validated declaration and compiled-plan views for the admitted packet range.
+
+
+public:
     [[nodiscard]] bool resolve(
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess,

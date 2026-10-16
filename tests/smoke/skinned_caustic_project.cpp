@@ -2,17 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "csg_smoke_helpers.h"
+#include "framebuffer_capture.h"
+#include "fps_probe.h"
+#include "gpu_pass_timing_probe.h"
+#include "smoke_project_helpers.h"
+#include "smoke_scene_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
+
 #include <loader/project_entry.h>
 
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/telemetry/frame_graph_contributor.h>
-#include <global/assert.h>
-#include <global/simd/frame.h>
-#include <global/timer.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
@@ -26,13 +25,16 @@
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include "csg_smoke_helpers.h"
-#include "framebuffer_capture.h"
-#include "fps_probe.h"
-#include "gpu_pass_timing_probe.h"
-#include "smoke_project_helpers.h"
-#include "smoke_scene_helpers.h"
-#include "smoke_skinned_scene_helpers.h"
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/telemetry/frame_graph_contributor.h>
+
+#include <global/assert.h>
+#include <global/simd/frame.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -510,7 +512,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Skinned Caustic Smoke");
 }
 

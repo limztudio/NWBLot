@@ -333,13 +333,15 @@ struct MaterialResourceReference{
 
 class Material final : public Core::Assets::TypedAsset<Material>{
 public:
-    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
-
-    using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, s_ShaderStageCount>;
+    using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, static_cast<usize>(Core::ShaderType::Count)>;
     using TypedLayoutBlockVector = Core::Assets::AssetVector<MaterialTypedLayoutBlock>;
     using TypedLayoutFieldVector = Core::Assets::AssetVector<MaterialTypedLayoutField>;
     using TypedBlockByteVector = Core::Assets::AssetVector<u8>;
     using ResourceReferenceVector = Core::Assets::AssetVector<MaterialResourceReference>;
+
+
+public:
+    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
 
 
 public:

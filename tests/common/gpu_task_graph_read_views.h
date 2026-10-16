@@ -27,6 +27,8 @@ struct GpuTaskGraphReadViews final : NoCopy{
     Core::GpuTaskGraph::DeclarationReadView declarations;
     Core::GpuCompiledGraph::ReadView compiled;
 
+
+public:
     GpuTaskGraphReadViews(const Core::GpuTaskGraph& graph, const Core::GpuCompiledGraph& compiledGraph)
         : declarations(graph)
         , compiled(compiledGraph)
@@ -36,6 +38,8 @@ struct GpuTaskGraphReadViews final : NoCopy{
     GpuTaskGraphReadViews& operator=(const GpuTaskGraphReadViews&) = delete;
     GpuTaskGraphReadViews& operator=(GpuTaskGraphReadViews&&) = delete;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return declarations.valid() && compiled.valid() && compiled.validFor(declarations);
     }

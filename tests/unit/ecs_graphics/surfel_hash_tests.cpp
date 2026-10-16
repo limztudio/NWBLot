@@ -27,6 +27,8 @@ struct ShaderInt3{
     i32 y;
     i32 z;
 
+
+public:
     ShaderInt3(const i32 xValue, const i32 yValue, const i32 zValue)noexcept
         : x(xValue)
         , y(yValue)

@@ -2,25 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.h>
-
-#include <core/common/log.h>
-#include <core/ecs/entity.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/render_pass.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/telemetry/frame_graph_contributor.h>
-#include <global/simd/constant.h>
-#include <global/simd/convert.h>
-#include <global/simd/frame.h>
-#include <impl/assets/graphics/reflection/depth_constants.h>
-#include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/reflection/timing_names.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.h>
-#include <impl/ecs_scene/module.h>
-
 #include "framebuffer_capture.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
@@ -34,6 +15,27 @@
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
+
+#include <loader/project_entry.h>
+
+#include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/assets/graphics/reflection/frame_constants.h>
+#include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/reflection/timing_names.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.h>
+#include <impl/ecs_scene/module.h>
+
+#include <core/common/log.h>
+#include <core/ecs/entity.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/runtime/render_pass.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/telemetry/frame_graph_contributor.h>
+
+#include <global/simd/constant.h>
+#include <global/simd/convert.h>
+#include <global/simd/frame.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -147,6 +149,8 @@ public:
         , m_renderer(CreateReflectionRenderer(*m_world, context)){}
     virtual ~ReflectionSmokeProject()override{ destroyWorld(); }
 
+
+public:
     virtual bool onStartup()override{
         const auto caseText = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_CASE");
         const bool hasCase = caseText.has_value();
@@ -349,7 +353,7 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}"), m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u);
     }
 
-    bool shouldCapture(const u64 graphicsFrame)const{
+    bool shouldCapture(const u64 graphicsFrame)const noexcept{
         if(m_spatialOwnerProbe)
             return m_spatialOwnerProbe->shouldCapture(graphicsFrame);
         if(m_feedbackScene && m_feedbackScene->mutationCase())
@@ -546,7 +550,7 @@ private:
             }
             options.quitWhenReady = false;
             options.predicateContext = this;
-            options.shouldCapture = [](void* owner, const u64 graphicsFrame){
+            options.shouldCapture = [](void* owner, const u64 graphicsFrame)noexcept{
                 return static_cast<ReflectionSmokeProject*>(owner)->shouldCapture(graphicsFrame);
             };
         }
@@ -702,7 +706,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB_FATAL_ASSERT_MSG(*extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
     return { 953, 713 };
 }
-TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Reflection Smoke"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Reflection Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_reflection_smoke::ReflectionSmokeProject>(context);
 }

@@ -8,6 +8,7 @@
 #include <global/thread.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 

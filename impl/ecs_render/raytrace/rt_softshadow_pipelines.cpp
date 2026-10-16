@@ -61,6 +61,42 @@ namespace __hidden_softshadow_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets){
+    if(!m_rayTracingState.m_softShadowTemporalHistoryAdvancePending)
+        return;
+
+    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
+    swapSoftShadowTemporalHistory(targets);
+}
+
+void RendererRayTracingSystem::discardSoftShadowTemporalHistory(){
+    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
+    m_rayTracingState.m_transparentShadowSamplingHistory.discardPending();
+}
+
+bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
+    auto& resolve = m_rayTracingState.m_softShadowResolve;
+    if(resolve.m_scalar.m_wavelet.m_pipeline && resolve.m_scalar.m_upsample.m_pipeline)
+        return true;
+    if(resolve.m_scalar.m_failed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    if(!device.getDescriptorHeap().isInitialized())
+        return false;
+    if(!resolve.m_bindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
+        resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
+        if(!resolve.m_bindingLayout){
+            resolve.m_scalar.m_failed = true;
+            return false;
+        }
+    }
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveShaderName, resolve.m_scalar);
+}
+
 bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(m_rayTracingState.m_shadowGeometryDownsamplePipeline)
         return true;
@@ -93,29 +129,6 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
         return false;
     }
     return true;
-}
-
-bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
-    auto& resolve = m_rayTracingState.m_softShadowResolve;
-    if(resolve.m_scalar.m_wavelet.m_pipeline && resolve.m_scalar.m_upsample.m_pipeline)
-        return true;
-    if(resolve.m_scalar.m_failed)
-        return false;
-
-    auto& device = m_graphics.getDevice();
-    if(!device.getDescriptorHeap().isInitialized())
-        return false;
-    if(!resolve.m_bindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
-        resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
-        if(!resolve.m_bindingLayout){
-            resolve.m_scalar.m_failed = true;
-            return false;
-        }
-    }
-    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveShaderName, resolve.m_scalar);
 }
 
 bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
@@ -304,19 +317,6 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
     Swap(targets.bindless.shadowSoftGeometry, targets.bindless.shadowSoftGeometryPrev);
     Swap(targets.bindless.shadowSoftGeometryStorage, targets.bindless.shadowSoftGeometryPrevStorage);
     m_rayTracingState.m_softShadowHistoryFrontIsA ^= 1u;
-}
-
-void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets){
-    if(!m_rayTracingState.m_softShadowTemporalHistoryAdvancePending)
-        return;
-
-    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
-    swapSoftShadowTemporalHistory(targets);
-}
-
-void RendererRayTracingSystem::discardSoftShadowTemporalHistory(){
-    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
-    m_rayTracingState.m_transparentShadowSamplingHistory.discardPending();
 }
 
 

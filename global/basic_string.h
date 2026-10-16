@@ -92,6 +92,9 @@ struct ConstString{
             data[i] = str[i];
     }
     constexpr operator AStringView()const noexcept{ return AStringView(data, N - 1u); }
+
+
+public:
     constexpr const char* c_str()const noexcept{ return data; }
 };
 template<usize N>
@@ -102,6 +105,9 @@ struct ConstWString{
             data[i] = str[i];
     }
     constexpr operator WStringView()const noexcept{ return WStringView(data, N - 1u); }
+
+
+public:
     constexpr const wchar* c_str()const noexcept{ return data; }
 };
 #if defined(NWB_UNICODE)

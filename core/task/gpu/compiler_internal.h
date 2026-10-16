@@ -143,6 +143,7 @@ class GpuTaskSchedulingReachability final : NoCopy{
     friend struct GpuTaskQueueScoringData;
     friend bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability);
 
+
 private:
     struct WordRange{
         usize m_begin = 0u;
@@ -198,6 +199,7 @@ struct GpuTaskQueueScoringData{
     GpuTaskQueueScoringData(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, const GpuTaskSchedulingReachability& reachability, const GpuTaskGraphQueueAssignmentOptions& options, Alloc::ScratchArena& scratchArena);
 
 
+public:
     [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;

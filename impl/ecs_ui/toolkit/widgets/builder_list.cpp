@@ -21,11 +21,7 @@ NWB_IMPL_UI_BEGIN
 
 ListResult Builder::virtualList(const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
     ListResult result;
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
-        || m_scope->m_items.size() >= s_LayoutMaxNodes
-        || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
-    ){
+    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f){
         m_context.fail();
         return result;
     }

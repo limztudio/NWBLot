@@ -101,6 +101,8 @@ struct OpaqueMaterialPassGraphSnapshot{
         , csgCutters(arena)
     {}
 
+
+public:
     void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
         CaptureMaterialPassSnapshot(*this, drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
         ReplaceSnapshotVector(csgReceiverSurfaceMeshDrawItems, drawItems.csgReceiverSurface.meshDrawItems);
@@ -141,6 +143,8 @@ struct TransparentCsgIntervalGraphSnapshot{
         , csgCutters(arena)
     {}
 
+
+public:
     void capture(const MaterialPassDrawItems& receiverSurfaceDrawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
         ReplaceSnapshotVector(receiverSurfaceMeshDrawItems, receiverSurfaceDrawItems.meshDrawItems);
         ReplaceSnapshotVector(receiverSurfaceIndexedDrawItems, receiverSurfaceDrawItems.indexedDrawItems);
@@ -197,6 +201,8 @@ struct TransparentMaterialPassGraphSnapshot{
         , csgCutters(arena)
     {}
 
+
+public:
     void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
         CaptureMaterialPassSnapshot(*this, drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
         captured = true;

@@ -64,9 +64,11 @@ struct CallbackGraph{
     Vector<Graphics::GpuTaskId, Graphics::Alloc::ScratchArena> m_tasks;
 
 
+public:
     CallbackGraph(TestArena& testArena, Graphics::Alloc::ScratchArena& scratch);
 
 
+public:
     [[nodiscard]] bool prepare(usize taskCount);
 };
 

@@ -80,6 +80,8 @@ struct VolumeMipSliceRange{
 [[nodiscard]] Expected<VolumeMipSliceRange> ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ)noexcept;
 struct LdrPlaneLoader{
     using Plane = basisu::image;
+
+
     static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode input image '{}'.");
     static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: input image '{}' has an invalid resolution.");
     static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all LDR texture inputs must have the same resolution.");
@@ -92,6 +94,8 @@ struct LdrPlaneLoader{
 };
 struct HdrPlaneLoader{
     using Plane = basisu::imagef;
+
+
     static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode HDR image '{}'.");
     static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: HDR image '{}' has an invalid resolution.");
     static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all HDR texture inputs must have the same resolution.");

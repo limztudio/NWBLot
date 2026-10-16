@@ -103,7 +103,7 @@ protected:
         EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     }
 
-    [[nodiscard]] Expected<ControlAction> take(const usize owner = 1u){
+    [[nodiscard]] Expected<ControlAction> take(const usize owner = 1u)noexcept{
         const HitTarget& target = m_targets[owner];
         return m_router.consumeControlAction(target.id, target.declarationGeneration, target.control);
     }

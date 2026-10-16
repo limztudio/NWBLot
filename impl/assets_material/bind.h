@@ -91,6 +91,8 @@ struct MaterialBindField{
         , attributes(memoryArena)
     {}
 
+
+public:
     [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const noexcept;
     [[nodiscard]] AStringView defaultArgument()const noexcept;
 };
@@ -106,6 +108,8 @@ struct MaterialBindStruct{
         , fields(memoryArena)
     {}
 
+
+public:
     [[nodiscard]] const MaterialBindField* findField(AStringView fieldName)const noexcept;
     [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const noexcept;
 };
@@ -133,6 +137,8 @@ struct MaterialBindEntry{
         , instances(memoryArena)
     {}
 
+
+public:
     void reset()noexcept{
         source.clear();
         virtualPath.clear();
@@ -183,6 +189,8 @@ struct MaterialBindTypedLayout{
         , parameterLookup(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), memoryArena)
     {}
 
+
+public:
     void reset()noexcept;
 };
 
@@ -195,6 +203,8 @@ struct MaterialBindTypedLayoutCache{
         , lookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
     {}
 
+
+public:
     void reserve(usize count);
 };
 

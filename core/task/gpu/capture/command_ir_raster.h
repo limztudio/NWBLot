@@ -160,6 +160,9 @@ struct GpuCommandIrDecodedRecord{
 
 interface IGpuCommandIrRetainedOwner{
     virtual ~IGpuCommandIrRetainedOwner()noexcept = default;
+
+
+public:
     virtual void retain()noexcept = 0;
     virtual void release()noexcept = 0;
 };

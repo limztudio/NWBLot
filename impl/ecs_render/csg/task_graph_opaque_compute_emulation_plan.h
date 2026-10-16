@@ -76,6 +76,8 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         , cutters(arena)
     {}
 
+
+public:
     void reset(){
         meshDrawItems.clear();
         indexedDrawItems.clear();
@@ -212,6 +214,8 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         , cutters(arena)
     {}
 
+
+public:
     void reset(){
         meshDrawItems.clear();
         indexedDrawItems.clear();

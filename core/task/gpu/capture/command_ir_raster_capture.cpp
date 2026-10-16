@@ -146,81 +146,6 @@ GpuCommandIrCapture::~GpuCommandIrCapture()noexcept{
         DestroyArenaObjectNoexcept(m_arena, m_rasterOwners);
 }
 
-bool GpuCommandIrCapture::appendRasterBytes(
-    const GpuTaskId task,
-    const GpuSubmissionPacketId packet,
-    const GpuPhysicalQueueId queue,
-    const BinaryByteView encoded,
-    const BinaryByteView blob,
-    const GpuCommandIrRasterStateOwner* const stateOwner,
-    const GpuCommandIrRasterHeapOwner* const heapOwner
-){
-    if(
-        !task.valid() || !packet.valid() || !queue.valid()
-        || encoded.size() < sizeof(GpuCommandIrHeader) || !encoded.data()
-        || (!blob.empty() && !blob.data())
-        || (stateOwner && heapOwner)
-        || (m_graphGeneration != 0u && m_graphGeneration != task.generation)
-        || (m_planGeneration != 0u && m_planGeneration != packet.generation)
-        || m_nextSerial == Limit<u64>::s_Max
-        || m_recordEndOffsets.size() == Limit<usize>::s_Max
-        || !BinaryDetail::CanAppendBytes(m_commandBytes, encoded.size())
-        || !BinaryDetail::CanAppendBytes(m_blobBytes, blob.size())
-        || m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - encoded.size()
-        || m_blobBytes.size() > Limit<u64>::s_Max - blob.size()
-    )
-        return false;
-
-    const usize nextCount = m_recordEndOffsets.size() + 1u;
-    if(!BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextCount))
-        return false;
-    if((stateOwner || heapOwner) && !m_rasterOwners)
-        m_rasterOwners = NewArenaObject<GpuCommandIrRasterOwnerTable>(m_arena, m_arena);
-    if(stateOwner && m_rasterOwners->stateOwners.size() >= Limit<u32>::s_Max)
-        return false;
-    if(heapOwner && m_rasterOwners->heapOwners.size() >= Limit<u32>::s_Max)
-        return false;
-
-    ContainerDetail::ReserveGrowingCapacity(m_recordEndOffsets, nextCount);
-    ContainerDetail::ReserveGrowingCapacity(m_blobEndOffsets, nextCount);
-    ContainerDetail::ReserveGrowingCapacity(m_recordSerials, nextCount);
-    ContainerDetail::ReserveGrowingCapacity(m_commandBytes, m_commandBytes.size() + encoded.size());
-    if(!blob.empty())
-        ContainerDetail::ReserveGrowingCapacity(m_blobBytes, m_blobBytes.size() + blob.size());
-    if(stateOwner)
-        ContainerDetail::ReserveGrowingCapacity(m_rasterOwners->stateOwners, m_rasterOwners->stateOwners.size() + 1u);
-    if(heapOwner)
-        ContainerDetail::ReserveGrowingCapacity(m_rasterOwners->heapOwners, m_rasterOwners->heapOwners.size() + 1u);
-
-    const usize oldCommandSize = m_commandBytes.size();
-    m_commandBytes.resize(oldCommandSize + encoded.size());
-    NWB_MEMCPY(m_commandBytes.data() + oldCommandSize, encoded.size(), encoded.data(), encoded.size());
-    if(!blob.empty()){
-        const usize oldBlobSize = m_blobBytes.size();
-        m_blobBytes.resize(oldBlobSize + blob.size());
-        NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), blob.data(), blob.size());
-    }
-    if(stateOwner){
-        GpuCommandIrRasterStateOwner owner = *stateOwner;
-        owner.recordIndex = m_recordEndOffsets.size();
-        m_rasterOwners->stateOwners.push_back(Move(owner));
-    }
-    if(heapOwner){
-        GpuCommandIrRasterHeapOwner owner = *heapOwner;
-        owner.recordIndex = m_recordEndOffsets.size();
-        m_rasterOwners->heapOwners.push_back(Move(owner));
-    }
-    m_recordEndOffsets.push_back(m_commandBytes.size());
-    m_blobEndOffsets.push_back(m_blobBytes.size());
-    m_recordSerials.push_back(m_nextSerial++);
-    if(m_graphGeneration == 0u)
-        m_graphGeneration = task.generation;
-    if(m_planGeneration == 0u)
-        m_planGeneration = packet.generation;
-    writeStreamHeader();
-    return true;
-}
-
 bool GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state){
     if(
         !state.pipeline.valid() || state.pipeline.generation != task.generation
@@ -338,6 +263,81 @@ bool GpuCommandIrCapture::captureEndRenderPass(const GpuTaskId task, const GpuSu
     GpuCommandIrEndRenderPassRecord record;
     __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::EndRenderPass, task, packet, queue);
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, nullptr);
+}
+
+bool GpuCommandIrCapture::appendRasterBytes(
+    const GpuTaskId task,
+    const GpuSubmissionPacketId packet,
+    const GpuPhysicalQueueId queue,
+    const BinaryByteView encoded,
+    const BinaryByteView blob,
+    const GpuCommandIrRasterStateOwner* const stateOwner,
+    const GpuCommandIrRasterHeapOwner* const heapOwner
+){
+    if(
+        !task.valid() || !packet.valid() || !queue.valid()
+        || encoded.size() < sizeof(GpuCommandIrHeader) || !encoded.data()
+        || (!blob.empty() && !blob.data())
+        || (stateOwner && heapOwner)
+        || (m_graphGeneration != 0u && m_graphGeneration != task.generation)
+        || (m_planGeneration != 0u && m_planGeneration != packet.generation)
+        || m_nextSerial == Limit<u64>::s_Max
+        || m_recordEndOffsets.size() == Limit<usize>::s_Max
+        || !BinaryDetail::CanAppendBytes(m_commandBytes, encoded.size())
+        || !BinaryDetail::CanAppendBytes(m_blobBytes, blob.size())
+        || m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - encoded.size()
+        || m_blobBytes.size() > Limit<u64>::s_Max - blob.size()
+    )
+        return false;
+
+    const usize nextCount = m_recordEndOffsets.size() + 1u;
+    if(!BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextCount))
+        return false;
+    if((stateOwner || heapOwner) && !m_rasterOwners)
+        m_rasterOwners = NewArenaObject<GpuCommandIrRasterOwnerTable>(m_arena, m_arena);
+    if(stateOwner && m_rasterOwners->stateOwners.size() >= Limit<u32>::s_Max)
+        return false;
+    if(heapOwner && m_rasterOwners->heapOwners.size() >= Limit<u32>::s_Max)
+        return false;
+
+    ContainerDetail::ReserveGrowingCapacity(m_recordEndOffsets, nextCount);
+    ContainerDetail::ReserveGrowingCapacity(m_blobEndOffsets, nextCount);
+    ContainerDetail::ReserveGrowingCapacity(m_recordSerials, nextCount);
+    ContainerDetail::ReserveGrowingCapacity(m_commandBytes, m_commandBytes.size() + encoded.size());
+    if(!blob.empty())
+        ContainerDetail::ReserveGrowingCapacity(m_blobBytes, m_blobBytes.size() + blob.size());
+    if(stateOwner)
+        ContainerDetail::ReserveGrowingCapacity(m_rasterOwners->stateOwners, m_rasterOwners->stateOwners.size() + 1u);
+    if(heapOwner)
+        ContainerDetail::ReserveGrowingCapacity(m_rasterOwners->heapOwners, m_rasterOwners->heapOwners.size() + 1u);
+
+    const usize oldCommandSize = m_commandBytes.size();
+    m_commandBytes.resize(oldCommandSize + encoded.size());
+    NWB_MEMCPY(m_commandBytes.data() + oldCommandSize, encoded.size(), encoded.data(), encoded.size());
+    if(!blob.empty()){
+        const usize oldBlobSize = m_blobBytes.size();
+        m_blobBytes.resize(oldBlobSize + blob.size());
+        NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), blob.data(), blob.size());
+    }
+    if(stateOwner){
+        GpuCommandIrRasterStateOwner owner = *stateOwner;
+        owner.recordIndex = m_recordEndOffsets.size();
+        m_rasterOwners->stateOwners.push_back(Move(owner));
+    }
+    if(heapOwner){
+        GpuCommandIrRasterHeapOwner owner = *heapOwner;
+        owner.recordIndex = m_recordEndOffsets.size();
+        m_rasterOwners->heapOwners.push_back(Move(owner));
+    }
+    m_recordEndOffsets.push_back(m_commandBytes.size());
+    m_blobEndOffsets.push_back(m_blobBytes.size());
+    m_recordSerials.push_back(m_nextSerial++);
+    if(m_graphGeneration == 0u)
+        m_graphGeneration = task.generation;
+    if(m_planGeneration == 0u)
+        m_planGeneration = packet.generation;
+    writeStreamHeader();
+    return true;
 }
 
 

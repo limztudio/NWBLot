@@ -47,7 +47,7 @@ static constexpr f32 s_Gap = 4.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics){
+[[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics)noexcept{
     const Impl::Ui::Rect content = Impl::Ui::WindowLayout::Content(state, metrics);
     return { content.x + metrics.contentPadding.left, content.y + metrics.contentPadding.top + s_LabelHeight + s_SeparatorHeight + 2.0f * s_Gap, s_ControlWidth, s_ControlHeight };
 }
@@ -160,14 +160,11 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
     const f32 values[]{ bounds.x, bounds.y, bounds.width, bounds.height, static_cast<f32>(m_count), static_cast<f32>(m_window.collapsed), static_cast<f32>(m_locked), static_cast<f32>(m_sequence) };
     const f32 markerY = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index < LengthOf(values); ++index)
-        context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, markerY, 14.0f, 12.0f },
-            EncodeSmokeColor(values[index]));
+        context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, markerY, 14.0f, 12.0f }, EncodeSmokeColor(values[index]));
     context.paint.pushClip(WindowLayout::Visible(m_window, metrics));
-    context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + 4.0f, 10.0f, 10.0f },
-        __hidden_ui_window_smoke::s_TitleAnchor);
+    context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + 4.0f, 10.0f, 10.0f }, __hidden_ui_window_smoke::s_TitleAnchor);
     if(!m_window.collapsed)
-        context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + metrics.titleHeight + 4.0f, 10.0f, 10.0f },
-            __hidden_ui_window_smoke::s_ContentAnchor);
+        context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + metrics.titleHeight + 4.0f, 10.0f, 10.0f }, __hidden_ui_window_smoke::s_ContentAnchor);
     const bool popped = context.paint.popClip();
     NWB_FATAL_ASSERT(popped);
 }

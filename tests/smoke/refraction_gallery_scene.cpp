@@ -3,15 +3,15 @@
 
 
 #include "refraction_gallery_scene.h"
-
 #include "smoke_project_helpers.h"
 #include "csg_smoke_helpers.h"
+
+#include <impl/ecs_csg/shape_registry.h>
 
 #include <global/expected.h>
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
-#include <impl/ecs_csg/shape_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

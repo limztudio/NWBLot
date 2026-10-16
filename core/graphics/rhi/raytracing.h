@@ -70,6 +70,8 @@ struct RayTracingOpacityMicromapDesc{
         : counts(arena)
     {}
 
+
+public:
     constexpr RayTracingOpacityMicromapDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setTrackLiveness(bool value)noexcept{ trackLiveness = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setFlags(RayTracingOpacityMicromapBuildFlags::Mask value)noexcept{ flags = value; return *this; }
@@ -281,6 +283,8 @@ struct RayTracingGeometryDesc{
         : geometryData{}
     {}
 
+
+public:
     RayTracingGeometryDesc& setTransform(const AffineTransform& value)noexcept{ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
     constexpr RayTracingGeometryDesc& setFlags(RayTracingGeometryFlags::Mask value)noexcept{ flags = value; return *this; }
     constexpr RayTracingGeometryDesc& setTriangles(const RayTracingGeometryTriangles& value)noexcept{ geometryData.triangles = value; geometryType = RayTracingGeometryType::Triangles; return *this; }
@@ -328,6 +332,8 @@ struct RayTracingInstanceDesc{
         setTransform(s_IdentityTransform);
     }
 
+
+public:
     constexpr RayTracingInstanceDesc& setInstanceID(u32 value)noexcept{ instanceID = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceContributionToHitGroupIndex(u32 value)noexcept{ instanceContributionToHitGroupIndex = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceMask(u32 value)noexcept{ instanceMask = value; return *this; }
@@ -371,6 +377,8 @@ struct RayTracingAccelStructDesc{
         : bottomLevelGeometries(arena)
     {}
 
+
+public:
     constexpr RayTracingAccelStructDesc& setTopLevelMaxInstances(usize value)noexcept{ topLevelMaxInstances = value; isTopLevel = true; return *this; }
     RayTracingAccelStructDesc& addBottomLevelGeometry(const RayTracingGeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
     constexpr RayTracingAccelStructDesc& setBuildFlags(RayTracingAccelStructBuildFlags::Mask value)noexcept{ buildFlags = value; return *this; }

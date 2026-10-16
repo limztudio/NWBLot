@@ -4,11 +4,6 @@
 
 #include "project.h"
 
-#include <core/common/log.h>
-#include <global/simd/frame.h>
-#include <global/simd/vector.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/simplemath.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
@@ -17,6 +12,13 @@
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_ui/module.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/simd/frame.h>
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -225,55 +227,6 @@ NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::Pr
     return MakeNotNullUnique(Move(*world));
 }
 
-Project::Project(NWB::ProjectRuntimeContext& context)
-    : m_context(context)
-    , m_world(CreateInitialWorldOrDie(context))
-    , m_uiPreview(context.objectArena, context.assetManager)
-{}
-
-Project::~Project(){
-    unregisterInputHandler();
-    destroyWorld();
-}
-
-void Project::destroyWorld(){
-    if(!m_world.owner())
-        return;
-
-    NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
-}
-
-bool Project::onStartup(){
-    auto activeCameraEntity = m_world->createEntity();
-    auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-    const Float4 cameraPosition(0.0f, __hidden_runtime::s_CharacterCameraTargetY, __hidden_runtime::s_CameraStartDepth);
-    activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
-    auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
-    NWB_ASSERT(activeCamera.camera.valid());
-    NWB_ASSERT(cameraTransform);
-    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform->rotation);
-    const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
-        *m_world,
-        __hidden_runtime::s_DefaultDirectionalLightPitch,
-        __hidden_runtime::s_DefaultDirectionalLightYaw,
-        __hidden_runtime::s_DefaultDirectionalLightRoll,
-        __hidden_runtime::s_DefaultDirectionalLightColor,
-        __hidden_runtime::s_DefaultDirectionalLightIntensity
-    );
-    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, __hidden_runtime::s_PointLightPosition, __hidden_runtime::s_PointLightColor, __hidden_runtime::s_PointLightIntensity, __hidden_runtime::s_PointLightRange);
-    if(!directionalLight.valid() || !pointLight.valid())
-        return false;
-
-    if(!createDefaultScene())
-        return false;
-    auto* modelSystemPtr = m_world->getSystem<NWB::Impl::ModelSystem>();
-    NWB_ASSERT(modelSystemPtr);
-    NWB::Impl::ModelSystem& modelSystem = *modelSystemPtr;
-    modelSystem.syncModelRuntimes();
-    registerInputHandler();
-    return true;
-}
-
 bool Project::createDefaultScene(){
     if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world).valid()){
         NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
@@ -289,21 +242,6 @@ bool Project::createDefaultScene(){
     };
 
     NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_StartupSceneText, __hidden_runtime::s_DefaultSceneDescription);
-    return true;
-}
-
-void Project::onShutdown(){
-    unregisterInputHandler();
-    clearInputState();
-    destroyWorld();
-    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_ShutdownText);
-}
-
-bool Project::onUpdate(f32 delta){
-    const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
-
-    updateMainCamera(safeDelta);
-    m_world->tick(safeDelta);
     return true;
 }
 
@@ -367,6 +305,70 @@ void Project::updateMainCamera(const f32 delta){
     const bool boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
     __hidden_runtime::ApplyFlyCameraInputToMainCamera(*m_world, rightAxis, forwardAxis, boosted, mouseDeltaX, mouseDeltaY, delta);
+}
+
+void Project::destroyWorld(){
+    if(!m_world.owner())
+        return;
+
+    NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
+}
+
+Project::Project(NWB::ProjectRuntimeContext& context)
+    : m_context(context)
+    , m_world(CreateInitialWorldOrDie(context))
+    , m_uiPreview(context.objectArena, context.assetManager)
+{}
+
+Project::~Project(){
+    unregisterInputHandler();
+    destroyWorld();
+}
+
+bool Project::onStartup(){
+    auto activeCameraEntity = m_world->createEntity();
+    auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
+    const Float4 cameraPosition(0.0f, __hidden_runtime::s_CharacterCameraTargetY, __hidden_runtime::s_CameraStartDepth);
+    activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
+    auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
+    NWB_ASSERT(activeCamera.camera.valid());
+    NWB_ASSERT(cameraTransform);
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform->rotation);
+    const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
+        *m_world,
+        __hidden_runtime::s_DefaultDirectionalLightPitch,
+        __hidden_runtime::s_DefaultDirectionalLightYaw,
+        __hidden_runtime::s_DefaultDirectionalLightRoll,
+        __hidden_runtime::s_DefaultDirectionalLightColor,
+        __hidden_runtime::s_DefaultDirectionalLightIntensity
+    );
+    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, __hidden_runtime::s_PointLightPosition, __hidden_runtime::s_PointLightColor, __hidden_runtime::s_PointLightIntensity, __hidden_runtime::s_PointLightRange);
+    if(!directionalLight.valid() || !pointLight.valid())
+        return false;
+
+    if(!createDefaultScene())
+        return false;
+    auto* modelSystemPtr = m_world->getSystem<NWB::Impl::ModelSystem>();
+    NWB_ASSERT(modelSystemPtr);
+    NWB::Impl::ModelSystem& modelSystem = *modelSystemPtr;
+    modelSystem.syncModelRuntimes();
+    registerInputHandler();
+    return true;
+}
+
+void Project::onShutdown(){
+    unregisterInputHandler();
+    clearInputState();
+    destroyWorld();
+    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_ShutdownText);
+}
+
+bool Project::onUpdate(f32 delta){
+    const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
+
+    updateMainCamera(safeDelta);
+    m_world->tick(safeDelta);
+    return true;
 }
 
 void Project::windowFocusUpdate(const bool focused){

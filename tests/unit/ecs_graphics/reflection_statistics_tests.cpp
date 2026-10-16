@@ -49,7 +49,7 @@ struct StatisticsContext{
     return value;
 }
 
-[[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u){
+[[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u)noexcept{
     return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 7u, .queue = Core::CommandQueue::Graphics, };
 }
 
@@ -58,6 +58,8 @@ struct LeaseTask{
         ReflectionStatisticsReservation reservation;
     };
 
+
+public:
     static void Discarded(Payload& payload){ payload.reservation.discard(); }
 };
 
@@ -67,7 +69,7 @@ struct DestructorLeaseTask{
     };
 };
 
-[[nodiscard]] Core::GpuTaskDesc TaskDesc(){
+[[nodiscard]] Core::GpuTaskDesc TaskDesc()noexcept{
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("tests.reflection.statistics.lease")).setMarkerLabel("Statistics lease");
     return desc;

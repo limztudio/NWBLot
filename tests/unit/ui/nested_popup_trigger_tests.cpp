@@ -26,6 +26,15 @@ using namespace NWB::UiComboTests;
 
 class UiNestedPopupTriggerTests : public ComboFixture{
 protected:
+    [[nodiscard]] static WidgetOptions Control(){
+        WidgetOptions options;
+        options.width = { LayoutSizePolicy::Fixed, 220.0f };
+        options.height = { LayoutSizePolicy::Fixed, 32.0f };
+        return options;
+    }
+
+
+protected:
     virtual void SetUp()override{
         ComboFixture::SetUp();
         m_source.count = 5u;
@@ -34,12 +43,6 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] static WidgetOptions Control(){
-        WidgetOptions options;
-        options.width = { LayoutSizePolicy::Fixed, 220.0f };
-        options.height = { LayoutSizePolicy::Fixed, 32.0f };
-        return options;
-    }
 
     [[nodiscard]] WidgetId parentId()const{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
     [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }
@@ -48,7 +51,7 @@ protected:
     [[nodiscard]] WidgetId anchorId()const{ return MakeWidgetId(childId(), "anchor"); }
     [[nodiscard]] WidgetId menuRows()const{ return MakeWidgetId(MakeWidgetId(childId(), "menu"), "rows"); }
 
-    [[nodiscard]] WidgetId comboRow(const u64 key)const{
+    [[nodiscard]] WidgetId comboRow(const u64 key)const noexcept{
         return MakeWidgetPartId(MakeWidgetId(rowsId(), "rows"), key);
     }
 

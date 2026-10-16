@@ -5,6 +5,7 @@
 #include <core/metascript/parser.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 

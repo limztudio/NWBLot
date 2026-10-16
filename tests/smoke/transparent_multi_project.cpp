@@ -186,32 +186,32 @@ public:
 }
 
 
-[[nodiscard]] static Float4 TransparentLeftShapeBasePosition(){
+[[nodiscard]] static Float4 TransparentLeftShapeBasePosition()noexcept{
     return Float4(-0.68f, s_CameraTargetY, 0.02f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentCenterShapeBasePosition(){
+[[nodiscard]] static Float4 TransparentCenterShapeBasePosition()noexcept{
     return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentRightShapeBasePosition(){
+[[nodiscard]] static Float4 TransparentRightShapeBasePosition()noexcept{
     return Float4(0.68f, s_CameraTargetY, 0.04f, 0.0f);
 }
 
 // Opaque occluders orbit through colored shadows to exercise their multiplicative combination.
-[[nodiscard]] static Float4 OpaqueLeftShapeBasePosition(){
+[[nodiscard]] static Float4 OpaqueLeftShapeBasePosition()noexcept{
     return Float4(-0.34f, s_CameraTargetY, 0.30f, 0.0f);
 }
 
-[[nodiscard]] static Float4 OpaqueRightShapeBasePosition(){
+[[nodiscard]] static Float4 OpaqueRightShapeBasePosition()noexcept{
     return Float4(0.34f, s_CameraTargetY, 0.30f, 0.0f);
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildTransparentSceneRotation(const f32 time){
+[[nodiscard]] static SIMDVectorSingle BuildTransparentSceneRotation(const f32 time)noexcept{
     return QuaternionRotationRollPitchYaw(0.0f, time, 0.0f);
 }
 
-[[nodiscard]] static SIMDVectorSingle RotateTransparentBasePosition(const SIMDVectorSingle basePosition, const SIMDVectorSingle sceneRotation){
+[[nodiscard]] static SIMDVectorSingle RotateTransparentBasePosition(const SIMDVectorSingle basePosition, const SIMDVectorSingle sceneRotation)noexcept{
     return Vector3Rotate(basePosition, sceneRotation);
 }
 
@@ -226,7 +226,7 @@ static void ApplyTransparentSceneTransform(NWB::Core::ECS::World& world, const N
 
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-[[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const f32 time){
+[[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const f32 time)noexcept{
     const SIMDVectorSingle angles = VectorMultiply(VectorSet(time, time, time, 0.0f), VectorSet(0.32f, 1.0f, 0.16f, 0.0f));
     return QuaternionRotationRollPitchYawFromVector(angles);
 }
@@ -375,6 +375,8 @@ private:
         return world;
     }
 
+
+private:
     void destroyWorld(){
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(m_framebufferCapture){
@@ -404,6 +406,32 @@ private:
         m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
     }
 #endif
+
+
+
+
+public:
+    // Vary spin speed from one build to compare caustic motion-vector reprojection.
+    static f32 EffectiveRotationSpeed(){
+        static const f32 s_speed = [](){
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
+            if(!parsed)
+                return s_TransparentSceneRotationSpeed;
+            return IsFinite(*parsed) && (*parsed >= 0.0f) ? *parsed : s_TransparentSceneRotationSpeed;
+        }();
+        return s_speed;
+    }
+
+    // Pin yaw for deterministic captures; an unset override leaves normal spin active.
+    static f32 EffectiveFrozenAngle(){
+        static const f32 s_angle = [](){
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
+            if(!parsed)
+                return Limit<f32>::s_QuietNaN;
+            return IsFinite(*parsed) ? *parsed : Limit<f32>::s_QuietNaN;
+        }();
+        return s_angle;
+    }
 
 
 public:
@@ -641,27 +669,7 @@ public:
         return true;
     }
 
-    // Vary spin speed from one build to compare caustic motion-vector reprojection.
-    static f32 EffectiveRotationSpeed(){
-        static const f32 s_speed = [](){
-            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
-            if(!parsed)
-                return s_TransparentSceneRotationSpeed;
-            return IsFinite(*parsed) && (*parsed >= 0.0f) ? *parsed : s_TransparentSceneRotationSpeed;
-        }();
-        return s_speed;
-    }
 
-    // Pin yaw for deterministic captures; an unset override leaves normal spin active.
-    static f32 EffectiveFrozenAngle(){
-        static const f32 s_angle = [](){
-            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
-            if(!parsed)
-                return Limit<f32>::s_QuietNaN;
-            return IsFinite(*parsed) ? *parsed : Limit<f32>::s_QuietNaN;
-        }();
-        return s_angle;
-    }
 
 
 private:
@@ -679,6 +687,8 @@ private:
         ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, LoadFloat(OpaqueRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
     }
 
+
+private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
@@ -723,7 +733,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     return NWB_TEXT("NWB Frame Lagged Async Lighting Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)

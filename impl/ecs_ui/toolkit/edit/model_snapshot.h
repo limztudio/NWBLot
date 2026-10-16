@@ -31,6 +31,8 @@ struct EditModelSnapshot{
 
     explicit EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept;
 
+
+public:
     [[nodiscard]] bool matches(const EditModel& model)const noexcept;
     void capture(const EditModel& model);
     void clear()noexcept;

@@ -55,7 +55,7 @@ public:
 
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const override{
         ++searchCalls;
-        return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index){ return rawKey(index); });
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
@@ -78,7 +78,7 @@ public:
 
 
 protected:
-    [[nodiscard]] u64 rawKey(const u64 index)const{
+    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
         const u64 forward = reverse ? count - 1u - index : index;
         const u64 value = forward + 1u;
         return value + (removed != 0u && value >= removed ? 1u : 0u);
@@ -137,7 +137,7 @@ protected:
     [[nodiscard]] WidgetId popup(const AStringView key = "combo")const{ return MakeWidgetId(host(key), "popup"); }
     [[nodiscard]] WidgetId list(const AStringView key = "combo")const{ return MakeWidgetId(host(key), "rows"); }
 
-    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = "combo")const{
+    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = "combo")const noexcept{
         return MakeWidgetPartId(MakeWidgetId(list(combo), "rows"), key);
     }
 

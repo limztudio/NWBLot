@@ -198,6 +198,8 @@ struct ProbeBatchTask{
         u32 slotsIndex = 0u;
     };
 
+
+public:
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true, };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -463,7 +465,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 320u, 240u };
 }
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB AVBOIT Depth Warp Probe");
 }
 

@@ -42,7 +42,7 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("integer_bounds"), NWB_TEXT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Coherent(const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxState& state){
+[[nodiscard]] static bool Coherent(const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxState& state)noexcept{
     return state.modelGeneration == model.instanceGeneration() && state.revision == model.revision() && state.selectionGeneration == model.selectionGeneration() && state.anchor == model.anchor() && state.caret == model.caret();
 }
 
@@ -123,8 +123,7 @@ void UiNumericEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
         const u32 parts = index < 2u ? 6u : index == 3u || index == 10u || index == 17u ? 3u : 2u;
         for(u32 part = 0u; part < parts; ++part){
-            context.paint.fillRect({ positions[marker], y, 6.0f, 10.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ positions[marker], y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }
     }

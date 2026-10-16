@@ -246,6 +246,8 @@ struct FormatInfo{
         static_assert(NameSize - 1u <= Limit<u8>::s_Max, "Format names must fit the compact metadata length");
     }
 
+
+public:
     [[nodiscard]] constexpr AStringView getName()const noexcept{ return AStringView(m_name, m_nameLength); }
 };
 static_assert(sizeof(FormatInfo) == FormatInfo::s_ByteSize, "FormatInfo should remain tightly packed");

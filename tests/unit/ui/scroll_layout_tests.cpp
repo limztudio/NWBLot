@@ -30,15 +30,7 @@ static_assert(!IsConstructible_V<ScrollState, ScrollState&&>);
 
 TEST(UiScrollLayoutTests, EmptyContentUsesFullPaddedViewportAndEmptyVisibleRange){
     ScrollPlacement placement;
-    const auto placementResult = ScrollLayout::Calculate({ 10.0f, 20.0f, 200.0f, 120.0f },
-        { 0.0f, 0.0f, 400.0f, 300.0f },
-        { 8.0f, 6.0f, 4.0f, 14.0f },
-        12.0f,
-        16.0f,
-        0u,
-        20.0f,
-        500.0
-    );
+    const auto placementResult = ScrollLayout::Calculate({ 10.0f, 20.0f, 200.0f, 120.0f }, { 0.0f, 0.0f, 400.0f, 300.0f }, { 8.0f, 6.0f, 4.0f, 14.0f }, 12.0f, 16.0f, 0u, 20.0f, 500.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     NWB::UiWidgetTests::ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });

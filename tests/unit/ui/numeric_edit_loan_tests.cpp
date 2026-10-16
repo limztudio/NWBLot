@@ -65,6 +65,8 @@ protected:
 
     [[nodiscard]] static ListOptions ListOptions(){ return UiWidgetTests::LargeLoanListOptions(); }
 
+
+protected:
     [[nodiscard]] bool beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
     }

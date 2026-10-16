@@ -139,24 +139,24 @@ bool SliderFixture::sibling(const AStringView key){
     return m_builder.virtualList(key, m_laterSource, m_laterState, SiblingOptions()).valid;
 }
 
-WidgetId SliderFixture::host()const{
+WidgetId SliderFixture::host()const noexcept{
     return id("slider", "panel");
 }
 
-WidgetId SliderFixture::track()const{
+WidgetId SliderFixture::track()const noexcept{
     return MakeWidgetId(host(), "track");
 }
 
-WidgetId SliderFixture::thumb()const{
+WidgetId SliderFixture::thumb()const noexcept{
     return MakeWidgetId(host(), "thumb");
 }
 
-Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const{
+Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const noexcept{
     const SliderPlacement& placement = state.placement();
     return { placement.centerTravel.x + static_cast<f32>(normalized) * placement.centerTravel.width, placement.track.y + placement.track.height * 0.5f };
 }
 
-Point SliderFixture::thumbPoint()const{
+Point SliderFixture::thumbPoint()const noexcept{
     return UiWidgetTests::Center(m_state.placement().thumb);
 }
 

@@ -52,6 +52,7 @@ struct SourceFixture{
     u8 sfnt[s_FontBytes] = { 0u, 1u, 4u, 0u, 127u, 128u, 255u };
 
 
+public:
     explicit SourceFixture(Core::Assets::AssetArena& arena)
         : groups(arena)
     {

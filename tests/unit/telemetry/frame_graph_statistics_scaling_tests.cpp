@@ -5,6 +5,7 @@
 #include "telemetry_test_helpers.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
+
 #include <global/text_utils.h>
 
 #include <gtest/gtest.h>
@@ -41,6 +42,8 @@ struct StatisticsFixture{
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
     Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
 
+
+public:
     explicit StatisticsFixture(Telemetry::TelemetryArena& arena)
         : nodes(arena)
         , edges(arena)

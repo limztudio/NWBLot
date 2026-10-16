@@ -49,7 +49,7 @@ constexpr Graphics::GpuGraphResourceId s_B{ .generation = 1u, .index = 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Graphics::GpuTaskResourceUse BufferUse(const Graphics::GpuGraphResourceId resource, const u64 offset, const u64 size, const Graphics::ResourceStates::Mask state = Graphics::ResourceStates::CopyDest){
+[[nodiscard]] Graphics::GpuTaskResourceUse BufferUse(const Graphics::GpuGraphResourceId resource, const u64 offset, const u64 size, const Graphics::ResourceStates::Mask state = Graphics::ResourceStates::CopyDest)noexcept{
     return Graphics::GpuTaskResourceUse{ .resource = resource, .range = { .bufferRange = Graphics::BufferRange(offset, size) }, .requiredState = state, .access = Graphics::GpuTaskResourceAccess::Write, };
 }
 

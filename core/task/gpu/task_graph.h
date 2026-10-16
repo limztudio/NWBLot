@@ -147,6 +147,7 @@ class GpuTaskGraphDeclarationReadView final : NoCopy{
     friend class GpuCompiledGraph::ReadView;
     friend class GpuTaskGraph;
 
+
 private:
     struct TryAcquireTag{};
 
@@ -412,6 +413,7 @@ private:
         friend class GpuNativePacketRecorder;
         friend class GpuTaskScheduler;
 
+
     public:
         RecordingAttemptScope()noexcept = default;
         ~RecordingAttemptScope()noexcept;
@@ -435,11 +437,13 @@ private:
         bool m_previousPlanWasActive = false;
     };
 
+
 private:
     // A failed parallel recorder transfers its exact packet claim into this capability before leaving its worker.
     // The ready-frontier owner can then invoke typed discard callbacks serially after every worker has joined.
     class PacketRecordingAbort final : NoCopy{
         friend class GpuTaskGraph;
+
 
     public:
         PacketRecordingAbort()noexcept = default;
@@ -473,6 +477,7 @@ private:
     class PacketRecordingLease final : NoCopy{
         friend class GpuTaskGraph;
         friend class PacketRecordingAccess;
+
 
     public:
         PacketRecordingLease()noexcept = default;
@@ -508,6 +513,7 @@ private:
         friend class GpuTaskGraph;
         friend class GpuNativePacketRecorder;
 
+
     public:
         PacketRecordingAccess(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingLease& lease)noexcept;
 
@@ -531,6 +537,7 @@ private:
     class PacketSubmissionLease final : NoCopy{
         friend class GpuTaskGraph;
         friend class GpuGraphSubmissionTransaction;
+
 
     public:
         PacketSubmissionLease()noexcept = default;
@@ -561,6 +568,7 @@ private:
         u64 m_claimGeneration = 0u;
         GpuGraphSubmissionBinding m_submissionBinding;
     };
+
 
 private:
     struct GpuTaskNode{
@@ -729,6 +737,13 @@ private:
     using ImportIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
     using ResourcePointerIndex = HashMap<ResourcePointerKey, u32, GraphicsArena, ResourcePointerHasher, ResourcePointerEqual>;
     using PipelinePointerIndex = HashMap<PipelinePointerKey, u32, GraphicsArena, PipelinePointerHasher, PipelinePointerEqual>;
+
+
+private:
+    struct MarkerLabelRange{
+        u32 offset = 0u;
+        u32 size = 0u;
+    };
 
 
 private:
@@ -932,6 +947,7 @@ private:
     [[nodiscard]] bool beginSubmissionExceptionClosing(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
     [[nodiscard]] bool waitForSubmissionExceptionRecordingClaims(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
 
+
 private:
     // Caller holds m_lifecycleMutex; preparation, submission binding and task-state checks remain path-specific.
     [[nodiscard]] bool matchesPacketAttemptWithinLock(const GpuCompiledGraph& compiledGraph, const u64 planGeneration, const u64 recordingAttemptGeneration)const noexcept{
@@ -968,6 +984,7 @@ private:
     void abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, PacketRecordingLease& lease)const;
     [[nodiscard]] bool packetReadyForSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration)const noexcept;
 
+
 private:
     [[nodiscard]] bool beginPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
@@ -995,6 +1012,7 @@ private:
         const GpuGraphSubmissionBinding& submissionBinding
     )const noexcept;
 
+
 private:
     // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks retain responsibility only for barriers internal to their own command sequence.
     [[nodiscard]] bool applyCompiledBarrier(
@@ -1007,6 +1025,7 @@ private:
     )const;
     // Materializes retained resource states in the native tracker after compiler barriers lower. This preserves graph-owned packet handoffs when a required state already matches an imported automatic-state resource and therefore needs no Vulkan transition command.
     [[nodiscard]] bool seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingAccess& recordingAccess, const GpuTaskId& task, CommandList& commandList)const;
+
 
 private:
     [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
@@ -1062,11 +1081,6 @@ private:
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
-    struct MarkerLabelRange{
-        u32 offset = 0u;
-        u32 size = 0u;
-    };
-
     [[nodiscard]] Expected<MarkerLabelRange> appendMarkerLabel(AStringView text);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
     [[nodiscard]] bool destroyTaskPayloads();

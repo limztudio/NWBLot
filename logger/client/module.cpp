@@ -83,6 +83,18 @@ Client::~Client(){
         m_curl = nullptr;
     }
 }
+bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
+    if(!bytes || byteCount == 0u)
+        return false;
+
+    LogBytes upload(BaseType::arena());
+    upload.resize(byteCount);
+    NWB_MEMCPY(upload.data(), upload.size(), bytes, byteCount);
+    m_telemetryQueue.emplace(Move(upload));
+    m_telemetryCount.fetch_add(1u, MemoryOrder::relaxed);
+    this->m_semaphore.release();
+    return true;
+}
 
 bool Client::internalInit(const AStringView url){
     m_messageUrl = url;
@@ -121,18 +133,6 @@ bool Client::internalInit(const AStringView url){
         return false;
     }
 
-    return true;
-}
-bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
-    if(!bytes || byteCount == 0u)
-        return false;
-
-    LogBytes upload(BaseType::arena());
-    upload.resize(byteCount);
-    NWB_MEMCPY(upload.data(), upload.size(), bytes, byteCount);
-    m_telemetryQueue.emplace(Move(upload));
-    m_telemetryCount.fetch_add(1u, MemoryOrder::relaxed);
-    this->m_semaphore.release();
     return true;
 }
 bool Client::internalUpdate(){

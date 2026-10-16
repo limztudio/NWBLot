@@ -34,6 +34,8 @@ struct Object{
         : integer(static_cast<u64>(reinterpret_cast<usize>(p)))
     {}
 
+
+public:
     [[nodiscard]] void* pointer()const noexcept{ return reinterpret_cast<void*>(static_cast<usize>(integer)); }
 
     template<typename T>

@@ -14,32 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
-    frame.revision = frame.state->revision();
-    frame.open = frame.state->isOpen();
-    frame.popupToken.openGeneration = frame.state->m_popup.openGeneration();
-    frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
-    if(frame.list < m_scope->m_lists.size())
-        m_scope->m_lists[frame.list].token = frame.listToken;
-}
-
-bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept{
-    return
-        popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
-        && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->m_owner == frame.widget.id
-        && frame.state->m_ownerDeclaration == frame.widget.declarationGeneration && frame.state->m_anchorWidget == frame.anchor.id && frame.state->m_anchorDeclaration == frame.anchor.declarationGeneration
-    ;
-}
-
-bool Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
-    return
-        frame.source && contextMenuStateMatches(frame)
-        && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u && frame.source->instanceGeneration() == frame.listToken.contentGeneration && contextMenuStateMatches(frame)
-        && frame.source->revision() == frame.listToken.contentRevision && contextMenuStateMatches(frame)
-        && frame.source->rowCount() == frame.rowCount && contextMenuStateMatches(frame)
-    ;
-}
-
 bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result){
     InputRouter& input = m_context.input();
     ContextMenuState& state = *frame.state;
@@ -111,6 +85,32 @@ bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& 
         }
     }
     return contextMenuMatches(frame);
+}
+
+void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
+    frame.revision = frame.state->revision();
+    frame.open = frame.state->isOpen();
+    frame.popupToken.openGeneration = frame.state->m_popup.openGeneration();
+    frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
+    if(frame.list < m_scope->m_lists.size())
+        m_scope->m_lists[frame.list].token = frame.listToken;
+}
+
+bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept{
+    return
+        popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
+        && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->m_owner == frame.widget.id
+        && frame.state->m_ownerDeclaration == frame.widget.declarationGeneration && frame.state->m_anchorWidget == frame.anchor.id && frame.state->m_anchorDeclaration == frame.anchor.declarationGeneration
+    ;
+}
+
+bool Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
+    return
+        frame.source && contextMenuStateMatches(frame)
+        && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u && frame.source->instanceGeneration() == frame.listToken.contentGeneration && contextMenuStateMatches(frame)
+        && frame.source->revision() == frame.listToken.contentRevision && contextMenuStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount && contextMenuStateMatches(frame)
+    ;
 }
 
 

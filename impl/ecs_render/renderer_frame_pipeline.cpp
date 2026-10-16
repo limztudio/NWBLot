@@ -117,6 +117,44 @@ Core::GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRunt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererFramePipeline::resetTargetGenerationStateHandoffs()noexcept{
+    // Replaced targets invalidate retained compute-local state.
+    m_raytracingSystem.invalidateLightSpaceShadowCapture();
+    m_shadowComputePersistentState.reset();
+    m_shadowVisibilityReturnState.reset();
+    m_causticsComputePersistentState.reset();
+    m_hardwareCausticAccumulatorPersistentState.reset();
+    m_causticIrradianceReturnState.reset();
+    m_surfelGiComputePersistentState.reset();
+    m_surfelGiCounterPersistentState.reset();
+    m_surfelIrradianceReturnState.reset();
+}
+
+void RendererFramePipeline::resetInvalidatedResourceStateHandoffs()noexcept{
+    // Only retained cross-frame state resets here.
+    resetTargetGenerationStateHandoffs();
+    m_shadowPreparePersistentState.reset();
+}
+
+void RendererFramePipeline::invalidateLaggedLightingHistorySubmission()noexcept{
+    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+}
+
+void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
+    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
+    m_laggedLightingHistoryWriterDrainGeneration = 0u;
+}
+
+void RendererFramePipeline::resetLaggedLightingHistoryReadTracking()noexcept{
+    invalidateLaggedLightingHistorySubmission();
+    m_laggedLightingHistoryGeneration = 0u;
+}
+
+void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{
+    resetLaggedLightingHistoryReadTracking();
+    invalidateLaggedLightingHistoryWriterDrain();
+}
+
 void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingReport report, const u64 targetGeneration){
     if(m_laggedLightingReport == report && m_laggedLightingReportGeneration == targetGeneration)
         return;
@@ -139,44 +177,6 @@ void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingR
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: frame-lagged async lighting current-frame path accepted (target generation {})"), targetGeneration);
         break;
     }
-}
-
-void RendererFramePipeline::invalidateLaggedLightingHistorySubmission()noexcept{
-    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-}
-
-void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
-    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
-    m_laggedLightingHistoryWriterDrainGeneration = 0u;
-}
-
-void RendererFramePipeline::resetLaggedLightingHistoryReadTracking()noexcept{
-    invalidateLaggedLightingHistorySubmission();
-    m_laggedLightingHistoryGeneration = 0u;
-}
-
-void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{
-    resetLaggedLightingHistoryReadTracking();
-    invalidateLaggedLightingHistoryWriterDrain();
-}
-
-void RendererFramePipeline::resetTargetGenerationStateHandoffs()noexcept{
-    // Replaced targets invalidate retained compute-local state.
-    m_raytracingSystem.invalidateLightSpaceShadowCapture();
-    m_shadowComputePersistentState.reset();
-    m_shadowVisibilityReturnState.reset();
-    m_causticsComputePersistentState.reset();
-    m_hardwareCausticAccumulatorPersistentState.reset();
-    m_causticIrradianceReturnState.reset();
-    m_surfelGiComputePersistentState.reset();
-    m_surfelGiCounterPersistentState.reset();
-    m_surfelIrradianceReturnState.reset();
-}
-
-void RendererFramePipeline::resetInvalidatedResourceStateHandoffs()noexcept{
-    // Only retained cross-frame state resets here.
-    resetTargetGenerationStateHandoffs();
-    m_shadowPreparePersistentState.reset();
 }
 
 

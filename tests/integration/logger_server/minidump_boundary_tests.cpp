@@ -6,8 +6,10 @@
 #include <tests/common/test_context.h>
 
 #include <core/crash/package_names.h>
+
 #include <global/filesystem/operations.h>
 #include <global/filesystem/utility.h>
+
 #include <logger/server/crash_symbolicate.h>
 
 #include <gtest/gtest.h>

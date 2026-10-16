@@ -52,6 +52,7 @@ struct ModelInputs{
     Model::SkinnedMeshObjectVector skinnedMeshObjects{ arena };
 
 
+public:
     ModelInputs(){
         skeletonObjects.push_back(ModelSkeletonObject{ .name = Name(s_RIG), .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton"), });
         staticMeshObjects.push_back(ModelStaticMeshObject{ .name = Name(s_PROP), .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()), .material = {}, .parentObject = Name(s_RIG), .parentJoint = Name("hand"), });
@@ -59,6 +60,8 @@ struct ModelInputs{
         publish();
     }
 
+
+public:
     void publish(){
         model.setObjects(Model::SkeletonObjectVector(skeletonObjects), Model::StaticMeshObjectVector(staticMeshObjects), Model::SkinnedMeshObjectVector(skinnedMeshObjects));
     }

@@ -75,6 +75,8 @@ private:
                 return *this;
             }
 
+
+        public:
             T& value(){
                 NWB_ASSERT(m_value.has_value());
                 return *m_value;
@@ -96,11 +98,13 @@ private:
             Optional<T> m_value;
         };
 
+
     public:
         explicit MessageChannel(Alloc::GlobalArena& arena)
             : m_pending(arena)
             , m_readBuffer(arena)
         {}
+
 
     public:
         void post(const T& message){

@@ -47,6 +47,8 @@ struct BlasGeometryScratch{
         , transformOffsets(scratchArena)
     {}
 
+
+public:
     void resizeForSizeQuery(usize geometryCount){
         geometries.resize(geometryCount);
         spheresData.resize(geometryCount);

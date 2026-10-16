@@ -95,6 +95,15 @@ class RendererOpticalVolumeSelection;
 
 
 class RendererMaterialSystem final : public IMaterialSurfaceLookup, NoCopy{
+private:
+    static void SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes);
+
+
+public:
+    [[nodiscard]] static Expected<MaterialInstanceOverrideField> FindMaterialInstanceOverrideField(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter);
+    [[nodiscard]] static bool ApplyMaterialInstanceOverrides(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, MaterialTypedByteDataVector& inOutMutableTypedBytes);
+
+
 public:
     RendererMaterialSystem(
         Core::Alloc::GlobalArena& arena,
@@ -108,6 +117,7 @@ public:
         RendererCsgSystem& csgSystem,
         const RendererOpticalVolumeSelection& opticalVolumes
     );
+
 
 public:
     void invalidateResources();
@@ -167,8 +177,6 @@ public:
         RendererResourceLookupMode::Enum lookupMode,
         // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState);
-    [[nodiscard]] static Expected<MaterialInstanceOverrideField> FindMaterialInstanceOverrideField(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter);
-    [[nodiscard]] static bool ApplyMaterialInstanceOverrides(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, MaterialTypedByteDataVector& inOutMutableTypedBytes);
     // Creation and override application belong to preparation; render paths only use the prepared lookup below.
     [[nodiscard]] Expected<const MaterialTypedByteVector*> prepareMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance);
     [[nodiscard]] Expected<const MaterialTypedByteVector*> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const;
@@ -224,7 +232,6 @@ public:
 
 private:
     void releaseMaterialResourceReferences();
-    static void SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes);
 
 
 private:

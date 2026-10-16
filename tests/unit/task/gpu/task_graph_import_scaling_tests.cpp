@@ -32,7 +32,7 @@ using namespace TaskGraphTestUtils;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Name IndexedIdentity(const Name& prefix, const usize index){
+[[nodiscard]] static Name IndexedIdentity(const Name& prefix, const usize index)noexcept{
     char text[32u] = {};
     return DeriveName(prefix, FormatDecimal(index, text));
 }

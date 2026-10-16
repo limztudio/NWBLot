@@ -59,6 +59,7 @@ protected:
     void internalDestroy();
     bool internalUpdate();
 
+
 protected:
     using UpdateBaseType::enqueue;
     using UpdateBaseType::tryDequeue;

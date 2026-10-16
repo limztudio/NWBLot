@@ -16,19 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
-    if(!ensureRayTraceMaterialContextSlotsBuffer())
-        return false;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, false, m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
-        return false;
-    }
-    return true;
-}
-
 bool RendererRayTracingSystem::prepareSceneQueryResources(){
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
@@ -71,6 +58,19 @@ RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResour
     resources.materialContextSlotsHeapSlot = state.m_rayTraceMaterialContextSlotsHeapHandle.slot();
     resources.hardwareAvailable = true;
     return resources;
+}
+
+bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
+    if(!ensureRayTraceMaterialContextSlotsBuffer())
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized() || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, false, m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
+        return false;
+    }
+    return true;
 }
 
 

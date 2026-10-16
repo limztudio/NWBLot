@@ -7,6 +7,7 @@
 
 #include <tests/common/ecs_test_world.h>
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 #include <global/atomic.h>
@@ -57,21 +58,25 @@ struct PoolSlotComponent{
 };
 
 template<usize... Is>
-Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>){
+Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>)noexcept{
     return { NWB::Core::ECS::ComponentType<PoolSlotComponent<Is>>()... };
 }
 
 struct MoveOnlyMessage{
+    u32 value = 0u;
+
+
+public:
     explicit MoveOnlyMessage(u32 v)
         : value(v)
     {}
     MoveOnlyMessage(const MoveOnlyMessage&) = delete;
-    MoveOnlyMessage& operator=(const MoveOnlyMessage&) = delete;
     MoveOnlyMessage(MoveOnlyMessage&& rhs)noexcept
         : value(rhs.value)
     {
         rhs.value = 0u;
     }
+    MoveOnlyMessage& operator=(const MoveOnlyMessage&) = delete;
     MoveOnlyMessage& operator=(MoveOnlyMessage&& rhs)noexcept{
         if(this != &rhs){
             value = rhs.value;
@@ -79,8 +84,6 @@ struct MoveOnlyMessage{
         }
         return *this;
     }
-
-    u32 value = 0u;
 };
 
 class CountingSystem final : public NWB::Core::ECS::ISystem{

@@ -164,7 +164,7 @@ protected:
 
     [[nodiscard]] WidgetId anchor(const AStringView parent = "panel")const{ return id("anchor", parent); }
 
-    [[nodiscard]] const HitTarget* menuHost()const{
+    [[nodiscard]] const HitTarget* menuHost()const noexcept{
         for(const HitTarget& entry : m_context.input().targets()){
             if(entry.navigable && entry.popup.instanceGeneration == m_menu.instanceGeneration())
                 return &entry;
@@ -172,7 +172,7 @@ protected:
         return nullptr;
     }
 
-    [[nodiscard]] const HitTarget* menuRow(const u64 key)const{
+    [[nodiscard]] const HitTarget* menuRow(const u64 key)const noexcept{
         for(const HitTarget& entry : m_context.input().targets()){
             if(entry.value == key && entry.popup.instanceGeneration == m_menu.instanceGeneration())
                 return &entry;

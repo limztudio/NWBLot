@@ -106,125 +106,6 @@ GpuDescriptorHeap::PendingRecordingLease GpuDescriptorHeap::acquirePendingRecord
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass)const noexcept{
-    const GpuDescriptorHeapAbi& abi = m_desc.bindlessHeapAbi;
-    switch(descriptorClass){
-    case GpuDescriptorClass::SampledImage:  return abi.sampledImageBinding;
-    case GpuDescriptorClass::StorageImage:  return abi.storageImageBinding;
-    case GpuDescriptorClass::SampledBuffer: return abi.sampledBufferBinding;
-    case GpuDescriptorClass::StorageBuffer: return abi.storageBufferBinding;
-    case GpuDescriptorClass::UniformBuffer: return abi.uniformBufferBinding;
-    case GpuDescriptorClass::AccelStruct:   return abi.accelStructBinding;
-    case GpuDescriptorClass::Sampler:       return abi.samplerBinding;
-    case GpuDescriptorClass::SampledImage2DArray: return abi.sampledImage2DArrayBinding;
-    case GpuDescriptorClass::SampledImage3D: return abi.sampledImage3DBinding;
-    case GpuDescriptorClass::SampledImage2DArrayUint: return abi.sampledImage2DArrayUintBinding;
-    case GpuDescriptorClass::SampledImageCube: return abi.sampledImageCubeBinding;
-    default:                                return 0u;
-    }
-}
-
-GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
-    // Ordinary resources share slots; TLAS selects immutable set-2 blocks.
-    if(descriptorClass == GpuDescriptorClass::Sampler)
-        return m_samplerSlots;
-    if(descriptorClass == GpuDescriptorClass::AccelStruct)
-        return m_accelStructSlots;
-    return m_resourceSlots;
-}
-
-DescriptorBufferSegment GpuDescriptorHeap::getAccelStructBufferBlock(const GpuDescriptorHandle handle)const{
-    ScopedLock lock(m_mutex);
-    if(
-        !m_initialized
-        || !handle.valid()
-        || handle.descriptorClass() != GpuDescriptorClass::AccelStruct
-        || handle.slot() >= m_accelStructBufferBlocks.size()
-        || handle.slot() >= m_accelStructResources.size()
-        || handle.slot() >= m_accelStructSlots.slotStates.size()
-        || handle.slot() >= m_accelStructSlots.allocatedClasses.size()
-        || m_accelStructSlots.slotStates[handle.slot()] != SlotState::Live
-        || m_accelStructSlots.allocatedClasses[handle.slot()] != static_cast<u8>(GpuDescriptorClass::AccelStruct)
-        || !m_accelStructResources[handle.slot()]
-    )
-        return {};
-    return m_accelStructBufferBlocks[handle.slot()];
-}
-
-void GpuDescriptorHeap::releaseAccelStructDescriptorBlock(const u32 slot){
-    if(slot >= m_accelStructBufferBlocks.size())
-        return;
-
-    DescriptorBufferSegment& block = m_accelStructBufferBlocks[slot];
-    if(block.valid() && m_context.descriptorBufferManager)
-        m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
-    block = {};
-    if(slot < m_accelStructResources.size())
-        m_accelStructResources[slot] = nullptr;
-}
-
-void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHandle handle){
-    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
-        releaseAccelStructDescriptorBlock(handle.slot());
-        return;
-    }
-
-    if(handle.descriptorClass() == GpuDescriptorClass::Sampler){
-        if(handle.slot() < m_samplerDescriptorResources.size())
-            m_samplerDescriptorResources[handle.slot()].reset();
-        return;
-    }
-
-    if(handle.slot() < m_resourceDescriptorBuffers.size())
-        m_resourceDescriptorBuffers[handle.slot()].reset();
-    if(handle.slot() < m_resourceDescriptorTextures.size())
-        m_resourceDescriptorTextures[handle.slot()].reset();
-}
-
-bool GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){
-    const usize retirementJournalCapacity = AddSize(AddSize(resourceCapacity, samplerCapacity), accelStructCapacity);
-    const usize tableBytes[] = {
-        SlotAllocator::RequiredBytes(resourceCapacity),
-        SlotAllocator::RequiredBytes(samplerCapacity),
-        SlotAllocator::RequiredBytes(accelStructCapacity),
-        FixedTable<DescriptorBufferSegment>::RequiredBytes(accelStructCapacity),
-        FixedTable<RayTracingAccelStructHandle>::RequiredBytes(accelStructCapacity),
-        FixedTable<BufferHandle>::RequiredBytes(resourceCapacity),
-        FixedTable<TextureHandle>::RequiredBytes(resourceCapacity),
-        FixedTable<SamplerHandle>::RequiredBytes(samplerCapacity),
-        FixedTable<GpuDescriptorHandle>::RequiredBytes(retirementJournalCapacity),
-        FixedTable<RetiredSlot>::RequiredBytes(retirementJournalCapacity),
-    };
-    usize arenaBytes = 0u;
-    for(const usize bytes : tableBytes)
-        arenaBytes = AddSize(arenaBytes, bytes);
-    m_storageArena.emplace(VulkanArenaScope::s_DescriptorHeapStorageArena, arenaBytes);
-    Alloc::PersistentArena& arena = *m_storageArena;
-    if(
-        !m_resourceSlots.initialize(arena, resourceCapacity)
-        || !m_samplerSlots.initialize(arena, samplerCapacity)
-        || !m_accelStructSlots.initialize(arena, accelStructCapacity)
-        || !m_accelStructBufferBlocks.initialize(arena, accelStructCapacity)
-        || !m_accelStructResources.initialize(arena, accelStructCapacity)
-        || !m_resourceDescriptorBuffers.initialize(arena, resourceCapacity)
-        || !m_resourceDescriptorTextures.initialize(arena, resourceCapacity)
-        || !m_samplerDescriptorResources.initialize(arena, samplerCapacity)
-        || !m_pendingRecording.initialize(arena, retirementJournalCapacity)
-        || !m_retired.initialize(arena, retirementJournalCapacity)
-    )
-        return false;
-
-    for(auto& resource : m_accelStructResources)
-        resource = RayTracingAccelStructHandle(nullptr, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
-    for(auto& resource : m_resourceDescriptorBuffers)
-        resource = BufferHandle(nullptr, BufferHandle::deleter_type(&m_context.objectArena));
-    for(auto& resource : m_resourceDescriptorTextures)
-        resource = TextureHandle(nullptr, TextureHandle::deleter_type(&m_context.objectArena));
-    for(auto& resource : m_samplerDescriptorResources)
-        resource = SamplerHandle(nullptr, SamplerHandle::deleter_type(&m_context.objectArena));
-    return true;
-}
-
 bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     using namespace __hidden_vulkan_descriptor_heap;
     ScopedLock lock(m_mutex);
@@ -444,77 +325,6 @@ void GpuDescriptorHeap::shutdown(){
     shutdownLocked();
 }
 
-void GpuDescriptorHeap::shutdownForDeviceTeardown()noexcept{
-    NothrowScopedLock lock(m_mutex);
-    resetStateForShutdownLocked();
-}
-
-void GpuDescriptorHeap::shutdownLocked(){
-    if(m_context.descriptorBufferManager){
-        if(m_resourceBufferBlock.valid())
-            m_context.descriptorBufferManager->freeForBindingGeneration(m_resourceBufferBlock, m_descriptorBufferGeneration);
-        if(m_samplerBufferBlock.valid())
-            m_context.descriptorBufferManager->freeForBindingGeneration(m_samplerBufferBlock, m_descriptorBufferGeneration);
-        for(const DescriptorBufferSegment& block : m_accelStructBufferBlocks){
-            if(block.valid())
-                m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
-        }
-    }
-
-    resetStateForShutdownLocked();
-}
-
-void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
-    for(HeapUse& heapUse : m_heapUses){
-        if(!heapUse.commandBuffer)
-            continue;
-
-        auto& referencedHeaps = heapUse.commandBuffer->m_referencedDescriptorHeaps;
-        for(usize heapIndex = 0u; heapIndex < referencedHeaps.size(); ++heapIndex){
-            if(referencedHeaps[heapIndex] != this)
-                continue;
-
-            referencedHeaps.erase(referencedHeaps.begin() + heapIndex);
-            break;
-        }
-        heapUse.commandBuffer = nullptr;
-    }
-
-    m_resourceBufferBlock = {};
-    m_samplerBufferBlock = {};
-    m_accelStructBufferBlocks.clear();
-    m_accelStructResources.clear();
-    m_resourceDescriptorBuffers.clear();
-    m_resourceDescriptorTextures.clear();
-    m_samplerDescriptorResources.clear();
-    m_accelStructBufferBindingOffset = 0u;
-    for(u32 i = 0u; i < GpuDescriptorClass::kCount; ++i)
-        m_classBufferOffset[i] = 0u;
-
-    m_resourceLayout = nullptr;
-    m_samplerLayout = nullptr;
-    m_accelStructLayout = nullptr;
-
-    m_resourceSlots.clear();
-    m_samplerSlots.clear();
-    m_accelStructSlots.clear();
-    m_pendingRecording.clear();
-    m_retired.clear();
-    m_storageArena.reset();
-    m_heapUses.clear();
-    m_pendingRecordingCount = 0u;
-    m_retiredCount = 0u;
-    m_activePendingRecordingLeaseCount = 0u;
-    m_lastHeapUseID = 0u;
-    m_descriptorBufferGeneration = 0u;
-    m_desc = {};
-
-    m_initialized = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()const{
     ScopedLock lock(m_mutex);
@@ -549,9 +359,6 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
     }
     return statistics;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum descriptorClass){
@@ -650,6 +457,202 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
     }
 
     collectRetired();
+}
+
+
+u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass)const noexcept{
+    const GpuDescriptorHeapAbi& abi = m_desc.bindlessHeapAbi;
+    switch(descriptorClass){
+    case GpuDescriptorClass::SampledImage:  return abi.sampledImageBinding;
+    case GpuDescriptorClass::StorageImage:  return abi.storageImageBinding;
+    case GpuDescriptorClass::SampledBuffer: return abi.sampledBufferBinding;
+    case GpuDescriptorClass::StorageBuffer: return abi.storageBufferBinding;
+    case GpuDescriptorClass::UniformBuffer: return abi.uniformBufferBinding;
+    case GpuDescriptorClass::AccelStruct:   return abi.accelStructBinding;
+    case GpuDescriptorClass::Sampler:       return abi.samplerBinding;
+    case GpuDescriptorClass::SampledImage2DArray: return abi.sampledImage2DArrayBinding;
+    case GpuDescriptorClass::SampledImage3D: return abi.sampledImage3DBinding;
+    case GpuDescriptorClass::SampledImage2DArrayUint: return abi.sampledImage2DArrayUintBinding;
+    case GpuDescriptorClass::SampledImageCube: return abi.sampledImageCubeBinding;
+    default:                                return 0u;
+    }
+}
+
+DescriptorBufferSegment GpuDescriptorHeap::getAccelStructBufferBlock(const GpuDescriptorHandle handle)const{
+    ScopedLock lock(m_mutex);
+    if(
+        !m_initialized
+        || !handle.valid()
+        || handle.descriptorClass() != GpuDescriptorClass::AccelStruct
+        || handle.slot() >= m_accelStructBufferBlocks.size()
+        || handle.slot() >= m_accelStructResources.size()
+        || handle.slot() >= m_accelStructSlots.slotStates.size()
+        || handle.slot() >= m_accelStructSlots.allocatedClasses.size()
+        || m_accelStructSlots.slotStates[handle.slot()] != SlotState::Live
+        || m_accelStructSlots.allocatedClasses[handle.slot()] != static_cast<u8>(GpuDescriptorClass::AccelStruct)
+        || !m_accelStructResources[handle.slot()]
+    )
+        return {};
+    return m_accelStructBufferBlocks[handle.slot()];
+}
+
+GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
+    // Ordinary resources share slots; TLAS selects immutable set-2 blocks.
+    if(descriptorClass == GpuDescriptorClass::Sampler)
+        return m_samplerSlots;
+    if(descriptorClass == GpuDescriptorClass::AccelStruct)
+        return m_accelStructSlots;
+    return m_resourceSlots;
+}
+
+void GpuDescriptorHeap::releaseAccelStructDescriptorBlock(const u32 slot){
+    if(slot >= m_accelStructBufferBlocks.size())
+        return;
+
+    DescriptorBufferSegment& block = m_accelStructBufferBlocks[slot];
+    if(block.valid() && m_context.descriptorBufferManager)
+        m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
+    block = {};
+    if(slot < m_accelStructResources.size())
+        m_accelStructResources[slot] = nullptr;
+}
+
+void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHandle handle){
+    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
+        releaseAccelStructDescriptorBlock(handle.slot());
+        return;
+    }
+
+    if(handle.descriptorClass() == GpuDescriptorClass::Sampler){
+        if(handle.slot() < m_samplerDescriptorResources.size())
+            m_samplerDescriptorResources[handle.slot()].reset();
+        return;
+    }
+
+    if(handle.slot() < m_resourceDescriptorBuffers.size())
+        m_resourceDescriptorBuffers[handle.slot()].reset();
+    if(handle.slot() < m_resourceDescriptorTextures.size())
+        m_resourceDescriptorTextures[handle.slot()].reset();
+}
+
+void GpuDescriptorHeap::shutdownForDeviceTeardown()noexcept{
+    NothrowScopedLock lock(m_mutex);
+    resetStateForShutdownLocked();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void GpuDescriptorHeap::shutdownLocked(){
+    if(m_context.descriptorBufferManager){
+        if(m_resourceBufferBlock.valid())
+            m_context.descriptorBufferManager->freeForBindingGeneration(m_resourceBufferBlock, m_descriptorBufferGeneration);
+        if(m_samplerBufferBlock.valid())
+            m_context.descriptorBufferManager->freeForBindingGeneration(m_samplerBufferBlock, m_descriptorBufferGeneration);
+        for(const DescriptorBufferSegment& block : m_accelStructBufferBlocks){
+            if(block.valid())
+                m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
+        }
+    }
+
+    resetStateForShutdownLocked();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
+    for(HeapUse& heapUse : m_heapUses){
+        if(!heapUse.commandBuffer)
+            continue;
+
+        auto& referencedHeaps = heapUse.commandBuffer->m_referencedDescriptorHeaps;
+        for(usize heapIndex = 0u; heapIndex < referencedHeaps.size(); ++heapIndex){
+            if(referencedHeaps[heapIndex] != this)
+                continue;
+
+            referencedHeaps.erase(referencedHeaps.begin() + heapIndex);
+            break;
+        }
+        heapUse.commandBuffer = nullptr;
+    }
+
+    m_resourceBufferBlock = {};
+    m_samplerBufferBlock = {};
+    m_accelStructBufferBlocks.clear();
+    m_accelStructResources.clear();
+    m_resourceDescriptorBuffers.clear();
+    m_resourceDescriptorTextures.clear();
+    m_samplerDescriptorResources.clear();
+    m_accelStructBufferBindingOffset = 0u;
+    for(u32 i = 0u; i < GpuDescriptorClass::kCount; ++i)
+        m_classBufferOffset[i] = 0u;
+
+    m_resourceLayout = nullptr;
+    m_samplerLayout = nullptr;
+    m_accelStructLayout = nullptr;
+
+    m_resourceSlots.clear();
+    m_samplerSlots.clear();
+    m_accelStructSlots.clear();
+    m_pendingRecording.clear();
+    m_retired.clear();
+    m_storageArena.reset();
+    m_heapUses.clear();
+    m_pendingRecordingCount = 0u;
+    m_retiredCount = 0u;
+    m_activePendingRecordingLeaseCount = 0u;
+    m_lastHeapUseID = 0u;
+    m_descriptorBufferGeneration = 0u;
+    m_desc = {};
+
+    m_initialized = false;
+}
+
+bool GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){
+    const usize retirementJournalCapacity = AddSize(AddSize(resourceCapacity, samplerCapacity), accelStructCapacity);
+    const usize tableBytes[] = {
+        SlotAllocator::RequiredBytes(resourceCapacity),
+        SlotAllocator::RequiredBytes(samplerCapacity),
+        SlotAllocator::RequiredBytes(accelStructCapacity),
+        FixedTable<DescriptorBufferSegment>::RequiredBytes(accelStructCapacity),
+        FixedTable<RayTracingAccelStructHandle>::RequiredBytes(accelStructCapacity),
+        FixedTable<BufferHandle>::RequiredBytes(resourceCapacity),
+        FixedTable<TextureHandle>::RequiredBytes(resourceCapacity),
+        FixedTable<SamplerHandle>::RequiredBytes(samplerCapacity),
+        FixedTable<GpuDescriptorHandle>::RequiredBytes(retirementJournalCapacity),
+        FixedTable<RetiredSlot>::RequiredBytes(retirementJournalCapacity),
+    };
+    usize arenaBytes = 0u;
+    for(const usize bytes : tableBytes)
+        arenaBytes = AddSize(arenaBytes, bytes);
+    m_storageArena.emplace(VulkanArenaScope::s_DescriptorHeapStorageArena, arenaBytes);
+    Alloc::PersistentArena& arena = *m_storageArena;
+    if(
+        !m_resourceSlots.initialize(arena, resourceCapacity)
+        || !m_samplerSlots.initialize(arena, samplerCapacity)
+        || !m_accelStructSlots.initialize(arena, accelStructCapacity)
+        || !m_accelStructBufferBlocks.initialize(arena, accelStructCapacity)
+        || !m_accelStructResources.initialize(arena, accelStructCapacity)
+        || !m_resourceDescriptorBuffers.initialize(arena, resourceCapacity)
+        || !m_resourceDescriptorTextures.initialize(arena, resourceCapacity)
+        || !m_samplerDescriptorResources.initialize(arena, samplerCapacity)
+        || !m_pendingRecording.initialize(arena, retirementJournalCapacity)
+        || !m_retired.initialize(arena, retirementJournalCapacity)
+    )
+        return false;
+
+    for(auto& resource : m_accelStructResources)
+        resource = RayTracingAccelStructHandle(nullptr, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
+    for(auto& resource : m_resourceDescriptorBuffers)
+        resource = BufferHandle(nullptr, BufferHandle::deleter_type(&m_context.objectArena));
+    for(auto& resource : m_resourceDescriptorTextures)
+        resource = TextureHandle(nullptr, TextureHandle::deleter_type(&m_context.objectArena));
+    for(auto& resource : m_samplerDescriptorResources)
+        resource = SamplerHandle(nullptr, SamplerHandle::deleter_type(&m_context.objectArena));
+    return true;
 }
 
 

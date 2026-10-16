@@ -29,6 +29,8 @@ struct NavigationCall{
     usize caret = 0u;
     f32 viewportHeight = 0.0f;
 
+
+public:
     explicit NavigationCall(Alloc::GlobalArena& arena) : text(arena){}
 };
 
@@ -102,6 +104,8 @@ struct NavigationAction{
     AString<Alloc::GlobalArena> text;
     Ui::EditAction::Enum action = Ui::EditAction::Abandon;
 
+
+public:
     explicit NavigationAction(Alloc::GlobalArena& arena) : text(arena){}
 };
 

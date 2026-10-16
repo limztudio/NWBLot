@@ -15,6 +15,7 @@ import json
 import math
 import os
 import platform
+import re
 import struct
 import subprocess
 import sys
@@ -34,7 +35,7 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 from profiles import BaselineProfile, corpus_profile_names, get_profile, profile_names  # noqa: E402
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    FRAMEBUFFER_CAPTURE_SKIP_MESSAGE, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, read_bmp_24, wait_for_application_capture_exit, build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_capture_result, wait_for_log_message,)
 
 LIT_GIT = "git"
@@ -147,6 +148,7 @@ class CaptureResult:
     source_worktree_clean: bool
     frozen_environment: Mapping[str, str]
     forbidden_log_messages: Tuple[str, ...]
+    live_warmup: Optional[Mapping[str, object]] = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +198,8 @@ def canonical_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
 
 
 def capture_mode(profile: BaselineProfile) -> str:
+    if profile.frozen_environment.get("NWB_GI_SMOKE_COMPLEX_SCENE") == "1":
+        return "settled-readback"
     return LIT_FRAME_LOCKED if profile.capture_freeze_frame != 0 else LIT_SETTLED
 
 
@@ -308,6 +312,58 @@ def validate_runtime_log(log_text: str, rejected_messages: Sequence[str]) -> Tup
     return forbidden
 
 
+def validate_complex_gi_warmup(log_text: str, profile: BaselineProfile, frozen_environment: Mapping[str, str]) -> Optional[Mapping[str, object]]:
+    if profile.frozen_environment.get("NWB_GI_SMOKE_COMPLEX_SCENE") != "1":
+        return None
+    if frozen_environment.get("NWB_GI_SMOKE_COMPLEX_SCENE") != "1":
+        raise SmokeFailure("complex GI profile requires its selected complex scene")
+    try:
+        requested_seconds = struct.unpack("f", struct.pack("f", float(frozen_environment.get("NWB_GI_SMOKE_MIN_SETTLE_SECONDS", "30"))))[0]
+    except (ValueError, OverflowError, struct.error) as error:
+        raise SmokeFailure("complex GI requires a finite live warmup of at least 30 seconds") from error
+    if not math.isfinite(requested_seconds) or requested_seconds < 30.0 or profile.capture_freeze_frame < 360:
+        raise SmokeFailure("complex GI requires at least 360 presentations then 30 live warmup seconds")
+    patterns = {
+        "start": r"GiTestSmokeProject: complex GI live warmup start graphics_frame=(\d+) presentations=(\d+) required_presentations=(\d+) required_seconds=(\S+)",
+        "end": r"GiTestSmokeProject: complex GI live warmup end graphics_frame=(\d+) presentations=(\d+) elapsed_seconds=(\S+)",
+        "readback": r"FramebufferCapture: graphics source frame (\d+)",
+        "capture": r"GiTestSmokeProject: complex GI capture source_frame=(\d+)",
+    }
+    matches = {}
+    for name, pattern in patterns.items():
+        records = list(re.finditer(pattern, log_text))
+        if len(records) != 1:
+            raise SmokeFailure(f"complex GI requires exactly one {name} live warmup evidence record")
+        matches[name] = records[0]
+    start_frame, start_presentations, required_presentations = map(int, matches["start"].groups()[:3])
+    end_frame, end_presentations = map(int, matches["end"].groups()[:2])
+    readback_frame = int(matches["readback"].group(1))
+    capture_frame = int(matches["capture"].group(1))
+    numeric_pattern = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+    for value in (matches["start"].group(4), matches["end"].group(3)):
+        if not re.fullmatch(numeric_pattern, value):
+            raise SmokeFailure("complex GI has malformed live warmup evidence")
+    try:
+        required_seconds = float(matches["start"].group(4))
+        elapsed_seconds = float(matches["end"].group(3))
+    except ValueError as error:
+        raise SmokeFailure("complex GI has malformed live warmup evidence") from error
+    if required_presentations != profile.capture_freeze_frame or start_presentations < required_presentations:
+        raise SmokeFailure("complex GI live warmup began before the presentation warmup")
+    if not math.isfinite(required_seconds) or required_seconds != requested_seconds:
+        raise SmokeFailure("complex GI live warmup duration does not match its configured requirement")
+    if not math.isfinite(elapsed_seconds) or elapsed_seconds < required_seconds:
+        raise SmokeFailure("complex GI live warmup ended before its required duration")
+    if end_frame <= start_frame or end_presentations <= start_presentations:
+        raise SmokeFailure("complex GI live warmup has no rendered presentation progress")
+    if capture_frame != readback_frame or capture_frame < end_frame or capture_frame >= 2**64 - 1:
+        raise SmokeFailure("complex GI capture source does not match its completed readback and live warmup")
+    if not (matches["start"].start() < matches["end"].start() < matches["readback"].start() < matches["capture"].start()):
+        raise SmokeFailure("complex GI live warmup and readback evidence is out of order")
+    return {"start_graphics_frame": start_frame, "start_presentations": start_presentations, "required_presentations": required_presentations, "required_live_seconds": required_seconds,
+        "elapsed_live_seconds": elapsed_seconds, "warmup_end_graphics_frame": end_frame, "end_presentations": end_presentations, "capture_source_frame": capture_frame}
+
+
 def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_path: Path, log_path: Path, frozen_environment: Mapping[str, str],) -> CaptureResult:
     if not args.executable.is_file():
         raise SmokeFailure(f"renderer baseline executable does not exist: {args.executable}")
@@ -321,6 +377,12 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
         environment["NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"] = str(profile.capture_freeze_frame)
     if profile.fixed_delta_seconds != 0.0:
         environment["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = f"{profile.fixed_delta_seconds:.9g}"
+    complex_readback = profile.frozen_environment.get("NWB_GI_SMOKE_COMPLEX_SCENE") == "1"
+    if complex_readback and frozen_environment.get("NWB_GI_SMOKE_COMPLEX_SCENE") != "1":
+        raise SmokeFailure("complex GI profile requires its selected complex scene")
+    if complex_readback:
+        environment["NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"] = str(capture_path.resolve())
+        environment["NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"] = str(profile.capture_freeze_frame)
     backend = None
     logserver_process = None
     app_process = None
@@ -331,35 +393,43 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
     log_baseline: Mapping[Path, int] = {}
     log_pattern = ""
     log_text = ""
+    wait_failure = None
     try:
-        backend = create_capture_backend()
+        if not complex_readback:
+            backend = create_capture_backend()
         logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(launch_args, args.executable, environment)
         app_process = launch_testbed(launch_args, args.executable, environment, log_port)
-        window = backend.wait_for_window(app_process.pid, args.startup_timeout, profile.window_title)
-        if not window:
-            ensure_process_running(app_process, f"while waiting for '{profile.window_title}'")
-            raise SmokeFailure(f"renderer baseline did not expose expected window '{profile.window_title}'")
-        if isinstance(backend, WindowsCapture):
-            backend.prepare_raw_client_window(window)
+        if complex_readback:
+            try:
+                wait_for_application_capture_exit(app_process, capture_path, args.startup_timeout)
+            except SmokeFailure as error:
+                wait_failure = error
         else:
-            backend.prepare_window(window)
-        if profile.capture_freeze_frame != 0:
-            if not profile.capture_ready_log:
-                raise SmokeFailure(f"frame-locked profile '{args.profile}' has no capture-ready log marker")
-            if not log_directory:
-                raise SmokeFailure("frame-locked renderer baseline requires a readable runtime-log directory")
-            wait_for_log_message(log_directory, log_baseline, log_pattern, profile.capture_ready_log, args.startup_timeout,)
-            # The marker identifies the fixture's held update phase.
-            # This delay precedes client capture; it does not identify or wait on an accepted GPU source-frame fence.
-            time.sleep(args.settle_seconds)
-        else:
-            time.sleep(args.settle_seconds)
-        ensure_process_running(app_process, "before baseline capture")
-        if isinstance(backend, WindowsCapture):
-            capture = backend.capture_prepared_raw_client_window(window, capture_path)
-        else:
-            capture = backend.capture_window(window, capture_path)
-        validate_capture_result(capture)
+            window = backend.wait_for_window(app_process.pid, args.startup_timeout, profile.window_title)
+            if not window:
+                ensure_process_running(app_process, f"while waiting for '{profile.window_title}'")
+                raise SmokeFailure(f"renderer baseline did not expose expected window '{profile.window_title}'")
+            if isinstance(backend, WindowsCapture):
+                backend.prepare_raw_client_window(window)
+            else:
+                backend.prepare_window(window)
+            if profile.capture_freeze_frame != 0:
+                if not profile.capture_ready_log:
+                    raise SmokeFailure(f"frame-locked profile '{args.profile}' has no capture-ready log marker")
+                if not log_directory:
+                    raise SmokeFailure("frame-locked renderer baseline requires a readable runtime-log directory")
+                wait_for_log_message(log_directory, log_baseline, log_pattern, profile.capture_ready_log, args.startup_timeout,)
+                # The marker identifies the fixture's held update phase.
+                # This delay precedes client capture; it does not identify or wait on an accepted GPU source-frame fence.
+                time.sleep(args.settle_seconds)
+            else:
+                time.sleep(args.settle_seconds)
+            ensure_process_running(app_process, "before baseline capture")
+            if isinstance(backend, WindowsCapture):
+                capture = backend.capture_prepared_raw_client_window(window, capture_path)
+            else:
+                capture = backend.capture_window(window, capture_path)
+            validate_capture_result(capture)
         app_exit_code, app_exit_tail = terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
         app_process = None
         log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, LIT_RENDERER_BASELINE_LOGSERVER,)
@@ -370,13 +440,22 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
         if backend:
             backend.close()
 
+    log_path.write_text(log_text, encoding=LIT_UTF_8)
+    if wait_failure:
+        raise wait_failure
     require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
+    forbidden = validate_runtime_log(log_text, args.reject_log)
+    if complex_readback and FRAMEBUFFER_CAPTURE_SKIP_MESSAGE in log_text:
+        raise SmokeSkip(FRAMEBUFFER_CAPTURE_SKIP_MESSAGE)
     if not capture_path.is_file():
         raise SmokeFailure(f"renderer baseline did not create capture: {capture_path}")
-    forbidden = validate_runtime_log(log_text, args.reject_log)
-    log_path.write_text(log_text, encoding=LIT_UTF_8)
+    if complex_readback:
+        validate_capture_result(read_bmp_24(capture_path))
+        if Path(str(capture_path) + ".partial").exists():
+            raise SmokeFailure("complex GI application capture left an incomplete readback")
+    live_warmup = validate_complex_gi_warmup(log_text, profile, frozen_environment)
     return CaptureResult(capture_file=capture_path.name, log_file=log_path.name, capture_sha256=sha256_file(capture_path), executable_sha256=sha256_file(args.executable), source_revision=source_revision(), source_worktree_clean=source_worktree_clean(),
-        frozen_environment=dict(frozen_environment), forbidden_log_messages=forbidden,)
+        frozen_environment=dict(frozen_environment), forbidden_log_messages=forbidden, live_warmup=live_warmup,)
 
 
 def manifest_payload(capture_kind: str, profile_name: str, profile: BaselineProfile, args: argparse.Namespace, capture: CaptureResult, reference_manifest: Optional[Mapping[str, object]] = None,) -> Dict[str, object]:
@@ -384,6 +463,8 @@ def manifest_payload(capture_kind: str, profile_name: str, profile: BaselineProf
         "window_title": profile.window_title, LIT_CAPTURE_MODE: capture_mode(profile), LIT_CAPTURE_FREEZE_FRAME: profile.capture_freeze_frame, LIT_FIXED_DELTA_SECONDS: profile.fixed_delta_seconds, LIT_SETTLE_SECONDS: args.settle_seconds,
         LIT_GPU_VALIDATION: args.gpu_validation, "runtime_directory": str(args.runtime_dir), LIT_SOURCE_REVISION: capture.source_revision, LIT_SOURCE_WORKTREE_CLEAN: capture.source_worktree_clean, "executable_sha256": capture.executable_sha256,
         LIT_CAPTURE_FILE: capture.capture_file, LIT_CAPTURE_SHA256: capture.capture_sha256, "log_file": capture.log_file, LIT_FROZEN_ENVIRONMENT: dict(capture.frozen_environment), "platform": platform.platform(), "python_version": platform.python_version(), }
+    if capture.live_warmup is not None:
+        payload["live_warmup"] = dict(capture.live_warmup)
     if reference_manifest is not None:
         payload[LIT_REFERENCE_SOURCE_REVISION] = reference_manifest.get(LIT_SOURCE_REVISION)
         payload["reference_capture_sha256"] = reference_manifest.get(LIT_CAPTURE_SHA256)
@@ -616,9 +697,14 @@ def prepare_output_directory(path: Path) -> None:
 
 def run(args: argparse.Namespace) -> int:
     profile = get_profile(args.profile)
-    args.settle_seconds = profile.settle_seconds if args.settle_seconds is None else args.settle_seconds
-    if not math.isfinite(args.settle_seconds) or args.settle_seconds <= 0.0:
-        raise SmokeFailure("--settle-seconds must be positive and finite")
+    if profile.frozen_environment.get("NWB_GI_SMOKE_COMPLEX_SCENE") == "1":
+        if args.settle_seconds is not None:
+            raise SmokeFailure("complex GI readback uses NWB_GI_SMOKE_MIN_SETTLE_SECONDS instead of --settle-seconds")
+        args.settle_seconds = 0.0
+    else:
+        args.settle_seconds = profile.settle_seconds if args.settle_seconds is None else args.settle_seconds
+        if not math.isfinite(args.settle_seconds) or args.settle_seconds <= 0.0:
+            raise SmokeFailure("--settle-seconds must be positive and finite")
     frozen_environment = effective_frozen_environment(profile)
     reference_manifest: Optional[Mapping[str, object]] = None
     reference_capture: Optional[Path] = None
@@ -680,7 +766,7 @@ def make_parser() -> argparse.ArgumentParser:
     validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION, action="store_false")
     parser.set_defaults(gpu_validation=False)
     parser.add_argument("--settle-seconds", type=float, help="Override the profile's fixed temporal settle duration.")
-    parser.add_argument("--startup-timeout", type=float, default=30.0, help="Seconds to wait for the native smoke window.")
+    parser.add_argument("--startup-timeout", type=float, default=120.0, help="Seconds to wait for the native window and, separately, its capture-ready marker.")
     parser.add_argument("--require-exact", action=LIT_STORE_TRUE, help="Require bit-exact RGB output for a comparison.")
     parser.add_argument("--maximum-max-abs", type=int, help="Optional maximum per-channel RGB difference.")
     parser.add_argument("--maximum-mean-abs", type=float, help="Optional maximum mean absolute RGB difference.")
@@ -717,6 +803,61 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def run_self_test() -> int:
+    complex_profile = get_profile("surfel-gi-complex")
+    complex_environment = dict(complex_profile.frozen_environment)
+    complex_evidence = (
+        "GiTestSmokeProject: complex GI live warmup start graphics_frame=361 presentations=360 required_presentations=360 required_seconds=30\n"
+        "GiTestSmokeProject: complex GI live warmup end graphics_frame=901 presentations=900 elapsed_seconds=30.125\n"
+        "FramebufferCapture: capture ready\n"
+        "FramebufferCapture: graphics source frame 902\n"
+        "GiTestSmokeProject: complex GI capture source_frame=902\n"
+    )
+    assert validate_complex_gi_warmup(complex_evidence, complex_profile, complex_environment)["capture_source_frame"] == 902
+    for old, replacement in (
+        ("start graphics_frame=361 presentations=360", "start graphics_frame=361 presentations=359"),
+        ("elapsed_seconds=30.125", "elapsed_seconds=29.999999"),
+        ("elapsed_seconds=30.125", "elapsed_seconds=nan"),
+        ("elapsed_seconds=30.125", "elapsed_seconds=invalid"),
+        ("elapsed_seconds=30.125", "elapsed_seconds=3_0.125"),
+        ("required_seconds=30", "required_seconds=10"),
+        ("end graphics_frame=901 presentations=900", "end graphics_frame=361 presentations=900"),
+        ("end graphics_frame=901 presentations=900", "end graphics_frame=901 presentations=360"),
+        ("capture source_frame=902", "capture source_frame=901"),
+        ("graphics source frame 902", "graphics source frame 900"),
+    ):
+        try:
+            validate_complex_gi_warmup(complex_evidence.replace(old, replacement), complex_profile, complex_environment)
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError(f"complex GI accepted invalid live warmup evidence: {replacement}")
+    for line in complex_evidence.splitlines(keepends=True):
+        if "capture ready" in line:
+            continue
+        for altered in (complex_evidence.replace(line, ""), complex_evidence + line):
+            try:
+                validate_complex_gi_warmup(altered, complex_profile, complex_environment)
+            except SmokeFailure:
+                pass
+            else:
+                raise AssertionError("complex GI accepted missing or repeated live warmup evidence")
+    for value in ("10", "nan", "inf", "invalid", "1e300"):
+        try:
+            validate_complex_gi_warmup(complex_evidence, complex_profile, {**complex_environment, "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": value})
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError("complex GI accepted an invalid configured live warmup")
+    rounded_requirement = struct.unpack("f", struct.pack("f", 30.00002))[0]
+    rounded_evidence = complex_evidence.replace("required_seconds=30", f"required_seconds={rounded_requirement!r}").replace("elapsed_seconds=30.125", f"elapsed_seconds={rounded_requirement!r}")
+    validate_complex_gi_warmup(rounded_evidence, complex_profile, {**complex_environment, "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "30.00002"})
+    for altered in ("".join(reversed(complex_evidence.splitlines(keepends=True))), complex_evidence.replace("graphics source frame 902", "graphics source frame 900").replace("capture source_frame=902", "capture source_frame=900")):
+        try:
+            validate_complex_gi_warmup(altered, complex_profile, complex_environment)
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError("complex GI accepted reordered or stale readback evidence")
     numeric_arguments = [LIT_PROFILE_2, LIT_OPAQUE_TEXTURE, LIT_EXECUTABLE, "renderer", LIT_RUNTIME_DIR, "runtime", LIT_OUTPUT_DIR, "output"]
     for option in ("--startup-timeout", "--settle-seconds", "--maximum-mean-abs"):
         for value in ("nan", "inf", "-inf"):
@@ -817,6 +958,35 @@ def run_self_test() -> int:
         assert raw_events == [(LIT_PREPARE, 17), (LIT_READY,), (LIT_SETTLE, 0.0), (LIT_CAPTURE, 17), (LIT_CLOSE,)]
         raw_backend.prepare_window.assert_not_called()
         raw_backend.capture_window.assert_not_called()
+
+        # A completed readback must qualify its own source; desktop capture cannot replace missing provenance.
+        complex_args = SimpleNamespace(**vars(orchestration_args))
+        complex_args.profile = "surfel-gi-complex"
+        complex_capture = root / "complex.bmp"
+        complex_log = root / "complex.log"
+        captured_environment = {}
+
+        def launch_complex(_args, _executable, environment, _port):
+            captured_environment.update(environment)
+            return app
+
+        def complete_complex(_app, output_path, _timeout):
+            write_bmp_rgb(output_path, 2, 1, bytes((0, 0, 0, 255, 0, 255)))
+            return 0, True
+
+        with mock.patch.object(module, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
+             mock.patch.object(module, LIT_CREATE_CAPTURE_BACKEND, side_effect=AssertionError("complex GI must use application readback")), \
+             mock.patch.object(module, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
+             mock.patch.object(module, LIT_LAUNCH_TESTBED, side_effect=launch_complex), \
+             mock.patch.object(module, "wait_for_application_capture_exit", side_effect=complete_complex), \
+             mock.patch.object(module, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
+             mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=complex_evidence), \
+             mock.patch.object(module, LIT_SOURCE_REVISION, return_value="test-source"), \
+             mock.patch.object(module, LIT_SOURCE_WORKTREE_CLEAN, return_value=True):
+            result = capture_scene(complex_args, complex_profile, complex_capture, complex_log, complex_environment)
+        assert result.live_warmup["capture_source_frame"] == 902
+        assert captured_environment["NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"] == str(complex_capture.resolve())
+        assert captured_environment["NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"] == "360"
 
         reference_directory = root / LIT_OPAQUE_TEXTURE / LIT_REFERENCE
         reference_directory.mkdir(parents=True)

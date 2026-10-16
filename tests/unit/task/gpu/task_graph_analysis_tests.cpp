@@ -6,6 +6,7 @@
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
+
 #include <global/text_utils.h>
 
 #include <gtest/gtest.h>

@@ -141,28 +141,6 @@ bool ReflectionCsgContextProbe::create(){
     return beginPhase();
 }
 
-bool ReflectionCsgContextProbe::beginPhase(){
-    const bool small = m_phase == 0u || m_phase == 3u;
-    const bool csg = m_phase != 2u;
-    m_world.entity(m_entities.smallReceiver).getComponent<Impl::RendererComponent>().visible = small;
-    // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
-    m_world.entity(m_entities.denseReceiver).getComponent<Impl::Scene::TransformComponent>().position.x = small ? 40.f : 0.f;
-    m_world.entity(m_entities.smallCutter).getComponent<Impl::CsgCutterComponent>().active = small;
-    m_world.entity(m_entities.denseCutter).getComponent<Impl::CsgCutterComponent>().active = !small && csg;
-    m_phaseSource = m_context.graphics.getFrameIndex();
-    m_completed = 0u;
-    m_targetSource = Limit<u64>::s_Max;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
-    return startCapture();
-}
-
-bool ReflectionCsgContextProbe::startCapture(){
-    const auto path = m_phase == 4u ? SmokeEnvironmentString(m_output, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", m_output, m_phase);
-    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
-    m_capture = MakeUnique<FramebufferCapture>(m_context, AStringView(path), 1u, options);
-    return m_capture && m_capture->start();
-}
-
 bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
     // Wait before advancing the fixture/world; a later wait cannot recover skipped latest-only diagnostic rows.
     if(!m_context.graphics.waitForIdle()){
@@ -210,6 +188,28 @@ bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionSt
     if(m_targetSource == Limit<u64>::s_Max && m_completed >= 16u)
         m_targetSource = frame;
     return true;
+}
+
+bool ReflectionCsgContextProbe::beginPhase(){
+    const bool small = m_phase == 0u || m_phase == 3u;
+    const bool csg = m_phase != 2u;
+    m_world.entity(m_entities.smallReceiver).getComponent<Impl::RendererComponent>().visible = small;
+    // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
+    m_world.entity(m_entities.denseReceiver).getComponent<Impl::Scene::TransformComponent>().position.x = small ? 40.f : 0.f;
+    m_world.entity(m_entities.smallCutter).getComponent<Impl::CsgCutterComponent>().active = small;
+    m_world.entity(m_entities.denseCutter).getComponent<Impl::CsgCutterComponent>().active = !small && csg;
+    m_phaseSource = m_context.graphics.getFrameIndex();
+    m_completed = 0u;
+    m_targetSource = Limit<u64>::s_Max;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
+    return startCapture();
+}
+
+bool ReflectionCsgContextProbe::startCapture(){
+    const auto path = m_phase == 4u ? SmokeEnvironmentString(m_output, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", m_output, m_phase);
+    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
+    m_capture = MakeUnique<FramebufferCapture>(m_context, AStringView(path), 1u, options);
+    return m_capture && m_capture->start();
 }
 
 

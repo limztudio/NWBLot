@@ -21,7 +21,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 UiListSmokeSource::key(const u64 index)const{
+u64 UiListSmokeSource::key(const u64 index)const noexcept{
     const u64 count = rowCount();
     if(index >= count)
         return 0u;
@@ -31,7 +31,7 @@ u64 UiListSmokeSource::key(const u64 index)const{
     return value;
 }
 
-Expected<u64> UiListSmokeSource::indexOf(const u64 keyValue)const{
+Expected<u64> UiListSmokeSource::indexOf(const u64 keyValue)const noexcept{
     u64 index = 0u;
     if(keyValue == 0u || keyValue > 100000u || keyValue == m_removed)
         return MakeUnexpected(Failure{});
@@ -40,11 +40,11 @@ Expected<u64> UiListSmokeSource::indexOf(const u64 keyValue)const{
     return index;
 }
 
-Expected<u64> UiListSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> UiListSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
-StringView UiListSmokeSource::text(const u64 index)const{
+StringView UiListSmokeSource::text(const u64 index)const noexcept{
     ++m_labelReads;
     const u64 rowKey = key(index);
     if(rowKey == 0u)
@@ -66,7 +66,7 @@ StringView UiListSmokeSource::text(const u64 index)const{
     return { m_label.data(), 4u + count };
 }
 
-bool UiListSmokeSource::enabled(const u64 index)const{
+bool UiListSmokeSource::enabled(const u64 index)const noexcept{
     return index < rowCount() && key(index) != 5u;
 }
 

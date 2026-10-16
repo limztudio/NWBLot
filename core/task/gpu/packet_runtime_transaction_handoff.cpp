@@ -131,6 +131,7 @@ struct GpuTaskGraphExternalResourceHandoffSnapshot::Storage final : NoCopy{
     {}
 
 
+public:
     void reset()noexcept{
         handoff = {};
         stateSource.reset();

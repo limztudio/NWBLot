@@ -3,6 +3,7 @@
 
 
 #include <core/task/cpu/scheduler.h>
+
 #include <global/terminal_entry.h>
 #include <global/termination.h>
 #include <global/timer.h>
@@ -130,6 +131,8 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
     struct Retirement{
         u32* count;
 
+
+    public:
         explicit Retirement(u32& counter)noexcept : count(&counter){}
         Retirement(const Retirement&) = delete;
         Retirement(Retirement&& other)noexcept : count(other.count){ other.count = nullptr; }

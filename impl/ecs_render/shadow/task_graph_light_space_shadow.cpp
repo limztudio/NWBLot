@@ -98,9 +98,11 @@ struct ViewTask{
 };
 
 struct ShadeTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
     using Payload = ViewTask::Payload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
@@ -167,6 +169,8 @@ struct CasterPayload{
         snapshot.casterCount = 0u;
     }
 
+
+public:
     [[nodiscard]] LightSpaceShadowSnapshot frozenSnapshot()const{
         LightSpaceShadowSnapshot result = snapshot;
         result.casters = casters.data();
@@ -176,9 +180,11 @@ struct CasterPayload{
 };
 
 struct CullTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
     using Payload = CasterPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)

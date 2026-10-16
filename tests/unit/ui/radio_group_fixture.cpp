@@ -124,7 +124,7 @@ void RadioSource::armClose(PopupState& popup, const RadioCallbackSite::Enum site
     m_mutation = RadioMutation::ClosePopup;
 }
 
-u64 RadioSource::rawCount()const{
+u64 RadioSource::rawCount()const noexcept{
     return m_count - static_cast<u64>(m_removed != 0u);
 }
 
@@ -228,11 +228,11 @@ bool RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& op
     return prepare(generation, options, bounds) && m_context.commitFrame(generation);
 }
 
-WidgetId RadioGroupFixture::host()const{
+WidgetId RadioGroupFixture::host()const noexcept{
     return id("radio", "panel");
 }
 
-const RadioGroupChoicePlacement* RadioGroupFixture::choice(const u64 keyValue, const RadioGroupState& state)const{
+const RadioGroupChoicePlacement* RadioGroupFixture::choice(const u64 keyValue, const RadioGroupState& state)const noexcept{
     const RadioGroupPlacement& placement = state.placement();
     for(u32 index = 0u; index < placement.count; ++index){
         if(placement.rows[index].key == keyValue)
@@ -241,7 +241,7 @@ const RadioGroupChoicePlacement* RadioGroupFixture::choice(const u64 keyValue, c
     return nullptr;
 }
 
-Point RadioGroupFixture::choicePoint(const u64 keyValue)const{
+Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcept{
     const RadioGroupChoicePlacement* item = choice(keyValue, m_state);
     return item ? UiWidgetTests::Center(item->rectangle) : Point{};
 }

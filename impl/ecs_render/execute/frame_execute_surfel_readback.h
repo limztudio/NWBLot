@@ -27,9 +27,6 @@ class RendererFramePipeline;
 // Separated from RendererFramePipeline::render(): the readback context plus its recorded/accepted callbacks are one functionality — retain the counter candidate privately until Transfer accepts, then publish the submission token.
 class FrameExecuteSurfelReadback final{
 public:
-    FrameExecuteSurfelReadback() = delete;
-
-
     struct Context{
         Core::Alloc::ScratchArena& scratchArena;
         RendererFramePipeline* renderer = nullptr;
@@ -41,8 +38,13 @@ public:
     };
 
 
+public:
     [[nodiscard]] static bool PrepareReadbackFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
     [[nodiscard]] static bool AcceptReadbackFinalState(void* rawContext, const Core::QueueSubmissionToken& token);
+
+
+public:
+    FrameExecuteSurfelReadback() = delete;
 };
 
 

@@ -82,6 +82,8 @@ public:
         m_invoke(storagePtr());
     }
 
+
+public:
     inline void reset()noexcept{
         if(!m_destroy)
             return;

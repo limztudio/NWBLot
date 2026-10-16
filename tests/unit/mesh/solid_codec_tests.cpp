@@ -6,6 +6,7 @@
 #include <impl/assets_mesh/binary_payload.h>
 
 #include <core/assets/binary_payload_io.h>
+
 #include <tests/common/capturing_logger.h>
 
 #include <global/bit.h>

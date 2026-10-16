@@ -28,16 +28,17 @@ public:
 
 public:
     struct Record{
-        explicit Record(GraphicsArena& arena)
-            : variantName(arena)
-        {}
-
         Name shaderName = s_NameNone;
         GraphicsString variantName;
         Name stage = s_NameNone;
         u64 sourceChecksum = 0;
         u64 bytecodeChecksum = 0;
         NameHash virtualPathHash = {};
+
+
+        explicit Record(GraphicsArena& arena)
+            : variantName(arena)
+        {}
     };
 
 

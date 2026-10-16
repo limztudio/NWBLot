@@ -40,178 +40,6 @@ CommandList::~CommandList()noexcept{
     m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
 }
 
-void CommandList::resetMarkerState(){
-    if(!m_markerStack.empty())
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Recovering {} unterminated command-list marker scope(s)"), m_markerStack.size());
-
-    resetMarkerStateWithoutCallbacks();
-}
-
-void CommandList::resetMarkerStateWithoutCallbacks()noexcept{
-    if(m_isRecording && m_currentCmdBuf && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE){
-        for(usize markerIndex = m_markerStack.size(); markerIndex > 0u; --markerIndex){
-            if(m_markerStack[markerIndex - 1u].usesDebugUtils)
-                m_context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
-        }
-    }
-
-    m_gpuCrashMarkerTracker.resetEventStack();
-    m_markerStack.clear();
-}
-
-void CommandList::discardUnsubmittedUploadChunks(){
-    if(!m_currentCmdBuf)
-        return;
-
-    TrackedCommandBuffer* owner = m_currentCmdBuf.get();
-    const u64 nativeRecordingID = m_nativeRecordingID;
-    const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
-    const u64 reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
-
-    m_device.m_uploadManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
-    m_device.m_scratchManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
-}
-
-void CommandList::abandonUnsubmittedUploadChunks()noexcept{
-    if(!m_currentCmdBuf)
-        return;
-
-    TrackedCommandBuffer* const owner = m_currentCmdBuf.get();
-    const u64 nativeRecordingID = m_nativeRecordingID;
-    const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
-    m_device.m_uploadManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
-    m_device.m_scratchManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
-}
-
-void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
-    m_stateTracker.rollbackRecordingAttempt();
-    resetMarkerStateWithoutCallbacks();
-    if(m_currentCmdBuf){
-        m_currentCmdBuf->discardTimerQueryRecordingClaims();
-        m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
-        m_currentCmdBuf->discardRetainedTextureStateCommits();
-        m_currentCmdBuf->abandonPendingAccelStructBuildCommits();
-        m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
-        abandonUnsubmittedUploadChunks();
-        m_currentCmdBuf.reset();
-    }
-    m_isRecording = false;
-    m_commandRecordingFailed = true;
-    m_nativeRecordingID = 0u;
-    m_renderPassActive = false;
-    m_renderPassFramebuffer = nullptr;
-    m_hostReadbackBarrierTracker.clear();
-#if defined(NWB_DEBUG)
-    m_taskCapabilitiesUsed = GpuQueueCapability::None;
-    m_taskDeclaredCapabilities = GpuQueueCapability::None;
-    m_taskCapabilityTracking = false;
-#endif
-}
-
-bool CommandList::publicCommandStateAccessible()const noexcept{
-    const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
-    return publicationState == s_GraphPublicationUnowned || (publicationState == s_GraphPublicationRecording && GraphRecordingOwnership::HasCapability(*this, m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)));
-}
-
-bool CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
-    u8 expectedState = s_GraphPublicationUnowned;
-    const bool ownershipAvailable = matchesRecordingLease(recordingLeaseSerial) && m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationRecording, MemoryOrder::acq_rel, MemoryOrder::acquire);
-    if(!ownershipAvailable){
-        rejectCommandRecording(NWB_TEXT("begin task-graph command recording ownership"), NWB_TEXT("native recording lease is unavailable or already exclusively owned"));
-        return false;
-    }
-
-    m_graphRecordingOwnershipSerial.store(recordingLeaseSerial, MemoryOrder::release);
-    return true;
-}
-
-void CommandList::publishGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
-    const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationRecording && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "task-graph command recording ownership changed without its capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
-    m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
-}
-
-void CommandList::cancelGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
-    const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
-    const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
-    const bool ownershipMatches = (publicationState == s_GraphPublicationRecording && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "cancelled task-graph recording must retain its exact command-list capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
-    if(publicationState != s_GraphPublicationRecording)
-        return;
-    m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
-    m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
-}
-
-void CommandList::revokeGraphRecordingPublication(const u64 recordingLeaseSerial)noexcept{
-    if(recordingLeaseSerial == 0u)
-        return;
-
-    AtomicBackOff backoff;
-    for(;;){
-        u8 expectedState = s_GraphPublicationRecorded;
-        if(m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationRevoking, MemoryOrder::acq_rel, MemoryOrder::acquire))
-            break;
-        if(expectedState != s_GraphPublicationReading)
-            return;
-        backoff.pause();
-    }
-
-    const bool ownershipMatches = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial && m_recordingLeaseSerial == recordingLeaseSerial;
-    if(!ownershipMatches){
-        m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
-        return;
-    }
-
-    abortRecordingAttemptWithoutCallbacks();
-    m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
-    m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
-}
-
-Expected<u64> CommandList::beginGraphSubmissionOwnership()noexcept{
-    AtomicBackOff backoff;
-    for(;;){
-        u8 expectedState = s_GraphPublicationRecorded;
-        if(m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationSubmitting, MemoryOrder::acq_rel, MemoryOrder::acquire))
-            break;
-        if(expectedState != s_GraphPublicationReading)
-            return MakeUnexpected(Failure{});
-        backoff.pause();
-    }
-
-    const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
-    const bool ownershipValid = graphRecordingOwnershipSerial != 0u && !m_isRecording && !m_commandRecordingFailed && matchesNativeLeaseIdentity();
-    if(!ownershipValid){
-        m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
-        return MakeUnexpected(Failure{});
-    }
-
-    return graphRecordingOwnershipSerial;
-}
-
-void CommandList::acceptGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
-    const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationSubmitting && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "accepted graph submission must retain its exact command-list capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
-    m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
-    m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
-}
-
-void CommandList::endGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
-    const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
-    const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
-    const bool ownershipMatches = (publicationState == s_GraphPublicationSubmitting && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
-    NWB_FATAL_ASSERT_MSG(ownershipMatches, "graph submission ownership changed without its exact capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
-    if(publicationState == s_GraphPublicationSubmitting)
-        m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
-}
-
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     if(publicationState != s_GraphPublicationUnowned){
@@ -321,6 +149,118 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     closeInternal(finalStates);
 }
 
+void CommandList::clearState(){
+    if(!publicCommandStateAccessible())
+        return;
+    if(m_isRecording && !validateCommandRecordingScope(NWB_TEXT("clear command-list state")))
+        return;
+    clearStateInternal();
+}
+
+bool CommandList::publicCommandStateAccessible()const noexcept{
+    const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
+    return publicationState == s_GraphPublicationUnowned || (publicationState == s_GraphPublicationRecording && GraphRecordingOwnership::HasCapability(*this, m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)));
+}
+
+bool CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
+    u8 expectedState = s_GraphPublicationUnowned;
+    const bool ownershipAvailable = matchesRecordingLease(recordingLeaseSerial) && m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationRecording, MemoryOrder::acq_rel, MemoryOrder::acquire);
+    if(!ownershipAvailable){
+        rejectCommandRecording(NWB_TEXT("begin task-graph command recording ownership"), NWB_TEXT("native recording lease is unavailable or already exclusively owned"));
+        return false;
+    }
+
+    m_graphRecordingOwnershipSerial.store(recordingLeaseSerial, MemoryOrder::release);
+    return true;
+}
+
+void CommandList::publishGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
+    const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationRecording && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
+    NWB_FATAL_ASSERT_MSG(ownershipMatches, "task-graph command recording ownership changed without its capability");
+    if(!ownershipMatches)
+        TerminateInvariant();
+    m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
+}
+
+void CommandList::cancelGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
+    const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
+    const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
+    const bool ownershipMatches = (publicationState == s_GraphPublicationRecording && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
+    NWB_FATAL_ASSERT_MSG(ownershipMatches, "cancelled task-graph recording must retain its exact command-list capability");
+    if(!ownershipMatches)
+        TerminateInvariant();
+    if(publicationState != s_GraphPublicationRecording)
+        return;
+    m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
+    m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
+}
+
+void CommandList::revokeGraphRecordingPublication(const u64 recordingLeaseSerial)noexcept{
+    if(recordingLeaseSerial == 0u)
+        return;
+
+    AtomicBackOff backoff;
+    for(;;){
+        u8 expectedState = s_GraphPublicationRecorded;
+        if(m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationRevoking, MemoryOrder::acq_rel, MemoryOrder::acquire))
+            break;
+        if(expectedState != s_GraphPublicationReading)
+            return;
+        backoff.pause();
+    }
+
+    const bool ownershipMatches = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial && m_recordingLeaseSerial == recordingLeaseSerial;
+    if(!ownershipMatches){
+        m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
+        return;
+    }
+
+    abortRecordingAttemptWithoutCallbacks();
+    m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
+    m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
+}
+
+Expected<u64> CommandList::beginGraphSubmissionOwnership()noexcept{
+    AtomicBackOff backoff;
+    for(;;){
+        u8 expectedState = s_GraphPublicationRecorded;
+        if(m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationSubmitting, MemoryOrder::acq_rel, MemoryOrder::acquire))
+            break;
+        if(expectedState != s_GraphPublicationReading)
+            return MakeUnexpected(Failure{});
+        backoff.pause();
+    }
+
+    const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
+    const bool ownershipValid = graphRecordingOwnershipSerial != 0u && !m_isRecording && !m_commandRecordingFailed && matchesNativeLeaseIdentity();
+    if(!ownershipValid){
+        m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
+        return MakeUnexpected(Failure{});
+    }
+
+    return graphRecordingOwnershipSerial;
+}
+
+void CommandList::acceptGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
+    const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationSubmitting && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
+    NWB_FATAL_ASSERT_MSG(ownershipMatches, "accepted graph submission must retain its exact command-list capability");
+    if(!ownershipMatches)
+        TerminateInvariant();
+    m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
+    m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
+}
+
+void CommandList::endGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
+    const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
+    const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
+    const bool ownershipMatches = (publicationState == s_GraphPublicationSubmitting && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
+    NWB_FATAL_ASSERT_MSG(ownershipMatches, "graph submission ownership changed without its exact capability");
+    if(!ownershipMatches)
+        TerminateInvariant();
+    if(publicationState == s_GraphPublicationSubmitting)
+        m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
+}
+
 void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
     if(finalStates)
         finalStates->reset();
@@ -399,12 +339,29 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
     clearStateInternal();
 }
 
-void CommandList::clearState(){
-    if(!publicCommandStateAccessible())
-        return;
-    if(m_isRecording && !validateCommandRecordingScope(NWB_TEXT("clear command-list state")))
-        return;
-    clearStateInternal();
+void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
+    m_stateTracker.rollbackRecordingAttempt();
+    resetMarkerStateWithoutCallbacks();
+    if(m_currentCmdBuf){
+        m_currentCmdBuf->discardTimerQueryRecordingClaims();
+        m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
+        m_currentCmdBuf->discardRetainedTextureStateCommits();
+        m_currentCmdBuf->abandonPendingAccelStructBuildCommits();
+        m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
+        abandonUnsubmittedUploadChunks();
+        m_currentCmdBuf.reset();
+    }
+    m_isRecording = false;
+    m_commandRecordingFailed = true;
+    m_nativeRecordingID = 0u;
+    m_renderPassActive = false;
+    m_renderPassFramebuffer = nullptr;
+    m_hostReadbackBarrierTracker.clear();
+#if defined(NWB_DEBUG)
+    m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    m_taskDeclaredCapabilities = GpuQueueCapability::None;
+    m_taskCapabilityTracking = false;
+#endif
 }
 
 void CommandList::clearStateInternal(){
@@ -565,6 +522,49 @@ bool CommandList::validateTrackedBuffersReadyForClose(){
     }
 
     return true;
+}
+
+void CommandList::resetMarkerState(){
+    if(!m_markerStack.empty())
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Recovering {} unterminated command-list marker scope(s)"), m_markerStack.size());
+
+    resetMarkerStateWithoutCallbacks();
+}
+
+void CommandList::resetMarkerStateWithoutCallbacks()noexcept{
+    if(m_isRecording && m_currentCmdBuf && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE){
+        for(usize markerIndex = m_markerStack.size(); markerIndex > 0u; --markerIndex){
+            if(m_markerStack[markerIndex - 1u].usesDebugUtils)
+                m_context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
+        }
+    }
+
+    m_gpuCrashMarkerTracker.resetEventStack();
+    m_markerStack.clear();
+}
+
+void CommandList::discardUnsubmittedUploadChunks(){
+    if(!m_currentCmdBuf)
+        return;
+
+    TrackedCommandBuffer* owner = m_currentCmdBuf.get();
+    const u64 nativeRecordingID = m_nativeRecordingID;
+    const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
+    const u64 reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
+
+    m_device.m_uploadManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
+    m_device.m_scratchManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
+}
+
+void CommandList::abandonUnsubmittedUploadChunks()noexcept{
+    if(!m_currentCmdBuf)
+        return;
+
+    TrackedCommandBuffer* const owner = m_currentCmdBuf.get();
+    const u64 nativeRecordingID = m_nativeRecordingID;
+    const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
+    m_device.m_uploadManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
+    m_device.m_scratchManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
 }
 
 

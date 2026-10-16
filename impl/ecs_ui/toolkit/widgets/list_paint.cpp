@@ -79,7 +79,7 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
             return false;
         f32 height = frame.rowHeight;
         for(u64 index = candidate->firstRow; index < candidate->endRow; ++index){
-            const auto found = LowerBound(rows.begin(), rows.end(), index, [](const ListRow& row, const u64 value){ return row.index < value; });
+            const auto found = LowerBound(rows.begin(), rows.end(), index, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
             if(found != rows.end() && found->index == index)
                 continue;
             // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
@@ -189,7 +189,7 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
     const auto& rows = frame.rows;
     const WidgetId rowsId = MakeWidgetId(item.state.id, "rows");
     const bool focused = m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_context.input().focus() == frame.commandFocus);
-    auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value){ return row.index < value; });
+    auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
     for(u64 index = placement.firstRow; index < placement.endRow; ++index, ++found){
         if(found == rows.end() || found->index != index || !listStateMatches(frame))
             return false;

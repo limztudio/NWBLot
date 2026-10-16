@@ -4,14 +4,14 @@
 
 #include "decode.h"
 
+#include <core/alloc/scratch.h>
+
+#include <global/basic_string.h>
+#include <global/containers.h>
 #include <global/sync.h>
 
-#include <cstdint>
 #include <iostream>
 #include <sstream>
-#include <string>
-#include <unordered_map>
-#include <vector>
 
 #include "rgd_data_types.h"
 #include "rgd_parsing_utils.h"
@@ -39,6 +39,16 @@ namespace Rgd{
 
 namespace __hidden_rgd_decode{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_DecodeScratchArena("logger/rgd/decode");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Futex& RgdConsoleMutex(){
     static Futex s_Mutex;
     return s_Mutex;
@@ -51,23 +61,26 @@ Futex& RgdConsoleMutex(){
 // The vendored RGD parser writes progress diagnostics to the process console. Capture that chatter in a caller-owned sink instead of leaking it into the logger stream, and drop it with the guard.
 class ScopedRgdConsoleCapture final{
 public:
-    ScopedRgdConsoleCapture()
-        : m_lock(RgdConsoleMutex())
-        , m_coutBuffer(std::cout.rdbuf(m_sink.rdbuf()))
-        , m_cerrBuffer(std::cerr.rdbuf(m_sink.rdbuf()))
+    explicit ScopedRgdConsoleCapture(Core::Alloc::ScratchArena& scratchArena)
+        : m_sink(s_FileOpenWrite, scratchArena)
+        , m_lock(RgdConsoleMutex())
+        , m_coutBuffer(NWB_COUT.rdbuf(m_sink.rdbuf()))
+        , m_cerrBuffer(NWB_CERR.rdbuf(m_sink.rdbuf()))
     {
     }
-
     ~ScopedRgdConsoleCapture()noexcept{
-        std::cout.rdbuf(m_coutBuffer);
-        std::cerr.rdbuf(m_cerrBuffer);
+        NWB_COUT.rdbuf(m_coutBuffer);
+        NWB_CERR.rdbuf(m_cerrBuffer);
     }
 
+
+public:
     ScopedRgdConsoleCapture(const ScopedRgdConsoleCapture&) = delete;
     ScopedRgdConsoleCapture& operator=(const ScopedRgdConsoleCapture&) = delete;
 
+
 private:
-    std::ostringstream m_sink;
+    AStringStream<Core::Alloc::ScratchArena> m_sink;
     ScopedLock<Futex> m_lock;
     std::streambuf* m_coutBuffer;
     std::streambuf* m_cerrBuffer;
@@ -78,86 +91,88 @@ private:
 
 
 // The upstream serializer APIs keep native C++ strings and streams at this integration boundary; decode failures retain any report sections already produced.
-std::string AssembleTextSummary(const Config& config, RgdCrashDumpContents& contents){
-    std::stringstream txt;
+AInteropString AssembleTextSummary(Core::Alloc::ScratchArena& scratchArena, const Config& config, RgdCrashDumpContents& contents){
+    AStringStream<Core::Alloc::ScratchArena> txt(s_FileOpenWrite, scratchArena);
 
     {
-        std::string systemInfo;
+        AInteropString systemInfo;
         if(!RgdSerializer::ToString(config, contents.system_info, contents.driver_experiments_json, systemInfo))
-            txt << "ERROR: failed to serialize system information." << std::endl;
-        txt << systemInfo << std::endl;
+            txt << "ERROR: failed to serialize system information." << '\n';
+        txt << systemInfo << '\n';
     }
 
     {
-        ExecMarkerDataSerializer markerSerializer(std::unordered_map<uint64_t, RgdCrashingShaderInfo>{});
+        ExecMarkerDataSerializer markerSerializer({});
 
-        std::string markerSummary;
+        AInteropString markerSummary;
         if(!markerSerializer.GenerateExecutionMarkerSummaryList(config, contents.umd_crash_data, contents.cmd_buffer_mapping, markerSummary))
-            txt << "ERROR: failed to serialize the execution marker summary." << std::endl;
+            txt << "ERROR: failed to serialize the execution marker summary." << '\n';
 
-        txt << std::endl << std::endl;
-        txt << "===================" << std::endl;
-        txt << "MARKERS IN PROGRESS" << std::endl;
-        txt << "===================" << std::endl << std::endl;
+        txt << '\n' << '\n';
+        txt << "===================" << '\n';
+        txt << "MARKERS IN PROGRESS" << '\n';
+        txt << "===================" << '\n' << '\n';
         txt << markerSummary;
 
-        std::string markerTree;
+        AInteropString markerTree;
         if(!markerSerializer.GenerateExecutionMarkerTree(config, contents.umd_crash_data, contents.cmd_buffer_mapping, markerTree))
-            txt << "ERROR: failed to serialize the execution marker tree." << std::endl;
+            txt << "ERROR: failed to serialize the execution marker tree." << '\n';
 
-        txt << std::endl << std::endl;
-        txt << "=====================" << std::endl;
-        txt << "EXECUTION MARKER TREE" << std::endl;
-        txt << "=====================" << std::endl << std::endl;
-        txt << "Legend" << std::endl;
-        txt << "======" << std::endl;
-        txt << "[X] finished" << std::endl;
-        txt << "[>] in progress" << std::endl;
-        txt << "[ ] not started" << std::endl << std::endl;
+        txt << '\n' << '\n';
+        txt << "=====================" << '\n';
+        txt << "EXECUTION MARKER TREE" << '\n';
+        txt << "=====================" << '\n' << '\n';
+        txt << "Legend" << '\n';
+        txt << "======" << '\n';
+        txt << "[X] finished" << '\n';
+        txt << "[>] in progress" << '\n';
+        txt << "[ ] not started" << '\n' << '\n';
         txt << markerTree;
     }
 
     {
-        std::vector<size_t> pageFaultEvents;
-        for(size_t i = 0, count = contents.kmd_crash_data.events.size(); i < count; ++i){
+        Vector<usize, Core::Alloc::ScratchArena> pageFaultEvents(scratchArena);
+        pageFaultEvents.reserve(contents.kmd_crash_data.events.size());
+        for(usize i = 0, count = contents.kmd_crash_data.events.size(); i < count; ++i){
             const RgdEventOccurrence& currentEvent = contents.kmd_crash_data.events[i];
-            if(currentEvent.rgd_event != nullptr && currentEvent.rgd_event->header.eventId == static_cast<uint8_t>(KmdEventId::RgdEventVmPageFault))
+            if(currentEvent.rgd_event != nullptr && currentEvent.rgd_event->header.eventId == static_cast<u8>(KmdEventId::RgdEventVmPageFault))
                 pageFaultEvents.push_back(i);
         }
 
         if(!pageFaultEvents.empty()){
-            txt << std::endl << std::endl;
-            txt << "==================" << std::endl;
-            txt << "PAGE FAULT SUMMARY" << std::endl;
-            txt << "==================" << std::endl << std::endl;
+            txt << '\n' << '\n';
+            txt << "==================" << '\n';
+            txt << "PAGE FAULT SUMMARY" << '\n';
+            txt << "==================" << '\n' << '\n';
 
             RgdResourceInfoSerializer resourceSerializer;
             const bool resourceHistoryReady = resourceSerializer.InitializeWithTraceFile(config.crash_dump_file);
             if(!resourceHistoryReady)
-                txt << "ERROR: failed to initialize page-fault resource history." << std::endl;
+                txt << "ERROR: failed to initialize page-fault resource history." << '\n';
 
-            for(const size_t eventIndex : pageFaultEvents){
+            for(const usize eventIndex : pageFaultEvents){
                 const RgdEventOccurrence& pageFaultEvent = contents.kmd_crash_data.events[eventIndex];
                 const VmPageFaultEvent& pageFault = static_cast<const VmPageFaultEvent&>(*pageFaultEvent.rgd_event);
 
-                txt << "Offending VA: 0x" << std::hex << pageFault.faultVmAddress << std::dec << std::endl << std::endl;
+                txt << "Offending VA: 0x" << std::hex << pageFault.faultVmAddress << std::dec << '\n' << '\n';
 
-                std::string resourceInfo;
+                AInteropString resourceInfo;
                 if(resourceHistoryReady && !resourceSerializer.GetVirtualAddressHistoryInfo(config, pageFault.faultVmAddress, resourceInfo))
-                    txt << "ERROR: failed to serialize page-fault resource history." << std::endl;
-                txt << resourceInfo << std::endl;
+                    txt << "ERROR: failed to serialize page-fault resource history." << '\n';
+                txt << resourceInfo << '\n';
             }
         }
     }
 
-    std::string inputInfo;
-    RgdSerializer::InputInfoToString(config, contents, std::vector<std::string>{}, inputInfo);
+    AInteropString inputInfo;
+    RgdSerializer::InputInfoToString(config, contents, {}, inputInfo);
 
-    std::stringstream summary;
+    AStringStream<Core::Alloc::ScratchArena> summary(s_FileOpenWrite, scratchArena);
     summary << inputInfo;
-    summary << txt.str();
+    summary << txt.view();
 
-    return summary.str();
+    const auto report = summary.view();
+    return AInteropString(report.data(), report.size());
 }
 
 
@@ -165,7 +180,7 @@ std::string AssembleTextSummary(const Config& config, RgdCrashDumpContents& cont
 
 
 // RDF's C API returns explicit file/open/format status instead of using its throwing C++ file wrappers for expected input failures.
-[[nodiscard]] Expected<void, StringView> AdmitRdfInput(const std::string& filePath)noexcept{
+[[nodiscard]] Expected<void, StringView> AdmitRdfInput(const AInteropString& filePath)noexcept{
     rdfStream* stream = nullptr;
     if(rdfStreamOpenFile(filePath.c_str(), &stream) != rdfResultOk)
         return MakeUnexpected(StringView("rdf_open_failed"));
@@ -191,22 +206,23 @@ std::string AssembleTextSummary(const Config& config, RgdCrashDumpContents& cont
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<std::string, StringView> DecodeCrashDumpToText(const std::string& filePath){
+Expected<AInteropString, StringView> DecodeCrashDumpToText(const AInteropString& filePath){
     const auto admitted = __hidden_rgd_decode::AdmitRdfInput(filePath);
     if(!admitted)
         return MakeUnexpected(admitted.error());
 
+    Core::Alloc::ScratchArena scratchArena(__hidden_rgd_decode::s_DecodeScratchArena);
     Config config;
     config.crash_dump_file = filePath;
     RgdCrashDumpContents contents;
     {
-        __hidden_rgd_decode::ScopedRgdConsoleCapture captureRgdConsole;
+        __hidden_rgd_decode::ScopedRgdConsoleCapture captureRgdConsole(scratchArena);
 
         if(!RgdParsingUtils::ParseCrashDump(config, contents))
             return MakeUnexpected(StringView("parse_failed"));
     }
 
-    return __hidden_rgd_decode::AssembleTextSummary(config, contents);
+    return __hidden_rgd_decode::AssembleTextSummary(scratchArena, config, contents);
 }
 
 

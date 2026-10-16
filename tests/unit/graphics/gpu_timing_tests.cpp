@@ -92,6 +92,7 @@ struct GpuTimingSubscriptionCapture{
     u32 sampleCount = 0u;
 
 
+public:
     static void Invoke(void* const context, const Core::GpuTimingSample&){
         GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
         if(!capture)

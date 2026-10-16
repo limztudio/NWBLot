@@ -260,78 +260,6 @@ void AppendTextureStateBarriersBefore(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarriers, const Span<VkImageMemoryBarrier2> imageBarriers, const Span<VkBufferMemoryBarrier2> bufferBarriers){
-    if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
-        return;
-
-    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-    depInfo.memoryBarrierCount = static_cast<u32>(memoryBarriers.size());
-    depInfo.pMemoryBarriers = memoryBarriers.data();
-    depInfo.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.size());
-    depInfo.pImageMemoryBarriers = imageBarriers.data();
-    depInfo.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.size());
-    depInfo.pBufferMemoryBarriers = bufferBarriers.data();
-
-    Framebuffer* resumeFramebuffer = nullptr;
-    if(m_renderPassActive){
-        resumeFramebuffer = m_renderPassFramebuffer;
-
-        const auto attachmentOverlapsBarrier = [&](const FramebufferAttachment& attachment)noexcept{
-            if(!attachment.texture)
-                return false;
-
-            const TextureSubresourceSet resolvedSubresources = attachment.subresources.resolve(attachment.texture->m_creationDesc, TextureSubresourceMipResolve::Single);
-            for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
-                if(VulkanStateTrackingDetail::ImageBarrierOverlapsTextureSubresources(depInfo.pImageMemoryBarriers[index], attachment.texture->m_image, attachment.texture->m_aspectMask, resolvedSubresources))
-                    return true;
-            }
-            return false;
-        };
-
-        const FramebufferDesc& framebufferDesc = resumeFramebuffer->m_desc;
-        bool attachmentTransitioned = attachmentOverlapsBarrier(framebufferDesc.depthAttachment) || attachmentOverlapsBarrier(framebufferDesc.shadingRateAttachment);
-        for(const FramebufferAttachment& attachment : framebufferDesc.colorAttachments)
-            attachmentTransitioned = attachmentTransitioned || attachmentOverlapsBarrier(attachment);
-        if(attachmentTransitioned)
-            resumeFramebuffer = nullptr;
-
-        endDynamicRendering();
-        m_renderPassActive = false;
-        m_renderPassFramebuffer = nullptr;
-    }
-
-    // Cross-queue semaphore waits cover unsupported producer scopes; lower them to NONE on the exact queue.
-    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo ? exactQueueInfo->capabilities : GpuQueueCapability::None;
-    const u8 exactCapabilityBits = static_cast<u8>(exactQueueCapabilities);
-    const bool graphicsCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-    const bool computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
-    const bool universalGraphicsCompute = graphicsCapable && computeCapable;
-    if(!universalGraphicsCompute){
-        const auto normalizeBarrierScopes = [&](const auto barriers)noexcept{
-            for(auto& barrier : barriers){
-                VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
-                VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
-            }
-        };
-        normalizeBarrierScopes(memoryBarriers);
-        normalizeBarrierScopes(imageBarriers);
-        normalizeBarrierScopes(bufferBarriers);
-    }
-
-    m_context.deviceDispatch.vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
-
-    if(resumeFramebuffer){
-        RenderPassParameters params = {};
-        if(beginDynamicRendering(*resumeFramebuffer, params)){
-            m_renderPassActive = true;
-            m_renderPassFramebuffer = resumeFramebuffer;
-        }
-        else
-            rejectCommandRecording(NWB_TEXT("pipeline barrier"), NWB_TEXT("dynamic rendering could not resume after the barrier"));
-    }
-}
-
 void CommandList::commitBarriers(){
     if(!validateCommandRecordingScope(NWB_TEXT("commit barriers")))
         return;
@@ -443,6 +371,79 @@ void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource
     auto* as = accelStructResource;
     if(as->m_buffer)
         setBufferState(as->m_buffer.get(), stateBits, forceMemoryDependency);
+}
+
+
+void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarriers, const Span<VkImageMemoryBarrier2> imageBarriers, const Span<VkBufferMemoryBarrier2> bufferBarriers){
+    if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
+        return;
+
+    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+    depInfo.memoryBarrierCount = static_cast<u32>(memoryBarriers.size());
+    depInfo.pMemoryBarriers = memoryBarriers.data();
+    depInfo.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.size());
+    depInfo.pImageMemoryBarriers = imageBarriers.data();
+    depInfo.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.size());
+    depInfo.pBufferMemoryBarriers = bufferBarriers.data();
+
+    Framebuffer* resumeFramebuffer = nullptr;
+    if(m_renderPassActive){
+        resumeFramebuffer = m_renderPassFramebuffer;
+
+        const auto attachmentOverlapsBarrier = [&](const FramebufferAttachment& attachment)noexcept{
+            if(!attachment.texture)
+                return false;
+
+            const TextureSubresourceSet resolvedSubresources = attachment.subresources.resolve(attachment.texture->m_creationDesc, TextureSubresourceMipResolve::Single);
+            for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
+                if(VulkanStateTrackingDetail::ImageBarrierOverlapsTextureSubresources(depInfo.pImageMemoryBarriers[index], attachment.texture->m_image, attachment.texture->m_aspectMask, resolvedSubresources))
+                    return true;
+            }
+            return false;
+        };
+
+        const FramebufferDesc& framebufferDesc = resumeFramebuffer->m_desc;
+        bool attachmentTransitioned = attachmentOverlapsBarrier(framebufferDesc.depthAttachment) || attachmentOverlapsBarrier(framebufferDesc.shadingRateAttachment);
+        for(const FramebufferAttachment& attachment : framebufferDesc.colorAttachments)
+            attachmentTransitioned = attachmentTransitioned || attachmentOverlapsBarrier(attachment);
+        if(attachmentTransitioned)
+            resumeFramebuffer = nullptr;
+
+        endDynamicRendering();
+        m_renderPassActive = false;
+        m_renderPassFramebuffer = nullptr;
+    }
+
+    // Cross-queue semaphore waits cover unsupported producer scopes; lower them to NONE on the exact queue.
+    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo ? exactQueueInfo->capabilities : GpuQueueCapability::None;
+    const u8 exactCapabilityBits = static_cast<u8>(exactQueueCapabilities);
+    const bool graphicsCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const bool computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+    const bool universalGraphicsCompute = graphicsCapable && computeCapable;
+    if(!universalGraphicsCompute){
+        const auto normalizeBarrierScopes = [&](const auto barriers)noexcept{
+            for(auto& barrier : barriers){
+                VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
+                VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
+            }
+        };
+        normalizeBarrierScopes(memoryBarriers);
+        normalizeBarrierScopes(imageBarriers);
+        normalizeBarrierScopes(bufferBarriers);
+    }
+
+    m_context.deviceDispatch.vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+
+    if(resumeFramebuffer){
+        RenderPassParameters params = {};
+        if(beginDynamicRendering(*resumeFramebuffer, params)){
+            m_renderPassActive = true;
+            m_renderPassFramebuffer = resumeFramebuffer;
+        }
+        else
+            rejectCommandRecording(NWB_TEXT("pipeline barrier"), NWB_TEXT("dynamic rendering could not resume after the barrier"));
+    }
 }
 
 

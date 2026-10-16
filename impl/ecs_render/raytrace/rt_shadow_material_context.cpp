@@ -20,59 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    if(handle.valid())
-        return true;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
-        return false;
-    }
-
-    if(!RayTracingDetail::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
-        return false;
-    }
-    return true;
-}
-
-bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
-        return false;
-    }
-
-    if(!RayTracingDetail::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
-        return false;
-    }
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
-    if(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer)
-        return true;
-
-    Core::BufferDesc slotsBufferDesc;
-    slotsBufferDesc
-        .setByteSize(sizeof(RayTraceMaterialContextSlots))
-        .setIsConstantBuffer(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("raytrace_material_context_slots"))
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
-    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
-        return false;
-    }
-    return true;
-}
-
 Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
     // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its preparation packet records.
     // Do not recreate either one here: a recording-time replacement would invalidate the graph's frozen resource identity and the immutable selector snapshot it retains.
@@ -163,6 +110,59 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     m_rayTracingState.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+}
+
+bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
+    if(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer)
+        return true;
+
+    Core::BufferDesc slotsBufferDesc;
+    slotsBufferDesc
+        .setByteSize(sizeof(RayTraceMaterialContextSlots))
+        .setIsConstantBuffer(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(Name("raytrace_material_context_slots"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
+    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+    if(handle.valid())
+        return true;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        return false;
+    }
+
+    if(!RayTracingDetail::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        return false;
+    }
+
+    if(!RayTracingDetail::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
+        return false;
+    }
+    return true;
 }
 
 

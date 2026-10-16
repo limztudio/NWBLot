@@ -188,6 +188,7 @@ struct GpuTaskGraphSchedulingTaskIndexView{
 class GpuTaskGraphAnalysis final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
+
 public:
     explicit GpuTaskGraphAnalysis(GraphicsArena& arena)
         : m_edges(arena)
@@ -265,6 +266,7 @@ private:
 // Queue assignment is a separate immutable compile result. Renderer integrations may use it for native-recording selection; graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
+
 
 public:
     explicit GpuTaskGraphQueueAssignments(GraphicsArena& arena)

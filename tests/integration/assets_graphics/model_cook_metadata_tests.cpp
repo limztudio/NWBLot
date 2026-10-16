@@ -10,6 +10,7 @@
 #include <global/text_utils.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 
@@ -50,10 +51,13 @@ struct ModelMetadata{
     const NWB::Path path{ outputArena, "tests/model_cook_metadata/model.nwb" };
 
 
+public:
     ModelMetadata(){
         asset.makeMap();
     }
 
+
+public:
     void addSkeleton(const AStringView objectName, const AStringView skeletonAsset){
         Value& object = asset.field("skeletons").field(objectName);
         object.field(s_SKELETON).setString(skeletonAsset);

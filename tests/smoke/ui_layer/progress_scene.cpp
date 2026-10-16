@@ -55,7 +55,7 @@ bool UiProgressSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiProgressSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiProgressSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);

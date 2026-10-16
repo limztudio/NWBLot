@@ -22,7 +22,6 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/cook_checksum.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/source_dependencies.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"

@@ -5,6 +5,7 @@
 #include <impl/ecs_render/caustic/settings.h>
 
 #include <global/limit.h>
+
 #include <gtest/gtest.h>
 
 

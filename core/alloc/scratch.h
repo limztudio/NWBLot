@@ -68,6 +68,8 @@ private:
             , m_buffer(buffer)
             , m_available(m_buffer)
         {}
+
+
     private:
         ~Chunk() = default;
 

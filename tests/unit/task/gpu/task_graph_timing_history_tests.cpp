@@ -7,6 +7,7 @@
 #include <global/text_utils.h>
 
 #include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 
@@ -33,7 +34,7 @@ struct TimingInput{
     GpuPhysicalQueueId queue;
 };
 
-[[nodiscard]] TimingInput Input(const u32 index, const u16 generation = 1u){
+[[nodiscard]] TimingInput Input(const u32 index, const u16 generation = 1u)noexcept{
     return { .key = { .task = Name("tests/timing_history/work"), .variant = index, .resolutionClass = index % 3u, .queue = static_cast<CommandQueue::Enum>(index % CommandQueue::kCount), }, .queue = { static_cast<u16>(index % 7u), generation }, };
 }
 

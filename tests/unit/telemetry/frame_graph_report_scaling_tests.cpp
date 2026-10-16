@@ -61,6 +61,8 @@ struct ReportFixture{
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
     Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
 
+
+public:
     explicit ReportFixture(Telemetry::TelemetryArena& arena)
         : nodes(arena)
         , edges(arena)
@@ -68,6 +70,8 @@ struct ReportFixture{
         , packets(arena)
     {}
 
+
+public:
     void addUnmeasuredNode(){
         nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/task"), .label = "Unmeasured task", .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
     }

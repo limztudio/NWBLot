@@ -6,6 +6,7 @@
 
 
 #include <core/common/log.h>
+
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/type.h>
@@ -21,11 +22,21 @@ namespace NWB::Tests::Smoke{
 
 
 class FpsProbe final{
+private:
+    static constexpr f64 s_WarmupSeconds = 0.25;
+
+    static constexpr f64 s_ReportIntervalSeconds = 0.5;
+
+    static constexpr f64 s_MillisecondsPerSecond = 1000.0;
+
+
 public:
     explicit FpsProbe(TStringView label)
         : m_label(label)
     {}
 
+
+public:
     void recordFrame(const f32 delta){
         const f64 safeDelta = IsFinite(delta) && delta > 0.0f ? static_cast<f64>(delta) : 0.0;
         if(safeDelta <= 0.0)
@@ -64,9 +75,6 @@ public:
 
 
 private:
-    static constexpr f64 s_WarmupSeconds = 0.25;
-    static constexpr f64 s_ReportIntervalSeconds = 0.5;
-    static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
     TStringView m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;

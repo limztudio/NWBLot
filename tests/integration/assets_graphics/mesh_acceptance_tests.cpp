@@ -49,12 +49,16 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 
 template<typename MeshT>
-static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localPositionIndex){
+static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localPositionIndex)noexcept(noexcept(
+    NWB::Impl::DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()))
+)){
     return NWB::Impl::DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()));
 }
 
 template<typename MeshT>
-static Expected<NWB::Impl::MeshletAttributeStreamRef> TestDecodeMeshletAttributeRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localAttributeIndex){
+static Expected<NWB::Impl::MeshletAttributeStreamRef> TestDecodeMeshletAttributeRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localAttributeIndex)noexcept(noexcept(
+    NWB::Impl::DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), meshlet, localAttributeIndex)
+)){
     return NWB::Impl::DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), meshlet, localAttributeIndex);
 }
 

@@ -2,26 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "csg_smoke_helpers.h"
+#include "framebuffer_capture.h"
+#include "fps_probe.h"
+#include "gpu_pass_timing_probe.h"
+#include "smoke_scene_helpers.h"
+
 #include <loader/project_entry.h>
 
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/perf/report.h>
-#include <global/simd/frame.h>
-#include <global/simdmath.h>
-#include <global/timer.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 
-#include "csg_smoke_helpers.h"
-#include "framebuffer_capture.h"
-#include "fps_probe.h"
-#include "gpu_pass_timing_probe.h"
-#include "smoke_scene_helpers.h"
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/perf/report.h>
+
+#include <global/simd/frame.h>
+#include <global/simdmath.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +101,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     Name("project/smoke/csg_visible/capsule_receiver"),
 };
 
-[[nodiscard]] static TStringView CsgVisibleFpsLabel(){
+[[nodiscard]] static TStringView CsgVisibleFpsLabel()noexcept{
     return NWB_TEXT("CsgVisibleSmokeProject");
 }
 
@@ -127,7 +129,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     return entity;
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildCubeRotation(const f32 time, const f32 phase){
+[[nodiscard]] static SIMDVectorSingle BuildCubeRotation(const f32 time, const f32 phase)noexcept{
     SIMDVectorSingle angles = VectorMultiply(VectorSet(time, 0.0f, time, 0.0f), VectorSet(0.35f, 0.0f, 0.18f, 0.0f));
     angles = VectorSetY(angles, time + phase);
     return QuaternionRotationRollPitchYawFromVector(angles);
@@ -512,7 +514,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB CSG Visible Smoke");
 }
 

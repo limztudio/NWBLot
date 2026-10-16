@@ -56,9 +56,11 @@ public:
     void showFrame();
     bool mainLoop();
 
+
 public:
     template<typename T>
     inline T& data()noexcept{ return static_cast<T&>(m_data); }
+
 
 private:
     FrameDetail::FrameData m_data;

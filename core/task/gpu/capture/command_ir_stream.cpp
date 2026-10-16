@@ -156,12 +156,6 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
     m_recordCount = header.recordCount;
 }
 
-BinaryByteView GpuCommandIrStreamReader::blobBytes()const noexcept{
-    if(m_validation.failed() || m_blobBegin == m_bytes.size())
-        return {};
-    return BinaryByteView{ m_bytes.data() + m_blobBegin, m_bytes.size() - m_blobBegin };
-}
-
 Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuCommandIrStreamReader::nextBuiltinTask()noexcept{
     if(m_validation.failed())
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -450,6 +444,12 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     m_nextBlobOffset = nextBlobOffset;
     ++m_nextRecordIndex;
     return decoded;
+}
+
+BinaryByteView GpuCommandIrStreamReader::blobBytes()const noexcept{
+    if(m_validation.failed() || m_blobBegin == m_bytes.size())
+        return {};
+    return BinaryByteView{ m_bytes.data() + m_blobBegin, m_bytes.size() - m_blobBegin };
 }
 
 void GpuCommandIrStreamReader::fail(const GpuCommandIrStreamValidationError::Enum error, const usize byteOffset, const u64 recordIndex)noexcept{

@@ -33,24 +33,6 @@ void Session::beginFrame(const u64 frameIndex)noexcept{
     m_frameIndex = frameIndex;
 }
 
-void Session::ensureMemoryScopes(){
-    if(!captureOptions().memoryActive())
-        return;
-
-    // Scope creation for arena owners lives in this setup step, never in the record calls below.
-    const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
-    while(owner){
-        ArenaMemoryOwnerIdentity identity;
-        owner = ReadArenaMemoryOwnerIdentity(*owner, identity);
-        const MemorySource::Enum source = identity.source == ArenaMemorySource::HeapBacking ? MemorySource::HeapBacking : MemorySource::Arena;
-        const MemoryScopeId scope = m_memory.registerScope(identity.ownerName, source);
-        if(!scope.valid()){
-            NWB_ASSERT(false);
-            continue;
-        }
-    }
-}
-
 void Session::publishFrame(){
     m_cpuTiming.publishFrame(m_frameIndex);
     if(!captureOptions().memoryActive())
@@ -84,6 +66,24 @@ SessionReport Session::report()const noexcept{
     report.gpuTiming = gpuTimingView();
     report.memory = memoryView();
     return report;
+}
+
+void Session::ensureMemoryScopes(){
+    if(!captureOptions().memoryActive())
+        return;
+
+    // Scope creation for arena owners lives in this setup step, never in the record calls below.
+    const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
+    while(owner){
+        ArenaMemoryOwnerIdentity identity;
+        owner = ReadArenaMemoryOwnerIdentity(*owner, identity);
+        const MemorySource::Enum source = identity.source == ArenaMemorySource::HeapBacking ? MemorySource::HeapBacking : MemorySource::Arena;
+        const MemoryScopeId scope = m_memory.registerScope(identity.ownerName, source);
+        if(!scope.valid()){
+            NWB_ASSERT(false);
+            continue;
+        }
+    }
 }
 
 void Session::applyEnabledState()noexcept{

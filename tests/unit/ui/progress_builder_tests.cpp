@@ -25,7 +25,7 @@ using ProgressPaintSample = SkinPaintSample;
 
 class UiProgressBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ProgressOptions MakeOptions(){
+    [[nodiscard]] static ProgressOptions MakeOptions()noexcept{
         ProgressOptions options;
         options.width = { LayoutSizePolicy::Fixed, 240.0f };
         return options;
@@ -77,7 +77,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiProgressBuilderTests, DeclarationCopiesFractionOptionsStyleAndResolvedNames){
+TEST_F(UiProgressBuilderTests, CallerMutationCannotChangeDeferredProgressGeometryStyleOrResolvedNames){
     ASSERT_TRUE(panel(1u));
     f64 fraction = 0.25;
     ProgressOptions options = MakeOptions();

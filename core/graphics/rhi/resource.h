@@ -239,9 +239,22 @@ struct TextureSubresourceSet{
     ArraySlice baseArraySlice = 0;
     ArraySlice numArraySlices = 1;
 
+
+public:
+    [[nodiscard]] static constexpr u64 RangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
+        return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
+    }
+
+
+public:
     [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const noexcept;
     [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const noexcept;
 
+
+public:
+
+
+public:
     constexpr TextureSubresourceSet() = default;
     constexpr TextureSubresourceSet(MipLevel baseMipLevelValue, MipLevel numMipLevelsValue, ArraySlice baseArraySliceValue, ArraySlice numArraySlicesValue)noexcept
         : baseMipLevel(baseMipLevelValue)
@@ -250,16 +263,14 @@ struct TextureSubresourceSet{
         , numArraySlices(numArraySlicesValue)
     {}
 
+
+public:
     constexpr TextureSubresourceSet& setBaseMipLevel(MipLevel value)noexcept{ baseMipLevel = value; return *this; }
     constexpr TextureSubresourceSet& setNumMipLevels(MipLevel value)noexcept{ numMipLevels = value; return *this; }
     constexpr TextureSubresourceSet& setMipLevels(MipLevel base, MipLevel num)noexcept{ baseMipLevel = base; numMipLevels = num; return *this; }
     constexpr TextureSubresourceSet& setBaseArraySlice(ArraySlice value)noexcept{ baseArraySlice = value; return *this; }
     constexpr TextureSubresourceSet& setNumArraySlices(ArraySlice value)noexcept{ numArraySlices = value; return *this; }
     constexpr TextureSubresourceSet& setArraySlices(ArraySlice base, ArraySlice num)noexcept{ baseArraySlice = base; numArraySlices = num; return *this; }
-
-    [[nodiscard]] static constexpr u64 RangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
-        return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
-    }
 
     [[nodiscard]] constexpr bool hasExtent()const noexcept{
         return numMipLevels != 0u && numArraySlices != 0u;
@@ -393,6 +404,8 @@ struct BufferRange{
         , byteSize(byteSizeValue)
     {}
 
+
+public:
     [[nodiscard]] BufferRange resolve(const BufferDesc& desc)const noexcept;
     [[nodiscard]] constexpr bool hasExtent()const noexcept{
         return byteSize != 0u && byteOffset < s_AllBytes && (byteSize == s_AllBytes || byteSize <= s_AllBytes - byteOffset);

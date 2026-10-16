@@ -22,6 +22,8 @@ struct GraphemeCase{
     AStringView text;
     AStringView expectedOffsets;
 
+
+public:
     template<usize TextSize, usize OffsetSize>
     constexpr GraphemeCase(const char (&textValue)[TextSize], const char (&offsetValue)[OffsetSize], const usize byteCount)
         : text(textValue, byteCount)

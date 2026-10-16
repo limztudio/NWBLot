@@ -16,7 +16,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 960u, 540u };
 }
 
-TStringView NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB UI Layer Smoke");
 }
 

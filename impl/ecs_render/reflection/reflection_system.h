@@ -137,6 +137,10 @@ using ReflectionCsgDispatchControl = RefCounter<ReflectionCsgDispatchState>;
 using ReflectionCsgDispatchHandle = RefCountPtr< ReflectionCsgDispatchControl, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena> >;
 
 class RendererReflectionSystem final : NoCopy{
+private:
+    static constexpr usize s_ReflectionDescriptorCount = 8u;
+
+
 public:
     RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);
 
@@ -190,7 +194,6 @@ private:
     Core::ComputePipelineHandle m_csgPlainHardwarePipeline;
     Core::ComputePipelineHandle m_csgUnspecifiedHardwarePipeline;
     Core::ShaderHandle m_depthShader;
-    static constexpr usize s_ReflectionDescriptorCount = 8u;
     Core::GpuDescriptorHandle m_descriptors[s_ReflectionDescriptorCount];
     Core::GpuDescriptorHandle m_depthSampledDescriptor;
     Core::GpuDescriptorHandle m_depthMipSampledDescriptors[ReflectionDepthPyramidSnapshot::s_MaxMipCount];

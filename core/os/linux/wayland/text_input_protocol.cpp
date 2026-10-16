@@ -22,6 +22,115 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void WaylandTextInputService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(AStringView(interfaceName) != zwp_text_input_manager_v3_interface.name || service.m_manager || version == 0u)
+        return;
+    // Protocol v1 commits cursor-rectangle updates through its explicit commit request.
+    service.m_manager = static_cast<zwp_text_input_manager_v3*>(wl_registry_bind(registry, name, &zwp_text_input_manager_v3_interface, 1u));
+    service.m_managerName = name;
+    if(service.m_seat){
+        wl_seat* const seat = service.m_seat;
+        const u32 seatName = service.m_seatName;
+        service.m_seat = nullptr;
+        service.attachSeat(seat, seatName);
+    }
+}
+
+void WaylandTextInputService::OnRegistryRemove(void* const data, wl_registry*, const u32 name){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(name == service.m_seatName){
+        service.attachSeat(nullptr, 0u);
+        return;
+    }
+    if(name != service.m_managerName)
+        return;
+    const TextInputSessionToken token = service.activeSession();
+    if(token.valid() && !service.cancelSession(token, TextInputCancelReason::NativeCancelled))
+        NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: manager removal could not cancel current session"));
+    service.releaseDevice();
+    zwp_text_input_manager_v3_destroy(service.m_manager);
+    service.m_manager = nullptr;
+    service.m_managerName = 0u;
+}
+
+void WaylandTextInputService::OnEnter(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(input != service.m_input)
+        return;
+    service.m_entered = surface == &service.m_surface;
+    service.clearPending();
+}
+
+void WaylandTextInputService::OnLeave(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(input != service.m_input || surface != &service.m_surface)
+        return;
+    service.m_entered = false;
+    service.m_enabled = false;
+    service.clearPending();
+    const TextInputSessionToken token = service.activeSession();
+    if(token.valid() && !service.cancelSession(token, TextInputCancelReason::FocusLost))
+        NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: protocol focus loss could not cancel current session"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void WaylandTextInputService::OnPreedit(void* const data, zwp_text_input_v3* const input, const char* const text, const i32 begin, const i32 end){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(input != service.m_input || !service.m_enabled)
+        return;
+    const AStringView value = text ? AStringView(text) : AStringView{};
+    const bool hidden = begin == -1 && end == -1;
+    const bool valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
+    const bool range = hidden || (begin >= 0 && end >= 0 && IsTextInputUtf8Boundary(value, static_cast<usize>(begin)) && IsTextInputUtf8Boundary(value, static_cast<usize>(end)));
+    service.m_pendingInvalid |= !valid || !range;
+    if(valid && range)
+        service.m_pendingPreedit.assign(value.data(), value.size());
+    service.m_pendingBegin = begin;
+    service.m_pendingEnd = end;
+    service.m_hasPreedit = true;
+}
+
+void WaylandTextInputService::OnCommit(void* const data, zwp_text_input_v3* const input, const char* const text){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(input != service.m_input || !service.m_enabled)
+        return;
+    const AStringView value = text ? AStringView(text) : AStringView{};
+    const bool valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
+    service.m_pendingInvalid |= !valid;
+    if(valid)
+        service.m_pendingCommit.assign(value.data(), value.size());
+    service.m_hasCommit = true;
+}
+
+void WaylandTextInputService::OnDelete(void* const data, zwp_text_input_v3* const input, const u32 before, const u32 after){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(input != service.m_input || !service.m_enabled)
+        return;
+    service.m_pendingBefore = before;
+    service.m_pendingAfter = after;
+    service.m_hasDelete = true;
+}
+
+void WaylandTextInputService::OnDone(void* const data, zwp_text_input_v3* const input, const u32 serial){
+    auto& service = *static_cast<WaylandTextInputService*>(data);
+    if(input == service.m_input)
+        service.receiveDone(serial);
+}
+
+
+#if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
+void WaylandTextInputService::OnAction(void*, zwp_text_input_v3*, u32, u32){}
+
+void WaylandTextInputService::OnLanguage(void*, zwp_text_input_v3*, const char*){}
+
+void WaylandTextInputService::OnPreeditHint(void*, zwp_text_input_v3*, u32, u32, u32){}
+#endif
+
+
 void WaylandTextInputService::commitState(const TextInputSessionToken token, const u64 revision){
     zwp_text_input_v3_commit(m_input);
     ++m_commitSerial;
@@ -95,113 +204,6 @@ void WaylandTextInputService::receiveDone(const u32 serial){
             nativeFailure();
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void WaylandTextInputService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(AStringView(interfaceName) != zwp_text_input_manager_v3_interface.name || service.m_manager || version == 0u)
-        return;
-    // Protocol v1 commits cursor-rectangle updates through its explicit commit request.
-    service.m_manager = static_cast<zwp_text_input_manager_v3*>(wl_registry_bind(registry, name, &zwp_text_input_manager_v3_interface, 1u));
-    service.m_managerName = name;
-    if(service.m_seat){
-        wl_seat* const seat = service.m_seat;
-        const u32 seatName = service.m_seatName;
-        service.m_seat = nullptr;
-        service.attachSeat(seat, seatName);
-    }
-}
-
-void WaylandTextInputService::OnRegistryRemove(void* const data, wl_registry*, const u32 name){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(name == service.m_seatName){
-        service.attachSeat(nullptr, 0u);
-        return;
-    }
-    if(name != service.m_managerName)
-        return;
-    const TextInputSessionToken token = service.activeSession();
-    if(token.valid() && !service.cancelSession(token, TextInputCancelReason::NativeCancelled))
-        NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: manager removal could not cancel current session"));
-    service.releaseDevice();
-    zwp_text_input_manager_v3_destroy(service.m_manager);
-    service.m_manager = nullptr;
-    service.m_managerName = 0u;
-}
-
-void WaylandTextInputService::OnEnter(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(input != service.m_input)
-        return;
-    service.m_entered = surface == &service.m_surface;
-    service.clearPending();
-}
-
-void WaylandTextInputService::OnLeave(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(input != service.m_input || surface != &service.m_surface)
-        return;
-    service.m_entered = false;
-    service.m_enabled = false;
-    service.clearPending();
-    const TextInputSessionToken token = service.activeSession();
-    if(token.valid() && !service.cancelSession(token, TextInputCancelReason::FocusLost))
-        NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: protocol focus loss could not cancel current session"));
-}
-
-void WaylandTextInputService::OnPreedit(void* const data, zwp_text_input_v3* const input, const char* const text, const i32 begin, const i32 end){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(input != service.m_input || !service.m_enabled)
-        return;
-    const AStringView value = text ? AStringView(text) : AStringView{};
-    const bool hidden = begin == -1 && end == -1;
-    const bool valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
-    const bool range = hidden || (begin >= 0 && end >= 0 && IsTextInputUtf8Boundary(value, static_cast<usize>(begin)) && IsTextInputUtf8Boundary(value, static_cast<usize>(end)));
-    service.m_pendingInvalid |= !valid || !range;
-    if(valid && range)
-        service.m_pendingPreedit.assign(value.data(), value.size());
-    service.m_pendingBegin = begin;
-    service.m_pendingEnd = end;
-    service.m_hasPreedit = true;
-}
-
-void WaylandTextInputService::OnCommit(void* const data, zwp_text_input_v3* const input, const char* const text){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(input != service.m_input || !service.m_enabled)
-        return;
-    const AStringView value = text ? AStringView(text) : AStringView{};
-    const bool valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
-    service.m_pendingInvalid |= !valid;
-    if(valid)
-        service.m_pendingCommit.assign(value.data(), value.size());
-    service.m_hasCommit = true;
-}
-
-void WaylandTextInputService::OnDelete(void* const data, zwp_text_input_v3* const input, const u32 before, const u32 after){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(input != service.m_input || !service.m_enabled)
-        return;
-    service.m_pendingBefore = before;
-    service.m_pendingAfter = after;
-    service.m_hasDelete = true;
-}
-
-void WaylandTextInputService::OnDone(void* const data, zwp_text_input_v3* const input, const u32 serial){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
-    if(input == service.m_input)
-        service.receiveDone(serial);
-}
-
-#if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
-void WaylandTextInputService::OnAction(void*, zwp_text_input_v3*, u32, u32){}
-
-void WaylandTextInputService::OnLanguage(void*, zwp_text_input_v3*, const char*){}
-
-void WaylandTextInputService::OnPreeditHint(void*, zwp_text_input_v3*, u32, u32, u32){}
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

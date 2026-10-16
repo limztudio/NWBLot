@@ -7,11 +7,12 @@
 
 #include "smoke_scene_helpers.h"
 
-#include <core/ecs/entity.h>
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
+
+#include <core/ecs/entity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

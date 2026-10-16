@@ -141,18 +141,17 @@ private:
     };
 
     struct ListRow{
-        explicit ListRow(Core::Alloc::GlobalArena& arena)noexcept : text(arena) {}
-
         TextLayout text;
         Rect textBounds;
         u64 index = 0u;
         u64 key = 0u;
         bool enabled = false;
+
+
+        explicit ListRow(Core::Alloc::GlobalArena& arena)noexcept : text(arena) {}
     };
 
     struct ListFrame{
-        explicit ListFrame(Core::Alloc::GlobalArena& arena)noexcept : rows(arena) {}
-
         PaintVector<ListRow> rows;
         const IListDataSource* source = nullptr;
         ListState* state = nullptr;
@@ -169,6 +168,9 @@ private:
         bool revealCursor = false;
         bool focusOnCommit = false;
         WidgetId commandFocus;
+
+
+        explicit ListFrame(Core::Alloc::GlobalArena& arena)noexcept : rows(arena) {}
     };
 
     struct ComboFrame{

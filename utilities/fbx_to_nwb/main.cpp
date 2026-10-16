@@ -4,10 +4,12 @@
 
 #include "module.h"
 
+#include <logger/client/module.h>
+
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
+
 #include <global/cpu_topology.h>
-#include <logger/client/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

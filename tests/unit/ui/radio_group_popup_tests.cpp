@@ -47,11 +47,11 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId parentHost()const{
+    [[nodiscard]] WidgetId parentHost()const noexcept{
         return MakeWidgetId(MakeWidgetId(MakeRootId(m_root), "parent"), "radio");
     }
 
-    [[nodiscard]] WidgetId childHost()const{
+    [[nodiscard]] WidgetId childHost()const noexcept{
         return MakeWidgetId(MakeWidgetId(MakeWidgetId(MakeRootId(m_root), "parent"), "child"), "radio");
     }
 

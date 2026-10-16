@@ -3,6 +3,7 @@
 
 
 #include <core/os/linux/pipe_io.h>
+
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
@@ -29,11 +30,15 @@ struct OwnedPipe final : NoCopy{
     int m_readFd = -1;
     int m_writeFd = -1;
 
+
+public:
     ~OwnedPipe()noexcept{
         CloseClipboardPipe(m_readFd);
         CloseClipboardPipe(m_writeFd);
     }
 
+
+public:
     [[nodiscard]] bool open()noexcept{
         const auto pipe = OpenClipboardPipe();
         if(!pipe)

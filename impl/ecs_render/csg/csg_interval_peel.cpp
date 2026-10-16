@@ -98,23 +98,6 @@ static void DispatchCsgIntervalCompute(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSampleStateData(
-    const DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-)const{
-    CsgIntervalSampleStateGpuData state{};
-    if(!csgFrameData.hasWork())
-        return state;
-    if(!csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid())
-        return MakeUnexpected(Failure{});
-
-    // Freeze rect and slot before recording; later state must not leak in.
-    state = CsgIntervalDetail::BuildCsgIntervalSampleState(targets, csgFrameData, frameBindings.meshView.heapHandle.slot());
-    return state;
-}
-
 void RendererCsgSystem::dispatchCsgIntervalPeels(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -223,6 +206,23 @@ void RendererCsgSystem::renderRefractionIntervalCaps(
         ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, receiverIndices[index], 0u, viewportState, frameHeapSlots, 0u);
         commandList.draw(drawArgs);
     }
+}
+
+Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSampleStateData(
+    const DeferredFrameTargets& targets,
+    const CsgFrameGpuData& csgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+)const{
+    CsgIntervalSampleStateGpuData state{};
+    if(!csgFrameData.hasWork())
+        return state;
+    if(!csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid())
+        return MakeUnexpected(Failure{});
+
+    // Freeze rect and slot before recording; later state must not leak in.
+    state = CsgIntervalDetail::BuildCsgIntervalSampleState(targets, csgFrameData, frameBindings.meshView.heapHandle.slot());
+    return state;
 }
 
 

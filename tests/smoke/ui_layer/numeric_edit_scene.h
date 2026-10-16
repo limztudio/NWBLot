@@ -42,11 +42,11 @@ public:
 
 private:
     void resetModels();
+    [[nodiscard]] Array<u64, 30u> values()const;
     void observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text);
     void paintMarkers(Impl::UiPaintContext& context)const;
     void count(const Impl::Ui::NumericEditResult& result);
     [[nodiscard]] Impl::Ui::FloatBounds floatBounds()const noexcept;
-    [[nodiscard]] Array<u64, 30u> values()const;
 
 
 private:

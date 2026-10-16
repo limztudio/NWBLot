@@ -39,11 +39,11 @@ static constexpr Array<StringView, 5u> s_Labels{ "Inspect", "Duplicate", "Delete
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 UiPopupToolsSmokeSource::key(const u64 index)const{
+u64 UiPopupToolsSmokeSource::key(const u64 index)const noexcept{
     return index < rowCount() ? (m_reversed ? rowCount() - index : index + 1u) : 0u;
 }
 
-Expected<u64> UiPopupToolsSmokeSource::indexOf(const u64 keyValue)const{
+Expected<u64> UiPopupToolsSmokeSource::indexOf(const u64 keyValue)const noexcept{
     u64 index = 0u;
     if(keyValue == 0u || keyValue > rowCount())
         return MakeUnexpected(Failure{});
@@ -51,11 +51,11 @@ Expected<u64> UiPopupToolsSmokeSource::indexOf(const u64 keyValue)const{
     return index;
 }
 
-Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
-StringView UiPopupToolsSmokeSource::text(const u64 index)const{
+StringView UiPopupToolsSmokeSource::text(const u64 index)const noexcept{
     ++m_labelReads;
     const u64 rowKey = key(index);
     return rowKey == 0u ? StringView{} : __hidden_ui_popup_tools_smoke_source::s_Labels[rowKey - 1u];

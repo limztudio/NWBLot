@@ -94,6 +94,8 @@ struct ViewIterator{
             index = count;
     }
 
+
+public:
     void skipInvalid(){
         if constexpr(sizeof...(Ts) == 1u){
             if(index < count){

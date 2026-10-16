@@ -131,6 +131,7 @@ private:
     // It stages phase values without touching the TimingSink, so a failed frame cannot make a partial phase scope observable.
     struct CpuTimingPhaseBatch;
 
+
 public:
     GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming);
     GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming, Perf::TimingSink* cpuTiming);
@@ -183,6 +184,7 @@ public:
     [[nodiscard]] bool destroy();
     [[nodiscard]] bool waitForIdle();
     [[nodiscard]] bool isDeviceLost()const noexcept;
+
 
 public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
@@ -319,6 +321,7 @@ private:
     Perf::TimingSink* m_cpuTiming = nullptr;
     // Frame scope registered once when the sink is attached, not per frame in runFrame().
     Perf::TimingScopeId m_frameTimingScope;
+
 
 private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;

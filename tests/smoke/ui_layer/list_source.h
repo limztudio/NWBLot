@@ -29,11 +29,11 @@ public:
     virtual u64 instanceGeneration()const noexcept override{ return 1u; }
     virtual u64 revision()const noexcept override{ return m_revision; }
     virtual u64 rowCount()const noexcept override{ return m_removed == 0u ? 100000u : 99999u; }
-    virtual u64 key(u64 index)const override;
-    virtual Expected<u64> indexOf(u64 key)const override;
-    virtual Expected<u64> findEnabled(u64 start, bool reverse)const override;
-    virtual StringView text(u64 index)const override;
-    virtual bool enabled(u64 index)const override;
+    virtual u64 key(u64 index)const noexcept override;
+    virtual Expected<u64> indexOf(u64 key)const noexcept override;
+    virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+    virtual StringView text(u64 index)const noexcept override;
+    virtual bool enabled(u64 index)const noexcept override;
 
 
 public:

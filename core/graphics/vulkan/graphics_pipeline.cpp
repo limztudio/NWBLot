@@ -51,6 +51,150 @@ void SetGraphicsDynamicState(const VolkDeviceTable& deviceDispatch, VkCommandBuf
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params){
+    constexpr TStringView s_OperationName = NWB_TEXT("begin render pass");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
+        return;
+    if(!validateRenderPassBegin(framebuffer, params, s_OperationName))
+        return;
+    if(!prepareFramebufferForRendering(&framebuffer, s_OperationName))
+        return;
+
+    // Match automatic graphics-state passes: compiler-owned recording may supply exact attachment barriers.
+    if(m_enableAutomaticBarriers){
+        setResourceStatesForFramebuffer(framebuffer);
+        if(m_commandRecordingFailed)
+            return;
+        commitBarriers();
+        if(m_commandRecordingFailed)
+            return;
+    }
+    if(!beginDynamicRendering(framebuffer, params)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("dynamic rendering could not begin"));
+        return;
+    }
+
+    retainResource(&framebuffer);
+    m_currentGraphicsState = {};
+    m_currentComputeState = {};
+    m_currentMeshletState = {};
+    m_currentRayTracingState = {};
+    m_renderPassActive = true;
+    m_renderPassFramebuffer = &framebuffer;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CommandList::endRenderPass(){
+    if(!publicCommandStateAccessible())
+        return;
+    if(!m_renderPassActive)
+        return;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("end render pass")))
+        return;
+    endActiveRenderPass();
+}
+
+void CommandList::setGraphicsState(const GraphicsState& state){
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("set graphics state")))
+        return;
+    if(!validateGraphicsState(state))
+        return;
+    if(!prepareFramebufferForRendering(state.framebuffer, NWB_TEXT("set graphics state")))
+        return;
+
+    setResourceStatesForGraphicsBuffers(state);
+    commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
+
+    if(!ensureGraphicsRenderPass(state.framebuffer))
+        return;
+
+    commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
+    m_currentComputeState = {};
+    m_currentMeshletState = {};
+    m_currentRayTracingState = {};
+    m_currentGraphicsState = state;
+
+    auto* pipeline = state.pipeline;
+    if(pipeline){
+        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
+        retainResource(pipeline);
+        VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
+    }
+
+    setViewportState(state.viewport);
+
+    for(const VertexBufferBinding& binding : state.vertexBuffers){
+        VkBuffer vertexBuffer = binding.buffer->m_buffer;
+        VkDeviceSize offset = binding.offset;
+        m_context.deviceDispatch.vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
+        retainResource(binding.buffer);
+    }
+
+    if(state.indexBuffer.buffer){
+        auto* ib = state.indexBuffer.buffer;
+        const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+        m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
+        retainResource(ib);
+    }
+    retainResource(state.indirectParams);
+}
+
+void CommandList::draw(const DrawArguments& args){
+    if(args.vertexCount == 0 || args.instanceCount == 0)
+        return;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw")))
+        return;
+    if(!validateGraphicsDrawArguments(args, false, NWB_TEXT("draw")))
+        return;
+
+    m_context.deviceDispatch.vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
+}
+
+void CommandList::drawIndexed(const DrawArguments& args){
+    if(args.vertexCount == 0 || args.instanceCount == 0)
+        return;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed")))
+        return;
+    if(!validateGraphicsDrawArguments(args, true, NWB_TEXT("draw indexed")))
+        return;
+
+    m_context.deviceDispatch.vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, static_cast<i32>(args.startVertexLocation), args.startInstanceLocation);
+}
+
+void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
+    if(drawCount == 0u)
+        return;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indirect")))
+        return;
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), NWB_TEXT("draw indirect"), NWB_TEXT("drawIndirect"), VulkanDetail::IndirectDrawIndexMode::NonIndexed);
+    if(!indirectBuffer)
+        return;
+
+    m_context.deviceDispatch.vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, (*indirectBuffer)->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
+    retainResource(m_currentGraphicsState.indirectParams);
+}
+
+void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
+    if(drawCount == 0u)
+        return;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed indirect")))
+        return;
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), NWB_TEXT("draw indexed indirect"), NWB_TEXT("drawIndexedIndirect"), VulkanDetail::IndirectDrawIndexMode::Indexed);
+    if(!indirectBuffer)
+        return;
+
+    m_context.deviceDispatch.vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, (*indirectBuffer)->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
+    retainResource(m_currentGraphicsState.indirectParams);
+}
+
+
 void CommandList::setViewportState(const ViewportState& viewportState){
     if(!viewportState.viewports.empty()){
         const auto& vp = viewportState.viewports[0u];
@@ -87,9 +231,6 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &*scissor);
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
@@ -188,48 +329,6 @@ void CommandList::endDynamicRendering(){
     m_context.deviceDispatch.vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
 }
 
-void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params){
-    constexpr TStringView s_OperationName = NWB_TEXT("begin render pass");
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
-        return;
-    if(!validateRenderPassBegin(framebuffer, params, s_OperationName))
-        return;
-    if(!prepareFramebufferForRendering(&framebuffer, s_OperationName))
-        return;
-
-    // Match automatic graphics-state passes: compiler-owned recording may supply exact attachment barriers.
-    if(m_enableAutomaticBarriers){
-        setResourceStatesForFramebuffer(framebuffer);
-        if(m_commandRecordingFailed)
-            return;
-        commitBarriers();
-        if(m_commandRecordingFailed)
-            return;
-    }
-    if(!beginDynamicRendering(framebuffer, params)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("dynamic rendering could not begin"));
-        return;
-    }
-
-    retainResource(&framebuffer);
-    m_currentGraphicsState = {};
-    m_currentComputeState = {};
-    m_currentMeshletState = {};
-    m_currentRayTracingState = {};
-    m_renderPassActive = true;
-    m_renderPassFramebuffer = &framebuffer;
-}
-
-void CommandList::endRenderPass(){
-    if(!publicCommandStateAccessible())
-        return;
-    if(!m_renderPassActive)
-        return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("end render pass")))
-        return;
-    endActiveRenderPass();
-}
-
 bool CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
     if(!framebuffer)
         return true;
@@ -264,103 +363,6 @@ void CommandList::endActiveRenderPass(){
     endDynamicRendering();
     m_renderPassActive = false;
     m_renderPassFramebuffer = nullptr;
-}
-
-void CommandList::setGraphicsState(const GraphicsState& state){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("set graphics state")))
-        return;
-    if(!validateGraphicsState(state))
-        return;
-    if(!prepareFramebufferForRendering(state.framebuffer, NWB_TEXT("set graphics state")))
-        return;
-
-    setResourceStatesForGraphicsBuffers(state);
-    commitBarriers();
-    if(m_commandRecordingFailed)
-        return;
-
-    if(!ensureGraphicsRenderPass(state.framebuffer))
-        return;
-
-    commitBarriers();
-    if(m_commandRecordingFailed)
-        return;
-    m_currentComputeState = {};
-    m_currentMeshletState = {};
-    m_currentRayTracingState = {};
-    m_currentGraphicsState = state;
-
-    auto* pipeline = state.pipeline;
-    if(pipeline){
-        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
-        retainResource(pipeline);
-        VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
-    }
-
-    setViewportState(state.viewport);
-
-    for(const VertexBufferBinding& binding : state.vertexBuffers){
-        VkBuffer vertexBuffer = binding.buffer->m_buffer;
-        VkDeviceSize offset = binding.offset;
-        m_context.deviceDispatch.vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
-        retainResource(binding.buffer);
-    }
-
-    if(state.indexBuffer.buffer){
-        auto* ib = state.indexBuffer.buffer;
-        const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-        m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
-        retainResource(ib);
-    }
-    retainResource(state.indirectParams);
-}
-
-void CommandList::draw(const DrawArguments& args){
-    if(args.vertexCount == 0 || args.instanceCount == 0)
-        return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw")))
-        return;
-    if(!validateGraphicsDrawArguments(args, false, NWB_TEXT("draw")))
-        return;
-
-    m_context.deviceDispatch.vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
-}
-
-void CommandList::drawIndexed(const DrawArguments& args){
-    if(args.vertexCount == 0 || args.instanceCount == 0)
-        return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed")))
-        return;
-    if(!validateGraphicsDrawArguments(args, true, NWB_TEXT("draw indexed")))
-        return;
-
-    m_context.deviceDispatch.vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, static_cast<i32>(args.startVertexLocation), args.startInstanceLocation);
-}
-
-void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
-    if(drawCount == 0u)
-        return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indirect")))
-        return;
-    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), NWB_TEXT("draw indirect"), NWB_TEXT("drawIndirect"), VulkanDetail::IndirectDrawIndexMode::NonIndexed);
-    if(!indirectBuffer)
-        return;
-
-    m_context.deviceDispatch.vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, (*indirectBuffer)->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
-    retainResource(m_currentGraphicsState.indirectParams);
-}
-
-void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
-    if(drawCount == 0u)
-        return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed indirect")))
-        return;
-    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), NWB_TEXT("draw indexed indirect"), NWB_TEXT("drawIndexedIndirect"), VulkanDetail::IndirectDrawIndexMode::Indexed);
-    if(!indirectBuffer)
-        return;
-
-    m_context.deviceDispatch.vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, (*indirectBuffer)->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
-    retainResource(m_currentGraphicsState.indirectParams);
 }
 
 

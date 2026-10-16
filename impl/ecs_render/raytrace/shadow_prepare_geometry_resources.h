@@ -28,6 +28,10 @@ struct ShadowPrepareGeometryInputs{
 
 // One declaration owns selection and scratch; inputs stay frozen, phases run once.
 class ShadowPrepareGeometryResources final : NoCopy{
+public:
+    using ResourceVector = Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>;
+
+
 private:
     struct BufferRequest{
         const Core::BufferHandle* source = nullptr;
@@ -42,6 +46,8 @@ private:
     using RequestIndex = HashMap<Core::Buffer*, BufferRequest, Core::Alloc::ScratchArena>;
     using ResourceIndex = HashMap<u32, BufferRequest*, Core::Alloc::ScratchArena>;
     using NameReference = NotNull<const NameHash*>;
+
+
     struct NameReferenceHash{
         [[nodiscard]] usize operator()(const NameReference& identity)const noexcept{
             return Hasher<NameHash>{}(*identity);
@@ -57,10 +63,6 @@ private:
 
 private:
     static constexpr usize s_InlineCount = 32u;
-
-
-public:
-    using ResourceVector = Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>;
 
 
 public:

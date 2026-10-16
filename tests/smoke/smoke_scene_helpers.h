@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include <loader/project_entry.h>
-
 #include "smoke_environment.h"
 #include "software_shadow_settings.h"
 #include "caustic_quality_settings.h"
@@ -14,17 +12,20 @@
 #include "shadow_quality_settings.h"
 #include "render_quality_settings.h"
 
-#include <core/assets/ref.h>
-#include <core/ecs/entity.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/telemetry/frame_graph_registry.h>
+#include <loader/project_entry.h>
+
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_scene/module.h>
+
+#include <core/assets/ref.h>
+#include <core/ecs/entity.h>
+#include <core/ecs/world.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/telemetry/frame_graph_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

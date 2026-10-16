@@ -165,7 +165,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] virtual const NWB::Impl::Ui::IListDataSource& filtered()const override final{ return m_view; }
+    [[nodiscard]] virtual const NWB::Impl::Ui::IListDataSource& filtered()const noexcept override final{ return m_view; }
 
 
 private:

@@ -94,52 +94,6 @@ bool CommandList::canResetTimerQueryHere()const{
     return ownership.m_readable && canResetTimerQueryHereUnchecked();
 }
 
-bool CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    constexpr u32 s_CompleteTimestampValidBits = 64u;
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer);
-    return
-        !m_commandRecordingFailed
-        && matchesActiveNativeLeaseIdentity()
-        && m_creationDesc.physicalQueue.valid()
-        && queueInfo
-        && queueInfo->id == m_creationDesc.physicalQueue
-        && queueInfo->queueClass == m_creationDesc.queueType
-        && (static_cast<u8>(queueInfo->capabilities) & s_KnownCapabilityBits) != 0u
-        && queueInfo->timestampValidBits > 0u
-        && queueInfo->timestampValidBits <= s_CompleteTimestampValidBits
-    ;
-}
-
-bool CommandList::canResetTimerQueryHereUnchecked()const noexcept{
-    if(m_renderPassActive || !canRecordTimerQueryHereUnchecked())
-        return false;
-
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute);
-    return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
-}
-
-Expected<TimerQueryRecordingEndpoints> CommandList::inspectExactTimerQueryRecordingEndpoints(const TimerQueryRecordingToken& token, const u64 recordingLeaseSerial)const noexcept{
-    TimerQueryRecordingEndpoints endpoints{};
-
-    const GraphPublicationReadOwnership ownership(*this);
-    if(!ownership.m_readable)
-        return MakeUnexpected(Failure{});
-    if(!token.valid() || recordingLeaseSerial == 0u || recordingLeaseSerial != m_recordingLeaseSerial || !matchesNativeLeaseIdentity() || !m_currentCmdBuf)
-        return endpoints;
-
-    for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryRecordingClaims){
-        if(claim.query != token.query || claim.queryIncarnation != token.queryIncarnation || claim.generation != token.generation || claim.recordingID != m_currentCmdBuf->m_recordingID || claim.queue != token.physicalQueue)
-            continue;
-
-        endpoints.recordsBegin = claim.recordsBegin;
-        endpoints.recordsEnd = claim.recordsEnd;
-        break;
-    }
-    return endpoints;
-}
-
 Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& query){
     TimerQueryRecordingToken token{};
     if(!publicCommandStateAccessible())
@@ -357,6 +311,52 @@ bool CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQ
     if(!endRecorded)
         invalidateCommandRecording();
     return endRecorded;
+}
+
+bool CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    constexpr u32 s_CompleteTimestampValidBits = 64u;
+    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer);
+    return
+        !m_commandRecordingFailed
+        && matchesActiveNativeLeaseIdentity()
+        && m_creationDesc.physicalQueue.valid()
+        && queueInfo
+        && queueInfo->id == m_creationDesc.physicalQueue
+        && queueInfo->queueClass == m_creationDesc.queueType
+        && (static_cast<u8>(queueInfo->capabilities) & s_KnownCapabilityBits) != 0u
+        && queueInfo->timestampValidBits > 0u
+        && queueInfo->timestampValidBits <= s_CompleteTimestampValidBits
+    ;
+}
+
+bool CommandList::canResetTimerQueryHereUnchecked()const noexcept{
+    if(m_renderPassActive || !canRecordTimerQueryHereUnchecked())
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute);
+    return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
+}
+
+Expected<TimerQueryRecordingEndpoints> CommandList::inspectExactTimerQueryRecordingEndpoints(const TimerQueryRecordingToken& token, const u64 recordingLeaseSerial)const noexcept{
+    TimerQueryRecordingEndpoints endpoints{};
+
+    const GraphPublicationReadOwnership ownership(*this);
+    if(!ownership.m_readable)
+        return MakeUnexpected(Failure{});
+    if(!token.valid() || recordingLeaseSerial == 0u || recordingLeaseSerial != m_recordingLeaseSerial || !matchesNativeLeaseIdentity() || !m_currentCmdBuf)
+        return endpoints;
+
+    for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryRecordingClaims){
+        if(claim.query != token.query || claim.queryIncarnation != token.queryIncarnation || claim.generation != token.generation || claim.recordingID != m_currentCmdBuf->m_recordingID || claim.queue != token.physicalQueue)
+            continue;
+
+        endpoints.recordsBegin = claim.recordsBegin;
+        endpoints.recordsEnd = claim.recordsEnd;
+        break;
+    }
+    return endpoints;
 }
 
 

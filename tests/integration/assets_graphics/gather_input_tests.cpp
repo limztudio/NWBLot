@@ -3,8 +3,10 @@
 
 
 #include <pipeline/asset_gatherer/gather.h>
+
 #include <core/assets/volume/built_asset.h>
 #include <core/filesystem/factory.h>
+
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
@@ -34,18 +36,13 @@ static usize s_MergeCalls = 0u;
     return true;
 }
 
-[[nodiscard]] static Name AssetName(const usize index){
+[[nodiscard]] static Name AssetName(const usize index)noexcept{
     char text[32u] = {};
     return DeriveName(Name("project/gather/"), FormatDecimal(index, text));
 }
 
 class GatherInputs : public testing::Test{
 protected:
-    NWB::Tests::TestArena<> m_testArena;
-    NWB::Tests::CapturingLogger m_logger;
-    NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
-    NWB::Path m_root{ m_testArena.arena };
-    Gatherer::AssetGatherOptions m_options{ m_testArena.arena };
 
     virtual void SetUp()override{
         Assets::AssetString caseKey(m_testArena.arena);
@@ -88,6 +85,14 @@ protected:
         }
         EXPECT_TRUE(filesystem->unmount());
     }
+
+
+protected:
+    NWB::Tests::TestArena<> m_testArena;
+    NWB::Tests::CapturingLogger m_logger;
+    NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
+    NWB::Path m_root{ m_testArena.arena };
+    Gatherer::AssetGatherOptions m_options{ m_testArena.arena };
 };
 
 TEST_F(GatherInputs, IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls){

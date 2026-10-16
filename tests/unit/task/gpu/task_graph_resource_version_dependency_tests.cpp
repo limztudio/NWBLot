@@ -5,6 +5,7 @@
 #include "task_graph_resource_version_test_utils.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
+
 #include <tests/common/gpu_task_graph_read_views.h>
 
 

@@ -53,7 +53,7 @@ using TaskGraphTestUtils::TestArena;
     return graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ compute ? Graphics::GpuQueueCapability::Compute : Graphics::GpuQueueCapability::Graphics });
 }
 
-[[nodiscard]] static const Graphics::GpuCompiledBarrier* FindRangeBarrier(const Graphics::GpuCompiledBarrier* const barriers, const u32 count, const Graphics::BufferRange& range, const Graphics::GpuCompiledBarrierType::Enum type){
+[[nodiscard]] static const Graphics::GpuCompiledBarrier* FindRangeBarrier(const Graphics::GpuCompiledBarrier* const barriers, const u32 count, const Graphics::BufferRange& range, const Graphics::GpuCompiledBarrierType::Enum type)noexcept{
     for(u32 index = 0u; index < count; ++index){
         if(barriers[index].type == type && barriers[index].range.bufferRange == range)
             return &barriers[index];

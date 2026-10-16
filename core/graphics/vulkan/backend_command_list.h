@@ -7,8 +7,6 @@
 
 #include "module.h"
 #include "backend_forward.h"
-
-#include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -16,6 +14,8 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
+
+#include <core/task/cpu/scheduler.h>
 
 #include <global/span.h>
 
@@ -298,6 +298,7 @@ public:
     Device& getDevice()noexcept{ return m_device; }
     const CommandListParameters& getDescription()noexcept{ return m_desc; }
     [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
+
 
 private:
     [[nodiscard]] bool publicCommandStateAccessible()const noexcept;

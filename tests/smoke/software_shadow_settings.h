@@ -8,6 +8,7 @@
 #include "smoke_environment.h"
 
 #include <impl/ecs_render/module.h>
+
 #include <global/limit.h>
 
 

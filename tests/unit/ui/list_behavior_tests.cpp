@@ -76,7 +76,7 @@ public:
 
     [[nodiscard]] virtual StringView text(u64)const override{ return "row"; }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         ++enabledCalls;
         return index < count && (index < disabledBegin || index >= disabledEnd);
     }

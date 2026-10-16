@@ -298,8 +298,7 @@ void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         const u64 value = index == current.size() ? m_sequence : current[index];
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

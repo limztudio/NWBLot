@@ -93,6 +93,9 @@ Frame::~Frame()noexcept(false){
     cleanupPlatform();
     drainOnFailure.release();
 }
+void Frame::requestQuit()noexcept{
+    m_quitRequested = true;
+}
 
 
 bool Frame::startup(){
@@ -120,16 +123,21 @@ void Frame::cleanup(){
     }
     NWB_FATAL_ASSERT_MSG(m_graphics.destroy(), NWB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss"));
 }
-void Frame::requestQuit()noexcept{
-    m_quitRequested = true;
+bool Frame::update(f32 delta){
+    const u64 frameIndex = m_graphics.getFrameIndex();
+    m_perfSession.beginFrame(frameIndex);
+    m_telemetrySession.setFrameIndex(frameIndex);
+    m_cpuTasks.setProfiling(m_perfSession.captureOptions().cpuTimingActive(), frameIndex);
+
+    if(m_telemetrySession.enabled()){
+        Telemetry::CaptureSessionCaptureScope telemetryScope(m_telemetrySession);
+        return updateFrame(delta);
+    }
+
+    return updateFrame(delta);
 }
-void Frame::setPerfCapture(const Perf::CaptureOptions& options){
-    m_perfSession.setCaptureOptions(options);
-    m_cpuTasks.setProfiling(options.cpuTimingActive(), m_perfSession.frameIndex());
-    m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
-    // Keep the cached update scope aligned with the sink without touching the per-frame update path.
-    if(options.cpuTimingActive())
-        m_projectUpdateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
+bool Frame::render()noexcept{
+    return true;
 }
 void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     m_telemetrySession.setCaptureOptions(options);
@@ -156,18 +164,40 @@ bool Frame::flushTelemetryUpload(const bool clearAfterUpload){
         m_telemetrySession.clear();
     return true;
 }
-bool Frame::update(f32 delta){
-    const u64 frameIndex = m_graphics.getFrameIndex();
-    m_perfSession.beginFrame(frameIndex);
-    m_telemetrySession.setFrameIndex(frameIndex);
-    m_cpuTasks.setProfiling(m_perfSession.captureOptions().cpuTimingActive(), frameIndex);
+void Frame::setPerfCapture(const Perf::CaptureOptions& options){
+    m_perfSession.setCaptureOptions(options);
+    m_cpuTasks.setProfiling(options.cpuTimingActive(), m_perfSession.frameIndex());
+    m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
+    // Keep the cached update scope aligned with the sink without touching the per-frame update path.
+    if(options.cpuTimingActive())
+        m_projectUpdateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
+}
 
-    if(m_telemetrySession.enabled()){
-        Telemetry::CaptureSessionCaptureScope telemetryScope(m_telemetrySession);
-        return updateFrame(delta);
-    }
+IClipboardService& Frame::clipboard(){
+    NWB_FATAL_ASSERT_MSG(m_clipboard, NWB_TEXT("Frame clipboard service requires completed startup"));
+    return *m_clipboard;
+}
 
-    return updateFrame(delta);
+ITextInputService& Frame::textInput(){
+    NWB_FATAL_ASSERT_MSG(m_textInput, NWB_TEXT("Frame text-input service requires completed startup"));
+    return *m_textInput;
+}
+
+TStringView Frame::windowTitleOrDefault()const noexcept{
+    const TStringView title = m_graphics.getWindowTitle();
+    return !title.empty() ? title : TStringView(NWB_TEXT("NWB"));
+}
+
+Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+    if(!m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus))
+        NWB_LOGGER_WARNING(NWB_TEXT("Frame: graphics window-state update requires device recreation"));
+
+    const TStringView title = m_graphics.getWindowTitle();
+    if(TStringView(m_appliedWindowTitle) == title)
+        return {};
+
+    m_appliedWindowTitle = title;
+    return TStringView(m_appliedWindowTitle);
 }
 bool Frame::updateFrame(f32 delta){
     ScopeExit discardUnpublishedProfile([this]()noexcept{ m_cpuTasks.setProfiling(false, m_perfSession.frameIndex()); });
@@ -224,36 +254,6 @@ bool Frame::updateFrame(f32 delta){
             NWB_LOGGER_WARNING(NWB_TEXT("Frame: one or more perf telemetry records failed"));
     }
     return true;
-}
-bool Frame::render()noexcept{
-    return true;
-}
-
-IClipboardService& Frame::clipboard(){
-    NWB_FATAL_ASSERT_MSG(m_clipboard, NWB_TEXT("Frame clipboard service requires completed startup"));
-    return *m_clipboard;
-}
-
-ITextInputService& Frame::textInput(){
-    NWB_FATAL_ASSERT_MSG(m_textInput, NWB_TEXT("Frame text-input service requires completed startup"));
-    return *m_textInput;
-}
-
-TStringView Frame::windowTitleOrDefault()const noexcept{
-    const TStringView title = m_graphics.getWindowTitle();
-    return !title.empty() ? title : TStringView(NWB_TEXT("NWB"));
-}
-
-Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
-    if(!m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus))
-        NWB_LOGGER_WARNING(NWB_TEXT("Frame: graphics window-state update requires device recreation"));
-
-    const TStringView title = m_graphics.getWindowTitle();
-    if(TStringView(m_appliedWindowTitle) == title)
-        return {};
-
-    m_appliedWindowTitle = title;
-    return TStringView(m_appliedWindowTitle);
 }
 
 

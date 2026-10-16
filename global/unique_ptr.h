@@ -149,10 +149,9 @@ public:
         : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
     UniquePtr(const this_type&) = delete;
+    ~UniquePtr()noexcept{ reset(); }
     UniquePtr& operator=(const this_type&) = delete;
     UniquePtr& operator=(pointer pValue) = delete;
-
-    ~UniquePtr()noexcept{ reset(); }
 
 
 public:
@@ -226,10 +225,9 @@ public:
         : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
     UniquePtr(const this_type&) = delete;
+    ~UniquePtr()noexcept{ reset(); }
     UniquePtr& operator=(const this_type&) = delete;
     UniquePtr& operator=(pointer pArray) = delete;
-
-    ~UniquePtr()noexcept{ reset(); }
 
 
 public:

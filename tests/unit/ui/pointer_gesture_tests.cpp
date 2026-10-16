@@ -30,7 +30,7 @@ HitTarget GestureTarget(const u64 value = 1u){
     return target;
 }
 
-InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 25.0f }){
+InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 25.0f })noexcept{
     return { type, position };
 }
 

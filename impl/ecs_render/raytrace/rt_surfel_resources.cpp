@@ -48,6 +48,22 @@ bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets
     return true;
 }
 
+Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(Core::GpuTaskGraph& graph, const DeferredFrameTargets& targets)const{
+    Core::GpuUploadBlobId blob;
+    if(!hasSurfelWork())
+        return blob;
+    if(!m_rayTracingState.m_surfelConstants){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
+        return MakeUnexpected(Failure{});
+    }
+
+    const NwbSurfelConstantsGpu params = BuildSurfelFrameConstants(m_rayTracingState, targets);
+    blob = graph.copyUploadData(&params, sizeof(params), alignof(NwbSurfelConstantsGpu));
+    if(!(blob.valid()))
+        return MakeUnexpected(Failure{});
+    return blob;
+}
+
 void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -79,16 +95,37 @@ bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
     return m_rayTracingState.m_surfelEnabled;
 }
 
+bool RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept{
+    return hasSurfelWork() && m_rayTracingState.m_surfelResourcesNeedClear;
+}
+
+bool RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
+    if(!m_rayTracingState.m_surfelResourcesNeedClear)
+        return false;
+
+    m_rayTracingState.m_surfelResourcesClearPending = true;
+    return true;
+}
+
+void RendererRayTracingSystem::finalizeSurfelResourceInitialization()noexcept{
+    if(!m_rayTracingState.m_surfelResourcesClearPending)
+        return;
+
+    m_rayTracingState.m_surfelResourcesClearPending = false;
+    m_rayTracingState.m_surfelResourcesNeedClear = false;
+}
+
+void RendererRayTracingSystem::discardSurfelResourceInitialization()noexcept{
+    // Keep the clear pending until a producer succeeds.
+    m_rayTracingState.m_surfelResourcesClearPending = false;
+}
+
 bool RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const noexcept{
     return hasSurfelWork() && m_rayTracingState.m_surfelCounterBuffer && m_rayTracingState.m_surfelCounterReadback && !m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid() && (m_rayTracingState.m_surfelFrameIndex % s_SurfelCountLogInterval) == 0u;
 }
 
 void RendererRayTracingSystem::markSurfelCountReadbackScheduled()noexcept{
     m_rayTracingState.m_surfelCountReadbackFrame = m_rayTracingState.m_surfelFrameIndex;
-}
-
-bool RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept{
-    return hasSurfelWork() && m_rayTracingState.m_surfelResourcesNeedClear;
 }
 
 bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){
@@ -106,43 +143,6 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
     }
 
     return true;
-}
-
-Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(Core::GpuTaskGraph& graph, const DeferredFrameTargets& targets)const{
-    Core::GpuUploadBlobId blob;
-    if(!hasSurfelWork())
-        return blob;
-    if(!m_rayTracingState.m_surfelConstants){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
-        return MakeUnexpected(Failure{});
-    }
-
-    const NwbSurfelConstantsGpu params = BuildSurfelFrameConstants(m_rayTracingState, targets);
-    blob = graph.copyUploadData(&params, sizeof(params), alignof(NwbSurfelConstantsGpu));
-    if(!(blob.valid()))
-        return MakeUnexpected(Failure{});
-    return blob;
-}
-
-void RendererRayTracingSystem::finalizeSurfelResourceInitialization()noexcept{
-    if(!m_rayTracingState.m_surfelResourcesClearPending)
-        return;
-
-    m_rayTracingState.m_surfelResourcesClearPending = false;
-    m_rayTracingState.m_surfelResourcesNeedClear = false;
-}
-
-bool RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
-    if(!m_rayTracingState.m_surfelResourcesNeedClear)
-        return false;
-
-    m_rayTracingState.m_surfelResourcesClearPending = true;
-    return true;
-}
-
-void RendererRayTracingSystem::discardSurfelResourceInitialization()noexcept{
-    // Keep the clear pending until a producer succeeds.
-    m_rayTracingState.m_surfelResourcesClearPending = false;
 }
 
 

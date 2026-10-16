@@ -142,14 +142,6 @@ const AtlasGlyph* GlyphAtlas::find(const SharedFontFace& face, u32 glyphId, u32 
     return found == m_index.end() ? nullptr : &m_glyphs[found.value()];
 }
 
-void GlyphAtlas::appendGlyph(AtlasGlyph&& record){
-    const GlyphKey key{ record.face.get(), record.glyphId, record.pixelSize };
-    const usize index = m_glyphs.size();
-    m_glyphs.push_back(Move(record));
-    if(!m_index.emplace(key, index).second)
-        TerminateInvariant();
-}
-
 SharedGlyphPage GlyphAtlas::page(u32 index){
     if(index >= m_pages.size())
         return {};
@@ -168,6 +160,14 @@ SharedGlyphPage GlyphAtlas::page(u32 index){
         page.dirty = false;
     }
     return page.published;
+}
+
+void GlyphAtlas::appendGlyph(AtlasGlyph&& record){
+    const GlyphKey key{ record.face.get(), record.glyphId, record.pixelSize };
+    const usize index = m_glyphs.size();
+    m_glyphs.push_back(Move(record));
+    if(!m_index.emplace(key, index).second)
+        TerminateInvariant();
 }
 
 

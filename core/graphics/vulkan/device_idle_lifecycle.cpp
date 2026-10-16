@@ -45,6 +45,34 @@ bool Device::waitForIdle(){
     return true;
 }
 
+void Device::runGarbageCollection(){
+    // Avoid extra queue queries after device loss.
+    if(isDeviceLost())
+        return;
+
+    for(Queue* queue : m_physicalQueues){
+        if(queue){
+            VkResult completionResult = VK_SUCCESS;
+            {
+                ScopedLock lock(queue->m_mutex);
+                completionResult = queue->updateLastFinishedID();
+                if(completionResult == VK_SUCCESS)
+                    queue->collectCompletedCommandBuffers();
+            }
+            if(completionResult == VK_ERROR_DEVICE_LOST){
+                captureDeviceLoss("queue timeline query");
+                return;
+            }
+            if(completionResult != VK_SUCCESS){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
+                return;
+            }
+        }
+    }
+    m_scratchManager.collectCompletedChunks();
+    m_gpuDescriptorHeap.collectRetired();
+}
+
 VkResult Device::waitForNativeIdle()noexcept{
     for(Queue* queue : m_physicalQueues){
         if(queue)
@@ -103,34 +131,6 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
     savePipelineCacheData();
     m_gpuDescriptorHeap.shutdownForDeviceTeardown();
     m_descriptorBufferManager.shutdownForDeviceTeardown();
-}
-
-void Device::runGarbageCollection(){
-    // Avoid extra queue queries after device loss.
-    if(isDeviceLost())
-        return;
-
-    for(Queue* queue : m_physicalQueues){
-        if(queue){
-            VkResult completionResult = VK_SUCCESS;
-            {
-                ScopedLock lock(queue->m_mutex);
-                completionResult = queue->updateLastFinishedID();
-                if(completionResult == VK_SUCCESS)
-                    queue->collectCompletedCommandBuffers();
-            }
-            if(completionResult == VK_ERROR_DEVICE_LOST){
-                captureDeviceLoss("queue timeline query");
-                return;
-            }
-            if(completionResult != VK_SUCCESS){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
-                return;
-            }
-        }
-    }
-    m_scratchManager.collectCompletedChunks();
-    m_gpuDescriptorHeap.collectRetired();
 }
 
 

@@ -32,17 +32,17 @@ public:
     [[nodiscard]] virtual u64 revision()const override{ observeCallback(); return contentRevision; }
     [[nodiscard]] virtual u64 rowCount()const override{ observeCallback(); return count; }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         observeCallback();
         return ComboSource::key(index);
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
         observeCallback();
         return ComboSource::indexOf(value);
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverseSearch)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverseSearch)const noexcept override{
         observeCallback();
         return ComboSource::findEnabled(start, reverseSearch);
     }
@@ -59,14 +59,14 @@ public:
         return value;
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         observeCallback();
         return ComboSource::enabled(index);
     }
 
 
 private:
-    void observeCallback()const{
+    void observeCallback()const noexcept{
         if(attempts != 0u)
             ++callbacksAfterAttempt;
     }

@@ -71,7 +71,7 @@ template<typename SnapshotT, typename StateChangedT>
     return { true, displayChanged };
 }
 
-[[nodiscard]] inline bool HandlePassiveSmokeKeyboard(const i32 key, const i32 action, bool& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child){
+[[nodiscard]] inline bool HandlePassiveSmokeKeyboard(const i32 key, const i32 action, bool& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept{
     if(key != Core::Key::F4 && key != Core::Key::F5)
         return false;
     if(action != Core::InputAction::Press)

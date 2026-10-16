@@ -94,6 +94,22 @@ void TimingRecorder::recordSample(const TimingScopeId scope, const f64 seconds, 
     record->accumulator.record(seconds, sampleFrameIndex);
 }
 
+void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds)noexcept{
+    recordSample(scopeName, seconds, m_nextPublishFrameIndex);
+}
+
+void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, const u64 sampleFrameIndex)noexcept{
+    if(!m_enabled || !scopeName)
+        return;
+
+    // Record paths only consume scopes registered during setup; scope creation belongs to registerScope callers, never to per-frame record calls.
+    const auto found = m_scopeMap.find(scopeName);
+    if(found == m_scopeMap.end())
+        return;
+
+    recordSample(found.value(), seconds, sampleFrameIndex);
+}
+
 void TimingRecorder::publishFrame()noexcept{
     publishFrame(m_nextPublishFrameIndex);
 }
@@ -136,22 +152,6 @@ const TimingStats& TimingRecorder::statsAt(const usize index)const noexcept{
         return m_emptyStats;
 
     return m_scopes[index]->accumulator.lastStats();
-}
-
-void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds)noexcept{
-    recordSample(scopeName, seconds, m_nextPublishFrameIndex);
-}
-
-void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, const u64 sampleFrameIndex)noexcept{
-    if(!m_enabled || !scopeName)
-        return;
-
-    // Record paths only consume scopes registered during setup; scope creation belongs to registerScope callers, never to per-frame record calls.
-    const auto found = m_scopeMap.find(scopeName);
-    if(found == m_scopeMap.end())
-        return;
-
-    recordSample(found.value(), seconds, sampleFrameIndex);
 }
 
 TimingRecorder::ScopeRecord* TimingRecorder::findScope(const TimingScopeId scope)const noexcept{

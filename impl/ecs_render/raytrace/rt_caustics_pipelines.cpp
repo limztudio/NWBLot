@@ -21,6 +21,100 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& targets){
+    // Prepare hardware resources once geometry and emission targets exist.
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return true;
+    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || !m_rayTracingState.m_tlas || m_rayTracingState.m_shadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargetBuffer)
+        return true;
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    return prepareCausticResources(meshView, targets, true);
+}
+
+bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
+    // Hardware photons share the accumulator and resolve with the software reference.
+    if(!hasHwCausticWork(meshView))
+        return false;
+    NWB_ASSERT(meshView.bindingValid());
+    NWB_ASSERT(targets.bindless.valid());
+    {
+        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+        if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
+            return false;
+        }
+    }
+    const f32 temporalDecay = causticTemporalDecay();
+    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
+    const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
+    if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets, temporalDecay))
+        return false;
+    const u32 temporalPhaseCount = causticTemporalPhaseCount();
+    const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
+    const u32 photonCount = photonBudget.photonsPerFrame;
+
+    const auto recordPhotons = [&](){
+        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(targets, meshView, m_rayTracingState, photonBudget, m_rayTracingState.m_tlasInstanceCount, static_cast<u32>(m_graphics.getFrameIndex()), temporalPhaseCount);
+
+        Core::RayTracingState rayTracingPassState;
+        rayTracingPassState.setShaderTable(shaderTable.get());
+        commandList.setRayTracingState(rayTracingPassState);
+        // Bind heap blocks after RayTracingState; set 2 selects the TLAS generation.
+        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+        heap.bindRayTracing(commandList, *pipeline.get(), m_rayTracingState.m_tlasHeapHandle);
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+
+        Core::RayTracingDispatchRaysArguments dispatchArgs;
+        dispatchArgs.setDimensions(photonBudget.gridSide, photonBudget.gridSide / temporalPhaseCount, 1u);
+        commandList.dispatchRays(dispatchArgs);
+        advanceCausticTemporalReuse();
+    };
+    if(causticPhotonTiming && causticPhotonTiming->has_value()){
+        recordPhotons();
+        causticPhotonTiming->value().finishTiming(commandList);
+        causticPhotonTiming->reset();
+    }
+    else{
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
+        recordPhotons();
+    }
+
+    if(!m_rayTracingState.m_hwCausticDispatchLogged){
+        m_rayTracingState.m_hwCausticDispatchLogged = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
+            , static_cast<u64>(photonCount)
+            , static_cast<u64>(temporalPhaseCount)
+            , static_cast<u64>(photonBudget.fullGridCount)
+            , static_cast<u64>(m_rayTracingState.m_causticLightCount)
+            , static_cast<u64>(m_rayTracingState.m_causticRefractiveInstanceCount)
+        );
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
+    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
+    return hasHwCausticWork(meshView);
+}
+
+bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
+    return m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && m_rayTracingState.m_causticLightCount > 0u
+        && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
+        && m_rayTracingState.m_tlas
+        && m_rayTracingState.m_shadowMeshCount > 0u
+        && m_rayTracingState.m_causticEmissionTargetBuffer
+        && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
+        && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && meshView.bindingValid()
+    ;
+}
+
 bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     auto& shader = csg ? m_rayTracingState.m_swCausticCsgShader : m_rayTracingState.m_swCausticShader;
@@ -181,26 +275,6 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     return true;
 }
 
-f32 RendererRayTracingSystem::causticTemporalDecay()noexcept{
-    return m_rayTracingState.m_causticTemporalDecay;
-}
-
-u32 RendererRayTracingSystem::causticTemporalPhaseCount(){
-    // Reuse phases only after temporal history warms up.
-    if(causticTemporalDecay() <= 0.f)
-        return NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT;
-    return m_rayTracingState.m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount ? s_CausticTemporalBootstrapPhaseCount : s_CausticTemporalConvergedPhaseCount;
-}
-
-void RendererRayTracingSystem::advanceCausticTemporalReuse(){
-    if(causticTemporalDecay() <= 0.f){
-        m_rayTracingState.m_causticTemporalReuseFrameCount = 0u;
-        return;
-    }
-    if(m_rayTracingState.m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount)
-        m_rayTracingState.m_causticTemporalReuseFrameCount = m_rayTracingState.m_causticTemporalReuseFrameCount + 1u;
-}
-
 bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     if(m_rayTracingState.m_causticAccumulatorDecayPipeline)
         return true;
@@ -244,6 +318,26 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
         return false;
     }
     return true;
+}
+
+f32 RendererRayTracingSystem::causticTemporalDecay()noexcept{
+    return m_rayTracingState.m_causticTemporalDecay;
+}
+
+u32 RendererRayTracingSystem::causticTemporalPhaseCount(){
+    // Reuse phases only after temporal history warms up.
+    if(causticTemporalDecay() <= 0.f)
+        return NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT;
+    return m_rayTracingState.m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount ? s_CausticTemporalBootstrapPhaseCount : s_CausticTemporalConvergedPhaseCount;
+}
+
+void RendererRayTracingSystem::advanceCausticTemporalReuse(){
+    if(causticTemporalDecay() <= 0.f){
+        m_rayTracingState.m_causticTemporalReuseFrameCount = 0u;
+        return;
+    }
+    if(m_rayTracingState.m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount)
+        m_rayTracingState.m_causticTemporalReuseFrameCount = m_rayTracingState.m_causticTemporalReuseFrameCount + 1u;
 }
 
 bool RendererRayTracingSystem::ensureCausticRtPipeline(){
@@ -349,100 +443,6 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     cachedTable = Move(shaderTable);
 
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RT caustic pipeline + shader table"));
-    return true;
-}
-
-bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return hasHwCausticWork(meshView);
-}
-
-bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
-    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
-    return m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && m_rayTracingState.m_causticLightCount > 0u
-        && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
-        && m_rayTracingState.m_tlas
-        && m_rayTracingState.m_shadowMeshCount > 0u
-        && m_rayTracingState.m_causticEmissionTargetBuffer
-        && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-        && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && meshView.bindingValid()
-    ;
-}
-
-bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& targets){
-    // Prepare hardware resources once geometry and emission targets exist.
-    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
-        return true;
-    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || !m_rayTracingState.m_tlas || m_rayTracingState.m_shadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargetBuffer)
-        return true;
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return prepareCausticResources(meshView, targets, true);
-}
-
-bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
-    // Hardware photons share the accumulator and resolve with the software reference.
-    if(!hasHwCausticWork(meshView))
-        return false;
-    NWB_ASSERT(meshView.bindingValid());
-    NWB_ASSERT(targets.bindless.valid());
-    {
-        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
-            return false;
-        }
-    }
-    const f32 temporalDecay = causticTemporalDecay();
-    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
-    const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
-    const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
-    if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets, temporalDecay))
-        return false;
-    const u32 temporalPhaseCount = causticTemporalPhaseCount();
-    const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
-    const u32 photonCount = photonBudget.photonsPerFrame;
-
-    const auto recordPhotons = [&](){
-        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(targets, meshView, m_rayTracingState, photonBudget, m_rayTracingState.m_tlasInstanceCount, static_cast<u32>(m_graphics.getFrameIndex()), temporalPhaseCount);
-
-        Core::RayTracingState rayTracingPassState;
-        rayTracingPassState.setShaderTable(shaderTable.get());
-        commandList.setRayTracingState(rayTracingPassState);
-        // Bind heap blocks after RayTracingState; set 2 selects the TLAS generation.
-        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        heap.bindRayTracing(commandList, *pipeline.get(), m_rayTracingState.m_tlasHeapHandle);
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-
-        Core::RayTracingDispatchRaysArguments dispatchArgs;
-        dispatchArgs.setDimensions(photonBudget.gridSide, photonBudget.gridSide / temporalPhaseCount, 1u);
-        commandList.dispatchRays(dispatchArgs);
-        advanceCausticTemporalReuse();
-    };
-    if(causticPhotonTiming && causticPhotonTiming->has_value()){
-        recordPhotons();
-        causticPhotonTiming->value().finishTiming(commandList);
-        causticPhotonTiming->reset();
-    }
-    else{
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
-        recordPhotons();
-    }
-
-    if(!m_rayTracingState.m_hwCausticDispatchLogged){
-        m_rayTracingState.m_hwCausticDispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
-            , static_cast<u64>(photonCount)
-            , static_cast<u64>(temporalPhaseCount)
-            , static_cast<u64>(photonBudget.fullGridCount)
-            , static_cast<u64>(m_rayTracingState.m_causticLightCount)
-            , static_cast<u64>(m_rayTracingState.m_causticRefractiveInstanceCount)
-        );
-    }
     return true;
 }
 

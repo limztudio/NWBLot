@@ -23,48 +23,78 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
-    // Prepare storage only for geometry requiring an acceleration update.
-    bool allResourcesReady = true;
-    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
-    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
-    for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        if(!RequiresMeshSwBvhUpdate(meshResources))
-            continue;
-
-        if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer){
-            allResourcesReady = false;
-            continue;
-        }
-        if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u){
-            allResourcesReady = false;
-            continue;
-        }
-
-        const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
-        const auto boundResources = m_meshSystem.ensureRayTracingInputHeapHandles(meshResources);
-        if(!boundResources){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
-            allResourcesReady = false;
-            continue;
-        }
-        ECSRenderDetail::MeshRayTracingResourceSnapshot preparedResources = *boundResources;
-        if(!ensureMeshSwBvhResources(primitiveCount, preparedResources.swBvhNodeBuffer, preparedResources.swBvhParentBuffer, preparedResources.swBvhNodeHeapHandle, preparedResources.swBvhParentHeapHandle)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
-            allResourcesReady = false;
-        }
-        else if(!m_meshSystem.commitRayTracingResourceSnapshot(*boundResources, preparedResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
-            allResourcesReady = false;
-        }
+bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build){
+    if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
+        return false;
     }
-    return allResourcesReady;
+
+    Core::BufferHandle nodeBuffer = build.nodeBuffer;
+    Core::BufferHandle parentBuffer = build.parentBuffer;
+    const bool recorded = build.performRefit
+        ? refitMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, nodeBuffer, parentBuffer, build.nodeHeapHandle, build.parentHeapHandle)
+        : buildMeshSwBvhPrepared(
+            commandList,
+            build.positionHeapHandle.slot(),
+            build.triangleIndexHeapHandle.slot(),
+            build.primitiveCount,
+            LoadFloatInt(build.aabbMin),
+            LoadFloatInt(build.aabbMax),
+            nodeBuffer,
+            parentBuffer,
+            build.nodeHeapHandle,
+            build.parentHeapHandle
+        )
+    ;
+    if(!recorded){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
+    }
+    return recorded;
 }
 
-void RendererRayTracingSystem::clearPreparedMeshSwBvhBuilds()noexcept{
-    m_preparedMeshSwBvhBuilds.clear();
-    m_preparedMeshSwBvhBuildsReady = false;
-    m_preparedMeshSwBvhBuildPlanFrozen = false;
+void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
+    if(!m_preparedMeshSwBvhBuildsReady)
+        return;
+
+    bool allPlansCurrent = true;
+    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
+        auto meshResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
+        if(
+            !meshResult
+            || meshResult->runtimeMesh != build.runtimeMesh
+            || meshResult->runtimeMeshVersion != build.runtimeMeshVersion
+            || meshResult->runtimeGeometryContentRevision != build.geometryContentRevision
+            || meshResult->swBvhGeometryContentRevision != build.acceptedGeometryContentRevision
+            || meshResult->positionBuffer.get() != build.positionBuffer.get()
+            || meshResult->triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
+            || meshResult->swBvhNodeBuffer.get() != build.nodeBuffer.get()
+            || meshResult->swBvhParentBuffer.get() != build.parentBuffer.get()
+            || meshResult->swBvhRefitsSinceRebuild != build.refitsBeforeBuild
+            || meshResult->swBvhBuildPending != build.buildPending
+            || (!meshResult->swBvhTopologyBuilt || !meshResult->swBvhBuildAccepted) != build.firstBuild
+        ){
+            allPlansCurrent = false;
+            continue;
+        }
+
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResult);
+        meshResult->swBvhBuildPending = false;
+        meshResult->swBvhBuildAccepted = true;
+        meshResult->swBvhGeometryContentRevision = build.geometryContentRevision;
+        if(!build.performRefit)
+            meshResult->swBvhTopologyBuilt = true;
+        meshResult->swBvhRefitsSinceRebuild = build.refitsAfterBuild;
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResult))){
+            allPlansCurrent = false;
+            continue;
+        }
+        if(build.firstBuild){
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"), StringConvert(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.primitiveCount));
+        }
+    }
+    if(!allPlansCurrent)
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+    clearPreparedMeshSwBvhBuilds();
 }
 
 bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::ScratchArena& scratchArena){
@@ -214,80 +244,6 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
     ;
 }
 
-bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build){
-    if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
-        return false;
-    }
-
-    Core::BufferHandle nodeBuffer = build.nodeBuffer;
-    Core::BufferHandle parentBuffer = build.parentBuffer;
-    const bool recorded = build.performRefit
-        ? refitMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, nodeBuffer, parentBuffer, build.nodeHeapHandle, build.parentHeapHandle)
-        : buildMeshSwBvhPrepared(
-            commandList,
-            build.positionHeapHandle.slot(),
-            build.triangleIndexHeapHandle.slot(),
-            build.primitiveCount,
-            LoadFloatInt(build.aabbMin),
-            LoadFloatInt(build.aabbMax),
-            nodeBuffer,
-            parentBuffer,
-            build.nodeHeapHandle,
-            build.parentHeapHandle
-        )
-    ;
-    if(!recorded){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
-    }
-    return recorded;
-}
-
-void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
-    if(!m_preparedMeshSwBvhBuildsReady)
-        return;
-
-    bool allPlansCurrent = true;
-    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
-        auto meshResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(
-            !meshResult
-            || meshResult->runtimeMesh != build.runtimeMesh
-            || meshResult->runtimeMeshVersion != build.runtimeMeshVersion
-            || meshResult->runtimeGeometryContentRevision != build.geometryContentRevision
-            || meshResult->swBvhGeometryContentRevision != build.acceptedGeometryContentRevision
-            || meshResult->positionBuffer.get() != build.positionBuffer.get()
-            || meshResult->triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
-            || meshResult->swBvhNodeBuffer.get() != build.nodeBuffer.get()
-            || meshResult->swBvhParentBuffer.get() != build.parentBuffer.get()
-            || meshResult->swBvhRefitsSinceRebuild != build.refitsBeforeBuild
-            || meshResult->swBvhBuildPending != build.buildPending
-            || (!meshResult->swBvhTopologyBuilt || !meshResult->swBvhBuildAccepted) != build.firstBuild
-        ){
-            allPlansCurrent = false;
-            continue;
-        }
-
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResult);
-        meshResult->swBvhBuildPending = false;
-        meshResult->swBvhBuildAccepted = true;
-        meshResult->swBvhGeometryContentRevision = build.geometryContentRevision;
-        if(!build.performRefit)
-            meshResult->swBvhTopologyBuilt = true;
-        meshResult->swBvhRefitsSinceRebuild = build.refitsAfterBuild;
-        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResult))){
-            allPlansCurrent = false;
-            continue;
-        }
-        if(build.firstBuild){
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"), StringConvert(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.primitiveCount));
-        }
-    }
-    if(!allPlansCurrent)
-        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-    clearPreparedMeshSwBvhBuilds();
-}
-
 bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)const noexcept{
     if(!m_preparedMeshSwBvhBuildsReady)
         return false;
@@ -308,6 +264,50 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(const ECSR
             return !build.performRefit;
     }
     return false;
+}
+
+void RendererRayTracingSystem::clearPreparedMeshSwBvhBuilds()noexcept{
+    m_preparedMeshSwBvhBuilds.clear();
+    m_preparedMeshSwBvhBuildsReady = false;
+    m_preparedMeshSwBvhBuildPlanFrozen = false;
+}
+
+bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
+    // Prepare storage only for geometry requiring an acceleration update.
+    bool allResourcesReady = true;
+    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
+    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
+        if(!RequiresMeshSwBvhUpdate(meshResources))
+            continue;
+
+        if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer){
+            allResourcesReady = false;
+            continue;
+        }
+        if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u){
+            allResourcesReady = false;
+            continue;
+        }
+
+        const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
+        const auto boundResources = m_meshSystem.ensureRayTracingInputHeapHandles(meshResources);
+        if(!boundResources){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            allResourcesReady = false;
+            continue;
+        }
+        ECSRenderDetail::MeshRayTracingResourceSnapshot preparedResources = *boundResources;
+        if(!ensureMeshSwBvhResources(primitiveCount, preparedResources.swBvhNodeBuffer, preparedResources.swBvhParentBuffer, preparedResources.swBvhNodeHeapHandle, preparedResources.swBvhParentHeapHandle)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            allResourcesReady = false;
+        }
+        else if(!m_meshSystem.commitRayTracingResourceSnapshot(*boundResources, preparedResources)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            allResourcesReady = false;
+        }
+    }
+    return allResourcesReady;
 }
 
 

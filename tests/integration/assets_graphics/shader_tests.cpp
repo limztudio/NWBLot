@@ -79,7 +79,7 @@ TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
     EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_PROJECT_SHADERS_TEST_SHADER), "", Name(s_PS)));
 }
 
-static constexpr u32 PackSpirvStringWord(const char a, const char b, const char c, const char d){
+static constexpr u32 PackSpirvStringWord(const char a, const char b, const char c, const char d)noexcept{
     return static_cast<u32>(static_cast<u8>(a)) | (static_cast<u32>(static_cast<u8>(b)) << 8u) | (static_cast<u32>(static_cast<u8>(c)) << 16u) | (static_cast<u32>(static_cast<u8>(d)) << 24u);
 }
 

@@ -2,16 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/assets/bunch/cook.h>
-#include <core/assets/cook_metadata.h>
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
 
 #include <impl/assets_model/cook.h>
-#include <tests/common/capturing_logger.h>
+
+#include <core/assets/bunch/cook.h>
+#include <core/assets/cook_metadata.h>
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
 
-#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 

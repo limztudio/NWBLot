@@ -22,21 +22,6 @@ void InputRouter::restoreDefaultBindings(){
     m_bindings.restoreDefaults();
 }
 
-bool InputRouter::wantsCommands()const noexcept{
-    return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{
-        return source.consumed;
-    }) != m_commandSources.end();
-}
-
-bool InputRouter::ownsKey(const i32 key)const noexcept{
-    return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
-}
-
-bool InputRouter::ownsSource(const InputSource& source)const noexcept{
-    const CommandSource* held = findCommandSource(source);
-    return held && held->consumed;
-}
-
 void InputRouter::cancelDeviceInput(const u64 device)noexcept{
     if(m_activePointerSource.valid() && m_activePointerSource.device == device)
         terminatePointerSource(m_activePointerSource);
@@ -67,6 +52,21 @@ void InputRouter::cancelDeviceInput(const u64 device)noexcept{
         if(event.source.valid() && event.source.device == device)
             m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
     }
+}
+
+bool InputRouter::wantsCommands()const noexcept{
+    return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{
+        return source.consumed;
+    }) != m_commandSources.end();
+}
+
+bool InputRouter::ownsKey(const i32 key)const noexcept{
+    return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
+}
+
+bool InputRouter::ownsSource(const InputSource& source)const noexcept{
+    const CommandSource* held = findCommandSource(source);
+    return held && held->consumed;
 }
 
 bool InputRouter::canEditCommand(const InputEvent& event)const noexcept{

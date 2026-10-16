@@ -33,9 +33,6 @@ struct DeferredFrameTargets;
 // Separated from RendererFramePipeline::render(): prefix/shadow/effects restores are per-stage functionality, composed here so render() keeps only the call sites.
 class FrameExecuteCpuRestore final{
 public:
-    FrameExecuteCpuRestore() = delete;
-
-
     struct Snapshot{
         RayTracingFrameCpuStateSnapshot rayTracing;
         bool avboitTargetsNeedClear = false;
@@ -43,6 +40,7 @@ public:
     };
 
 
+public:
     static void RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem);
     static void RestoreShadowCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot);
     static void RestoreCausticsCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot);
@@ -58,6 +56,10 @@ public:
         const Snapshot& snapshot,
         bool restoreBindlessSlots
     );
+
+
+public:
+    FrameExecuteCpuRestore() = delete;
 };
 
 

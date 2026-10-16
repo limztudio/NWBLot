@@ -67,6 +67,14 @@ const WidgetState* WidgetStateStore::find(const WidgetId id)const{
     return index == m_entries.size() ? nullptr : &m_entries[index];
 }
 
+void WidgetStateStore::erase(const usize index){
+    if(index >= m_entries.size())
+        return;
+    m_entries.erase(m_entries.begin() + index);
+    // Context retires states in batches; rebuild shifted indices on the next lookup.
+    m_indexDirty = true;
+}
+
 usize WidgetStateStore::findIndex(const WidgetId id)const{
     if(m_indexDirty)
         rebuildIndex();
@@ -85,14 +93,6 @@ void WidgetStateStore::rebuildIndex()const{
             TerminateInvariant();
     }
     m_indexDirty = false;
-}
-
-void WidgetStateStore::erase(const usize index){
-    if(index >= m_entries.size())
-        return;
-    m_entries.erase(m_entries.begin() + index);
-    // Context retires states in batches; rebuild shifted indices on the next lookup.
-    m_indexDirty = true;
 }
 
 

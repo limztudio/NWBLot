@@ -29,6 +29,17 @@ class UiBuilderTextShapingTests : public WidgetFixture{
 protected:
 
 
+    [[nodiscard]] static u32 GlyphQuads(const DrawSnapshot& snapshot){
+        u32 count = 0u;
+        for(const DrawCommand& command : snapshot.commands()){
+            if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
+                count += command.indexCount / 6u;
+        }
+        return count;
+    }
+
+
+protected:
     void addEditRegion(){
         UiSkin::RegionVector regions(m_arena);
         for(const UiSkinRegion& region : m_skin.regions())
@@ -41,14 +52,6 @@ protected:
         m_builder.setSkin(m_skin);
     }
 
-    [[nodiscard]] static u32 GlyphQuads(const DrawSnapshot& snapshot){
-        u32 count = 0u;
-        for(const DrawCommand& command : snapshot.commands()){
-            if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
-                count += command.indexCount / 6u;
-        }
-        return count;
-    }
 };
 
 

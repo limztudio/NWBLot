@@ -17,6 +17,43 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<ControlAction> InputRouter::consumeControlAction(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
+    const HitTarget* target = findTarget(host, declarationGeneration);
+    if(declarationGeneration == 0u || !token.valid() || target == nullptr || !isInteractive(*target) || target->control != token || target->owner.valid() || !target->focusable)
+        return MakeUnexpected(Failure{});
+    for(usize index = 0u; index < m_controlActions.size(); ++index){
+        const auto& candidate = m_controlActions[index];
+        if(candidate.id.target != host || candidate.id.declarationGeneration != declarationGeneration || candidate.control != token || !currentControlAction(candidate))
+            continue;
+        const ControlAction action = candidate;
+        m_controlActions.erase(m_controlActions.begin() + static_cast<isize>(index));
+        return action;
+    }
+    return MakeUnexpected(Failure{});
+}
+
+void InputRouter::fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
+    const HitTarget* accepted = findTarget(host);
+    if(accepted == nullptr || (accepted->declarationGeneration == declarationGeneration && accepted->control == token))
+        return;
+    const bool preserveText = accepted->declarationGeneration == declarationGeneration && accepted->textEditable && !accepted->owner.valid() && (accepted->scrollable || accepted->control.empty());
+    for(auto& target : m_targets){
+        if(target.id == host){
+            if(preserveText){
+                target.control = {};
+                target.scrollable = false;
+                target.navigable = false;
+                target.horizontalNavigation = false;
+            }
+            else
+                target.enabled = false;
+        }
+        else if(target.owner == host)
+            target.enabled = false;
+    }
+    reconcileTargets();
+}
+
 bool InputRouter::validControlTargets()const noexcept{
     for(const auto& target : m_stagedTargets){
         if(
@@ -87,43 +124,6 @@ bool InputRouter::currentControlAction(const ControlAction& action)const noexcep
     ;
 }
 
-Expected<ControlAction> InputRouter::consumeControlAction(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
-    const HitTarget* target = findTarget(host, declarationGeneration);
-    if(declarationGeneration == 0u || !token.valid() || target == nullptr || !isInteractive(*target) || target->control != token || target->owner.valid() || !target->focusable)
-        return MakeUnexpected(Failure{});
-    for(usize index = 0u; index < m_controlActions.size(); ++index){
-        const auto& candidate = m_controlActions[index];
-        if(candidate.id.target != host || candidate.id.declarationGeneration != declarationGeneration || candidate.control != token || !currentControlAction(candidate))
-            continue;
-        const ControlAction action = candidate;
-        m_controlActions.erase(m_controlActions.begin() + static_cast<isize>(index));
-        return action;
-    }
-    return MakeUnexpected(Failure{});
-}
-
-void InputRouter::fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
-    const HitTarget* accepted = findTarget(host);
-    if(accepted == nullptr || (accepted->declarationGeneration == declarationGeneration && accepted->control == token))
-        return;
-    const bool preserveText = accepted->declarationGeneration == declarationGeneration && accepted->textEditable && !accepted->owner.valid() && (accepted->scrollable || accepted->control.empty());
-    for(auto& target : m_targets){
-        if(target.id == host){
-            if(preserveText){
-                target.control = {};
-                target.scrollable = false;
-                target.navigable = false;
-                target.horizontalNavigation = false;
-            }
-            else
-                target.enabled = false;
-        }
-        else if(target.owner == host)
-            target.enabled = false;
-    }
-    reconcileTargets();
-}
-
 void InputRouter::reconcileControlActions()noexcept{
     for(usize index = 0u; index < m_controlActions.size();){
         if(!currentControlAction(m_controlActions[index]))
@@ -169,15 +169,6 @@ void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& so
     ++m_nextActionSequence;
 }
 
-void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
-    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
-    if((m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed) || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0))
-        return;
-    const HitTarget* host = controlHost(*hit);
-    if(host != nullptr && host->scrollable && (event.scrollY != 0.0 || host->scrollStepX > 0.0))
-        appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, result, event.scrollX);
-}
-
 bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, const bool alreadyPressed, InputRoutingResult& result){
     ControlActionKind::Enum kind;
     switch(event.command){
@@ -214,6 +205,15 @@ bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarge
     )
         appendControlAction(host, source, kind, 0.0, result);
     return true;
+}
+
+void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
+    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
+    if((m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed) || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0))
+        return;
+    const HitTarget* host = controlHost(*hit);
+    if(host != nullptr && host->scrollable && (event.scrollY != 0.0 || host->scrollStepX > 0.0))
+        appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, result, event.scrollX);
 }
 
 

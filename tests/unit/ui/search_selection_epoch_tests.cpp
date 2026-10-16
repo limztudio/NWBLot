@@ -113,7 +113,7 @@ public:
     [[nodiscard]] virtual u64 rowCount()const override{ return m_source.rowCount(); }
     [[nodiscard]] virtual u64 key(const u64 index)const override{ return m_source.key(index); }
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return m_source.indexOf(key); }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return m_source.findEnabled(start, reverse);
     }
     [[nodiscard]] virtual StringView text(const u64 index)const override{ return m_source.text(index); }

@@ -66,11 +66,11 @@ static constexpr Array<StringView, 5u> s_Labels{ "Alpha", "Beta", "Gamma (disabl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 UiNestedPopupSmokeSource::View::key(const u64 index)const{
+u64 UiNestedPopupSmokeSource::View::key(const u64 index)const noexcept{
     return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u;
 }
 
-Expected<u64> UiNestedPopupSmokeSource::View::indexOf(const u64 keyValue)const{
+Expected<u64> UiNestedPopupSmokeSource::View::indexOf(const u64 keyValue)const noexcept{
     u64 index = 0u;
     for(u64 candidate = 0u; candidate < rowCount(); ++candidate){
         if(key(candidate) == keyValue){
@@ -81,7 +81,7 @@ Expected<u64> UiNestedPopupSmokeSource::View::indexOf(const u64 keyValue)const{
     return MakeUnexpected(Failure{});
 }
 
-Expected<u64> UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const bool reverse)const noexcept{
     u64 index = 0u;
     if(start >= rowCount())
         return MakeUnexpected(Failure{});
@@ -96,11 +96,11 @@ Expected<u64> UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const
     return MakeUnexpected(Failure{});
 }
 
-StringView UiNestedPopupSmokeSource::View::text(const u64 index)const{
+StringView UiNestedPopupSmokeSource::View::text(const u64 index)const noexcept{
     return index < rowCount() ? m_source.text(m_source.m_indices[index]) : StringView{};
 }
 
-bool UiNestedPopupSmokeSource::View::enabled(const u64 index)const{
+bool UiNestedPopupSmokeSource::View::enabled(const u64 index)const noexcept{
     return index < rowCount() && m_source.enabled(m_source.m_indices[index]);
 }
 
@@ -116,7 +116,7 @@ UiNestedPopupSmokeSource::UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& are
     NWB_FATAL_ASSERT(initialized);
 }
 
-Expected<u64> UiNestedPopupSmokeSource::indexOf(const u64 keyValue)const{
+Expected<u64> UiNestedPopupSmokeSource::indexOf(const u64 keyValue)const noexcept{
     u64 index = 0u;
     if(keyValue == 0u || keyValue > rowCount())
         return MakeUnexpected(Failure{});
@@ -124,11 +124,11 @@ Expected<u64> UiNestedPopupSmokeSource::indexOf(const u64 keyValue)const{
     return index;
 }
 
-Expected<u64> UiNestedPopupSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> UiNestedPopupSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
-StringView UiNestedPopupSmokeSource::text(const u64 index)const{
+StringView UiNestedPopupSmokeSource::text(const u64 index)const noexcept{
     ++m_labelReads;
     return index < rowCount() ? __hidden_ui_nested_popup_source::s_Labels[index] : StringView{};
 }

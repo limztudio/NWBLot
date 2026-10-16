@@ -29,6 +29,11 @@ NWB_CORE_BEGIN
 
 
 class Frame{
+public:
+    using ProjectUpdateCallback = bool(*)(void* userData, f32 delta);
+    using TelemetryUploadCallback = bool(*)(void* userData, const void* bytes, usize byteCount);
+
+
 private:
     using FrameString = TString<Alloc::GlobalArena>;
 
@@ -48,19 +53,18 @@ public:
     bool mainLoop();
     void requestQuit()noexcept;
 
+
 public:
     template<typename T>
     inline T& data()noexcept{ return static_cast<T&>(m_data); }
 
-public:
-    using ProjectUpdateCallback = bool(*)(void* userData, f32 delta);
-    using TelemetryUploadCallback = bool(*)(void* userData, const void* bytes, usize byteCount);
 
 public:
     bool startup();
     void cleanup();
     bool update(f32 delta);
     bool render()noexcept;
+
 
 public:
     inline void setProjectUpdateCallback(ProjectUpdateCallback callback, void* userData)noexcept{

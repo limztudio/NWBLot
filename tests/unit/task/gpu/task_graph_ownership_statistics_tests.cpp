@@ -45,12 +45,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
         const Graphics::GpuGraphResourceId resource = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
         ASSERT_TRUE(resource.valid());
         for(u32 rangeIndex = 0u; rangeIndex < 2u; ++rangeIndex){
-            uses.push_back({
-                .resource = resource,
-                .range = { .textureSubresources = Graphics::TextureSubresourceSet(rangeIndex * 2u, 1u, 0u, 1u) },
-                .requiredState = Graphics::ResourceStates::CopySource,
-                .access = Graphics::GpuTaskResourceAccess::Write,
-            });
+            uses.push_back({ .resource = resource, .range = { .textureSubresources = Graphics::TextureSubresourceSet(rangeIndex * 2u, 1u, 0u, 1u) }, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Write, });
         }
     }
     for(usize taskIndex = 0u; taskIndex < 3u; ++taskIndex){

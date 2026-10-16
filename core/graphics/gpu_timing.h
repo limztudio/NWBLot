@@ -400,10 +400,6 @@ private:
         ScopePublicationState state = ScopePublicationState::Reserved;
     };
 
-private:
-    template<class ExecutionQueue>
-    [[nodiscard]] NWB_INLINE QueueSubmissionToken submitToQueue(Device& device, CommandList* const* commandLists, usize commandListCount, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc);
-
 
 public:
     class RecordingScope final : NoCopy{
@@ -417,6 +413,14 @@ public:
         GpuTimingSubmissionTicket* m_previousTicket = nullptr;
         bool m_activated = false;
     };
+
+
+private:
+    template<class ExecutionQueue>
+    [[nodiscard]] NWB_INLINE QueueSubmissionToken submitToQueue(Device& device, CommandList* const* commandLists, usize commandListCount, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc);
+
+
+public:
 
 
 public:

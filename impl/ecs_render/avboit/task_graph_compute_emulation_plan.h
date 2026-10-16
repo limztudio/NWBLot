@@ -45,6 +45,8 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         , outputHeapSlots(arena)
     {}
 
+
+public:
     void reset(){
         drawItems.clear();
         outputBuffers.clear();

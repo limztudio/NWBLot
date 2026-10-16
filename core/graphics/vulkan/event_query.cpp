@@ -54,6 +54,14 @@ bool Device::setEventQuery(EventQuery& query, CommandQueue::Enum queue){
     return setEventQueryInternal(query, queue, DeviceLossDiagnosticPolicy::Capture);
 }
 
+bool Device::pollEventQuery(EventQuery& query){
+    return pollEventQueryInternal(query, DeviceLossDiagnosticPolicy::Capture);
+}
+
+bool Device::waitEventQuery(EventQuery& query){
+    return waitEventQueryInternal(query, DeviceLossDiagnosticPolicy::Capture);
+}
+
 bool Device::setEventQueryInternal(EventQuery& query, const CommandQueue::Enum queue, const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy){
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid())
@@ -116,10 +124,6 @@ bool Device::setEventQueryInternal(EventQuery& query, const CommandQueue::Enum q
     return true;
 }
 
-bool Device::pollEventQuery(EventQuery& query){
-    return pollEventQueryInternal(query, DeviceLossDiagnosticPolicy::Capture);
-}
-
 bool Device::pollEventQueryInternal(EventQuery& query, const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy){
     if(query.m_fence == VK_NULL_HANDLE || &query.m_context != &m_context)
         return false;
@@ -139,10 +143,6 @@ bool Device::pollEventQueryInternal(EventQuery& query, const DeviceLossDiagnosti
     if(res == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
         captureDeviceLoss("event query poll");
     return res == VK_SUCCESS;
-}
-
-bool Device::waitEventQuery(EventQuery& query){
-    return waitEventQueryInternal(query, DeviceLossDiagnosticPolicy::Capture);
 }
 
 bool Device::waitEventQueryInternal(EventQuery& query, const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy){

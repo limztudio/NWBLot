@@ -25,14 +25,14 @@ namespace Tests::Smoke{
 
 class UiRadioGroupSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override;
-    [[nodiscard]] virtual u64 revision()const override;
-    [[nodiscard]] virtual u64 rowCount()const override;
-    [[nodiscard]] virtual u64 key(u64 index)const override;
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const override;
-    [[nodiscard]] virtual StringView text(u64 index)const override;
-    [[nodiscard]] virtual bool enabled(u64 index)const override;
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override;
+    [[nodiscard]] virtual u64 revision()const noexcept override;
+    [[nodiscard]] virtual u64 rowCount()const noexcept override;
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
+    [[nodiscard]] virtual bool enabled(u64 index)const noexcept override;
 
 
 public:
@@ -46,8 +46,8 @@ public:
 
 
 private:
-    [[nodiscard]] u64 rawKey(u64 index)const;
-    void invalidateText()const;
+    [[nodiscard]] u64 rawKey(u64 index)const noexcept;
+    void invalidateText()const noexcept;
 
 
 private:

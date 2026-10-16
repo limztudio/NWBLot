@@ -126,69 +126,23 @@ u64 Device::getMaxStorageBufferRange()const noexcept{
     return static_cast<u64>(m_context.physicalDeviceProperties.limits.maxStorageBufferRange);
 }
 
-bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
-    const VkFormat vkFormat = ConvertFormat(format);
-    if(vkFormat == VK_FORMAT_UNDEFINED)
-        return false;
+FormatSupport::Mask Device::queryFormatSupport(const Format::Enum format){
+    if(Format::IsBlockCompressedFormat(format))
+        return m_compressedFormatSupport[static_cast<usize>(format)];
 
-    auto imageFormatInfo = VulkanDetail::MakeVkStruct<VkPhysicalDeviceImageFormatInfo2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2);
-    imageFormatInfo.format = vkFormat;
-    imageFormatInfo.type = VK_IMAGE_TYPE_2D;
-    imageFormatInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    // Static textures must be uploadable as well as sampled, so verify both uses together.
-    imageFormatInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-
-    auto imageFormatProperties = VulkanDetail::MakeVkStruct<VkImageFormatProperties2>(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2);
-    const VkResult res = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties2(m_context.physicalDevice, &imageFormatInfo, &imageFormatProperties);
-    if(res == VK_SUCCESS)
-        return true;
-
-    if(res != VK_ERROR_FORMAT_NOT_SUPPORTED){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"), StringConvert(GetFormatInfo(format).getName()), ResultToString(res));
-    }
-    return false;
+    return queryFormatSupportUncached(format);
 }
 
-FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format)const{
-    const VulkanDetail::CompressedTextureFeatureState compressedTextureFeatures{
-        .bcEnabled = m_context.textureCompressionBcFeatureEnabled,
-        .astcLdrEnabled = m_context.textureCompressionAstcLdrFeatureEnabled,
-        .astcHdrEnabled = m_context.textureCompressionAstcHdrFeatureEnabled,
-    };
-    if(!VulkanDetail::IsCompressedTextureFormatFeatureEnabled(format, compressedTextureFeatures))
-        return FormatSupport::None;
+Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
+    return getNativeQueue(objectType, getPrimaryPhysicalQueue(queue));
+}
 
-    const VkFormat vkFormat = ConvertFormat(format);
-    if(vkFormat == VK_FORMAT_UNDEFINED)
-        return FormatSupport::None;
-
-    VkFormatProperties props;
-    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &props);
-
-    FormatSupport::Mask support = FormatSupport::None;
-
-    VkFormatFeatureFlags features = props.optimalTilingFeatures;
-
-    if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
-        support |= FormatSupport::Texture | FormatSupport::ShaderLoad;
-    if(features & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
-        support |= FormatSupport::DepthStencil;
-    if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
-        support |= FormatSupport::RenderTarget;
-    if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)
-        support |= FormatSupport::Blendable;
-    if(features & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)
-        support |= FormatSupport::ShaderUavStore;
-    if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
-        support |= FormatSupport::ShaderSample;
-
-    VkFormatFeatureFlags bufferFeatures = props.bufferFeatures;
-    if(bufferFeatures & VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT)
-        support |= FormatSupport::Buffer;
-    if(bufferFeatures & VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT)
-        support |= FormatSupport::Buffer;
-
-    return support;
+Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue){
+    if(objectType == ObjectTypes::s_Queue){
+        Queue* q = getQueue(queue);
+        return q ? Object(q->m_nativeQueue.queue) : Object(nullptr);
+    }
+    return Object(nullptr);
 }
 
 void Device::probeCompressedTextureFormats(){
@@ -240,23 +194,69 @@ void Device::probeCompressedTextureFormats(){
     );
 }
 
-FormatSupport::Mask Device::queryFormatSupport(const Format::Enum format){
-    if(Format::IsBlockCompressedFormat(format))
-        return m_compressedFormatSupport[static_cast<usize>(format)];
+FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format)const{
+    const VulkanDetail::CompressedTextureFeatureState compressedTextureFeatures{
+        .bcEnabled = m_context.textureCompressionBcFeatureEnabled,
+        .astcLdrEnabled = m_context.textureCompressionAstcLdrFeatureEnabled,
+        .astcHdrEnabled = m_context.textureCompressionAstcHdrFeatureEnabled,
+    };
+    if(!VulkanDetail::IsCompressedTextureFormatFeatureEnabled(format, compressedTextureFeatures))
+        return FormatSupport::None;
 
-    return queryFormatSupportUncached(format);
+    const VkFormat vkFormat = ConvertFormat(format);
+    if(vkFormat == VK_FORMAT_UNDEFINED)
+        return FormatSupport::None;
+
+    VkFormatProperties props;
+    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &props);
+
+    FormatSupport::Mask support = FormatSupport::None;
+
+    VkFormatFeatureFlags features = props.optimalTilingFeatures;
+
+    if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
+        support |= FormatSupport::Texture | FormatSupport::ShaderLoad;
+    if(features & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        support |= FormatSupport::DepthStencil;
+    if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
+        support |= FormatSupport::RenderTarget;
+    if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)
+        support |= FormatSupport::Blendable;
+    if(features & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)
+        support |= FormatSupport::ShaderUavStore;
+    if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
+        support |= FormatSupport::ShaderSample;
+
+    VkFormatFeatureFlags bufferFeatures = props.bufferFeatures;
+    if(bufferFeatures & VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT)
+        support |= FormatSupport::Buffer;
+    if(bufferFeatures & VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT)
+        support |= FormatSupport::Buffer;
+
+    return support;
 }
 
-Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
-    return getNativeQueue(objectType, getPrimaryPhysicalQueue(queue));
-}
+bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
+    const VkFormat vkFormat = ConvertFormat(format);
+    if(vkFormat == VK_FORMAT_UNDEFINED)
+        return false;
 
-Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue){
-    if(objectType == ObjectTypes::s_Queue){
-        Queue* q = getQueue(queue);
-        return q ? Object(q->m_nativeQueue.queue) : Object(nullptr);
+    auto imageFormatInfo = VulkanDetail::MakeVkStruct<VkPhysicalDeviceImageFormatInfo2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2);
+    imageFormatInfo.format = vkFormat;
+    imageFormatInfo.type = VK_IMAGE_TYPE_2D;
+    imageFormatInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    // Static textures must be uploadable as well as sampled, so verify both uses together.
+    imageFormatInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    auto imageFormatProperties = VulkanDetail::MakeVkStruct<VkImageFormatProperties2>(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2);
+    const VkResult res = m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties2(m_context.physicalDevice, &imageFormatInfo, &imageFormatProperties);
+    if(res == VK_SUCCESS)
+        return true;
+
+    if(res != VK_ERROR_FORMAT_NOT_SUPPORTED){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"), StringConvert(GetFormatInfo(format).getName()), ResultToString(res));
     }
-    return Object(nullptr);
+    return false;
 }
 
 

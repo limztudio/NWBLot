@@ -349,12 +349,7 @@ TEST(GpuTaskQueueScoring, PartialAssignmentsExcludeRelatedTasksWithoutRequiringO
     constexpr usize s_AssignedTasks[] = { 0u, 3u };
     for(const usize taskIndex : s_AssignedTasks){
         indices[taskIndex] = static_cast<u32>(assignments.size());
-        assignments.push_back({
-            .task = view.taskAt(taskIndex).id,
-            .initialQueue = queues[1u].id,
-            .queue = queues[1u].id,
-            .score = {},
-        });
+        assignments.push_back({ .task = view.taskAt(taskIndex).id, .initialQueue = queues[1u].id, .queue = queues[1u].id, .score = {}, });
     }
     scoringData.rebuildAssignmentLoads(assignments, topology);
     const auto score = [&](const usize taskIndex, const GpuTaskQueueScoreExclusions exclusions = {}){

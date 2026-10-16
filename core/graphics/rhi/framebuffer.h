@@ -59,6 +59,8 @@ struct FramebufferInfo{
     FramebufferInfo() = default;
     FramebufferInfo(const FramebufferDesc& desc);
 
+
+public:
     constexpr FramebufferInfo& addColorFormat(Format::Enum format){ colorFormats.push_back(format); return *this; }
     constexpr FramebufferInfo& setDepthFormat(Format::Enum format)noexcept{ depthFormat = format; return *this; }
     constexpr FramebufferInfo& setSampleCount(u32 count)noexcept{ sampleCount = count; return *this; }
@@ -89,6 +91,8 @@ struct FramebufferInfoEx : FramebufferInfo{
     FramebufferInfoEx() = default;
     FramebufferInfoEx(const FramebufferDesc& desc);
 
+
+public:
     constexpr FramebufferInfoEx& setWidth(u32 value)noexcept{ width = value; return *this; }
     constexpr FramebufferInfoEx& setHeight(u32 value)noexcept{ height = value; return *this; }
     constexpr FramebufferInfoEx& setArraySize(u32 value)noexcept{ arraySize = value; return *this; }

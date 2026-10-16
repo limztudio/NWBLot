@@ -515,7 +515,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 
         return __hidden_command_line::s_FbxToNwbExitSuccess;
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return -1; });
 }
 
 

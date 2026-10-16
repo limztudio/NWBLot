@@ -21,8 +21,8 @@ namespace __hidden_vulkan_dispatch{
 
 
 Futex& GetVolkTableLoadMutex()noexcept{
-    static Futex mutex;
-    return mutex;
+    static Futex s_Mutex;
+    return s_Mutex;
 }
 
 
@@ -42,8 +42,8 @@ namespace VulkanDetail{
 
 
 VkResult InitializeVolkLoader()noexcept{
-    static const VkResult result = volkInitialize();
-    return result;
+    static const VkResult s_Result = volkInitialize();
+    return s_Result;
 }
 
 void LoadVolkInstanceDispatch(VolkInstanceTable& instanceDispatch, const VkInstance instance)noexcept{

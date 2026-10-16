@@ -10,7 +10,6 @@
 
 #include "slang_compiler.h"
 #include "source_dependencies.h"
-#include "arena_names.h"
 
 #include <core/graphics/shader_stage_names.h>
 #include <core/graphics/spirv_entry_point.h>
@@ -18,6 +17,7 @@
 
 #include <global/hash_utils.h>
 #include <global/process_execution.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,11 +85,6 @@ static constexpr usize s_MaxOptimizationArgumentCount = 1u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename StringT>
-static Expected<void, ErrorCode> ReadDiagnostics(const Path& diagnosticsPath, StringT& outDiagnostics){
-    return ReadBinaryFile(diagnosticsPath, outDiagnostics);
-}
 
 class ScopedDirectoryCleanupGuard final : NoCopy{
 public:
@@ -180,62 +175,145 @@ static bool IsCompilerDependency(const ShaderCook::CookVector<Path>& dependencie
 }
 
 
-static bool RewriteAbsoluteCompilerIncludes(ScratchString& inOutSource, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const Path& overlayRoot, Alloc::ScratchArena& scratchArena){
-    ShaderSourceDependencies::SpliceSourceLines(inOutSource);
-    ScratchString scanSource(AStringView(inOutSource), scratchArena);
+struct CompilerIncludeReplacement{
+    Path path;
+    usize sourceOffset;
+    usize sourceBytes;
+};
+
+[[nodiscard]] static Expected<usize> CompilerPathTextCapacity(const Path& path){
+    constexpr usize s_MaxEncodedBytesPerUnit = IsSame_V<Path::value_type, char> ? 1u : 4u;
+    if(path.native().size() > Limit<usize>::s_Max / s_MaxEncodedBytesPerUnit){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler path text exceeds representable size"));
+        return MakeUnexpected(Failure{});
+    }
+    return path.native().size() * s_MaxEncodedBytesPerUnit;
+}
+
+[[nodiscard]] static Expected<ScratchString> BuildCompilerPathText(const Path& path, Alloc::ScratchArena& scratchArena){
+    const auto capacity = CompilerPathTextCapacity(path);
+    if(!capacity)
+        return MakeUnexpected(Failure{});
+    ScratchString text{scratchArena};
+    text.reserve(*capacity);
+    auto out = BackInserter(text);
+    BasicStringDetail::WriteConvertedText<char>(out, path.native());
+    return text;
+}
+
+static bool WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const Path& overlayRoot, const Path& outputPath, Alloc::ScratchArena& scratchArena){
+    ShaderSourceDependencies::SpliceSourceLines(source);
+    ScratchString scanSource(AStringView(source), scratchArena);
     ShaderSourceDependencies::MaskSourceComments(scanSource);
-    ScratchString rewrittenSource{scratchArena};
-    rewrittenSource.reserve(inOutSource.size());
-
-    const AStringView sourceView(inOutSource.data(), inOutSource.size());
+    const AStringView sourceView(source.data(), source.size());
     const AStringView scanView(scanSource);
-    usize lineBegin = 0u;
-    while(lineBegin < sourceView.size()){
-        usize lineEnd = lineBegin;
-        while(lineEnd < scanView.size() && scanView[lineEnd] != '\n')
-            ++lineEnd;
-
-        const AStringView line = sourceView.substr(lineBegin, lineEnd - lineBegin);
-        const AStringView scanLine = scanView.substr(lineBegin, lineEnd - lineBegin);
+    usize includeCount = 0u;
+    for(usize begin = 0u; begin < scanView.size();){
+        const usize foundEnd = scanView.find('\n', begin);
+        const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
+        const auto include = ShaderSourceDependencies::ExtractIncludeDirective(scanView.substr(begin, end - begin));
+        if(include)
+            ++includeCount;
+        begin = end < scanView.size() ? end + 1u : end;
+    }
+    ScratchVector<CompilerIncludeReplacement> replacements{scratchArena};
+    replacements.reserve(includeCount);
+    usize outputBytes = sourceView.size();
+    for(usize begin = 0u; begin < scanView.size();){
+        const usize foundEnd = scanView.find('\n', begin);
+        const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
+        const AStringView scanLine = scanView.substr(begin, end - begin);
         const auto include = ShaderSourceDependencies::ExtractIncludeDirective(scanLine);
-        if(!include || include->kind == ShaderSourceDependencies::IncludeKind::Macro){
-            rewrittenSource.append(line.data(), line.size());
+        if(include && include->kind == ShaderSourceDependencies::IncludeKind::Unsupported){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported dependency directive '{}' in '{}'"), StringConvert(TrimView(scanLine)), PathToString<tchar>(sourcePath));
+            return false;
         }
-        else{
-            const AStringView includeName = include->name;
-            const auto includeKind = include->kind;
-            if(includeKind == ShaderSourceDependencies::IncludeKind::Unsupported){
-                NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported dependency directive '{}' in '{}'"), StringConvert(TrimView(scanLine)), PathToString<tchar>(sourcePath));
-                return false;
-            }
-            Path includePath(sourcePath.arena(), includeName);
-            if(!includePath.isAbsolute()){
-                rewrittenSource.append(line.data(), line.size());
-            }
-            else{
+        if(include && include->kind != ShaderSourceDependencies::IncludeKind::Macro){
+            const Path includePath(sourcePath.arena(), include->name);
+            if(includePath.isAbsolute()){
                 auto absoluteIncludePath = AbsolutePath(includePath);
                 if(absoluteIncludePath)
                     *absoluteIncludePath = absoluteIncludePath->lexicallyNormal();
-                const auto overlayIncludePath = absoluteIncludePath ? BuildCompilerOverlayPath(overlayRoot, *absoluteIncludePath) : Expected<Path>(MakeUnexpected(Failure{}));
+                auto overlayIncludePath = absoluteIncludePath ? BuildCompilerOverlayPath(overlayRoot, *absoluteIncludePath) : Expected<Path>(MakeUnexpected(Failure{}));
                 if(!absoluteIncludePath || !IsCompilerDependency(request.dependencies, *absoluteIncludePath) || !overlayIncludePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), StringConvert(includeName), PathToString<tchar>(sourcePath));
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), StringConvert(include->name), PathToString<tchar>(sourcePath));
                     return false;
                 }
-                const usize includeNameOffset = static_cast<usize>(includeName.data() - scanLine.data());
-                const ScratchString overlayIncludeText = PathToString<char>(scratchArena, *overlayIncludePath);
-                rewrittenSource.append(line.data(), includeNameOffset);
-                rewrittenSource += overlayIncludeText;
-                rewrittenSource.append(line.data() + includeNameOffset + includeName.size(), line.size() - includeNameOffset - includeName.size());
+                const auto pathText = BuildCompilerPathText(*overlayIncludePath, scratchArena);
+                if(!pathText || pathText->size() > Limit<usize>::s_Max - (outputBytes - include->name.size()))
+                    return false;
+                outputBytes = outputBytes - include->name.size() + pathText->size();
+                const usize sourceOffset = begin + static_cast<usize>(include->name.data() - scanLine.data());
+                replacements.push_back({ Move(*overlayIncludePath), sourceOffset, include->name.size() });
             }
         }
-
-        if(lineEnd < sourceView.size())
-            rewrittenSource += '\n';
-        lineBegin = lineEnd + 1u;
+        begin = end < scanView.size() ? end + 1u : end;
     }
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(outputBytes)))
+        return false;
 
-    inOutSource = Move(rewrittenSource);
-    return true;
+    // Stream borrowed slices so replacement output never blocks the source/scan buffers' LIFO retirement.
+    OutputFileStream stream(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!stream.is_open())
+        return false;
+    usize sourceCursor = 0u;
+    for(const CompilerIncludeReplacement& replacement : replacements){
+        const auto text = BuildCompilerPathText(replacement.path, scratchArena);
+        if(!text)
+            return false;
+        if(replacement.sourceOffset > sourceCursor)
+            stream.write(sourceView.data() + sourceCursor, static_cast<StreamSize>(replacement.sourceOffset - sourceCursor));
+        if(!text->empty())
+            stream.write(text->data(), static_cast<StreamSize>(text->size()));
+        sourceCursor = replacement.sourceOffset + replacement.sourceBytes;
+    }
+    if(sourceCursor < sourceView.size())
+        stream.write(sourceView.data() + sourceCursor, static_cast<StreamSize>(sourceView.size() - sourceCursor));
+    stream.close();
+    return stream.good();
+}
+
+[[nodiscard]] static Expected<ScratchString> BuildCompilerDefineArgument(const ShaderCook::ShaderMacroDefinition& define, const ShaderCook::ShaderCompilerRequest& request, const Path& overlayRoot, Alloc::ScratchArena& scratchArena){
+    const bool plannedMacroInclude = request.compilerInputsHaveBom && FindIf(request.externallyPlannedMacroIncludes.begin(), request.externallyPlannedMacroIncludes.end(), [&define](const AStringView name)noexcept{
+            return name == define.name;
+        }) != request.externallyPlannedMacroIncludes.end();
+    const AStringView includeName = plannedMacroInclude ? UnquoteDoubleQuotedView(define.value) : AStringView();
+    const Path includePath(request.sourcePath.arena(), includeName);
+    Expected<Path> overlayIncludePath = MakeUnexpected(Failure{});
+    usize valueCapacity = define.value.size();
+    if(!includeName.empty() && includePath.isAbsolute()){
+        auto absoluteIncludePath = AbsolutePath(includePath);
+        if(absoluteIncludePath)
+            *absoluteIncludePath = absoluteIncludePath->lexicallyNormal();
+        overlayIncludePath = absoluteIncludePath ? BuildCompilerOverlayPath(overlayRoot, *absoluteIncludePath) : Expected<Path>(MakeUnexpected(Failure{}));
+        if(!absoluteIncludePath || !IsCompilerDependency(request.dependencies, *absoluteIncludePath) || !overlayIncludePath){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), StringConvert(includeName));
+            return MakeUnexpected(Failure{});
+        }
+        const auto capacity = CompilerPathTextCapacity(*overlayIncludePath);
+        if(!capacity || *capacity > Limit<usize>::s_Max - 2u)
+            return MakeUnexpected(Failure{});
+        valueCapacity = *capacity + 2u;
+    }
+    const usize fixedBytes = s_DefineArgument.size() + (!define.value.empty() ? 1u : 0u);
+    if(define.name.size() > Limit<usize>::s_Max - fixedBytes || valueCapacity > Limit<usize>::s_Max - fixedBytes - define.name.size())
+        return MakeUnexpected(Failure{});
+    ScratchString argument{scratchArena};
+    argument.reserve(fixedBytes + define.name.size() + valueCapacity);
+    argument += s_DefineArgument;
+    argument += define.name;
+    if(!define.value.empty()){
+        argument += '=';
+        if(overlayIncludePath){
+            argument += '"';
+            auto out = BackInserter(argument);
+            BasicStringDetail::WriteConvertedText<char>(out, overlayIncludePath->native());
+            argument += '"';
+        }
+        else
+            argument += define.value;
+    }
+    return argument;
 }
 
 
@@ -264,7 +342,6 @@ static Expected<Path> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderC
         return MakeUnexpected(Failure{});
     }
 
-    ScratchString sourceText{scratchArena};
     // Encode each absolute root separately and preserve nested relative includes within that root.
     for(const Path& dependency : request.dependencies){
         const auto overlayDependencyPath = BuildCompilerOverlayPath(overlayRoot, dependency);
@@ -279,15 +356,13 @@ static Expected<Path> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderC
             return MakeUnexpected(Failure{});
         }
 
-        sourceText.clear();
+        ScratchString sourceText{scratchArena};
         if(!ReadTextFile(dependency, sourceText)){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler input '{}' while writing BOM-stripped source"), PathToString<tchar>(dependency));
             return MakeUnexpected(Failure{});
         }
         StripUtf8Bom(sourceText);
-        if(!RewriteAbsoluteCompilerIncludes(sourceText, dependency, request, overlayRoot, scratchArena))
-            return MakeUnexpected(Failure{});
-        if(!WriteTextFile(*overlayDependencyPath, AStringView(sourceText.data(), sourceText.size()))){
+        if(!WriteBomStrippedCompilerInput(sourceText, dependency, request, overlayRoot, *overlayDependencyPath, scratchArena)){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to write BOM-stripped compiler input '{}'"), PathToString<tchar>(*overlayDependencyPath));
             return MakeUnexpected(Failure{});
         }
@@ -416,11 +491,13 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
     const Path& workDirectory = *workDirectoryResult;
     __hidden_slang_compiler::ScopedDirectoryCleanupGuard workDirectoryCleanup(workDirectory);
     const Path versionPath = workDirectory / "compiler.version";
-    const __hidden_slang_compiler::ScratchString versionPathText = PathToString<char>(scratchArena, versionPath);
+    const auto versionPathText = __hidden_slang_compiler::BuildCompilerPathText(versionPath, scratchArena);
+    if(!versionPathText)
+        return MakeUnexpected(Failure{});
     const AStringView arguments[]{ AStringView(NWB_SLANGC_EXECUTABLE), "-version" };
-    const auto exitCode = RunProcessRedirectedToFile(scratchArena, arguments, AStringView(versionPathText));
+    const auto exitCode = RunProcessRedirectedToFile(scratchArena, arguments, AStringView(*versionPathText));
     __hidden_slang_compiler::ScratchString versionText(scratchArena);
-    if(!exitCode || *exitCode != 0 || !__hidden_slang_compiler::ReadDiagnostics(versionPath, versionText) || TrimView(versionText).empty()){
+    if(!exitCode || *exitCode != 0 || !ReadBinaryFile(versionPath, versionText) || TrimView(versionText).empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to query configured compiler version '{}'"), PathToString<tchar>(compilerPath));
         return MakeUnexpected(Failure{});
     }
@@ -455,7 +532,7 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode){
+bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode, Core::Alloc::ScratchArena& scratchArena){
     outBytecode.clear();
 
     if(request.sourcePath.empty()){
@@ -485,7 +562,6 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
         return false;
     }
 
-    Alloc::ScratchArena argumentArena(AssetsShaderArenaScope::s_CompilerArgumentsArena);
     const Path outputParent = request.outputPath.parentPath();
     const auto compilerWorkDirectoryResult = __hidden_slang_compiler::CreateCompilerWorkDirectory(outputParent.empty() ? Path(outputParent.arena(), ".") : outputParent);
     if(!compilerWorkDirectoryResult)
@@ -495,8 +571,8 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     const Path diagnosticsPath = compilerWorkDirectory / "compiler.diag";
     const Path compilerOutputPath = compilerWorkDirectory / "module.spv";
     const Path compilerOverlayRoot = compilerWorkDirectory / "sources";
-    __hidden_slang_compiler::ScratchVector<Path> compilerIncludeDirectories(argumentArena);
-    const auto compilerSourcePath = __hidden_slang_compiler::PrepareBomStrippedCompilerInputs(request, compilerOverlayRoot, compilerIncludeDirectories, argumentArena);
+    __hidden_slang_compiler::ScratchVector<Path> compilerIncludeDirectories(scratchArena);
+    const auto compilerSourcePath = __hidden_slang_compiler::PrepareBomStrippedCompilerInputs(request, compilerOverlayRoot, compilerIncludeDirectories, scratchArena);
     if(!compilerSourcePath)
         return false;
 
@@ -510,14 +586,22 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
 
     const usize argumentReserve = maxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
     const usize ownedArgumentCount = 2u + includeDirectoryCount + defineCount;
-    __hidden_slang_compiler::ScratchVector<AStringView> arguments(argumentArena);
+    __hidden_slang_compiler::ScratchVector<AStringView> arguments(scratchArena);
     arguments.reserve(argumentReserve);
-    __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchString> ownedArguments(argumentArena);
+    __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchString> ownedArguments(scratchArena);
+    // Retire nested string allocations before the owner array, independently of STL destruction order.
+    ScopeExit retireArguments([&ownedArguments]()noexcept{
+        while(!ownedArguments.empty())
+            ownedArguments.pop_back();
+    });
     // Reserve owners before publishing views so inline string storage cannot move.
     ownedArguments.reserve(ownedArgumentCount);
     arguments.push_back(AStringView(NWB_SLANGC_EXECUTABLE));
 
-    ownedArguments.push_back(PathToString<char>(argumentArena, *compilerSourcePath));
+    auto sourcePathText = __hidden_slang_compiler::BuildCompilerPathText(*compilerSourcePath, scratchArena);
+    if(!sourcePathText)
+        return false;
+    ownedArguments.push_back(Move(*sourcePathText));
     arguments.push_back(AStringView(ownedArguments.back()));
     for(const AStringView argument : __hidden_slang_compiler::s_CommonCompilerArguments)
         arguments.push_back(argument);
@@ -537,50 +621,35 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     arguments.push_back(*slangStage);
     for(const Path& includeDirectory : compilerIncludeDirectories){
         arguments.push_back(__hidden_slang_compiler::s_IncludeArgument);
-        ownedArguments.push_back(PathToString<char>(argumentArena, includeDirectory));
+        auto includeDirectoryText = __hidden_slang_compiler::BuildCompilerPathText(includeDirectory, scratchArena);
+        if(!includeDirectoryText)
+            return false;
+        ownedArguments.push_back(Move(*includeDirectoryText));
         arguments.push_back(AStringView(ownedArguments.back()));
     }
 
     for(u32 i = 0u; i < request.defineCount; ++i){
-        const ShaderCook::ShaderMacroDefinition& define = request.defines[i];
-        ownedArguments.emplace_back(__hidden_slang_compiler::s_DefineArgument, argumentArena);
-        __hidden_slang_compiler::ScratchString& defineArgument = ownedArguments.back();
-        defineArgument += define.name;
-        if(!define.value.empty()){
-            defineArgument += '=';
-            const bool plannedMacroInclude = request.compilerInputsHaveBom && FindIf(request.externallyPlannedMacroIncludes.begin(), request.externallyPlannedMacroIncludes.end(), [&define](const AStringView name)noexcept{
-                    return name == define.name;
-                }) != request.externallyPlannedMacroIncludes.end();
-            const AStringView includeName = plannedMacroInclude ? UnquoteDoubleQuotedView(define.value) : AStringView();
-            const Path includePath(request.sourcePath.arena(), includeName);
-            if(!includeName.empty() && includePath.isAbsolute()){
-                auto absoluteIncludePath = AbsolutePath(includePath);
-                if(absoluteIncludePath)
-                    *absoluteIncludePath = absoluteIncludePath->lexicallyNormal();
-                const auto overlayIncludePath = absoluteIncludePath ? __hidden_slang_compiler::BuildCompilerOverlayPath(compilerOverlayRoot, *absoluteIncludePath) : Expected<Path>(MakeUnexpected(Failure{}));
-                if(!absoluteIncludePath || !__hidden_slang_compiler::IsCompilerDependency(request.dependencies, *absoluteIncludePath) || !overlayIncludePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), StringConvert(includeName));
-                    return false;
-                }
-                defineArgument += '"';
-                defineArgument += PathToString<char>(argumentArena, *overlayIncludePath);
-                defineArgument += '"';
-            }
-            else
-                defineArgument += define.value;
-        }
-        arguments.push_back(AStringView(defineArgument));
+        auto defineArgument = __hidden_slang_compiler::BuildCompilerDefineArgument(request.defines[i], request, compilerOverlayRoot, scratchArena);
+        if(!defineArgument)
+            return false;
+        ownedArguments.push_back(Move(*defineArgument));
+        arguments.push_back(AStringView(ownedArguments.back()));
     }
 
     arguments.push_back(__hidden_slang_compiler::s_OutputArgument);
-    ownedArguments.push_back(PathToString<char>(argumentArena, compilerOutputPath));
+    auto outputPathText = __hidden_slang_compiler::BuildCompilerPathText(compilerOutputPath, scratchArena);
+    if(!outputPathText)
+        return false;
+    ownedArguments.push_back(Move(*outputPathText));
     arguments.push_back(AStringView(ownedArguments.back()));
 
-    const __hidden_slang_compiler::ScratchString diagnosticsPathText = PathToString<char>(argumentArena, diagnosticsPath);
-    const auto exitCode = ::RunProcessRedirectedToFile(argumentArena, arguments, AStringView(diagnosticsPathText));
+    const auto diagnosticsPathText = __hidden_slang_compiler::BuildCompilerPathText(diagnosticsPath, scratchArena);
+    if(!diagnosticsPathText)
+        return false;
+    const auto exitCode = ::RunProcessRedirectedToFile(scratchArena, arguments, AStringView(*diagnosticsPathText));
     if(!exitCode || *exitCode != 0){
-        __hidden_slang_compiler::ScratchString diagnostics{argumentArena};
-        if(__hidden_slang_compiler::ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){
+        __hidden_slang_compiler::ScratchString diagnostics{scratchArena};
+        if(ReadBinaryFile(diagnosticsPath, diagnostics) && !diagnostics.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}"), StringConvert(request.shaderName), StringConvert(request.variantName), StringConvert(diagnostics));
         }
         else if(exitCode){
@@ -592,8 +661,8 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
         return false;
     }
 
-    __hidden_slang_compiler::ScratchString diagnostics{argumentArena};
-    if(!__hidden_slang_compiler::ReadDiagnostics(diagnosticsPath, diagnostics)){
+    __hidden_slang_compiler::ScratchString diagnostics{scratchArena};
+    if(!ReadBinaryFile(diagnosticsPath, diagnostics)){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler diagnostics '{}' for '{}' (variant '{}')"), PathToString<tchar>(diagnosticsPath), StringConvert(request.shaderName), StringConvert(request.variantName));
         return false;
     }
@@ -627,7 +696,7 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
 
     auto renamePathResult = RenamePath(compilerOutputPath, request.outputPath);
     if(!renamePathResult){
-        __hidden_slang_compiler::ScratchVector<u8> publishedBytecode(argumentArena);
+        __hidden_slang_compiler::ScratchVector<u8> publishedBytecode(scratchArena);
         if(
             ReadBinaryFile(request.outputPath, publishedBytecode)
             && publishedBytecode.size() == outBytecode.size()

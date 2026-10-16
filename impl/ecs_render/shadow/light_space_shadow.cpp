@@ -102,39 +102,6 @@ void RendererRayTracingSystem::invalidateLightSpaceShadowCapture()noexcept{
     m_lightSpaceShadow.m_captureHistory.invalidate();
 }
 
-Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount)const{
-    const auto& state = m_lightSpaceShadow;
-    if(
-        (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))
-        || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || (!m_shadowVisibilityHardwareSupported && !m_preparedSceneSwBvhReady)
-        || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
-        || state.m_casters.empty() || !lights || lightCount > NWB_SCENE_MAX_LIGHTS
-    )
-        return MakeUnexpected(Failure{});
-    Array<LightSpaceLightRequest, NWB_SCENE_SHADOW_SLOT_COUNT> requests;
-    usize requestCount = 0u;
-    for(u32 index = 0u; index < lightCount; ++index){
-        const auto& light = lights[index];
-        if(light.params.z < 0.f || light.params.z >= static_cast<f32>(NWB_SCENE_SHADOW_SLOT_COUNT))
-            continue;
-        if(requestCount == requests.size())
-            return MakeUnexpected(Failure{});
-        const auto type = light.params.y < ECSRenderDetail::s_LightTypeDirectionalMax ? Scene::LightType::Directional : light.params.y < ECSRenderDetail::s_LightTypePointMax ? Scene::LightType::Point : Scene::LightType::Spot;
-        requests[requestCount++] = { index, static_cast<u32>(light.params.z), state.m_csg.snapshot.hasCsg && type == Scene::LightType::Spot ? Scene::LightType::Point : type, true };
-    }
-    SoftwareShadowSettings settings = state.m_settings;
-    if(state.m_csg.snapshot.hasCsg){
-        settings.backend = SoftwareShadowBackend::Automatic;
-        if(settings.memoryBudgetBytes <= state.m_csg.bytes.size() + sizeof(u32))
-            return MakeUnexpected(Failure{});
-        settings.memoryBudgetBytes -= state.m_csg.bytes.size() + sizeof(u32);
-    }
-    auto plan = BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(), LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size()), state.m_csg.snapshot.hasCsg);
-    if(!plan || plan->viewCount == 0u)
-        return MakeUnexpected(Failure{});
-    return Move(*plan);
-}
-
 void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     auto& state = m_lightSpaceShadow;
     auto& diagnostics = state.m_diagnostics;
@@ -179,6 +146,39 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
         return;
     const LightSpacePlan& plan = *planResult;
     state.m_resourcesPrepared = ensureLightSpaceShadowPipelines() && ensureLightSpaceShadowStorage(plan);
+}
+
+Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount)const{
+    const auto& state = m_lightSpaceShadow;
+    if(
+        (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))
+        || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || (!m_shadowVisibilityHardwareSupported && !m_preparedSceneSwBvhReady)
+        || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
+        || state.m_casters.empty() || !lights || lightCount > NWB_SCENE_MAX_LIGHTS
+    )
+        return MakeUnexpected(Failure{});
+    Array<LightSpaceLightRequest, NWB_SCENE_SHADOW_SLOT_COUNT> requests;
+    usize requestCount = 0u;
+    for(u32 index = 0u; index < lightCount; ++index){
+        const auto& light = lights[index];
+        if(light.params.z < 0.f || light.params.z >= static_cast<f32>(NWB_SCENE_SHADOW_SLOT_COUNT))
+            continue;
+        if(requestCount == requests.size())
+            return MakeUnexpected(Failure{});
+        const auto type = light.params.y < ECSRenderDetail::s_LightTypeDirectionalMax ? Scene::LightType::Directional : light.params.y < ECSRenderDetail::s_LightTypePointMax ? Scene::LightType::Point : Scene::LightType::Spot;
+        requests[requestCount++] = { index, static_cast<u32>(light.params.z), state.m_csg.snapshot.hasCsg && type == Scene::LightType::Spot ? Scene::LightType::Point : type, true };
+    }
+    SoftwareShadowSettings settings = state.m_settings;
+    if(state.m_csg.snapshot.hasCsg){
+        settings.backend = SoftwareShadowBackend::Automatic;
+        if(settings.memoryBudgetBytes <= state.m_csg.bytes.size() + sizeof(u32))
+            return MakeUnexpected(Failure{});
+        settings.memoryBudgetBytes -= state.m_csg.bytes.size() + sizeof(u32);
+    }
+    auto plan = BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(), LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size()), state.m_csg.snapshot.hasCsg);
+    if(!plan || plan->viewCount == 0u)
+        return MakeUnexpected(Failure{});
+    return Move(*plan);
 }
 
 // Graph declaration can change the admitted light list, but never creates or grows its GPU resources.

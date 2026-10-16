@@ -189,6 +189,7 @@ public:
     inline virtual usize size()const override{ return m_dense.size(); }
     inline virtual u64 mutationVersion()const override{ return m_mutationVersion; }
 
+
 private:
     Vector<u32, Alloc::GlobalArena> m_sparse;
     Vector<EntityID, Alloc::GlobalArena> m_dense;

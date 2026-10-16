@@ -44,6 +44,15 @@ u64 DecrementOrAbort(Atomic<u64>& value)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void Queue::UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 currentCount)noexcept{
+    u64 highWater = highWaterCount.load(MemoryOrder::relaxed);
+    while(highWater < currentCount){
+        if(highWaterCount.compare_exchange_weak(highWater, currentCount, MemoryOrder::relaxed))
+            return;
+    }
+}
+
+
 Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue)
     : m_context(context)
     , m_device(device)
@@ -97,6 +106,14 @@ Queue::~Queue()noexcept{
         m_context.deviceDispatch.vkDestroySemaphore(m_context.device, m_trackingSemaphore, m_context.allocationCallbacks);
         m_trackingSemaphore = VK_NULL_HANDLE;
     }
+}
+
+
+TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
+    if(recordingWorkerIndex == 0u)
+        return getOrCreateDirectCommandBuffer();
+
+    return getOrCreateWorkerCommandBuffer(recordingWorkerDomain, recordingWorkerIndex);
 }
 
 GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
@@ -171,14 +188,6 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(const u64 re
         .queue = m_physicalQueue,
         .recordingWorkerIndex = recordingWorkerIndex,
     };
-}
-
-void Queue::UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 currentCount)noexcept{
-    u64 highWater = highWaterCount.load(MemoryOrder::relaxed);
-    while(highWater < currentCount){
-        if(highWaterCount.compare_exchange_weak(highWater, currentCount, MemoryOrder::relaxed))
-            return;
-    }
 }
 
 u64 Queue::nextRecordingID()noexcept{
@@ -341,6 +350,17 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
         if(!arena)
             TerminateInvariant();
         __hidden_vulkan_queue::DecrementOrAbort(arena->currentCommandBufferCount);
+    }
+}
+
+void Queue::collectCompletedCommandBuffers(){
+    auto it = m_commandBuffersInFlight.begin();
+    while(it != m_commandBuffersInFlight.end()){
+        TrackedCommandBuffer* cmdBuf = it->get();
+        if(cmdBuf->m_submissionID > m_lastFinishedID)
+            break;
+
+        it = recycleCommandBuffer(m_commandBuffersInFlight, it);
     }
 }
 
@@ -512,14 +532,6 @@ TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(const u64 recordin
 }
 
 
-TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
-    if(recordingWorkerIndex == 0u)
-        return getOrCreateDirectCommandBuffer();
-
-    return getOrCreateWorkerCommandBuffer(recordingWorkerDomain, recordingWorkerIndex);
-}
-
-
 void Queue::destroyWorkerCommandArenas()noexcept{
     NothrowScopedLock workerArenasLock(m_workerCommandArenasMutex);
     for(WorkerCommandArena* const arena : m_workerCommandArenas){
@@ -550,17 +562,6 @@ void Queue::destroyWorkerCommandArenas()noexcept{
         DestroyArenaObject(m_context.objectArena, arena);
     }
     m_workerCommandArenas.clear();
-}
-
-void Queue::collectCompletedCommandBuffers(){
-    auto it = m_commandBuffersInFlight.begin();
-    while(it != m_commandBuffersInFlight.end()){
-        TrackedCommandBuffer* cmdBuf = it->get();
-        if(cmdBuf->m_submissionID > m_lastFinishedID)
-            break;
-
-        it = recycleCommandBuffer(m_commandBuffersInFlight, it);
-    }
 }
 
 

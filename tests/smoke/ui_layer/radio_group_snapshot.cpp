@@ -158,8 +158,7 @@ void UiRadioGroupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
-            context.paint.fillRect({ positions[marker], y, 8.0f, 8.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ positions[marker], y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

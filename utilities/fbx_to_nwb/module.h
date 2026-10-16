@@ -212,7 +212,7 @@ struct MeshInstance{
 struct SceneHandle{
     ufbx_scene* scene = nullptr;
 
-    SceneHandle() = default;
+    SceneHandle()noexcept = default;
     ~SceneHandle()noexcept;
     SceneHandle(SceneHandle&& other)noexcept;
     SceneHandle(const SceneHandle&) = delete;

@@ -20,10 +20,17 @@ NWB_IMPL_BEGIN
 
 
 struct RayTracingSceneGraphReads{
+    // Ordinary scene reads remain inline; only admitted CSG work allocates the variable posed-bounds list.
+    Core::GpuTaskResourceUse uses[6] = {};
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses;
+
+
     explicit RayTracingSceneGraphReads(Core::Alloc::ScratchArena& scratchArena)
         : csgUses(scratchArena)
     {}
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         for(const auto& use : uses){
             if(!use.resource.valid())
@@ -35,11 +42,6 @@ struct RayTracingSceneGraphReads{
         }
         return true;
     }
-
-
-    // Ordinary scene reads remain inline; only admitted CSG work allocates the variable posed-bounds list.
-    Core::GpuTaskResourceUse uses[6] = {};
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses;
 };
 
 // Import common scene reads once per physical resource. Geometry buffers and material sampled textures belong to the existing frozen resource sets supplied separately by the caller. A failure returns an entirely invalid bundle.

@@ -39,6 +39,7 @@ public:
 
     [[nodiscard]] usize contributorCount()const noexcept{ return m_contributors.size(); }
 
+
 private:
     List<IFrameGraphContributor*, Alloc::GlobalArena> m_contributors;
 };

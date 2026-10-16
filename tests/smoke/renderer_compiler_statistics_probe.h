@@ -49,6 +49,8 @@ private:
         bool valid = false;
     };
 
+
+private:
     static constexpr usize s_Capacity = 1024u;
 
 

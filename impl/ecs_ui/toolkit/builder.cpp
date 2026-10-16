@@ -231,10 +231,12 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
         }
         for(const auto& name : names){
             const UiSkinRegion* skinRegion = region(name, m_style.checkbox);
-            item.checkboxExtent = Max(item.checkboxExtent, Max(skinRegion->minimumWidth, skinRegion->minimumHeight));
+            const SIMDVectorSingle regionMinimum = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
+            item.checkboxExtent = VectorGetX(VectorMax(VectorReplicate(item.checkboxExtent), VectorMax(regionMinimum, VectorSplatY(regionMinimum))));
         }
-        measured.x = (measured.x + (item.checkboxExtent + m_style.gap));
-        measured.y = Max(measured.y, item.checkboxExtent);
+        const SIMDVectorSingle content = VectorMax(VectorSet(measured.x, measured.y, 0.0f, 0.0f), VectorSet(measured.x, item.checkboxExtent, 0.0f, 0.0f));
+        const SIMDVectorSingle checkboxSize = VectorAdd(content, VectorAdd(VectorSet(item.checkboxExtent, 0.0f, 0.0f, 0.0f), VectorSet(m_style.gap, 0.0f, 0.0f, 0.0f)));
+        measured = { VectorGetX(checkboxSize), VectorGetY(checkboxSize) };
     }
     LayoutNodeDesc description;
     description.width = options.width;

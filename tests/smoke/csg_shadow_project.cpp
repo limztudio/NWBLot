@@ -83,6 +83,13 @@ struct Box{
     Float3U maximum;
 };
 
+[[nodiscard]] static Box BoxFromBounds(const SIMDVectorSingle minimum, const SIMDVectorSingle maximum)noexcept{
+    Box box;
+    StoreFloat(minimum, box.minimum);
+    StoreFloat(maximum, box.maximum);
+    return box;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -190,8 +197,10 @@ private:
     }
 
     void createReferencePieces(const Box& box, const Box& cutter, const bool transparent){
-        const Float3U lower(Max(box.minimum.x, cutter.minimum.x), Max(box.minimum.y, cutter.minimum.y), Max(box.minimum.z, cutter.minimum.z));
-        const Float3U upper(Min(box.maximum.x, cutter.maximum.x), Min(box.maximum.y, cutter.maximum.y), Min(box.maximum.z, cutter.maximum.z));
+        Float3U lower;
+        Float3U upper;
+        StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), lower);
+        StoreFloat(VectorMin(LoadFloat(box.maximum), LoadFloat(cutter.maximum)), upper);
         if(lower.x >= upper.x || lower.y >= upper.y || lower.z >= upper.z){
             createBox(box, transparent);
             return;
@@ -232,7 +241,7 @@ private:
         StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), finalCenter);
         Float4 initialCenter = finalCenter;
         if(moving && m_arm == Arm::Moved)
-            initialCenter.x -= 0.6f * (m_pointLight ? 0.5f : 1.0f);
+            StoreFloat(VectorSubtract(LoadFloat(initialCenter), VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_pointLight ? 0.5f : 1.0f)), initialCenter);
         AssignCsgCutterTransform(cutter, LoadFloat(initialCenter), QuaternionIdentity());
         if(moving){
             NWB_ASSERT(m_movingCount < LengthOf(m_movingCutters));
@@ -256,27 +265,33 @@ private:
 #else
         const f32 xyScale = m_pointLight ? 0.5f : 1.0f;
         for(u32 slot = 0u; slot < 6u; ++slot){
-            const f32 x = (static_cast<f32>(slot % 3u) - 1.0f) * 2.0f * xyScale;
-            const f32 y = (slot < 3u ? 1.0f : -1.0f) * xyScale;
-            const f32 halfWidth = 0.7f * xyScale;
-            const Box box{ Float3U(x - halfWidth, y - halfWidth, -7.0f), Float3U(x + halfWidth, y + halfWidth, -5.0f) };
+            const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(slot % 3u), slot < 3u ? 1.0f : -1.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+            const SIMDVectorSingle center = VectorScale(VectorMultiply(grid, VectorSet(2.0f, 1.0f, 0.0f, 0.0f)), xyScale);
+            const SIMDVectorSingle halfExtent = VectorScale(VectorSet(0.7f, 0.7f, 0.0f, 0.0f), xyScale);
+            const Box box = BoxFromBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
             const bool hole = slot == 0u || slot == 3u;
             const f32 holeHalfWidth = m_pointLight ? 0.36f : 0.24f;
+            const SIMDVectorSingle holeOffsets = VectorScale(VectorSet(0.3f, 0.4f, 0.0f, 0.0f), xyScale);
+            const SIMDVectorSingle holeCenter = VectorAdd(center, VectorAndInt(holeOffsets, s_SIMDMaskX));
+            const SIMDVectorSingle holeExtent = VectorSetX(holeOffsets, holeHalfWidth);
+            const SIMDVectorSingle solidExtent = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
             Box cutter = hole
-                ? Box{ Float3U(x + 0.3f * xyScale - holeHalfWidth, y - 0.4f * xyScale, -7.2f), Float3U(x + 0.3f * xyScale + holeHalfWidth, y + 0.4f * xyScale, -4.8f) }
-                : Box{ Float3U(x - 1.0f, y - 1.0f, -6.0f), Float3U(x + 1.0f, y + 1.0f, -4.8f) };
+                ? BoxFromBounds(VectorSetZ(VectorSubtract(holeCenter, holeExtent), -7.2f), VectorSetZ(VectorAdd(holeCenter, holeExtent), -4.8f))
+                : BoxFromBounds(VectorSetZ(VectorSubtract(center, solidExtent), -6.0f), VectorSetZ(VectorAdd(center, solidExtent), -4.8f));
             if(slot == 5u){
-                cutter.minimum.x += 20.0f;
-                cutter.maximum.x += 20.0f;
+                const SIMDVectorSingle shift = VectorSet(20.0f, 0.0f, 0.0f, 0.0f);
+                StoreFloat(VectorAdd(LoadFloat(cutter.minimum), shift), cutter.minimum);
+                StoreFloat(VectorAdd(LoadFloat(cutter.maximum), shift), cutter.maximum);
             }
             const u32 groupIndex = slot == 5u ? 6u : slot;
             addCaster(box, cutter, groupIndex, slot >= 2u, hole);
             if(slot == 4u){
                 Box second = box;
-                second.minimum.z -= 0.5f;
-                second.maximum.z -= 0.5f;
-                cutter.minimum.z -= 0.5f;
-                cutter.maximum.z -= 0.5f;
+                const SIMDVectorSingle shift = VectorSet(0.0f, 0.0f, 0.5f, 0.0f);
+                StoreFloat(VectorSubtract(LoadFloat(second.minimum), shift), second.minimum);
+                StoreFloat(VectorSubtract(LoadFloat(second.maximum), shift), second.maximum);
+                StoreFloat(VectorSubtract(LoadFloat(cutter.minimum), shift), cutter.minimum);
+                StoreFloat(VectorSubtract(LoadFloat(cutter.maximum), shift), cutter.maximum);
                 addCaster(second, cutter, 5u, true, false);
             }
         }
@@ -298,9 +313,10 @@ private:
 
     void createAnalyticAtlas(){
         for(u32 slot = 0u; slot < 6u; ++slot){
-            const f32 x = (static_cast<f32>(slot % 3u) - 1.0f) * 2.0f;
-            const f32 y = slot < 3u ? 1.0f : -1.0f;
-            const Box box{ Float3U(x - 0.7f, y - 0.7f, -7.0f), Float3U(x + 0.7f, y + 0.7f, -5.0f) };
+            const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(slot % 3u), slot < 3u ? 1.0f : -1.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+            const SIMDVectorSingle center = VectorMultiply(grid, VectorSet(2.0f, 1.0f, 0.0f, 0.0f));
+            const SIMDVectorSingle halfExtent = VectorSet(0.7f, 0.7f, 0.0f, 0.0f);
+            const Box box = BoxFromBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
             const auto entity = createBox(box, true);
             AddStaticCsgMeshReceiver(*m_world, entity, s_AnalyticGroups[slot], false, true);
         }
@@ -338,15 +354,17 @@ private:
                 return false;
             // Separate ordinary two-sheet instances give an independent exact even-pair reference beyond the ordinary four-event approximation.
             for(u32 pair = 0u; pair < 3u; ++pair){
-                const f32 lower = -7.0f + 0.8f * static_cast<f32>(pair);
-                if(!createBox({ Float3U(0.5f, -0.7f, lower), Float3U(1.9f, 0.7f, lower + 0.4f) }, true, s_OpenPairMesh).valid())
+                const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-7.0f), VectorScale(VectorReplicate(static_cast<f32>(pair)), 0.8f));
+                const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.4f, 0.0f, 0.0f));
+                if(!createBox(BoxFromBounds(VectorSet(0.5f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(1.9f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
                     return false;
             }
         }
         else if(m_openCase == OpenCase::ClippedReference){
             for(u32 pair = 0u; pair < 2u; ++pair){
-                const f32 lower = -6.5f + static_cast<f32>(pair);
-                if(!createBox({ Float3U(-1.9f, -0.7f, lower), Float3U(-0.5f, 0.7f, lower + 0.5f) }, true, s_OpenPairMesh).valid())
+                const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-6.5f), VectorReplicate(static_cast<f32>(pair)));
+                const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
+                if(!createBox(BoxFromBounds(VectorSet(-1.9f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(-0.5f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
                     return false;
             }
             if(!createBox({ Float3U(0.5f, -0.7f, -6.6f), Float3U(1.9f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
@@ -357,7 +375,10 @@ private:
             const SmokeMeshRef meshes[] = { firstMesh, s_OpenSixMesh };
             for(u32 tile = 0u; tile < 2u; ++tile){
                 const f32 x = tile == 0u ? -1.2f : 1.2f;
-                const auto receiver = createBox({ Float3U(x - 0.7f, -0.7f, -7.0f), Float3U(x + 0.7f, 0.7f, -5.0f) }, true, meshes[tile]);
+                const SIMDVectorSingle center = VectorSet(x, 0.0f, 0.0f, 0.0f);
+                const SIMDVectorSingle halfExtent = VectorSet(0.7f, 0.7f, 0.0f, 0.0f);
+                const Box bounds = BoxFromBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
+                const auto receiver = createBox(bounds, true, meshes[tile]);
                 AddStaticCsgMeshReceiver(*m_world, receiver, s_OpenGroups[tile], false, true);
                 auto entity = m_world->createEntity();
                 if(!entity.id().valid())

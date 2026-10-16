@@ -93,8 +93,9 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
                 break;
             }
             if(segment->width > 0.0f){
-                const f32 thickness = Min(placement.caret.width, segment->height);
-                const f32 verticalOffset = placement.textOrigin.y + Max(0.0f, segment->height - thickness);
+                const f32 thickness = VectorGetX(VectorMin(VectorReplicate(placement.caret.width), VectorReplicate(segment->height)));
+                const SIMDVectorSingle underlineOffset = VectorMax(VectorZero(), VectorSubtract(VectorSet(0.0f, segment->height, 0.0f, 0.0f), VectorSet(0.0f, thickness, 0.0f, 0.0f)));
+                const f32 verticalOffset = VectorGetY(VectorAdd(VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f), underlineOffset));
                 const SIMDVectorSingle underlineOrigin = VectorAdd(VectorSet(segment->x, segment->y, segment->x, segment->y), VectorSet(placement.textOrigin.x, verticalOffset, placement.textOrigin.x, verticalOffset));
                 segment->x = VectorGetX(underlineOrigin);
                 segment->y = VectorGetY(underlineOrigin);

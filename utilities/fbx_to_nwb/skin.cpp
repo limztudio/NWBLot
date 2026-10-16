@@ -214,7 +214,9 @@ Expected<SkinInfluenceResult> BuildInfluence(ufbx_skin_deformer* skin, const Uti
         return MakeUnexpected(Failure{});
     }
 
-    result.weights = VectorScale(result.weights, static_cast<f32>(1.0 / weightSum));
+    const SIMDVectorDouble inverseWeightSum = VectorDoubleDivide(VectorDoubleSplatOne(), VectorDoubleReplicate(weightSum));
+    const f32 normalization = static_cast<f32>(VectorDoubleGetX(inverseWeightSum));
+    result.weights = VectorScale(result.weights, normalization);
 
     return result;
 }

@@ -99,9 +99,10 @@ bool Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     if(frame.editor >= m_scope->m_comboEditors.size() || !comboMatches(frame))
         return false;
     const Item& item = m_scope->m_comboEditors[frame.editor];
-    const f32 measured = item.editView.visualBounds().height + item.padding.top + item.padding.bottom;
+    const SIMDVectorSingle measured = VectorAdd(VectorAdd(VectorSet(content.rectangle.width, item.editView.visualBounds().height, 0.0f, 0.0f), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
+    const SIMDVectorSingle querySize = VectorMin(VectorMax(VectorSet(content.rectangle.width, frame.queryHeight, 0.0f, 0.0f), measured), VectorSet(content.rectangle.width, content.rectangle.height, 0.0f, 0.0f));
     LayoutBox box = content;
-    box.rectangle.height = Min(Max(frame.queryHeight, measured), content.rectangle.height);
+    box.rectangle.height = VectorGetY(querySize);
     HitTarget navigation;
     if(frame.options.enabled && !item.editView.composing()){
         navigation.commandOwner = frame.rows.id;
@@ -110,9 +111,11 @@ bool Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     }
     if(!paintEditBox(item, box, &navigation))
         return false;
-    const f32 extent = Min(content.rectangle.height, box.rectangle.height + frame.queryGap);
-    content.rectangle.y += extent;
-    content.rectangle.height -= extent;
+    const SIMDVectorSingle extent = VectorMin(VectorReplicate(content.rectangle.height), VectorAdd(VectorReplicate(box.rectangle.height), VectorReplicate(frame.queryGap)));
+    const SIMDVectorSingle contentOrigin = VectorAdd(VectorSet(content.rectangle.x, content.rectangle.y, 0.0f, 0.0f), VectorSelect(VectorZero(), extent, s_SIMDMaskY));
+    const SIMDVectorSingle contentSize = VectorSubtract(VectorSet(content.rectangle.width, content.rectangle.height, 0.0f, 0.0f), VectorSelect(VectorZero(), extent, s_SIMDMaskY));
+    content.rectangle.y = VectorGetY(contentOrigin);
+    content.rectangle.height = VectorGetY(contentSize);
     return comboMatches(frame);
 }
 

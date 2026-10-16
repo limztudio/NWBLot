@@ -146,9 +146,11 @@ public:
     // Screen refraction requires opaque depth and spatial color variation behind the retained glass entry. Reuse the unlit refraction fixture material, leaving the ground receiver and sphere unchanged.
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
         const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
+        Float4 position;
+        StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.f, 0.f, 0.f), VectorSet(0.2f, 0.f, 0.f, 0.f), VectorSet(-2.3f, s_CameraTargetY, 2.2f, 0.f)), position);
         const auto entity = CreateTintedStaticMeshEntity(
             world, arena, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface,
-            Float4(value, value, value, 1.f), Float4(-2.3f + static_cast<f32>(stripe) * 0.2f, s_CameraTargetY, 2.2f, 0.f),
+            Float4(value, value, value, 1.f), position,
             Float4(0.1f, 1.f, 1.3f, 0.f)
         );
         if(!entity.valid()){

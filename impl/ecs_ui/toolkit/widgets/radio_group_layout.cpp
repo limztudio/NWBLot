@@ -39,7 +39,7 @@ namespace __hidden_ui_radio_group_layout{
         return false;
     const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0), VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0));
     const SIMDVectorDouble rowExtents = VectorDoubleMultiply(VectorDoubleSet(metrics.count, metrics.count == 0u ? 0u : metrics.count - 1u, 0.0, 0.0), VectorDoubleSet(metrics.rowHeight, metrics.rowGap, 0.0, 0.0));
-    const f64 labelWidth = metrics.count == 0u ? 0.0 : static_cast<f64>(metrics.indicatorExtent) + metrics.gap;
+    const f64 labelWidth = metrics.count == 0u ? 0.0 : VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(metrics.indicatorExtent), VectorDoubleReplicate(metrics.gap)));
     const SIMDVectorDouble size = VectorDoubleAdd(VectorDoubleAdd(padding, VectorDoubleSet(labelWidth, VectorDoubleGetX(rowExtents), 0.0, 0.0)), VectorDoubleSwizzle<2, 1, 2, 3>(rowExtents));
     const f64 height = VectorDoubleGetY(size);
     const f64 minimumWidth = VectorDoubleGetX(size);
@@ -69,7 +69,7 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
     )
         return MakeUnexpected(Failure{});
     RadioGroupMetrics candidate;
-    candidate.rowHeight = Max(maximumLabel.y, style.indicatorExtent);
+    candidate.rowHeight = VectorGetY(VectorMax(VectorSet(maximumLabel.x, maximumLabel.y, 0.0f, 0.0f), VectorSet(maximumLabel.x, style.indicatorExtent, 0.0f, 0.0f)));
     candidate.indicatorExtent = style.indicatorExtent;
     candidate.gap = style.gap;
     candidate.rowGap = style.rowGap;
@@ -78,7 +78,7 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
     candidate.count = count;
     const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(style.padding.left, style.padding.top, 0.0, 0.0), VectorDoubleSet(style.padding.right, style.padding.bottom, 0.0, 0.0));
     const SIMDVectorDouble rowExtents = VectorDoubleMultiply(VectorDoubleSet(count, count == 0u ? 0u : count - 1u, 0.0, 0.0), VectorDoubleSet(candidate.rowHeight, style.rowGap, 0.0, 0.0));
-    const f64 labelWidth = count == 0u ? 0.0 : static_cast<f64>(style.indicatorExtent) + style.gap + maximumLabel.x;
+    const f64 labelWidth = count == 0u ? 0.0 : VectorDoubleGetX(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleReplicate(style.indicatorExtent), VectorDoubleReplicate(style.gap)), VectorDoubleReplicate(maximumLabel.x)));
     const SIMDVectorDouble size = VectorDoubleAdd(VectorDoubleAdd(padding, VectorDoubleSet(labelWidth, VectorDoubleGetX(rowExtents), 0.0, 0.0)), VectorDoubleSwizzle<2, 1, 2, 3>(rowExtents));
     const f64 width = VectorDoubleGetX(size);
     const f64 height = VectorDoubleGetY(size);
@@ -116,9 +116,11 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
-    const f64 extent = Min(static_cast<f64>(metrics.indicatorExtent), width);
-    const f64 labelStart = Min(width, extent + metrics.gap);
-    const f64 markInset = extent * metrics.markInset;
+    const SIMDVectorDouble indicatorExtent = VectorDoubleMin(VectorDoubleReplicate(metrics.indicatorExtent), VectorDoubleReplicate(width));
+    const f64 extent = VectorDoubleGetX(indicatorExtent);
+    const SIMDVectorDouble labelOffset = VectorDoubleMin(VectorDoubleReplicate(width), VectorDoubleAdd(indicatorExtent, VectorDoubleReplicate(metrics.gap)));
+    const f64 labelStart = VectorDoubleGetX(labelOffset);
+    const f64 markInset = VectorDoubleGetX(VectorDoubleMultiply(indicatorExtent, VectorDoubleReplicate(metrics.markInset)));
     for(u32 index = 0u; index < candidate.count; ++index){
         if(choices.rows[index].key == 0u)
             return MakeUnexpected(Failure{});
@@ -129,8 +131,10 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         RadioGroupChoicePlacement& row = candidate.rows[index];
         row.key = choices.rows[index].key;
         row.enabled = choices.rows[index].enabled;
-        const f64 rowY = y + static_cast<f64>(index) * (static_cast<f64>(metrics.rowHeight) + metrics.rowGap);
-        const f64 indicatorY = rowY + (static_cast<f64>(metrics.rowHeight) - extent) * 0.5;
+        const SIMDVectorDouble rowOffset = VectorDoubleMultiply(VectorDoubleReplicate(index), VectorDoubleAdd(VectorDoubleReplicate(metrics.rowHeight), VectorDoubleReplicate(metrics.rowGap)));
+        const SIMDVectorDouble rowOrigin = VectorDoubleAdd(VectorDoubleReplicate(y), rowOffset);
+        const f64 rowY = VectorDoubleGetX(rowOrigin);
+        const f64 indicatorY = VectorDoubleGetY(VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(metrics.rowHeight), indicatorExtent), VectorDoubleReplicate(0.5))));
         const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(x, rowY, width, metrics.rowHeight);
         if(!rectangle)
             return MakeUnexpected(Failure{});
@@ -145,7 +149,8 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         const auto mark = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleGetX(markOrigin), VectorDoubleGetY(markOrigin), VectorDoubleGetX(markSize), VectorDoubleGetY(markSize));
         if(!mark)
             return MakeUnexpected(Failure{});
-        const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(x + labelStart, rowY, width - labelStart, metrics.rowHeight);
+        const SIMDVectorDouble labelBounds = VectorDoubleAdd(VectorDoubleSet(x, width, 0.0, 0.0), VectorDoubleSet(labelStart, -labelStart, 0.0, 0.0));
+        const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleGetX(labelBounds), rowY, VectorDoubleGetY(labelBounds), metrics.rowHeight);
         if(!label)
             return MakeUnexpected(Failure{});
         const auto textClip = IntersectUiRects<UiRectPrecision::PreciseExtents>(*label, *rowClip);

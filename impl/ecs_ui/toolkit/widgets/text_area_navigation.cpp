@@ -76,9 +76,8 @@ private:
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())
         return MakeUnexpected(Failure{});
-    const f64 center = static_cast<f64>(caret.y) + static_cast<f64>(caret.height) * 0.5;
-    const f64 displacement = static_cast<f64>(viewportHeight);
-    const f64 target = center + (down ? displacement : -displacement);
+    const SIMDVectorDouble center = VectorDoubleAdd(VectorDoubleReplicate(caret.y), VectorDoubleMultiply(VectorDoubleReplicate(caret.height), VectorDoubleReplicate(0.5)));
+    const f64 target = VectorDoubleGetX(VectorDoubleAdd(center, VectorDoubleReplicate(down ? static_cast<f64>(viewportHeight) : -static_cast<f64>(viewportHeight))));
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
     const SIMDVectorDouble minimumMaximumValue = VectorDoubleMultiplyAddExpression(
@@ -90,7 +89,9 @@ private:
     const f64 maximum = VectorDoubleGetY(minimumMaximumValue);
     if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
         return MakeUnexpected(Failure{});
-    const Point point{ preferredX, static_cast<f32>(Clamp(target, minimum, maximum)) };
+    const SIMDVectorDouble targetValue = VectorDoubleReplicate(target);
+    const SIMDVectorDouble minimumValue = VectorDoubleReplicate(minimum);
+    const Point point{ preferredX, static_cast<f32>(VectorDoubleGetX(VectorDoubleSelect(minimumValue, VectorDoubleMin(VectorDoubleReplicate(maximum), targetValue), VectorDoubleGreater(targetValue, minimumValue)))) };
     if(!IsFinite(point.y))
         return MakeUnexpected(Failure{});
     const auto result = geometry.hitTest(point);

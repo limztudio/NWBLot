@@ -429,6 +429,19 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(EditBoxLayoutTests, NegativeZeroScrollClampsToPositiveZero){
+    ASSERT_TRUE(m_model.setText("abcdef"));
+    ASSERT_TRUE(m_model.move(EditMove::Home));
+    ASSERT_TRUE(shapeView());
+    for(const bool revealCaret : { false, true }){
+        const auto placement = m_view.arrange({ 10.0f, 20.0f, 26.0f, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, { -0.0f, -0.0f }, 1.0f, revealCaret);
+        ASSERT_TRUE(placement);
+        EXPECT_FLOAT_EQ(placement->scroll, 0.0f);
+        EXPECT_FALSE(SignBit(placement->scroll));
+    }
+}
+
+
 };
 
 

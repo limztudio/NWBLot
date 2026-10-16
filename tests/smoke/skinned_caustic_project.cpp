@@ -34,6 +34,7 @@
 
 #include <global/assert.h>
 #include <global/simd/frame.h>
+#include <global/simd/vector.h>
 #include <global/timer.h>
 
 
@@ -100,8 +101,9 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
     if(jointIndex == 0u)
         return bindJoint;
 
-    const f32 phase = static_cast<f32>(jointIndex) * 0.7f;
-    const SIMDVectorSingle waves = VectorSin(VectorSet(timeSeconds * s_PoseAnimationSpeed + phase, 0.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle phase = VectorScale(VectorSet(static_cast<f32>(jointIndex), 0.0f, 0.0f, 0.0f), 0.7f);
+    const SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(VectorSet(timeSeconds, 0.0f, 0.0f, 0.0f), VectorReplicate(s_PoseAnimationSpeed), phase);
+    const SIMDVectorSingle waves = VectorSin(wavePhases);
     const SIMDVectorSingle angle = VectorScale(waves, s_PoseAnimationAngle);
     const SIMDVectorSingle rotationAngles = VectorMergeX(VectorScale(angle, 0.4f), angle, VectorScale(angle, 0.25f), VectorZero());
 

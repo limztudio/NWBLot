@@ -4,6 +4,7 @@
 
 #include "list.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -83,14 +84,15 @@ struct KeyResolution{
 [[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const ControlAction& action)noexcept{
     if(!IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0 || !IsFinite(action.maximum) || action.maximum < 0.0)
         return MakeUnexpected(Failure{});
-    f64 candidate = Min(current, action.maximum);
+    f64 candidate = VectorDoubleGetX(VectorDoubleMin(VectorDoubleReplicate(current), VectorDoubleReplicate(action.maximum)));
     if(action.delta > 0.0)
         candidate = action.delta >= (candidate / action.step) ? 0.0 : (candidate - action.delta * action.step);
     else if(action.delta < 0.0){
         const f64 remaining = (action.maximum - candidate);
         candidate = (-action.delta) >= (remaining / action.step) ? action.maximum : (candidate + -action.delta * action.step);
     }
-    candidate = Clamp(candidate, 0.0, action.maximum);
+    const SIMDVectorDouble candidateValue = VectorDoubleReplicate(candidate);
+    candidate = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleReplicate(action.maximum), candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())));
     if(!IsFinite(candidate))
         return MakeUnexpected(Failure{});
     return candidate;

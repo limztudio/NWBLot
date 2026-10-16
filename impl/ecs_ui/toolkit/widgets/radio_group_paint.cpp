@@ -65,9 +65,10 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         if(painted && focused && m_skin->findRegion(frame.m_style.focus))
             painted = m_paint.drawRegion(frame.m_style.focus, row.rectangle);
         const TextLayout& label = frame.m_labels[index].text;
-        const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + frame.m_metrics.gap);
-        const f32 verticalOffset = Max(0.0f, (row.rectangle.height - textBounds.height) * 0.5f);
-        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, row.rectangle.x, row.rectangle.y), VectorSet(horizontalOffset, verticalOffset, horizontalOffset, verticalOffset));
+        const SIMDVectorSingle labelOffsets = VectorAdd(VectorSet(row.indicator.width, 0.0f, 0.0f, 0.0f), VectorSet(frame.m_metrics.gap, 0.0f, 0.0f, 0.0f));
+        const SIMDVectorSingle horizontalOffset = VectorMin(VectorSet(row.rectangle.width, 0.0f, 0.0f, 0.0f), labelOffsets);
+        const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(0.0f, row.rectangle.height, 0.0f, 0.0f), VectorSet(0.0f, textBounds.height, 0.0f, 0.0f)), 0.5f));
+        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, 0.0f, 0.0f), VectorSelect(horizontalOffset, verticalOffset, s_SIMDMaskY));
         const SIMDVectorSingle alignedOrigin = VectorSubtract(textOrigin, VectorSet(textBounds.x, textBounds.y, textBounds.x, textBounds.y));
         const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
         m_paint.pushClip(row.textClip);

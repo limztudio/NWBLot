@@ -102,7 +102,8 @@ namespace __hidden_ui_text_paint{
     const SIMDVectorDouble verticalStep = VectorDoubleSwizzle<1, 2, 3, 3>(physicalStep);
     const SIMDVectorDouble verticalDerivative = VectorDoubleMultiply(VectorDoubleSet(gradientY, 0.0, 0.0, 0.0), verticalStep);
     const f64 derivative = VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleSet(gradientX, 0.0, 0.0, 0.0), horizontalStep, verticalDerivative));
-    const f64 halfWidth = 0.5 * Max(derivative, 0.001 * 128.0 / binding.spreadPixels);
+    const SIMDVectorDouble minimumDerivative = VectorDoubleDivide(VectorDoubleReplicate(0.001 * 128.0), VectorDoubleReplicate(binding.spreadPixels));
+    const f64 halfWidth = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(0.5), VectorDoubleMax(VectorDoubleReplicate(derivative), minimumDerivative)));
     const SIMDVectorDouble glyphSize = VectorDoubleSet(glyph.width, glyph.height, 0.0, 0.0);
     const SIMDVectorDouble halfTexel = VectorDoubleSet(0.5, 0.5, 0.0, 0.0);
     SIMDVectorDouble supportMinimum = glyphSize;
@@ -157,11 +158,12 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
     using namespace __hidden_ui_text_paint;
     if(layout.lines().empty() || !IsFinite(layout.fontSize()) || layout.fontSize() < 1.0f / 64.0f || layout.fontSize() > 2048.0f || !IsFinite(display.pixelScaleX) || !IsFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
         return MakeUnexpected(Failure{});
-    const f32 physicalSize = layout.fontSize() * Max(display.pixelScaleX, display.pixelScaleY);
-    const f32 rasterPpem = Ceil(physicalSize);
+    const SIMDVectorSingle physicalSizes = VectorMultiply(VectorReplicate(layout.fontSize()), VectorMax(VectorSet(display.pixelScaleX, display.pixelScaleY, 1.0f, 1.0f), VectorSet(display.pixelScaleY, display.pixelScaleX, 1.0f, 1.0f)));
+    const f32 physicalSize = VectorGetX(physicalSizes);
+    const f32 rasterPpem = VectorGetX(VectorCeiling(physicalSizes));
     if(!IsFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > 4096.0f)
         return MakeUnexpected(Failure{});
-    const f32 rasterScale = rasterPpem / layout.fontSize();
+    const f32 rasterScale = VectorGetX(VectorDivide(VectorReplicate(rasterPpem), VectorReplicate(layout.fontSize())));
     const u32 pixelSize = static_cast<u32>(rasterPpem);
     const Point logical = layout.measure();
     const Rect ink = layout.inkBounds();
@@ -210,8 +212,8 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
 
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
-    const f32 pixelScale = Max(metrics.pixelScaleX, metrics.pixelScaleY);
-    const f32 physicalSize = (layout.fontSize() * pixelScale);
+    const SIMDVectorSingle pixelScales = VectorMax(VectorSet(metrics.pixelScaleX, metrics.pixelScaleY, 1.0f, 1.0f), VectorSet(metrics.pixelScaleY, metrics.pixelScaleX, 1.0f, 1.0f));
+    const f32 physicalSize = VectorGetX(VectorMultiply(VectorReplicate(layout.fontSize()), pixelScales));
     const f32 rasterPpem = VectorGetX(VectorCeiling(VectorReplicate(physicalSize)));
     if(
         layout.lines().empty() || !IsFinite(layout.fontSize())
@@ -228,7 +230,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
         return true;
     const u32 pixelSize = static_cast<u32>(rasterPpem);
-    const f32 rasterScale = (rasterPpem / layout.fontSize());
+    const f32 rasterScale = VectorGetX(VectorDivide(VectorReplicate(rasterPpem), VectorReplicate(layout.fontSize())));
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);

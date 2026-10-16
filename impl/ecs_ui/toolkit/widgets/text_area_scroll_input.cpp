@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -25,7 +26,8 @@ namespace __hidden_text_area_scroll_input{
 [[nodiscard]] static Expected<f32> Step(const f64 offset, const f64 delta, const f64 step, const f64 maximum)noexcept{
     if(!IsFinite(offset) || !IsFinite(delta) || !IsFinite(step) || step < 0.0 || !IsFinite(maximum) || maximum < 0.0)
         return MakeUnexpected(Failure{});
-    f64 next = Clamp(offset, 0.0, maximum);
+    const SIMDVectorDouble offsetValue = VectorDoubleReplicate(offset);
+    f64 next = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleReplicate(maximum), offsetValue), VectorDoubleGreater(offsetValue, VectorDoubleZero())));
     if(step > 0.0 && delta > 0.0)
         next = delta >= (maximum - next) / step ? maximum : next + delta * step;
     else if(step > 0.0 && delta < 0.0)
@@ -38,12 +40,18 @@ namespace __hidden_text_area_scroll_input{
 [[nodiscard]] static bool Drag(const PointerGesture& gesture, const bool horizontal, Point& scroll)noexcept{
     const f64 track = horizontal ? gesture.referenceRectangle.width : gesture.referenceRectangle.height;
     const f64 thumb = horizontal ? gesture.targetRectangle.width : gesture.targetRectangle.height;
-    const f64 start = horizontal ? static_cast<f64>(gesture.targetRectangle.x) - gesture.referenceRectangle.x : static_cast<f64>(gesture.targetRectangle.y) - gesture.referenceRectangle.y;
-    const f64 delta = horizontal ? static_cast<f64>(gesture.position.x) - gesture.origin.x : static_cast<f64>(gesture.position.y) - gesture.origin.y;
-    const f64 travel = track - thumb;
+    const SIMDVectorDouble startDelta = VectorDoubleSubtract(
+        VectorDoubleSet(horizontal ? gesture.targetRectangle.x : gesture.targetRectangle.y, horizontal ? gesture.position.x : gesture.position.y, 0.0, 0.0),
+        VectorDoubleSet(horizontal ? gesture.referenceRectangle.x : gesture.referenceRectangle.y, horizontal ? gesture.origin.x : gesture.origin.y, 0.0, 0.0)
+    );
+    const f64 start = VectorDoubleGetX(startDelta);
+    const f64 delta = VectorDoubleGetY(startDelta);
+    const f64 travel = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(track), VectorDoubleReplicate(thumb)));
     if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(start) || !IsFinite(delta) || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
         return false;
-    const f64 next = Clamp((start + delta) / travel, 0.0, 1.0) * gesture.maximum;
+    const SIMDVectorDouble normalized = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleSplatX(startDelta), VectorDoubleSplatY(startDelta)), VectorDoubleReplicate(travel));
+    const SIMDVectorDouble clamped = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalized), VectorDoubleGreater(normalized, VectorDoubleZero()));
+    const f64 next = VectorDoubleGetX(VectorDoubleMultiply(clamped, VectorDoubleReplicate(gesture.maximum)));
     if(!IsFinite(next) || next > static_cast<f64>(Limit<f32>::s_Max))
         return false;
     if(horizontal)

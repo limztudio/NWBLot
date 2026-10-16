@@ -103,8 +103,10 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
         for(;;){
             LayoutBox provisional;
-            const f32 probeWidth = Max(Max(120.0f, background->minimumWidth), frame.padding.left + frame.padding.right + frame.style.scrollbarWidth + frame.rowHeight);
-            provisional.rectangle = { 0.0f, 0.0f, probeWidth, Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom) };
+            const SIMDVectorSingle probeMinimum = VectorMax(VectorSet(120.0f, background->minimumHeight, 0.0f, 0.0f), VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f));
+            const SIMDVectorSingle probeWidth = VectorAdd(VectorAdd(VectorAdd(VectorSet(frame.padding.left, frame.rowHeight, 0.0f, 0.0f), VectorSet(frame.padding.right, frame.padding.top, 0.0f, 0.0f)), VectorSet(frame.style.scrollbarWidth, frame.padding.bottom, 0.0f, 0.0f)), VectorSet(frame.rowHeight, 0.0f, 0.0f, 0.0f));
+            const SIMDVectorSingle probeSize = VectorMax(probeMinimum, probeWidth);
+            provisional.rectangle = { 0.0f, 0.0f, VectorGetX(probeSize), VectorGetY(probeSize) };
             provisional.clip = provisional.rectangle;
             ScrollPlacement placement;
             if(!measureListPlacement(frame, provisional, provisional.clip, placement)){
@@ -112,7 +114,8 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
                 result.valid = false;
                 return result;
             }
-            const f32 height = Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom);
+            const SIMDVectorSingle measuredSize = VectorAdd(VectorAdd(VectorSet(0.0f, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
+            const f32 height = VectorGetY(VectorMax(VectorSet(0.0f, background->minimumHeight, 0.0f, 0.0f), measuredSize));
             if(height == provisional.rectangle.height)
                 break;
         }
@@ -124,7 +127,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle preferredSize = VectorSet(120.0f, ((frame.rowHeight + frame.padding.top) + frame.padding.bottom), 0.0f, 0.0f);
+    const SIMDVectorSingle preferredSize = VectorAdd(VectorAdd(VectorSet(120.0f, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
     const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
     const SIMDVectorSingle intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
@@ -171,7 +174,8 @@ bool Builder::prepareListMetrics(ListFrame& frame){
         const auto bounds = m_text.measure(*empty, m_paint.displayMetrics());
         if(!bounds)
             return false;
-        const f32 height = Max(metrics->minimum.y, bounds->height + metrics->padding.top + metrics->padding.bottom);
+        const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(bounds->width, bounds->height, 0.0f, 0.0f), VectorSet(metrics->padding.left, metrics->padding.top, 0.0f, 0.0f)), VectorSet(metrics->padding.right, metrics->padding.bottom, 0.0f, 0.0f));
+        const f32 height = VectorGetY(VectorMax(VectorSet(metrics->minimum.x, metrics->minimum.y, 0.0f, 0.0f), paddedSize));
         if(!IsFinite(height) || height <= 0.0f || !listMatches(frame))
             return false;
         state.m_measureKey = key;
@@ -179,9 +183,10 @@ bool Builder::prepareListMetrics(ListFrame& frame){
     }
     // The last painted offset may belong to a different styled declaration than the measurement cache.
     if(state.m_scrollRowHeight > 0.0f && state.m_scrollSourceGeneration == key.sourceGeneration && state.m_scrollRowHeight != state.m_rowHeight){
-        const f64 clippedTop = static_cast<f64>(state.m_placement.contentClip.y) - state.m_placement.viewport.y;
-        const f64 anchor = Max(0.0, state.scrollOffset() + clippedTop) / state.m_scrollRowHeight;
-        if(!state.m_scroll.setOffset(Max(0.0, anchor * state.m_rowHeight - clippedTop)))
+        const SIMDVectorDouble clippedTop = VectorDoubleSubtract(VectorDoubleReplicate(state.m_placement.contentClip.y), VectorDoubleReplicate(state.m_placement.viewport.y));
+        const SIMDVectorDouble anchor = VectorDoubleDivide(VectorDoubleMax(VectorDoubleZero(), VectorDoubleAdd(VectorDoubleReplicate(state.scrollOffset()), clippedTop)), VectorDoubleReplicate(state.m_scrollRowHeight));
+        const SIMDVectorDouble offset = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleMultiply(anchor, VectorDoubleReplicate(state.m_rowHeight)), clippedTop));
+        if(!state.m_scroll.setOffset(VectorDoubleGetX(offset)))
             return false;
     }
     state.m_scrollRowHeight = state.m_rowHeight;
@@ -203,9 +208,10 @@ bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture)n
     );
     const f64 start = VectorDoubleGetX(startDeltaValue);
     const f64 delta = VectorDoubleGetY(startDeltaValue);
-    const f64 fraction = Clamp(((start + delta) / travel), 0.0, 1.0);
+    const SIMDVectorDouble fractionValue = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleReplicate(start), VectorDoubleReplicate(delta)), VectorDoubleReplicate(travel));
+    const f64 fraction = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), fractionValue), VectorDoubleGreater(fractionValue, VectorDoubleZero())));
     state.m_ensureCursor = false;
-    return state.m_scroll.setOffset((fraction * gesture.maximum));
+    return state.m_scroll.setOffset(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(fraction), VectorDoubleReplicate(gesture.maximum))));
 }
 
 

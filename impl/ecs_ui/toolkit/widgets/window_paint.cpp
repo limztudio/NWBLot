@@ -59,10 +59,11 @@ bool Builder::paintWindowTitle(){
             painted = m_paint.drawRegion(style.focus, collapse);
     }
     const Rect& titleBounds = m_scope->m_window.titleBounds;
-    const f32 collapseReservation = m_scope->m_window.options.collapsible ? metrics.collapseExtent + style.gap : 0.0f;
-    const SIMDVectorSingle content = InsetRectValue(VectorSet(header.x, header.y, header.width, header.height), VectorSet(metrics.titlePadding.left + collapseReservation, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom));
-    const f32 verticalOffset = Max(0.0f, (VectorGetW(content) - titleBounds.height) * 0.5f);
-    const SIMDVectorSingle textOrigin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(content), VectorSet(0.0f, verticalOffset, 0.0f, verticalOffset));
+    const SIMDVectorSingle collapseReservation = m_scope->m_window.options.collapsible ? VectorAdd(VectorSet(metrics.collapseExtent, 0.0f, 0.0f, 0.0f), VectorSet(style.gap, 0.0f, 0.0f, 0.0f)) : VectorZero();
+    const SIMDVectorSingle padding = VectorAdd(VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom), collapseReservation);
+    const SIMDVectorSingle content = InsetRectValue(VectorSet(header.x, header.y, header.width, header.height), padding);
+    const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(0.0f, VectorGetW(content), 0.0f, 0.0f), VectorSet(0.0f, titleBounds.height, 0.0f, 0.0f)), 0.5f));
+    const SIMDVectorSingle textOrigin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(content), verticalOffset);
     const SIMDVectorSingle alignedOrigin = VectorSubtract(textOrigin, VectorSet(titleBounds.x, titleBounds.y, titleBounds.x, titleBounds.y));
     const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
     m_paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
@@ -102,7 +103,7 @@ bool Builder::paintWindowResize(){
         painted = m_paint.drawRegion(resize->name, corner, style.text);
     else{
         // Skins may supply a resize sprite. The default atlas uses its white sprite for a logical corner grip.
-        const f32 thickness = Min(2.0f, corner.width * 0.125f);
+        const f32 thickness = VectorGetX(VectorMin(VectorReplicate(2.0f), VectorScale(VectorSet(corner.width, corner.height, 0.0f, 0.0f), 0.125f)));
         const SIMDVectorSingle scaledSize = VectorMultiply(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(0.25f, 0.25f, 0.75f, 0.75f));
         const SIMDVectorSingle ends = VectorMultiplyAddExpression(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(0.25f, 1.0f, 1.0f, 0.25f), VectorSet(corner.x, corner.y, corner.x, corner.y));
         const SIMDVectorSingle origins = VectorSubtract(ends, VectorSet(0.0f, thickness, thickness, 0.0f));

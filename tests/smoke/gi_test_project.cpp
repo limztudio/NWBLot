@@ -451,22 +451,27 @@ private:
             return static_cast<f32>(randomState >> 8u) * (1.0f / 16777216.0f);
         };
         const auto absolute = [](f32 value) -> f32{ return value < 0.0f ? -value : value; };
-        const auto overlaps = [absolute](const ComplexSceneBox& a, const ComplexSceneBox& b) -> bool{
-            if(a.position.y + a.scale.y * 0.5f <= b.position.y - b.scale.y * 0.5f || b.position.y + b.scale.y * 0.5f <= a.position.y - a.scale.y * 0.5f)
+        const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b) -> bool{
+            const SIMDVectorSingle verticalCenters = VectorSet(a.position.y, b.position.y, 0.0f, 0.0f);
+            const SIMDVectorSingle verticalHalfExtents = VectorScale(VectorSet(a.scale.y, b.scale.y, 0.0f, 0.0f), 0.5f);
+            const SIMDVectorSingle verticalUpper = VectorAdd(verticalCenters, verticalHalfExtents);
+            const SIMDVectorSingle verticalLower = VectorSwizzle<1, 0, 2, 3>(VectorSubtract(verticalCenters, verticalHalfExtents));
+            if((VectorMoveMask(VectorLessOrEqual(verticalUpper, verticalLower)) & VectorComponentMask::s_XY) != 0u)
                 return false;
-            const f32 aAngle = a.yawDegrees * (s_PI / 180.0f);
-            const f32 bAngle = b.yawDegrees * (s_PI / 180.0f);
-            const f32 aCos = absolute(Cos(aAngle)), aSin = absolute(Sin(aAngle));
-            const f32 bCos = absolute(Cos(bAngle)), bSin = absolute(Sin(bAngle));
+            const SIMDVectorSingle angles = VectorScale(VectorSet(a.yawDegrees, b.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f);
+            SIMDVectorSingle sine;
+            SIMDVectorSingle cosine;
+            VectorSinCos(sine, cosine, angles);
+            const SIMDVectorSingle absoluteSine = VectorAbs(sine);
+            const SIMDVectorSingle absoluteCosine = VectorAbs(cosine);
+            const SIMDVectorSingle cosineSine = VectorMergeX(absoluteCosine, absoluteSine, VectorSplatY(absoluteCosine), VectorSplatY(absoluteSine));
             const SIMDVectorSingle halfExtents = VectorScale(VectorMultiplyAddExpression(
-                VectorSet(aCos, aSin, bCos, bSin), VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x),
-                VectorMultiply(VectorSet(aSin, aCos, bSin, bCos), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))
+                cosineSine, VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x),
+                VectorMultiply(VectorSwizzle<1, 0, 3, 2>(cosineSine), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))
             ), 0.5f);
-            const f32 aHalfX = VectorGetX(halfExtents);
-            const f32 aHalfZ = VectorGetY(halfExtents);
-            const f32 bHalfX = VectorGetZ(halfExtents);
-            const f32 bHalfZ = VectorGetW(halfExtents);
-            return absolute(a.position.x - b.position.x) < aHalfX + bHalfX + 0.06f && absolute(a.position.z - b.position.z) < aHalfZ + bHalfZ + 0.06f;
+            const SIMDVectorSingle combinedHalfExtents = VectorAdd(VectorAdd(halfExtents, VectorSwizzle<2, 3, 0, 1>(halfExtents)), VectorReplicate(0.06f));
+            const SIMDVectorSingle separation = VectorAbs(VectorSubtract(VectorSet(a.position.x, a.position.z, 0.0f, 0.0f), VectorSet(b.position.x, b.position.z, 0.0f, 0.0f)));
+            return (VectorMoveMask(VectorLess(separation, combinedHalfExtents)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
         };
         for(u32 attempt = 0u; placedBodyCount < s_ComplexRandomBodyCount && attempt < 4096u; ++attempt){
             const f32 x = -1.70f + 3.40f * nextRandom01();
@@ -476,7 +481,9 @@ private:
             const f32 height = (z < -1.8f ? 0.22f : 0.30f) + (z < -1.8f ? 0.34f : 0.68f) * nextRandom01();
             const f32 shade = 0.62f + 0.32f * nextRandom01();
             const f32 yawDegrees = (static_cast<f32>(static_cast<u32>(nextRandom01() * 7.0f)) - 3.0f) * 15.0f;
-            const ComplexSceneBox body{ Float4(x, height * 0.5f, z, 0.0f), Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
+            Float4 position;
+            StoreFloat(VectorMultiply(VectorSet(x, height, z, 0.0f), VectorSet(1.0f, 0.5f, 1.0f, 1.0f)), position);
+            const ComplexSceneBox body{ position, Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
             // Leave the line from the camera through the front doorway clear.
             if(z < -1.8f && absolute(x) < 0.72f)
                 continue;

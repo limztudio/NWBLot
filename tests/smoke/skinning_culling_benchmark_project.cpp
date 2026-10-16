@@ -27,6 +27,7 @@
 
 #include <global/assert.h>
 #include <global/environment.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,22 +174,29 @@ static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 join
         return;
 
     const u32 seed = RandomJointSeed(jointIndex, characterIndex);
-    const f32 seedPhase = static_cast<f32>(seed & 255u) * 0.0245436926f;
-    const f32 phase = staticPreview ? seedPhase : static_cast<f32>(characterIndex) * 1.04719758f;
+    const SIMDVectorSingle phaseCandidates = VectorMultiply(VectorSet(static_cast<f32>(seed & 255u), static_cast<f32>(characterIndex), 0.0f, 0.0f), VectorSet(0.0245436926f, 1.04719758f, 0.0f, 0.0f));
+    const SIMDVectorSingle phase = staticPreview ? VectorSplatX(phaseCandidates) : VectorSplatY(phaseCandidates);
     const f32 primarySpeed = staticPreview ? 1.15f : 0.34f;
     const f32 secondarySpeed = staticPreview ? 0.83f : 0.21f;
     const f32 baseAngle = staticPreview ? 0.20f : 0.024f;
     const f32 angleJitter = staticPreview ? 0.025f : 0.0025f;
     const f32 rollBase = staticPreview ? 0.045f : 0.006f;
     const f32 rollJitter = staticPreview ? 0.008f : 0.0015f;
-    SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(VectorSet(timeSeconds, timeSeconds, 0.0f, 0.0f), VectorSet(primarySpeed, secondarySpeed, 0.0f, 0.0f), VectorSet(phase, phase, 0.0f, 0.0f));
+    SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(VectorSet(timeSeconds, timeSeconds, 0.0f, 0.0f), VectorSet(primarySpeed, secondarySpeed, 0.0f, 0.0f), VectorAndInt(phase, s_SIMDMaskXY));
     wavePhases = VectorAdd(wavePhases, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
     const SIMDVectorSingle waves = VectorSin(wavePhases);
-    const SIMDVectorSingle angle = VectorScale(VectorSplatX(waves), baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter);
+    const SIMDVectorSingle coefficientIndices = VectorSet(
+        static_cast<f32>((seed >> 16u) % 5u), static_cast<f32>((seed >> 3u) & 3u),
+        static_cast<f32>((seed >> 6u) & 3u), static_cast<f32>((seed >> 9u) & 3u)
+    );
+    const SIMDVectorSingle coefficients = VectorMultiplyAddExpression(
+        coefficientIndices, VectorSet(angleJitter, 0.035f, 0.04f, rollJitter), VectorSet(baseAngle, 0.18f, 0.58f, rollBase)
+    );
+    const SIMDVectorSingle angle = VectorMultiply(VectorSplatX(waves), VectorSplatX(coefficients));
     const SIMDVectorSingle rotationAngles = VectorMergeX(
-        VectorScale(angle, 0.18f + static_cast<f32>((seed >> 3u) & 3u) * 0.035f),
-        VectorScale(angle, 0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
-        VectorScale(VectorSplatY(waves), rollBase + static_cast<f32>((seed >> 9u) & 3u) * rollJitter),
+        VectorMultiply(angle, VectorSplatY(coefficients)),
+        VectorMultiply(angle, VectorSplatZ(coefficients)),
+        VectorMultiply(VectorSplatY(waves), VectorSplatW(coefficients)),
         VectorZero()
     );
 
@@ -531,7 +539,8 @@ public:
         for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
             auto entity = m_world->createEntity();
             auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-            transform.position = Float4(m_staticPreview ? 0.0f : (static_cast<f32>(characterIndex) - 1.0f) * 1.15f, 0.0f, 0.0f, 0.0f);
+            const SIMDVectorSingle position = m_staticPreview ? VectorZero() : VectorScale(VectorSubtract(VectorSet(static_cast<f32>(characterIndex), 0.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f)), 1.15f);
+            StoreFloat(position, transform.position);
             transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 
             auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();

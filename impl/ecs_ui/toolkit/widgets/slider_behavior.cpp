@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -128,7 +129,8 @@ Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, co
     }
     if(!IsFinite(normalized))
         return MakeUnexpected(Failure{});
-    return Clamp(normalized, 0.0, 1.0);
+    const SIMDVectorDouble normalizedValue = VectorDoubleReplicate(normalized);
+    return VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
 }
 
 Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
@@ -238,7 +240,11 @@ bool SliderBehavior::Seek(SliderState& state, const SliderOptions& options, cons
         result = accepted;
         return true;
     }
-    const f64 normalized = Clamp((static_cast<f64>(gesture.position.x) - gesture.referenceRectangle.x) / gesture.referenceRectangle.width, 0.0, 1.0);
+    const SIMDVectorDouble normalizedValue = VectorDoubleDivide(
+        VectorDoubleSubtract(VectorDoubleReplicate(gesture.position.x), VectorDoubleReplicate(gesture.referenceRectangle.x)),
+        VectorDoubleReplicate(gesture.referenceRectangle.width)
+    );
+    const f64 normalized = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
     const auto value = Interpolate(options.minimum, options.maximum, normalized);
     if(!value)
         return false;
@@ -267,13 +273,17 @@ bool SliderBehavior::Drag(SliderState& state, const SliderOptions& options, cons
         return false;
     SliderResult accepted = result;
     accepted.valid = true;
-    const f64 travel = static_cast<f64>(gesture.referenceRectangle.width) - gesture.targetRectangle.width;
+    const SIMDVectorDouble travelDelta = VectorDoubleSubtract(
+        VectorDoubleSet(gesture.referenceRectangle.width, gesture.position.x, 0.0, 0.0),
+        VectorDoubleSet(gesture.targetRectangle.width, gesture.origin.x, 0.0, 0.0)
+    );
+    const f64 travel = VectorDoubleGetX(travelDelta);
     if(!options.enabled || options.minimum == options.maximum || travel <= 0.0){
         accepted.dragging = false;
         result = accepted;
         return true;
     }
-    const f64 delta = static_cast<f64>(gesture.position.x) - gesture.origin.x;
+    const f64 delta = VectorDoubleGetY(travelDelta);
     bool moved = SamePress(state.m_press, gesture.id) && state.m_pressMoved;
     f64 value = state.m_value;
     if(delta == 0.0){
@@ -284,7 +294,9 @@ bool SliderBehavior::Drag(SliderState& state, const SliderOptions& options, cons
         const auto normalized = Normalize(options.minimum, options.maximum, baseline);
         if(!normalized)
             return false;
-        const auto interpolated = Interpolate(options.minimum, options.maximum, Clamp(*normalized + delta / travel, 0.0, 1.0));
+        const SIMDVectorDouble normalizedValue = VectorDoubleAdd(VectorDoubleReplicate(*normalized), VectorDoubleDivide(VectorDoubleReplicate(delta), VectorDoubleReplicate(travel)));
+        const f64 dragged = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
+        const auto interpolated = Interpolate(options.minimum, options.maximum, dragged);
         if(!interpolated)
             return false;
         value = *interpolated;

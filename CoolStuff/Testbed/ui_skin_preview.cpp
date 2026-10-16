@@ -151,14 +151,16 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
 
     const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
     const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(18.0f, 162.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle koreanOrigin = VectorAdd(origin, VectorSet(18.0f, 162.0f + caption->height, 0.0f, 0.0f));
+    const SIMDVectorSingle koreanOffset = VectorAdd(VectorSet(18.0f, 162.0f, 0.0f, 0.0f), VectorSet(0.0f, caption->height, 0.0f, 0.0f));
+    const SIMDVectorSingle koreanOrigin = VectorAdd(origin, koreanOffset);
     const SIMDVectorSingle buttonTextOffsets = VectorScale(VectorSubtract(VectorReplicate(30.0f), VectorSet(normal->height, hover->height, pressed->height, disabled->height)), 0.5f);
     const SIMDVectorSingle buttonTextY = VectorAdd(VectorSet(12.0f, 12.0f, 50.0f, 50.0f), buttonTextOffsets);
     const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(20.0f, VectorGetX(buttonTextY), 0.0f, 0.0f));
     const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(154.0f, VectorGetY(buttonTextY), 0.0f, 0.0f));
     const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(20.0f, VectorGetZ(buttonTextY), 0.0f, 0.0f));
     const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(154.0f, VectorGetW(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle editOrigin = VectorAdd(origin, VectorSet(20.0f, 88.0f + (32.0f - edit->height) * 0.5f, 0.0f, 0.0f));
+    const SIMDVectorSingle editOffset = VectorAdd(VectorSet(20.0f, 88.0f, 0.0f, 0.0f), VectorScale(VectorSubtract(VectorSet(0.0f, 32.0f, 0.0f, 0.0f), VectorSet(0.0f, edit->height, 0.0f, 0.0f)), 0.5f));
+    const SIMDVectorSingle editOrigin = VectorAdd(origin, editOffset);
     const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), 244.0f, caption->height })
         && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin), 244.0f, korean->height });
     if(!captionPainted){

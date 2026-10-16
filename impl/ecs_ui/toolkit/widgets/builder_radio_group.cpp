@@ -207,9 +207,10 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
             continue;
         const SIMDVectorSingle sliceSize = VectorSet(static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.left) + skinRegion->sliceInsets.right), static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.top) + skinRegion->sliceInsets.bottom), 0.0f, 0.0f);
         const SIMDVectorSingle logicalSize = VectorDivide(sliceSize, VectorReplicate(m_skin->referenceDensity()));
-        const f32 horizontal = VectorGetX(logicalSize);
-        const f32 vertical = VectorGetY(logicalSize);
-        frame.m_style.indicatorExtent = Max(frame.m_style.indicatorExtent, Max(Max(skinRegion->minimumWidth, skinRegion->minimumHeight), Max(horizontal, vertical)));
+        const SIMDVectorSingle regionMinimum = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
+        const SIMDVectorSingle minimum = VectorMax(regionMinimum, VectorSplatY(regionMinimum));
+        const SIMDVectorSingle sliceMinimum = VectorMax(logicalSize, VectorSplatY(logicalSize));
+        frame.m_style.indicatorExtent = VectorGetX(VectorMax(VectorReplicate(frame.m_style.indicatorExtent), VectorMax(minimum, sliceMinimum)));
     }
     const auto metrics = RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
     if(!metrics)

@@ -20,6 +20,7 @@
 
 #include <global/simd/constant.h>
 #include <global/simd/frame.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,7 +106,9 @@ public:
         // Unlit materials keep the comparison independent of GI, shadows, and caustic histories.
         for(u32 stripe = 0u; stripe < 20u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
-            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(-2.85f + static_cast<f32>(stripe) * 0.3f, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 2.0f, 0.0f));
+            Float4 position;
+            StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.0f, 0.0f, 0.0f), VectorSet(0.3f, 0.0f, 0.0f, 0.0f), VectorSet(-2.85f, 1.4f, 2.8f, 0.0f)), position);
+            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), position, Float4(0.15f, 1.0f, 2.0f, 0.0f));
         }
         // Red foreground transparency must stay straight across the glass.
         // The blue strip is behind it and participates in the transmitted background.

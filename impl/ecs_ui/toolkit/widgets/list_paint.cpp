@@ -5,6 +5,7 @@
 #include "../builder.h"
 #include "selectable_paint.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -68,8 +69,9 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
         if(!candidate)
             return false;
         if(revealCursor){
-            const f64 start = static_cast<f64>(cursorIndex) * frame.rowHeight;
-            const f64 end = start + frame.rowHeight;
+            const SIMDVectorDouble startValue = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(cursorIndex)), VectorDoubleReplicate(frame.rowHeight));
+            const f64 start = VectorDoubleGetX(startValue);
+            const f64 end = VectorDoubleGetX(VectorDoubleAdd(startValue, VectorDoubleReplicate(frame.rowHeight)));
             if(!IsFinite(start) || !IsFinite(end) || end <= start || !scroll.ensureVisible(start, end, candidate->viewport.height))
                 return false;
         }
@@ -88,7 +90,8 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
             ListRow row(m_arena);
             if(!prepareListRow(frame, index, row))
                 return false;
-            height = Max(height, row.textBounds.height + frame.style.row.padding.top + frame.style.row.padding.bottom);
+            const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(row.textBounds.width, row.textBounds.height, 0.0f, 0.0f), VectorSet(frame.style.row.padding.left, frame.style.row.padding.top, 0.0f, 0.0f)), VectorSet(frame.style.row.padding.right, frame.style.row.padding.bottom, 0.0f, 0.0f));
+            height = VectorGetY(VectorMax(VectorSet(0.0f, height, 0.0f, 0.0f), paddedSize));
             rows.insert(found, Move(row));
         }
         if(!IsFinite(height) || height <= 0.0f || !listMatches(frame))
@@ -97,15 +100,16 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
             frame.scrollOffset = candidate->offset;
             // Another declaration can share this state with a different sizing context.
             if(state.m_measureKey == frame.measureKey)
-                state.m_rowHeight = Max(state.m_rowHeight, frame.rowHeight);
+                state.m_rowHeight = VectorGetX(VectorMax(VectorReplicate(state.m_rowHeight), VectorReplicate(frame.rowHeight)));
             placement = *candidate;
             return true;
         }
         // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
-        const f64 clippedTop = static_cast<f64>(candidate->contentClip.y) - candidate->viewport.y;
-        const f64 within = candidate->offset + clippedTop - static_cast<f64>(candidate->firstRow) * frame.rowHeight;
-        const f64 offset = static_cast<f64>(candidate->firstRow) * height + within - clippedTop;
-        if(!scroll.setOffset(Max(0.0, offset)))
+        const SIMDVectorDouble clippedTop = VectorDoubleSubtract(VectorDoubleReplicate(candidate->contentClip.y), VectorDoubleReplicate(candidate->viewport.y));
+        const SIMDVectorDouble rowOffsets = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(candidate->firstRow)), VectorDoubleSet(frame.rowHeight, height, 0.0, 0.0));
+        const SIMDVectorDouble within = VectorDoubleSubtract(VectorDoubleAdd(VectorDoubleReplicate(candidate->offset), clippedTop), VectorDoubleSplatX(rowOffsets));
+        const SIMDVectorDouble offset = VectorDoubleSubtract(VectorDoubleAdd(VectorDoubleSplatY(rowOffsets), within), clippedTop);
+        if(!scroll.setOffset(VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), offset))))
             return false;
         frame.rowHeight = height;
     }
@@ -145,8 +149,8 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     host.control = frame.token;
     host.navigable = item.enabled;
     host.scrollable = item.enabled;
-    host.scrollStep = static_cast<f64>(frame.rowHeight) * static_cast<f64>(frame.options.wheelRows);
-    const f64 page = Floor(static_cast<f64>(placement.viewport.height) / static_cast<f64>(frame.rowHeight));
+    host.scrollStep = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(frame.rowHeight), VectorDoubleReplicate(frame.options.wheelRows)));
+    const f64 page = VectorDoubleGetX(VectorDoubleFloor(VectorDoubleDivide(VectorDoubleReplicate(placement.viewport.height), VectorDoubleReplicate(frame.rowHeight))));
     host.pageRows = page >= static_cast<f64>(frame.rowCount) ? Max<u64>(1u, frame.rowCount) : Max<u64>(1u, static_cast<u64>(page));
     host.gestureMaximum = placement.maxOffset;
     host.focusOnCommit = frame.focusOnCommit;

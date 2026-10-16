@@ -12,7 +12,7 @@
 
 #include <core/common/log.h>
 
-#include <global/simplemath.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,14 +109,15 @@ bool StressCsgScene::update(Core::ECS::World& world, const f32 yaw){
         NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: nonfinite CSG cutter yaw"));
         return false;
     }
+    const SIMDVectorSingle phases = VectorAdd(VectorReplicate(yaw), VectorSet(0.0f, s_PI, 0.0f, 0.0f));
+    const SIMDVectorSingle heights = VectorMultiplyAddExpression(VectorSin(phases), VectorReplicate(__hidden_stress_csg_scene::s_CutterAmplitude), VectorReplicate(__hidden_stress_csg_scene::s_CutterHeight));
     for(usize row = 0u; row < LengthOf(m_cutters); ++row){
         auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(m_cutters[row]);
         if(!cutter){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG cutter disappeared"));
             return false;
         }
-        const f32 phase = yaw + (row == 0u ? 0.0f : s_PI);
-        const f32 height = __hidden_stress_csg_scene::s_CutterHeight + __hidden_stress_csg_scene::s_CutterAmplitude * Sin(phase);
+        const f32 height = row == 0u ? VectorGetX(heights) : VectorGetY(heights);
         AssignCsgCutterTransform(*cutter, VectorSet(0.0f, height, __hidden_stress_csg_scene::s_RowDepth[row], 0.0f), QuaternionIdentity());
     }
     return true;

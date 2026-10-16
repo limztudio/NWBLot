@@ -30,7 +30,7 @@ namespace __hidden_ui_scrollbar{
         !IsValidUiRect(bar.track) || !IsValidUiRect(bar.thumb)
         || !IsFinite(bar.contentExtent) || bar.contentExtent < 0.0
         || !IsFinite(bar.viewportExtent) || bar.viewportExtent < 0.0
-        || !IsFinite(bar.maximum) || bar.maximum != Max(0.0, bar.contentExtent - bar.viewportExtent)
+        || !IsFinite(bar.maximum) || bar.maximum != VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(bar.contentExtent), VectorDoubleReplicate(bar.viewportExtent))))
         || !IsFinite(bar.offset) || bar.offset < 0.0 || bar.offset > bar.maximum
         || (bar.viewportExtent > 0.0 && bar.maximum > 0.0 && bar.maximum >= bar.contentExtent)
     )
@@ -57,18 +57,21 @@ namespace __hidden_ui_scrollbar{
 }
 
 [[nodiscard]] static bool MoveThumb(const f64 offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
-    bar.offset = Min(offset, bar.maximum);
+    bar.offset = VectorDoubleGetX(VectorDoubleMin(VectorDoubleReplicate(offset), VectorDoubleReplicate(bar.maximum)));
     if(!bar.visible)
         return true;
     const f32 trackOrigin = axis == ScrollAxis::Horizontal ? bar.track.x : bar.track.y;
     const f32 trackExtent = axis == ScrollAxis::Horizontal ? bar.track.width : bar.track.height;
     const f32 thumbExtent = axis == ScrollAxis::Horizontal ? bar.thumb.width : bar.thumb.height;
-    const f64 travel = Max(0.0, static_cast<f64>(trackExtent) - thumbExtent);
-    const f64 position = static_cast<f64>(trackOrigin) + travel * (bar.offset / bar.maximum);
+    const SIMDVectorDouble travel = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(trackExtent), VectorDoubleReplicate(thumbExtent)));
+    const SIMDVectorDouble positionValue = VectorDoubleAdd(VectorDoubleReplicate(trackOrigin), VectorDoubleMultiply(travel, VectorDoubleDivide(VectorDoubleReplicate(bar.offset), VectorDoubleReplicate(bar.maximum))));
+    const f64 position = VectorDoubleGetX(positionValue);
     if(!IsFinite(position) || position < -Limit<f32>::s_Max || position > Limit<f32>::s_Max)
         return false;
-    const f32 lastOrigin = Max(trackOrigin, trackOrigin + trackExtent - thumbExtent);
-    const f32 origin = Clamp(static_cast<f32>(position), trackOrigin, lastOrigin);
+    const SIMDVectorSingle first = VectorReplicate(trackOrigin);
+    const SIMDVectorSingle last = VectorMax(first, VectorSubtract(VectorAdd(first, VectorReplicate(trackExtent)), VectorReplicate(thumbExtent)));
+    const SIMDVectorSingle positionSingle = VectorReplicate(static_cast<f32>(position));
+    const f32 origin = VectorGetX(VectorSelect(first, VectorMin(last, positionSingle), VectorGreater(positionSingle, first)));
     if(axis == ScrollAxis::Horizontal)
         bar.thumb.x = origin;
     else
@@ -80,7 +83,7 @@ namespace __hidden_ui_scrollbar{
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
-    candidate.maximum = Max(0.0, contentExtent - viewportExtent);
+    candidate.maximum = VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(contentExtent), VectorDoubleReplicate(viewportExtent))));
     if(!IsFinite(candidate.maximum) || (viewportExtent > 0.0 && candidate.maximum > 0.0 && candidate.maximum >= contentExtent))
         return MakeUnexpected(Failure{});
     candidate.visible = track.width > 0.0f && track.height > 0.0f;
@@ -89,13 +92,15 @@ namespace __hidden_ui_scrollbar{
             return MakeUnexpected(Failure{});
         candidate.track = track;
         const f64 length = axis == ScrollAxis::Horizontal ? track.width : track.height;
-        const f64 proportional = length * (viewportExtent / contentExtent);
-        const f32 thumbExtent = static_cast<f32>(Clamp(proportional, Min(static_cast<f64>(minThumb), length), length));
+        const SIMDVectorDouble lengthValue = VectorDoubleReplicate(length);
+        const SIMDVectorDouble proportional = VectorDoubleMultiply(lengthValue, VectorDoubleDivide(VectorDoubleReplicate(viewportExtent), VectorDoubleReplicate(contentExtent)));
+        const SIMDVectorDouble minimum = VectorDoubleMin(VectorDoubleReplicate(minThumb), lengthValue);
+        const f32 thumbExtent = static_cast<f32>(VectorDoubleGetX(VectorDoubleSelect(minimum, VectorDoubleMin(lengthValue, proportional), VectorDoubleGreater(proportional, minimum))));
         candidate.thumb = track;
         if(axis == ScrollAxis::Horizontal)
-            candidate.thumb.width = Min(thumbExtent, track.width);
+            candidate.thumb.width = VectorGetX(VectorMin(VectorReplicate(thumbExtent), VectorReplicate(track.width)));
         else
-            candidate.thumb.height = Min(thumbExtent, track.height);
+            candidate.thumb.height = VectorGetX(VectorMin(VectorReplicate(thumbExtent), VectorReplicate(track.height)));
     }
     if(!MoveThumb(offset, axis, candidate) || !ValidBar(candidate, axis))
         return MakeUnexpected(Failure{});
@@ -147,7 +152,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     const SIMDVectorDouble verticalWidthHorizontalHeightValue = VectorDoubleSelect(geometryPair4Operand1, geometryPair4Operand0, VectorDoubleLess(geometryPair4Operand0, geometryPair4Operand1));
     const f64 verticalWidth = VectorDoubleGetX(verticalWidthHorizontalHeightValue);
     const f64 horizontalHeight = VectorDoubleGetY(verticalWidthHorizontalHeightValue);
-    const f64 contentWidth = static_cast<f64>(contentMeasure.x) + caretWidth;
+    const f64 contentWidth = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(contentMeasure.x), VectorDoubleReplicate(caretWidth)));
     const f64 contentHeight = contentMeasure.y;
     if(!IsFinite(contentWidth))
         return MakeUnexpected(Failure{});
@@ -184,13 +189,13 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     Rect horizontalTrack;
     Rect verticalTrack;
     if(horizontal && viewportWidth > 0.0 && barHeight > 0.0){
-        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, static_cast<f64>(padded->y) + viewportHeight, viewportWidth, barHeight);
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->y), VectorDoubleReplicate(viewportHeight))), viewportWidth, barHeight);
         if(!track)
             return MakeUnexpected(Failure{});
         horizontalTrack = *track;
     }
     if(vertical && viewportHeight > 0.0 && barWidth > 0.0){
-        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(static_cast<f64>(padded->x) + viewportWidth, padded->y, barWidth, viewportHeight);
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->x), VectorDoubleReplicate(viewportWidth))), padded->y, barWidth, viewportHeight);
         if(!track)
             return MakeUnexpected(Failure{});
         verticalTrack = *track;

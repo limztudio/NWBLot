@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/edit/multiline_text.h>
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -95,7 +96,7 @@ namespace __hidden_ui_edit_caret_geometry{
             return false;
         previousBreak = line.breakEnd;
         previousBottom = line.top + line.height;
-        maximumAdvance = Max(maximumAdvance, line.advance);
+        maximumAdvance = VectorGetX(VectorMax(VectorReplicate(maximumAdvance), VectorReplicate(line.advance)));
     }
     return nextCluster == clusters.size() && nextGlyph == glyphs.size() && measure.x == maximumAdvance && measure.y == previousBottom;
 }
@@ -115,7 +116,7 @@ namespace __hidden_ui_edit_caret_geometry{
                 ++before;
         }
     }
-    return total == 0u ? 0.0f : static_cast<f32>(before) / static_cast<f32>(total);
+    return total == 0u ? 0.0f : VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(before)), VectorReplicate(static_cast<f32>(total))));
 }
 
 [[nodiscard]] static Expected<Rect> CaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries, const usize byte)noexcept{
@@ -148,7 +149,9 @@ namespace __hidden_ui_edit_caret_geometry{
                 const usize end = next == last ? cluster->byteEnd : *next;
                 ordinal += ScalarFraction(layout.utf8(), begin, end, byte);
             }
-            x = cluster->leadingX + (cluster->trailingX - cluster->leadingX) * ordinal / static_cast<f32>(intervals);
+            const SIMDVectorSingle leading = VectorReplicate(cluster->leadingX);
+            const SIMDVectorSingle span = VectorSubtract(VectorReplicate(cluster->trailingX), leading);
+            x = VectorGetX(VectorAdd(leading, VectorDivide(VectorMultiply(span, VectorReplicate(ordinal)), VectorReplicate(static_cast<f32>(intervals)))));
         }
     }
     if(!IsFinite(x))
@@ -173,10 +176,15 @@ namespace __hidden_ui_edit_caret_geometry{
     for(usize index = first + 1u; index < end; ++index){
         if(!IsFinite(stops[index].x) || stops[index].x < 0.0f)
             return MakeUnexpected(Failure{});
-        minimumX = Min(minimumX, stops[index].x);
-        maximumX = Max(maximumX, stops[index].x);
+        const SIMDVectorSingle extrema = VectorSet(minimumX, maximumX, 0.0f, 0.0f);
+        const SIMDVectorSingle candidate = VectorReplicate(stops[index].x);
+        const SIMDVectorSingle updated = VectorSelect(VectorMin(extrema, candidate), VectorMax(extrema, candidate), s_SIMDMaskY);
+        minimumX = VectorGetX(updated);
+        maximumX = VectorGetY(updated);
     }
-    const f32 queryX = Clamp(point.x, minimumX, maximumX);
+    const SIMDVectorSingle pointX = VectorReplicate(point.x);
+    const SIMDVectorSingle minimum = VectorReplicate(minimumX);
+    const f32 queryX = VectorGetX(VectorSelect(minimum, VectorMin(VectorReplicate(maximumX), pointX), VectorGreater(pointX, minimum)));
     f64 nearestY = Limit<f64>::s_Max;
     f32 nearestX = Limit<f32>::s_Max;
     usize result = 0u;
@@ -187,8 +195,9 @@ namespace __hidden_ui_edit_caret_geometry{
         const EditCaretLine& stopLine = lines[stop.lineIndex];
         if(!IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f || !IsFinite(stopLine.top + stopLine.height))
             return MakeUnexpected(Failure{});
-        const f64 distanceY = line.stopCount == 0u ? Abs(static_cast<f64>(point.y) - (static_cast<f64>(stopLine.top) + static_cast<f64>(stopLine.height) * 0.5)) : 0.0;
-        const f32 distanceX = Abs(queryX - stop.x);
+        const SIMDVectorDouble lineCenter = VectorDoubleAdd(VectorDoubleReplicate(stopLine.top), VectorDoubleMultiply(VectorDoubleReplicate(stopLine.height), VectorDoubleReplicate(0.5)));
+        const f64 distanceY = line.stopCount == 0u ? VectorDoubleGetX(VectorDoubleAbs(VectorDoubleSubtract(VectorDoubleReplicate(point.y), lineCenter))) : 0.0;
+        const f32 distanceX = VectorGetX(VectorAbs(VectorSubtract(VectorReplicate(queryX), VectorReplicate(stop.x))));
         if(distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
             nearestY = distanceY;
             nearestX = distanceX;
@@ -313,10 +322,12 @@ Expected<usize> EditCaretGeometry::verticalTarget(const usize displayCaret, cons
                 return stop.committedByte;
             }
         }
-        return nearestStop(current, { caret->x, caret->y + caret->height * 0.5f });
+        const f32 center = VectorGetX(VectorAdd(VectorReplicate(caret->y), VectorMultiply(VectorReplicate(caret->height), VectorReplicate(0.5f))));
+        return nearestStop(current, { caret->x, center });
     }
     const EditCaretLine& line = m_lines[target];
-    return nearestStop(target, { preferredX, line.top + line.height * 0.5f });
+    const f32 center = VectorGetX(VectorAdd(VectorReplicate(line.top), VectorMultiply(VectorReplicate(line.height), VectorReplicate(0.5f))));
+    return nearestStop(target, { preferredX, center });
 }
 
 Expected<Rect> EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u32 lineIndex, const f32 breakWidth)const noexcept{
@@ -343,7 +354,7 @@ Expected<Rect> EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u3
     const auto last = caretRect(end);
     if(!last)
         return MakeUnexpected(last.error());
-    const f32 width = Max(0.0f, last->x - first->x) + (selectedBreak ? breakWidth : 0.0f);
+    const f32 width = VectorGetX(VectorAdd(VectorMax(VectorZero(), VectorSubtract(VectorReplicate(last->x), VectorReplicate(first->x))), VectorReplicate(selectedBreak ? breakWidth : 0.0f)));
     if(!IsFinite(width) || !IsFinite(first->x + width))
         return MakeUnexpected(Failure{});
     return Rect{ first->x, line.top, width, line.height };

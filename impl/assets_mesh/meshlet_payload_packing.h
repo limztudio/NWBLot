@@ -110,7 +110,7 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] NWB_INLINE u32 PackMeshletConeCutoffUnorm8(const f32 value)noexcept{
-    return static_cast<u32>(Saturate(value) * s_MeshletUnorm8Max);
+    return static_cast<u32>(VectorGetX(VectorScale(VectorSaturate(VectorReplicate(value)), s_MeshletUnorm8Max)));
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FoldMeshletConeOctAxis(SIMDVectorSingle axis)noexcept{
@@ -148,7 +148,7 @@ namespace MeshletRefDeltaWidth{
     const SIMDVectorSingle unpackedAxis = UnpackMeshletConeOct16Axis(packedAxis);
     const SIMDVectorSingle normalizedAxis = Vector3NormalizeOr(axis, unpackedAxis, s_MeshletConeAxisLengthSquaredEpsilon);
     const SIMDVectorSingle axisDot = VectorClamp(Vector3Dot(normalizedAxis, unpackedAxis), s_SIMDNegativeOne, s_SIMDOne);
-    const SIMDVectorSingle safeCutoff = VectorReplicate(Saturate(cutoff));
+    const SIMDVectorSingle safeCutoff = VectorSaturate(VectorReplicate(cutoff));
     const SIMDVectorSingle cosineTerms = VectorMergeX(safeCutoff, axisDot, VectorZero(), VectorZero());
     const SIMDVectorSingle sineTerms = VectorSqrt(VectorMax(VectorZero(), VectorSubtract(s_SIMDOne, VectorMultiply(cosineTerms, cosineTerms))));
     const SIMDVectorSingle conservativeCutoff = VectorSubtract(VectorMultiply(safeCutoff, axisDot), VectorMultiply(VectorSplatX(sineTerms), VectorSplatY(sineTerms)));

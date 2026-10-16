@@ -90,36 +90,37 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
     const SIMDVectorSingle visualSize = VectorSet(m_visualBounds.width, m_visualBounds.height, 0.0f, 0.0f);
     const SIMDVectorSingle overhangExtent = VectorSubtract(VectorAdd(visualBoundsOrigin, visualSize), VectorSet(logicalSize.x, logicalSize.y, 0.0f, 0.0f));
     const SIMDVectorSingle overhang = VectorSelect(overhangExtent, VectorZero(), VectorGreater(VectorZero(), overhangExtent));
-    const f32 rightOverhang = VectorGetX(overhang);
-    const f32 bottomOverhang = VectorGetY(overhang);
-    const f32 maximumScroll = Max(0.0f, m_visualBounds.width + caretWidth - placement.content.width);
+    const SIMDVectorSingle caretExtent = VectorSet(caretWidth, caret->height, 0.0f, 0.0f);
+    const SIMDVectorSingle maximumScrolls = VectorMax(VectorZero(), VectorSubtract(VectorAdd(visualSize, VectorSet(caretWidth, 0.0f, 0.0f, 0.0f)), VectorSet(placement.content.width, placement.content.height, 0.0f, 0.0f)));
+    const f32 maximumScroll = VectorGetX(maximumScrolls);
     // Scroll offsets start at the visual envelope; reveal its overhang with the logical caret at either text edge.
-    const f32 caretEndX = caret->x - m_visualBounds.x + caretWidth + rightOverhang;
+    const SIMDVectorSingle caretEnds = VectorAdd(VectorAdd(VectorSubtract(VectorSet(caret->x, caret->y, 0.0f, 0.0f), visualBoundsOrigin), caretExtent), overhang);
+    const f32 caretEndX = VectorGetX(caretEnds);
     if(!IsFinite(maximumScroll) || !IsFinite(caretEndX))
         return MakeUnexpected(Failure{});
-    placement.scroll = Clamp(previousScroll.x, 0.0f, maximumScroll);
+    placement.scroll = VectorGetX(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f)), VectorGreater(VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f), VectorZero())));
     if(revealCaret && caret->x < placement.scroll)
         placement.scroll = caret->x;
     if(revealCaret && caretEndX > placement.scroll + placement.content.width)
         placement.scroll = caretEndX - placement.content.width;
-    placement.scroll = Clamp(placement.scroll, 0.0f, maximumScroll);
+    placement.scroll = VectorGetX(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorReplicate(placement.scroll)), VectorGreater(VectorReplicate(placement.scroll), VectorZero())));
     if(m_textMode == EditTextMode::Multiline){
-        const f32 maximumScrollY = Max(0.0f, m_visualBounds.height - placement.content.height);
-        const f32 caretEndY = caret->y - m_visualBounds.y + caret->height + bottomOverhang;
+        const f32 maximumScrollY = VectorGetY(maximumScrolls);
+        const f32 caretEndY = VectorGetY(caretEnds);
         if(!IsFinite(maximumScrollY) || !IsFinite(caretEndY))
             return MakeUnexpected(Failure{});
-        placement.scrollY = Clamp(previousScroll.y, 0.0f, maximumScrollY);
+        placement.scrollY = VectorGetY(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f)), VectorGreater(VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f), VectorZero())));
         if(revealCaret && caret->y < placement.scrollY)
             placement.scrollY = caret->y;
         if(revealCaret && caretEndY > placement.scrollY + placement.content.height)
             placement.scrollY = caretEndY - placement.content.height;
-        placement.scrollY = Clamp(placement.scrollY, 0.0f, maximumScrollY);
+        placement.scrollY = VectorGetY(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorReplicate(placement.scrollY)), VectorGreater(VectorReplicate(placement.scrollY), VectorZero())));
         const SIMDVectorSingle visualOrigin = VectorSubtract(VectorSet(left, top, left, top), VectorSet(m_visualBounds.x, m_visualBounds.y, m_visualBounds.x, m_visualBounds.y));
         const SIMDVectorSingle origin = VectorSubtract(visualOrigin, VectorSet(placement.scroll, placement.scrollY, placement.scroll, placement.scrollY));
         placement.textOrigin = { VectorGetX(origin), VectorGetY(origin) };
     }
     else{
-        const f32 verticalOffset = Max(0.0f, (placement.content.height - m_visualBounds.height) * 0.5f);
+        const f32 verticalOffset = VectorGetY(VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(placement.content.width, placement.content.height, 0.0f, 0.0f), visualSize), 0.5f)));
         const SIMDVectorSingle baseOrigin = VectorSubtract(VectorSet(left, top, 0.0f, 0.0f), visualBoundsOrigin);
         const SIMDVectorSingle scrolled = VectorSubtract(baseOrigin, VectorSet(placement.scroll, 0.0f, 0.0f, 0.0f));
         const SIMDVectorSingle centered = VectorAdd(baseOrigin, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
@@ -142,8 +143,9 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
             return MakeUnexpected(underline.error());
         preeditUnderline = *underline;
         if(preeditUnderline.width > 0.0f){
-            const f32 thickness = Min(caretWidth, preeditUnderline.height);
-            const f32 verticalOffset = placement.textOrigin.y + Max(0.0f, preeditUnderline.height - thickness);
+            const f32 thickness = VectorGetX(VectorMin(VectorReplicate(caretWidth), VectorReplicate(preeditUnderline.height)));
+            const SIMDVectorSingle underlineOffset = VectorMax(VectorZero(), VectorSubtract(VectorSet(0.0f, preeditUnderline.height, 0.0f, 0.0f), VectorSet(0.0f, thickness, 0.0f, 0.0f)));
+            const f32 verticalOffset = VectorGetY(VectorAdd(VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f), underlineOffset));
             const SIMDVectorSingle underlineOrigin = VectorAdd(VectorSet(preeditUnderline.x, preeditUnderline.y, preeditUnderline.x, preeditUnderline.y), VectorSet(placement.textOrigin.x, verticalOffset, placement.textOrigin.x, verticalOffset));
             preeditUnderline.x = VectorGetX(underlineOrigin);
             preeditUnderline.y = VectorGetY(underlineOrigin);

@@ -11,6 +11,8 @@
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
+#include <global/simd/vector.h>
+
 #include "renderer_gather_benchmark_probe.h"
 #include "renderer_compiler_statistics_probe.h"
 #include "smoke_project_helpers.h"
@@ -135,7 +137,10 @@ public:
         if(!createBackdrop())
             return false;
         for(u32 index = 0u; index < s_ObjectCount; ++index){
-            const Float4 position((static_cast<f32>(index % 8u) - 3.5f) * 0.75f, 0.7f + static_cast<f32>(index / 8u) * 0.58f, 0.f, 0.f);
+            const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(index % 8u), static_cast<f32>(index / 8u), 0.f, 0.f), VectorSet(3.5f, 0.f, 0.f, 0.f));
+            const SIMDVectorSingle spacing = VectorMultiply(grid, VectorSet(0.75f, 0.58f, 0.f, 0.f));
+            Float4 position;
+            StoreFloat(VectorAdd(VectorSet(0.f, 0.7f, 0.f, 0.f), spacing), position);
             if(m_runtime && index % 8u == 0u){
                 if(!createRuntime(index, position))
                     return false;
@@ -164,7 +169,9 @@ public:
             ++m_renderers;
             if(workload == "overrides"){
                 entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, Name(s_Interface));
-                if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint", Float4(0.55f + static_cast<f32>(index) / 256.f, 0.85f, 1.f, 1.f)))
+                Float4 tint;
+                StoreFloat(VectorAdd(VectorSet(0.55f, 0.85f, 1.f, 1.f), VectorDivide(VectorSet(static_cast<f32>(index), 0.f, 0.f, 0.f), VectorReplicate(256.f))), tint);
+                if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint", tint))
                     return false;
             }
         }

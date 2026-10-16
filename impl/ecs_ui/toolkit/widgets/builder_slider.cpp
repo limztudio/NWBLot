@@ -112,7 +112,7 @@ bool Builder::prepareSlider(SliderFrame& frame){
     const auto trackMinimum = __hidden_builder_slider::MinimumSize(*track, m_skin->referenceDensity());
     if(!trackMinimum)
         return false;
-    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum->y);
+    frame.m_style.trackHeight = VectorGetY(VectorMax(VectorSet(trackMinimum->x, frame.m_style.trackHeight, 0.0f, 0.0f), VectorSet(trackMinimum->x, trackMinimum->y, 0.0f, 0.0f)));
     const UiSkinRegion* thumbs[]{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
@@ -129,10 +129,12 @@ bool Builder::prepareSlider(SliderFrame& frame){
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + frame.m_metrics.padding.right + frame.m_metrics.thumbExtent.x + trackMinimum->x;
+    const SIMDVectorDouble paddedSize = VectorDoubleAdd(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleSet(frame.m_metrics.padding.left, frame.m_metrics.padding.top, 0.0, 0.0), VectorDoubleSet(frame.m_metrics.padding.right, frame.m_metrics.padding.bottom, 0.0, 0.0)), VectorDoubleSet(frame.m_metrics.thumbExtent.x, frame.m_metrics.thumbExtent.y, 0.0, 0.0)), VectorDoubleSet(trackMinimum->x, 0.0, 0.0, 0.0));
+    const f64 width = VectorDoubleGetX(paddedSize);
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;
-    frame.m_metrics.contentSize.x = Max(frame.m_metrics.contentSize.x, static_cast<f32>(width));
+    const SIMDVectorSingle contentSize = VectorMax(VectorSet(frame.m_metrics.contentSize.x, frame.m_metrics.contentSize.y, 0.0f, 0.0f), VectorSet(static_cast<f32>(width), frame.m_metrics.contentSize.y, 0.0f, 0.0f));
+    frame.m_metrics.contentSize = { VectorGetX(contentSize), VectorGetY(contentSize) };
     return sliderMatches(frame);
 }
 

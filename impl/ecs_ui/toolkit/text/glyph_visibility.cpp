@@ -95,7 +95,11 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
         if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
             return TextGlyphIntersection::Visible;
     }
-    const f64 shapedSize = Floor(static_cast<f64>(fontSize) * 64.0 + 0.5) / 64.0;
+    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(
+        VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(64.0)), VectorDoubleReplicate(0.5))),
+        VectorDoubleReplicate(64.0)
+    );
+    const f64 shapedSize = VectorDoubleGetX(shapedSizeValue);
     const SIMDVectorDouble scaleNumerators = VectorDoubleSet(glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize), physicalSize, glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize), 0.0);
     const SIMDVectorDouble scaleDenominators = VectorDoubleSet(glyph.coverage.known ? 1.0 : shapedSize, fontSize, glyph.coverage.known ? 1.0 : static_cast<f64>(glyph.face->unitsPerEm()), 1.0);
     const SIMDVectorDouble scales = VectorDoubleDivide(scaleNumerators, scaleDenominators);
@@ -103,7 +107,14 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
     const f64 rasterScale = VectorDoubleGetY(scales);
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const f64 designMargin = VectorDoubleGetZ(scales);
-    const f64 rasterMargin = Max(1.0, correction) / 64.0 + 2.0 / rasterScale + designMargin;
+    const SIMDVectorDouble rasterMarginValue = VectorDoubleAdd(
+        VectorDoubleAdd(
+            VectorDoubleDivide(VectorDoubleMax(VectorDoubleSplatOne(), VectorDoubleReplicate(correction)), VectorDoubleReplicate(64.0)),
+            VectorDoubleDivide(VectorDoubleReplicate(2.0), VectorDoubleReplicate(rasterScale))
+        ),
+        VectorDoubleReplicate(designMargin)
+    );
+    const f64 rasterMargin = VectorDoubleGetX(rasterMarginValue);
     const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0);
     const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleSet(rasterMargin, rasterMargin, 0.0, 0.0), VectorDoubleDivide(VectorDoubleSet(0.5, 0.5, 0.0, 0.0), pixelScaleVector));
     const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);

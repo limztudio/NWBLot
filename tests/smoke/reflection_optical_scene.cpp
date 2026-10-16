@@ -12,6 +12,7 @@
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +101,9 @@ static Core::ECS::EntityID CreateBox(ProjectRuntimeContext& context, Core::ECS::
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested, const i32 priority = 0,
     const f32 xyScale = 1.f
 ){
-    return CreateBoundary(context, world, s_Box, Float4(0.f, 1.4f, centerZ, 0.f), Float4(24.f * xyScale, 18.f * xyScale, thickness, 0.f), ior, transmission, mode, priority);
+    Float4 scale;
+    StoreFloat(VectorSetZ(VectorScale(VectorSet(24.f, 18.f, 0.f, 0.f), xyScale), thickness), scale);
+    return CreateBoundary(context, world, s_Box, Float4(0.f, 1.4f, centerZ, 0.f), scale, ior, transmission, mode, priority);
 }
 
 static Expected<OpticalReceiverEntities> CreateDenseReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const bool csg){
@@ -359,7 +362,10 @@ bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::Wor
     if(caseName != "optical_tir"){
         for(u32 stripe = 0u; stripe < 31u; ++stripe){
             const Float4 color = stripe == 15u ? Float4(0.9f, 0.9f, 0.9f, 1.f) : Float4(stripe % 3u == 0u ? 0.9f : 0.f, stripe % 3u == 1u ? 0.9f : 0.f, stripe % 3u == 2u ? 0.9f : 0.f, 1.f);
-            if(!CreatePanel(context, world, color, Float4((static_cast<f32>(stripe) - 15.f) * 0.8f, 1.4f, -14.f, 0.f), Float4(0.4f, 1.f, 8.f, 0.f)).valid())
+            const SIMDVectorSingle stripeOffset = VectorScale(VectorSubtract(VectorSet(static_cast<f32>(stripe), 0.f, 0.f, 0.f), VectorSet(15.f, 0.f, 0.f, 0.f)), 0.8f);
+            Float4 position;
+            StoreFloat(VectorSetZ(VectorSetY(stripeOffset, 1.4f), -14.f), position);
+            if(!CreatePanel(context, world, color, position, Float4(0.4f, 1.f, 8.f, 0.f)).valid())
                 return false;
         }
     }

@@ -62,8 +62,10 @@ struct Box{
 }
 
 [[nodiscard]] static bool CreateReferencePieces(ProjectRuntimeContext& context, Core::ECS::World& world, const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint){
-    const Float3U lower(Max(box.minimum.x, cutter.minimum.x), Max(box.minimum.y, cutter.minimum.y), Max(box.minimum.z, cutter.minimum.z));
-    const Float3U upper(Min(box.maximum.x, cutter.maximum.x), Min(box.maximum.y, cutter.maximum.y), Min(box.maximum.z, cutter.maximum.z));
+    Float3U lower;
+    Float3U upper;
+    StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), lower);
+    StoreFloat(VectorMin(LoadFloat(box.maximum), LoadFloat(cutter.maximum)), upper);
     // Ordinary closed pieces provide independent triangle geometry for the same subtraction union.
     const Box pieces[] = {
         { box.minimum, Float3U(lower.x, box.maximum.y, box.maximum.z) },
@@ -93,8 +95,11 @@ struct Box{
         return false;
     AddStaticCsgMeshReceiver(world, receiver, s_Groups[slot], true, false);
     // Two overlapping cutters form one opening; their internal union seam must not become a GI surface.
-    const f32 overlapBegin = cutter.minimum.x + (cutter.maximum.x - cutter.minimum.x) * 0.35f;
-    const f32 overlapEnd = cutter.minimum.x + (cutter.maximum.x - cutter.minimum.x) * 0.65f;
+    const SIMDVectorSingle cutterBegin = VectorReplicate(cutter.minimum.x);
+    const SIMDVectorSingle cutterSpan = VectorSubtract(VectorReplicate(cutter.maximum.x), cutterBegin);
+    const SIMDVectorSingle overlap = VectorMultiplyAddExpression(cutterSpan, VectorSet(0.35f, 0.65f, 0.0f, 0.0f), cutterBegin);
+    const f32 overlapBegin = VectorGetX(overlap);
+    const f32 overlapEnd = VectorGetY(overlap);
     const Box cuts[] = {
         { cutter.minimum, Float3U(overlapEnd, cutter.maximum.y, cutter.maximum.z) },
         { Float3U(overlapBegin, cutter.minimum.y, cutter.minimum.z), cutter.maximum },
@@ -214,8 +219,11 @@ Expected<bool> CsgGiScene::start(){
         return MakeUnexpected(Failure{});
     for(u32 slot = 0u; slot < 2u; ++slot){
         const f32 x = slot == 0u ? -1.3f : 1.3f;
-        const Box receiver{ Float3U(x - 0.9f, 0.3f, -0.8f), Float3U(x + 0.9f, 2.3f, 0.8f) };
-        const Box cutter{ Float3U(x - 0.65f, 0.55f, -1.0f), Float3U(x + 0.65f, 2.05f, slot == 0u ? 1.0f : 0.4f) };
+        const SIMDVectorSingle halfWidths = VectorSet(0.9f, 0.65f, 0.0f, 0.0f);
+        const SIMDVectorSingle minimumX = VectorSubtract(VectorReplicate(x), halfWidths);
+        const SIMDVectorSingle maximumX = VectorAdd(VectorReplicate(x), halfWidths);
+        const Box receiver{ Float3U(VectorGetX(minimumX), 0.3f, -0.8f), Float3U(VectorGetX(maximumX), 2.3f, 0.8f) };
+        const Box cutter{ Float3U(VectorGetY(minimumX), 0.55f, -1.0f), Float3U(VectorGetY(maximumX), 2.05f, slot == 0u ? 1.0f : 0.4f) };
         if(!CreateSubtraction(m_context, m_world, receiver, cutter, slot, arm))
             return MakeUnexpected(Failure{});
     }

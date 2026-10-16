@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -33,7 +34,7 @@ bool Builder::separator(const AStringView stableKey, const SeparatorOptions& opt
     }
     const bool horizontal = options.direction == SeparatorDirection::Horizontal;
     const f32 minimum = horizontal ? skinRegion->minimumHeight : skinRegion->minimumWidth;
-    const f32 thickness = options.thickness > 0.0f ? options.thickness : Max(1.0f, minimum);
+    const f32 thickness = options.thickness > 0.0f ? options.thickness : VectorGetX(VectorMax(VectorSplatOne(), VectorReplicate(minimum)));
     Item item(m_arena);
     item.style = m_style;
     item.state = *state;

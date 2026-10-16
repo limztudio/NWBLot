@@ -135,6 +135,7 @@ struct EncodedMip{
         return filtered;
 
     const u32 sourceDepth = static_cast<u32>(source.size());
+    const SIMDVectorSingle inverseDepth = VectorDivide(s_SIMDOne, VectorReplicate(static_cast<f32>(sourceDepth)));
     const u32 targetDepth = sourceDepth >> 1u;
     FloatPlanes target;
     target.resize(targetDepth);
@@ -156,7 +157,7 @@ struct EncodedMip{
                     const f32 overlap = static_cast<f32>(Min(intervalEnd, slabEnd) - Max(intervalBegin, slabBegin));
                     sum = VectorAdd(sum, VectorScale(VectorSet(color[0u], color[1u], color[2u], color[3u]), overlap));
                 }
-                const SIMDVectorSingle mean = VectorScale(sum, 1.0f / static_cast<f32>(sourceDepth));
+                const SIMDVectorSingle mean = VectorMultiply(sum, inverseDepth);
                 plane(x, y).set(VectorGetX(mean), VectorGetY(mean), VectorGetZ(mean), VectorGetW(mean));
             }
         }

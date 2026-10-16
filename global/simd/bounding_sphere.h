@@ -101,7 +101,7 @@
         return MakeUnexpected(Failure{});
 
     const SIMDVectorSingle distance = VectorSubtract(VectorNegate(bVector), VectorSqrt(discriminantVector));
-    return Max(0.0f, VectorGetX(distance));
+    return VectorGetX(VectorMax(VectorZero(), distance));
 }
 
 [[nodiscard]] inline Expected<f64> NWB_SIMD_CALL BoundingDoubleSphere::IntersectsRayValue(SIMDVectorDouble sphereValue, SIMDVectorDouble origin, SIMDVectorDouble direction)noexcept{
@@ -117,7 +117,7 @@
         return MakeUnexpected(Failure{});
 
     const SIMDVectorDouble distance = VectorDoubleSubtract(VectorDoubleNegate(bVector), VectorDoubleSqrt(discriminantVector));
-    return Max(0.0, VectorDoubleGetX(distance));
+    return VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), distance));
 }
 
 

@@ -37,7 +37,7 @@ namespace __hidden_ui_slider_layout{
     )
         return false;
     const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0), VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0));
-    const SIMDVectorDouble size = VectorDoubleAdd(padding, VectorDoubleSet(metrics.thumbExtent.x, Max(static_cast<f64>(metrics.thumbExtent.y), static_cast<f64>(metrics.trackHeight)), 0.0, 0.0));
+    const SIMDVectorDouble size = VectorDoubleAdd(padding, VectorDoubleMax(VectorDoubleSet(metrics.thumbExtent.x, metrics.thumbExtent.y, 0.0, 0.0), VectorDoubleSet(metrics.thumbExtent.x, metrics.trackHeight, 0.0, 0.0)));
     const f64 width = VectorDoubleGetX(size);
     const f64 height = VectorDoubleGetY(size);
     return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height);
@@ -68,7 +68,7 @@ Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, cons
     candidate.thumbExtent = style.thumbExtent;
     candidate.trackHeight = style.trackHeight;
     const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(style.padding.left, style.padding.top, 0.0, 0.0), VectorDoubleSet(style.padding.right, style.padding.bottom, 0.0, 0.0));
-    const SIMDVectorDouble intrinsic = VectorDoubleAdd(padding, VectorDoubleSet(style.thumbExtent.x, Max(static_cast<f64>(style.thumbExtent.y), static_cast<f64>(style.trackHeight)), 0.0, 0.0));
+    const SIMDVectorDouble intrinsic = VectorDoubleAdd(padding, VectorDoubleMax(VectorDoubleSet(style.thumbExtent.x, style.thumbExtent.y, 0.0, 0.0), VectorDoubleSet(style.thumbExtent.x, style.trackHeight, 0.0, 0.0)));
     const SIMDVectorDouble minimum = VectorDoubleSet(VectorDoubleGetX(intrinsic), options.height, 0.0, 0.0);
     const SIMDVectorDouble size = VectorDoubleSelect(intrinsic, minimum, VectorDoubleGreater(minimum, intrinsic));
     const f64 width = VectorDoubleGetX(size);
@@ -108,10 +108,12 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     const SIMDVectorDouble thumbWidthThumbHeightValue = VectorDoubleSelect(geometryPair4Operand1, geometryPair4Operand0, VectorDoubleLess(geometryPair4Operand0, geometryPair4Operand1));
     const f64 thumbWidth = VectorDoubleGetX(thumbWidthThumbHeightValue);
     const f64 thumbHeight = VectorDoubleGetY(thumbWidthThumbHeightValue);
-    const f64 trackHeight = Min(static_cast<f64>(metrics.trackHeight), height);
-    const f64 travel = width - thumbWidth;
-    const f64 centerStart = x + thumbWidth * 0.5;
-    const f64 thumbX = normalized == 0.0 ? x : normalized == 1.0 ? x + travel : x + travel * normalized;
+    const f64 trackHeight = VectorDoubleGetY(VectorDoubleMin(VectorDoubleSet(width, metrics.trackHeight, 0.0, 0.0), widthHeightValue));
+    const f64 travel = VectorDoubleGetX(VectorDoubleSubtract(widthHeightValue, thumbWidthThumbHeightValue));
+    const SIMDVectorDouble offsets = VectorDoubleMultiply(VectorDoubleSet(thumbWidth, travel, 0.0, 0.0), VectorDoubleSet(0.5, normalized, 0.0, 0.0));
+    const SIMDVectorDouble centers = VectorDoubleAdd(VectorDoubleReplicate(x), offsets);
+    const f64 centerStart = VectorDoubleGetX(centers);
+    const f64 thumbX = normalized == 0.0 ? x : normalized == 1.0 ? VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(x), VectorDoubleReplicate(travel))) : VectorDoubleGetY(centers);
     const auto travelBounds = MakeUiRect<UiRectPrecision::PreciseExtents>(x, y, width, height);
     if(!travelBounds)
         return MakeUnexpected(Failure{});

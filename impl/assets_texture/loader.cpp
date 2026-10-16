@@ -32,7 +32,6 @@ namespace __hidden_texture_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(sizeof(basist::half_float) == sizeof(u16), "Basis HDR output must use 16-bit half components");
 static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
 
 Futex s_BasisTranscoderInitializationMutex;
@@ -58,11 +57,6 @@ static void InitializeBasisTranscoder(){
     return (device.queryFormatSupport(format) & s_RequiredTextureFormatSupport) == s_RequiredTextureFormatSupport;
 }
 
-[[nodiscard]] static Core::Format::Enum PickColorSpaceFormat(Core::Device& device, const TextureColorSpace::Enum colorSpace, const Core::Format::Enum srgbFormat, const Core::Format::Enum linearFormat){
-    const Core::Format::Enum format = colorSpace == TextureColorSpace::Srgb ? srgbFormat : linearFormat;
-    return SupportsTextureFormat(device, format) ? format : Core::Format::UNKNOWN;
-}
-
 [[nodiscard]] static Core::Format::Enum SelectUploadFormat(Core::Device& device, const Texture& textureAsset){
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4){
         if(textureAsset.alphaMode() == TextureAlphaMode::Opaque){
@@ -76,19 +70,13 @@ static void InitializeBasisTranscoder(){
     if(textureAsset.payloadFormat() != TexturePayloadFormat::UastcLdr4x4)
         return Core::Format::UNKNOWN;
 
-    const Core::Format::Enum astcFormat = PickColorSpaceFormat(device, textureAsset.colorSpace(), Core::Format::ASTC_4x4_UNORM_SRGB, Core::Format::ASTC_4x4_UNORM);
-    if(astcFormat != Core::Format::UNKNOWN)
-        return astcFormat;
+    if(SupportsTextureFormat(device, Core::Format::ASTC_4x4_UNORM))
+        return Core::Format::ASTC_4x4_UNORM;
 
-    const Core::Format::Enum bcFormat = PickColorSpaceFormat(device, textureAsset.colorSpace(), Core::Format::BC7_UNORM_SRGB, Core::Format::BC7_UNORM);
-    if(bcFormat != Core::Format::UNKNOWN)
-        return bcFormat;
+    if(SupportsTextureFormat(device, Core::Format::BC7_UNORM))
+        return Core::Format::BC7_UNORM;
 
-    return PickColorSpaceFormat(device, textureAsset.colorSpace(), Core::Format::RGBA8_UNORM_SRGB, Core::Format::RGBA8_UNORM);
-}
-
-[[nodiscard]] static Core::Format::Enum SelectRgbaUploadFormat(Core::Device& device, const TextureColorSpace::Enum colorSpace){
-    return PickColorSpaceFormat(device, colorSpace, Core::Format::RGBA8_UNORM_SRGB, Core::Format::RGBA8_UNORM);
+    return SupportsTextureFormat(device, Core::Format::RGBA8_UNORM) ? Core::Format::RGBA8_UNORM : Core::Format::UNKNOWN;
 }
 
 [[nodiscard]] static Core::Format::Enum SelectHdrOpaqueUploadFallback(Core::Device& device, const Core::Format::Enum failedFormat){
@@ -99,14 +87,11 @@ static void InitializeBasisTranscoder(){
     return Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(Core::Device& device, const Core::Format::Enum failedFormat, const TextureColorSpace::Enum colorSpace){
-    const Core::Format::Enum bcFormat = PickColorSpaceFormat(device, colorSpace, Core::Format::BC7_UNORM_SRGB, Core::Format::BC7_UNORM);
-    if(Core::Format::IsAstc4x4LdrFormat(failedFormat) && bcFormat != Core::Format::UNKNOWN)
-        return bcFormat;
-
-    const Core::Format::Enum rgbaFormat = SelectRgbaUploadFormat(device, colorSpace);
-    if(failedFormat != rgbaFormat)
-        return rgbaFormat;
+[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(Core::Device& device, const Core::Format::Enum failedFormat){
+    if(failedFormat == Core::Format::ASTC_4x4_UNORM && SupportsTextureFormat(device, Core::Format::BC7_UNORM))
+        return Core::Format::BC7_UNORM;
+    if(failedFormat != Core::Format::RGBA8_UNORM && SupportsTextureFormat(device, Core::Format::RGBA8_UNORM))
+        return Core::Format::RGBA8_UNORM;
     return Core::Format::UNKNOWN;
 }
 
@@ -115,12 +100,11 @@ static void InitializeBasisTranscoder(){
     Core::TextureDesc& textureDesc,
     Core::Device& device,
     Core::Format::Enum& inOutFormat,
-    Core::Format::Enum (*selectFallback)(Core::Device&, Core::Format::Enum, const void*),
-    const void* fallbackContext
+    Core::Format::Enum (*selectFallback)(Core::Device&, Core::Format::Enum)
 ){
     Core::TextureHandle texture;
     for(;;){
-        const Core::Format::Enum fallbackFormat = selectFallback(device, inOutFormat, fallbackContext);
+        const Core::Format::Enum fallbackFormat = selectFallback(device, inOutFormat);
         if(fallbackFormat == Core::Format::UNKNOWN)
             break;
         textureDesc.setFormat(fallbackFormat);
@@ -130,15 +114,6 @@ static void InitializeBasisTranscoder(){
             break;
     }
     return texture;
-}
-
-[[nodiscard]] static Core::Format::Enum SelectLdrFallbackThunk(Core::Device& device, Core::Format::Enum failedFormat, const void* context){
-    const TextureColorSpace::Enum* colorSpace = static_cast<const TextureColorSpace::Enum*>(context);
-    return SelectLdrUploadFallback(device, failedFormat, *colorSpace);
-}
-
-[[nodiscard]] static Core::Format::Enum SelectHdrOpaqueFallbackThunk(Core::Device& device, Core::Format::Enum failedFormat, const void*){
-    return SelectHdrOpaqueUploadFallback(device, failedFormat);
 }
 
 [[nodiscard]] static Core::GraphicsRuntime::TextureUploadRegion MakeMipUploadRegion(const u8* data, const usize dataSize, const u32 rowPitch, const u32 sliceByteCount, const u32 arraySlice, const u32 mipLevel)noexcept{
@@ -221,12 +196,11 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
         textureDesc.setDepth(textureAsset.depth());
 
     Core::TextureHandle texture = graphics.createTexture(textureDesc);
-    if(!texture && textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && Core::Format::IsLdrCompressedFormat(format)){
-        const TextureColorSpace::Enum colorSpace = textureAsset.colorSpace();
-        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(graphics, textureDesc, device, format, &__hidden_texture_loader::SelectLdrFallbackThunk, &colorSpace);
+    if(!texture && textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && format != Core::Format::RGBA8_UNORM){
+        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(graphics, textureDesc, device, format, &__hidden_texture_loader::SelectLdrUploadFallback);
     }
     if(!texture && textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4 && textureAsset.alphaMode() == TextureAlphaMode::Opaque){
-        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(graphics, textureDesc, device, format, &__hidden_texture_loader::SelectHdrOpaqueFallbackThunk, nullptr);
+        texture = __hidden_texture_loader::CreateTextureWithFormatFallback(graphics, textureDesc, device, format, &__hidden_texture_loader::SelectHdrOpaqueUploadFallback);
     }
     if(!texture){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), owner, StringConvert(imageName.resolvedText()));

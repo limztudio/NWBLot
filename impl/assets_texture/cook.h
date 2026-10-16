@@ -31,20 +31,15 @@ struct TextureCookEntry{
     u32 width = 0u;
     u32 height = 0u;
     u32 depth = 1u;
-
-    TextureColorSpace::Enum colorSpace = TextureColorSpace::Linear;
     TextureDimension::Enum dimension = TextureDimension::Texture2D;
     TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+    u32 mipCount = 0u;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    bool hasAlpha = false;
     u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-
-    Texture::MipLevelVector mipLevels;
     Core::Assets::AssetBytes payloadBytes;
 
     explicit TextureCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : mipLevels(arena)
-        , payloadBytes(arena)
+        : payloadBytes(arena)
     {}
 };
 
@@ -53,7 +48,7 @@ struct TextureCookEntry{
 
 
 [[nodiscard]] Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<Texture> BuildTextureAsset(TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

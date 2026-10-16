@@ -22,7 +22,6 @@
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets_texture/asset.h>
-#include <impl/assets_texture/binary_payload.h>
 #include <impl/assets_texture/cook.h>
 #include <impl/assets_sampler/asset.h>
 #include <impl/assets_sampler/binary_payload.h>

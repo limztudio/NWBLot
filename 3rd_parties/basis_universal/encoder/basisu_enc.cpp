@@ -3934,110 +3934,148 @@ namespace basisu
 		return write_vec_to_file(pFilename, file_data);
 	}
 
-	bool read_exr(const char* pFilename, imagef& img, int& n_chans)
+	static bool read_exr_data(const void* pMem, size_t mem_size, imagef& img, int& n_chans, const char* pFilename)
 	{
 		n_chans = 0;
-
-		int width = 0, height = 0;
-		float* out_rgba = nullptr;
-		const char* err = nullptr;
-
-		int status = LoadEXRWithLayer(&out_rgba, &width, &height, pFilename, nullptr, &err);
-		if (status != 0)
+		const char* source_name = pFilename ? pFilename : "memory";
+		const unsigned char* source = static_cast<const unsigned char*>(pMem);
+		EXRVersion version;
+		int status = ParseEXRVersionFromMemory(&version, source, mem_size);
+		if (status != TINYEXR_SUCCESS || version.multipart || version.non_image)
 		{
-			error_printf("Failed loading .EXR image \"%s\"! (TinyEXR error: %s)\n", pFilename, err ? err : "?");
-			FreeEXRErrorMessage(err);
-			free(out_rgba);
+			error_printf("Invalid or unsupported .EXR image \"%s\"!\n", source_name);
 			return false;
 		}
 
-		const uint32_t MAX_SUPPORTED_DIM = 32768;
-		if ((width < 1) || (height < 1) || (width > (int)MAX_SUPPORTED_DIM) || (height > (int)MAX_SUPPORTED_DIM))
+		struct exr_resources
 		{
-			error_printf("Invalid dimensions of .EXR image \"%s\"!\n", pFilename);
-			free(out_rgba);
-			return false;
-		}
-
-		img.resize(width, height);
-
-		memcpy((void*)img.get_ptr(), out_rgba, static_cast<size_t>(sizeof(float) * 4 * img.get_total_pixels()));
-		
-		free(out_rgba);
-		out_rgba = nullptr;
-
-		uint32_t total_all_same_rgba = 0, total_all_same_rgb = 0, total_has_alpha = 0;
-
-		for (int y = 0; y < height; y++)
-		{
-			for (int x = 0; x < width; x++)
+			EXRHeader header;
+			EXRImage image;
+			exr_resources()
 			{
-				const vec4F& p = img(x, y);
+				InitEXRHeader(&header);
+				InitEXRImage(&image);
+			}
+			~exr_resources()
+			{
+				FreeEXRImage(&image);
+				FreeEXRHeader(&header);
+			}
+		} exr;
 
-				if ((p[0] == p[1]) && (p[0] == p[2]))
-					total_all_same_rgb++;
-
-				const float a = p[3];
-
-				if ((a == p[0]) && (a == p[1]) && (a == p[2]))
-					total_all_same_rgba++;
-								
-				if (a != 1.0f)
-					total_has_alpha++;
-
-			} // x
-		} // y
-
-		const uint32_t total_pixels = width * height;
-		if (total_all_same_rgba == total_pixels)
+		const char* err = nullptr;
+		status = ParseEXRHeaderFromMemory(&exr.header, &version, source, mem_size, &err);
+		if (status != TINYEXR_SUCCESS)
 		{
-			// TinyEXR loads single channel EXR images into all output channels (including alpha) - assume they are luminance and fix our alpha.
-			// Odds are this is an opaque luminance-only image, not a true alpha channel image. (As of early 2026 we don't support any HDR format with alpha, anyway.)
-			for (int y = 0; y < height; y++)
-				for (int x = 0; x < width; x++)
-					img(x, y)[3] = 1.0f;
-			
-			n_chans = 1;
+			error_printf("Failed reading .EXR header \"%s\"! (TinyEXR error: %s)\n", source_name, err ? err : "?");
+			FreeEXRErrorMessage(err);
+			return false;
 		}
-		else if (total_has_alpha)
+
+		int channels[4] = { -1, -1, -1, -1 };
+		int base_channels = 0, single_channel = -1;
+		for (int c = 0; c < exr.header.num_channels; c++)
 		{
-			n_chans = 4;
+			if (exr.header.pixel_types[c] == TINYEXR_PIXELTYPE_HALF)
+				exr.header.requested_pixel_types[c] = TINYEXR_PIXELTYPE_FLOAT;
+
+			const char* name = exr.header.channels[c].name;
+			const char* layer = strrchr(name, '.');
+			if (layer)
+			{
+				if (exr.header.num_channels != 1)
+					continue;
+				name = layer + 1;
+			}
+			base_channels++;
+			single_channel = c;
+			for (int component = 0; component < 4; component++)
+				if (name[0] == "RGBA"[component] && name[1] == '\0')
+					channels[component] = c;
 		}
-		else if (total_all_same_rgb == total_pixels)
+		if (!base_channels || (base_channels != 1 && (channels[0] < 0 || channels[1] < 0 || channels[2] < 0)))
 		{
-			n_chans = 1;
+			error_printf("Unsupported base-layer channels in .EXR image \"%s\"!\n", source_name);
+			return false;
+		}
+
+		status = LoadEXRImageFromMemory(&exr.image, &exr.header, source, mem_size, &err);
+		if (status != TINYEXR_SUCCESS)
+		{
+			error_printf("Failed loading .EXR image \"%s\"! (TinyEXR error: %s)\n", source_name, err ? err : "?");
+			FreeEXRErrorMessage(err);
+			return false;
+		}
+		const uint32_t MAX_SUPPORTED_DIM = 32768;
+		if (exr.image.width < 1 || exr.image.height < 1 || exr.image.width > (int)MAX_SUPPORTED_DIM || exr.image.height > (int)MAX_SUPPORTED_DIM)
+		{
+			error_printf("Invalid dimensions of .EXR image \"%s\"!\n", source_name);
+			return false;
+		}
+
+		// Channel declarations determine grayscale and alpha; equal RGBA values are still genuine RGBA data.
+		if (base_channels == 1)
+			channels[0] = channels[1] = channels[2] = single_channel;
+		imagef decoded;
+		decoded.resize(exr.image.width, exr.image.height);
+		auto store_pixel = [&](uint32_t x, uint32_t y, unsigned char** planes, size_t index)
+		{
+			vec4F& pixel = decoded(x, y);
+			for (int component = 0; component < 4; component++)
+			{
+				const int channel = channels[component];
+				if (channel < 0)
+					pixel[component] = 1.0f;
+				else if (exr.header.requested_pixel_types[channel] == TINYEXR_PIXELTYPE_UINT)
+					pixel[component] = static_cast<float>(reinterpret_cast<const uint32_t*>(planes[channel])[index]);
+				else
+					pixel[component] = reinterpret_cast<const float*>(planes[channel])[index];
+			}
+		};
+		if (exr.header.tiled)
+		{
+			const size_t tile_width = static_cast<size_t>(exr.header.tile_size_x);
+			const size_t tile_height = static_cast<size_t>(exr.header.tile_size_y);
+			for (int tile_index = 0; tile_index < exr.image.num_tiles; tile_index++)
+			{
+				EXRTile& tile = exr.image.tiles[tile_index];
+				for (size_t y = 0; y < tile_height; y++)
+					for (size_t x = 0; x < tile_width; x++)
+					{
+						const size_t target_x = static_cast<size_t>(tile.offset_x) * tile_width + x;
+						const size_t target_y = static_cast<size_t>(tile.offset_y) * tile_height + y;
+						if (target_x < static_cast<size_t>(exr.image.width) && target_y < static_cast<size_t>(exr.image.height))
+							store_pixel(static_cast<uint32_t>(target_x), static_cast<uint32_t>(target_y), tile.images, x + y * tile_width);
+					}
+			}
 		}
 		else
 		{
-			n_chans = 3;
+			for (uint32_t y = 0; y < decoded.get_height(); y++)
+				for (uint32_t x = 0; x < decoded.get_width(); x++)
+					store_pixel(x, y, exr.image.images, x + static_cast<size_t>(y) * decoded.get_width());
 		}
-
-		//fmt_printf("Number of detected EXR channels: {}\n", n_chans);
-				
+		img.swap(decoded);
+		n_chans = channels[3] >= 0 ? 4 : base_channels == 1 ? 1 : 3;
 		return true;
+	}
+
+	bool read_exr(const char* pFilename, imagef& img, int& n_chans)
+	{
+		n_chans = 0;
+		uint8_vec source;
+		if (!read_file_to_vec(pFilename, source))
+		{
+			error_printf("Failed reading .EXR image \"%s\"!\n", pFilename);
+			return false;
+		}
+		return read_exr_data(source.get_ptr(), source.size(), img, n_chans, pFilename);
 	}
 
 	bool read_exr(const void* pMem, size_t mem_size, imagef& img)
 	{
-		float* out_rgba = nullptr;
-		int width = 0, height = 0;
-		const char* pErr = nullptr;
-		int res = LoadEXRFromMemory(&out_rgba, &width, &height, (const uint8_t*)pMem, mem_size, &pErr);
-		if (res < 0)
-		{
-			error_printf("Failed loading .EXR image from memory! (TinyEXR error: %s)\n", pErr ? pErr : "?");
-			FreeEXRErrorMessage(pErr);
-			free(out_rgba);
-			return false;
-		}
-
-		img.resize(width, height);
-		memcpy((void *)img.get_ptr(), out_rgba, width * height * sizeof(float) * 4);
-		free(out_rgba);
-
-		// TODO: detect luminance-only etc.
-
-		return true;
+		int n_chans = 0;
+		return read_exr_data(pMem, mem_size, img, n_chans, nullptr);
 	}
 
 	bool write_exr(const char* pFilename, const imagef& img, uint32_t n_chans, uint32_t flags)

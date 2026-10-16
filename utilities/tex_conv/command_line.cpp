@@ -89,7 +89,7 @@ int Run(const int argc, char** argv){
     bool force = false;
     bool linear = false;
 
-    CLI::App app{ "Convert LDR or HDR images into an NWB 2D, cube, or volume texture asset." };
+    CLI::App app{ "Convert LDR or HDR images into prepared linear UASTC texture assets." };
     app.add_option(TexConvCliDetail::s_InputOptionName.data(), inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
     app.add_option(TexConvCliDetail::s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(TextureFormat::s_TextureCubeFaceCount));
     app.add_option(TexConvCliDetail::s_VolumeOptionName.data(), volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
@@ -166,7 +166,7 @@ int Run(const int argc, char** argv){
             if(!outputPaths || !ValidateOutputPaths(*outputPaths, force))
                 return TexConvCliDetail::s_TexConvExitFailure;
 
-            const auto payload = EncodeTexture(inputPaths, dimension, !linear, alphaSource);
+            const auto payload = PrepareTexture(inputPaths, dimension, !linear, alphaSource);
             if(!payload)
                 return TexConvCliDetail::s_TexConvExitFailure;
             if(!WriteOutputs(*outputPaths, *payload, force))
@@ -178,8 +178,7 @@ int Run(const int argc, char** argv){
                 report << " cube";
             else if(payload->dimension == TextureDimension::Texture3D)
                 report << "x" << payload->depth;
-            const usize totalPayloadBytes = payload->bytes.size() + payload->alphaBytes.size();
-            report << ", " << payload->mips.size() << " mips, " << totalPayloadBytes << " bytes\n";
+            report << ", " << payload->mipCount << " linear UASTC mips, " << payload->bytes.size() << " raw bytes\n";
             NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
             return TexConvCliDetail::s_TexConvExitSuccess;
         }

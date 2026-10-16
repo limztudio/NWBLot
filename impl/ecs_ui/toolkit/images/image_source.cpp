@@ -52,7 +52,7 @@ ImageSource::ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture
     mipLevels.assign(texture.mipLevels().begin(), texture.mipLevels().end());
     Core::Assets::AssetBytes payloadBytes(arena);
     payloadBytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
-    m_texture.setPayload(texture.colorSpace(), texture.hasAlpha(), texture.width(), texture.height(), Move(mipLevels), Move(payloadBytes), texture.dimension(), texture.depth(), texture.payloadFormat(), texture.alphaMode(), texture.alphaConstantUnorm8());
+    m_texture.setPayload(texture.width(), texture.height(), Move(mipLevels), Move(payloadBytes), texture.dimension(), texture.depth(), texture.payloadFormat(), texture.alphaMode(), texture.alphaConstantUnorm8());
     m_generation = __hidden_ui_image_source::NewGeneration();
 }
 

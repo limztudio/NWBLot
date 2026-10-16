@@ -181,7 +181,7 @@ struct PrimaryUastcSlice{
 }
 
 template<typename StoreTexelT>
-[[nodiscard]] static bool VisitDecodedUastcTexels(const TextureMipLevel& mip, const u8* const sourceData, const bool srgb, StoreTexelT&& storeTexel){
+[[nodiscard]] static bool VisitDecodedUastcTexels(const TextureMipLevel& mip, const u8* const sourceData, StoreTexelT&& storeTexel){
     for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
         for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
             const u64 blockIndex = static_cast<u64>(blockY) * static_cast<u64>(mip.blockCountX) + blockX;
@@ -190,7 +190,7 @@ template<typename StoreTexelT>
             NWB_MEMCPY(&sourceBlock, sizeof(sourceBlock), sourceData + static_cast<usize>(blockOffset), sizeof(sourceBlock));
 
             basist::color32 decodedTexels[s_UastcBlockWidth * s_UastcBlockHeight];
-            if(!basist::unpack_uastc(sourceBlock, decodedTexels, srgb))
+            if(!basist::unpack_uastc(sourceBlock, decodedTexels, false))
                 return false;
 
             for(u32 localY = 0u; localY < s_UastcBlockHeight; ++localY){
@@ -226,8 +226,7 @@ template<typename StoreTexelT>
         return false;
     }
 
-    const bool srgb = textureAsset.colorSpace() == TextureColorSpace::Srgb;
-    if(!VisitDecodedUastcTexels(mip, source->bytes.data(), srgb, [outUploadBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
+    if(!VisitDecodedUastcTexels(mip, source->bytes.data(), [outUploadBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         const usize destinationByteOffset = destinationTexelIndex * s_RgbaBytesPerTexel;
         outUploadBytes[destinationByteOffset + 0u] = sourceTexel.r;
         outUploadBytes[destinationByteOffset + 1u] = sourceTexel.g;
@@ -327,7 +326,7 @@ static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex,
         return false;
     }
 
-    if(!VisitDecodedUastcTexels(mip, alphaSource->data(), false, [outRgba16FloatBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
+    if(!VisitDecodedUastcTexels(mip, alphaSource->data(), [outRgba16FloatBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         // The companion stream is a grayscale LDR mask: (a, a, a, 255).
         StoreHdrAlpha(outRgba16FloatBytes, destinationTexelIndex, sourceTexel.r);
     })){
@@ -362,9 +361,14 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(const Texture& textu
 
 
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){
+    if(format != Core::Format::ASTC_4x4_UNORM && format != Core::Format::BC7_UNORM && format != Core::Format::RGBA8_UNORM){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: unsupported linear LDR texture upload format"));
+        return MakeUnexpected(Failure{});
+    }
+
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
-    if(Core::Format::IsLdrCompressedFormat(format)){
+    if(format != Core::Format::RGBA8_UNORM){
         const u64 rowPitch64 = static_cast<u64>(mip.blockCountX) * TextureFormat::s_UastcBytesPerBlock;
         if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / mip.blockCountY){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: compressed LDR mip row pitch exceeds addressable memory"));
@@ -392,9 +396,9 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& te
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         u8* const destination = upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
         bool decoded = false;
-        if(Core::Format::IsAstc4x4LdrFormat(format))
+        if(format == Core::Format::ASTC_4x4_UNORM)
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsAstc(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
-        else if(Core::Format::IsBc7LdrFormat(format))
+        else if(format == Core::Format::BC7_UNORM)
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsBc7(textureAsset, mip, mipLevel, sliceIndex, destination, sliceUploadByteCount);
         else
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsRgba(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);

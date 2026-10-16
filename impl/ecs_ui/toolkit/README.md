@@ -49,9 +49,9 @@ the center collapses on that axis. UV boundaries keep the authored source border
 The painter does not enforce the region's content padding or minimum size; layout owns those metrics.
 
 Input `Color` values are linear RGB with finite straight alpha in `[0, 1]`. Emitted vertex RGB is
-multiplied by alpha. Skin artwork and its color-space/coverage interpretation come from the typed
-texture asset; the skin shader combines texture coverage and tint consistently with this
-premultiplied vertex contract.
+multiplied by alpha. Skin artwork is prepared by `tex_conv` as linear RGB and linear alpha coverage.
+The typed texture asset supplies that prepared data; the skin shader combines texture coverage
+and tint consistently with this premultiplied vertex contract.
 
 `freeze()` moves the geometry, indices, ordered commands, display metrics, frame generation, and
 skin binding into a move-only snapshot exposed through const views. Start a new frame with `begin()`

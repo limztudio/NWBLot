@@ -132,7 +132,7 @@ bool UiTextureImageSmokeScene::replaceVersion(){
     mipLevels.assign(payload.mipLevels().begin(), payload.mipLevels().end());
     Core::Assets::AssetBytes bytes(m_arena);
     bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
-    replacement.setPayload(payload.colorSpace(), payload.hasAlpha(), payload.width(), payload.height(), Move(mipLevels), Move(bytes), payload.dimension(), payload.depth(), payload.payloadFormat(), payload.alphaMode(), payload.alphaConstantUnorm8());
+    replacement.setPayload(payload.width(), payload.height(), Move(mipLevels), Move(bytes), payload.dimension(), payload.depth(), payload.payloadFormat(), payload.alphaMode(), payload.alphaConstantUnorm8());
     Impl::Ui::SharedImageSource next = Impl::Ui::MakeImageSource(m_arena, replacement);
     if(!next || next->generation() == m_replacement->generation() || next->generation() == m_default->generation() || next->generation() == m_alternate->generation() || next->identity().name() != m_default->identity().name())
         return false;

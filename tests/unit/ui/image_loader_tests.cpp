@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_ui/toolkit/images/image_loader.h>
-#include <impl/assets_texture/binary_payload.h>
 #include <impl/assets_ui_skin/asset.h>
 
 #include <tests/common/capturing_logger.h>
@@ -33,7 +32,6 @@ using namespace NWB::Impl::Ui;
 
 [[nodiscard]] static AssetBytes MakeTextureBinary(AssetArena& arena, const u8 initialValue){
     TextureBinaryPayload::HeaderBinary header;
-    header.colorSpace = static_cast<u32>(TextureColorSpace::Srgb);
     header.dimension = static_cast<u32>(TextureDimension::Texture2D);
     header.width = 2u;
     header.height = 1u;

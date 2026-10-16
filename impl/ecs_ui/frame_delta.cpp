@@ -4,6 +4,7 @@
 
 #include "frame_delta.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -20,7 +21,10 @@ void UiFrameDelta::add(const f32 deltaSeconds)noexcept{
     if(!IsFinite(deltaSeconds) || deltaSeconds < 0.0f)
         return;
     const f64 maximum = static_cast<f64>(Limit<f32>::s_Max);
-    m_pendingSeconds = Min(maximum, (m_pendingSeconds + static_cast<f64>(deltaSeconds)));
+    m_pendingSeconds = VectorDoubleGetX(VectorDoubleMin(
+        VectorDoubleReplicate(maximum),
+        VectorDoubleAdd(VectorDoubleReplicate(m_pendingSeconds), VectorDoubleReplicate(static_cast<f64>(deltaSeconds)))
+    ));
 }
 
 f32 UiFrameDelta::consume()noexcept{

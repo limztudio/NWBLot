@@ -4,6 +4,7 @@
 
 #include "scroll.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/atomic_identity.h>
 
@@ -58,10 +59,10 @@ bool ScrollState::ensureVisible(const f64 start, const f64 end, const f64 viewpo
     if(!IsFinite(start) || start < 0.0 || !IsFinite(end) || end < start || !IsFinite(viewportHeight) || viewportHeight < 0.0)
         return false;
     f64 candidate = m_offset;
-    if((end - start) > viewportHeight || start < candidate)
+    if(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(end), VectorDoubleReplicate(start))) > viewportHeight || start < candidate)
         candidate = start;
-    else if(end > candidate && (end - candidate) > viewportHeight)
-        candidate = (end - viewportHeight);
+    else if(end > candidate && VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(end), VectorDoubleReplicate(candidate))) > viewportHeight)
+        candidate = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(end), VectorDoubleReplicate(viewportHeight)));
     m_offset = candidate;
     return true;
 }
@@ -69,19 +70,23 @@ bool ScrollState::ensureVisible(const f64 start, const f64 end, const f64 viewpo
 bool ScrollState::scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{
     if(!IsFinite(delta) || !__hidden_ui_scroll_state::ValidRange(contentHeight, viewportHeight))
         return false;
-    const f64 maxOffset = Max(0.0, (contentHeight - viewportHeight));
-    const f64 base = Min(m_offset, maxOffset);
+    const SIMDVectorDouble maxOffset = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(contentHeight), VectorDoubleReplicate(viewportHeight)));
+    const SIMDVectorDouble base = VectorDoubleMin(VectorDoubleReplicate(m_offset), maxOffset);
+    const SIMDVectorDouble deltaValue = VectorDoubleReplicate(delta);
     if(delta >= 0.0)
-        m_offset = (base + Min(delta, (maxOffset - base)));
+        m_offset = VectorDoubleGetX(VectorDoubleAdd(base, VectorDoubleMin(deltaValue, VectorDoubleSubtract(maxOffset, base))));
     else
-        m_offset = Max(0.0, (base + delta));
+        m_offset = VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), VectorDoubleAdd(base, deltaValue)));
     return true;
 }
 
 bool ScrollState::clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{
     if(!__hidden_ui_scroll_state::ValidRange(contentHeight, viewportHeight))
         return false;
-    m_offset = Min(m_offset, Max(0.0, (contentHeight - viewportHeight)));
+    m_offset = VectorDoubleGetX(VectorDoubleMin(
+        VectorDoubleReplicate(m_offset),
+        VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(contentHeight), VectorDoubleReplicate(viewportHeight)))
+    ));
     return true;
 }
 

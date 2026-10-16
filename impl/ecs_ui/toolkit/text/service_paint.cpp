@@ -101,9 +101,9 @@ namespace __hidden_ui_text_paint{
     const SIMDVectorDouble horizontalStep = VectorDoubleSelect(VectorDoubleZero(), physicalStep, s_DoubleSIMDMaskX);
     const SIMDVectorDouble verticalStep = VectorDoubleSwizzle<1, 2, 3, 3>(physicalStep);
     const SIMDVectorDouble verticalDerivative = VectorDoubleMultiply(VectorDoubleSet(gradientY, 0.0, 0.0, 0.0), verticalStep);
-    const f64 derivative = VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleSet(gradientX, 0.0, 0.0, 0.0), horizontalStep, verticalDerivative));
+    const SIMDVectorDouble derivative = VectorDoubleMultiplyAddExpression(VectorDoubleSet(gradientX, 0.0, 0.0, 0.0), horizontalStep, verticalDerivative);
     const SIMDVectorDouble minimumDerivative = VectorDoubleDivide(VectorDoubleReplicate(0.001 * 128.0), VectorDoubleReplicate(binding.spreadPixels));
-    const f64 halfWidth = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(0.5), VectorDoubleMax(VectorDoubleReplicate(derivative), minimumDerivative)));
+    const SIMDVectorDouble halfWidth = VectorDoubleMultiply(VectorDoubleReplicate(0.5), VectorDoubleMax(derivative, minimumDerivative));
     const SIMDVectorDouble glyphSize = VectorDoubleSet(glyph.width, glyph.height, 0.0, 0.0);
     const SIMDVectorDouble halfTexel = VectorDoubleSet(0.5, 0.5, 0.0, 0.0);
     SIMDVectorDouble supportMinimum = glyphSize;
@@ -116,7 +116,7 @@ namespace __hidden_ui_text_paint{
             const u32 x0 = glyph.x + x == 0u ? 0u : glyph.x + x - 1u;
             const u32 x1 = Min(binding.width - 1u, glyph.x + x);
             const i32 maximum = Max(Max(sample(x0, y0), sample(x1, y0)), Max(sample(x0, y1), sample(x1, y1)));
-            if(static_cast<f64>(maximum) + halfWidth < 128.0)
+            if(VectorDoubleGetIntX(VectorDoubleLess(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(maximum)), halfWidth), VectorDoubleReplicate(128.0))) != 0u)
                 continue;
             // Texel centers lie at n + 0.5; retain exactly the candidate cell's intersection with the drawn plane.
             const SIMDVectorDouble position = VectorDoubleSet(x, y, 0.0, 0.0);

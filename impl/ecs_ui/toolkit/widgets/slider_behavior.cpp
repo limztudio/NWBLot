@@ -70,28 +70,38 @@ namespace __hidden_ui_slider_behavior{
 }
 
 [[nodiscard]] static f64 ClampValue(const f64 value, const f64 minimum, const f64 maximum)noexcept{
-    return value < minimum ? minimum : value > maximum ? maximum : value;
+    const SIMDVectorDouble current = VectorDoubleReplicate(value);
+    const SIMDVectorDouble lower = VectorDoubleReplicate(minimum);
+    const SIMDVectorDouble upper = VectorDoubleReplicate(maximum);
+    return VectorDoubleGetX(VectorDoubleSelect(
+        VectorDoubleSelect(current, upper, VectorDoubleGreater(current, upper)),
+        lower, VectorDoubleLess(current, lower)
+    ));
 }
 
 [[nodiscard]] static f64 KeyStep(const SliderOptions& options)noexcept{
     if(options.keyStep > 0.0)
         return options.keyStep;
-    const f64 span = options.maximum - options.minimum;
+    const SIMDVectorDouble spanValue = VectorDoubleSubtract(VectorDoubleReplicate(options.maximum), VectorDoubleReplicate(options.minimum));
+    const f64 span = VectorDoubleGetX(spanValue);
     if(IsFinite(span)){
-        const f64 step = span / 100.0;
+        const f64 step = VectorDoubleGetX(VectorDoubleDivide(spanValue, VectorDoubleReplicate(100.0)));
         return step == 0.0 ? span : step;
     }
-    return options.maximum / 100.0 - options.minimum / 100.0;
+    const SIMDVectorDouble scaledBounds = VectorDoubleDivide(VectorDoubleSet(options.maximum, options.minimum, options.maximum, options.minimum), VectorDoubleReplicate(100.0));
+    return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleSplatX(scaledBounds), VectorDoubleSplatY(scaledBounds)));
 }
 
 [[nodiscard]] static f64 StepValue(const f64 value, const SliderOptions& options, const f64 step, const bool increasing)noexcept{
     const f64 current = ClampValue(value, options.minimum, options.maximum);
+    const SIMDVectorDouble currentValue = VectorDoubleReplicate(current);
+    const SIMDVectorDouble stepValue = VectorDoubleReplicate(step);
     if(increasing){
-        const f64 distance = options.maximum - current;
-        return step >= distance ? options.maximum : ClampValue(current + step, options.minimum, options.maximum);
+        const f64 distance = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(options.maximum), currentValue));
+        return step >= distance ? options.maximum : ClampValue(VectorDoubleGetX(VectorDoubleAdd(currentValue, stepValue)), options.minimum, options.maximum);
     }
-    const f64 distance = current - options.minimum;
-    return step >= distance ? options.minimum : ClampValue(current - step, options.minimum, options.maximum);
+    const f64 distance = VectorDoubleGetX(VectorDoubleSubtract(currentValue, VectorDoubleReplicate(options.minimum)));
+    return step >= distance ? options.minimum : ClampValue(VectorDoubleGetX(VectorDoubleSubtract(currentValue, stepValue)), options.minimum, options.maximum);
 }
 
 
@@ -123,8 +133,16 @@ Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, co
         if(value >= maximum)
             normalized = 1.0;
         else{
-            const f64 span = maximum - minimum;
-            normalized = IsFinite(span) ? (value - minimum) / span : (value * 0.5 - minimum * 0.5) / (maximum * 0.5 - minimum * 0.5);
+            const SIMDVectorDouble span = VectorDoubleSubtract(VectorDoubleReplicate(maximum), VectorDoubleReplicate(minimum));
+            if(IsFinite(VectorDoubleGetX(span)))
+                normalized = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(value), VectorDoubleReplicate(minimum)), span));
+            else{
+                const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, minimum), VectorDoubleReplicate(0.5));
+                normalized = VectorDoubleGetX(VectorDoubleDivide(
+                    VectorDoubleSubtract(VectorDoubleSplatX(scaled), VectorDoubleSplatY(scaled)),
+                    VectorDoubleSubtract(VectorDoubleSplatZ(scaled), VectorDoubleSplatW(scaled))
+                ));
+            }
         }
     }
     if(!IsFinite(normalized))
@@ -141,7 +159,16 @@ Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, 
     if(normalized == 1.0)
         value = maximum;
     else if(normalized > 0.0 && minimum != maximum){
-        value = minimum < 0.0 && maximum > 0.0 ? minimum * (1.0 - normalized) + maximum * normalized : minimum + (maximum - minimum) * normalized;
+        const SIMDVectorDouble lower = VectorDoubleReplicate(minimum);
+        const SIMDVectorDouble upper = VectorDoubleReplicate(maximum);
+        const SIMDVectorDouble fraction = VectorDoubleReplicate(normalized);
+        if(minimum < 0.0 && maximum > 0.0)
+            value = VectorDoubleGetX(VectorDoubleAdd(
+                VectorDoubleMultiply(lower, VectorDoubleSubtract(VectorDoubleSplatOne(), fraction)),
+                VectorDoubleMultiply(upper, fraction)
+            ));
+        else
+            value = VectorDoubleGetX(VectorDoubleAdd(lower, VectorDoubleMultiply(VectorDoubleSubtract(upper, lower), fraction)));
         value = ClampValue(value, minimum, maximum);
     }
     if(!IsFinite(value))

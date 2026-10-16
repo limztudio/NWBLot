@@ -122,6 +122,54 @@ TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLat
     EXPECT_EQ(store.historyCount(), 81u);
 }
 
+TEST(GpuTaskTimingHistory, PreservesOrderedAverageAndExtremaAcrossRollingWindows){
+    GraphicsArena arena(Name("tests/timing_history/ordered_reduction"));
+    constexpr u32 capacity = 4u;
+    GpuTaskTimingHistoryStore store(arena, capacity);
+    const TimingInput input = Input(0u);
+    const f64 samples[] = { 1.0e100, 1.0, 3.0e99, 2.0, 5.0e99, 3.0, 7.0e99, 7.0e99, 4.0 };
+    for(usize index = 0u; index < LengthOf(samples); ++index){
+        ASSERT_TRUE(store.recordNonCommittingSample(input.key, input.queue, samples[index]));
+        const usize begin = index >= capacity ? index + 1u - capacity : 0u;
+        f64 expectedAverage = 0.0;
+        f64 expectedMinimum = samples[begin];
+        f64 expectedMaximum = samples[begin];
+        u32 expectedCount = 0u;
+        // Independent scalar oracle fixes the original reduction order and exact rounding.
+        for(usize sampleIndex = begin; sampleIndex <= index; ++sampleIndex){
+            ++expectedCount;
+            expectedAverage += (samples[sampleIndex] - expectedAverage) / static_cast<f64>(expectedCount);
+            if(samples[sampleIndex] < expectedMinimum)
+                expectedMinimum = samples[sampleIndex];
+            if(samples[sampleIndex] > expectedMaximum)
+                expectedMaximum = samples[sampleIndex];
+        }
+        const GpuTaskTimingHistory* const history = store.find(input.key, input.queue);
+        ASSERT_NE(history, nullptr);
+        EXPECT_EQ(BitCast<u64>(history->averageSeconds), BitCast<u64>(expectedAverage));
+        EXPECT_EQ(BitCast<u64>(history->minimumSeconds), BitCast<u64>(expectedMinimum));
+        EXPECT_EQ(BitCast<u64>(history->maximumSeconds), BitCast<u64>(expectedMaximum));
+        EXPECT_EQ(history->sampleCount, expectedCount);
+        EXPECT_TRUE(history->valid());
+    }
+}
+
+TEST(GpuTaskTimingHistory, PreservesAbsoluteAndRelativeHysteresisThresholds){
+    const GpuTaskTimingHistory incumbent{ .averageSeconds = 8.0, .minimumSeconds = 8.0, .maximumSeconds = 8.0, .sampleCount = 1u };
+    const GpuTaskTimingHistory candidate{ .averageSeconds = 6.0, .minimumSeconds = 6.0, .maximumSeconds = 6.0, .sampleCount = 1u };
+    GpuTaskTimingFeedbackPolicy policy;
+    policy.minimumAbsoluteBenefitSeconds = 2.0;
+    policy.minimumRelativeBenefit = 0.25;
+    EXPECT_TRUE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, candidate, policy));
+    policy.minimumAbsoluteBenefitSeconds = 2.0000000000000004;
+    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, candidate, policy));
+    policy.minimumAbsoluteBenefitSeconds = 2.0;
+    policy.minimumRelativeBenefit = 0.25000000000000006;
+    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, candidate, policy));
+    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(candidate, incumbent, policy));
+    EXPECT_FALSE(GpuTaskTimingBenefitExceedsHysteresis(incumbent, incumbent, policy));
+}
+
 TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnotherArena){
     GraphicsArena storeArena(Name("tests/timing_history/store_owner"));
     GraphicsArena snapshotArena(Name("tests/timing_history/snapshot_owner"));

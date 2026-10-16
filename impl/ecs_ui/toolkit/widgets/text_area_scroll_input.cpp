@@ -27,11 +27,21 @@ namespace __hidden_text_area_scroll_input{
     if(!IsFinite(offset) || !IsFinite(delta) || !IsFinite(step) || step < 0.0 || !IsFinite(maximum) || maximum < 0.0)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble offsetValue = VectorDoubleReplicate(offset);
-    f64 next = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleReplicate(maximum), offsetValue), VectorDoubleGreater(offsetValue, VectorDoubleZero())));
-    if(step > 0.0 && delta > 0.0)
-        next = delta >= (maximum - next) / step ? maximum : next + delta * step;
-    else if(step > 0.0 && delta < 0.0)
-        next = -delta >= next / step ? 0.0 : next + delta * step;
+    const SIMDVectorDouble maximumValue = VectorDoubleReplicate(maximum);
+    const SIMDVectorDouble stepValue = VectorDoubleReplicate(step);
+    SIMDVectorDouble nextValue = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximumValue, offsetValue), VectorDoubleGreater(offsetValue, VectorDoubleZero()));
+    if(step > 0.0 && delta > 0.0){
+        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(maximumValue, nextValue), stepValue));
+        nextValue = delta >= distanceInSteps ? maximumValue
+            : VectorDoubleAdd(nextValue, VectorDoubleMultiply(VectorDoubleReplicate(delta), stepValue));
+    }
+    else if(step > 0.0 && delta < 0.0){
+        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(nextValue, stepValue));
+        const f64 reverseDelta = VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(delta)));
+        nextValue = reverseDelta >= distanceInSteps ? VectorDoubleZero()
+            : VectorDoubleAdd(nextValue, VectorDoubleMultiply(VectorDoubleReplicate(delta), stepValue));
+    }
+    const f64 next = VectorDoubleGetX(nextValue);
     if(!IsFinite(next) || next > static_cast<f64>(Limit<f32>::s_Max))
         return MakeUnexpected(Failure{});
     return static_cast<f32>(next);
@@ -108,7 +118,7 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
                 const auto x = __hidden_text_area_scroll_input::Step(scroll.x, action->deltaX, action->stepX, action->maximumX);
                 if(!x)
                     return false;
-                const auto y = __hidden_text_area_scroll_input::Step(scroll.y, -action->delta, action->step, action->maximum);
+                const auto y = __hidden_text_area_scroll_input::Step(scroll.y, VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(action->delta))), action->step, action->maximum);
                 if(!y)
                     return false;
                 next = { *x, *y };

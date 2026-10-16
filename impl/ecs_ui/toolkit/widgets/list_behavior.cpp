@@ -84,15 +84,21 @@ struct KeyResolution{
 [[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const ControlAction& action)noexcept{
     if(!IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0 || !IsFinite(action.maximum) || action.maximum < 0.0)
         return MakeUnexpected(Failure{});
-    f64 candidate = VectorDoubleGetX(VectorDoubleMin(VectorDoubleReplicate(current), VectorDoubleReplicate(action.maximum)));
-    if(action.delta > 0.0)
-        candidate = action.delta >= (candidate / action.step) ? 0.0 : (candidate - action.delta * action.step);
-    else if(action.delta < 0.0){
-        const f64 remaining = (action.maximum - candidate);
-        candidate = (-action.delta) >= (remaining / action.step) ? action.maximum : (candidate + -action.delta * action.step);
+    const SIMDVectorDouble maximum = VectorDoubleReplicate(action.maximum);
+    const SIMDVectorDouble step = VectorDoubleReplicate(action.step);
+    SIMDVectorDouble candidateValue = VectorDoubleMin(VectorDoubleReplicate(current), maximum);
+    if(action.delta > 0.0){
+        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(candidateValue, step));
+        candidateValue = action.delta >= distanceInSteps ? VectorDoubleZero()
+            : VectorDoubleSubtract(candidateValue, VectorDoubleMultiply(VectorDoubleReplicate(action.delta), step));
     }
-    const SIMDVectorDouble candidateValue = VectorDoubleReplicate(candidate);
-    candidate = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleReplicate(action.maximum), candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())));
+    else if(action.delta < 0.0){
+        const SIMDVectorDouble reverseDelta = VectorDoubleNegate(VectorDoubleReplicate(action.delta));
+        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(maximum, candidateValue), step));
+        candidateValue = VectorDoubleGetX(reverseDelta) >= distanceInSteps ? maximum
+            : VectorDoubleAdd(candidateValue, VectorDoubleMultiply(reverseDelta, step));
+    }
+    const f64 candidate = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())));
     if(!IsFinite(candidate))
         return MakeUnexpected(Failure{});
     return candidate;

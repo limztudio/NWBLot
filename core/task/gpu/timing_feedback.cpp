@@ -5,6 +5,7 @@
 #include "timing_feedback.h"
 
 #include <global/scope_exit.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,10 +160,11 @@ bool GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent
     if(!policy.valid() || !incumbent.valid() || !candidate.valid() || candidate.averageSeconds >= incumbent.averageSeconds)
         return false;
 
-    const f64 benefitSeconds = incumbent.averageSeconds - candidate.averageSeconds;
-    if(benefitSeconds < policy.minimumAbsoluteBenefitSeconds)
+    const SIMDVectorDouble incumbentSeconds = VectorDoubleReplicate(incumbent.averageSeconds);
+    const SIMDVectorDouble benefitSeconds = VectorDoubleSubtract(incumbentSeconds, VectorDoubleReplicate(candidate.averageSeconds));
+    if(VectorDoubleGetX(benefitSeconds) < policy.minimumAbsoluteBenefitSeconds)
         return false;
-    return benefitSeconds / incumbent.averageSeconds >= policy.minimumRelativeBenefit;
+    return VectorDoubleGetX(VectorDoubleDivide(benefitSeconds, incumbentSeconds)) >= policy.minimumRelativeBenefit;
 }
 
 
@@ -483,21 +485,19 @@ void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
         return;
     }
 
-    f64 averageSeconds = 0.0;
-    f64 minimumSeconds = record.samples.front();
-    f64 maximumSeconds = record.samples.front();
+    SIMDVectorDouble averageSeconds = VectorDoubleZero();
+    // Keep the incremental average in sample order; extrema occupy X (minimum) and Y (maximum).
+    SIMDVectorDouble extremaSeconds = VectorDoubleReplicate(record.samples.front());
     u32 sampleCount = 0u;
     for(const f64 sampleSeconds : record.samples){
         ++sampleCount;
-        averageSeconds += (sampleSeconds - averageSeconds) / static_cast<f64>(sampleCount);
-        if(sampleSeconds < minimumSeconds)
-            minimumSeconds = sampleSeconds;
-        if(sampleSeconds > maximumSeconds)
-            maximumSeconds = sampleSeconds;
+        const SIMDVectorDouble sample = VectorDoubleReplicate(sampleSeconds);
+        averageSeconds = VectorDoubleAdd(averageSeconds, VectorDoubleDivide(VectorDoubleSubtract(sample, averageSeconds), VectorDoubleReplicate(static_cast<f64>(sampleCount))));
+        extremaSeconds = VectorDoubleSelect(VectorDoubleMin(extremaSeconds, sample), VectorDoubleMax(extremaSeconds, sample), s_DoubleSIMDMaskY);
     }
-    record.entry.history.averageSeconds = averageSeconds;
-    record.entry.history.minimumSeconds = minimumSeconds;
-    record.entry.history.maximumSeconds = maximumSeconds;
+    record.entry.history.averageSeconds = VectorDoubleGetX(averageSeconds);
+    record.entry.history.minimumSeconds = VectorDoubleGetX(extremaSeconds);
+    record.entry.history.maximumSeconds = VectorDoubleGetY(extremaSeconds);
     record.entry.history.sampleCount = sampleCount;
 }
 

@@ -74,7 +74,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     Core::Alloc::GlobalArena& arena,
     const SmokeModelRef& model,
     const SmokeMaterialRef& material,
-    const AStringView materialInterfacePath,
+    const NameText<char> materialInterfacePath,
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
@@ -98,7 +98,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     Core::Alloc::GlobalArena& arena,
     const SmokeModelRef& model,
     const SmokeMaterialRef& material,
-    const AStringView materialInterfacePath,
+    const NameText<char> materialInterfacePath,
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale

@@ -51,6 +51,10 @@ static const float NWB_REFRACTION_MIN_DISTANCE = 0.001;
 // Without a geometric exit, treat the captured boundary as a unit-thickness sheet. This fallback is explicit and stable; it must not use the distance to the background as glass thickness, which would darken distant backgrounds.
 static const float NWB_REFRACTION_FALLBACK_THICKNESS = 1.0;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 float3 nwbRefractionReconstruct(const uint2 pixel, const float depth){
     const float2 uv = (float2(pixel) + 0.5) / float2(g_NwbRefractionPush.width, g_NwbRefractionPush.height);
     const float4 world = mul(g_NwbRefractionView.clipToWorld, float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0));

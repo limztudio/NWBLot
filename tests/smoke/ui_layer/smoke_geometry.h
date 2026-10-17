@@ -28,7 +28,12 @@ NWB_BEGIN
 namespace Tests::Smoke{
 
 template<typename Source>
-[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const bool reverse)noexcept(noexcept(start >= source.rowCount()) && noexcept(static_cast<bool>(source.enabled(start)))){
+[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const bool reverse)noexcept(
+    noexcept(static_cast<bool>(start >= source.rowCount()))
+    && noexcept(static_cast<bool>(start + 1u >= source.rowCount()))
+    && noexcept(static_cast<bool>(source.enabled(start)))
+    && noexcept(static_cast<bool>(source.enabled(DeclVal<u64&>())))
+){
     u64 index = 0u;
     if(start >= source.rowCount())
         return MakeUnexpected(Failure{});
@@ -58,6 +63,13 @@ template<typename Source>
     const SIMDVectorSingle color = VectorDivide(channels, VectorReplicate(15.0f));
     return { VectorGetX(color), VectorGetY(color), VectorGetZ(color), 1.0f };
 }
+[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{
+    return EncodeSmokeColor(static_cast<u64>(value));
+}
+
+[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value)noexcept{
+    return EncodeSmokeColor(static_cast<u64>(Max(0.0f, value) + 0.5f));
+}
 
 [[nodiscard]] inline bool SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
@@ -81,14 +93,6 @@ template<typename Source>
 
 inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} {}={},{},{},{}"), tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-}
-
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{
-    return EncodeSmokeColor(static_cast<u64>(value));
-}
-
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value)noexcept{
-    return EncodeSmokeColor(static_cast<u64>(Max(0.0f, value) + 0.5f));
 }
 
 [[nodiscard]] inline u64 HashSmokeText(const AStringView text)noexcept{

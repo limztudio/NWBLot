@@ -180,7 +180,7 @@ bool RendererCompilerStatisticsProbe::write()const{
     const u64 overflow = m_attempts - m_samples.size();
     const bool complete = !m_samples.empty() && overflow == 0u;
     output << "{\"type\":\"compiler_statistics_complete\",\"attempts\":" << m_attempts << ",\"stored\":" << m_samples.size() << ",\"overflow\":" << overflow << ",\"invalid\":" << invalid << ",\"complete\":" << (complete ? "true" : "false") << "}\n";
-    output.flush();
+    output.close();
     return output.good() && complete;
 }
 

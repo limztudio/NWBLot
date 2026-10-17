@@ -3,6 +3,7 @@
 
 
 #include <core/os/linux/x11/clipboard.h>
+#include <core/os/linux/x11/x11_checked.h>
 
 #include <tests/common/test_context.h>
 
@@ -32,12 +33,16 @@ using namespace NWB::Core;
 class X11ClipboardFixture : public testing::Test{
 protected:
     virtual void SetUp()override{
-        if(!EnvironmentVariableEquals(m_arena.arena, "NWB_X11_CLIPBOARD_TEST_ISOLATED", "1"))
+        const auto isolated = EnvironmentVariableEquals(m_arena.arena, "NWB_X11_CLIPBOARD_TEST_ISOLATED", "1");
+        ASSERT_TRUE(isolated);
+        if(!*isolated)
             GTEST_SKIP() << "Native clipboard tests require the isolated Xvfb CTest entry";
         for(usize index = 0u; index < m_displays.size(); ++index){
             m_displays[index] = XOpenDisplay(nullptr);
             ASSERT_NE(m_displays[index], nullptr);
-            m_services[index] = CreateX11ClipboardService(m_arena.arena, *m_displays[index]);
+            auto serviceResult = CreateX11ClipboardService(m_arena.arena, *m_displays[index]);
+            ASSERT_TRUE(serviceResult);
+            m_services[index] = Move(*serviceResult);
             ASSERT_TRUE(m_services[index]);
         }
     }
@@ -91,8 +96,8 @@ protected:
 
     [[nodiscard]] bool writeText(const usize index, const ClipboardChannel::Enum channel, const AStringView text){
         ClipboardCompletion completion(m_arena.arena);
-        const ClipboardRequestResult request = m_services[index]->requestWriteText(channel, text);
-        return request.token.valid() && awaitCompletion(*m_services[index], request.token, completion) && completion.status == ClipboardStatus::Success;
+        const auto request = m_services[index]->requestWriteText(channel, text);
+        return request && request->valid() && awaitCompletion(*m_services[index], *request, completion) && completion.status == ClipboardStatus::Success;
     }
 
 
@@ -107,6 +112,30 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(X11ClipboardFixture, PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults){
+    Window retired = 0u;
+    {
+        X11CheckedOperation created(*m_displays[0]);
+        retired = XCreateSimpleWindow(m_displays[0], DefaultRootWindow(m_displays[0]), 0, 0, 1, 1, 0, 0, 0);
+        ASSERT_TRUE(created.succeeded());
+        ASSERT_NE(retired, 0u);
+    }
+    {
+        const auto absent = ReadX11Property(*m_displays[0], retired, XA_STRING, false, 16u);
+        ASSERT_TRUE(absent);
+        EXPECT_EQ(absent->type, 0u);
+        EXPECT_EQ(absent->count, 0u);
+    }
+    {
+        X11CheckedOperation destroyed(*m_displays[0]);
+        XDestroyWindow(m_displays[0], retired);
+        ASSERT_TRUE(destroyed.succeeded());
+    }
+    const auto failed = ReadX11Property(*m_displays[0], retired, XA_STRING, false, 16u);
+    ASSERT_FALSE(failed);
+    EXPECT_EQ(failed.error().errorCode, static_cast<u8>(BadWindow));
+}
+
 TEST_F(X11ClipboardFixture, WritingPrimarySelectionDoesNotOverwriteClipboardUtf8){
     const AStringView clipboard = "clipboard \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x99\x82";
     const AStringView primary = "primary caf\xc3\xa9";
@@ -114,11 +143,15 @@ TEST_F(X11ClipboardFixture, WritingPrimarySelectionDoesNotOverwriteClipboardUtf8
     ASSERT_TRUE(writeText(0u, ClipboardChannel::Clipboard, clipboard));
     ASSERT_TRUE(writeText(0u, ClipboardChannel::PrimarySelection, primary));
     ClipboardCompletion completion(m_arena.arena);
-    const ClipboardRequestToken clipToken = m_services[1]->requestReadText(ClipboardChannel::Clipboard).token;
+    const auto clipTokenAdmission = m_services[1]->requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(clipTokenAdmission);
+    const ClipboardRequestToken clipToken = *clipTokenAdmission;
     ASSERT_TRUE(awaitCompletion(*m_services[1], clipToken, completion));
     ASSERT_EQ(completion.status, ClipboardStatus::Success);
     EXPECT_EQ(completion.text, clipboard);
-    const ClipboardRequestToken primaryToken = m_services[1]->requestReadText(ClipboardChannel::PrimarySelection).token;
+    const auto primaryTokenAdmission = m_services[1]->requestReadText(ClipboardChannel::PrimarySelection);
+    ASSERT_TRUE(primaryTokenAdmission);
+    const ClipboardRequestToken primaryToken = *primaryTokenAdmission;
     ASSERT_TRUE(awaitCompletion(*m_services[1], primaryToken, completion));
     ASSERT_EQ(completion.status, ClipboardStatus::Success);
     EXPECT_EQ(completion.text, primary);
@@ -130,7 +163,9 @@ TEST_F(X11ClipboardFixture, IncrementalReadRetainsSnapshotAfterOwnerLosesSelecti
     ASSERT_TRUE(writeText(0u, ClipboardChannel::Clipboard, original));
     m_sawSelectionRequest = false;
     ClipboardCompletion completion(m_arena.arena);
-    const ClipboardRequestToken token = m_services[1]->requestReadText(ClipboardChannel::Clipboard).token;
+    const auto tokenAdmission = m_services[1]->requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(tokenAdmission);
+    const ClipboardRequestToken token = *tokenAdmission;
     const Timer deadline = TimerAddMS(TimerNow(), 3000u);
     while(!m_sawSelectionRequest && TimerNow() < deadline){
         ASSERT_TRUE(pumpAll());
@@ -152,12 +187,16 @@ TEST_F(X11ClipboardFixture, IncrementalReadRetainsSnapshotAfterOwnerLosesSelecti
 
 TEST_F(X11ClipboardFixture, CancelledRequestWindowCannotCompleteFreshRequest){
     ASSERT_TRUE(writeText(0u, ClipboardChannel::Clipboard, "first"));
-    const ClipboardRequestToken cancelled = m_services[1]->requestReadText(ClipboardChannel::Clipboard).token;
+    const auto cancelledAdmission = m_services[1]->requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(cancelledAdmission);
+    const ClipboardRequestToken cancelled = *cancelledAdmission;
     ASSERT_TRUE(m_services[1]->pump());
     ASSERT_TRUE(m_services[1]->cancel(cancelled));
     ASSERT_TRUE(writeText(0u, ClipboardChannel::Clipboard, "after cancellation"));
     ClipboardCompletion completion(m_arena.arena);
-    const ClipboardRequestToken fresh = m_services[1]->requestReadText(ClipboardChannel::Clipboard).token;
+    const auto freshAdmission = m_services[1]->requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(freshAdmission);
+    const ClipboardRequestToken fresh = *freshAdmission;
     ASSERT_TRUE(awaitCompletion(*m_services[1], fresh, completion));
     EXPECT_EQ(completion.status, ClipboardStatus::Success);
     EXPECT_EQ(completion.text, "after cancellation");
@@ -186,14 +225,18 @@ TEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText){
     ASSERT_EQ(ownershipLoss.xselectionclear.selection, clipboard);
 
     ClipboardCompletion completion(m_arena.arena);
-    const ClipboardRequestToken write = m_services[0]->requestWriteText(ClipboardChannel::Clipboard, "after reacquisition").token;
+    const auto writeAdmission = m_services[0]->requestWriteText(ClipboardChannel::Clipboard, "after reacquisition");
+    ASSERT_TRUE(writeAdmission);
+    const ClipboardRequestToken write = *writeAdmission;
     ASSERT_TRUE(write.valid());
     ASSERT_TRUE(awaitCompletion(*m_services[0], write, completion));
     ASSERT_EQ(completion.status, ClipboardStatus::Success);
     ASSERT_NE(XGetSelectionOwner(m_displays[1], clipboard), temporaryOwner);
     ASSERT_TRUE(DispatchX11ClipboardEvent(*m_services[0], ownershipLoss));
     ASSERT_TRUE(pumpAll());
-    const ClipboardRequestToken read = m_services[1]->requestReadText(ClipboardChannel::Clipboard).token;
+    const auto readAdmission = m_services[1]->requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(readAdmission);
+    const ClipboardRequestToken read = *readAdmission;
     ASSERT_TRUE(awaitCompletion(*m_services[1], read, completion));
     EXPECT_EQ(completion.status, ClipboardStatus::Success);
     EXPECT_EQ(completion.text, "after reacquisition");

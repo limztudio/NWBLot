@@ -62,8 +62,10 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     overrides.reserve(readerCount + pairCount);
     for(usize resourceIndex = 0u; resourceIndex < pairCount * 2u; ++resourceIndex){
         char identityText[32u] = {};
-        const Name identity = DeriveName(Name("tests/terminal_dependency/resource/"), FormatDecimal(resourceIndex, identityText));
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
+        const auto derivedNameAt65Col30 = DeriveName(Name("tests/terminal_dependency/resource/"), FormatDecimal(resourceIndex, identityText));
+        ASSERT_TRUE(derivedNameAt65Col30);
+        const Name identity = *derivedNameAt65Col30;
+        const auto resourceResult = graph.importResource(
             Graphics::GpuGraphResourceDesc{}
                 .setIdentity(identity)
                 .setMarkerLabel("Terminal Dependency Buffer")
@@ -72,6 +74,8 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
                 .setInitialState(Graphics::ResourceStates::ShaderResource)
                 .setExternalFinalState(Graphics::ResourceStates::CopySource)
         );
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         resources.push_back(resource);
     }
@@ -99,11 +103,15 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         }
         char identityText[32u] = {};
         Graphics::GpuTaskDesc desc;
-        desc.setIdentity(DeriveName(Name("tests/terminal_dependency/reader/"), FormatDecimal(readerIndex, identityText))).setMarkerLabel("Independent Terminal Reader").setScheduling(scheduling).setResourceUses(uses.data(), useCount);
+        const auto derivedNameAt104Col25 = DeriveName(Name("tests/terminal_dependency/reader/"), FormatDecimal(readerIndex, identityText));
+        ASSERT_TRUE(derivedNameAt104Col25);
+        desc.setIdentity(*derivedNameAt104Col25).setMarkerLabel("Independent Terminal Reader").setScheduling(scheduling).setResourceUses(uses.data(), useCount);
         if(scenario == TerminalDependencyScenario::Chain && !readers.empty())
             desc.setDependencies(&readers.back(), 1u);
         const usize queueIndex = scenario == TerminalDependencyScenario::ReadPairs && !lateFallback ? 0u : readerIndex % 2u;
-        const Graphics::GpuTaskId reader = graph.addTask(desc, queueIndex == 0u ? GraphicsCommands() : ComputeCommands());
+        const auto readerResult = graph.addTask(desc, queueIndex == 0u ? GraphicsCommands() : ComputeCommands());
+        ASSERT_TRUE(readerResult);
+        const Graphics::GpuTaskId reader = *readerResult;
         ASSERT_TRUE(reader.valid());
         readers.push_back(reader);
         overrides.push_back({ .task = reader, .queue = queues[queueIndex].id });
@@ -112,13 +120,17 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         const Graphics::GpuTaskResourceUse uses[] = { resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u) };
         char identityText[32u] = {};
         Graphics::GpuTaskDesc desc;
-        desc.setIdentity(DeriveName(Name("tests/terminal_dependency/finalizer/"), FormatDecimal(pairIndex, identityText))).setMarkerLabel("Terminal Finalizing Reader").setScheduling(scheduling).setResourceUses(uses, LengthOf(uses));
+        const auto derivedNameAt119Col25 = DeriveName(Name("tests/terminal_dependency/finalizer/"), FormatDecimal(pairIndex, identityText));
+        ASSERT_TRUE(derivedNameAt119Col25);
+        desc.setIdentity(*derivedNameAt119Col25).setMarkerLabel("Terminal Finalizing Reader").setScheduling(scheduling).setResourceUses(uses, LengthOf(uses));
         if(scenario == TerminalDependencyScenario::Chain)
             desc.setDependencies(&readers.back(), 1u);
         else if(lateFallback && pairIndex + 1u == pairCount)
             desc.setDependencies(&finalizers[1u], 1u);
         const usize queueIndex = scenario == TerminalDependencyScenario::ReadPairs ? (lateFallback ? (pairIndex + 1u) % 2u : 1u) : readerCount % 2u;
-        const Graphics::GpuTaskId finalizer = graph.addTask(desc, queueIndex == 0u ? GraphicsCommands() : ComputeCommands());
+        const auto finalizerResult = graph.addTask(desc, queueIndex == 0u ? GraphicsCommands() : ComputeCommands());
+        ASSERT_TRUE(finalizerResult);
+        const Graphics::GpuTaskId finalizer = *finalizerResult;
         ASSERT_TRUE(finalizer.valid());
         finalizers.push_back(finalizer);
         overrides.push_back({ .task = finalizer, .queue = queues[queueIndex].id });
@@ -206,9 +218,9 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
 TEST(GpuTaskGraphTerminalDependencies, PreservesDuplicatePairOrderAndLateIndirectReachability){
     using namespace __hidden_task_graph_terminal_dependency_tests;
     for(const usize readerCount : { 3u, 17u }){
-        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::ReadPairs, true);
-        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::RootedStar, false);
-        CheckTerminalDependencies(readerCount, TerminalDependencyScenario::Chain, false);
+        ASSERT_NO_FATAL_FAILURE(CheckTerminalDependencies(readerCount, TerminalDependencyScenario::ReadPairs, true));
+        ASSERT_NO_FATAL_FAILURE(CheckTerminalDependencies(readerCount, TerminalDependencyScenario::RootedStar, false));
+        ASSERT_NO_FATAL_FAILURE(CheckTerminalDependencies(readerCount, TerminalDependencyScenario::Chain, false));
     }
 }
 

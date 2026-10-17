@@ -26,7 +26,7 @@ void BuildTestFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraph
     edges.push_back(Telemetry::FrameGraphEdgeDesc{ .fromNodeIndex = 1u, .toNodeIndex = 2u, .kind = Telemetry::FrameGraphEdgeKind::Reads, .flags = 2u, });
 }
 
-Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment(){
+Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment()noexcept{
     Telemetry::FrameGraphQueueAssignment assignment;
     assignment.initialQueue = { .index = 1u, .deviceGeneration = 17u };
     assignment.plannedQueue = { .index = 3u, .deviceGeneration = 17u };
@@ -42,7 +42,7 @@ Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment(){
     return assignment;
 }
 
-Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment(){
+Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment()noexcept{
     Telemetry::FrameGraphQueueAssignment assignment;
     assignment.initialQueue = { .index = 4u, .deviceGeneration = 17u };
     assignment.plannedQueue = { .index = 5u, .deviceGeneration = 17u };
@@ -60,7 +60,7 @@ Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGener
     return Telemetry::FrameGraphCompiledTask{ .planGeneration = planGeneration, .packetIndex = packetIndex, .packetizationDecision = packetizationDecision, .present = true, };
 }
 
-Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
+Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics()noexcept{
     return Telemetry::FrameGraphRuntimeStatistics{
         .graphGeneration = 51u,
         .planGeneration = 52u,
@@ -148,7 +148,7 @@ Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
     };
 }
 
-Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex){
+Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex)noexcept{
     if(queueIndex == 1u){
         return Telemetry::FrameGraphPhysicalQueueRuntimeStatistics{
             .graphGeneration = 51u,
@@ -390,7 +390,8 @@ void BuildTestPacketSubmissionFrameGraph(
         .plannedWaitTokenCount = 1u,
         .sameQueueWaitElisionCount = 1u,
         .submissionSeconds = 0.375,
-    });
+    }
+    );
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
         .packetGeneration = 72u,
         .taskCount = 2u,
@@ -403,7 +404,8 @@ void BuildTestPacketSubmissionFrameGraph(
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .submissionSeconds = 0.125,
-    });
+    }
+    );
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
         .packetGeneration = 72u,
         .taskCount = 1u,
@@ -417,7 +419,8 @@ void BuildTestPacketSubmissionFrameGraph(
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 2u,
         .submissionSeconds = 0.25,
-    });
+    }
+    );
 }
 
 

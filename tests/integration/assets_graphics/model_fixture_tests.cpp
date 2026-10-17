@@ -112,7 +112,8 @@ asset_bunch bunch = [
     mesh,
     model,
 ];
-)");
+)"
+    );
 
     TestArena testArena;
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "model_bunch_four_row_transform");
@@ -154,7 +155,8 @@ asset_bunch bunch = [
     mesh,
     model,
 ];
-)");
+)"
+    );
 
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
@@ -186,7 +188,8 @@ asset_bunch bunch = [
     mesh,
     model,
 ];
-)");
+)"
+    );
 
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);

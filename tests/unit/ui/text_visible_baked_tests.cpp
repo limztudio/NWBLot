@@ -107,7 +107,7 @@ protected:
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u, &m_baked },
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
         };
-        if(!m_text.setFonts(sources, 2u))
+        if(!m_text.setFonts(scratchArena, sources, 2u))
             return false;
         layout = m_text.layout({ .text = text, .fontSize = 32.0f });
         if(!layout)
@@ -184,7 +184,9 @@ TEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisible
     ASSERT_EQ(m_baked.payload().groups.size(), 3u);
     FixedVector<SharedGlyphPage, s_PaintMaxImages - 1u> prior;
     for(usize index = 0u; index < prior.max_size(); ++index){
-        SharedGlyphPage page = makePage(1000u + index);
+        auto pageCreationResult = makePage(1000u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
         ASSERT_TRUE(page);
         prior.push_back(Move(page));
     }
@@ -259,7 +261,9 @@ TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersi
     FixedVector<SharedGlyphPage, s_PaintMaxImages> prior;
     prior.push_back(oldPage);
     for(usize index = 1u; index < prior.max_size(); ++index){
-        SharedGlyphPage page = makePage(2000u + index);
+        auto pageCreationResult = makePage(2000u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
         ASSERT_TRUE(page);
         prior.push_back(Move(page));
     }

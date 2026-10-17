@@ -34,7 +34,7 @@ public:
 
 
 public:
-    void arm(const SelectionMutation::Enum mutation){
+    void arm(const SelectionMutation::Enum mutation)noexcept{
         m_mutation = mutation;
         m_anchor = m_query.anchor();
         m_caret = m_query.caret();
@@ -87,8 +87,8 @@ public:
     }
     [[nodiscard]] virtual bool enabled(const u64 index)const override{ return m_source.enabled(index); }
 
-    void arm(const SelectionMutation::Enum mutation){ m_probe.arm(mutation); }
-    [[nodiscard]] u64 mutationCalls()const{ return m_probe.calls(); }
+    void arm(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
+    [[nodiscard]] u64 mutationCalls()const noexcept{ return m_probe.calls(); }
     [[nodiscard]] u64 textCalls()const noexcept{ return m_textCalls; }
 
 
@@ -123,8 +123,8 @@ public:
     }
     [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return m_view; }
 
-    void armFilter(const SelectionMutation::Enum mutation){ m_probe.arm(mutation); }
-    [[nodiscard]] u64 filterMutationCalls()const{ return m_probe.calls(); }
+    void armFilter(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
+    [[nodiscard]] u64 filterMutationCalls()const noexcept{ return m_probe.calls(); }
     [[nodiscard]] SelectionView& view()noexcept{ return m_view; }
 
 

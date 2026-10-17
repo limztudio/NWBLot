@@ -35,6 +35,10 @@ static Futex s_PrintMutex;
 static volatile SignalAtomic s_ShouldExit = 0;
 static constexpr u32 s_ConsoleUpdateIntervalMilliseconds = 50u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void SignalHandler(i32)noexcept{
     s_ShouldExit = 1;
 }
@@ -57,11 +61,11 @@ void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
     stream.flush();
 }
 
-Frame::Frame(void*){
+Frame::Frame(void*)noexcept{
 }
 Frame::~Frame() = default;
 
-bool Frame::init(){
+bool Frame::init()noexcept{
     FrameDetail::s_ShouldExit = 0;
 
     if(!SetSignalHandler(ProcessSignal::Interrupt, FrameDetail::SignalHandler))
@@ -71,10 +75,12 @@ bool Frame::init(){
 
     return true;
 }
+
 void Frame::showFrame(){
     NWB_TCOUT << NWB_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
 }
-bool Frame::mainLoop(){
+
+bool Frame::mainLoop()noexcept{
     while(!FrameDetail::s_ShouldExit)
         SleepMS(FrameDetail::s_ConsoleUpdateIntervalMilliseconds);
 

@@ -28,10 +28,9 @@ u32 BackendContext::findNativeQueueIndex(const u32 familyIndex, const u32 queueI
 }
 
 
-bool BackendContext::createVulkanDevice(){
+bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     VkResult res = VK_SUCCESS;
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceCreateArena, s_DeviceSetupScratchArenaBytes);
     m_bufferDeviceAddressSupported = false;
     m_hostQueryResetFeatureEnabled = false;
     m_textureCompressionBcFeatureEnabled = false;
@@ -169,8 +168,12 @@ bool BackendContext::createVulkanDevice(){
     optionalPhysicalDeviceFeatures.pNext = pNext;
     m_instanceDispatch.vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &optionalPhysicalDeviceFeatures);
 
-    GraphicsVector<GraphicsString> unsupportedFeatureExtensions{ m_arena };
+    Vector<VulkanDetail::ScratchString, Alloc::ScratchArena> unsupportedFeatureExtensions(scratchArena);
     unsupportedFeatureExtensions.reserve(m_enabledExtensions.device.size());
+    ScopeExit retireUnsupportedFeatureExtensions([&unsupportedFeatureExtensions]()noexcept{
+        while(!unsupportedFeatureExtensions.empty())
+            unsupportedFeatureExtensions.pop_back();
+    });
     for(const auto& [name, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::None)
             continue;
@@ -178,17 +181,17 @@ bool BackendContext::createVulkanDevice(){
             continue;
         if(VulkanDetail::SupportsRequestedOptionalDeviceFeature(requestedOptionalFeatures, supportedOptionalFeatures, feature))
             continue;
-        unsupportedFeatureExtensions.push_back(name);
+        unsupportedFeatureExtensions.emplace_back(AStringView(name), scratchArena);
     }
 
     for(const auto& name : unsupportedFeatureExtensions){
-        const auto extensionIt = m_enabledExtensions.device.find(name);
+        const auto extensionIt = m_enabledExtensions.device.find(AStringView(name));
         if(extensionIt != m_enabledExtensions.device.end() && extensionIt.value() == DeviceExtensionFeature::DescriptorBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), StringConvert(name));
             return false;
         }
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), StringConvert(name));
-        m_enabledExtensions.device.erase(name);
+        m_enabledExtensions.device.erase(AStringView(name));
     }
 
     {
@@ -220,7 +223,8 @@ bool BackendContext::createVulkanDevice(){
         .vulkan13FeatureSupported = supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE,
         .extensionEnabled = isDeviceExtensionEnabled(VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME),
         .extensionFeatureSupported = supportedOptionalFeatures.textureCompressionAstcHdr.textureCompressionASTC_HDR == VK_TRUE,
-    });
+    }
+    );
 
     {
         auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
@@ -564,7 +568,8 @@ bool BackendContext::createVulkanDevice(){
                 .capabilities = capabilitiesForSameClassQueue(request.family),
                 .dedicated = queueClass != CommandQueue::Graphics,
                 .primaryForClass = false,
-            });
+            }
+            );
             if(!sameClassQueueEnabled){
                 secondaryQueueFamily = request.family;
                 sameClassQueueEnabled = true;

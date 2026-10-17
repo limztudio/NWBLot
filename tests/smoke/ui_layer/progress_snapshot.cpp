@@ -57,7 +57,7 @@ void UiProgressSmokeScene::observeState(Impl::UiPaintContext& context){
     const u32 focusCode = observation.focusCode;
     const u32 progressTargets = observation.passiveTargets;
     current.values = { static_cast<u64>(m_phase), focusCode, m_beforeClicks, m_afterClicks, static_cast<u64>(m_parent.isOpen()), static_cast<u64>(m_child.isOpen()), input.popupCount(), progressTargets };
-    const auto update = PublishPassiveSmokeSnapshot(current, m_snapshot, [&]{ return current.values != m_snapshot.values || current.bits != m_snapshot.bits; });
+    const auto update = PublishPassiveSmokeSnapshot(current, m_snapshot, [&]()noexcept{ return current.values != m_snapshot.values || current.bits != m_snapshot.bits; });
     if(!update.published)
         return;
     if(update.displayChanged){

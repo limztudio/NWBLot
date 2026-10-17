@@ -69,7 +69,8 @@ void CheckNaNComparisonFlags(){
     ScopeExit restore([&]()noexcept{
         if(!SetFloatingPointEnvironment(*original))
             NWB_ASSERT(false);
-    });
+    }
+    );
     for(const u32 nanBits : { 0x7FC12345u, 0x7F812345u }){
         for(usize nanLane = 0u; nanLane < Count; ++nanLane){
             for(usize mismatch = 0u; mismatch <= Count; ++mismatch){

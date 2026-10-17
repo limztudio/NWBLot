@@ -28,6 +28,7 @@
 #include <impl/assets/graphics/caustic/photon_push_constants.h>
 #endif
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
@@ -98,6 +99,11 @@ static constexpr TransparentMaterialRef s_GroundMaterial{"project/smoke/transpar
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 static constexpr TransparentMaterialRef s_TransparentCsgMaterial{"project/smoke/transparent_multi/materials/csg_center"};
 static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_multi/center_receiver");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
@@ -148,11 +154,7 @@ public:
         const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
         Float4 position;
         StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.f, 0.f, 0.f), VectorSet(0.2f, 0.f, 0.f, 0.f), VectorSet(-2.3f, s_CameraTargetY, 2.2f, 0.f)), position);
-        const auto entity = CreateTintedStaticMeshEntity(
-            world, arena, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface,
-            Float4(value, value, value, 1.f), position,
-            Float4(0.1f, 1.f, 1.3f, 0.f)
-        );
+        const auto entity = CreateTintedStaticMeshEntity(world, arena, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface, Float4(value, value, value, 1.f), position, Float4(0.1f, 1.f, 1.3f, 0.f));
         if(!entity.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
             return false;
@@ -297,15 +299,6 @@ static void ApplyTransparentCsgSceneTransform(
 
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
-        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
-    }
-
-    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
-        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
-    }
-
-
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TransparentMultiSmokeProject"));
 
@@ -321,6 +314,7 @@ private:
         rendererSystem.setFrameLaggedAsyncLightingEnabled(true);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path"));
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
         const auto refractionSetting = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
         const bool refractionEnabled = !refractionSetting || *refractionSetting != 0.0f;
@@ -329,7 +323,7 @@ private:
         rendererSystem.setRefractionEnabled(refractionEnabled);
         rendererSystem.setRefractionHardwareTracingEnabled(hardwareEnabled);
         NWB::Impl::ReflectionSettings reflectionSettings;
-        const auto reflectionModeText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(context.objectArena, "NWB_REFLECTION_SMOKE_MODE");
+        const auto reflectionModeText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_MODE");
         if(reflectionModeText){
             const AStringView mode(reflectionModeText->data(), reflectionModeText->size());
             if(mode == "disabled")
@@ -378,6 +372,30 @@ private:
     }
 
 
+public:
+    // Vary spin speed from one build to compare caustic motion-vector reprojection.
+    static f32 EffectiveRotationSpeed(){
+        static const f32 s_speed = [](){
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
+            if(!parsed)
+                return s_TransparentSceneRotationSpeed;
+            return IsFinite(*parsed) && (*parsed >= 0.0f) ? *parsed : s_TransparentSceneRotationSpeed;
+        }();
+        return s_speed;
+    }
+
+    // Pin yaw for deterministic captures; an unset override leaves normal spin active.
+    static f32 EffectiveFrozenAngle(){
+        static const f32 s_angle = [](){
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
+            if(!parsed)
+                return Limit<f32>::s_QuietNaN;
+            return IsFinite(*parsed) ? *parsed : Limit<f32>::s_QuietNaN;
+        }();
+        return s_angle;
+    }
+
+
 private:
     void destroyWorld(){
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
@@ -413,35 +431,10 @@ private:
 
 
 public:
-    // Vary spin speed from one build to compare caustic motion-vector reprojection.
-    static f32 EffectiveRotationSpeed(){
-        static const f32 s_speed = [](){
-            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
-            if(!parsed)
-                return s_TransparentSceneRotationSpeed;
-            return IsFinite(*parsed) && (*parsed >= 0.0f) ? *parsed : s_TransparentSceneRotationSpeed;
-        }();
-        return s_speed;
-    }
-
-    // Pin yaw for deterministic captures; an unset override leaves normal spin active.
-    static f32 EffectiveFrozenAngle(){
-        static const f32 s_angle = [](){
-            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
-            if(!parsed)
-                return Limit<f32>::s_QuietNaN;
-            return IsFinite(*parsed) ? *parsed : Limit<f32>::s_QuietNaN;
-        }();
-        return s_angle;
-    }
-
-
-public:
     explicit TransparentMultiSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
     {}
-
     virtual ~TransparentMultiSmokeProject()override{
         m_timingRenderPass.stop();
         m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
@@ -485,7 +478,8 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(causticTiming){
             // Camera distance varies visible footprint while the optical geometry, light and photon quality stay fixed.
-            const auto presetText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CAUSTIC_SMOKE_CAMERA_PRESET");
+            NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+            const auto presetText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CAUSTIC_SMOKE_CAMERA_PRESET");
             if(!presetText){
                 NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset is required"));
                 return false;
@@ -498,7 +492,7 @@ public:
             cameraDistance *= preset == "sparse" ? 2.0f : 1.0f;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}"), preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated"), cameraDistance, s_CameraTargetY);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"), RendererBaselineFixedDelta(), EffectiveFrozenAngle(), s_CausticSphereScale);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases bootstrap {} converged {} warmup {}"), NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT, NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT, NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases {}"), NWB_CAUSTIC_TEMPORAL_PHASE_COUNT);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}"), s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, s_DefaultDirectionalLightIntensity);
         }
 #endif
@@ -540,7 +534,8 @@ public:
             s_TransparentSharedMaterial,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
 #endif
-            TransparentCenterShapeBasePosition(), Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup());
+            TransparentCenterShapeBasePosition(), Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup()
+        );
         const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), TransparentRightShapeBasePosition(), Float4(0.68f, 0.68f, 0.68f));
         m_leftShape = shapeEntity;
         m_centerShape = centerShapeEntity;
@@ -585,7 +580,8 @@ public:
 #else
             Float4(0.08f, 0.08f, 0.08f, 1.0f), // dark ground keeps the overlapping colored transparent shadows readable
 #endif
-            Float4(0.0f, -0.08f, 0.08f), Float4(1.75f, 1.0f, 1.55f));
+            Float4(0.0f, -0.08f, 0.08f), Float4(1.75f, 1.0f, 1.55f)
+        );
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP") && !CreateCausticRefractionBackdrop(*m_world, m_context.objectArena))
             return false;
@@ -666,12 +662,14 @@ public:
         m_sceneYaw.update(safeDelta, frozenAngle, IsFinite(frozenAngle), m_arrowYawInput, s_ManualYawSpeed, EffectiveRotationSpeed(), s_MaxAnimationDelta);
         updateTransparentSceneTransforms();
         SetSmokeYawWindowTitle(m_context, m_sceneYaw.yaw(), m_sceneYaw.manualControl(), s_2PI);
-        m_world->tick(safeDelta);
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         ++m_rendererBaselineRenderedFrameCount;
         return true;
     }
-
-
 
 
 private:

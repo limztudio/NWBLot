@@ -72,7 +72,9 @@ TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
         ++calls;
         EXPECT_EQ(ref, custom);
         return false;
-    }), UiSkinSelectionResult::Failed);
+    }
+    ), UiSkinSelectionResult::Failed
+    );
     EXPECT_EQ(calls, 1u);
     EXPECT_EQ(selection.selected(), custom);
 }
@@ -116,7 +118,8 @@ TEST(UiSkinSelectionTests, SameReferenceReloadAdvancesGenerationAndLatestRequest
             EXPECT_EQ(generation, 2u);
             return true;
         }
-    ), UiSkinChangeResult::Applied);
+    ), UiSkinChangeResult::Applied
+    );
     EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
     EXPECT_EQ(selection.generation(), 2u);
     EXPECT_FALSE(selection.changePending());
@@ -149,7 +152,8 @@ TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetr
             EXPECT_EQ(generation, 2u);
             return true;
         }
-    ), UiSkinChangeResult::Applied);
+    ), UiSkinChangeResult::Applied
+    );
     EXPECT_EQ(selection.selected(), alternate);
     EXPECT_EQ(selection.generation(), 2u);
     EXPECT_FALSE(selection.changeFailed());
@@ -165,7 +169,8 @@ TEST(UiSkinSelectionTests, EmptyLiveRequestSelectsAndRebindsEngineDefault){
             EXPECT_EQ(generation, 2u);
             return true;
         }
-    ), UiSkinChangeResult::Applied);
+    ), UiSkinChangeResult::Applied
+    );
     EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
 }
 
@@ -204,7 +209,8 @@ TEST(UiSkinSelectionTests, IncompleteCookedCandidateCannotReachGpuBindOrReplaceS
     ASSERT_EQ(live.ensure(tryBind), UiSkinSelectionResult::Selected);
     live.requestChange(custom);
     EXPECT_EQ(live.applyChangeIfReady(true, false, false, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64){ return tryBind(ref); }
-    ), UiSkinChangeResult::Failed);
+    ), UiSkinChangeResult::Failed
+    );
     EXPECT_EQ(live.selected(), s_DefaultUiSkinRef);
     EXPECT_EQ(live.generation(), 1u);
     EXPECT_EQ(gpuBinds, 0u);

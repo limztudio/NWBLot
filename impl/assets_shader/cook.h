@@ -43,6 +43,32 @@ namespace ShaderOptimizationLevel{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ShaderCookDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct StringEqual{
+    using is_transparent = void;
+
+
+public:
+    [[nodiscard]] bool operator()(const AStringView lhs, const AStringView rhs)const noexcept{
+        return lhs == rhs;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ShaderCook : NoCopy{
 public:
     using CookArena = Core::Alloc::GlobalArena;
@@ -51,8 +77,14 @@ public:
     using CookVector = Vector<T, CookArena>;
 
     template<typename T, typename V>
-    using CookMap = HashMap<T, V, CookArena, Hasher<T>, EqualTo<T>>;
+    using CookMap = HashMap<
+        T, V, CookArena,
+        Conditional_T<IsSame_V<T, CookString>, Hasher<AStringView>, Hasher<T>>,
+        Conditional_T<IsSame_V<T, CookString>, ShaderCookDetail::StringEqual, EqualTo<T>>
+    >;
 
+
+public:
     struct ShaderMacroDefinition{
         AStringView name;
         AStringView value;
@@ -68,7 +100,7 @@ public:
         const CookVector<Path>& dependencies;
         Span<const AStringView> externallyPlannedMacroIncludes;
         const Path& sourcePath;
-        const Path& outputPath;
+        const ::Path<Core::Alloc::ScratchArena>& outputPath;
         u32 defineCount = 0;
         ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
         bool rayQuery = false;
@@ -79,17 +111,25 @@ public:
         Path root;
         AStringView key;
 
+
+    public:
         DependencyRootAlias(const Path& rootPath, const AStringView rootKey)
             : root(rootPath)
             , key(rootKey)
         {}
     };
 
+
+public:
     using DefineCombo = CookMap<CookString, CookString>;
 
+
+public:
     struct DefineEntry{
         CookVector<CookString> values;
 
+
+    public:
         explicit DefineEntry(CookArena& memoryArena)noexcept
             : values(memoryArena)
         {}
@@ -103,9 +143,11 @@ public:
         CookString source;
         CookMap<CookString, DefineEntry> defineValues;
 
+
+    public:
         explicit IncludeEntry(CookArena& memoryArena)
             : source(memoryArena)
-            , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
+            , defineValues(memoryArena)
         {}
     };
 
@@ -123,13 +165,15 @@ public:
         bool rayQuery = false;
         bool emitMeshComputeShadow = true;
 
+
+    public:
         explicit ShaderEntry(CookArena& memoryArena)
             : name(memoryArena)
             , entryPoint("main", memoryArena)
             , source(memoryArena)
             , includeRoots(memoryArena)
-            , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
-            , implicitDefines(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
+            , defineValues(memoryArena)
+            , implicitDefines(memoryArena)
         {}
     };
 
@@ -140,11 +184,21 @@ private:
         const typename MapT::key_type* key;
         const typename MapT::mapped_type* value;
     };
+
+
+private:
     template<typename MapT>
     using ScratchDefineEntryVector = Vector<
         DefineEntryPtr<MapT>,
         Core::Alloc::ScratchArena
     >;
+
+
+public:
+    struct DependencyChecksum{
+        u64 checksum = 0u;
+        bool compilerInputsHaveBom = false;
+    };
 
 
 public:
@@ -157,22 +211,16 @@ public:
     [[nodiscard]] Expected<ShaderEntry> parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<IncludeEntry> parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
 
-    bool validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
 
     void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena);
 
-    bool gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, Span<const AStringView> externallyPlannedMacroIncludes, CookVector<Path>& outDependencies, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations, Core::Alloc::ScratchArena& scratchArena);
 
-    bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
 
-    CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
 
-    struct DependencyChecksum{
-        u64 checksum = 0u;
-        bool compilerInputsHaveBom = false;
-    };
-
-    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(const CookVector<Path>& dependencies, InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(const CookVector<Path>& dependencies, const CookVector<Path>& includeDirectories, InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] u64 computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, u64 dependencyChecksum, u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena);
 
 

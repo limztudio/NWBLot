@@ -29,10 +29,16 @@ NWB_IMPL_BEGIN
 inline constexpr i32 s_CsgBoundsValidFlag = NWB_CSG_BOUNDS_VALID_FLAG;
 inline constexpr i32 s_CsgBoundsFiniteFlag = NWB_CSG_BOUNDS_FINITE_FLAG;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct CsgBoundsGpuData{
     Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
     Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_CsgBoundsValidFlag) != 0; }
     [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_CsgBoundsFiniteFlag) != 0; }
 };
@@ -118,6 +124,8 @@ struct CsgClipWorkBounds{
     SIMDVectorSingle maxBounds = VectorZero();
     bool valid = false;
 
+
+public:
     // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
     [[nodiscard]] bool resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize, const CsgClipWorkBounds& receiverBounds);
 };
@@ -129,6 +137,8 @@ struct CsgFrameWorkRegion{
     u32 maxY = 0u;
     bool fullFrame = false;
 
+
+public:
     [[nodiscard]] bool bounded()const noexcept{ return !fullFrame && minX < maxX && minY < maxY; }
     [[nodiscard]] bool valid()const noexcept{ return fullFrame || bounded(); }
     [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
@@ -176,7 +186,9 @@ struct CsgFrameGpuData{
     CsgCutterGpuDataVector cutters;
     CsgFrameWorkRegion workRegion;
 
-    explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
+
+public:
+    explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)noexcept
         : receiverRanges(arena)
         , cutters(arena)
     {}

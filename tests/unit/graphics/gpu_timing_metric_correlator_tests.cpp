@@ -53,7 +53,7 @@ public:
 
 public:
     [[nodiscard]] virtual bool enabled()const noexcept override{ return true; }
-    [[nodiscard]] virtual Core::Perf::TimingScopeId registerScope(const Name& scopeName)override{
+    [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope(const Name& scopeName)override{
         ++m_registrationAttempt;
         if(m_registrationAttempt == 3u)
             throw RegistrationSentinel{};
@@ -87,10 +87,13 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
     scopes.reserve(s_ScopeCount);
     for(usize scopeIndex = 0u; scopeIndex < s_ScopeCount; ++scopeIndex){
         char scopeIndexBuffer[32u] = {};
+        const auto derivedNameAt91Col25 = DeriveName(Name("tests/timing/large_envelope/"), FormatDecimal(scopeIndex, scopeIndexBuffer));
+        ASSERT_TRUE(derivedNameAt91Col25);
         scopes.push_back(Core::GpuPacketEnvelopeMetricScope{
-            .scopeName = DeriveName(Name("tests/timing/large_envelope/"), FormatDecimal(scopeIndex, scopeIndexBuffer)),
+            .scopeName = *derivedNameAt91Col25,
             .physicalQueue = { .index = static_cast<u16>(scopeIndex % s_ExpectedDualCount), .deviceGeneration = 7u },
-        });
+        }
+        );
     }
     const Name overlapScope("tests/timing/large_envelope_overlap");
     const Core::GpuPacketEnvelopeMetricQueueOutput outputs[] = {

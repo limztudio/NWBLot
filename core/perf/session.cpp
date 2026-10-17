@@ -78,8 +78,8 @@ void Session::ensureMemoryScopes(){
         ArenaMemoryOwnerIdentity identity;
         owner = ReadArenaMemoryOwnerIdentity(*owner, identity);
         const MemorySource::Enum source = identity.source == ArenaMemorySource::HeapBacking ? MemorySource::HeapBacking : MemorySource::Arena;
-        const MemoryScopeId scope = m_memory.registerScope(identity.ownerName, source);
-        if(!scope.valid()){
+        const auto scope = m_memory.registerScope(identity.ownerName, source);
+        if(!scope){
             NWB_ASSERT(false);
             continue;
         }

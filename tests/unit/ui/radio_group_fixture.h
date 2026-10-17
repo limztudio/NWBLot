@@ -41,7 +41,7 @@ namespace RadioMutation{
 
 
 // Mutable callbacks model explicit application intents; temporary labels expire at every later source call.
-class RadioSource : public IListDataSource{
+class RadioSource final : public IListDataSource{
 public:
     virtual ~RadioSource()override = default;
 
@@ -55,16 +55,16 @@ public:
     [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const override;
     [[nodiscard]] virtual StringView text(u64 index)const override;
     [[nodiscard]] virtual bool enabled(u64 index)const override;
-    void resetCounters()const;
-    void armSelection(RadioGroupState& state, RadioCallbackSite::Enum site, u64 key, bool awayAndBack = false);
-    void armSource(RadioCallbackSite::Enum site, bool replacement = false);
-    void armReentry(Builder& builder, RadioCallbackSite::Enum site, bool panel = false);
-    void armClose(PopupState& popup, RadioCallbackSite::Enum site);
+    void resetCounters()const noexcept;
+    void armSelection(RadioGroupState& state, RadioCallbackSite::Enum site, u64 key, bool awayAndBack = false)noexcept;
+    void armSource(RadioCallbackSite::Enum site, bool replacement = false)noexcept;
+    void armReentry(Builder& builder, RadioCallbackSite::Enum site, bool panel = false)noexcept;
+    void armClose(PopupState& popup, RadioCallbackSite::Enum site)noexcept;
 
 
 private:
     [[nodiscard]] u64 rawCount()const noexcept;
-    [[nodiscard]] u64 rawKey(u64 index)const;
+    [[nodiscard]] u64 rawKey(u64 index)const noexcept;
     void callback(RadioCallbackSite::Enum site)const;
 
 
@@ -120,12 +120,12 @@ protected:
     [[nodiscard]] bool declareSource(u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
     [[nodiscard]] bool prepare(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
     [[nodiscard]] bool accept(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
-    [[nodiscard]] WidgetId host()const noexcept;
+    [[nodiscard]] WidgetId host()const;
     [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 key, const RadioGroupState& state)const noexcept;
     [[nodiscard]] Point choicePoint(u64 key)const noexcept;
-    [[nodiscard]] RadioAcceptedFrame accepted()const;
+    [[nodiscard]] RadioAcceptedFrame accepted()const noexcept;
     void expectAccepted(const RadioAcceptedFrame& saved, bool focus = true, bool popupScopes = true)const;
-    [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const;
+    [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const noexcept;
 
 
 protected:

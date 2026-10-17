@@ -75,7 +75,7 @@ static void PrepareWorkload(PathFixture& fixture, const usize directoryCount, co
 }
 
 [[nodiscard]] static bool BuildAndVerifyDerivedPath(const PathFixture& fixture, Alloc::ScratchArena& scratchArena){
-    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("project"), fixture.sourcePath);
+    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("project"), fixture.sourcePath, scratchArena);
     return output && AStringView(*output) == AStringView(fixture.expectedDerived);
 }
 
@@ -105,6 +105,9 @@ TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
         const NWB::Path path(inputArena, testCase.input);
         EXPECT_EQ(AssetPathsDetail::BuildRelativeAssetPathText(path, output), testCase.accepted);
         EXPECT_EQ(AStringView(output), testCase.expected);
+        const ::Path<Alloc::ScratchArena> scratchPath(scratchArena, testCase.input);
+        EXPECT_EQ(AssetPathsDetail::BuildRelativeAssetPathText(scratchPath, output), testCase.accepted);
+        EXPECT_EQ(AStringView(output), testCase.expected);
     }
 }
 
@@ -133,19 +136,33 @@ TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText
     PathFixture fixture;
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/derived_scratch"));
     const NWB::Path source = fixture.assetRoot / "Models//./Hero.LOD0.NWB";
-    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("MiXeD/Root"), source);
+    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("MiXeD/Root"), source, scratchArena);
     ASSERT_TRUE(output);
     EXPECT_EQ(AStringView(*output), "MiXeD/Root/models/hero.lod0");
     const NWB::Path hiddenSource = fixture.assetRoot / "Folder.Name/.Hidden";
-    const auto hiddenOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), hiddenSource);
+    const auto hiddenOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), hiddenSource, scratchArena);
     ASSERT_TRUE(hiddenOutput);
     EXPECT_EQ(AStringView(*hiddenOutput), "project/folder.name/.hidden");
     const NWB::Path extensionlessSource = fixture.assetRoot / "Folder/NoExtension";
-    const auto extensionlessOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(""), extensionlessSource);
+    const auto extensionlessOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(""), extensionlessSource, scratchArena);
     ASSERT_TRUE(extensionlessOutput);
     EXPECT_EQ(AStringView(*extensionlessOutput), "/folder/noextension");
 
 }
+
+TEST(AssetPaths, DerivedOwningTextOutlivesBorrowedScratchSourcePath){
+    PathFixture fixture;
+    AString<AssetArena> retained(fixture.arena);
+    {
+        Alloc::ScratchArena scratchArena(Name("tests/asset_path/borrowed_source_scratch"));
+        const ::Path<Alloc::ScratchArena> source = ::Path<Alloc::ScratchArena>(scratchArena, fixture.assetRoot) / "Models/Hero.LOD0.NWB";
+        auto output = BuildDerivedAssetVirtualPath(fixture.arena, fixture.assetRoot, AStringView(s_PROJECT), source, scratchArena);
+        ASSERT_TRUE(output);
+        retained = Move(*output);
+    }
+    EXPECT_EQ(AStringView(retained), "project/models/hero.lod0");
+}
+
 
 TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
     Tests::CapturingLogger logger;
@@ -153,9 +170,9 @@ TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
     PathFixture fixture;
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/rejection_scratch"));
     const NWB::Path outside = fixture.assetRoot / "../Elsewhere/Model.NWB";
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), outside));
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), outside, scratchArena));
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), outside, scratchArena));
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot));
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot, scratchArena));
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot, scratchArena));
     EXPECT_EQ(logger.errorCount(), 4u);
 }
@@ -187,6 +204,27 @@ TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaU
             EXPECT_EQ(after.usedBytes, retained.usedBytes);
             EXPECT_EQ(after.reservedBytes, warm.reservedBytes);
         }
+        const NWB::Path parentInput = fixture.sourcePath / ".." / "Second.LOD1.NWB";
+        for(usize call = 0u; call < 16u; ++call){
+            {
+                const ::Path<Alloc::ScratchArena> source(scratchArena, parentInput);
+                const auto normal = source.lexicallyNormal();
+                const auto stem = normal.stem();
+                const auto extension = normal.extension();
+                EXPECT_EQ(stem.native(), TStringView(NWB_TEXT("Second.LOD1")));
+                EXPECT_EQ(extension.native(), TStringView(NWB_TEXT(".NWB")));
+            }
+            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
+        }
+        for(usize call = 0u; call < 16u; ++call){
+            {
+                const ::Path<Alloc::ScratchArena> source(scratchArena, fixture.relativePath);
+                const ::Path<Alloc::ScratchArena> emptyBase(scratchArena);
+                const auto relative = source.lexicallyRelative(emptyBase);
+                EXPECT_FALSE(relative.empty());
+            }
+            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
+        }
         scratchArena.deallocate(sentinel, 1u, 64u);
     }
 }
@@ -213,6 +251,25 @@ TEST(AssetPaths, RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStor
             EXPECT_EQ(output.c_str()[output.size()], '\0');
         }
         EXPECT_EQ(scratchArena.memoryStats().usedBytes, 0u);
+    }
+}
+
+TEST(AssetPaths, StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots){
+    Alloc::ScratchArena scratchArena(Name("tests/asset_path/native_filename_spans"));
+    constexpr AStringView s_Cases[][3]{
+        { "foo.bar/", "foo", ".bar" },
+        { "Folder/.Hidden///", ".Hidden", "" },
+        { "Folder/..//", ".", "." },
+        { "Folder/Name.///", "Name", "." },
+        { "/", "", "" },
+        { "", "", "" },
+    };
+    for(const auto& testCase : s_Cases){
+        const ::Path<Alloc::ScratchArena> path(scratchArena, testCase[0]);
+        const auto stem = path.stem();
+        const auto extension = path.extension();
+        EXPECT_EQ(PathToString(scratchArena, stem), testCase[1]);
+        EXPECT_EQ(PathToString(scratchArena, extension), testCase[2]);
     }
 }
 

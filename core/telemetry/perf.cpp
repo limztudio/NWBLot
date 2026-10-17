@@ -22,18 +22,28 @@ namespace __hidden_telemetry_perf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static bool IsValidMemorySource(const u32 source)noexcept{
+    return source == Perf::MemorySource::ExplicitScope || source == Perf::MemorySource::Arena || source == Perf::MemorySource::HeapBacking;
+}
+
+[[nodiscard]] static bool TimingDurationsAreFinite(const f64 seconds, const f64 minSeconds, const f64 maxSeconds, const f64 lastSeconds)noexcept{
+    constexpr u64 s_ExponentMask = 0x7FF0000000000000ull;
+    return
+        (BitCast<u64>(seconds) & s_ExponentMask) != s_ExponentMask && (BitCast<u64>(minSeconds) & s_ExponentMask) != s_ExponentMask
+        && (BitCast<u64>(maxSeconds) & s_ExponentMask) != s_ExponentMask && (BitCast<u64>(lastSeconds) & s_ExponentMask) != s_ExponentMask
+    ;
+}
+
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{
-    return header.magic == s_PerfTimingPayloadMagic
+    return
+        header.magic == s_PerfTimingPayloadMagic
         && header.version == s_PerfTimingPayloadVersion
         && header.reserved == 0u
         && IsValidPerfTimingSource(static_cast<PerfTimingSource::Enum>(header.source))
         && header.sampleCount != 0u
+        && TimingDurationsAreFinite(header.seconds, header.minSeconds, header.maxSeconds, header.lastSeconds)
         && !NameDetail::IsZeroHash(header.scopeHash)
     ;
-}
-
-[[nodiscard]] static bool IsValidMemorySource(const u32 source)noexcept{
-    return source == Perf::MemorySource::ExplicitScope || source == Perf::MemorySource::Arena || source == Perf::MemorySource::HeapBacking;
 }
 
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
@@ -42,7 +52,7 @@ namespace __hidden_telemetry_perf{
 }
 
 [[nodiscard]] static bool ValidateTimingInput(const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats)noexcept{
-    return IsValidPerfTimingSource(source) && static_cast<bool>(scopeName) && !scopeText.empty() && scopeText.size() <= Limit<u32>::s_Max && stats.valid();
+    return IsValidPerfTimingSource(source) && static_cast<bool>(scopeName) && !scopeText.empty() && scopeText.size() <= Limit<u32>::s_Max && stats.valid() && TimingDurationsAreFinite(stats.seconds, stats.minSeconds, stats.maxSeconds, stats.lastSeconds);
 }
 
 [[nodiscard]] static bool ValidateMemoryInput(const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta)noexcept{
@@ -71,7 +81,16 @@ struct ParsedPerfPayload{
 };
 
 template<typename HeaderT>
-[[nodiscard]] static Expected<ParsedPerfPayload<HeaderT>> ParsePerfPayloadWithScopeText(const void* const payload, const usize payloadBytes){
+[[nodiscard]] static Expected<ParsedPerfPayload<HeaderT>> ParsePerfPayloadWithScopeText(const void* const payload, const usize payloadBytes)noexcept(
+    noexcept(ReadPOD<HeaderT>(DeclVal<const BinaryByteView&>(), DeclVal<usize&>()))
+    && noexcept(ValidateHeader(DeclVal<const HeaderT&>()))
+    && noexcept(BinaryDetail::CanReadBytes(DeclVal<const BinaryByteView&>(), DeclVal<usize>(), DeclVal<const HeaderT&>().scopeNameBytes))
+    && noexcept((DeclVal<usize>() != DeclVal<const HeaderT&>().scopeNameBytes) ? 0 : 0)
+    && noexcept(DeclVal<void (*)(Expected<ParsedPerfPayload<HeaderT>>)noexcept>()(MakeUnexpected(Failure{})))
+    && noexcept(DeclVal<void (*)(Expected<ParsedPerfPayload<HeaderT>>)noexcept>()(
+        ParsedPerfPayload<HeaderT>{ .header = DeclVal<const HeaderT&>(), .scopeText = AStringView(DeclVal<const char*>(), DeclVal<const HeaderT&>().scopeNameBytes) }
+    ))
+){
     if(payloadBytes < sizeof(HeaderT) || !payload)
         return MakeUnexpected(Failure{});
 

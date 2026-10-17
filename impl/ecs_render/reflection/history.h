@@ -60,7 +60,7 @@ struct ReflectionHistoryOutcome{
 // CPU acceptance chooses banks; GPU ordering protects reuse; owner never waits.
 class ReflectionHistoryState : NoCopy{
 public:
-    explicit ReflectionHistoryState(u16 deviceGeneration);
+    explicit ReflectionHistoryState(u16 deviceGeneration)noexcept;
 
 
 public:
@@ -69,6 +69,7 @@ public:
     [[nodiscard]] bool reserve(const ReflectionHistoryPlan& plan)noexcept;
     void discard(const ReflectionHistoryPlan& plan)noexcept;
     void accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+
 
 private:
     ReflectionSceneContentStamp m_stamp;
@@ -99,6 +100,9 @@ public:
     ReflectionHistoryReservation(ReflectionHistoryControlHandle control, const ReflectionHistoryPlan& plan);
     ReflectionHistoryReservation(ReflectionHistoryReservation&& other)noexcept;
     ~ReflectionHistoryReservation()noexcept;
+
+
+public:
     ReflectionHistoryReservation& operator=(ReflectionHistoryReservation&& other)noexcept;
 
 
@@ -106,6 +110,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_reserved; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
     void discard()noexcept;
+
 
 private:
     ReflectionHistoryControlHandle m_control;

@@ -38,7 +38,7 @@ namespace CallbackMutation{
 
 class ReconcileGate final : public IRadioGroupReconcileGuard{
 public:
-    [[nodiscard]] virtual bool current()const override{
+    [[nodiscard]] virtual bool current()const noexcept override{
         if(mutateState && state){
             mutateState = false;
             state->select(state->selectedKey());
@@ -55,7 +55,7 @@ public:
 
 class ChoiceSource final : public IListDataSource{
 public:
-    ChoiceSource(){
+    ChoiceSource()noexcept{
         for(u32 index = 0u; index < s_RadioGroupMaxChoices; ++index)
             rows[index] = { index + 1u, true };
     }
@@ -205,7 +205,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static ControlAction Action(const RadioGroupState& state, const ControlActionKind::Enum kind, const u64 key = 0u){
+[[nodiscard]] static ControlAction Action(const RadioGroupState& state, const ControlActionKind::Enum kind, const u64 key = 0u)noexcept{
     const RadioGroupSnapshot snapshot = state.snapshot();
     ControlAction action;
     action.control = { snapshot.inputGeneration, snapshot.sourceGeneration, snapshot.sourceRevision };
@@ -361,7 +361,6 @@ TEST(UiRadioGroupBehaviorTests, HomeEndChooseEnabledEndpoints){
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_FALSE(result.activated);
 }
-
 
 
 TEST(UiRadioGroupBehaviorTests, IdenticalNavigationAndIgnoredPageIntentAdvanceRevisionWithoutRetiringInput){

@@ -53,10 +53,10 @@ BakedFontAtlas::BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas&
     m_pages.reserve(payload.groups.size());
     const u64 identity = __hidden_ui_baked_font_atlas::NewIdentity();
     for(u32 group = 0u; group < payload.groups.size(); ++group){
-        SharedSdfAtlasPage page = CreateSdfAtlasPage(arena, atlas, fontGeneration, identity, group);
+        auto page = CreateSdfAtlasPage(arena, atlas, fontGeneration, identity, group);
         if(!page)
             return;
-        m_pages.push_back(Move(page));
+        m_pages.push_back(Move(*page));
     }
     m_ready = true;
 }
@@ -70,9 +70,14 @@ const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedBakedFontAtlas CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration){
-    SharedBakedFontAtlas result(NewArenaObject<RefCounter<BakedFontAtlas>>(arena, arena, atlas, fontGeneration), ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-    return result->valid() ? result : SharedBakedFontAtlas{};
+Expected<SharedBakedFontAtlas> CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration){
+    auto* const atlasObject = NewArenaObject<RefCounter<BakedFontAtlas>>(arena, arena, atlas, fontGeneration);
+    if(!atlasObject)
+        return MakeUnexpected(Failure{});
+    SharedBakedFontAtlas result(atlasObject, ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    if(!result->valid())
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 

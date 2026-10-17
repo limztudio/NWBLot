@@ -28,9 +28,6 @@ inline constexpr AStringView s_VertexRefTangentName = "tangent";
 inline constexpr AStringView s_VertexRefUvName = "uv0";
 inline constexpr AStringView s_VertexRefColorName = "color";
 inline constexpr AStringView s_VertexRefSkinName = "skin";
-inline constexpr TStringView s_PositionStreamLabel = NWB_TEXT("position");
-inline constexpr TStringView s_NormalStreamLabel = NWB_TEXT("normal");
-inline constexpr TStringView s_TangentStreamLabel = NWB_TEXT("tangent");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,11 +42,11 @@ inline constexpr TStringView s_TangentStreamLabel = NWB_TEXT("tangent");
 Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const bool includeSkin, Core::Alloc::ScratchArena& scratchArena){
     ScratchVector<MeshVertexRef> vertexRefs(scratchArena);
 
-    const Core::Metascript::Value* field = MeshCookMetadata::FindRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_VertexRefsFieldNameView);
+    const auto field = MeshCookMetadata::FindRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_VertexRefsFieldNameView);
     if(!field)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(field.error());
 
-    const auto& list = field->asList();
+    const auto& list = (*field)->asList();
     const usize expectedComponentCount = includeSkin ? __hidden_mesh_source_streams::s_VertexRefComponentCountWithSkin : __hidden_mesh_source_streams::s_VertexRefComponentCountWithoutSkin;
     vertexRefs.reserve(list.size());
     for(usize vertexRefIndex = 0u; vertexRefIndex < list.size(); ++vertexRefIndex){

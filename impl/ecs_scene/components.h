@@ -74,6 +74,8 @@ struct alignas(Float4) CameraComponent{
     // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
     Float4 projection = Float4(CameraDefaults::s_VerticalFovRadians, CameraDefaults::s_NearPlane, CameraDefaults::s_FarPlane, CameraDefaults::s_AutoAspectRatio);
 
+
+public:
     [[nodiscard]] f32 verticalFovRadians()const noexcept{ return projection.x; }
     [[nodiscard]] f32 nearPlane()const noexcept{ return projection.y; }
     [[nodiscard]] f32 farPlane()const noexcept{ return projection.z; }
@@ -139,6 +141,8 @@ struct alignas(Float4) LightComponent{
     LightType::Enum type = LightType::Directional;
     bool enableCaustics = LightDefaults::s_EnableCaustics;
 
+
+public:
     [[nodiscard]] Float4 color()const noexcept{
         return Float4(colorIntensity.x, colorIntensity.y, colorIntensity.z, 0.0f);
     }

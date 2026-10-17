@@ -40,6 +40,8 @@ struct CsgResolvedClipCutter{
     CsgShapeTypeInfo shapeType;
     const CsgCutterComponent* cutter = nullptr;
 
+
+public:
     [[nodiscard]] const u8* parameterBytes()const noexcept{
         NWB_ASSERT(cutter);
         if(!cutter->parameterBytes.empty())
@@ -119,6 +121,8 @@ struct CsgReceiverLocalSpace{
     bool boundsCanCull = false;
     bool hasLocalToWorld = false;
 
+
+public:
     [[nodiscard]] const SIMDMatrix* localToWorldPtr()const noexcept{
         return hasLocalToWorld ? &localToWorld : nullptr;
     }

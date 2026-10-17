@@ -323,19 +323,27 @@ Expected<NWB::Impl::MaterialBindEntry> AssetsGraphicsFixture::ParseMaterialBindF
 
 
 #if defined(NWB_FINAL)
-bool AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+Expected<AssetsGraphicsFixture::Path> AssetsGraphicsFixture::EmitDuplicateGeneratedMaterialBindIncludePath(AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     const Path firstAssetRoot = cookCase.root / "first" / "assets";
     const Path secondAssetRoot = cookCase.root / "second" / "assets";
-    if(!__hidden_assets_graphics_fixture::WriteMaterialBindDiscoveryMetadata(firstAssetRoot))
-        return false;
-    if(!WriteTextFile(firstAssetRoot / "meshes" / "minimal_mesh.nwb", s_MinimalMeshMeta))
-        return false;
-    if(!WriteTextFile(firstAssetRoot / "material_interfaces" / "test_surface.bind", s_MinimalMaterialBindSource))
-        return false;
-    if(!WriteTextFile(secondAssetRoot / "material_interfaces" / "test_surface.bind", s_MinimalMaterialBindSource))
-        return false;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+    NWB::Impl::MaterialCookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
+    for(const Path& assetRoot : InitializerList<Path>{ firstAssetRoot, secondAssetRoot }){
+        const Path bindPath = assetRoot / "material_interfaces" / "test_surface.bind";
+        if(!WriteTextFile(bindPath, s_MinimalMaterialBindSource))
+            return MakeUnexpected(Failure{});
 
-    return CookPreparedGraphicsAssetRoots(testArena, cookCase.root, cookCase.outputDirectory, { firstAssetRoot, secondAssetRoot });
+        auto bindEntry = NWB::Impl::ParseMaterialBindSource(bindPath, testArena.arena, scratchArena);
+        if(!bindEntry)
+            return MakeUnexpected(bindEntry.error());
+        auto virtualPath = NWB::Core::Assets::BuildDerivedAssetVirtualPath(testArena.arena, assetRoot, NWB::Core::Assets::s_ProjectVirtualRoot, bindPath, scratchArena);
+        if(!virtualPath)
+            return MakeUnexpected(virtualPath.error());
+        bindEntry->virtualPath = Move(*virtualPath);
+        bindEntries.push_back(Move(*bindEntry));
+    }
+
+    return NWB::Impl::EmitMaterialBindIncludes(testArena.arena, cookCase.root / "cache", "tests", bindEntries, scratchArena);
 }
 
 
@@ -452,11 +460,12 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> AssetsGrap
     NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
     mountDesc.volumeName = "graphics";
     mountDesc.mountDirectory = outputDirectory;
-    UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
-    const bool loadedVolume = static_cast<bool>(filesystem);
+    auto filesystemResult = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+    const bool loadedVolume = static_cast<bool>(filesystemResult);
     EXPECT_TRUE(loadedVolume);
     if(!loadedVolume)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(filesystemResult.error());
+    UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = Move(*filesystemResult);
 
     NWB::Core::GraphicsBytes indexBinary(testArena.arena);
     const bool loadedIndex = filesystem->readFile(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);

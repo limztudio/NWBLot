@@ -39,45 +39,92 @@ namespace __hidden_cook_checksum{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 using ScratchString = AString<Core::Alloc::ScratchArena>;
 
 struct NormalizedDependencyRootAlias{
-    Path root;
+    ScratchPath root;
     ScratchString key;
     usize depth = 0u;
 
-    NormalizedDependencyRootAlias(ShaderCook::CookArena& pathArena, Core::Alloc::ScratchArena& scratchArena)
-        : root(pathArena)
+
+public:
+    explicit NormalizedDependencyRootAlias(Core::Alloc::ScratchArena& scratchArena)noexcept
+        : root(scratchArena)
         , key(scratchArena)
     {}
 };
 
 struct SortedDependencyItem{
     ScratchString canonicalPath;
-    Path path;
+    NotNull<const Path*> path;
 
-    SortedDependencyItem(ShaderCook::CookArena& pathArena, Core::Alloc::ScratchArena& scratchArena)
+
+public:
+    SortedDependencyItem(Core::Alloc::ScratchArena& scratchArena, const Path& dependency)noexcept
         : canonicalPath(scratchArena)
-        , path(pathArena)
+        , path(&dependency)
     {}
 };
 
-static usize PathDepth(const Path& path)noexcept{
+static usize PathDepth(const ScratchPath& path)noexcept{
     usize depth = 0u;
     for(auto it = path.begin(); it != path.end(); ++it)
         ++depth;
     return depth;
 }
 
-static Path NormalizeDependencyRootAliasPath(Path path){
-    path = path.lexicallyNormal();
+static ScratchPath NormalizeDependencyRootAliasPath(const ScratchPath& source){
+    ScratchPath path = source.lexicallyNormal();
     while(!path.empty() && !path.hasFilename()){
-        const Path parentPath = path.parentPath();
+        const ScratchPath parentPath = path.parentPath();
         if(parentPath.empty() || parentPath == path)
             break;
         path = parentPath;
     }
     return path;
+}
+
+static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependency, const Span<const NormalizedDependencyRootAlias> normalizedRootAliases, Core::Alloc::ScratchArena& scratchArena, const bool allowUnaliasedPath){
+    const auto normalizedDependencyResult = AbsolutePath(ScratchPath(scratchArena, dependency));
+    if(!normalizedDependencyResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), StringConvert(normalizedDependencyResult.error().message()));
+        return MakeUnexpected(Failure{});
+    }
+    const ScratchPath normalizedDependency = normalizedDependencyResult->lexicallyNormal();
+
+    const NormalizedDependencyRootAlias* bestRootAlias = nullptr;
+    for(const NormalizedDependencyRootAlias& rootAlias : normalizedRootAliases){
+        if(normalizedDependency != rootAlias.root && !PathHasDirectoryAncestor(normalizedDependency, rootAlias.root))
+            continue;
+        if(!bestRootAlias || rootAlias.depth > bestRootAlias->depth)
+            bestRootAlias = &rootAlias;
+    }
+    if(!bestRootAlias){
+        if(!allowUnaliasedPath){
+            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
+            return MakeUnexpected(Failure{});
+        }
+        const ScratchString absolutePathText = PathToString(scratchArena, normalizedDependency);
+        ScratchString canonicalPath("absolute:", scratchArena);
+        canonicalPath.reserve(AddSize(canonicalPath.size(), absolutePathText.size()));
+        canonicalPath += absolutePathText;
+        return canonicalPath;
+    }
+
+    const ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexicallyRelative(bestRootAlias->root));
+
+    const AStringView pathPrefix = allowUnaliasedPath ? AStringView("alias:") : AStringView();
+    ScratchString canonicalPath(scratchArena);
+    const usize relativePathSize = relativePathText.empty() ? 0u : AddSize(1u, relativePathText.size());
+    canonicalPath.reserve(AddSize(AddSize(pathPrefix.size(), bestRootAlias->key.size()), relativePathSize));
+    canonicalPath += pathPrefix;
+    canonicalPath += bestRootAlias->key;
+    if(!relativePathText.empty()){
+        canonicalPath += '/';
+        canonicalPath += relativePathText;
+    }
+    return canonicalPath;
 }
 
 [[nodiscard]] static AStringView ShaderOptimizationLevelText(const ShaderOptimizationLevel::Enum optimizationLevel)noexcept{
@@ -100,9 +147,15 @@ static Path NormalizeDependencyRootAliasPath(Path path){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies, const InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena){
+Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
+    const CookVector<Path>& dependencies,
+    const CookVector<Path>& includeDirectories,
+    const InitializerList<DependencyRootAlias> dependencyRootAliases,
+    Core::Alloc::ScratchArena& scratchArena
+){
     using __hidden_cook_checksum::SortedDependencyItem;
 
+    static constexpr u32 s_DependencyChecksumVersion = 3u;
     static constexpr u8 s_NewlineByte = '\n';
     static constexpr u8 s_ZeroByte = 0;
 
@@ -122,8 +175,8 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
             return MakeUnexpected(Failure{});
         }
 
-        __hidden_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena, scratchArena};
-        const auto rootPath = AbsolutePath(rootAlias.root);
+        __hidden_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{scratchArena};
+        const auto rootPath = AbsolutePath(__hidden_cook_checksum::ScratchPath(scratchArena, rootAlias.root));
         if(!rootPath){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), StringConvert(rootPath.error().message()));
             return MakeUnexpected(Failure{});
@@ -140,38 +193,24 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
         normalizedRootAliases.push_back(Move(normalizedAlias));
     }
 
+    Fnv64AppendValue(result.checksum, s_DependencyChecksumVersion);
+    Fnv64AppendValue(result.checksum, includeDirectories.size());
+    for(const Path& includeDirectory : includeDirectories){
+        const auto canonicalPath = __hidden_cook_checksum::BuildCanonicalDependencyPath(includeDirectory, normalizedRootAliases, scratchArena, true);
+        if(!canonicalPath)
+            return MakeUnexpected(Failure{});
+        Fnv64AppendBuffer(result.checksum, reinterpret_cast<const u8*>(canonicalPath->data()), canonicalPath->size());
+    }
+    Fnv64AppendValue(result.checksum, dependencies.size());
+
     Vector<SortedDependencyItem, Core::Alloc::ScratchArena> sortedDependencies{scratchArena};
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
-        SortedDependencyItem item(m_memoryArena, scratchArena);
-        auto normalizedDependencyResult = AbsolutePath(dependency);
-        if(!normalizedDependencyResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), StringConvert(normalizedDependencyResult.error().message()));
+        SortedDependencyItem item(scratchArena, dependency);
+        auto canonicalPath = __hidden_cook_checksum::BuildCanonicalDependencyPath(dependency, normalizedRootAliases, scratchArena, false);
+        if(!canonicalPath)
             return MakeUnexpected(Failure{});
-        }
-        Path normalizedDependency = normalizedDependencyResult->lexicallyNormal();
-
-        const __hidden_cook_checksum::NormalizedDependencyRootAlias* bestRootAlias = nullptr;
-        for(const __hidden_cook_checksum::NormalizedDependencyRootAlias& rootAlias : normalizedRootAliases){
-            if(normalizedDependency != rootAlias.root && !PathHasDirectoryAncestor(normalizedDependency, rootAlias.root))
-                continue;
-            if(!bestRootAlias || rootAlias.depth > bestRootAlias->depth)
-                bestRootAlias = &rootAlias;
-        }
-        if(!bestRootAlias){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
-            return MakeUnexpected(Failure{});
-        }
-
-        __hidden_cook_checksum::ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexicallyRelative(bestRootAlias->root));
-        CanonicalizeTextInPlace(relativePathText);
-
-        item.canonicalPath = bestRootAlias->key;
-        if(!relativePathText.empty()){
-            item.canonicalPath += '/';
-            item.canonicalPath += relativePathText;
-        }
-        item.path = dependency;
+        item.canonicalPath = Move(*canonicalPath);
         sortedDependencies.push_back(Move(item));
     }
 
@@ -183,13 +222,13 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
         result.checksum = UpdateFnv64(result.checksum, &s_NewlineByte, 1);
 
         dependencyBytes.clear();
-        auto readBinaryFileResult = ReadBinaryFile(item.path, dependencyBytes);
+        auto readBinaryFileResult = ReadBinaryFile(*item.path, dependencyBytes);
         if(!readBinaryFileResult){
             if(readBinaryFileResult.error()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(item.path), StringConvert(readBinaryFileResult.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(*item.path), StringConvert(readBinaryFileResult.error().message()));
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(item.path));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(*item.path));
             }
             return MakeUnexpected(Failure{});
         }
@@ -206,7 +245,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(c
 }
 
 u64 ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, const u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena){
-    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v4";
+    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v6";
     const u8 newlineByte = '\n';
 
     u64 checksum = s_Fnv64OffsetBasis;

@@ -28,7 +28,7 @@ class FramebufferCapture;
 
 class UiLayerSmokeProject final : public IProjectEntryCallbacks{
 public:
-    explicit UiLayerSmokeProject(ProjectRuntimeContext& context);
+    explicit UiLayerSmokeProject(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World> world)noexcept;
     virtual ~UiLayerSmokeProject()override;
 
 
@@ -44,7 +44,7 @@ private:
 
 private:
     ProjectRuntimeContext& m_context;
-    UniquePtr<Core::ECS::World> m_world;
+    NotNullUniquePtr<Core::ECS::World> m_world;
     UniquePtr<FramebufferCapture> m_framebufferCapture;
 };
 

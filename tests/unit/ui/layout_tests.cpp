@@ -22,7 +22,7 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 
 
-static LayoutNodeDesc StretchContainer(const LayoutDirection::Enum direction){
+static LayoutNodeDesc StretchContainer(const LayoutDirection::Enum direction)noexcept{
     LayoutNodeDesc description;
     description.direction = direction;
     description.width = { LayoutSizePolicy::Stretch, 1.0f };
@@ -30,7 +30,7 @@ static LayoutNodeDesc StretchContainer(const LayoutDirection::Enum direction){
     return description;
 }
 
-static LayoutNodeDesc FixedLeaf(const f32 width, const f32 height){
+static LayoutNodeDesc FixedLeaf(const f32 width, const f32 height)noexcept{
     LayoutNodeDesc description;
     description.width = { LayoutSizePolicy::Fixed, width };
     description.height = { LayoutSizePolicy::Fixed, height };

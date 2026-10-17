@@ -59,6 +59,11 @@ inline constexpr usize s_AftermathMaxJsonBytes = 8u * 1024u * 1024u; // decoded 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct AftermathLoadFailure{
+    AStringView operation;
+    SharedLibraryFailure native;
+};
+
 struct AftermathDecoder{
     SharedLibrary library;
     PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder createDecoder = nullptr;
@@ -66,21 +71,26 @@ struct AftermathDecoder{
     PFN_GFSDK_Aftermath_GpuCrashDump_GetJSON getJson = nullptr;
     PFN_GFSDK_Aftermath_GpuCrashDump_DestroyDecoder destroyDecoder = nullptr;
 
-    [[nodiscard]] bool load(LogArena& arena){
-        if(!library.open(arena, Core::Common::s_AftermathRuntimeName))
-            return false;
 
-        const auto create = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder>(arena, "GFSDK_Aftermath_GpuCrashDump_CreateDecoder");
-        const auto generate = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GenerateJSON>(arena, "GFSDK_Aftermath_GpuCrashDump_GenerateJSON");
-        const auto get = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GetJSON>(arena, "GFSDK_Aftermath_GpuCrashDump_GetJSON");
-        const auto destroy = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_DestroyDecoder>(arena, "GFSDK_Aftermath_GpuCrashDump_DestroyDecoder");
-        if(!create || !generate || !get || !destroy)
-            return false;
+public:
+    [[nodiscard]] Expected<void, AftermathLoadFailure> load(Core::Alloc::ScratchArena& scratchArena){
+        const auto opened = library.open(scratchArena, Core::Common::s_AftermathRuntimeName);
+        if(!opened)
+            return MakeUnexpected(AftermathLoadFailure{ .operation = "load_runtime", .native = opened.error(), });
+
+        const auto create = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_CreateDecoder");
+        const auto generate = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GenerateJSON>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_GenerateJSON");
+        const auto get = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GetJSON>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_GetJSON");
+        const auto destroy = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_DestroyDecoder>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_DestroyDecoder");
+        if(!create || !generate || !get || !destroy){
+            const SharedLibraryFailure& failure = !create ? create.error() : !generate ? generate.error() : !get ? get.error() : destroy.error();
+            return MakeUnexpected(AftermathLoadFailure{ .operation = "resolve_symbols", .native = failure, });
+        }
         createDecoder = *create;
         generateJson = *generate;
         getJson = *get;
         destroyDecoder = *destroy;
-        return true;
+        return {};
     }
 };
 
@@ -94,28 +104,43 @@ struct AftermathDecoder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport, Core::Alloc::ScratchArena& scratchArena){
+void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     static_cast<void>(config);
 
-    const Path dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
-    if(!PathIsRegularFile(dumpPath))
+    const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
+    const auto regularDump = IsRegularFile(dumpPath);
+    if(!regularDump){
+        outReport += "\n[aftermath]\nstatus=inspect_failed\n";
+        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "inspect_aftermath_dump", .code = regularDump.error(), });
+        return;
+    }
+    if(!*regularDump)
         return;
 
 #if !defined(NWB_WITH_AFTERMATH)
-    static_cast<void>(arena);
     static_cast<void>(scratchArena);
     outReport += s_AftermathSectionHeader;
     outReport += s_AftermathSkippedReport;
 #else
     Vector<u8, Core::Alloc::ScratchArena> dumpBytes(scratchArena);
-    if(!ReadBinaryFile(dumpPath, dumpBytes) || dumpBytes.empty()){
+    const auto read = ReadBinaryFile(dumpPath, dumpBytes);
+    if(!read || dumpBytes.empty()){
         outReport += "\n[aftermath]\nstatus=read_failed\n";
+        if(!read)
+            AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_aftermath_dump", .code = read.error(), });
         return;
     }
 
     AftermathDecoder decoderLib;
-    if(!decoderLib.load(arena)){
-        outReport += "\n[aftermath]\nstatus=skipped\ndetail=Aftermath runtime not found next to logserver\n";
+    const auto loaded = decoderLib.load(scratchArena);
+    if(!loaded){
+        const AftermathLoadFailure& failure = loaded.error();
+        outReport += failure.operation == "load_runtime" ? "\n[aftermath]\nstatus=skipped\n" : "\n[aftermath]\nstatus=decode_failed\n";
+        outReport += "detail=Aftermath runtime admission failed\n";
+        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = failure.operation, .code = failure.native.code, });
+        outReport += "native_detail=";
+        outReport += failure.native.detail.view();
+        outReport += failure.native.detailTruncated ? "\nnative_detail_truncated=true\n" : "\nnative_detail_truncated=false\n";
         return;
     }
 
@@ -129,17 +154,23 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
     u32 jsonSize = 0u;
     {
         GFSDK_Aftermath_GpuCrashDump_Decoder decoder = nullptr;
-        if(!GFSDK_Aftermath_SUCCEED(decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<u32>(dumpBytes.size()), &decoder)) || !decoder){
+        const GFSDK_Aftermath_Result createResult = decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<u32>(dumpBytes.size()), &decoder);
+        if(!GFSDK_Aftermath_SUCCEED(createResult) || !decoder){
             outReport += s_AftermathSectionHeader;
             outReport += s_AftermathCreateDecoderFailedReport;
+            outReport += MakeDiagnosticEventText("native_category=GFSDK_Aftermath\nnative_code={}\ndecoder_present={}\n", createResult, decoder != nullptr).view();
             return;
         }
 
         ScopeExit cleanupDecoder([&]()noexcept{
-            if(!GFSDK_Aftermath_SUCCEED(decoderLib.destroyDecoder(decoder)))
-                CaptureDiagnosticEvent("logger_server_aftermath", "Failed to destroy Aftermath crash dump decoder", __FILE__, __LINE__);
+            const GFSDK_Aftermath_Result destroyed = decoderLib.destroyDecoder(decoder);
+            if(!GFSDK_Aftermath_SUCCEED(destroyed)){
+                const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to destroy Aftermath crash dump decoder: native_category=GFSDK_Aftermath native_code={}", destroyed);
+                CaptureDiagnosticEvent("logger_server_aftermath", detail.view(), __FILE__, __LINE__);
+            }
             decoder = nullptr;
-        });
+        }
+        );
 
         const GFSDK_Aftermath_Result generateResult = decoderLib.generateJson(
             decoder,
@@ -154,13 +185,16 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
         if(!GFSDK_Aftermath_SUCCEED(generateResult) || jsonSize == 0u){
             outReport += s_AftermathSectionHeader;
             outReport += s_AftermathGenerateJsonFailedReport;
+            outReport += MakeDiagnosticEventText("native_category=GFSDK_Aftermath\nnative_code={}\njson_bytes={}\n", generateResult, jsonSize).view();
             return;
         }
 
         json.resize(jsonSize, '\0');
-        if(!GFSDK_Aftermath_SUCCEED(decoderLib.getJson(decoder, jsonSize, json.data()))){
+        const GFSDK_Aftermath_Result getResult = decoderLib.getJson(decoder, jsonSize, json.data());
+        if(!GFSDK_Aftermath_SUCCEED(getResult)){
             outReport += s_AftermathSectionHeader;
             outReport += s_AftermathGetJsonFailedReport;
+            outReport += MakeDiagnosticEventText("native_category=GFSDK_Aftermath\nnative_code={}\n", getResult).view();
             return;
         }
     }

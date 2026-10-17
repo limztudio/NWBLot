@@ -67,7 +67,7 @@ VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Sampler::Sampler(const VulkanContext& context)
+Sampler::Sampler(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
@@ -82,10 +82,10 @@ Sampler::~Sampler(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SamplerHandle Device::createSampler(const SamplerDesc& d){
+Expected<SamplerHandle> Device::createSampler(const SamplerDesc& d){
     if(d.reductionType != SamplerReductionType::Standard && d.reductionType != SamplerReductionType::Comparison){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: unsupported reduction type {}"), static_cast<u32>(d.reductionType));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     SamplerDesc normalizedDesc = d;
@@ -97,7 +97,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
     SamplerHandle sampler(NewArenaObject<Sampler>(m_context.objectArena, m_context), SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!sampler)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     sampler->m_desc = normalizedDesc;
 
     const VkSamplerCreateInfo samplerInfo = __hidden_vulkan_sampler::BuildSamplerCreateInfo(normalizedDesc);
@@ -106,7 +106,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create sampler"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     return sampler;

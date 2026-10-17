@@ -32,13 +32,24 @@ namespace __hidden_vulkan_device{
 // Timeline values live within one logical-device lifetime. Indices come from the Device registry(not CommandQueue ordinals); the generation makes a recreated Device reject old tokens.
 static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{
-    const u16 generation = s_DeviceGenerationAllocator.allocate();
-    NWB_FATAL_ASSERT_MSG(generation != 0u, NWB_TEXT("Vulkan: Device-generation identity space is exhausted."));
-    return generation;
+    const auto generation = s_DeviceGenerationAllocator.allocate();
+    if(!generation){
+        NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Vulkan: Device-generation identity space is exhausted."));
+        TerminateInvariant();
+    }
+    return *generation;
 }
 
 static constexpr u32 s_CalibratedTimestampProbeAttemptCount = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename EnumerateTimeDomains, typename GetCalibratedTimestamps>
 [[nodiscard]] static bool ProbeComparableGpuTimestamps(const VkPhysicalDevice physicalDevice, const VkDevice device, EnumerateTimeDomains enumerateTimeDomains, GetCalibratedTimestamps getCalibratedTimestamps, Alloc::ScratchArena& scratchArena){
@@ -136,7 +147,8 @@ Device::Device(const DeviceDesc& desc)
     ScopeExit releaseUnpublishedResources([this, initialExceptionCount]()noexcept{
         if(UncaughtExceptionCount() > initialExceptionCount)
             releaseOwnedResources();
-    });
+    }
+    );
 
     VkResult res = VK_SUCCESS;
 

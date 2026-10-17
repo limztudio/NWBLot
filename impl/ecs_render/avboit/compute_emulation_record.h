@@ -6,7 +6,6 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
@@ -67,7 +66,7 @@ struct AvboitComputeEmulationRecordInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
+[[nodiscard]] bool RecordAvboitComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,10 +108,17 @@ struct AvboitSharedComputeEmulationRecordTrait{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
+[[nodiscard]] bool RecordAvboitSharedComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
 
 template<typename PayloadT>
-[[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, Optional<Core::GpuTimingMeasure>* timing, const AvboitComputeEmulationRecordTrait& trait){
+[[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(
+    Core::Alloc::ScratchArena& scratchArena,
+    const PayloadT& payload,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context,
+    Optional<Core::GpuTimingMeasure>* timing,
+    const AvboitComputeEmulationRecordTrait& trait
+){
     static_cast<void>(context);
     const AvboitComputeEmulationRecordInputs inputs{
         &payload.graphics,
@@ -132,11 +138,12 @@ template<typename PayloadT>
         payload.materialGeometryStatesGraphOwned,
         payload.conservativeGeometryScissor,
     };
-    return RecordAvboitComputeEmulation(inputs, commandList, trait);
+    return RecordAvboitComputeEmulation(scratchArena, inputs, commandList, trait);
 }
 
 template<typename PayloadT, typename DispatchFn>
 [[nodiscard]] inline bool RecordAvboitRasterPassFromPayload(
+    Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
@@ -152,7 +159,6 @@ template<typename PayloadT, typename DispatchFn>
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItemPartitions drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     usize preparedInstanceCount = 0u;
@@ -172,6 +178,7 @@ template<typename PayloadT, typename DispatchFn>
 
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
+    Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
@@ -198,7 +205,7 @@ template<typename PayloadT>
         payload.finishTiming,
         isRasterPhase ? AvboitSharedComputeEmulationPhase::Raster : AvboitSharedComputeEmulationPhase::Generate,
     };
-    return RecordAvboitSharedComputeEmulation(inputs, commandList, trait);
+    return RecordAvboitSharedComputeEmulation(scratchArena, inputs, commandList, trait);
 }
 
 

@@ -95,7 +95,6 @@ public:
     {
         m_captureConfigurationValid = configureFramebufferCapture();
     }
-
     virtual ~TextureSmokeProject()override{
         DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture);
     }
@@ -139,7 +138,11 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         if(m_framebufferCapture)
             m_framebufferCapture->update();
-        m_world->tick(delta);
+        const auto updated = m_world->tick(delta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         return true;
     }
 

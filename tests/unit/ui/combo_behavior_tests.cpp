@@ -54,14 +54,14 @@ public:
         return count;
     }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         mutate(CallbackStage::Key);
         if(index >= count)
             return 0u;
         return reversed ? count - index : index + 1u;
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
         u64 index = 0u;
         mutate(CallbackStage::Lookup);
         if(keyValue == 0u || keyValue > count)
@@ -92,7 +92,7 @@ public:
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         mutate(CallbackStage::Enabled);
         const u64 keyValue = reversed ? count - index : index + 1u;
         return index < count && keyValue != disabledKey;

@@ -28,7 +28,8 @@ uint nwbCausticFluxToFixedPoint(float fluxChannel){
     if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
         return 0u;
     const float scaled = fluxChannel * NWB_CAUSTIC_FIXED_POINT_SCALE;
-    return (uint)min(scaled, (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
+    // Round once at the fixed-point boundary so small absorbed deposits do not lose a whole integer unit on every splat.
+    return (uint)min(round(scaled), (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
 }
 
 

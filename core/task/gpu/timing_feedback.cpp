@@ -25,6 +25,10 @@ namespace __hidden_gpu_task_timing_feedback{
 
 inline constexpr usize s_LinearHistoryCount = 16u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename NameT>
 [[nodiscard]] static usize HashTimingIdentity(const NameT& task, const u32 variant, const u32 resolutionClass)noexcept{
     usize hash = Hasher<NameT>{}(task);
@@ -76,6 +80,10 @@ usize GpuTaskTimingHistoryDetail::RouteHash::operator()(const RouteLookup& value
     return HashTimingRoute(HashTimingIdentity(value.key.task, value.key.variant, value.key.resolutionClass), value.key.queue, value.physicalQueue);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 usize GpuTaskTimingHistoryDetail::AssignmentHash::operator()(const AssignmentKey& value)const noexcept{
     return __hidden_gpu_task_timing_feedback::HashTimingIdentity(value.task, value.variant, value.resolutionClass);
 }
@@ -98,6 +106,9 @@ i32 GpuQueueAssignmentScore::total()const noexcept{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool GpuTaskTimingHistory::valid()const noexcept{
     using namespace __hidden_gpu_task_timing_feedback;
 
@@ -105,11 +116,17 @@ bool GpuTaskTimingHistory::valid()const noexcept{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool GpuTaskTimingFeedbackPolicy::valid()const noexcept{
     using namespace __hidden_gpu_task_timing_feedback;
 
     return minimumSampleCount != 0u && IsFiniteNonNegative(minimumAbsoluteBenefitSeconds) && IsFiniteNonNegative(minimumRelativeBenefit) && minimumRelativeBenefit <= 1.0;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(const GpuTaskDiagnosticTimingQueueOverride* const overrides, const usize overrideCount, const u16 deviceGeneration)noexcept{
@@ -184,7 +201,8 @@ bool GpuTaskTimingFeedbackCanSwitch(
     const u64 frameIndex,
     const GpuTaskTimingFeedbackPolicy& policy
 )noexcept{
-    return policy.enabled
+    return
+        policy.enabled
         && incumbentQueue.valid()
         && candidateQueue.valid()
         && incumbentQueue != candidateQueue
@@ -388,7 +406,8 @@ void GpuTaskTimingHistoryStore::snapshot(GpuTaskTimingHistorySnapshot& outSnapsh
         outSnapshot.m_historyIndex.reset();
         outSnapshot.m_assignmentIndex.reset();
         outSnapshot.reset();
-    });
+    }
+    );
 
     outSnapshot.m_histories.reserve(m_histories.size());
     for(const HistoryRecord& record : m_histories)

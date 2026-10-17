@@ -74,6 +74,8 @@ struct GpuCompiledPacketView{
     const GpuPacketDependency* dependencies = nullptr;
     const GpuExternalCompletionId* externalDependencies = nullptr;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return id.valid() && plan && (plan->taskCount == 0u || tasks) && (plan->dependencyCount == 0u || dependencies) && (plan->externalDependencyCount == 0u || externalDependencies);
     }
@@ -125,6 +127,8 @@ struct GpuCompiledTaskView{
     const GpuCompiledBarrier* prologueBarriers = nullptr;
     const GpuCompiledBarrier* epilogueBarriers = nullptr;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return plan && (plan->prologueStateSeedCount == 0u || prologueStateSeeds) && (plan->prologueBarrierCount == 0u || prologueBarriers) && (plan->epilogueBarrierCount == 0u || epilogueBarriers);
     }
@@ -159,6 +163,8 @@ struct GpuCompiledExternalResourceExportView{
     const GpuCompiledExternalResourceExport* plan = nullptr;
     const GpuCompiledExternalResourceExportSource* sources = nullptr;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return plan && plan->sourceCount != 0u && sources;
     }
@@ -172,6 +178,8 @@ struct GpuCompiledPresentEndpoint{
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return producer.valid() && backBuffer.valid() && packet.valid() && queue.valid();
     }
@@ -208,6 +216,8 @@ struct GpuCompiledOwnershipTransfer{
     GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::kCount;
     bool concurrentSharingCouldAvoid = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         if(
             !resource.valid()
@@ -227,7 +237,8 @@ struct GpuCompiledOwnershipTransfer{
 
         switch(route){
         case GpuOwnershipTransferRoute::Internal:
-            return sourceTask.valid()
+            return
+                sourceTask.valid()
                 && destinationTask.valid()
                 && sourceTask != destinationTask
                 && sourceTask.generation == resource.generation
@@ -331,6 +342,8 @@ struct GpuTaskGraphCompileStatistics{
     f64 packetDependencyPlanningSeconds = 0.0;
     u16 deviceGeneration = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
@@ -358,6 +371,8 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     usize outgoingRepeatedOwnershipTransferSignatureCount = 0u;
     usize concurrentSharingAdviceResourceCount = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
@@ -379,6 +394,8 @@ private:
     static constexpr u32 s_PlanAccessWriterBit = 1u << 31u;
     static constexpr u32 s_PlanAccessReaderMask = s_PlanAccessWriterBit - 1u;
 
+
+private:
     enum class AttemptBindingState : u8{
         None,
         Recording,
@@ -491,7 +508,7 @@ private:
 
 
 public:
-    explicit GpuCompiledGraph(GraphicsArena& arena);
+    explicit GpuCompiledGraph(GraphicsArena& arena)noexcept;
     ~GpuCompiledGraph()noexcept;
 
 

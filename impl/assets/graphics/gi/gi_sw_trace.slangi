@@ -80,6 +80,10 @@ uint nwbMeshFrameViewHeapSlot(){
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapGiSwInstanceBuffers[];
 #pragma warning(pop)
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapGiSwInstances(const uint slot){
     return g_NwbHeapGiSwInstanceBuffers[slot];
 }

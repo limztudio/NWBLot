@@ -53,13 +53,21 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
     using namespace __hidden_cpu_task_range_tests;
     CpuTaskScheduler scheduler(0u);
     u32 callbacks = 0u;
-    scheduler.parallelFor(0u, 1u, 1u, [&](usize){
+    EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
         ++callbacks;
-        ASSERT_TRUE(scheduler.submit([&](){
+        const auto cpuAdmission77 = scheduler.submit([&](){
             ++callbacks;
-            ASSERT_TRUE(scheduler.submit([&]()noexcept{ ++callbacks; }).valid());
-        }).valid());
-    });
+            const auto cpuAdmission78 = scheduler.submit([&]()noexcept{ ++callbacks; });
+            ASSERT_TRUE(cpuAdmission78);
+            if(cpuAdmission78)
+                ASSERT_TRUE(cpuAdmission78->valid());
+        }
+        );
+        ASSERT_TRUE(cpuAdmission77);
+        if(cpuAdmission77)
+            ASSERT_TRUE(cpuAdmission77->valid());
+    }
+    )));
     EXPECT_EQ(callbacks, 3u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
@@ -67,15 +75,19 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
 TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
     using namespace __hidden_cpu_task_range_tests;
     CpuTaskScheduler scheduler(OneWorker());
-    const auto task = scheduler.submit([&](){
+    const auto cpuAdmission79 = scheduler.submit([&](){
         const usize worker = scheduler.currentWorkerIndex();
         const auto affinity = scheduler.currentWorkerAffinity();
         EXPECT_NE(worker, 0u);
-        scheduler.parallelFor(0u, 1u, 1u, [&](usize){
+        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
             EXPECT_EQ(scheduler.currentWorkerIndex(), worker);
             EXPECT_EQ(scheduler.currentWorkerAffinity(), affinity);
-        });
-    });
+        }
+        )));
+    }
+    );
+    ASSERT_TRUE(cpuAdmission79);
+    const auto task = *cpuAdmission79;
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
 }
@@ -86,9 +98,10 @@ TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
     Atomic<bool> done{ false };
     usize worker = 0u;
     Thread producer([&](){
-        scheduler.parallelFor(0u, 1u, 1u, [&](usize){ worker = scheduler.currentWorkerIndex(); });
+        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){ worker = scheduler.currentWorkerIndex(); })));
         done.store(true, MemoryOrder::release);
-    });
+    }
+    );
     PumpUntil(scheduler, done);
     producer.join();
     EXPECT_EQ(worker, 1u);
@@ -101,13 +114,15 @@ TEST(CpuTaskRangeTests, ExternalMainThreadRangeWaitsForTheOwner){
     const ThreadId owner = QueryCurrentThreadId();
     u32 callbacks = 0u;
     Thread producer([&](){
-        scheduler.parallelFor(0u, 1u, 1u, [&](usize){
+        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
             ++callbacks;
             EXPECT_EQ(QueryCurrentThreadId(), owner);
             EXPECT_EQ(scheduler.currentWorkerIndex(), 0u);
-        }, { .target = CpuTaskTarget::MainThread });
+        }, { .target = CpuTaskTarget::MainThread }
+        )));
         done.store(true, MemoryOrder::release);
-    });
+    }
+    );
     PumpUntil(scheduler, done);
     producer.join();
     EXPECT_EQ(callbacks, 1u);
@@ -119,7 +134,9 @@ TEST(CpuTaskRangeTests, InvalidBatchOptionsPublishNoTasks){
     u32 callbacks = 0u;
     CpuTaskOptions options;
     options.cost = static_cast<CpuTaskCost::Enum>(255u);
-    EXPECT_THROW(scheduler.parallelFor(0u, 128u, 1u, [&](usize)noexcept{ ++callbacks; }, options), RuntimeException);
+    const auto rejected = scheduler.parallelFor(0u, 128u, 1u, [&](usize)noexcept{ ++callbacks; }, options);
+    ASSERT_FALSE(rejected);
+    EXPECT_EQ(rejected.error(), CpuTaskAdmissionError::InvalidOptions);
     EXPECT_EQ(callbacks, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
@@ -145,20 +162,26 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
     u32 callbacks = 0u;
     CpuTaskScheduler scheduler(0u);
     const int result = ::InvokeTerminalEntry<Failure>([&]()->int{
-        scheduler.parallelFor(0u, 1u, 1u, [&](usize){
-            EXPECT_TRUE(scheduler.submit([&, capture = Retirement(retirements)](){
+        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
+            const auto cpuAdmission80 = scheduler.submit([&, capture = Retirement(retirements)](){
                 EXPECT_TRUE(capture.count != nullptr);
                 ++callbacks;
-            }).valid());
+            }
+            );
+            EXPECT_TRUE(cpuAdmission80);
+            if(cpuAdmission80)
+                EXPECT_TRUE(cpuAdmission80->valid());
             throw Failure{ 73 };
-        });
+        }
+        )));
         return 0;
     }, [&](const Failure& failure){
         EXPECT_EQ(retirements, 1u);
         EXPECT_EQ(callbacks, 0u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return failure.code;
-    }, []()noexcept{ return -1; });
+    }, []()noexcept{ return -1; }
+    );
     EXPECT_EQ(result, 73);
 }
 

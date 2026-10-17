@@ -54,7 +54,11 @@ static void DeclareDenseDependencies(Graphics::GpuTaskGraph& graph, const usize 
     if(scenario != Scenario::Explicit){
         for(usize index = 0u; index < taskCount; ++index){
             char text[32u] = {};
-            resources.push_back(AddHazardDomain(graph, DeriveName(Name("tests/dense_dependencies/resource/"), FormatDecimal(index, text)), "Dense Hazard"));
+            const auto derivedNameAt57Col65 = DeriveName(Name("tests/dense_dependencies/resource/"), FormatDecimal(index, text));
+            ASSERT_TRUE(derivedNameAt57Col65);
+            const auto gpuAdmissionAt57 = AddHazardDomain(graph, *derivedNameAt57Col65, "Dense Hazard");
+            ASSERT_TRUE(gpuAdmissionAt57);
+            resources.push_back(*gpuAdmissionAt57);
             ASSERT_TRUE(resources.back().valid());
         }
     }
@@ -67,19 +71,16 @@ static void DeclareDenseDependencies(Graphics::GpuTaskGraph& graph, const usize 
                     .range = {},
                     .requiredState = Graphics::ResourceStates::UnorderedAccess,
                     .access = resourceIndex == index ? Graphics::GpuTaskResourceAccess::Write : Graphics::GpuTaskResourceAccess::Read,
-                });
+                }
+                );
             }
         }
         char text[32u] = {};
-        const auto task = AddTask(
-            graph,
-            DeriveName(Name("tests/dense_dependencies/task/"), FormatDecimal(index, text)),
-            "Dense Dependency Task",
-            scenario == Scenario::Inferred ? nullptr : tasks.data(),
-            scenario == Scenario::Inferred ? 0u : tasks.size(),
-            uses.data(),
-            uses.size()
-        );
+        const auto derivedNameAt79Col12 = DeriveName(Name("tests/dense_dependencies/task/"), FormatDecimal(index, text));
+        ASSERT_TRUE(derivedNameAt79Col12);
+        const auto taskResult = AddTask(graph, *derivedNameAt79Col12, "Dense Dependency Task", scenario == Scenario::Inferred ? nullptr : tasks.data(), scenario == Scenario::Inferred ? 0u : tasks.size(), uses.data(), uses.size());
+        ASSERT_TRUE(taskResult);
+        const auto task = *taskResult;
         ASSERT_TRUE(task.valid());
         tasks.push_back(task);
     }
@@ -116,8 +117,8 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
         const usize resourceUseCount = scenario == Scenario::Explicit ? 0u : pairCount + taskCount;
         nodes.reserve(taskCount + view.resourceCount());
         edges.reserve(pairCount + resourceUseCount);
-        Telemetry::FrameGraphBuilder builder(nodes, edges, pending);
         Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+        Telemetry::FrameGraphBuilder builder(scratch, nodes, edges, pending);
         ASSERT_TRUE(view.appendFrameGraphTelemetry(builder, analysis, scratch));
         EXPECT_LT(scratch.memoryStats().peakUsedBytes, s_MaxScratchBytes);
         EXPECT_EQ(nodes.size(), taskCount + view.resourceCount());
@@ -144,23 +145,33 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
 TEST(GpuTaskGraphAnalysis, DenseSequentialDependencyPairsBoundStorageAndPreserveTelemetryFlags){
     constexpr Scenario::Enum s_Scenarios[] = { Scenario::Explicit, Scenario::Inferred, Scenario::Mixed };
     for(const auto scenario : s_Scenarios)
-        CheckDenseDependencies(256u, scenario);
+        ASSERT_NO_FATAL_FAILURE(CheckDenseDependencies(256u, scenario));
 }
 
 TEST(GpuTaskGraphAnalysis, ReductionRetainsAnUnreachedMiddleTargetAfterReachingTheLastTarget){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena arena;
     Graphics::GpuTaskGraph graph(arena.arena);
-    const auto root = AddTask(graph, Name("tests/reduction_gap/root"), "Root");
-    const auto left = AddTask(graph, Name("tests/reduction_gap/left"), "Left", &root, 1u);
-    const auto middle = AddTask(graph, Name("tests/reduction_gap/middle"), "Middle", &root, 1u);
+    const auto rootResult = AddTask(graph, Name("tests/reduction_gap/root"), "Root");
+    ASSERT_TRUE(rootResult);
+    const auto root = *rootResult;
+    const auto leftResult = AddTask(graph, Name("tests/reduction_gap/left"), "Left", &root, 1u);
+    ASSERT_TRUE(leftResult);
+    const auto left = *leftResult;
+    const auto middleResult = AddTask(graph, Name("tests/reduction_gap/middle"), "Middle", &root, 1u);
+    ASSERT_TRUE(middleResult);
+    const auto middle = *middleResult;
     const Graphics::GpuTaskId lastDependencies[] = { root, left };
-    const auto last = AddTask(graph, Name("tests/reduction_gap/last"), "Last", lastDependencies, LengthOf(lastDependencies));
+    const auto lastResult = AddTask(graph, Name("tests/reduction_gap/last"), "Last", lastDependencies, LengthOf(lastDependencies));
+    ASSERT_TRUE(lastResult);
+    const auto last = *lastResult;
     ASSERT_TRUE(root.valid());
     ASSERT_TRUE(left.valid());
     ASSERT_TRUE(middle.valid());
     ASSERT_TRUE(last.valid());
     Graphics::GpuTaskGraphAnalysis analysis(arena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.schedulingEdges().size(), 3u);
     bool retainsMiddle = false;
     bool retainsRedundantLast = false;

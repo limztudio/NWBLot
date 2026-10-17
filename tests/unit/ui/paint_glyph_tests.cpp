@@ -29,7 +29,9 @@ class UiPaintGlyphTests : public NWB::UiPaintTextTests::PaintTextFixture{
 
 
 TEST_F(UiPaintGlyphTests, ClipTrimsGlyphGeometryAndUv){
-    const SharedGlyphPage page = makeGlyphPage();
+    auto pageCreationResult = makeGlyphPage();
+    ASSERT_TRUE(pageCreationResult);
+    const SharedGlyphPage page = Move(*pageCreationResult);
     ASSERT_TRUE(page);
     m_builder.pushClip({ 10.0f, 5.0f, 20.0f, 10.0f });
     ASSERT_TRUE(m_builder.drawGlyph(page, { 0.0f, 0.0f, 40.0f, 20.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 0.8f, 0.4f, 0.2f, 0.5f }));
@@ -38,8 +40,12 @@ TEST_F(UiPaintGlyphTests, ClipTrimsGlyphGeometryAndUv){
 }
 
 TEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndClip){
-    const SharedGlyphPage first = makeGlyphPage();
-    const SharedGlyphPage second = makeGlyphPage(11u, 1u, 1u);
+    auto firstCreationResult = makeGlyphPage();
+    ASSERT_TRUE(firstCreationResult);
+    const SharedGlyphPage first = Move(*firstCreationResult);
+    auto secondCreationResult = makeGlyphPage(11u, 1u, 1u);
+    ASSERT_TRUE(secondCreationResult);
+    const SharedGlyphPage second = Move(*secondCreationResult);
     ASSERT_TRUE(first);
     ASSERT_TRUE(second);
     const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
@@ -78,8 +84,12 @@ TEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndCl
 }
 
 TEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlierGlyphUvs){
-    const SharedGlyphPage original = makeGlyphPage();
-    const SharedGlyphPage appended = makeGlyphPage(11u, 2u);
+    auto originalCreationResult = makeGlyphPage();
+    ASSERT_TRUE(originalCreationResult);
+    const SharedGlyphPage original = Move(*originalCreationResult);
+    auto appendedCreationResult = makeGlyphPage(11u, 2u);
+    ASSERT_TRUE(appendedCreationResult);
+    const SharedGlyphPage appended = Move(*appendedCreationResult);
     ASSERT_TRUE(original);
     ASSERT_TRUE(appended);
     const Rect earlierUv{ 0.0f, 0.0f, 0.25f, 0.25f };
@@ -109,13 +119,17 @@ TEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlier
 }
 
 TEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPageRelease){
-    SharedGlyphPage original = makeGlyphPage();
+    auto originalCreationResult = makeGlyphPage();
+    ASSERT_TRUE(originalCreationResult);
+    SharedGlyphPage original = Move(*originalCreationResult);
     ASSERT_TRUE(original);
     ASSERT_TRUE(m_builder.drawGlyph(original, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     const DrawSnapshot first = m_builder.freeze();
     original.reset();
     begin(8u);
-    SharedGlyphPage appended = makeGlyphPage(11u, 2u);
+    auto appendedCreationResult = makeGlyphPage(11u, 2u);
+    ASSERT_TRUE(appendedCreationResult);
+    SharedGlyphPage appended = Move(*appendedCreationResult);
     ASSERT_TRUE(appended);
     ASSERT_TRUE(m_builder.drawGlyph(appended, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
     const DrawSnapshot second = m_builder.freeze();
@@ -137,14 +151,20 @@ TEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPa
 TEST_F(UiPaintGlyphTests, RejectedPageAdmissionAtCapacityPreservesBindingsAndGeometry){
     FixedVector<SharedGlyphPage, s_PaintMaxGlyphPages> pages;
     for(usize index = 0u; index < s_PaintMaxGlyphPages; ++index){
-        SharedGlyphPage page = makeGlyphPage(100u + index);
+        auto pageCreationResult = makeGlyphPage(100u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
         ASSERT_TRUE(page);
         pages.push_back(Move(page));
     }
     ASSERT_TRUE(m_builder.drawGlyph(pages[0], { 2.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
     ASSERT_TRUE(m_builder.prepareGlyphPages(pages.data(), pages.size()));
-    const SharedGlyphPage upgrade = makeGlyphPage(100u, 2u);
-    const SharedGlyphPage overflow = makeGlyphPage(1000u);
+    auto upgradeCreationResult = makeGlyphPage(100u, 2u);
+    ASSERT_TRUE(upgradeCreationResult);
+    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
+    auto overflowCreationResult = makeGlyphPage(1000u);
+    ASSERT_TRUE(overflowCreationResult);
+    const SharedGlyphPage overflow = Move(*overflowCreationResult);
     ASSERT_TRUE(upgrade);
     ASSERT_TRUE(overflow);
     const Array<SharedGlyphPage, 2u> candidates{ upgrade, overflow };

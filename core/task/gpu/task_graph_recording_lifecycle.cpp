@@ -244,7 +244,8 @@ void GpuTaskGraph::completeRecordingPreparation(RecordingAttemptScope& attempt)c
 
 bool GpuTaskGraph::matchesRecordingAttempt(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
-    return recordingAttemptGeneration != 0u
+    return
+        recordingAttemptGeneration != 0u
         && !m_teardownInProgress
         && m_activeCompiledGraph == &compiledGraph
         && m_activeRecordingPlanGeneration != 0u
@@ -304,7 +305,8 @@ bool GpuTaskGraph::bindSubmissionTransaction(const GpuCompiledGraph& compiledGra
 
 bool GpuTaskGraph::matchesSubmissionTransaction(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
-    return submissionBinding.valid()
+    return
+        submissionBinding.valid()
         && !m_teardownInProgress
         && m_activeCompiledGraph == &compiledGraph
         && m_activeRecordingAttemptGeneration == recordingAttemptGeneration

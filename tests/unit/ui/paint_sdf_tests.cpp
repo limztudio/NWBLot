@@ -29,7 +29,9 @@ class UiPaintSdfTests : public NWB::UiPaintTextTests::PaintTextFixture{
 
 
 TEST_F(UiPaintSdfTests, ClipTrimsSdfGeometryAndUv){
-    const SharedSdfAtlasPage page = makeSdfPage();
+    auto pageCreationResult = makeSdfPage();
+    ASSERT_TRUE(pageCreationResult);
+    const SharedSdfAtlasPage page = Move(*pageCreationResult);
     ASSERT_TRUE(page);
     m_builder.pushClip({ 10.0f, 5.0f, 20.0f, 10.0f });
     ASSERT_TRUE(m_builder.drawSdfGlyph(page, 3u, { 0.0f, 0.0f, 40.0f, 20.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 0.8f, 0.4f, 0.2f, 0.5f }));
@@ -38,9 +40,15 @@ TEST_F(UiPaintSdfTests, ClipTrimsSdfGeometryAndUv){
 }
 
 TEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip){
-    const SharedSdfAtlasPage first = makeSdfPage();
-    const SharedSdfAtlasPage second = makeSdfPage(11u, 1u, 1u);
-    const SharedGlyphPage coverage = makeCoverage(22u);
+    auto firstCreationResult = makeSdfPage();
+    ASSERT_TRUE(firstCreationResult);
+    const SharedSdfAtlasPage first = Move(*firstCreationResult);
+    auto secondCreationResult = makeSdfPage(11u, 1u, 1u);
+    ASSERT_TRUE(secondCreationResult);
+    const SharedSdfAtlasPage second = Move(*secondCreationResult);
+    auto coverageCreationResult = makeCoverage(22u);
+    ASSERT_TRUE(coverageCreationResult);
+    const SharedGlyphPage coverage = Move(*coverageCreationResult);
     ASSERT_TRUE(first && second && coverage);
     const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
     const Rect uv{ 0.0f, 0.0f, 0.5f, 0.5f };
@@ -72,14 +80,18 @@ TEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip){
 }
 
 TEST_F(UiPaintSdfTests, FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepackAndRelease){
-    SharedSdfAtlasPage original = makeSdfPage();
+    auto originalCreationResult = makeSdfPage();
+    ASSERT_TRUE(originalCreationResult);
+    SharedSdfAtlasPage original = Move(*originalCreationResult);
     ASSERT_TRUE(original);
     const Sha256Digest oldPixelsHash = original->binding().pixelsSha256;
     ASSERT_TRUE(m_builder.drawSdfGlyph(original, 2u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     const DrawSnapshot first = m_builder.freeze();
     original.reset();
     begin(8u);
-    SharedSdfAtlasPage replacement = makeSdfPage(12u, 1u, 0u, 64u);
+    auto replacementCreationResult = makeSdfPage(12u, 1u, 0u, 64u);
+    ASSERT_TRUE(replacementCreationResult);
+    SharedSdfAtlasPage replacement = Move(*replacementCreationResult);
     ASSERT_TRUE(replacement);
     ASSERT_TRUE(m_builder.drawSdfGlyph(replacement, 2u, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
     const DrawSnapshot second = m_builder.freeze();
@@ -98,16 +110,24 @@ TEST_F(UiPaintSdfTests, FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepackAnd
 TEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverageUpgradeAndGeometry){
     FixedVector<SharedGlyphPage, s_PaintMaxImages - 1u> coverage;
     for(usize index = 0u; index < coverage.max_size(); ++index){
-        SharedGlyphPage page = makeCoverage(100u + index);
+        auto pageCreationResult = makeCoverage(100u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
         ASSERT_TRUE(page);
         coverage.push_back(Move(page));
     }
-    const SharedSdfAtlasPage sdf = makeSdfPage();
+    auto sdfCreationResult = makeSdfPage();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
     ASSERT_TRUE(sdf);
     ASSERT_TRUE(m_builder.prepareImages(coverage.data(), coverage.size(), &sdf, 1u));
     ASSERT_TRUE(m_builder.drawSdfGlyph(sdf, 3u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-    const SharedGlyphPage upgrade = makeCoverage(100u, 2u);
-    const SharedSdfAtlasPage overflow = makeSdfPage(99u);
+    auto upgradeCreationResult = makeCoverage(100u, 2u);
+    ASSERT_TRUE(upgradeCreationResult);
+    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
+    auto overflowCreationResult = makeSdfPage(99u);
+    ASSERT_TRUE(overflowCreationResult);
+    const SharedSdfAtlasPage overflow = Move(*overflowCreationResult);
     EXPECT_FALSE(m_builder.prepareImages(&upgrade, 1u, &overflow, 1u));
     EXPECT_FALSE(m_builder.drawSdfGlyph(overflow, 0u, { 10.0f, 10.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     const DrawSnapshot snapshot = m_builder.freeze();
@@ -122,8 +142,12 @@ TEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverage
 }
 
 TEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes){
-    const SharedSdfAtlasPage original = makeSdfPage();
-    const SharedSdfAtlasPage conflicting = makeSdfPage(11u, 1u, 0u, 64u);
+    auto originalCreationResult = makeSdfPage();
+    ASSERT_TRUE(originalCreationResult);
+    const SharedSdfAtlasPage original = Move(*originalCreationResult);
+    auto conflictingCreationResult = makeSdfPage(11u, 1u, 0u, 64u);
+    ASSERT_TRUE(conflictingCreationResult);
+    const SharedSdfAtlasPage conflicting = Move(*conflictingCreationResult);
     ASSERT_TRUE(original && conflicting);
     ASSERT_TRUE(m_builder.prepareSdfPages(&original, 1u));
     EXPECT_FALSE(m_builder.prepareSdfPages(&conflicting, 1u));
@@ -134,7 +158,9 @@ TEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes){
 }
 
 TEST_F(UiPaintSdfTests, InvalidChannelAndUvFailBeforeImageOrGeometryAdmission){
-    const SharedSdfAtlasPage page = makeSdfPage();
+    auto pageCreationResult = makeSdfPage();
+    ASSERT_TRUE(pageCreationResult);
+    const SharedSdfAtlasPage page = Move(*pageCreationResult);
     ASSERT_TRUE(page);
     EXPECT_FALSE(m_builder.drawSdfGlyph(page, 4u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     EXPECT_FALSE(m_builder.drawSdfGlyph(page, 0u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.75f, 0.0f, 0.5f, 0.5f }));
@@ -145,8 +171,12 @@ TEST_F(UiPaintSdfTests, InvalidChannelAndUvFailBeforeImageOrGeometryAdmission){
 }
 
 TEST_F(UiPaintSdfTests, DuplicateCandidatesConsumeOneImageSlot){
-    const SharedSdfAtlasPage page = makeSdfPage();
-    const SharedSdfAtlasPage reconstructed = makeSdfPage();
+    auto pageCreationResult = makeSdfPage();
+    ASSERT_TRUE(pageCreationResult);
+    const SharedSdfAtlasPage page = Move(*pageCreationResult);
+    auto reconstructedCreationResult = makeSdfPage();
+    ASSERT_TRUE(reconstructedCreationResult);
+    const SharedSdfAtlasPage reconstructed = Move(*reconstructedCreationResult);
     ASSERT_TRUE(page && reconstructed);
     const Array<SharedSdfAtlasPage, 3u> candidates{ page, reconstructed, page };
     ASSERT_TRUE(m_builder.prepareSdfPages(candidates.data(), candidates.size()));
@@ -156,7 +186,10 @@ TEST_F(UiPaintSdfTests, DuplicateCandidatesConsumeOneImageSlot){
 }
 
 TEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncompleteRgba){
-    SdfAtlasPageBinding binding = makeSdfPage()->binding();
+    auto bindingPageResult = makeSdfPage();
+    ASSERT_TRUE(bindingPageResult);
+    const SharedSdfAtlasPage bindingPage = Move(*bindingPageResult);
+    SdfAtlasPageBinding binding = bindingPage->binding();
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(256u, 0u);
     binding.distanceEncoding = 2u;
@@ -172,13 +205,18 @@ TEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncomplete
 }
 
 TEST_F(UiPaintSdfTests, CompactPageRejectsMissingChannelsWithoutPublishingGeometry){
-    SdfAtlasPageBinding binding = makeSdfPage()->binding();
+    auto bindingPageResult = makeSdfPage();
+    ASSERT_TRUE(bindingPageResult);
+    const SharedSdfAtlasPage bindingPage = Move(*bindingPageResult);
+    SdfAtlasPageBinding binding = bindingPage->binding();
     binding.width = 7u;
     binding.height = 5u;
     binding.channelCount = 2u;
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(7u * 5u * 2u, 128u);
-    const SharedSdfAtlasPage page = CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    auto pageCreationResult = CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    ASSERT_TRUE(pageCreationResult);
+    const SharedSdfAtlasPage page = Move(*pageCreationResult);
     ASSERT_TRUE(page);
     EXPECT_FALSE(m_builder.drawSdfGlyph(page, 2u, { 1.f, 1.f, 4.f, 4.f }, { 0.f, 0.f, 0.5f, 0.5f }));
     EXPECT_TRUE(m_builder.freeze().commands().empty());
@@ -190,7 +228,10 @@ TEST_F(UiPaintSdfTests, CompactPageRejectsMissingChannelsWithoutPublishingGeomet
 }
 
 TEST_F(UiPaintSdfTests, CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInput){
-    SdfAtlasPageBinding binding = makeSdfPage()->binding();
+    auto bindingPageResult = makeSdfPage();
+    ASSERT_TRUE(bindingPageResult);
+    const SharedSdfAtlasPage bindingPage = Move(*bindingPageResult);
+    SdfAtlasPageBinding binding = bindingPage->binding();
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(256u, 128u);
     binding.channelCount = 0u;
@@ -201,7 +242,10 @@ TEST_F(UiPaintSdfTests, CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInpu
     EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
     EXPECT_EQ(pixels.size(), 256u);
     pixels.resize(64u);
-    ASSERT_TRUE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    auto pageResult = CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    ASSERT_TRUE(pageResult);
+    const SharedSdfAtlasPage page = Move(*pageResult);
+    ASSERT_TRUE(page);
 }
 
 TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased){
@@ -228,7 +272,9 @@ TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsRele
         atlas.setPayload(Move(payload));
         Core::Alloc::ScratchArena scratchArena(Name("tests/ui/paint_sdf/validation_scratch"));
         ASSERT_TRUE(atlas.validatePayload(scratchArena));
-        page = CreateSdfAtlasPage(m_arena, atlas, 7u, 123u, 0u);
+        auto pageResult = CreateSdfAtlasPage(m_arena, atlas, 7u, 123u, 0u);
+        ASSERT_TRUE(pageResult);
+        page = Move(*pageResult);
         ASSERT_TRUE(page);
     }
     ASSERT_TRUE(m_builder.drawSdfGlyph(page, 3u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));

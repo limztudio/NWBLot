@@ -32,12 +32,12 @@ void FbxSourceMeshStreams::ReserveSourceMeshStreams(SourceMeshStreams& mesh, con
 void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning){
     context.positions.reserve(estimatedTriangleCorners);
     context.normals.reserve(estimatedTriangleCorners);
+    context.tangents.reserve(estimatedTriangleCorners);
     context.uv0.reserve(estimatedTriangleCorners);
     context.colors.reserve(estimatedTriangleCorners);
-    context.tangents.reserve(estimatedTriangleCorners);
-    context.vertexRefs.reserve(estimatedTriangleCorners);
     if(wantsSkinning)
         context.skin.reserve(estimatedTriangleCorners);
+    context.vertexRefs.reserve(estimatedTriangleCorners);
 }
 
 
@@ -53,7 +53,7 @@ bool FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams
 }
 
 
-void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena){
+bool FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena){
     mesh.tangents.clear();
 
     SourceVertexRefIndexMap compactLookup(scratchArena);
@@ -74,7 +74,11 @@ void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core:
 
         const u32 compactIndex = static_cast<u32>(compactVertexRefs.size());
         compactVertexRefs.push_back(ref);
-        compactLookup.emplace(ref, compactIndex);
+        const auto inserted = compactLookup.emplace(ref, compactIndex);
+        if(!inserted.second){
+            NWB_ASSERT(false);
+            return false;
+        }
         vertexRefRemap.push_back(compactIndex);
     }
 
@@ -83,6 +87,7 @@ void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core:
         index = vertexRefRemap[index];
     }
     mesh.vertexRefs = Move(compactVertexRefs);
+    return true;
 }
 
 

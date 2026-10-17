@@ -21,7 +21,7 @@ bool ValidateSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noe
     return settings.resolveResolution == SurfelGiResolveResolution::Half || settings.resolveResolution == SurfelGiResolveResolution::Quarter;
 }
 
-SurfelGiResolveSize MakeSurfelGiResolveSize(const u32 width, const u32 height, const u32 factor){
+SurfelGiResolveSize MakeSurfelGiResolveSize(const u32 width, const u32 height, const u32 factor)noexcept{
     NWB_ASSERT(factor == 2u || factor == 4u);
     return { DivideUp(width, factor), DivideUp(height, factor) };
 }

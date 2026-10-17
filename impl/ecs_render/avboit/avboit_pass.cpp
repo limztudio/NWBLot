@@ -62,31 +62,31 @@ static void DispatchAvboitCompute(Core::CommandList& commandList, Core::ComputeP
 
 
 Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { Core::Format::RGBA16_FLOAT, Core::Format::RGBA8_UNORM, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
+    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, Core::Format::RGBA8_UNORM, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { Core::Format::R16_FLOAT, Core::Format::R32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
+    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::R16_FLOAT, Core::Format::R32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample | Core::FormatSupport::ShaderUavStore;
+    constexpr Core::Format::Enum s_Candidates[] = { NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample | Core::FormatSupport::ShaderUavStore;
 
-    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
-    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 Core::RenderState BuildRendererAvboitVoxelRenderState(){
@@ -140,20 +140,24 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
     return pushConstants;
 }
 
-bool RendererAvboitSystem::prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererAvboitSystem::prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return false;
 
     const bool hasTransparentCsgWork = csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
-    if(hasTransparentCsgWork && !m_materialSystem.prepareMaterialPassResources(targets.framebuffer.get(), MaterialPipelinePass::CsgReceiverSurface, true, csgFrameState, nullptr))
+    if(hasTransparentCsgWork && !m_materialSystem.prepareMaterialPassResources(scratchArena, targets.framebuffer.get(), MaterialPipelinePass::CsgReceiverSurface, true, csgFrameState, nullptr))
         return false;
 
     return
-        m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer.get(), MaterialPipelinePass::AvboitOccupancy, true, csgFrameState, &avboitTargets)
-        && m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer.get(), MaterialPipelinePass::AvboitExtinction, true, csgFrameState, &avboitTargets)
-        && m_materialSystem.prepareMaterialPassResources(avboitTargets.accumulationFramebuffer.get(), MaterialPipelinePass::AvboitAccumulate, true, csgFrameState, &avboitTargets)
-        && (!avboitTargets.refractionFramebuffer || m_materialSystem.prepareMaterialPassResources(avboitTargets.refractionFramebuffer.get(), MaterialPipelinePass::AvboitRefractionCapture, true, csgFrameState, &avboitTargets))
+        m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.lowFramebuffer.get(), MaterialPipelinePass::AvboitOccupancy, true, csgFrameState, &avboitTargets)
+        && m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.lowFramebuffer.get(), MaterialPipelinePass::AvboitExtinction, true, csgFrameState, &avboitTargets)
+        && m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.accumulationFramebuffer.get(), MaterialPipelinePass::AvboitAccumulate, true, csgFrameState, &avboitTargets)
+        && (!avboitTargets.refractionFramebuffer || m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.refractionFramebuffer.get(), MaterialPipelinePass::AvboitRefractionCapture, true, csgFrameState, &avboitTargets))
     ;
 }
 

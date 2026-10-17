@@ -46,6 +46,8 @@ struct ReflectionFeedbackExtent{
     u32 entryCount = 0u;
     u32 byteCount = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return byteCount != 0u; }
 };
 
@@ -55,6 +57,8 @@ struct ReflectionFeedbackBinding{
     Core::BufferHandle buffer;
     Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid(); }
 };
 
@@ -65,6 +69,8 @@ struct ReflectionFeedbackSnapshot{
     ReflectionFeedbackBinding current;
     ReflectionFeedbackBinding previous;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return control && (!plan.eligible || (extent.valid() && current.valid() && previous.valid()));
     }
@@ -73,7 +79,7 @@ struct ReflectionFeedbackSnapshot{
 // Creation belongs to preflight; frozen snapshots retain buffers.
 class RendererReflectionFeedback final : NoCopy{
 public:
-    RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+    RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
 
 
 public:
@@ -84,6 +90,7 @@ public:
 private:
     void releaseBuffers();
     [[nodiscard]] bool prepareBank(ReflectionFeedbackBinding& bank, u32 byteCount, Name name);
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

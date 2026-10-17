@@ -2,11 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/graph/frame_graph_avboit_accumulation.h>
+#include "frame_graph_avboit_accumulation.h"
 
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 #include <impl/ecs_render/avboit/material_upload_builder.h>
 #include <impl/ecs_render/avboit/geometry_preparation_builder.h>
@@ -25,7 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphAvboitAccumulationUploadChain::FrameGraphAvboitAccumulationUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
+FrameGraphAvboitAccumulationUploadChain::FrameGraphAvboitAccumulationUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem){
@@ -33,6 +32,7 @@ FrameGraphAvboitAccumulationUploadChain::FrameGraphAvboitAccumulationUploadChain
 
 
 Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationUploadChain::declare(
+    Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitAccumulationUploadInputs& inputs,
     RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& accumulationPayload,
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& computeEmulationPayload,
@@ -65,18 +65,16 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
     usize accumulationSharedComputeEmulationInstanceCount = 0u;
     usize accumulationSharedComputeEmulationMaterialTypedByteCount = 0u;
     bool accumulationMaterialSampledTexturesCollected = false;
-    Core::Alloc::ScratchArena accumulationMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId accumulationMaterialGeometrySet;
     Core::GpuGraphResourceSetId accumulationMaterialSampledTextureSet;
     {
-        Core::Alloc::ScratchArena accumulationUploadScratch(RendererArenaScope::s_TaskGraphArena);
-        MaterialPassDrawItemPartitions accumulationDrawItems{ accumulationUploadScratch };
-        InstanceGpuDataVector accumulationInstanceData{ accumulationUploadScratch };
-        CsgFrameGpuData accumulationCsgFrameData{ accumulationUploadScratch };
+        MaterialPassDrawItemPartitions accumulationDrawItems{ scratchArena };
+        InstanceGpuDataVector accumulationInstanceData{ scratchArena };
+        CsgFrameGpuData accumulationCsgFrameData{ scratchArena };
 #if defined(NWB_DEBUG)
-        ECSRenderDetail::MaterialTypedInstanceRangeVector accumulationMaterialTypedRanges{ accumulationUploadScratch };
+        ECSRenderDetail::MaterialTypedInstanceRangeVector accumulationMaterialTypedRanges{ scratchArena };
 #endif
-        MaterialTypedByteDataVector accumulationMaterialTypedBytes{ accumulationUploadScratch };
+        MaterialTypedByteDataVector accumulationMaterialTypedBytes{ scratchArena };
         AvboitPassUploadHelper accumulationUploadHelper(m_materialSystem);
         auto accumulationUploadResult = accumulationUploadHelper.gather(
             AvboitPassUploadInputs{
@@ -99,7 +97,8 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
 #if defined(NWB_DEBUG)
             accumulationMaterialTypedRanges,
 #endif
-            accumulationMaterialTypedBytes);
+            accumulationMaterialTypedBytes
+        );
         if(!accumulationUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
             return MakeUnexpected(Failure{});
@@ -113,7 +112,7 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
         if(accumulationUploadResult->hasDrawItems){
 
             const MaterialPassDrawItems* const accumulationMaterialGeometryDrawSets[] = { &accumulationDrawItems.regular, &accumulationDrawItems.csg, };
-            AvboitGeometryPreparationBuilder accumulationGeometryPreparationBuilder(m_graph, m_materialSystem, accumulationMaterialGeometryScratch);
+            AvboitGeometryPreparationBuilder accumulationGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
             auto accumulationGeometryPreparationResult = accumulationGeometryPreparationBuilder.declare(
                 AvboitGeometryPreparationInputs{ .drawItemSets = accumulationMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(accumulationMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Accumulation, }
             );
@@ -180,7 +179,7 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
                 },
                 avboitAccumulationComputeEmulationPayload.plan,
                 avboitAccumulationComputeEmulationPayload.csgPlan,
-                accumulationUploadScratch,
+                scratchArena,
                 accumulationInstanceData.size(),
                 accumulationMaterialTypedBytes.size()
             );

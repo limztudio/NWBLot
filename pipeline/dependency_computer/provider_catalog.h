@@ -17,6 +17,8 @@ struct DependencyInputSelection{
     Vector<u8, NWB::Core::Alloc::ScratchArena> selected;
     Vector<usize, NWB::Core::Alloc::ScratchArena> order;
 
+
+public:
     explicit DependencyInputSelection(NWB::Core::Alloc::ScratchArena& arena)noexcept
         : selected(arena)
         , order(arena)

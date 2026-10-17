@@ -26,13 +26,13 @@ namespace ECSRenderDetail{
 
 
 namespace PreparedShadowTraceGeometryRole{
-    inline constexpr u8 HardwarePosition = 1u << 0u;
-    inline constexpr u8 HardwareIndex = 1u << 1u;
-    inline constexpr u8 HardwareAttribute = 1u << 2u;
-    inline constexpr u8 SoftwareNode = 1u << 3u;
-    inline constexpr u8 SoftwarePosition = 1u << 4u;
-    inline constexpr u8 SoftwareIndex = 1u << 5u;
-    inline constexpr u8 SoftwareAttribute = 1u << 6u;
+    inline constexpr u8 s_HardwarePosition = 1u << 0u;
+    inline constexpr u8 s_HardwareIndex = 1u << 1u;
+    inline constexpr u8 s_HardwareAttribute = 1u << 2u;
+    inline constexpr u8 s_SoftwareNode = 1u << 3u;
+    inline constexpr u8 s_SoftwarePosition = 1u << 4u;
+    inline constexpr u8 s_SoftwareIndex = 1u << 5u;
+    inline constexpr u8 s_SoftwareAttribute = 1u << 6u;
 };
 
 struct PreparedShadowTraceGeometryBuffer{

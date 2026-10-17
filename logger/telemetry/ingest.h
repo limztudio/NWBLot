@@ -24,7 +24,9 @@ NWB_LOG_BEGIN
 struct TelemetryIngestConfig{
     Path storageDirectory;
 
-    explicit TelemetryIngestConfig(LogArena& arena)
+
+public:
+    explicit TelemetryIngestConfig(LogArena& arena)noexcept
         : storageDirectory(arena)
     {}
 };
@@ -43,7 +45,9 @@ struct TelemetryIngestResult{
     Telemetry::DecodeResult decode;
     TelemetryReportSummary summary;
 
-    explicit TelemetryIngestResult(LogArena& arena)
+
+public:
+    explicit TelemetryIngestResult(LogArena& arena)noexcept
         : message(arena)
         , rawPath(arena)
         , jsonPath(arena)

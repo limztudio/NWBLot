@@ -27,7 +27,7 @@ using TestArena = NWB::Tests::TestArena<struct CpuTaskProfileIntegrationTag>;
 
 class OwnerThreadTimingSink final : public Perf::TimingSink{
 public:
-    OwnerThreadTimingSink(CpuTaskScheduler& scheduler, Perf::TimingRecorder& recorder, const bool injectTasks = false)
+    OwnerThreadTimingSink(CpuTaskScheduler& scheduler, Perf::TimingRecorder& recorder, const bool injectTasks = false)noexcept
         : m_scheduler(scheduler)
         , m_recorder(recorder)
         , m_owner(QueryCurrentThreadId())
@@ -38,7 +38,7 @@ public:
 public:
     [[nodiscard]] virtual bool enabled()const noexcept override{ return m_recorder.enabled(); }
 
-    [[nodiscard]] virtual Perf::TimingScopeId registerScope(const Name& name)override{
+    [[nodiscard]] virtual Expected<Perf::TimingScopeId> registerScope(const Name& name)override{
         EXPECT_EQ(QueryCurrentThreadId(), m_owner);
         return m_recorder.registerScope(name);
     }
@@ -49,7 +49,9 @@ public:
         m_recorder.recordSample(scope, seconds, frameIndex);
         if(m_injectTasks && m_injectionBudget != 0u){
             --m_injectionBudget;
-            const CpuTaskHandle task = m_scheduler.submit([]()noexcept{});
+            const auto cpuAdmission205 = m_scheduler.submit([]()noexcept{});
+            ASSERT_TRUE(cpuAdmission205);
+            const CpuTaskHandle task = *cpuAdmission205;
             ASSERT_TRUE(task.valid());
             m_scheduler.wait(task);
         }
@@ -98,7 +100,9 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 41u);
 
-    const CpuTaskHandle task = scope.submit([]()noexcept{}, { .profileLabel = taskLabel });
+    const auto cpuAdmission206 = scope.submit([]()noexcept{}, { .profileLabel = taskLabel });
+    ASSERT_TRUE(cpuAdmission206);
+    const CpuTaskHandle task = *cpuAdmission206;
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
     scope.wait();
@@ -138,7 +142,10 @@ TEST(CpuTaskProfileIntegration, DisabledTimingSinkDiscardsBufferedSamples){
     Perf::TimingRecorder timing(arena.arena);
     CpuTaskScheduler scheduler(0u);
     scheduler.setProfiling(true, 7u);
-    ASSERT_TRUE(scheduler.submit([]()noexcept{}).valid());
+    const auto cpuAdmission207 = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(cpuAdmission207);
+    if(cpuAdmission207)
+        ASSERT_TRUE(cpuAdmission207->valid());
     scheduler.wait();
     ASSERT_GT(scheduler.statistics().profilePendingEvents, 0u);
     Perf::CollectCpuTaskProfile(scheduler, timing);
@@ -157,7 +164,10 @@ TEST(CpuTaskProfileIntegration, CollectorConsumesOnlyItsInitialPendingSnapshot){
     timing.setEnabled(true);
     CpuTaskScheduler scheduler(0u);
     scheduler.setProfiling(true, 11u);
-    ASSERT_TRUE(scheduler.submit([]()noexcept{}).valid());
+    const auto cpuAdmission208 = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(cpuAdmission208);
+    if(cpuAdmission208)
+        ASSERT_TRUE(cpuAdmission208->valid());
     scheduler.wait();
     const usize pendingBefore = scheduler.statistics().profilePendingEvents;
     ASSERT_GT(pendingBefore, 0u);
@@ -183,7 +193,9 @@ TEST(CpuTaskProfileIntegration, NativeWorkerSamplesAreRecordedOnTheCollectorThre
     const CpuTaskProfileLabel label = scheduler.registerProfileLabel(taskName);
     ASSERT_TRUE(label.valid());
     scheduler.setProfiling(true, 19u);
-    const CpuTaskHandle task = scheduler.submit([&](){ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
+    const auto cpuAdmission209 = scheduler.submit([&](){ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
+    ASSERT_TRUE(cpuAdmission209);
+    const CpuTaskHandle task = *cpuAdmission209;
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
     EXPECT_NE(executionThread, owner);

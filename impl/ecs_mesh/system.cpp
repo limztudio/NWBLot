@@ -27,16 +27,17 @@ MeshSystem::MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
     readAccess<SkinnedMeshBindingComponent>();
 }
 
-void MeshSystem::update(Core::ECS::World& world, f32 delta)noexcept{
+Expected<void, Core::CpuTaskAdmissionError::Enum> MeshSystem::update(Core::ECS::World& world, f32 delta)noexcept{
     static_cast<void>(world);
     static_cast<void>(delta);
+    return {};
 }
 
-MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity){
+MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)noexcept{
     return m_world.tryGetComponent<MeshComponent>(entity);
 }
 
-const MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)const{
+const MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)const noexcept{
     return m_world.tryGetComponent<MeshComponent>(entity);
 }
 
@@ -65,18 +66,23 @@ Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolve
 
     const auto meshAsset = resolveMesh(entity);
     if(!meshAsset){
-        if(findMesh(entity) || m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
+        if(findMesh(entity) || hasRuntimeMeshBinding(entity))
             return MakeUnexpected(RenderableMeshResolution::Unavailable);
-        // Only unresolved entities need attachment discovery.
-        for(const IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
-            if(provider && provider->hasRuntimeMeshBinding(entity))
-                return MakeUnexpected(RenderableMeshResolution::Unavailable);
-        }
         return MakeUnexpected(RenderableMeshResolution::Absent);
     }
 
     mesh.mesh = *meshAsset;
     return mesh;
+}
+
+bool MeshSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
+    if(m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
+        return true;
+    for(const IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
+        if(provider && provider->hasRuntimeMeshBinding(entity))
+            return true;
+    }
+    return false;
 }
 
 void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{

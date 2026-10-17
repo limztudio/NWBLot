@@ -9,6 +9,8 @@
 #include "arena_names.h"
 #include "name_symbols.h"
 
+#include <core/alloc/scratch.h>
+
 #include <global/terminal_entry.h>
 
 
@@ -33,13 +35,19 @@ using AnsiEntryPointFn = int(*)(isize, char**, void*);
 inline constexpr int s_ApplicationEntryFailure = -1;
 inline constexpr int s_EmptyArgCount = 0;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // RAII detach of Name callbacks on exit; WriteDefaultFile still works after uninstall.
 class ScopedNameSymbolRegistry final{
 public:
     ScopedNameSymbolRegistry(){ NameSymbols::InstallRuntimeRegistry(); }
-    ~ScopedNameSymbolRegistry(){ NameSymbols::UninstallRuntimeRegistry(); }
-
+    ~ScopedNameSymbolRegistry()noexcept{ NameSymbols::UninstallRuntimeRegistry(); }
     ScopedNameSymbolRegistry(const ScopedNameSymbolRegistry&) = delete;
+
+
+public:
     ScopedNameSymbolRegistry& operator=(const ScopedNameSymbolRegistry&) = delete;
 };
 
@@ -65,7 +73,8 @@ template<typename Invoke>
             return s_ApplicationEntryFailure;
 #endif
         return result;
-    }, [&](const GeneralException&){ return terminalFailure(); }, terminalFailure);
+    }, [&](const GeneralException&){ return terminalFailure(); }, terminalFailure
+    );
 }
 
 template<typename EntryPoint, typename CharT>
@@ -77,9 +86,9 @@ template<typename EntryPoint, typename CharT>
 template<typename Run>
 [[nodiscard]] inline int InvokeWithUtf8Args(const isize argc, wchar** argv, Run&& run){
     const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
-    Alloc::GlobalArena arena(CommonArenaScope::s_ApplicationEntryArgsArena);
-    Vector<AString<Alloc::GlobalArena>, Alloc::GlobalArena> utf8Args{arena};
-    Vector<char*, Alloc::GlobalArena> utf8Argv{arena};
+    Alloc::ScratchArena arena(CommonArenaScope::s_ApplicationEntryArgsArena);
+    Vector<AString<Alloc::ScratchArena>, Alloc::ScratchArena> utf8Args{arena};
+    Vector<char*, Alloc::ScratchArena> utf8Argv{arena};
     utf8Args.reserve(argCount);
     utf8Argv.reserve(argCount + 1u);
 
@@ -146,8 +155,10 @@ public:
         if(m_argv)
             LocalFree(m_argv);
     }
-
     WindowsCommandLineArgs(const WindowsCommandLineArgs&) = delete;
+
+
+public:
     WindowsCommandLineArgs& operator=(const WindowsCommandLineArgs&) = delete;
 
 
@@ -170,7 +181,8 @@ template<typename EntryPoint>
             return entryPoint(args.argc(), args.argv(), hInstance);
 
         return s_ApplicationEntryFailure;
-    });
+    }
+    );
 }
 
 template<typename EntryPoint>
@@ -181,7 +193,8 @@ template<typename EntryPoint>
             return entryPoint(args.argc(), args.argv(), GetModuleHandleW(nullptr));
 
         return s_ApplicationEntryFailure;
-    });
+    }
+    );
 }
 
 

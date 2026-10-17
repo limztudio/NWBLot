@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
+#include "task_graph_opaque_compute_tasks.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -35,7 +35,7 @@ OpaqueRegularComputeEmulationGraphTask::Payload::Payload(
     Core::GpuTimingSubmissionTicket*& timingTicketIn,
     const bool& meshViewSetupReadyIn,
     const bool& sceneShadingSetupReadyIn
-)
+)noexcept
     : materialSystem(materialSystemIn)
     , targets(targetsIn)
     , timingTicket(timingTicketIn)
@@ -43,6 +43,9 @@ OpaqueRegularComputeEmulationGraphTask::Payload::Payload(
     , sceneShadingSetupReady(sceneShadingSetupReadyIn)
     , plan(arena)
 {}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -71,6 +74,9 @@ bool OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){

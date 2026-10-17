@@ -150,7 +150,11 @@ bool MatchesAmdBreadcrumbObservation(const u32 observedMarker, const u32 reserve
     return observedMarker != 0u && reservedMarker != 0u && observedMarker == reservedMarker;
 }
 
-HostReadbackBarrierTracker::HostReadbackBarrierTracker(Alloc::GlobalArena& arena)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HostReadbackBarrierTracker::HostReadbackBarrierTracker(Alloc::GlobalArena& arena)noexcept
     : m_buffers(arena)
 {}
 

@@ -37,8 +37,12 @@ TEST(GpuPassTimingProbe, ReportsEveryRegisteredScopeBeyondSixtyFour){
     Name lastScope;
     for(u32 index = 0u; index < s_ScopeCount; ++index){
         char scopeText[32u] = {};
-        lastScope = Name(FormatDecimal(index, scopeText));
-        const Core::Perf::TimingScopeId scope = recorder.registerScope(lastScope);
+        const auto scopeName = Name::FromText(FormatDecimal(index, scopeText));
+        ASSERT_TRUE(scopeName);
+        lastScope = *scopeName;
+        const auto scopeResult = recorder.registerScope(lastScope);
+        ASSERT_TRUE(scopeResult);
+        const Core::Perf::TimingScopeId scope = *scopeResult;
         ASSERT_TRUE(scope.valid());
         recorder.recordSample(scope, 0.001, 1u);
     }
@@ -61,7 +65,9 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     Tests::TestArena<> testArena;
     Core::Perf::TimingRecorder recorder(testArena.arena);
     recorder.setEnabled(true);
-    const Core::Perf::TimingScopeId firstScope = recorder.registerScope(Name("tests/probe/first"));
+    const auto firstScopeResult = recorder.registerScope(Name("tests/probe/first"));
+    ASSERT_TRUE(firstScopeResult);
+    const Core::Perf::TimingScopeId firstScope = *firstScopeResult;
     ASSERT_TRUE(firstScope.valid());
     recorder.recordSample(firstScope, 0.003, 1u);
     recorder.publishFrame(1u);
@@ -75,7 +81,11 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     Core::Perf::TimingScopeId lastScope;
     for(u32 index = 0u; index < s_AddedScopes; ++index){
         char scopeText[32u] = {};
-        lastScope = recorder.registerScope(Name(FormatDecimal(index, scopeText)));
+        const auto scopeName = Name::FromText(FormatDecimal(index, scopeText));
+        ASSERT_TRUE(scopeName);
+        const auto scopeResult = recorder.registerScope(*scopeName);
+        ASSERT_TRUE(scopeResult);
+        lastScope = *scopeResult;
         ASSERT_TRUE(lastScope.valid());
     }
     probe.recordFrame(0.25f, view);

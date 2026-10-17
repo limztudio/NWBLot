@@ -3,7 +3,6 @@
 
 
 #include "backend.h"
-#include "arena_names.h"
 #include "device_detail.h"
 
 #include <core/filesystem/factory.h>
@@ -37,6 +36,10 @@ static constexpr usize s_PipelineCacheVendorIdOffset = 8u;
 static constexpr usize s_PipelineCacheDeviceIdOffset = 12u;
 static constexpr usize s_PipelineCacheUuidOffset = 16u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static u32 ReadPipelineCacheU32(const BinaryByteView cacheData, const usize offset)noexcept{
     return
         static_cast<u32>(cacheData[offset])
@@ -58,10 +61,7 @@ static Expected<UniquePtr<Filesystem::IFilesystem>> MountPipelineCacheVolume(con
         mountDesc.metadataSize = s_PipelineCacheVolumeMetadataSize;
     }
 
-    auto volume = Filesystem::CreateFilesystem(directory.arena(), mountDesc, factory);
-    if(!volume)
-        return MakeUnexpected(Failure{});
-    return volume;
+    return Filesystem::CreateFilesystem(directory.arena(), mountDesc, factory);
 }
 
 static Expected<Vector<u8, Alloc::ScratchArena>> RetrievePipelineCacheData(const VolkDeviceTable& deviceDispatch, VkDevice device, VkPipelineCache pipelineCache, Alloc::ScratchArena& scratchArena){
@@ -190,11 +190,10 @@ Expected<GraphicsBytes> Device::loadPipelineCacheData(){
     return data;
 }
 
-void Device::savePipelineCacheData(){
+void Device::savePipelineCacheData(Alloc::ScratchArena& scratchArena){
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty() || !m_context.pipelineCache)
         return;
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PipelineCacheSaveArena);
     const auto cacheData = __hidden_vulkan_device_pipeline_cache::RetrievePipelineCacheData(m_context.deviceDispatch, m_context.device, m_context.pipelineCache, scratchArena);
     if(!cacheData)
         return;
@@ -215,7 +214,7 @@ void Device::savePipelineCacheData(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'."), StringConvert(m_pipelineCacheVolumeName), PathToString<tchar>(m_pipelineCacheDirectory));
         if(m_filesystemFactory)
             return;
-        if(!Filesystem::RemoveVolumeSegments(m_pipelineCacheDirectory, m_pipelineCacheVolumeName)){
+        if(!Filesystem::RemoveVolumeSegments(m_pipelineCacheDirectory, m_pipelineCacheVolumeName, scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
         }

@@ -50,10 +50,10 @@ class SearchComboState final : NoCopy{
 
 public:
     explicit SearchComboState(Core::Alloc::GlobalArena& arena);
+    SearchComboState(SearchComboState&&) = delete;
 
 
 public:
-    SearchComboState(SearchComboState&&) = delete;
     SearchComboState& operator=(SearchComboState&&) = delete;
 
 

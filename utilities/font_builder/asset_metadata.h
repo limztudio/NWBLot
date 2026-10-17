@@ -17,7 +17,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MetadataString = ::AString<Core::Assets::AssetArena>;
+using MetadataString = ::AString<Core::Alloc::ScratchArena>;
 
 void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& outText);
 

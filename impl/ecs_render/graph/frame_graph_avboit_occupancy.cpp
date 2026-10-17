@@ -2,11 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/graph/frame_graph_avboit_occupancy.h>
+#include "frame_graph_avboit_occupancy.h"
 
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 #include <impl/ecs_render/avboit/material_upload_builder.h>
 #include <impl/ecs_render/avboit/geometry_preparation_builder.h>
@@ -25,7 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphAvboitOccupancyUploadChain::FrameGraphAvboitOccupancyUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
+FrameGraphAvboitOccupancyUploadChain::FrameGraphAvboitOccupancyUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem){
@@ -33,6 +32,7 @@ FrameGraphAvboitOccupancyUploadChain::FrameGraphAvboitOccupancyUploadChain(Core:
 
 
 Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadChain::declare(
+    Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitOccupancyUploadInputs& inputs,
     RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload,
@@ -63,19 +63,17 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
     usize occupancySharedComputeEmulationInstanceCount = 0u;
     usize occupancySharedComputeEmulationMaterialTypedByteCount = 0u;
     bool occupancyMaterialSampledTexturesCollected = false;
-    Core::Alloc::ScratchArena occupancyMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId occupancyMaterialGeometrySet;
     Core::GpuGraphResourceSetId occupancyMaterialSampledTextureSet;
     result.uploadTask = occupancyUploadTask;
     if(inputs.hasTransparentRenderers){
-        Core::Alloc::ScratchArena occupancyUploadScratch(RendererArenaScope::s_TaskGraphArena);
-        MaterialPassDrawItemPartitions occupancyDrawItems{ occupancyUploadScratch };
-        InstanceGpuDataVector occupancyInstanceData{ occupancyUploadScratch };
-        CsgFrameGpuData occupancyCsgFrameData{ occupancyUploadScratch };
+        MaterialPassDrawItemPartitions occupancyDrawItems{ scratchArena };
+        InstanceGpuDataVector occupancyInstanceData{ scratchArena };
+        CsgFrameGpuData occupancyCsgFrameData{ scratchArena };
 #if defined(NWB_DEBUG)
-        ECSRenderDetail::MaterialTypedInstanceRangeVector occupancyMaterialTypedRanges{ occupancyUploadScratch };
+        ECSRenderDetail::MaterialTypedInstanceRangeVector occupancyMaterialTypedRanges{ scratchArena };
 #endif
-        MaterialTypedByteDataVector occupancyMaterialTypedBytes{ occupancyUploadScratch };
+        MaterialTypedByteDataVector occupancyMaterialTypedBytes{ scratchArena };
         AvboitPassUploadHelper occupancyUploadHelper(m_materialSystem);
         auto occupancyUploadResult = occupancyUploadHelper.gather(
             AvboitPassUploadInputs{
@@ -98,7 +96,8 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
 #if defined(NWB_DEBUG)
             occupancyMaterialTypedRanges,
 #endif
-            occupancyMaterialTypedBytes);
+            occupancyMaterialTypedBytes
+        );
         if(!occupancyUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
             return MakeUnexpected(Failure{});
@@ -112,7 +111,7 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
         if(occupancyUploadResult->hasDrawItems){
 
             const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = { &occupancyDrawItems.regular, &occupancyDrawItems.csg, };
-            AvboitGeometryPreparationBuilder occupancyGeometryPreparationBuilder(m_graph, m_materialSystem, occupancyMaterialGeometryScratch);
+            AvboitGeometryPreparationBuilder occupancyGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
             auto occupancyGeometryPreparationResult = occupancyGeometryPreparationBuilder.declare(
                 AvboitGeometryPreparationInputs{ .drawItemSets = occupancyMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(occupancyMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Occupancy, }
             );
@@ -179,7 +178,7 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
                 },
                 avboitOccupancyComputeEmulationPayload.plan,
                 avboitOccupancyComputeEmulationPayload.csgPlan,
-                occupancyUploadScratch,
+                scratchArena,
                 occupancyInstanceData.size(),
                 occupancyMaterialTypedBytes.size()
             );

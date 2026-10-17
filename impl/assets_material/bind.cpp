@@ -135,7 +135,7 @@ u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey)noexcept{
 
 
 Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    auto doc = MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena);
+    auto doc = MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena, scratchArena);
     if(!doc)
         return MakeUnexpected(Failure{});
 
@@ -185,7 +185,8 @@ bool ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layou
 
     Sort(outResourceReferences.begin(), outResourceReferences.end(), [](const MaterialResourceReference& lhs, const MaterialResourceReference& rhs)noexcept{
         return lhs.constantByteOffset < rhs.constantByteOffset;
-    });
+    }
+    );
 
     return true;
 }

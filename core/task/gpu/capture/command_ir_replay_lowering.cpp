@@ -158,7 +158,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     }
 }
 
-static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList)noexcept{
+static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:
         commandList.copyBuffer(*graph.bufferForResource(record.destination), record.destinationOffsetBytes, *graph.bufferForResource(record.source), record.sourceOffsetBytes, record.dataSizeBytes);
@@ -213,7 +213,7 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
     const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet,
     CommandList& commandList
-)noexcept{
+){
     GpuCommandIrReplayResult result = ownedStream ? PreflightGpuCommandIrPacket(*ownedStream, graph, compiledGraph, packet) : PreflightGpuCommandIrPacket(bytes, graph, compiledGraph, packet);
     if(!result.valid())
         return result;
@@ -289,11 +289,11 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
     }
 }
 
-GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList)noexcept{
+GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList){
     return ReplayPacketImpl(bytes, nullptr, graph, compiledGraph, packet, commandList);
 }
 
-GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList)noexcept{
+GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList){
     return ReplayPacketImpl(stream.bytes(), &stream, graph, compiledGraph, packet, commandList);
 }
 

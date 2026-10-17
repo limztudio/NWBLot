@@ -26,21 +26,25 @@ namespace __hidden_win32_clipboard{
 
 class ClipboardCloseGuard final : NoCopy{
 public:
-    ~ClipboardCloseGuard(){
-        if(!CloseClipboard())
-            NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: CloseClipboard failed ({})"), GetLastError());
+    ~ClipboardCloseGuard()noexcept{
+        if(!CloseClipboard()){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Clipboard: CloseClipboard failed ({})", GetLastError());
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "win32_clipboard_lifecycle", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        }
     }
 };
 
 class GlobalUnlockGuard final : NoCopy{
 public:
-    explicit GlobalUnlockGuard(const HGLOBAL memory)
+    explicit GlobalUnlockGuard(const HGLOBAL memory)noexcept
         : m_memory(memory)
     {}
-    ~GlobalUnlockGuard(){
+    ~GlobalUnlockGuard()noexcept{
         SetLastError(ERROR_SUCCESS);
-        if(!GlobalUnlock(m_memory) && GetLastError() != ERROR_SUCCESS)
-            NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: GlobalUnlock failed ({})"), GetLastError());
+        if(!GlobalUnlock(m_memory) && GetLastError() != ERROR_SUCCESS){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Clipboard: GlobalUnlock failed ({})", GetLastError());
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "win32_clipboard_lifecycle", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        }
     }
 
 
@@ -50,12 +54,14 @@ private:
 
 class GlobalMemoryOwner final : NoCopy{
 public:
-    explicit GlobalMemoryOwner(const HGLOBAL memory)
+    explicit GlobalMemoryOwner(const HGLOBAL memory)noexcept
         : m_memory(memory)
     {}
-    ~GlobalMemoryOwner(){
-        if(m_memory && GlobalFree(m_memory))
-            NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: GlobalFree failed ({})"), GetLastError());
+    ~GlobalMemoryOwner()noexcept{
+        if(m_memory && GlobalFree(m_memory)){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Clipboard: GlobalFree failed ({})", GetLastError());
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "win32_clipboard_lifecycle", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        }
     }
 
 

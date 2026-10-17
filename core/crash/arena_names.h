@@ -25,7 +25,9 @@ namespace CrashArenaScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_PlatformInstallationScratch("core/crash/platform_installation_scratch");
 inline constexpr Name s_DumpArena("core/crash/dump_arena");
+inline constexpr Name s_UploadScratch("core/crash/upload_scratch");
 inline constexpr Name s_UploadArena("core/crash/upload_arena");
 
 

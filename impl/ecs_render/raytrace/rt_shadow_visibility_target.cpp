@@ -35,9 +35,14 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setFormat(targets.shadowVisibilityFormat)
         .setInUAV(true)
         // The graph-owned lagged-history copy may run on a dedicated Transfer family after the graphics/compute producers finish. Keep all three real transports concurrently shareable rather than fabricating aliases.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/shadow/visibility");
-    targets.shadowVisibility = m_graphics.createTexture(visibilityDesc);
-    if(!targets.shadowVisibility){
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/shadow/visibility")
+    ;
+    auto shadowVisibilityResult = m_graphics.createTexture(visibilityDesc);
+    if(shadowVisibilityResult)
+        targets.shadowVisibility = Move(*shadowVisibilityResult);
+    else
+        targets.shadowVisibility.reset();
+    if(!shadowVisibilityResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow visibility target"));
         return false;
     }
@@ -55,8 +60,12 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/shadow/coarse_transmittance")
     ;
-    targets.shadowCoarseTransmittance = m_graphics.createTexture(coarseDesc);
-    if(!targets.shadowCoarseTransmittance){
+    auto shadowCoarseTransmittanceResult = m_graphics.createTexture(coarseDesc);
+    if(shadowCoarseTransmittanceResult)
+        targets.shadowCoarseTransmittance = Move(*shadowCoarseTransmittanceResult);
+    else
+        targets.shadowCoarseTransmittance.reset();
+    if(!shadowCoarseTransmittanceResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow coarse transmittance target"));
         return false;
     }
@@ -78,24 +87,36 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/shadow/soft_half_a")
     ;
-    targets.shadowSoftHalfA = m_graphics.createTexture(softHalfADesc);
-    if(!targets.shadowSoftHalfA){
+    auto shadowSoftHalfAResult = m_graphics.createTexture(softHalfADesc);
+    if(shadowSoftHalfAResult)
+        targets.shadowSoftHalfA = Move(*shadowSoftHalfAResult);
+    else
+        targets.shadowSoftHalfA.reset();
+    if(!shadowSoftHalfAResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow half-A target"));
         return false;
     }
 
     Core::TextureDesc softHalfBDesc = softHalfADesc;
     softHalfBDesc.setName("engine/shadow/soft_half_b");
-    targets.shadowSoftHalfB = m_graphics.createTexture(softHalfBDesc);
-    if(!targets.shadowSoftHalfB){
+    auto shadowSoftHalfBResult = m_graphics.createTexture(softHalfBDesc);
+    if(shadowSoftHalfBResult)
+        targets.shadowSoftHalfB = Move(*shadowSoftHalfBResult);
+    else
+        targets.shadowSoftHalfB.reset();
+    if(!shadowSoftHalfBResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow half-B target"));
         return false;
     }
 
     Core::TextureDesc softGeometryDesc;
     softGeometryDesc.setWidth(softHalfWidth).setHeight(softHalfHeight).setFormat(targets.shadowSoftGeometryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/shadow/soft_geometry");
-    targets.shadowSoftGeometry = m_graphics.createTexture(softGeometryDesc);
-    if(!targets.shadowSoftGeometry){
+    auto shadowSoftGeometryResult = m_graphics.createTexture(softGeometryDesc);
+    if(shadowSoftGeometryResult)
+        targets.shadowSoftGeometry = Move(*shadowSoftGeometryResult);
+    else
+        targets.shadowSoftGeometry.reset();
+    if(!shadowSoftGeometryResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow geometry cache target"));
         return false;
     }
@@ -103,36 +124,56 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     // Recreated history must not reproject through the previous target's matrix.
     Core::TextureDesc shadowHistADesc = softHalfADesc;
     shadowHistADesc.setName("engine/shadow/hist_a");
-    targets.shadowHistA = m_graphics.createTexture(shadowHistADesc);
-    if(!targets.shadowHistA){
+    auto shadowHistAResult = m_graphics.createTexture(shadowHistADesc);
+    if(shadowHistAResult)
+        targets.shadowHistA = Move(*shadowHistAResult);
+    else
+        targets.shadowHistA.reset();
+    if(!shadowHistAResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-A target"));
         return false;
     }
     Core::TextureDesc shadowHistBDesc = softHalfADesc;
     shadowHistBDesc.setName("engine/shadow/hist_b");
-    targets.shadowHistB = m_graphics.createTexture(shadowHistBDesc);
-    if(!targets.shadowHistB){
+    auto shadowHistBResult = m_graphics.createTexture(shadowHistBDesc);
+    if(shadowHistBResult)
+        targets.shadowHistB = Move(*shadowHistBResult);
+    else
+        targets.shadowHistB.reset();
+    if(!shadowHistBResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-B target"));
         return false;
     }
     Core::TextureDesc shadowMomentsADesc = softHalfADesc;
     shadowMomentsADesc.setName("engine/shadow/moments_a");
-    targets.shadowMomentsA = m_graphics.createTexture(shadowMomentsADesc);
-    if(!targets.shadowMomentsA){
+    auto shadowMomentsAResult = m_graphics.createTexture(shadowMomentsADesc);
+    if(shadowMomentsAResult)
+        targets.shadowMomentsA = Move(*shadowMomentsAResult);
+    else
+        targets.shadowMomentsA.reset();
+    if(!shadowMomentsAResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-A target"));
         return false;
     }
     Core::TextureDesc shadowMomentsBDesc = softHalfADesc;
     shadowMomentsBDesc.setName("engine/shadow/moments_b");
-    targets.shadowMomentsB = m_graphics.createTexture(shadowMomentsBDesc);
-    if(!targets.shadowMomentsB){
+    auto shadowMomentsBResult = m_graphics.createTexture(shadowMomentsBDesc);
+    if(shadowMomentsBResult)
+        targets.shadowMomentsB = Move(*shadowMomentsBResult);
+    else
+        targets.shadowMomentsB.reset();
+    if(!shadowMomentsBResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-B target"));
         return false;
     }
     Core::TextureDesc shadowSoftGeometryPrevDesc = softGeometryDesc;
     shadowSoftGeometryPrevDesc.setName("engine/shadow/soft_geometry_prev");
-    targets.shadowSoftGeometryPrev = m_graphics.createTexture(shadowSoftGeometryPrevDesc);
-    if(!targets.shadowSoftGeometryPrev){
+    auto shadowSoftGeometryPrevResult = m_graphics.createTexture(shadowSoftGeometryPrevDesc);
+    if(shadowSoftGeometryPrevResult)
+        targets.shadowSoftGeometryPrev = Move(*shadowSoftGeometryPrevResult);
+    else
+        targets.shadowSoftGeometryPrev.reset();
+    if(!shadowSoftGeometryPrevResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow previous-frame geometry cache target"));
         return false;
     }
@@ -146,36 +187,56 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     // Transparent temporal history shares geometry and the opaque history selector.
     Core::TextureDesc transparentSoftHalfDesc = softHalfADesc;
     transparentSoftHalfDesc.setName("engine/shadow/transparent_soft_half");
-    targets.transparentSoftHalf = m_graphics.createTexture(transparentSoftHalfDesc);
-    if(!targets.transparentSoftHalf){
+    auto transparentSoftHalfResult = m_graphics.createTexture(transparentSoftHalfDesc);
+    if(transparentSoftHalfResult)
+        targets.transparentSoftHalf = Move(*transparentSoftHalfResult);
+    else
+        targets.transparentSoftHalf.reset();
+    if(!transparentSoftHalfResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow half target"));
         return false;
     }
     Core::TextureDesc transparentHistADesc = softHalfADesc;
     transparentHistADesc.setName("engine/shadow/transparent_hist_a");
-    targets.transparentHistA = m_graphics.createTexture(transparentHistADesc);
-    if(!targets.transparentHistA){
+    auto transparentHistAResult = m_graphics.createTexture(transparentHistADesc);
+    if(transparentHistAResult)
+        targets.transparentHistA = Move(*transparentHistAResult);
+    else
+        targets.transparentHistA.reset();
+    if(!transparentHistAResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-A target"));
         return false;
     }
     Core::TextureDesc transparentHistBDesc = softHalfADesc;
     transparentHistBDesc.setName("engine/shadow/transparent_hist_b");
-    targets.transparentHistB = m_graphics.createTexture(transparentHistBDesc);
-    if(!targets.transparentHistB){
+    auto transparentHistBResult = m_graphics.createTexture(transparentHistBDesc);
+    if(transparentHistBResult)
+        targets.transparentHistB = Move(*transparentHistBResult);
+    else
+        targets.transparentHistB.reset();
+    if(!transparentHistBResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-B target"));
         return false;
     }
     Core::TextureDesc transparentMomentsADesc = softHalfADesc;
     transparentMomentsADesc.setName("engine/shadow/transparent_moments_a");
-    targets.transparentMomentsA = m_graphics.createTexture(transparentMomentsADesc);
-    if(!targets.transparentMomentsA){
+    auto transparentMomentsAResult = m_graphics.createTexture(transparentMomentsADesc);
+    if(transparentMomentsAResult)
+        targets.transparentMomentsA = Move(*transparentMomentsAResult);
+    else
+        targets.transparentMomentsA.reset();
+    if(!transparentMomentsAResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-A target"));
         return false;
     }
     Core::TextureDesc transparentMomentsBDesc = softHalfADesc;
     transparentMomentsBDesc.setName("engine/shadow/transparent_moments_b");
-    targets.transparentMomentsB = m_graphics.createTexture(transparentMomentsBDesc);
-    if(!targets.transparentMomentsB){
+    auto transparentMomentsBResult = m_graphics.createTexture(transparentMomentsBDesc);
+    if(transparentMomentsBResult)
+        targets.transparentMomentsB = Move(*transparentMomentsBResult);
+    else
+        targets.transparentMomentsB.reset();
+    if(!transparentMomentsBResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-B target"));
         return false;
     }
@@ -199,7 +260,12 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     }
 
     // Edge records are capped at one per pixel; overflow falls back to interpolation.
-    const u32 edgeListCapacityRecords = targets.width * targets.height;
+    const u64 edgeListCapacity = static_cast<u64>(targets.width) * targets.height;
+    if(edgeListCapacity > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow edge-list capacity exceeds u32 limits"));
+        return false;
+    }
+    const u32 edgeListCapacityRecords = static_cast<u32>(edgeListCapacity);
     Core::BufferDesc edgeListDesc;
     edgeListDesc
         .setByteSize(static_cast<u64>(sizeof(u32)) * static_cast<u64>(NWB_SW_SHADOW_EDGE_RECORD_WORDS) * static_cast<u64>(edgeListCapacityRecords))
@@ -209,12 +275,13 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setDebugName(Name("sw_shadow_edge_list"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle edgeListBuffer = m_graphics.createBuffer(edgeListDesc);
-    if(!edgeListBuffer){
+    auto edgeListBufferResult = m_graphics.createBuffer(edgeListDesc);
+    if(!edgeListBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
         m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
     }
+    Core::BufferHandle edgeListBuffer = Move(*edgeListBufferResult);
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !RayTracingDetail::ReplaceHeapBuffer(heap, *edgeListBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeListHeapHandle)){
@@ -306,7 +373,8 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
             commandList.commitBarriers();
             if(!RecordLightSpaceResolve(commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA,
                 frameIndex, softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP,
-                targets.bindless.shadowSoftHalfAStorage.slot(), false))
+                targets.bindless.shadowSoftHalfAStorage.slot(), false
+            ))
                 return MakeUnexpected(Failure{});
             if(!m_lightSpaceShadow.m_csgDispatchLogged){
                 m_lightSpaceShadow.m_csgDispatchLogged = true;

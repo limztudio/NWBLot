@@ -3,6 +3,7 @@
 
 
 #include "text_area_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +62,7 @@ public:
 
 class UiTextAreaInputScrollTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static TextAreaOptions ScrollOptions(){
+    [[nodiscard]] static TextAreaOptions ScrollOptions()noexcept{
         TextAreaOptions options;
         options.width = { LayoutSizePolicy::Fixed, 180.0f };
         options.height = { LayoutSizePolicy::Fixed, 96.0f };
@@ -102,8 +103,8 @@ protected:
 
     [[nodiscard]] bool wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
 
-    [[nodiscard]] WidgetId area()const noexcept{ return id("area", "panel"); }
-    [[nodiscard]] WidgetId part(const AStringView key)const noexcept{ return MakeWidgetId(area(), key); }
+    [[nodiscard]] WidgetId area()const{ return id("area", "panel"); }
+    [[nodiscard]] WidgetId part(const AStringView key)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(area(), key)); }
 
     [[nodiscard]] bool framePopup(const u64 generation, PopupState& popup){
         PopupOptions options;
@@ -249,7 +250,7 @@ TEST_F(UiTextAreaInputScrollTests, DisabledEditorUsesTheContainingPanelBarrierAn
     ASSERT_TRUE(host);
     EXPECT_FALSE(host->enabled || host->focusable || host->textEditable || host->scrollable);
     const Point point = Center(m_state.placement().content);
-    EXPECT_EQ(m_context.input().hitTest(point), MakeWidgetId(MakeRootId(m_root), "panel"));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")));
     ASSERT_TRUE(wheel(1.0, -1.0, point));
     EXPECT_TRUE(m_context.input().controlActions().empty());
     click(point);

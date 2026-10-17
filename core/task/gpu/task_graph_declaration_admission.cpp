@@ -43,6 +43,9 @@ GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexcept{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuTaskGraphDeclarationReadView GpuTaskGraphDeclarationReadView::TryAcquire(const GpuTaskGraph& graph)noexcept{
     return GpuTaskGraphDeclarationReadView(graph, TryAcquireTag{});
 }
@@ -53,6 +56,7 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGr
 
     acquire(graph);
 }
+
 
 GpuTaskGraphDeclarationReadView::~GpuTaskGraphDeclarationReadView()noexcept{
     if(!m_graph)
@@ -66,7 +70,6 @@ GpuTaskGraphDeclarationReadView::~GpuTaskGraphDeclarationReadView()noexcept{
     --m_graph->m_activeDeclarationAccessCount;
     --m_graph->m_activeDeclarationReadCount;
 }
-
 
 GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph, TryAcquireTag)noexcept{
     acquire(graph);

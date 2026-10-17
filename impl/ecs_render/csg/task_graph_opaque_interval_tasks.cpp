@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
+#include "task_graph_opaque_interval_tasks.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -43,7 +43,9 @@ struct OpaqueIntervalReadiness{
     bool csgResourcesReady = false;
     bool csgReceiverSurfaceDrawResourcesReady = false;
 
-    explicit OpaqueIntervalReadiness(Core::Alloc::ScratchArena& arena)
+
+public:
+    explicit OpaqueIntervalReadiness(Core::Alloc::ScratchArena& arena)noexcept
         : opaqueDrawItems(arena)
         , csgFrameData(arena)
     {}
@@ -91,6 +93,9 @@ bool CsgReceiverSpanBuildGraphTask::Record(const Payload& payload, Core::Command
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool CsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.opaqueDrawSnapshot.captured)
@@ -110,6 +115,9 @@ bool CsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandLi
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 CsgIntervalSampleGraphTask::Payload::Payload(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphicsIn,
@@ -119,7 +127,7 @@ CsgIntervalSampleGraphTask::Payload::Payload(
     Core::GpuTimingSubmissionTicket*& timingTicketIn,
     const bool& meshViewSetupReadyIn,
     const bool& sceneShadingSetupReadyIn
-)
+)noexcept
     : graphics(graphicsIn)
     , materialSystem(materialSystemIn)
     , csgSystem(csgSystemIn)
@@ -129,6 +137,9 @@ CsgIntervalSampleGraphTask::Payload::Payload(
     , sceneShadingSetupReady(sceneShadingSetupReadyIn)
     , opaqueDrawSnapshot(arena)
 {}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){

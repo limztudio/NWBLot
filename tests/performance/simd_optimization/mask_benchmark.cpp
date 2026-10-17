@@ -98,7 +98,8 @@ NWB_NOINLINE u32 Qualify()noexcept{
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
     u64 state = 0x7462825482129431ull;
     const auto next = [&]()noexcept{
         state ^= state << 13u;
@@ -111,15 +112,15 @@ NWB_NOINLINE u32 Qualify()noexcept{
         if(MoveDouble<false>(value) != MoveDouble<true>(value))
             return 1u;
     }
-    constexpr u64 edges[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3FF0000000000000ull, 0xBFF0000000000000ull,
+    constexpr u64 s_Edges[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3FF0000000000000ull, 0xBFF0000000000000ull,
         0x7FEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8123412341234ull, 0x7FF0234523452345ull, 0x7FC012347FC01234ull, 0x7F8012347F801234ull };
-    constexpr int modes[]{ FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO };
-    for(const int mode : modes){
+    constexpr int s_Modes[]{ FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO };
+    for(const int mode : s_Modes){
         if(!SetFloatingPointRoundingMode(mode))
             return 2u;
         for(usize sample = 0u; sample < 2048u; ++sample){
-            const SIMDVectorDouble a = VectorDoubleSetInt(edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)]);
-            const SIMDVectorDouble b = sample % 2u ? a : VectorDoubleSetInt(edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)], edges[next() % LengthOf(edges)]);
+            const SIMDVectorDouble a = VectorDoubleSetInt(s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)]);
+            const SIMDVectorDouble b = sample % 2u ? a : VectorDoubleSetInt(s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)]);
 #define NWB_AUDIT_COMPARE(kind) \
             if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) return 3u; \
             errno = 0; \

@@ -50,6 +50,8 @@ struct PipelineOptions{
     ACompactString assetType{ NWB::Pipeline::AssetBuilder::s_GraphicsAssetBuildType };
     bool includeSkinDependencies = false;
 
+
+public:
     explicit PipelineOptions(NWB::Core::Assets::AssetArena& arena)noexcept
         : inputs(arena)
         , assetRoots(arena)
@@ -78,7 +80,8 @@ public:
             if(!options)
                 return s_PipelineExitFailure;
             return body(*options);
-        }, [&](const CLI::ParseError& error){ return exit(error); }, []()noexcept{ return s_PipelineExitFatal; });
+        }, [&](const CLI::ParseError& error){ return exit(error); }, []()noexcept{ return s_PipelineExitFatal; }
+        );
     }
 
 

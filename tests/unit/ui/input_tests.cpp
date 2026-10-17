@@ -21,7 +21,7 @@ namespace __hidden_ui_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-HitTarget Target(const u64 value, const Rect& rectangle = { 10.0f, 10.0f, 20.0f, 20.0f }){
+HitTarget Target(const u64 value, const Rect& rectangle = { 10.0f, 10.0f, 20.0f, 20.0f })noexcept{
     HitTarget target;
     target.id = { value };
     target.rectangle = rectangle;

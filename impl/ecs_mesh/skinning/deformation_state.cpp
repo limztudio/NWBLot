@@ -46,7 +46,7 @@ MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinnin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningDeformationState::MeshSkinningDeformationState(Core::Alloc::GlobalArena& arena)
+MeshSkinningDeformationState::MeshSkinningDeformationState(Core::Alloc::GlobalArena& arena)noexcept
     : m_acceptedJoints(arena)
     , m_pendingJoints(arena)
 {}
@@ -72,11 +72,11 @@ void MeshSkinningDeformationState::refreshCurrent(const MeshSkinningDeformationI
     m_current = jointCount == 0u || NWB_MEMCMP(joints, m_acceptedJoints.data(), jointCount * sizeof(SkeletonJointMatrix)) == 0;
 }
 
-u64 MeshSkinningDeformationState::stage(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount){
+Expected<u64> MeshSkinningDeformationState::stage(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount){
     invalidateCurrent();
     if(!inputs.resourceSlotsBuffer || (jointCount != 0u && !joints) || jointCount > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || m_candidateSerial == Limit<u64>::s_Max || m_acceptedRevision == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningDeformationState: invalid or exhausted deformation candidate"));
-        return 0u;
+        return MakeUnexpected(Failure{});
     }
     if(jointCount == 0u)
         m_pendingJoints.clear();

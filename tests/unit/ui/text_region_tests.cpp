@@ -3,6 +3,7 @@
 
 
 #include "widget_fixture.h"
+#include "widget_id_assertion.h"
 #include "combo_fixture.h"
 
 #include <impl/ecs_ui/toolkit/widgets/label.h>
@@ -145,8 +146,11 @@ protected:
         UiSkin::RegionVector regions(m_arena);
         regions.assign(m_skin.regions().begin(), m_skin.regions().end());
         const AStringView names[]{ "checkbox.normal", "checkbox.hover", "checkbox.checked", "checkbox.disabled" };
-        for(u32 index = 0u; index < LengthOf(names); ++index)
-            regions.push_back({ Name(names[index]), { 88u + index * 8u, 0u, 8u, 8u }, {}, {}, 24.0f, 24.0f });
+        for(u32 index = 0u; index < LengthOf(names); ++index){
+            const auto regionName = Name::FromText(names[index]);
+            ASSERT_TRUE(regionName);
+            regions.push_back({ *regionName, { 88u + index * 8u, 0u, 8u, 8u }, {}, {}, 24.0f, 24.0f });
+        }
         m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
@@ -196,9 +200,9 @@ protected:
         const ListState& state = popup ? combo.listState() : list;
         const ScrollPlacement& placement = state.placement();
         ASSERT_GT(placement.endRow, placement.firstRow);
-        const WidgetId listOwner = popup ? MakeWidgetId(owner, "rows") : owner;
-        const WidgetId rows = MakeWidgetId(listOwner, "rows");
-        const HitTarget* first = target(MakeWidgetPartId(rows, placement.firstRow + 1u));
+        const WidgetId listOwner = popup ? UiTestSupport::RequireWidgetId(MakeWidgetId(owner, "rows")) : owner;
+        const WidgetId rows = UiTestSupport::RequireWidgetId(MakeWidgetId(listOwner, "rows"));
+        const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(rows, placement.firstRow + 1u)));
         ASSERT_NE(first, nullptr);
         const f32 rowHeight = first->rectangle.height;
         f32 expectedHeight = rowMetrics->minimum.y;
@@ -218,7 +222,7 @@ protected:
         reference.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
         reference.pushClip(placement.contentClip);
         for(u64 index = placement.firstRow; index < placement.endRow; ++index){
-            const HitTarget* row = target(MakeWidgetPartId(rows, index + 1u));
+            const HitTarget* row = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(rows, index + 1u)));
             ASSERT_NE(row, nullptr);
             EXPECT_FLOAT_EQ(row->rectangle.height, rowHeight);
             const StringView label = index == source.specialIndex ? source.specialText : source.ordinaryText;
@@ -282,8 +286,8 @@ protected:
         const DrawSnapshot actual = m_paint.freeze();
         ASSERT_TRUE(m_context.commitFrame(generation));
         const WidgetId rowId = id("navigation", "panel");
-        const HitTarget* first = target(MakeWidgetId(rowId, "previous"));
-        const HitTarget* second = target(MakeWidgetId(rowId, "next"));
+        const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "previous")));
+        const HitTarget* second = target(UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "next")));
         const HitTarget* after = target(id("after", "panel"));
         ASSERT_NE(first, nullptr);
         ASSERT_NE(second, nullptr);

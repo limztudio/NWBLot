@@ -52,6 +52,10 @@ static constexpr ::NamedEnumCase<bool> s_FilterCases[] = {
     { "linear", true },
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static Expected<bool> ParseFilter(const Path& nwbFilePath, const Value& asset, const AStringView fieldName){
     return Core::Assets::ParseNamedMetadataEnumField<bool>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_FilterCases, LengthOf(s_FilterCases), "must be 'nearest' or 'linear'");
 }
@@ -68,6 +72,10 @@ static constexpr ::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTy
     { "standard", Core::SamplerReductionType::Standard },
     { "comparison", Core::SamplerReductionType::Comparison },
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] static Expected<Core::SamplerAddressMode::Enum> ParseAddressMode(const Path& nwbFilePath, const Value& asset, const AStringView fieldName){
     return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_AddressModeCases, LengthOf(s_AddressModeCases), "has an unsupported address mode");
@@ -91,7 +99,7 @@ bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!checkSerializeAssetType(asset, NWB_TEXT("SamplerAssetCodec::serialize")))
         return false;
 
-    const Sampler& sampler = static_cast<const Sampler&>(asset);
+    const Sampler& sampler = *checked_cast<const Sampler*>(&asset);
     if(!sampler.validatePayload())
         return false;
 
@@ -117,6 +125,10 @@ bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_sampler_cook;
 
@@ -127,7 +139,7 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, const
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_MinFilterField, s_MagFilterField, s_MipFilterField, s_AddressUField, s_AddressVField, s_AddressWField, s_ReductionField, s_MaxAnisotropyField, s_MipBiasField, }))
         return MakeUnexpected(Failure{});
 
-    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     entry.virtualPath = *virtualPathResult;

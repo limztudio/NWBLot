@@ -124,8 +124,12 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
         .setDebugName(Name("raytrace_material_context_slots"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
-    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer){
+    auto rayTraceMaterialContextSlotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
+    if(rayTraceMaterialContextSlotsBufferResult)
+        m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer = Move(*rayTraceMaterialContextSlotsBufferResult);
+    else
+        m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.reset();
+    if(!rayTraceMaterialContextSlotsBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
         return false;
     }

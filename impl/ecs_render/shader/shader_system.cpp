@@ -14,14 +14,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererShaderSystem::RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)
+RendererShaderSystem::RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)noexcept
     : m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(shaderPathResolver)
 {}
 
 
-void RendererShaderSystem::invalidateResources(){
+void RendererShaderSystem::invalidateResources()noexcept{
     m_deferredCompositeVertexShader.reset();
 }
 

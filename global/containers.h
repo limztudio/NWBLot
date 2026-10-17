@@ -7,6 +7,7 @@
 
 #include "array.h"
 #include "expected.h"
+#include "optional.h"
 #include "generic.h"
 #include "algorithm.h"
 #include "limit.h"
@@ -14,7 +15,6 @@
 #include "simd/memory.h"
 
 #include <functional>
-#include <optional>
 #include <tuple>
 #include <forward_list>
 #include <list>
@@ -47,9 +47,6 @@
 
 template<typename FUNC>
 using Function = std::function<FUNC>;
-
-template<typename T>
-using Optional = std::optional<T>;
 
 using InPlaceType = std::in_place_t;
 inline constexpr InPlaceType s_InPlace{};

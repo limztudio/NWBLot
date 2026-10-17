@@ -5,6 +5,7 @@
 #include "cpu_task_profile.h"
 #include "timing.h"
 
+#include <core/common/log.h>
 #include <core/task/cpu/scheduler.h>
 
 #include <global/simd/vector_arithmetic.h>
@@ -33,6 +34,9 @@ inline constexpr Name s_SchedulerJoin("cpu.task.scheduler_join");
 inline constexpr Name s_WorkerIdle("cpu.worker.idle");
 inline constexpr usize s_ReadBatchSize = 32u;
 inline constexpr f64 s_NanosecondsToSeconds = 1.0e-9;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] const Name* TimingScope(const CpuTaskProfileEvent& event)noexcept{
@@ -85,8 +89,12 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
                 if(!scopeNames[lane])
                     continue;
                 const CpuTaskProfileEvent& event = events[index + lane];
-                const TimingScopeId scope = timing.registerScope(*scopeNames[lane]);
-                timing.recordSample(scope, VectorDoubleGetByIndex(seconds, lane), event.frameIndex);
+                const auto scope = timing.registerScope(*scopeNames[lane]);
+                if(!scope){
+                    NWB_LOGGER_WARNING(NWB_TEXT("CPU task timing scope registration failed"));
+                    continue;
+                }
+                timing.recordSample(*scope, VectorDoubleGetByIndex(seconds, lane), event.frameIndex);
             }
         }
     }

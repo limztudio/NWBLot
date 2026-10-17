@@ -7,6 +7,7 @@
 
 #include "filesystem.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 
@@ -34,6 +35,8 @@ private:
         u64 size = 0;
     };
 
+
+private:
     using SegmentPathVector = Vector<Path, Alloc::GlobalArena>;
 
     using FileMap = HashMap<Name, FileRecord, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
@@ -41,25 +44,25 @@ private:
 
 public:
     explicit VolumeFileSystem(Alloc::GlobalArena& arena);
-    virtual ~VolumeFileSystem()override;
+    virtual ~VolumeFileSystem()noexcept override = default;
 
 
 public:
     virtual bool mount(const VolumeMountDesc& desc)override;
     virtual bool unmount()override;
 
-    [[nodiscard]] virtual bool mounted()const override;
-    [[nodiscard]] virtual bool writable()const override;
+    [[nodiscard]] virtual bool mounted()const noexcept override;
+    [[nodiscard]] virtual bool writable()const noexcept override;
 
-    [[nodiscard]] AStringView volumeName()const;
+    [[nodiscard]] AStringView volumeName()const noexcept;
     [[nodiscard]] Path mountDirectory()const;
 
-    [[nodiscard]] u64 segmentSize()const;
-    [[nodiscard]] u64 metadataSize()const;
-    [[nodiscard]] usize segmentCount()const;
-    [[nodiscard]] virtual u64 fileCount()const override;
-    [[nodiscard]] u64 usedBytes()const;
-    [[nodiscard]] u64 wastedBytes()const;
+    [[nodiscard]] u64 segmentSize()const noexcept;
+    [[nodiscard]] u64 metadataSize()const noexcept;
+    [[nodiscard]] usize segmentCount()const noexcept;
+    [[nodiscard]] virtual u64 fileCount()const noexcept override;
+    [[nodiscard]] Expected<u64> usedBytes()const noexcept;
+    [[nodiscard]] Expected<u64> wastedBytes()const noexcept;
 
 
 public:
@@ -75,10 +78,10 @@ public:
     virtual void reserveFileCapacity(usize fileCount)override;
 
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const override;
-    virtual bool seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const override;
+    virtual bool seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const noexcept(!NWB_OCCUR_WARNING)override;
     virtual bool removeFile(const Name& virtualPath)override;
-    virtual bool fileExists(const Name& virtualPath)const override;
-    [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const override;
+    virtual bool fileExists(const Name& virtualPath)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING)override;
     virtual Vector<Name, VolumeArena> listFiles()const override;
     bool compact(bool shrinkSegments = true);
 
@@ -91,18 +94,17 @@ private:
     bool ensureCapacityLocked(u64 requiredBytes);
     Expected<u64> computeLogicalCapacityLocked()const noexcept;
 
-    bool loadMetadataLocked();
-    bool flushMetadataLocked();
+    bool loadMetadataLocked(Alloc::ScratchArena& scratchArena);
+    bool flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath = nullptr);
     bool canFitMetadataForFileCountLocked(u64 fileCount)const noexcept;
-    [[nodiscard]] Expected<FileRecord> readFileRecordLocked(const Name& virtualPath)const;
-    Expected<u64> computePhysicalCapacityLocked()const;
+    [[nodiscard]] Expected<FileRecord> readFileRecordLocked(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING);
+    Expected<u64, ErrorCode> computePhysicalCapacityLocked()const noexcept(!NWB_OCCUR_WARNING);
 
     bool readBytesLocked(u64 offset, void* data, u64 byteCount)const;
     bool writeBytesLocked(u64 offset, const void* data, u64 byteCount);
-    bool moveBytesLocked(u64 destinationOffset, u64 sourceOffset, u64 byteCount, Alloc::ScratchArena& scratchArena);
     bool trimSegmentsForNextFreeOffsetLocked();
 
-    void unmountLocked();
+    void unmountLocked()noexcept;
     Path segmentPath(usize segmentIndex)const;
 
 

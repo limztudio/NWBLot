@@ -239,7 +239,8 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
         return false;
     }
-    const auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size());
+    Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/frame_graph_snapshot_scratch"));
+    const auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, scratchArena, event->payload.data(), event->payload.size());
     if(!payload || !__hidden_stress_frame_graph_snapshot::ValidateSnapshot(*payload, sourceFrame)){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
         return false;
@@ -258,7 +259,7 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         return false;
     }
     binary.write(reinterpret_cast<const char*>(encoded.data()), static_cast<StreamSize>(encoded.size()));
-    binary.flush();
+    binary.close();
     if(!binary.good()){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: encoded stream output failed"));
         return false;
@@ -266,7 +267,13 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
     AString<Core::Telemetry::TelemetryArena> jsonPath(arena);
     jsonPath.assign(outputPath);
     OutputFileStream output(jsonPath.c_str(), s_FileOpenTruncate);
-    if(!output.is_open() || !__hidden_stress_frame_graph_snapshot::WriteSnapshot(output, *payload, graphicsFrame, completedFrames)){
+    if(!output.is_open()){
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
+        return false;
+    }
+    const bool snapshotWritten = __hidden_stress_frame_graph_snapshot::WriteSnapshot(output, *payload, graphicsFrame, completedFrames);
+    output.close();
+    if(!snapshotWritten || !output.good()){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
         return false;
     }

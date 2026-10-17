@@ -25,7 +25,7 @@ NWB_CORE_BEGIN
 // Native transfer chunks may split a UTF-8 sequence. Validate encoding only after the complete byte stream arrives.
 class ClipboardTextAccumulator final{
 public:
-    explicit ClipboardTextAccumulator(Alloc::GlobalArena& arena);
+    explicit ClipboardTextAccumulator(Alloc::GlobalArena& arena)noexcept;
 
 
 public:

@@ -85,17 +85,21 @@ struct DescriptorBufferStartupPrerequisites{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Futex s_DescriptorBufferStorageIdentityMutex;
-inline u64 s_NextDescriptorBufferStorageIdentity = 1u;
+inline Futex g_DescriptorBufferStorageIdentityMutex;
+inline u64 g_NextDescriptorBufferStorageIdentity = 1u;
 
-[[nodiscard]] inline u64 AllocateDescriptorBufferStorageIdentity(){
-    ScopedLock lock(s_DescriptorBufferStorageIdentityMutex);
 
-    if(s_NextDescriptorBufferStorageIdentity == 0u)
-        return 0u;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    const u64 identity = s_NextDescriptorBufferStorageIdentity;
-    s_NextDescriptorBufferStorageIdentity = identity == UINT64_MAX ? 0u : identity + 1u;
+
+[[nodiscard]] inline Expected<u64> AllocateDescriptorBufferStorageIdentity()noexcept{
+    ScopedLock lock(g_DescriptorBufferStorageIdentityMutex);
+
+    if(g_NextDescriptorBufferStorageIdentity == 0u)
+        return MakeUnexpected(Failure{});
+
+    const u64 identity = g_NextDescriptorBufferStorageIdentity;
+    g_NextDescriptorBufferStorageIdentity = identity == UINT64_MAX ? 0u : identity + 1u;
     return identity;
 }
 

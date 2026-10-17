@@ -54,9 +54,10 @@ namespace __hidden_csg_resources{
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
 
-    Core::BufferHandle createdBuffer = graphics.createBuffer(bufferDesc);
-    if(!createdBuffer)
+    auto createdBufferResult = graphics.createBuffer(bufferDesc);
+    if(!createdBufferResult)
         return false;
+    Core::BufferHandle createdBuffer = Move(*createdBufferResult);
 
     buffer = Move(createdBuffer);
     inOutCapacity = capacity;
@@ -128,8 +129,12 @@ bool RendererCsgSystem::createCsgClipResources(){
         // Push-only layout for the cap-fill path.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
-        m_csgState.m_clipBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_csgState.m_clipBindingLayout){
+        auto clipBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(clipBindingLayoutResult)
+            m_csgState.m_clipBindingLayout = Move(*clipBindingLayoutResult);
+        else
+            m_csgState.m_clipBindingLayout.reset();
+        if(!clipBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip binding layout"));
             return false;
         }
@@ -178,8 +183,12 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     if(!m_csgState.m_clipContextSlotsBuffer){
         Core::BufferDesc bufferDesc;
         bufferDesc.setByteSize(sizeof(CsgClipContextSlots)).setIsConstantBuffer(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName("engine/csg/clip_context_slots").enableAutomaticStateTracking(Core::ResourceStates::Common);
-        m_csgState.m_clipContextSlotsBuffer = m_graphics.createBuffer(bufferDesc);
-        if(!m_csgState.m_clipContextSlotsBuffer){
+        auto clipContextSlotsBufferResult = m_graphics.createBuffer(bufferDesc);
+        if(clipContextSlotsBufferResult)
+            m_csgState.m_clipContextSlotsBuffer = Move(*clipContextSlotsBufferResult);
+        else
+            m_csgState.m_clipContextSlotsBuffer.reset();
+        if(!clipContextSlotsBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
             return false;
         }

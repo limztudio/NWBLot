@@ -40,15 +40,17 @@ bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHea
     push.casterDrawOffset = 0u;
     for(usize index = 0u; index < snapshot.casterCount; ++index){
         const auto& caster = snapshot.casters[index];
-        const u32 drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+        const auto drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+        if(!drawCount)
+            return false;
         push.instanceIndex = caster.instanceIndex;
         push.meshletDescSlot = caster.meshletDescSlot;
         push.meshletBoundsSlot = caster.meshletBoundsSlot;
         push.meshletCount = caster.meshletCount;
         commandList.setPushConstants(&push, sizeof(push));
-        const u32 groups = DivideUp(drawCount, static_cast<u32>(NWB_LIGHT_SPACE_CULL_GROUP_SIZE));
+        const u32 groups = DivideUp(*drawCount, static_cast<u32>(NWB_LIGHT_SPACE_CULL_GROUP_SIZE));
         commandList.dispatch(Min(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)), snapshot.plan.viewCount, DivideUp(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)));
-        push.casterDrawOffset += drawCount;
+        push.casterDrawOffset += *drawCount;
     }
     return true;
 }
@@ -84,9 +86,13 @@ bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptor
     u32 drawOffset = viewIndex * snapshot.push.captureDrawCount;
     for(usize index = 0u; index < snapshot.casterCount; ++index){
         const LightSpaceShadowCaster& caster = snapshot.casters[index];
-        const u32 drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+        const auto drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+        if(!drawCount){
+            commandList.endRenderPass();
+            return false;
+        }
         const u32 argumentOffset = drawOffset * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
-        drawOffset += drawCount;
+        drawOffset += *drawCount;
         if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
             continue;
         graphics.setIndexBuffer(Core::IndexBufferBinding{}.setBuffer(caster.triangleIndexBuffer.get()).setFormat(Core::Format::R32_UINT));
@@ -94,7 +100,7 @@ bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptor
         heap.bindGraphics(commandList, *pipeline);
         push.instanceIndex = caster.instanceIndex;
         commandList.setPushConstants(&push, sizeof(push));
-        const u32 captureCount = (snapshot.plan.views[viewIndex].light[3] & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? drawCount : 1u;
+        const u32 captureCount = (snapshot.plan.views[viewIndex].light[3] & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? *drawCount : 1u;
         constexpr u32 s_MaxIndirectDraws = 65535u;
         for(u32 firstDraw = 0u; firstDraw < captureCount;){
             const u32 batchCount = Min(captureCount - firstDraw, s_MaxIndirectDraws);

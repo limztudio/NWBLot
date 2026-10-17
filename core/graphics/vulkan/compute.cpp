@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ComputePipeline::ComputePipeline(const VulkanContext& context)
+ComputePipeline::ComputePipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
@@ -33,27 +33,27 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
+Expected<ComputePipelineHandle> Device::createComputePipeline(const ComputePipelineDesc& desc){
     if(!desc.computeShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: compute shader is null"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     auto* cs = desc.computeShader.get();
     if(&cs->m_context != &m_context){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: compute shader belongs to another device"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(cs->m_shaderModule == VK_NULL_HANDLE || cs->m_desc.shaderType != ShaderType::Compute){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: compute shader has an invalid module or stage"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_ComputePipelineArena);
 
     ComputePipelineHandle pso(NewArenaObject<ComputePipeline>(m_context.objectArena, m_context), ComputePipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!pso)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     pso->m_desc = desc;
 
     auto shaderStage = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
@@ -71,14 +71,14 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     shaderStages.push_back(shaderStage);
 
     if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("compute pipeline"), *pso, scratchArena))
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     pipelineInfo.stage = shaderStages[0];
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso);
 
     if(!createPipeline(NWB_TEXT("compute pipeline"), *pso, pipelineInfo))
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     return pso;
 }

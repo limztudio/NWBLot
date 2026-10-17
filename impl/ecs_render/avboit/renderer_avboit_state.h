@@ -29,6 +29,7 @@ class RendererAvboitSystem;
 class RendererAvboitState final : NoCopy{
     friend class RendererAvboitSystem;
 
+
 public:
     RendererAvboitState() = default;
 

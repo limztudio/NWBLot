@@ -35,6 +35,9 @@ private:
         TrackedCommandBuffer* owner = nullptr;
         u64 nativeRecordingID = 0u;
     };
+
+
+private:
     using OwnerEntries = Vector<OwnerEntry, Alloc::GlobalArena>;
 
 
@@ -70,7 +73,7 @@ private:
 
 
 public:
-    explicit SubmittedCommandBufferOwnerLookup(Alloc::GlobalArena& arena)
+    explicit SubmittedCommandBufferOwnerLookup(Alloc::GlobalArena& arena)noexcept
         : m_ownerEntries(arena)
     {}
 

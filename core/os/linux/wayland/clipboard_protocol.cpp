@@ -39,6 +39,11 @@ static void SelectMime(const AStringView mime, u8& rank){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank){
+    NWB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard::s_Utf8Mimes.size());
+    return MakeNotNull(__hidden_wayland_clipboard::s_Utf8Mimes[__hidden_wayland_clipboard::s_Utf8Mimes.size() - rank].data());
+}
+
 void WaylandClipboardService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
     auto& service = *static_cast<WaylandClipboardService*>(data);
     if(AStringView(interfaceName) == wl_data_device_manager_interface.name && !service.m_manager){
@@ -86,21 +91,20 @@ void WaylandClipboardService::OnRegistryRemove(void* const data, wl_registry*, c
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void WaylandClipboardService::OnDataOffer(void* const data, wl_data_device*, wl_data_offer* const offer){
     static_cast<WaylandClipboardService*>(data)->addOffer(offer, ClipboardChannel::Clipboard);
 }
 
-void WaylandClipboardService::OnEnter(void*, wl_data_device*, u32, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*){}
+void WaylandClipboardService::OnEnter(void*, wl_data_device*, u32, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*)noexcept{}
 
-void WaylandClipboardService::OnLeave(void*, wl_data_device*){}
+void WaylandClipboardService::OnLeave(void*, wl_data_device*)noexcept{}
 
-void WaylandClipboardService::OnMotion(void*, wl_data_device*, u32, wl_fixed_t, wl_fixed_t){}
+void WaylandClipboardService::OnMotion(void*, wl_data_device*, u32, wl_fixed_t, wl_fixed_t)noexcept{}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void WaylandClipboardService::OnDrop(void*, wl_data_device*){}
+void WaylandClipboardService::OnDrop(void*, wl_data_device*)noexcept{}
 
 void WaylandClipboardService::OnSelection(void* const data, wl_data_device*, wl_data_offer* const offer){
     static_cast<WaylandClipboardService*>(data)->selectOffer(offer, ClipboardChannel::Clipboard);
@@ -111,11 +115,11 @@ void WaylandClipboardService::OnOfferMime(void* const data, wl_data_offer*, cons
     __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.rank);
 }
 
-void WaylandClipboardService::OnOfferActions(void*, wl_data_offer*, u32){}
+void WaylandClipboardService::OnOfferActions(void*, wl_data_offer*, u32)noexcept{}
 
-void WaylandClipboardService::OnOfferAction(void*, wl_data_offer*, u32){}
+void WaylandClipboardService::OnOfferAction(void*, wl_data_offer*, u32)noexcept{}
 
-void WaylandClipboardService::OnSourceTarget(void*, wl_data_source*, const char*){}
+void WaylandClipboardService::OnSourceTarget(void*, wl_data_source*, const char*)noexcept{}
 
 void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
@@ -135,11 +139,11 @@ void WaylandClipboardService::OnSourceCancelled(void* const data, wl_data_source
     source.handle = nullptr;
 }
 
-void WaylandClipboardService::OnSourceDrop(void*, wl_data_source*){}
+void WaylandClipboardService::OnSourceDrop(void*, wl_data_source*)noexcept{}
 
-void WaylandClipboardService::OnSourceFinished(void*, wl_data_source*){}
+void WaylandClipboardService::OnSourceFinished(void*, wl_data_source*)noexcept{}
 
-void WaylandClipboardService::OnSourceAction(void*, wl_data_source*, u32){}
+void WaylandClipboardService::OnSourceAction(void*, wl_data_source*, u32)noexcept{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -188,11 +192,6 @@ void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_s
 
 #endif
 
-
-NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank){
-    NWB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard::s_Utf8Mimes.size());
-    return MakeNotNull(__hidden_wayland_clipboard::s_Utf8Mimes[__hidden_wayland_clipboard::s_Utf8Mimes.size() - rank].data());
-}
 
 void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlobalName){
     NWB_ASSERT(isOwnerThread());

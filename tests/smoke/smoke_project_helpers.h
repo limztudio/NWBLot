@@ -34,6 +34,9 @@ namespace NWB::Tests::Smoke{
 inline constexpr f32 s_DegreesPerTurn = 360.0f;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(ProjectRuntimeContext& context, const TStringView projectName){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){

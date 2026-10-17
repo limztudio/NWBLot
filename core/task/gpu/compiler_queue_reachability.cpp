@@ -158,7 +158,7 @@ static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& wor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskSchedulingReachability::GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena)
+GpuTaskSchedulingReachability::GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena)noexcept
     : m_words(scratchArena)
     , m_topologicalRanks(scratchArena)
     , m_relatedWordRanges(scratchArena)

@@ -42,9 +42,12 @@ Expected<Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>, SampledTex
             const Name identity = texture->getCreationDescription().name;
             if(!identity)
                 return MakeUnexpected(SampledTextureImportFailure::MissingIdentity);
-            resource = graph.importTexture(texture, RendererTaskGraphDetail::TextureResourceDesc(identity, markerLabel));
-            if(!resource.valid())
+            const auto resourceResult = graph.importTexture(texture, RendererTaskGraphDetail::TextureResourceDesc(identity, markerLabel));
+            if(!resourceResult){
+                resource = {};
                 return MakeUnexpected(SampledTextureImportFailure::ImportFailed);
+            }
+            resource = *resourceResult;
         }
         resources.push_back(resource);
     }

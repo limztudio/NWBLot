@@ -17,7 +17,7 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void UiComboGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("combo_gallery", { x, y, 280.0f, 130.0f }))
@@ -30,7 +30,6 @@ void UiComboGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     const ComboResult result = ui.comboBox("choice", m_source, m_state, options);
     if(result.committed)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom combo selected key={}"), m_state.selectedKey());
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/combo_caption"));
     const auto text = StringFormat(scratchArena, "Selected: {}", m_state.selectedKey());
     valid = ui.label("selected", { text.data(), text.size() }) && result.valid && valid;
     valid = ui.endPanel() && valid;

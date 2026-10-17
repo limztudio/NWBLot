@@ -9,6 +9,10 @@
 
 #include <global/frame_data.h>
 
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,6 +35,17 @@ inline constexpr usize s_FrameStoragePointerSlotCount = 2u;
 using FrameParam = FrameParamStorage<s_FrameStoragePointerSlotCount>;
 using FrameData = BasicFrameData<s_FrameStoragePointerSlotCount>;
 
+#if defined(NWB_PLATFORM_WINDOWS)
+class WinFrame : public FrameData{
+public:
+    inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
+    inline void setInstance(HINSTANCE value)noexcept{ m_data.ptr[0] = value; }
+
+    inline HWND hwnd()const noexcept{ return static_cast<HWND>(m_data.ptr[1]); }
+    inline void setHwnd(HWND value)noexcept{ m_data.ptr[1] = value; }
+};
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,19 +57,26 @@ using FrameData = BasicFrameData<s_FrameStoragePointerSlotCount>;
 
 
 class Frame{
+#if defined(NWB_PLATFORM_WINDOWS)
+    using NativeFrameData = FrameDetail::WinFrame;
+#else
+    using NativeFrameData = FrameDetail::FrameData;
+#endif
+
+
 public:
     static void Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type);
 
 
 public:
-    Frame(void* inst);
+    Frame(void* inst)noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
     ~Frame();
 
 
 public:
-    bool init();
+    bool init()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
     void showFrame();
-    bool mainLoop();
+    bool mainLoop()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
 
 
 public:
@@ -63,7 +85,7 @@ public:
 
 
 private:
-    FrameDetail::FrameData m_data;
+    NativeFrameData m_data;
 };
 
 

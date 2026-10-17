@@ -25,6 +25,10 @@ namespace VulkanTimerQueryDetail{
 
 inline constexpr f64 s_TimestampNanosecondsToSeconds = 1e-9;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline Expected<Array<u64, s_TimerQueryTimestampCount>, VkResult> GetTimerQueryResults(const VulkanContext& context, const VkQueryPool queryPool){
     Array<u64, s_TimerQueryTimestampCount> timestamps{};
     const VkResult result = context.deviceDispatch.vkGetQueryPoolResults(context.device, queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount, sizeof(timestamps), timestamps.data(), sizeof(u64), VK_QUERY_RESULT_64_BIT);

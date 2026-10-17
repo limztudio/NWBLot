@@ -67,7 +67,7 @@ public:
     }
     pointer detach()noexcept{ return release(); }
 
-    pointer get()const noexcept{ return m_pair.first(); }
+    pointer get()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
 
     deleter_type& getDeleter()noexcept{ return m_pair.second(); }
     const deleter_type& getDeleter()const noexcept{ return m_pair.second(); }
@@ -150,11 +150,11 @@ public:
     {}
     UniquePtr(const this_type&) = delete;
     ~UniquePtr()noexcept{ reset(); }
-    UniquePtr& operator=(const this_type&) = delete;
-    UniquePtr& operator=(pointer pValue) = delete;
 
 
 public:
+    UniquePtr& operator=(const this_type&) = delete;
+    UniquePtr& operator=(pointer pValue) = delete;
     this_type& operator=(this_type&& x)noexcept{
         base_type::template moveAssignFrom<deleter_type>(x);
         return *this;
@@ -170,9 +170,9 @@ public:
     }
 
     typename AddLValueReference<T>::type operator*()const noexcept(IsPointer_V<pointer>){ return *get(); }
-    pointer operator->()const noexcept{ return get(); }
+    pointer operator->()const noexcept(noexcept(get())){ return get(); }
 
-    explicit operator bool()const noexcept{ return (get() != pointer()); }
+    explicit operator bool()const noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
 
 
 public:
@@ -226,11 +226,11 @@ public:
     {}
     UniquePtr(const this_type&) = delete;
     ~UniquePtr()noexcept{ reset(); }
-    UniquePtr& operator=(const this_type&) = delete;
-    UniquePtr& operator=(pointer pArray) = delete;
 
 
 public:
+    UniquePtr& operator=(const this_type&) = delete;
+    UniquePtr& operator=(pointer pArray) = delete;
     this_type& operator=(this_type&& x)noexcept{
         base_type::template moveAssignFrom<deleter_type>(x);
         return *this;
@@ -245,7 +245,7 @@ public:
         return *this;
     }
 
-    explicit operator bool()const noexcept{ return (get() != pointer()); }
+    explicit operator bool()const noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
 
     typename AddLValueReference<T>::type operator[](ptrdiff_t i)const noexcept(IsPointer_V<pointer>){ return get()[i]; }
 
@@ -268,6 +268,7 @@ public:
 
 template<typename T, typename Deleter = DefaultDeleter<T>>
 class NotNullUniquePtr{
+private:
     static_assert(!IsArray<T>::value, "NotNullUniquePtr does not support array types.");
 
 
@@ -286,26 +287,27 @@ public:
     {
         NWB_ASSERT_MSG(m_owner.get(), "NotNullUniquePtr requires non-null owner");
     }
-
     NotNullUniquePtr(NotNullUniquePtr&&)noexcept = default;
-    NotNullUniquePtr& operator=(NotNullUniquePtr&&)noexcept = default;
-
     NotNullUniquePtr(const NotNullUniquePtr&) = delete;
+
+
+public:
+    NotNullUniquePtr& operator=(NotNullUniquePtr&&)noexcept = default;
     NotNullUniquePtr& operator=(const NotNullUniquePtr&) = delete;
     NotNullUniquePtr& operator=(std::nullptr_t) = delete;
 
-
-public:
     typename AddLValueReference<element_type>::type operator*()const noexcept(noexcept(*m_owner)){
         return *m_owner;
     }
-    pointer operator->()const noexcept{ return m_owner.get(); }
+
+    pointer operator->()const noexcept(noexcept(m_owner.get())){ return m_owner.get(); }
 
 
 public:
-    [[nodiscard]] pointer get()const noexcept{ return m_owner.get(); }
+    [[nodiscard]] pointer get()const noexcept(noexcept(m_owner.get())){ return m_owner.get(); }
 
     [[nodiscard]] owner_type& owner()noexcept{ return m_owner; }
+
     [[nodiscard]] const owner_type& owner()const noexcept{ return m_owner; }
 
 
@@ -327,8 +329,7 @@ inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUni
     return UniquePtr<T>(new TBase[n]);
 }
 template<typename T, typename... Args>
-typename EnableIf<IsBoundedArray<T>::value>::type
-MakeUnique(Args&&...) = delete;
+typename EnableIf<IsBoundedArray<T>::value>::type MakeUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -343,8 +344,7 @@ inline typename EnableIf<IsUnboundedArray<T>::value, std::unique_ptr<T>>::type M
     return std::make_unique<T>(n);
 }
 template<typename T, typename... Args>
-typename EnableIf<IsBoundedArray<T>::value>::type
-MakeStdUnique(Args&&...) = delete;
+typename EnableIf<IsBoundedArray<T>::value>::type MakeStdUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -367,7 +367,7 @@ namespace std{
 
 template<typename T, typename D>
 struct hash<UniquePtr<T, D>>{
-    size_t operator()(const UniquePtr<T, D>& x)const noexcept{ return std::hash<typename UniquePtr<T, D>::pointer>()(x.get()); }
+    size_t operator()(const UniquePtr<T, D>& x)const noexcept(noexcept(DeclVal<void(*)(size_t)noexcept>()(std::hash<typename UniquePtr<T, D>::pointer>()(x.get())))){ return std::hash<typename UniquePtr<T, D>::pointer>()(x.get()); }
 };
 
 template<typename T, typename D>

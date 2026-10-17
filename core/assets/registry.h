@@ -28,7 +28,7 @@ public:
 
 public:
     bool registerCodec(UniquePtr<IAssetCodec>&& codec, bool replaceExisting = false);
-    bool unregisterCodec(const Name& assetType);
+    bool unregisterCodec(const Name& assetType)noexcept;
 
     [[nodiscard]] Expected<UniquePtr<IAsset>> deserializeAsset(const Name& assetType, const Name& virtualPath, const AssetBytes& binary)const;
 

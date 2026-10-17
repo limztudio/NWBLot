@@ -9,6 +9,8 @@
 
 #include <core/alloc/module.h>
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,6 +37,8 @@ struct MemoryScopeId{
     u32 index = Limit<u32>::s_Max;
     u32 generation = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 
@@ -49,6 +53,8 @@ struct MemorySnapshot{
     u64 deallocationCount = 0u;
     MemorySource::Enum source = MemorySource::ExplicitScope;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return scopeName != s_NameNone; }
 };
 
@@ -61,8 +67,11 @@ struct MemoryDelta{
     i64 allocationCount = 0;
     i64 reallocationCount = 0;
     i64 deallocationCount = 0;
+    // False when snapshots are incomparable or any signed counter difference is unrepresentable.
     bool hasSamples = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return hasSamples; }
 };
 
@@ -89,15 +98,39 @@ template<typename Arena>
     if(!current.valid() || !previous.valid() || current.scopeName != previous.scopeName || current.source != previous.source)
         return {};
 
+    const auto signedDifference = [](const u64 value, const u64 prior)noexcept -> Expected<i64>{
+        constexpr u64 s_MaxPositive = static_cast<u64>(Limit<i64>::s_Max);
+        if(value >= prior){
+            const u64 magnitude = value - prior;
+            if(magnitude > s_MaxPositive)
+                return MakeUnexpected(Failure{});
+            return static_cast<i64>(magnitude);
+        }
+
+        const u64 magnitude = prior - value;
+        constexpr u64 s_MaxNegative = s_MaxPositive + 1u;
+        if(magnitude > s_MaxNegative)
+            return MakeUnexpected(Failure{});
+        return magnitude == s_MaxNegative ? Limit<i64>::s_Min : -static_cast<i64>(magnitude);
+    };
+    const auto reservedBytes = signedDifference(current.reservedBytes, previous.reservedBytes);
+    const auto usedBytes = signedDifference(current.usedBytes, previous.usedBytes);
+    const auto peakUsedBytes = signedDifference(current.peakUsedBytes, previous.peakUsedBytes);
+    const auto allocationCount = signedDifference(current.allocationCount, previous.allocationCount);
+    const auto reallocationCount = signedDifference(current.reallocationCount, previous.reallocationCount);
+    const auto deallocationCount = signedDifference(current.deallocationCount, previous.deallocationCount);
+    if(!reservedBytes || !usedBytes || !peakUsedBytes || !allocationCount || !reallocationCount || !deallocationCount)
+        return {};
+
     MemoryDelta delta;
     delta.previousFrameIndex = previous.frameIndex;
     delta.currentFrameIndex = current.frameIndex;
-    delta.reservedBytes = static_cast<i64>(current.reservedBytes) - static_cast<i64>(previous.reservedBytes);
-    delta.usedBytes = static_cast<i64>(current.usedBytes) - static_cast<i64>(previous.usedBytes);
-    delta.peakUsedBytes = static_cast<i64>(current.peakUsedBytes) - static_cast<i64>(previous.peakUsedBytes);
-    delta.allocationCount = static_cast<i64>(current.allocationCount) - static_cast<i64>(previous.allocationCount);
-    delta.reallocationCount = static_cast<i64>(current.reallocationCount) - static_cast<i64>(previous.reallocationCount);
-    delta.deallocationCount = static_cast<i64>(current.deallocationCount) - static_cast<i64>(previous.deallocationCount);
+    delta.reservedBytes = *reservedBytes;
+    delta.usedBytes = *usedBytes;
+    delta.peakUsedBytes = *peakUsedBytes;
+    delta.allocationCount = *allocationCount;
+    delta.reallocationCount = *reallocationCount;
+    delta.deallocationCount = *deallocationCount;
     delta.hasSamples = true;
     return delta;
 }
@@ -131,12 +164,16 @@ private:
         u32 generation = 0u;
         MemorySource::Enum source = MemorySource::ExplicitScope;
 
+
+    public:
         explicit ScopeRecord(const Name& scopeName, const MemorySource::Enum memorySource)noexcept
             : name(scopeName)
             , source(memorySource)
         {}
     };
 
+
+private:
     using ScopeRecordPtr = GlobalUniquePtr<ScopeRecord>;
     using ScopeVector = Vector<ScopeRecordPtr, Alloc::GlobalArena>;
     using ScopeMap = HashMap<ScopeKey, MemoryScopeId, Alloc::GlobalArena, ScopeKeyHash, ScopeKeyEqual>;
@@ -153,7 +190,7 @@ public:
 public:
     void setEnabled(bool enabled)noexcept;
     void clear()noexcept;
-    [[nodiscard]] MemoryScopeId registerScope(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope);
+    [[nodiscard]] Expected<MemoryScopeId> registerScope(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope);
     void recordSnapshot(MemoryScopeId scope, const ::ArenaMemoryStats& stats, u64 frameIndex)noexcept;
     void recordSnapshot(const Name& scopeName, const ::ArenaMemoryStats& stats, u64 frameIndex, MemorySource::Enum source = MemorySource::ExplicitScope)noexcept;
 

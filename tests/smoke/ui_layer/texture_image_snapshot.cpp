@@ -69,15 +69,14 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.values[12u] = m_evictionRemaining;
     current.values[13u] = m_evictionCompleted;
     current.generations = { m_default->generation(), m_alternate->generation(), m_replacement->generation() };
-    const auto update = PublishPassiveSmokeSnapshot(current, m_snapshot, [&]{ return current.values != m_snapshot.values || current.generations != m_snapshot.generations; });
+    const auto update = PublishPassiveSmokeSnapshot(current, m_snapshot, [&]()noexcept{ return current.values != m_snapshot.values || current.generations != m_snapshot.generations; });
     if(!update.published)
         return;
     if(update.displayChanged){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}"), current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY);
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},")
-        NWB_TEXT("{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},") NWB_TEXT("{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5]
         , value[6], value[7], value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
     );

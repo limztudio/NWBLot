@@ -50,6 +50,8 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
+
+public:
     DrawItemVector meshDrawItems;
     DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
@@ -63,7 +65,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     CsgFrameWorkRegion workRegion;
     bool captured = false;
 
-    explicit OpaqueCsgReceiverComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit OpaqueCsgReceiverComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
         : meshDrawItems(arena)
         , indexedDrawItems(arena)
         , drawItems(arena)
@@ -192,6 +196,8 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
+
+public:
     DrawItemVector meshDrawItems;
     DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
@@ -203,7 +209,9 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     CsgFrameWorkRegion workRegion;
     bool captured = false;
 
-    explicit OpaqueCsgIntervalSampleComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit OpaqueCsgIntervalSampleComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
         : meshDrawItems(arena)
         , indexedDrawItems(arena)
         , drawItems(arena)

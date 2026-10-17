@@ -48,8 +48,9 @@ font does not establish paragraph bidi, Unicode line breaking, or native IME sup
 ## Layout, measurement, and hit testing
 
 `TextLayoutBuilder` consumes `ITextShaper` and publishes a move-only `TextLayout`.
-`layout()` returns `TextLayoutStatus` and leaves the previous output unchanged on
-failure. The layout owns copied UTF-8 text, positioned glyphs, cluster records,
+`layout(request)` returns `Expected<TextLayout, TextLayoutStatus::Enum>`. Check success
+before consuming or moving the new layout; a failure carries its layout status and
+does not modify an earlier caller-owned layout. The layout owns copied UTF-8 text, positioned glyphs, cluster records,
 and line records in the builder's arena. It has no automatic wrapping, alignment,
 editing model, selection, or undo state.
 
@@ -182,15 +183,15 @@ const Ui::FontSource fonts[]{
 if(!text.setFonts(fonts, 2u))
     return false;
 
-Ui::TextLayout label(uiArena);
 Ui::ShapeRequest request{ "Hello, custom UI" };
-if(text.layout(request, label) != Ui::TextLayoutStatus::Success)
+auto label = text.layout(request);
+if(!label)
     return false;
 
 Ui::PaintBuilder paint(uiArena);
 paint.begin({ 800.0f, 600.0f, 1.5f, 1.5f }, frameGeneration, skinGeneration, skinRef, skin);
 paint.pushClip({ 20.0f, 20.0f, 300.0f, 100.0f });
-if(!text.paint(paint, label, { 24.0f, 24.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }))
+if(!text.paint(paint, *label, { 24.0f, 24.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }))
     return false;
 if(!paint.popClip())
     return false;

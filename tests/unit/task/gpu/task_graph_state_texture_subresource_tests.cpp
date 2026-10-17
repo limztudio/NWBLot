@@ -40,7 +40,9 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/subresource_states"), "Subresource States");
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/subresource_states"), "Subresource States");
+    ASSERT_TRUE(textureResult);
+    const Graphics::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
 
     const Graphics::GpuTaskResourceUse firstUse[] = {
@@ -59,8 +61,12 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
-    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/subresource_first"), "First Subresource", nullptr, 0u, firstUse, LengthOf(firstUse));
-    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph/subresource_second"), "Second Subresource", nullptr, 0u, secondUse, LengthOf(secondUse));
+    const auto firstResult = AddTask(graph, Name("tests/task_graph/subresource_first"), "First Subresource", nullptr, 0u, firstUse, LengthOf(firstUse));
+    ASSERT_TRUE(firstResult);
+    const Graphics::GpuTaskId first = *firstResult;
+    const auto secondResult = AddTask(graph, Name("tests/task_graph/subresource_second"), "Second Subresource", nullptr, 0u, secondUse, LengthOf(secondUse));
+    ASSERT_TRUE(secondResult);
+    const Graphics::GpuTaskId second = *secondResult;
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
 
@@ -77,9 +83,13 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
 }
 
 TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/fragment_fan_in_texture"), "Fragment Fan-In Texture");
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/fragment_fan_in_texture"), "Fragment Fan-In Texture");
+    ASSERT_TRUE(textureResult);
+    const Graphics::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), DedicatedTransferQueue(), };
@@ -105,9 +115,15 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     computeDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_compute")).setMarkerLabel("Fragment Fan-In Compute").setScheduling(scheduling).setResourceUses(&computeUse, 1u);
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc.setIdentity(Name("tests/task_graph/fragment_fan_in_consumer")).setMarkerLabel("Fragment Fan-In Consumer").setScheduling(scheduling).setResourceUses(&consumerUse, 1u);
-    const Graphics::GpuTaskId transferTask = graph.addTask(transferDesc, transferCommands);
-    const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc, computeCommands);
-    const Graphics::GpuTaskId consumerTask = graph.addTask(consumerDesc, graphicsCommands);
+    const auto transferTaskResult = graph.addTask(transferDesc, transferCommands);
+    ASSERT_TRUE(transferTaskResult);
+    const Graphics::GpuTaskId transferTask = *transferTaskResult;
+    const auto computeTaskResult = graph.addTask(computeDesc, computeCommands);
+    ASSERT_TRUE(computeTaskResult);
+    const Graphics::GpuTaskId computeTask = *computeTaskResult;
+    const auto consumerTaskResult = graph.addTask(consumerDesc, graphicsCommands);
+    ASSERT_TRUE(consumerTaskResult);
+    const Graphics::GpuTaskId consumerTask = *consumerTaskResult;
     ASSERT_TRUE(transferTask.valid());
     ASSERT_TRUE(computeTask.valid());
     ASSERT_TRUE(consumerTask.valid());
@@ -115,7 +131,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 

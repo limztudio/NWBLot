@@ -99,7 +99,7 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait
             NWB_ASSERT(m_scopeContributionVisits[index] == positiveStamp);
             return true;
         }
-        const auto visit = [this](const TaskHandle handle){
+        const auto visit = [this](const TaskHandle handle)noexcept{
             if(resolveLocked(handle) && m_searchVisits[handle.index] != m_searchGeneration && m_scopeContributionVisits[handle.index] != m_scopeSearchGeneration){
                 m_searchVisits[handle.index] = m_searchGeneration;
                 m_searchStack.push_back(handle.index);

@@ -103,7 +103,9 @@ struct PerfTimingPayload{
     Perf::TimingStats stats;
     PerfTimingSource::Enum source = PerfTimingSource::Unknown;
 
-    explicit PerfTimingPayload(TelemetryArena& arena)
+
+public:
+    explicit PerfTimingPayload(TelemetryArena& arena)noexcept
         : scopeText(arena)
     {}
 };
@@ -114,7 +116,9 @@ struct PerfMemoryPayload{
     Perf::MemorySnapshot snapshot;
     Perf::MemoryDelta delta;
 
-    explicit PerfMemoryPayload(TelemetryArena& arena)
+
+public:
+    explicit PerfMemoryPayload(TelemetryArena& arena)noexcept
         : scopeText(arena)
     {}
 };
@@ -125,6 +129,8 @@ struct PerfSessionRecordResult{
     u32 memoryEvents = 0u;
     bool succeeded = true;
 
+
+public:
     [[nodiscard]] bool ok()const noexcept{ return succeeded; }
     [[nodiscard]] u32 eventCount()const noexcept{ return cpuTimingEvents + gpuTimingEvents + memoryEvents; }
     [[nodiscard]] bool recordedAny()const noexcept{ return eventCount() != 0u; }

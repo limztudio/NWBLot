@@ -35,7 +35,7 @@ bool RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::Me
     const bool producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? ensureCausticRtPipeline() : ensureSwCausticPipeline());
     // Prepare shared resolve and temporal resources even when the producer is unavailable.
     const bool resolveReady = ensureCausticGeometryDownsamplePipeline() && ensureCausticResolvePipeline();
-    const bool temporalReady = causticTemporalDecay() <= 0.f || ensureCausticAccumulatorDecayPipeline();
+    const bool temporalReady = m_rayTracingState.m_causticTemporalDecay <= 0.f || ensureCausticAccumulatorDecayPipeline();
     return producerReady && resolveReady && temporalReady;
 }
 

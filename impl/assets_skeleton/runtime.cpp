@@ -5,10 +5,13 @@
 #include "asset.h"
 #include "arena_names.h"
 #include "binary_payload.h"
+#include "payload_validation.h"
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
+
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,12 +41,12 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAsse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Skeleton::setJoints(JointVector&& joints, JointIndexMap&& jointIndices){
+void Skeleton::setJoints(JointVector&& joints, JointIndexMap&& jointIndices)noexcept{
     m_joints = Move(joints);
     m_jointIndices = Move(jointIndices);
 }
 
-u32 Skeleton::findJointIndex(const Name jointName)const{
+u32 Skeleton::findJointIndex(const Name jointName)const noexcept{
     const auto foundJoint = m_jointIndices.find(jointName);
     if(foundJoint == m_jointIndices.end())
         return s_SkeletonInvalidJointIndex;
@@ -53,48 +56,7 @@ u32 Skeleton::findJointIndex(const Name jointName)const{
 bool Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
-    if(m_joints.empty() || m_joints.size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32"));
-        return false;
-    }
-
-    if(m_jointIndices.size() != m_joints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup count does not match joint count"));
-        return false;
-    }
-
-    Vector<u8, Core::Alloc::ScratchArena> namedJoints(scratchArena);
-    namedJoints.resize(m_joints.size(), 0u);
-    for(const auto& jointLookup : m_jointIndices){
-        const Name jointName = jointLookup.first;
-        const u32 jointIndex = jointLookup.second;
-        if(!jointName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup contains an empty name"));
-            return false;
-        }
-        if(jointIndex >= m_joints.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}"), StringConvert(jointName.resolvedText()), jointIndex);
-            return false;
-        }
-        if(namedJoints[jointIndex] != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has multiple names"), jointIndex);
-            return false;
-        }
-        namedJoints[jointIndex] = 1u;
-    }
-    for(usize i = 0u; i < m_joints.size(); ++i){
-        const SkeletonJoint& joint = m_joints[i];
-        if(!MatrixIsAffine(LoadFloat(joint.localBindPose), 0.0f)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has non-finite local bind pose"), i);
-            return false;
-        }
-        if(joint.parentIndex != s_SkeletonInvalidJointIndex && joint.parentIndex >= i){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}"), i, joint.parentIndex);
-            return false;
-        }
-    }
-
-    return true;
+    return AssetsSkeletonPayloadDetail::ValidateJoints<Core::Assets::AssetArena>(Span<const SkeletonJoint>(m_joints.data(), m_joints.size()), m_jointIndices, scratchArena);
 }
 
 bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){

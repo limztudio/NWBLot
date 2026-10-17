@@ -5,6 +5,7 @@
 #include "deform_cutter_field.h"
 
 #include "deform_validator.h"
+
 #include <impl/assets_csg/shape_id.h>
 
 

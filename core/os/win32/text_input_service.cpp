@@ -34,6 +34,8 @@ Win32TextInputService::Win32TextInputService(Alloc::GlobalArena& arena, const No
         if(context){
             Win32TextInputContextGuard release(window, context);
             m_imeAvailable = true;
+            if(!release.release())
+                NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
         }
     }
 }
@@ -80,6 +82,8 @@ void Win32TextInputService::endNativeSession(const TextInputSessionToken token){
                 Win32TextInputContextGuard release(window, context);
                 if(!ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0u))
                     NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 composition cancellation unavailable"));
+                if(!release.release())
+                    NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
             }
         }
     }
@@ -105,11 +109,14 @@ TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInpu
     candidate.rcArea = { caret.x, caret.y, caret.x + caret.width, caret.y + caret.height };
     const bool compositionSet = ImmSetCompositionWindow(context, &composition) != FALSE;
     const bool candidateSet = ImmSetCandidateWindow(context, &candidate) != FALSE;
+    TextInputAdmission::Enum admission = TextInputAdmission::Accepted;
     if(!compositionSet || !candidateSet){
         NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 caret placement failed"));
-        return TextInputAdmission::NativeFailure;
+        admission = TextInputAdmission::NativeFailure;
     }
-    return TextInputAdmission::Accepted;
+    if(!release.release())
+        NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
+    return admission;
 }
 
 

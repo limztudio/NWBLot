@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 
 
 // The loaded asset is temporary; the returned version retains only texture data copied into the caller's arena.
-[[nodiscard]] SharedImageSource LoadImageSource(Core::Alloc::GlobalArena& arena, const Core::Assets::AssetManager& assets, const Core::Assets::AssetRef<Texture>& identity);
+[[nodiscard]] Expected<SharedImageSource> LoadImageSource(Core::Alloc::GlobalArena& arena, const Core::Assets::AssetManager& assets, const Core::Assets::AssetRef<Texture>& identity);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

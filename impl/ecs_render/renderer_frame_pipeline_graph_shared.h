@@ -56,9 +56,10 @@ template<typename ImportBufferFn, typename AppendBufferFn>
         const Core::BufferHandle& buffer = sceneShadowBuffers[bufferIndex];
         if(!buffer)
             continue;
-        const Core::GpuGraphResourceId resource = importBuffer(buffer, sceneShadowIdentities[bufferIndex], sceneShadowLabels[bufferIndex]);
-        if(!resource.valid())
+        const auto resourceResult = importBuffer(buffer, sceneShadowIdentities[bufferIndex], sceneShadowLabels[bufferIndex]);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         appendBuffer(resource, Core::ResourceStates::ShaderResource);
     }
     return true;
@@ -86,7 +87,10 @@ template<typename AppendBufferFn>
             resource = declarations.findImportedBuffer(buffer);
         }
         if(!resource.valid()){
-            resource = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, "Current CSG Ray Geometry"));
+            const auto importedResource = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, "Current CSG Ray Geometry"));
+            if(!importedResource)
+                return false;
+            resource = *importedResource;
         }
         if(!resource.valid())
             return false;
@@ -102,7 +106,7 @@ template<typename AppendBufferFn>
     return true;
 }
 
-[[nodiscard]] inline TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId traceGeometrySet, const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet){
+[[nodiscard]] inline TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId traceGeometrySet, const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet)noexcept{
     TraceResourceSetUses result;
     if(traceGeometrySet.valid()){
         result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = traceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };

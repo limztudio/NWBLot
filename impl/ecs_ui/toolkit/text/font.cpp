@@ -7,6 +7,7 @@
 #include <core/common/log.h>
 
 #include <global/simd/vector_arithmetic.h>
+#include <global/scope_exit.h>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -120,11 +121,20 @@ private:
 
 
 public:
-    FontFaceState(Core::Alloc::GlobalArena& arena, const FontSource& source)
+    FontFaceState(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source)
         : m_identity(source.identity)
         , m_generation(source.generation)
         , m_bytes(arena)
     {
+        ScopeExit cleanup([this]()noexcept{ releaseNative(); });
+        initialize(scratchArena, arena, source);
+        cleanup.release();
+    }
+    ~FontFaceState()noexcept{ releaseNative(); }
+
+
+private:
+    void initialize(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source){
         const Core::Assets::AssetBytes& sourceBytes = source.font.fontBytes();
         m_bytes.assign(sourceBytes.begin(), sourceBytes.end());
         m_memory.user = &arena;
@@ -160,7 +170,6 @@ public:
             && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('C', 'B', 'D', 'T'))
             && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('C', 'O', 'L', 'R'));
         if(source.atlas){
-            Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/atlas_validation"));
             const FontAtlasPayload& payload = source.atlas->payload();
             if(
                 source.atlas->validatePayload(scratchArena) && payload.font == m_identity
@@ -168,23 +177,38 @@ public:
                 && payload.faceIndex == source.font.faceIndex() && payload.unitsPerEm == hb_face_get_upem(m_hbFace)
                 && payload.sourceGlyphCount == hb_face_get_glyph_count(m_hbFace)
             ){
-                m_bakedAtlas = CreateBakedFontAtlas(arena, *source.atlas, m_generation);
-                if(!m_bakedAtlas)
+                auto atlasResult = CreateBakedFontAtlas(arena, *source.atlas, m_generation);
+                if(atlasResult)
+                    m_bakedAtlas = Move(*atlasResult);
+                else
                     NWB_LOGGER_WARNING(NWB_TEXT("UI baked font atlas could not be installed; using native coverage"));
             }
             else
                 NWB_LOGGER_WARNING(NWB_TEXT("UI baked font atlas does not match the shaping font; using native coverage"));
         }
     }
-    ~FontFaceState(){
-        if(m_hbFace)
+
+    void releaseNative()noexcept{
+        if(m_hbFace){
             hb_face_destroy(m_hbFace);
-        if(m_blob)
+            m_hbFace = nullptr;
+        }
+        if(m_blob){
             hb_blob_destroy(m_blob);
-        if(m_face && FT_Done_Face(m_face) != 0)
-            NWB_LOGGER_ERROR(NWB_TEXT("UI FreeType face destruction failed"));
-        if(m_library && FT_Done_Library(m_library) != 0)
-            NWB_LOGGER_ERROR(NWB_TEXT("UI FreeType library destruction failed"));
+            m_blob = nullptr;
+        }
+        if(m_face){
+            const FT_Error error = FT_Done_Face(m_face);
+            m_face = nullptr;
+            if(error != 0)
+                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "ui_font_lifecycle", .message = "UI FreeType face destruction failed", .file = __FILE__, .line = __LINE__, });
+        }
+        if(m_library){
+            const FT_Error error = FT_Done_Library(m_library);
+            m_library = nullptr;
+            if(error != 0)
+                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "ui_font_lifecycle", .message = "UI FreeType library destruction failed", .file = __FILE__, .line = __LINE__, });
+        }
     }
 
 
@@ -244,8 +268,8 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FontFace::FontFace(Core::Alloc::GlobalArena& arena, const FontSource& source)
-    : m_state(Core::MakeGlobalUnique<FontFaceState>(arena, arena, source))
+FontFace::FontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source)
+    : m_state(Core::MakeGlobalUnique<FontFaceState>(arena, scratchArena, arena, source))
 {}
 
 FontFace::~FontFace() = default;
@@ -342,10 +366,13 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
             }
             const SIMDVectorSingle position = VectorScale(VectorSet(static_cast<f32>(positions[index].x_offset),
                 -static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance),
-                -static_cast<f32>(positions[index].y_advance)), 1.0f / 64.0f);
+                -static_cast<f32>(positions[index].y_advance)
+            ), 1.0f / 64.0f
+            );
             output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd,
                 { VectorGetX(position), VectorGetY(position) }, { VectorGetZ(position), VectorGetW(position) },
-                ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
+                ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) }
+            );
         }
         previousBegin = clusterBegin;
         first = end;
@@ -403,8 +430,8 @@ bool FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedFontFace MakeFontFace(Core::Alloc::GlobalArena& arena, const FontSource& source){
-    return SharedFontFace(NewArenaObject<RefCounter<FontFace>>(arena, arena, source), ArenaRefDeleter<RefCounter<FontFace>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+SharedFontFace MakeFontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source){
+    return SharedFontFace(NewArenaObject<RefCounter<FontFace>>(arena, scratchArena, arena, source), ArenaRefDeleter<RefCounter<FontFace>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

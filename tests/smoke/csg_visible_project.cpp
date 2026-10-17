@@ -16,6 +16,7 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
@@ -100,6 +101,10 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     Name("project/smoke/csg_visible/sphere_receiver"),
     Name("project/smoke/csg_visible/capsule_receiver"),
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] static TStringView CsgVisibleFpsLabel()noexcept{
     return NWB_TEXT("CsgVisibleSmokeProject");
@@ -339,7 +344,6 @@ public:
         , m_world(CreateWorldOrDie(context))
         , m_temporalOutput(context.objectArena)
     {}
-
     virtual ~CsgVisibleSmokeProject()override{
         destroyWorld();
     }
@@ -351,9 +355,10 @@ public:
         const bool overlapping = m_temporalEnabled && NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
         CsgVisibleMaterialRef material = s_SolidMaterial;
         if(m_temporalEnabled){
+            NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
-            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-            const auto view = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_GI_TEMPORAL_VIEW");
+            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+            const auto view = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_VIEW");
             if(!output || !view)
                 return false;
             if(*view == "indirect")
@@ -384,13 +389,13 @@ public:
             }
             else if(*view != "full")
                 return false;
-            m_temporalOutput = *output;
+            m_temporalOutput.assign(output->data(), output->size());
             m_temporalAnimated = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
             if(overlapping && m_temporalAnimated){
                 NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));
                 return false;
             }
-            const auto intervalText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_GI_TEMPORAL_INTERVAL");
+            const auto intervalText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_INTERVAL");
             if(intervalText){
                 const auto interval = ParseU64(AStringView(intervalText->data(), intervalText->size()));
                 if(!interval || *interval == 0u || *interval > 64u){
@@ -474,7 +479,11 @@ public:
             ApplyCutterTransform(*m_world, m_cutters[shapeSlot], LoadFloat(m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot));
         }
 
-        m_world->tick(m_temporalEnabled ? 1.0f / 60.0f : safeDelta);
+        const auto updated = m_world->tick(m_temporalEnabled ? 1.0f / 60.0f : safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         return true;
     }
 

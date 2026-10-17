@@ -109,10 +109,10 @@ public:
         m_host.beginFrame(m_generation, { 500.0f, 200.0f });
         if(!m_context.beginRoot({ 17u, 1u }))
             return false;
-        const WidgetState* widget = m_context.declare("edit", WidgetKind::EditBox);
+        const auto widget = m_context.declare("edit", WidgetKind::EditBox);
         if(!widget)
             return false;
-        m_widget = *widget;
+        m_widget = **widget;
         EditBoxOptions options;
         options.readOnly = true;
         if(!m_host.edit(m_widget, m_model, options).valid || !m_host.publish(m_widget, m_view, m_placement, options))
@@ -131,10 +131,10 @@ public:
         return true;
     }
 
-    [[nodiscard]] u64 checksum()const noexcept{
+    [[nodiscard]] Expected<u64> checksum()const noexcept{
         const HitTarget* target = m_context.input().findTarget(m_widget.id, m_widget.declarationGeneration);
         if(m_context.input().layoutGeneration() != m_generation || !target || target->rectangle.width != 320.0f || m_host.hasTextFocus() || !m_view.ready())
-            return 0u;
+            return MakeUnexpected(Failure{});
         u64 hash = MixChecksum(1469598103934665603u, m_view.committedBytes());
         for(const EditBoxCaretStop& stop : m_view.caretStops()){
             hash = MixChecksum(hash, stop.committedByte);
@@ -202,9 +202,9 @@ public:
         return m_snapshot.commands().size() == 1u && m_snapshot.indices().size() == 6u;
     }
 
-    [[nodiscard]] u64 checksum()const noexcept{
+    [[nodiscard]] Expected<u64> checksum()const noexcept{
         if(m_view.selectionRange().begin != m_view.selectionRange().end || m_snapshot.vertices().size() != 4u || m_snapshot.commands().size() != 1u)
-            return 0u;
+            return MakeUnexpected(Failure{});
         u64 hash = MixChecksum(1469598103934665603u, m_lines);
         for(const Vertex& vertex : m_snapshot.vertices()){
             hash = MixChecksum(hash, static_cast<u64>(vertex.position.x));
@@ -245,12 +245,12 @@ bool RunEditBenchmarks(){
     constexpr AStringView s_SelectionNames[]{ "editor.empty_selection.100", "editor.empty_selection.1000", "editor.empty_selection.10000" };
     for(usize index = 0u; index < 3u; ++index){
         __hidden_ui_editor_benchmark::PublicationCase publication(s_StopCounts[index]);
-        if(!publication.setup() || !publication.operation() || publication.checksum() == 0u)
+        if(!publication.setup() || !publication.operation() || !publication.checksum())
             return false;
         if(!Measure(s_PublicationNames[index], s_StopCounts[index], [&publication](){ return publication.operation(); }, [&publication](){ return publication.checksum(); }))
             return false;
         __hidden_ui_editor_benchmark::EmptySelectionCase selection(s_LineCounts[index]);
-        if(!selection.setup() || !selection.operation() || selection.checksum() == 0u)
+        if(!selection.setup() || !selection.operation() || !selection.checksum())
             return false;
         if(!Measure(s_SelectionNames[index], s_LineCounts[index], [&selection](){ return selection.operation(); }, [&selection](){ return selection.checksum(); }))
             return false;

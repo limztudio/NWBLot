@@ -169,9 +169,11 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 
 [[nodiscard]] bool IsValidCommandRequirements(const GpuTaskCommandRequirements& commands)noexcept{
-    return (static_cast<u8>(commands.requiredCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
+    return
+        (static_cast<u8>(commands.requiredCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
         && (static_cast<u8>(commands.alternativeCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
-        && (static_cast<u8>(commands.additionalAlternativeCapabilities) & ~s_ValidQueueCapabilityMask) == 0u;
+        && (static_cast<u8>(commands.additionalAlternativeCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
+    ;
 }
 
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept{

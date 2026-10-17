@@ -57,8 +57,12 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
         // Streams live in the global heap; local layout is push constants only.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshSkinningPushConstants)));
 
-        m_skinningBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_skinningBindingLayout){
+        auto skinningBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(skinningBindingLayoutResult)
+            m_skinningBindingLayout = Move(*skinningBindingLayoutResult);
+        else
+            m_skinningBindingLayout.reset();
+        if(!skinningBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning binding layout"));
             return false;
         }
@@ -72,8 +76,12 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_skinningComputeShader).addBindingLayout(m_skinningBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_skinningComputePipeline = device.createComputePipeline(pipelineDesc);
-    if(m_skinningComputePipeline)
+    auto skinningComputePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(skinningComputePipelineResult)
+        m_skinningComputePipeline = Move(*skinningComputePipelineResult);
+    else
+        m_skinningComputePipeline.reset();
+    if(skinningComputePipelineResult)
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning compute pipeline"));
@@ -94,8 +102,12 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
         // Per-runtime selector is a global UniformBuffer entry via push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletBoundsPushConstants)));
 
-        m_boundsBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_boundsBindingLayout){
+        auto boundsBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(boundsBindingLayoutResult)
+            m_boundsBindingLayout = Move(*boundsBindingLayoutResult);
+        else
+            m_boundsBindingLayout.reset();
+        if(!boundsBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds binding layout"));
             return false;
         }
@@ -109,8 +121,12 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_boundsComputeShader).addBindingLayout(m_boundsBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_boundsComputePipeline = device.createComputePipeline(pipelineDesc);
-    if(m_boundsComputePipeline)
+    auto boundsComputePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(boundsComputePipelineResult)
+        m_boundsComputePipeline = Move(*boundsComputePipelineResult);
+    else
+        m_boundsComputePipeline.reset();
+    if(boundsComputePipelineResult)
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds compute pipeline"));
@@ -128,8 +144,12 @@ bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_localBoundsComputeShader).addBindingLayout(m_boundsBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_localBoundsComputePipeline = device.createComputePipeline(pipelineDesc);
-    if(m_localBoundsComputePipeline)
+    auto localBoundsComputePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(localBoundsComputePipelineResult)
+        m_localBoundsComputePipeline = Move(*localBoundsComputePipelineResult);
+    else
+        m_localBoundsComputePipeline.reset();
+    if(localBoundsComputePipelineResult)
         return true;
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create local bounds compute pipeline"));
     return false;
@@ -149,8 +169,12 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         // Per-runtime selector is a global UniformBuffer entry via push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletRepackPushConstants)));
 
-        m_repackBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_repackBindingLayout){
+        auto repackBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(repackBindingLayoutResult)
+            m_repackBindingLayout = Move(*repackBindingLayoutResult);
+        else
+            m_repackBindingLayout.reset();
+        if(!repackBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack binding layout"));
             return false;
         }
@@ -164,8 +188,12 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_repackComputeShader).addBindingLayout(m_repackBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_repackComputePipeline = device.createComputePipeline(pipelineDesc);
-    if(m_repackComputePipeline)
+    auto repackComputePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(repackComputePipelineResult)
+        m_repackComputePipeline = Move(*repackComputePipelineResult);
+    else
+        m_repackComputePipeline.reset();
+    if(repackComputePipelineResult)
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack compute pipeline"));

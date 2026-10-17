@@ -30,7 +30,12 @@ public:
 
 class ThrowingReader final : public IMetaReader{
 public:
-    [[nodiscard]] virtual isize read(MChar*, usize)override{ throw UnexpectedReadFailure{}; }
+    [[nodiscard]] virtual Expected<usize> read(MChar*, usize)override{ throw UnexpectedReadFailure{}; }
+};
+
+class EndOfFileReader final : public IMetaReader{
+public:
+    [[nodiscard]] virtual Expected<usize> read(MChar*, usize)noexcept override{ return 0u; }
 };
 
 class RejectedReader final : public IMetaReader{
@@ -41,8 +46,10 @@ public:
 
 
 public:
-    [[nodiscard]] virtual isize read(MChar*, const usize maxBytes)noexcept override{
-        return m_oversized ? static_cast<isize>(maxBytes + 1u) : -1;
+    [[nodiscard]] virtual Expected<usize> read(MChar*, const usize maxBytes)noexcept override{
+        if(m_oversized)
+            return maxBytes + 1u;
+        return MakeUnexpected(Failure{});
     }
 
 
@@ -71,6 +78,18 @@ TEST(Metascript, ReportedReaderFailureRemainsAnExplicitParseError){
     EXPECT_FALSE(document.parse(reader));
     ASSERT_EQ(document.errors().size(), 1u);
     EXPECT_EQ(document.errors()[0u].message, "read error");
+}
+
+TEST(Metascript, SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure){
+    ReaderArena arena;
+    Document document(arena.arena);
+    EndOfFileReader reader;
+
+    EXPECT_FALSE(document.parse(reader));
+    ASSERT_EQ(document.errors().size(), 1u);
+    EXPECT_EQ(document.errors()[0u].message, "expected declaration");
+    EXPECT_EQ(document.errors()[0u].line, 1u);
+    EXPECT_EQ(document.errors()[0u].column, 1u);
 }
 
 TEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer){

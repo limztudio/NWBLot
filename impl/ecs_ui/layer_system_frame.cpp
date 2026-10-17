@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
+Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(world);
     m_frameDelta.add(delta);
     synchronizeInput();
@@ -38,7 +38,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     if(skinChange == UiSkinChangeResult::Failed)
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: UI skin request failed; retaining the selected skin"));
     if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
-        return;
+        return {};
     if(m_frameGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_frameGeneration;
@@ -59,7 +59,8 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
     Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const LiveRoot& lhs, const LiveRoot& rhs)noexcept{
         return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.entity.id < rhs.entity.id;
-    });
+    }
+    );
     for(const auto& root : m_liveRoots){
         UiPaintComponent* component = m_world.tryGetComponent<UiPaintComponent>(root.entity);
         if(!component || !component->visible || !component->paint)
@@ -84,7 +85,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         m_editHost.reset();
         m_blockCommandChars = false;
         m_ui.reset();
-        return;
+        return {};
     }
     m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
@@ -93,6 +94,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         m_editHost.reset();
         m_blockCommandChars = false;
     }
+    return {};
 }
 
 bool UiLayerSystem::collectRoots(){
@@ -108,7 +110,8 @@ bool UiLayerSystem::collectRoots(){
         }
         m_liveRoots.push_back({ entity, component.order });
         m_rootIdentities.push_back({ entity.id, 1u });
-    });
+    }
+    );
     m_context.retainRoots(m_rootIdentities.data(), m_rootIdentities.size());
     return !overflow;
 }

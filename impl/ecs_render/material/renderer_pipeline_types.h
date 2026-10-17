@@ -112,6 +112,7 @@ using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 struct MaterialPipelineKey{
     Name material = s_NameNone;
     Name csgEvaluatorVariant = s_NameNone;
+    u64 csgShapeRegistryRevision = 0u;
     Core::FramebufferInfo framebufferInfo;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     bool twoSided = false;
@@ -170,7 +171,9 @@ struct MaterialSurfaceInfo{
     bool twoSided = false;
     bool refractive = false;
 
-    explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)noexcept
         : shaderVariant(arena)
         , typedLayoutBlocks(arena)
         , typedLayoutFields(arena)

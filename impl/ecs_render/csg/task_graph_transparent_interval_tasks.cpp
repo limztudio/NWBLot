@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
+#include "task_graph_transparent_interval_tasks.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/csg/csg_system.h>
@@ -41,7 +41,9 @@ struct TransparentIntervalReadiness{
     CsgFrameGpuData csgFrameData;
     bool ready = false;
 
-    explicit TransparentIntervalReadiness(Core::Alloc::ScratchArena& arena)
+
+public:
+    explicit TransparentIntervalReadiness(Core::Alloc::ScratchArena& arena)noexcept
         : receiverSurfaceDrawItems(arena)
         , csgFrameData(arena)
     {}
@@ -86,7 +88,7 @@ TransparentCsgIntervalRecordInputs::TransparentCsgIntervalRecordInputs(
     DeferredFrameTargets& targetsIn,
     Core::GpuTimingSubmissionTicket& timingTicketIn,
     Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
-)
+)noexcept
     : materialSystem(materialSystemIn)
     , csgSystem(csgSystemIn)
     , targets(targetsIn)
@@ -94,6 +96,9 @@ TransparentCsgIntervalRecordInputs::TransparentCsgIntervalRecordInputs(
     , transparentCsgIntervalsTiming(transparentCsgIntervalsTimingIn)
     , transparentCsgSnapshot(arena)
 {}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -109,8 +114,12 @@ bool AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::Comman
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     return __hidden_transparent_interval_tasks::RecordTransparentInterval(payload, commandList, scratchArena, [&](const auto& readiness){
         payload.csgSystem.dispatchCsgReceiverSpanBuild(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
-    });
+    }
+    );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -128,7 +137,8 @@ bool AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::Com
         payload.csgSystem.dispatchCsgIntervalCombine(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
         payload.transparentCsgIntervalsTiming.value().finishTiming(commandList);
         payload.transparentCsgIntervalsTiming.reset();
-    });
+    }
+    );
 }
 
 

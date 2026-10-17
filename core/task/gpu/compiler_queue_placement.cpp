@@ -314,7 +314,8 @@ namespace GpuTaskGraphCompilerDetail{
             graph.taskAt(taskID.index),
             candidate,
             exclusions
-        ), score);
+        ), score
+        );
     }
     if(group.assignmentCount == 1u)
         return score;

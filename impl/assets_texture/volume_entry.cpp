@@ -37,7 +37,7 @@ static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
         registry,
         NWB_TEXT("texture"),
         &ParseTextureDocument,
-        [](TextureCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildTextureAsset(entry, arena); },
+        [](TextureCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildTextureAsset(entry, arena); },
         false
     );
 }

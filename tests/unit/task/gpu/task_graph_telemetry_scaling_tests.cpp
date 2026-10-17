@@ -42,26 +42,34 @@ namespace Scenario{
 
 
 static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scenario){
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+
     SCOPED_TRACE(taskCount);
     SCOPED_TRACE(scenario);
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuGraphResourceId resource;
     if(scenario != Scenario::Explicit){
-        resource = AddBufferMetadata(graph, Name("tests/telemetry_scaling/resource"), "Telemetry Buffer");
+        const auto gpuAdmissionAt51 = AddBufferMetadata(graph, Name("tests/telemetry_scaling/resource"), "Telemetry Buffer");
+        ASSERT_TRUE(gpuAdmissionAt51);
+        resource = *gpuAdmissionAt51;
         ASSERT_TRUE(resource.valid());
     }
     const Graphics::GpuTaskResourceUse resourceUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
     Graphics::GpuTaskId preceding;
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         char identityText[32u] = {};
-        const Name identity = DeriveName(Name("tests/telemetry_scaling/task/"), FormatDecimal(taskIndex, identityText));
+        const auto derivedNameAt60Col30 = DeriveName(Name("tests/telemetry_scaling/task/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(derivedNameAt60Col30);
+        const Name identity = *derivedNameAt60Col30;
         const bool explicitDependency = preceding.valid() && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u));
-        preceding = AddTask(graph, identity, "Telemetry Task", explicitDependency ? &preceding : nullptr, explicitDependency ? 1u : 0u, resource.valid() ? &resourceUse : nullptr, resource.valid() ? 1u : 0u);
+        const auto gpuAdmissionAt60 = AddTask(graph, identity, "Telemetry Task", explicitDependency ? &preceding : nullptr, explicitDependency ? 1u : 0u, resource.valid() ? &resourceUse : nullptr, resource.valid() ? 1u : 0u);
+        ASSERT_TRUE(gpuAdmissionAt60);
+        preceding = *gpuAdmissionAt60;
         ASSERT_TRUE(preceding.valid());
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Analyze(scratchArena, graph, analysis));
     ASSERT_EQ(analysis.edges().size(), taskCount - 1u);
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     ASSERT_TRUE(declarations.valid());
@@ -70,8 +78,7 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
     nodes.reserve(taskCount + declarations.resourceCount());
     edges.reserve(taskCount + analysis.edges().size());
-    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges);
     ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena));
     ASSERT_EQ(nodes.size(), taskCount + declarations.resourceCount());
     ASSERT_EQ(edges.size(), analysis.edges().size() + (resource.valid() ? taskCount : 0u));
@@ -111,9 +118,9 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
 
 TEST(GpuTaskGraphTelemetry, PreservesExplicitInferredAndOverlappingEdgeFlags){
     using namespace __hidden_task_graph_telemetry_scaling_tests;
-    CheckTelemetryEdges(3u, Scenario::Explicit);
-    CheckTelemetryEdges(3u, Scenario::Inferred);
-    CheckTelemetryEdges(3u, Scenario::Mixed);
+    ASSERT_NO_FATAL_FAILURE(CheckTelemetryEdges(3u, Scenario::Explicit));
+    ASSERT_NO_FATAL_FAILURE(CheckTelemetryEdges(3u, Scenario::Inferred));
+    ASSERT_NO_FATAL_FAILURE(CheckTelemetryEdges(3u, Scenario::Mixed));
 }
 
 

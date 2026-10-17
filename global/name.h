@@ -9,6 +9,9 @@
 #include "expected.h"
 #include "hash_utils.h"
 #include "numeric_text.h"
+#include "not_null.h"
+#include "optional.h"
+
 #include <functional>
 #include <type_traits>
 
@@ -21,6 +24,12 @@ inline constexpr u32 s_NameHashLaneCount = 8u;
 struct NameHash{
     u64 qwords[s_NameHashLaneCount];
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NameTextError{ enum Enum : u8 { NullText, EmbeddedNull }; };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +74,11 @@ inline constexpr u64 s_LaneSeeds[s_HashLaneCount] = {
     s_Fnv64OffsetBasis ^ 0x1234ABCD5678EF01ull,
     s_Fnv64OffsetBasis ^ 0xA0B1C2D3E4F50617ull,
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static_assert(sizeof(s_LaneSeeds) / sizeof(s_LaneSeeds[0]) == s_HashLaneCount, "s_LaneSeeds count must match s_HashLaneCount");
 
 
@@ -157,23 +171,72 @@ template<typename CharT>
 
 
 template<typename CharT>
-inline constexpr NameHash ComputeNameHash(const CharT* str)noexcept(IsArithmetic_V<CharT>){
-    if(str == nullptr)
-        return {};
-
+[[nodiscard]] inline constexpr NameHash ComputeNameHash(const NotNull<const CharT*> text)noexcept(IsArithmetic_V<CharT>){
     NameHash hash;
     NameDetail::InitializeNameHash(hash);
-    for(; *str != CharT{}; ++str)
-        NameDetail::UpdateCanonicalNameHashLanes(hash, *str);
+    for(const CharT* cursor = text.get(); *cursor != CharT{}; ++cursor)
+        NameDetail::UpdateCanonicalNameHashLanes(hash, *cursor);
     return hash;
 }
 
 template<typename CharT>
-inline constexpr NameHash ComputeNameHash(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr Expected<NameHash, NameTextError::Enum> ComputeNameHash(const CharT* text)noexcept(IsArithmetic_V<CharT>){
+    if(text == nullptr)
+        return MakeUnexpected(NameTextError::NullText);
+    return ComputeNameHash(MakeNotNull(text));
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr Expected<NameHash, NameTextError::Enum> ComputeNameHash(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     NameHash hash;
     NameDetail::InitializeNameHash(hash);
     if(!NameDetail::UpdateCanonicalNameHashText(hash, text))
-        return {};
+        return MakeUnexpected(NameTextError::EmbeddedNull);
+    return hash;
+}
+
+
+template<typename CharT>
+class NameText{
+    friend class Name;
+    template<typename T>
+    friend constexpr NameHash ComputeNameHash(NameText<T> text)noexcept(IsArithmetic_V<T>);
+
+
+public:
+    // Only constant evaluation can admit a bounded text value to the infallible constructor path.
+    consteval NameText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>)
+        : m_text(text)
+    {
+        for(const CharT character : text){
+            if(character == CharT{})
+                __builtin_trap();
+        }
+    }
+    template<usize TextSize>
+    consteval NameText(const CharT (&text)[TextSize])noexcept(IsArithmetic_V<CharT>)
+        : NameText(BasicStringView<CharT>(text, TextSize - 1u))
+    {
+        if(text[TextSize - 1u] != CharT{})
+            __builtin_trap();
+    }
+
+
+public:
+    [[nodiscard]] constexpr BasicStringView<CharT> text()const noexcept{ return m_text; }
+
+
+private:
+    BasicStringView<CharT> m_text;
+};
+
+
+template<typename CharT>
+[[nodiscard]] inline constexpr NameHash ComputeNameHash(const NameText<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    NameHash hash;
+    NameDetail::InitializeNameHash(hash);
+    for(const CharT character : text.m_text)
+        NameDetail::UpdateCanonicalNameHashLanes(hash, character);
     return hash;
 }
 
@@ -260,8 +323,10 @@ public:
     ~ScopedSymbolCallbackFlag()noexcept{
         m_flag = false;
     }
-
     ScopedSymbolCallbackFlag(const ScopedSymbolCallbackFlag&) = delete;
+
+
+public:
     ScopedSymbolCallbackFlag& operator=(const ScopedSymbolCallbackFlag&) = delete;
 
 
@@ -272,6 +337,11 @@ private:
 // Rotating thread-local scratch for Name text in opt/fin; ring avoids aliasing in one expression.
 inline constexpr usize s_SymbolTextBufferLength = 1024u; // keep == NameSymbols::s_MaxResolvedTextLength
 inline constexpr usize s_SymbolTextBufferCount = 8u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline char* NextSymbolTextBuffer()noexcept{
     thread_local static char s_buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
     thread_local static usize s_next = 0u;
@@ -457,9 +527,21 @@ class Name{
 private:
     struct StringViewConstruction{};
 
+
+public:
     template<typename CharT>
-    constexpr Name(StringViewConstruction, const BasicStringView<CharT> text)
-        : m_hash(ComputeNameHash(text))
+    [[nodiscard]] static constexpr Expected<Name, NameTextError::Enum> FromText(const BasicStringView<CharT> text){
+        const auto hash = ComputeNameHash(text);
+        if(!hash)
+            return MakeUnexpected(hash.error());
+        return Name(StringViewConstruction{}, *hash, text);
+    }
+
+
+private:
+    template<typename CharT>
+    constexpr Name(StringViewConstruction, const NameHash& hash, const BasicStringView<CharT> text)
+        : m_hash(hash)
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
@@ -473,8 +555,6 @@ private:
         if(!IsConstantEvaluated())
             NameDetail::RecordNameSymbolText(m_hash, text);
     }
-
-
 public:
     constexpr Name()noexcept
         : m_hash{}
@@ -489,7 +569,7 @@ public:
         : Name()
     {}
     constexpr Name(const char* str)noexcept
-        : m_hash(ComputeNameHash(str))
+        : m_hash(str ? ComputeNameHash(MakeNotNull(str)) : NameHash{})
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
@@ -502,7 +582,7 @@ public:
 #endif
     }
     constexpr Name(const wchar* str)noexcept
-        : m_hash(ComputeNameHash(str))
+        : m_hash(str ? ComputeNameHash(MakeNotNull(str)) : NameHash{})
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
@@ -523,15 +603,15 @@ public:
         , m_hasSymbolText(false)
 #endif
     {
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         NameDetail::HashToDebugString(m_hash, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
     }
-    explicit constexpr Name(const AStringView text)
-        : Name(StringViewConstruction{}, text)
+    explicit constexpr Name(const NameText<char> text)
+        : Name(StringViewConstruction{}, ComputeNameHash(text), text.m_text)
     {}
-    explicit constexpr Name(const WStringView text)
-        : Name(StringViewConstruction{}, text)
+    explicit constexpr Name(const NameText<wchar> text)
+        : Name(StringViewConstruction{}, ComputeNameHash(text), text.m_text)
     {}
 
 
@@ -540,6 +620,9 @@ public:
         return !NameDetail::IsZeroHash(m_hash);
     }
     // Binary identity access never records or resolves symbol text, including cooker builds.
+
+
+public:
     [[nodiscard]] constexpr const NameHash& identityHash()const noexcept{ return m_hash; }
 
     [[nodiscard]] constexpr const NameHash& hash()const{
@@ -642,14 +725,17 @@ static_assert(Name("PATH/TO/FILE") == Name("path/to/file"), "Name canonicalizati
 
 
 template<typename CharT>
-[[nodiscard]] inline Name ToName(const BasicStringView<CharT> text){
+[[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> ToName(const BasicStringView<CharT> text){
     if(text.empty())
-        return s_NameNone;
+        return Optional<Name>{};
 
-    return Name(text);
+    auto name = Name::FromText(text);
+    if(!name)
+        return MakeUnexpected(name.error());
+    return Optional<Name>{ Move(*name) };
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline Name ToName(const BasicString<CharT, ArenaT>& text){
+[[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> ToName(const BasicString<CharT, ArenaT>& text){
     return ToName(BasicStringView<CharT>(text));
 }
 template<typename StringT>
@@ -658,7 +744,7 @@ template<typename StringT>
         text.data();
         text.size();
     }
-[[nodiscard]] inline Name ToName(const StringT& text){
+[[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> ToName(const StringT& text){
     using CharT = typename StringT::value_type;
     return ToName(BasicStringView<CharT>(text.data(), text.size()));
 }
@@ -711,25 +797,28 @@ template<typename CharT>
     return NameDetail::UpdateCanonicalNameHashText(inOutDerivedHash, text);
 }
 
-[[nodiscard]] inline Name FinishDerivedNameHash(const NameHash& derivedHash)noexcept{
-    return Name(derivedHash);
+[[nodiscard]] inline Expected<Name> FinishDerivedNameHash(const NameHash& derivedHash)noexcept{
+    const Name name(derivedHash);
+    if(!name)
+        return MakeUnexpected(Failure{});
+    return name;
 }
 
 template<typename CharT>
-[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicStringView<CharT> suffix){
+[[nodiscard]] inline Expected<Name> DeriveName(const Name& baseName, const BasicStringView<CharT> suffix){
     if(!baseName || suffix.empty())
-        return s_NameNone;
+        return MakeUnexpected(Failure{});
 
     auto derivedHash = BeginDerivedNameHash(baseName);
     if(!derivedHash)
-        return s_NameNone;
+        return MakeUnexpected(Failure{});
     if(!UpdateDerivedNameHashText(*derivedHash, suffix))
-        return s_NameNone;
+        return MakeUnexpected(Failure{});
 
     return FinishDerivedNameHash(*derivedHash);
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicString<CharT, ArenaT>& suffix){
+[[nodiscard]] inline Expected<Name> DeriveName(const Name& baseName, const BasicString<CharT, ArenaT>& suffix){
     return DeriveName(baseName, BasicStringView<CharT>(suffix));
 }
 

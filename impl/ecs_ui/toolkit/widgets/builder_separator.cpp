@@ -27,7 +27,7 @@ bool Builder::separator(const AStringView stableKey, const SeparatorOptions& opt
         return false;
     }
     const UiSkinRegion* skinRegion = region(m_style.separator, m_style.separator);
-    WidgetState* state = m_context.declare(stableKey, WidgetKind::Separator);
+    const auto state = m_context.declare(stableKey, WidgetKind::Separator);
     if(!skinRegion || !state){
         m_context.fail();
         return false;
@@ -37,7 +37,7 @@ bool Builder::separator(const AStringView stableKey, const SeparatorOptions& opt
     const f32 thickness = options.thickness > 0.0f ? options.thickness : VectorGetX(VectorMax(VectorSplatOne(), VectorReplicate(minimum)));
     Item item(m_arena);
     item.style = m_style;
-    item.state = *state;
+    item.state = **state;
     LayoutNodeDesc description;
     description.width = horizontal ? options.length : LayoutSize{ LayoutSizePolicy::Fixed, thickness };
     description.height = horizontal ? LayoutSize{ LayoutSizePolicy::Fixed, thickness } : options.length;

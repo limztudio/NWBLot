@@ -39,6 +39,10 @@ struct NwbReflectionFeedbackTile{
     bool probe;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const bool glass){
     NwbReflectionFeedbackTile tile = (NwbReflectionFeedbackTile)0;
     if(!nwbReflectionFeedbackWriting() || (g_NwbReflectionParameters.feedbackFlags & NWB_REFLECTION_FEEDBACK_PREVIOUS_VALID) == 0u)

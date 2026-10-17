@@ -60,7 +60,7 @@ inline void RegisterAutoFactory(QueueT& queue, const FactoryT factory){
     if(factory == nullptr)
         return;
 
-    queue.appendUnique(factory, [](const FactoryT lhs, const FactoryT rhs){ return lhs == rhs; });
+    queue.appendUnique(factory, [](const FactoryT lhs, const FactoryT rhs)noexcept(IsPointer_V<FactoryT>){ return lhs == rhs; });
 }
 
 template<typename QueueT, typename ContextT, typename FunctionVectorT, typename LogNullT, typename LogFailureT>

@@ -51,7 +51,10 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
 
 bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
     InputRouter& input = m_context.input();
-    const WidgetId thumb = MakeWidgetId(frame.rows.id, "scrollbar");
+    const auto thumbResult = MakeWidgetId(frame.rows.id, "scrollbar");
+    if(!thumbResult)
+        return false;
+    const WidgetId thumb = *thumbResult;
     auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
     bool haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
     auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);

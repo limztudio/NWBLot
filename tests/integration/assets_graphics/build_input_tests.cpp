@@ -64,6 +64,8 @@ protected:
         ASSERT_TRUE(EnsureDirectories(path.parentPath()));
         GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary);
         ASSERT_TRUE(stream);
+        stream.close();
+        ASSERT_TRUE(stream);
         Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexicallyNormal());
         CanonicalizeTextInPlace(normalized);
         m_files.emplace_back(m_testArena.arena, m_root / s_ASSETS, path, normalized, ACompactString(s_PROJECT));
@@ -74,12 +76,12 @@ protected:
     }
 
     bool select(){
-        NWB::Core::Alloc::ScratchArena scratch(Name("tests/assets/build_inputs"));
-        return Builder::SelectBuildInputs(m_options, m_paths, m_files, scratch);
+        return Builder::SelectBuildInputs(m_options, m_paths, m_files, m_scratchArena);
     }
 
 
 protected:
+    NWB::Core::Alloc::ScratchArena m_scratchArena{ Name("tests/assets/build_inputs") };
     NWB::Tests::TestArena<> m_testArena;
     NWB::Core::CpuTaskScheduler m_cpuScheduler{ 1u };
     NWB::Tests::CapturingLogger m_logger;

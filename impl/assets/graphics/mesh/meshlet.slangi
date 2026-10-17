@@ -21,6 +21,10 @@ groupshared float4 g_NwbMeshletStagedClipPositions[NWB_MESH_SHADER_MAX_VERTICES]
 groupshared NwbMeshGeneratedVertex g_NwbMeshletStagedVertices[NWB_MESH_SHADER_MAX_VERTICES];
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbMeshletPrimitiveBase(const NwbMeshletDesc meshlet, const uint localPrimitiveIndex){
     return meshlet.primitiveOffset + localPrimitiveIndex * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
 }

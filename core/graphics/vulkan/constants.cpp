@@ -28,6 +28,8 @@ struct FormatMapping{
     bool hasStencil;
     bool isCompressed;
 
+
+public:
     constexpr FormatMapping(const Format::Enum inFormat, const VkFormat inVkFormat, const u32 inBytesPerPixel, const bool inHasDepth, const bool inHasStencil, const bool inIsCompressed)noexcept
         : vkFormat(inVkFormat)
         , bytesPerPixel(inBytesPerPixel)
@@ -166,6 +168,8 @@ static constexpr FormatMapping s_FormatMappings[] = {
 struct FormatLookup{
     VkFormat formats[Format::kCount]{};
 
+
+public:
     constexpr FormatLookup()noexcept{
         for(auto& format : formats)
             format = VK_FORMAT_UNDEFINED;
@@ -175,6 +179,9 @@ struct FormatLookup{
 };
 
 static constexpr FormatLookup s_FormatLookup;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 VkFormat ConvertFormat(Format::Enum format)noexcept{

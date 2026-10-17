@@ -93,9 +93,10 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
         bufferDesc.canHaveUAVs = true;
     }
 
-    BufferHandle bufferHandle = m_device.createBuffer(bufferDesc);
-    if(!bufferHandle)
+    auto bufferHandleResult = m_device.createBuffer(bufferDesc);
+    if(!bufferHandleResult)
         return MakeUnexpected(Failure{});
+    BufferHandle bufferHandle = Move(*bufferHandleResult);
 
     ledger->chunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.cpuScheduler, Move(bufferHandle), owner, nativeRecordingID, queue, chunkSize));
     BufferChunkPtr& currentChunk = ledger->chunks.back();

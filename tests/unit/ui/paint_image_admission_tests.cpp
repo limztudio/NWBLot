@@ -26,13 +26,21 @@ using namespace NWB::UiPaintImageTests;
 TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAndOverflowIsAtomic){
     FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
     for(usize index = 0u; index < glyphs.max_size(); ++index){
-        SharedGlyphPage page = makeGlyph(100u + index);
+        auto pageCreationResult = makeGlyph(100u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
         ASSERT_TRUE(page);
         glyphs.push_back(Move(page));
     }
-    const SharedSdfAtlasPage sdf = makeSdf();
-    const SharedImageSource image = makeImage();
-    const SharedImageSource overflow = makeImage("tests/ui/image", 81u);
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
+    auto overflowResult = makeImage("tests/ui/image", 81u);
+    ASSERT_TRUE(overflowResult);
+    const SharedImageSource overflow = Move(*overflowResult);
     ASSERT_TRUE(sdf && image && overflow);
     PaintBuilder reference(m_arena);
     beginPaint(reference);
@@ -63,15 +71,27 @@ TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAnd
 TEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersionsAndAllPriorGeometry){
     FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
     for(usize index = 0u; index < glyphs.max_size(); ++index){
-        SharedGlyphPage page = makeGlyph(100u + index);
+        auto pageCreationResult = makeGlyph(100u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
         ASSERT_TRUE(page);
         glyphs.push_back(Move(page));
     }
-    const SharedSdfAtlasPage sdf = makeSdf();
-    const SharedImageSource image = makeImage();
-    const SharedGlyphPage upgrade = makeGlyph(100u, 2u);
-    const SharedSdfAtlasPage newSdf = makeSdf(99u);
-    const SharedImageSource newImage = makeImage("tests/ui/image", 81u);
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
+    auto upgradeCreationResult = makeGlyph(100u, 2u);
+    ASSERT_TRUE(upgradeCreationResult);
+    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
+    auto newSdfCreationResult = makeSdf(99u);
+    ASSERT_TRUE(newSdfCreationResult);
+    const SharedSdfAtlasPage newSdf = Move(*newSdfCreationResult);
+    auto newImageResult = makeImage("tests/ui/image", 81u);
+    ASSERT_TRUE(newImageResult);
+    const SharedImageSource newImage = Move(*newImageResult);
     ASSERT_TRUE(sdf && image && upgrade && newSdf && newImage);
     PaintBuilder reference(m_arena);
     beginPaint(reference);
@@ -104,11 +124,21 @@ TEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersio
 }
 
 TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAValidRetryStillSucceeds){
-    const SharedGlyphPage glyph = makeGlyph();
-    const SharedGlyphPage upgrade = makeGlyph(11u, 2u);
-    const SharedSdfAtlasPage sdf = makeSdf();
-    const SharedImageSource image = makeImage();
-    const SharedImageSource addition = makeImage("tests/ui/added_image", 81u);
+    auto glyphCreationResult = makeGlyph();
+    ASSERT_TRUE(glyphCreationResult);
+    const SharedGlyphPage glyph = Move(*glyphCreationResult);
+    auto upgradeCreationResult = makeGlyph(11u, 2u);
+    ASSERT_TRUE(upgradeCreationResult);
+    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
+    auto additionResult = makeImage("tests/ui/added_image", 81u);
+    ASSERT_TRUE(additionResult);
+    const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(glyph && upgrade && sdf && image && addition);
     const Array<SharedImageSource, 2u> invalidImages{ addition, SharedImageSource{} };
     PaintBuilder reference(m_arena);
@@ -142,8 +172,12 @@ TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAVal
 }
 
 TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSlotPerVersion){
-    SharedImageSource first = makeImage("tests/ui/versioned_image", 37u);
-    SharedImageSource second = makeImage("tests/ui/versioned_image", 81u);
+    auto firstResult = makeImage("tests/ui/versioned_image", 37u);
+    ASSERT_TRUE(firstResult);
+    SharedImageSource first = Move(*firstResult);
+    auto secondResult = makeImage("tests/ui/versioned_image", 81u);
+    ASSERT_TRUE(secondResult);
+    SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());

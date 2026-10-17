@@ -51,8 +51,14 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement)
         return false;
-    const WidgetId trackId = MakeWidgetId(item.state.id, "track");
-    const WidgetId thumbId = MakeWidgetId(item.state.id, "thumb");
+    const auto trackIdResult = MakeWidgetId(item.state.id, "track");
+    if(!trackIdResult)
+        return false;
+    const WidgetId trackId = *trackIdResult;
+    const auto thumbIdResult = MakeWidgetId(item.state.id, "thumb");
+    if(!thumbIdResult)
+        return false;
+    const WidgetId thumbId = *thumbIdResult;
     const bool hover = interactive && input.hover() == thumbId;
     const bool pressed = interactive && input.primaryDown() && (input.capture() == trackId || input.capture() == thumbId);
     const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);

@@ -19,6 +19,7 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
@@ -106,11 +107,21 @@ private:
     }
 
 
+public:
+    explicit FlickerTestSmokeProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateWorldOrDie(context))
+    {}
+    virtual ~FlickerTestSmokeProject()override{
+        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
+        destroyWorld();
+    }
+
+
 private:
     void destroyWorld(){
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
-
 
     void spinCharacters(){
         for(const NWB::Core::ECS::EntityID owner : { m_opaqueOwner, m_transparentOwner }){
@@ -119,18 +130,6 @@ private:
                 continue;
             StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
         }
-    }
-
-
-public:
-    explicit FlickerTestSmokeProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateWorldOrDie(context))
-    {}
-
-    virtual ~FlickerTestSmokeProject()override{
-        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
-        destroyWorld();
     }
 
 
@@ -145,7 +144,7 @@ public:
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
         // Keep caustics enabled for the repro; NWB_FLICKER_TEST_NO_CAUSTICS selects the control.
         static const bool s_disableCaustics = [](){
-            NWB::Core::Alloc::GlobalArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+            NWB::Core::Alloc::ScratchArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             const auto value = ReadSmokeEnvironmentText(arena, "NWB_FLICKER_TEST_NO_CAUSTICS");
             return value && (*value)[0] == '1';
         }();
@@ -217,7 +216,11 @@ public:
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
         SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
-        m_world->tick(safeDelta);
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         return true;
     }
 

@@ -3,6 +3,7 @@
 
 
 #include "widget_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,14 +31,14 @@ static void ExpectBounds(const Rect& actual, const Rect& expected){
     EXPECT_FLOAT_EQ(actual.height, expected.height);
 }
 
-static PopupOptions Anchored(){
+static PopupOptions Anchored()noexcept{
     PopupOptions options;
     options.anchor = { 40.0f, 60.0f, 80.0f, 24.0f };
     options.size = { 220.0f, 160.0f };
     return options;
 }
 
-static WidgetOptions Control(const f32 width = 120.0f, const f32 height = 30.0f){
+static WidgetOptions Control(const f32 width = 120.0f, const f32 height = 30.0f)noexcept{
     WidgetOptions options;
     options.width = { LayoutSizePolicy::Fixed, width };
     options.height = { LayoutSizePolicy::Fixed, height };
@@ -59,8 +60,8 @@ public:
     }
 
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken&)override{ return edit(widget, model, options); }
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
         ++publications;
@@ -87,8 +88,8 @@ protected:
         return m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId ownerId(const AStringView key = "popup")const noexcept{
-        return MakeWidgetId(MakeRootId(m_root), key);
+    [[nodiscard]] WidgetId ownerId(const AStringView key = "popup")const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), key));
     }
 };
 

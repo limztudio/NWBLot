@@ -4,7 +4,6 @@
 
 #include "system.h"
 
-#include "arena_names.h"
 #include "world.h"
 
 #include <global/scope_exit.h>
@@ -26,7 +25,7 @@ namespace __hidden_system{
 
 
 template<typename AccessContainer>
-[[nodiscard]] bool SystemsConflict(const AccessContainer& predecessorAccesses, const AccessContainer& systemAccesses){
+[[nodiscard]] bool SystemsConflict(const AccessContainer& predecessorAccesses, const AccessContainer& systemAccesses)noexcept{
     for(const ComponentAccess& predecessor : predecessorAccesses){
         for(const ComponentAccess& access : systemAccesses){
             if(predecessor.typeId == access.typeId && (predecessor.mode == AccessMode::Write || access.mode == AccessMode::Write))
@@ -46,7 +45,7 @@ template<typename AccessContainer>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ISystem::ISystem(Alloc::GlobalArena& arena)
+ISystem::ISystem(Alloc::GlobalArena& arena)noexcept
     : m_access(arena)
 {}
 
@@ -69,12 +68,13 @@ void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)
+SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)noexcept
     : m_arena(arena)
     , m_dependencies(arena)
     , m_allSystems(arena)
     , m_executionHandles(arena)
     , m_executionDependencies(arena)
+    , m_executionResults(arena)
     , m_dirty(false)
 {}
 
@@ -88,9 +88,8 @@ void SystemScheduler::addSystem(ISystem& system){
 }
 
 
-void SystemScheduler::removeSystem(ISystem& system){
-    auto itr = FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](ISystem* iterSystem)noexcept{ return iterSystem == &system; }
-    );
+void SystemScheduler::removeSystem(ISystem& system)noexcept{
+    auto itr = FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](ISystem* iterSystem)noexcept{ return iterSystem == &system; });
     if(itr != m_allSystems.end()){
         m_allSystems.erase(itr);
         m_dirty = true;
@@ -98,11 +97,12 @@ void SystemScheduler::removeSystem(ISystem& system){
 }
 
 
-void SystemScheduler::clear(){
+void SystemScheduler::clear()noexcept{
     m_allSystems.clear();
     m_dependencies.clear();
     m_executionHandles.clear();
     m_executionDependencies.clear();
+    m_executionResults.clear();
     m_dirty = false;
 }
 
@@ -125,7 +125,7 @@ void SystemScheduler::rebuild(){
 }
 
 
-void SystemScheduler::execute(World& world, f32 delta){
+Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& world, f32 delta){
     if(m_dirty)
         rebuild();
 
@@ -134,13 +134,15 @@ void SystemScheduler::execute(World& world, f32 delta){
         system->prepare(world);
 
     if(m_allSystems.empty())
-        return;
+        return {};
 
     using TaskHandle = CpuTaskScheduler::TaskHandle;
     m_executionHandles.clear();
     m_executionHandles.resize(m_allSystems.size(), TaskHandle{});
     m_executionDependencies.clear();
     m_executionDependencies.reserve(m_allSystems.size());
+    m_executionResults.clear();
+    m_executionResults.resize(m_allSystems.size());
     Vector<TaskHandle, Alloc::GlobalArena>& handles = m_executionHandles;
     Vector<TaskHandle, Alloc::GlobalArena>& dependencies = m_executionDependencies;
     CpuTaskScope& tasks = world.taskScope();
@@ -154,14 +156,30 @@ void SystemScheduler::execute(World& world, f32 delta){
             dependencies.push_back(handles[predecessor]);
 
         ISystem* const system = m_allSystems[systemIndex];
-        handles[systemIndex] = tasks.submit([system, &world, delta](){
-            system->update(world, delta);
-        }, system->taskOptions(), dependencies.data(), dependencies.size());
-        if(!handles[systemIndex].valid())
-            throw RuntimeException("CPU task scheduler rejected an ECS system update");
+        const auto admitted = tasks.submit([this, system, systemIndex, &world, delta](){
+            for(const usize predecessor : m_dependencies[systemIndex]){
+                if(!m_executionResults[predecessor]){
+                    m_executionResults[systemIndex] = MakeUnexpected(m_executionResults[predecessor].error());
+                    return;
+                }
+            }
+            m_executionResults[systemIndex] = system->update(world, delta);
+        }, system->taskOptions(), dependencies.data(), dependencies.size()
+        );
+        if(!admitted){
+            tasks.wait();
+            drainSubmitted.release();
+            return MakeUnexpected(admitted.error());
+        }
+        handles[systemIndex] = *admitted;
     }
     tasks.wait();
     drainSubmitted.release();
+    for(const auto& completed : m_executionResults){
+        if(!completed)
+            return MakeUnexpected(completed.error());
+    }
+    return {};
 }
 
 

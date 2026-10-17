@@ -3,7 +3,6 @@
 
 
 #include "module.h"
-
 #include "crash_auth.h"
 #include "crash_paths.h"
 #include "frame.h"
@@ -16,6 +15,7 @@
 #include <global/diagnostics.h>
 #include <global/process.h>
 #include <global/scope_exit.h>
+
 
 #if defined(NWB_PLATFORM_LINUX)
 #include <arpa/inet.h>
@@ -69,13 +69,13 @@ struct ConnectionInfo{
     bool crashUploadOwned = false;
     OutputFileStream crashUploadStream;
 
+
+public:
     explicit ConnectionInfo(LogArena& arena)
         : crashUploadPath(arena)
     {}
     ConnectionInfo(ConnectionInfo&&) = delete;
     ConnectionInfo(const ConnectionInfo&) = delete;
-    ConnectionInfo& operator=(ConnectionInfo&&) = delete;
-    ConnectionInfo& operator=(const ConnectionInfo&) = delete;
     ~ConnectionInfo()noexcept{
         if(crashUploadOwned)
             discardCrashUpload();
@@ -83,6 +83,11 @@ struct ConnectionInfo{
             CaptureDiagnosticEvent("logger_server_upload", "Failed to close crash upload stream", __FILE__, __LINE__);
         Core::Alloc::CoreFree(buffer);
     }
+
+
+public:
+    ConnectionInfo& operator=(ConnectionInfo&&) = delete;
+    ConnectionInfo& operator=(const ConnectionInfo&) = delete;
 
 
 public:
@@ -163,6 +168,10 @@ static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContex
 inline constexpr usize s_MaxTelemetryUploadMebibytes = 64u;
 inline constexpr usize s_MaxTelemetryUploadBytes = s_MaxTelemetryUploadMebibytes * s_BytesPerMebibyte;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static usize UploadSizeLimit(const ConnectionUploadKind::Enum uploadKind)noexcept{
     switch(uploadKind){
     case ConnectionUploadKind::Crash:
@@ -199,11 +208,11 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     return responseResult;
 }
 
-[[nodiscard]] static Path CrashInboxDirectory(Server& server){
-    return CrashDefaultRootDirectory(server.arena()) / s_CrashInboxDirectoryName;
+[[nodiscard]] static CrashScratchPath CrashInboxDirectory(Core::Alloc::ScratchArena& scratchArena){
+    return CrashDefaultRootDirectory(scratchArena) / s_CrashInboxDirectoryName;
 }
 
-[[nodiscard]] static Path MakeCrashPackagePath(Server& server){
+[[nodiscard]] static Path MakeCrashPackagePath(Server& server, Core::Alloc::ScratchArena& scratchArena){
     static Atomic<u64> s_CrashPackageCounter{ 1u };
 
     const auto timeResult = GetLocalTime();
@@ -213,7 +222,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
-        server.arena(),
+        scratchArena,
         "{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}{}",
         s_CrashUploadArchiveFilePrefix,
         localTime.tm_year + s_LocalTimeYearBase,
@@ -227,32 +236,35 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
         s_CrashUploadArchiveFileExtension
     );
 
-    return CrashInboxDirectory(server) / fileName;
+    return Path(server.arena(), CrashInboxDirectory(scratchArena) / fileName);
 }
 
-[[nodiscard]] static bool OpenCrashUploadStream(Server& server, ConnectionInfo& info){
-    const Path inboxDirectory = CrashInboxDirectory(server);
-    if(!EnsureDirectories(inboxDirectory))
-        return false;
+[[nodiscard]] static Expected<void, ErrorCode> OpenCrashUploadStream(Server& server, ConnectionInfo& info, Core::Alloc::ScratchArena& scratchArena){
+    const CrashScratchPath inboxDirectory = CrashInboxDirectory(scratchArena);
+    const auto directories = EnsureDirectories(inboxDirectory);
+    if(!directories)
+        return MakeUnexpected(directories.error());
 
-    info.crashUploadPath = MakeCrashPackagePath(server);
-    const AString<LogArena> pathText = PathToString<char>(server.arena(), info.crashUploadPath);
+    info.crashUploadPath = MakeCrashPackagePath(server, scratchArena);
+    const AString<Core::Alloc::ScratchArena> pathText = PathToString<char>(scratchArena, info.crashUploadPath);
     if(pathText.size() >= s_MaxPendingCrashUploadPathText)
-        return false;
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::filename_too_long));
 
     info.crashUploadStream.open(info.crashUploadPath.c_str(), s_FileOpenBinary | OutputFileStream::noreplace);
     info.crashUploadOwned = info.crashUploadStream.is_open();
-    return info.crashUploadOwned;
+    if(!info.crashUploadOwned)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
+    return {};
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(Server& server, const ConnectionUploadKind::Enum uploadKind){
+[[nodiscard]] static Expected<NotNull<ConnectionInfo*>, ErrorCode> CreateConnectionInfo(Server& server, const ConnectionUploadKind::Enum uploadKind){
     void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo));
     if(!memory)
-        return nullptr;
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::not_enough_memory));
 
     ScopeExit releaseMemory([&]()noexcept{ Core::Alloc::CoreFree(memory); });
     auto* info = new(memory) ConnectionInfo(server.arena());
@@ -260,12 +272,17 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     ScopeExit releaseInfo([&]()noexcept{
         info->~ConnectionInfo();
         Core::Alloc::CoreFree(info);
-    });
+    }
+    );
     info->uploadKind = uploadKind;
-    if(uploadKind == ConnectionUploadKind::Crash && !OpenCrashUploadStream(server, *info))
-        return nullptr;
+    if(uploadKind == ConnectionUploadKind::Crash){
+        Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_upload/scratch"));
+        const auto opened = OpenCrashUploadStream(server, *info, scratchArena);
+        if(!opened)
+            return MakeUnexpected(opened.error());
+    }
     releaseInfo.release();
-    return info;
+    return MakeNotNull(info);
 }
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept{
@@ -346,13 +363,13 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
             return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
-        auto* info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
+        const auto info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to initialize connection upload state"), Core::Common::LogType::Fatal);
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), StringConvert(info.error().message()), s_ServerName), Core::Common::LogType::Fatal);
             return MHD_NO;
         }
 
-        connectionContext = info;
+        connectionContext = info->get();
         return MHD_YES;
     }
 
@@ -388,8 +405,9 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
 
     if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Crash){
         if(info->closeCrashUploadStream() && info->crashUploadOwned){
+            Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_enqueue/scratch"));
             const Path& storedPath = info->crashUploadPath;
-            if(thisPtr->enqueueCrashUpload(storedPath)){
+            if(thisPtr->enqueueCrashUpload(storedPath, scratchArena)){
                 info->crashUploadOwned = false;
                 thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
             }
@@ -474,7 +492,15 @@ bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStr
         m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
     m_crashIngestConfig.retention = crashRetentionConfig;
     m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
-    const bool loadedNameSymbols = Core::Common::NameSymbols::LoadDefaultFile(BaseType::arena());
+    const auto nameSymbolLoad = Core::Common::NameSymbols::LoadDefaultFile();
+    bool loadedNameSymbols = false;
+    if(nameSymbolLoad)
+        loadedNameSymbols = *nameSymbolLoad;
+    else{
+        const Core::Common::NameSymbols::DefaultFileLoadFailure& failure = nameSymbolLoad.error();
+        loadedNameSymbols = failure.loadedAny;
+        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Log server: startup name-symbol filesystem load failed: [{}] {}"), failure.code.value(), StringConvert(failure.code.message())), Core::Common::LogType::Warning);
+    }
     if(loadedNameSymbols)
         enqueue(BasicStringView<tchar>(NWB_TEXT("Log server: loaded startup name-symbol mappings")), Core::Common::LogType::Info);
 
@@ -491,7 +517,20 @@ bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStr
     listenAddress.sin_family = AF_INET;
     listenAddress.sin_port = htons(port);
     listenAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, 0u, nullptr, nullptr, &Server::RequestCallback, this, MHD_OPTION_SOCK_ADDR_LEN, static_cast<socklen_t>(sizeof(listenAddress)), &listenAddress, MHD_OPTION_NOTIFY_COMPLETED, &__hidden_logger_server::RequestCompleted, nullptr, MHD_OPTION_END);
+    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD
+        , 0u
+        , nullptr
+        , nullptr
+        , &Server::RequestCallback
+        , this
+        , MHD_OPTION_SOCK_ADDR_LEN
+        , static_cast<socklen_t>(sizeof(listenAddress))
+        , &listenAddress
+        , MHD_OPTION_NOTIFY_COMPLETED
+        , &__hidden_logger_server::RequestCompleted
+        , nullptr
+        , MHD_OPTION_END
+    );
 
     if(!m_daemon)
         return false;
@@ -525,9 +564,9 @@ bool Server::internalUpdate(){
     return true;
 }
 
-bool Server::enqueueCrashUpload(const Path& path){
+bool Server::enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena){
     PendingCrashUpload upload;
-    const AString<LogArena> pathText = PathToString<char>(BaseType::arena(), path);
+    const AString<Core::Alloc::ScratchArena> pathText = PathToString<char>(scratchArena, path);
     if(pathText.size() >= sizeof(upload.path)){
         enqueue(BasicStringView<tchar>(NWB_TEXT("Crash upload path exceeds queue capacity")), Core::Common::LogType::Error);
         return false;

@@ -70,7 +70,8 @@ void RunConcurrentReset(const bool disableCapture){
                     payloadsReady.count_down();
                 if(recorded)
                     accepted.fetch_add(1u, MemoryOrder::relaxed);
-            });
+            }
+            );
         }
         payloadsReady.wait();
         recorder.clear();
@@ -227,7 +228,8 @@ TEST(Telemetry, RecorderFailedAndThrowingBuildersRecycleWithoutAllocations){
                 payload.resize(128u, 47u);
                 throw PayloadBuildFailure{};
             }
-        )), PayloadBuildFailure);
+        )), PayloadBuildFailure
+    );
     EXPECT_EQ(recorder.eventCount(), 0u);
     ASSERT_TRUE(RecordFilledPayload(recorder, 64u, 59u));
     recorder.clear();

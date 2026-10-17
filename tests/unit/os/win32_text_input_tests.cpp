@@ -3,6 +3,7 @@
 
 
 #include <core/os/win32/text_input.h>
+#include <core/os/win32/text_input_context.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
@@ -84,13 +85,15 @@ protected:
         ASSERT_TRUE(registered != 0u || GetLastError() == ERROR_CLASS_ALREADY_EXISTS);
         m_window = CreateWindowExW(0u, s_ClassName.data(), L"", WS_POPUP, 0, 0, 100, 100, nullptr, nullptr, instance, this);
         ASSERT_NE(m_window, nullptr);
-        m_service = CreateTextInputService(m_arena.arena, m_window);
+        auto serviceResult = CreateTextInputService(m_arena.arena, m_window);
+        ASSERT_TRUE(serviceResult);
+        m_service = Move(*serviceResult);
         ASSERT_NE(m_service.get(), nullptr);
         ASSERT_TRUE(m_service->setFocused(true));
         const TextInputSessionDesc desc{ { 10, 15, 2, 18 }, {}, 0u, 0u };
-        const TextInputBeginResult begun = m_service->begin(desc);
-        ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
-        m_token = begun.token;
+        const auto begun = m_service->begin(desc);
+        ASSERT_TRUE(begun);
+        m_token = *begun;
         ASSERT_TRUE(m_token.valid());
     }
 
@@ -125,6 +128,40 @@ protected:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(Win32TextInputFixture, RepeatedExplicitContextReleasePreservesActiveNativeSession){
+    const HIMC nativeContext = ImmGetContext(m_window);
+    ASSERT_NE(nativeContext, nullptr);
+    Win32TextInputContextGuard context(m_window, nativeContext);
+    ASSERT_TRUE(context.release());
+    ASSERT_TRUE(context.release());
+    EXPECT_EQ(m_service->activeSession(), m_token);
+    EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 'R', 0), 0);
+    TextInputEvent event(m_arena.arena);
+    ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
+    EXPECT_EQ(event.text, "R");
+}
+
+TEST_F(Win32TextInputFixture, ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession){
+    struct UnwindMarker final{};
+    bool caughtOriginal = false;
+    try{
+        const HIMC nativeContext = ImmGetContext(m_window);
+        ASSERT_NE(nativeContext, nullptr);
+        Win32TextInputContextGuard context(m_window, nativeContext);
+        throw UnwindMarker{};
+    }
+    catch(const UnwindMarker&){
+        caughtOriginal = true;
+    }
+    EXPECT_TRUE(caughtOriginal);
+    EXPECT_EQ(m_service->activeSession(), m_token);
+    EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 'U', 0), 0);
+    TextInputEvent event(m_arena.arena);
+    ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
+    EXPECT_EQ(event.text, "U");
+}
 
 
 TEST_F(Win32TextInputFixture, SurrogatePairRemainsPerServiceUntilComplete){
@@ -211,7 +248,9 @@ TEST_F(Win32TextInputFixture, FocusLossClearsPendingSurrogateBeforeReplacement){
     EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
     EXPECT_FALSE(DispatchWin32TextInputMessage(*m_service, WM_CHAR, 'x', 0));
     ASSERT_TRUE(m_service->setFocused(true));
-    m_token = m_service->begin({}).token;
+    const auto tokenAdmission = m_service->begin({});
+    ASSERT_TRUE(tokenAdmission);
+    m_token = *tokenAdmission;
     ASSERT_TRUE(m_token.valid());
     EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 'B', 0), 0);
     ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
@@ -221,7 +260,9 @@ TEST_F(Win32TextInputFixture, FocusLossClearsPendingSurrogateBeforeReplacement){
 TEST_F(Win32TextInputFixture, EndDiscardAndReplacementCannotReusePartialUtf16){
     EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 0xd83du, 0), 0);
     ASSERT_TRUE(m_service->end(m_token));
-    m_token = m_service->begin({}).token;
+    const auto tokenAdmission = m_service->begin({});
+    ASSERT_TRUE(tokenAdmission);
+    m_token = *tokenAdmission;
     ASSERT_TRUE(m_token.valid());
     EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 0xde00u, 0), 0);
     TextInputEvent event(m_arena.arena);
@@ -256,7 +297,9 @@ TEST_F(Win32TextInputFixture, ImeCharIsConsumedWithoutDuplicateCommitAndFollowin
 TEST_F(Win32TextInputFixture, CompositionWithoutCurrentStartCannotDeliverAcrossSessionBoundary){
     EXPECT_EQ(SendMessageW(m_window, WM_IME_STARTCOMPOSITION, 0u, 0), 0);
     ASSERT_TRUE(m_service->end(m_token));
-    m_token = m_service->begin({}).token;
+    const auto tokenAdmission = m_service->begin({});
+    ASSERT_TRUE(tokenAdmission);
+    m_token = *tokenAdmission;
     ASSERT_TRUE(m_token.valid());
     EXPECT_EQ(SendMessageW(m_window, WM_IME_COMPOSITION, 0u, GCS_RESULTSTR), 0);
     TextInputEvent event(m_arena.arena);
@@ -264,7 +307,9 @@ TEST_F(Win32TextInputFixture, CompositionWithoutCurrentStartCannotDeliverAcrossS
 }
 
 TEST_F(Win32TextInputFixture, BridgeRejectsUnsupportedForeignServiceBeforeDowncast){
-    const GlobalUniquePtr<ITextInputService> unsupported = CreateTextInputService(m_arena.arena, nullptr);
+    auto unsupportedResult = CreateTextInputService(m_arena.arena, nullptr);
+    ASSERT_TRUE(unsupportedResult);
+    const GlobalUniquePtr<ITextInputService> unsupported = Move(*unsupportedResult);
     EXPECT_FALSE(DispatchWin32TextInputMessage(*unsupported, WM_CHAR, 'x', 0));
     EXPECT_FALSE(DispatchWin32TextInputMessage(*m_service, WM_MOUSEMOVE, 0u, 0));
     EXPECT_FALSE(ResolveWin32TextInputContextMessage(*unsupported, WM_IME_SETCONTEXT, TRUE, 456));
@@ -282,9 +327,9 @@ TEST_F(Win32TextInputFixture, ImeContextVisibilityTracksSessionAfterActivationAn
     EXPECT_EQ(m_lastContextForwardedFlags, flags);
     EXPECT_EQ(inactiveResult, m_lastContextDefaultResult);
 
-    const TextInputBeginResult begun = m_service->begin({});
-    ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
-    m_token = begun.token;
+    const auto begun = m_service->begin({});
+    ASSERT_TRUE(begun);
+    m_token = *begun;
     EXPECT_EQ(m_contextForwardCount, before + 2u);
     EXPECT_EQ(m_lastContextForwardedFlags, flags & ~static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW));
     const LRESULT activeResult = SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
@@ -301,9 +346,9 @@ TEST_F(Win32TextInputFixture, ImeContextReplayNeverReactivatesAfterFocusLossOrNa
     ASSERT_TRUE(m_service->end(m_token));
     const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (1u << 20u));
     SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
-    const TextInputBeginResult begun = m_service->begin({});
-    ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
-    m_token = begun.token;
+    const auto begun = m_service->begin({});
+    ASSERT_TRUE(begun);
+    m_token = *begun;
     const usize beforeFocusLoss = m_contextForwardCount;
     ASSERT_TRUE(m_service->setFocused(false));
     EXPECT_EQ(m_contextForwardCount, beforeFocusLoss);
@@ -313,9 +358,9 @@ TEST_F(Win32TextInputFixture, ImeContextReplayNeverReactivatesAfterFocusLossOrNa
     EXPECT_EQ(deactivationResult, m_lastContextDefaultResult);
 
     ASSERT_TRUE(m_service->setFocused(true));
-    const TextInputBeginResult second = m_service->begin({});
-    ASSERT_EQ(second.admission, TextInputAdmission::Accepted);
-    m_token = second.token;
+    const auto second = m_service->begin({});
+    ASSERT_TRUE(second);
+    m_token = *second;
     EXPECT_EQ(m_contextForwardCount, beforeFocusLoss + 1u);
     ASSERT_TRUE(m_service->end(m_token));
     EXPECT_EQ(m_contextForwardCount, beforeFocusLoss + 1u);
@@ -327,9 +372,10 @@ TEST_F(Win32TextInputFixture, ReentrantFocusCancellationRestoresNativeImeVisibil
     SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
     const usize before = m_contextForwardCount;
     m_cancelOnNextContextForward = true;
-    const TextInputBeginResult begun = m_service->begin({});
-    EXPECT_EQ(begun.admission, TextInputAdmission::Unavailable);
-    EXPECT_FALSE(begun.token.valid());
+    const auto begun = m_service->begin({});
+    ASSERT_FALSE(begun);
+    EXPECT_EQ(begun.error(), TextInputAdmission::Unavailable);
+    EXPECT_FALSE(begun.has_value());
     EXPECT_FALSE(m_cancelOnNextContextForward);
     EXPECT_TRUE(m_contextFocusLossSucceeded);
     EXPECT_TRUE(m_contextFocusRestoreSucceeded);
@@ -350,7 +396,9 @@ TEST_F(Win32TextInputFixture, SceneFallbackCannotJoinSurrogatesAcrossSessionOwne
     Expected<u32> codePoint = MakeUnexpected(Failure{});
     EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xd83du)));
 
-    m_token = m_service->begin({}).token;
+    const auto tokenAdmission = m_service->begin({});
+    ASSERT_TRUE(tokenAdmission);
+    m_token = *tokenAdmission;
     ASSERT_TRUE(m_token.valid());
     ASSERT_TRUE(m_service->end(m_token));
     EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xde00u)));
@@ -384,7 +432,9 @@ TEST_F(Win32TextInputFixture, SceneFallbackDecoderNeverConsumesActivePair){
 
 TEST_F(Win32TextInputFixture, SceneFallbackSurrogateStateIsPerServiceAndValidatesUnits){
     ASSERT_TRUE(m_service->end(m_token));
-    const GlobalUniquePtr<ITextInputService> second = CreateTextInputService(m_arena.arena, m_window);
+    auto secondResult = CreateTextInputService(m_arena.arena, m_window);
+    ASSERT_TRUE(secondResult);
+    const GlobalUniquePtr<ITextInputService> second = Move(*secondResult);
     ASSERT_NE(second.get(), nullptr);
     ASSERT_TRUE(second->setFocused(true));
     Expected<u32> codePoint = MakeUnexpected(Failure{});
@@ -403,7 +453,9 @@ TEST_F(Win32TextInputFixture, SceneFallbackSurrogateStateIsPerServiceAndValidate
 
 TEST_F(Win32TextInputFixture, SceneFallbackBridgeRejectsForeignServiceAndWrongThread){
     ASSERT_TRUE(m_service->end(m_token));
-    const GlobalUniquePtr<ITextInputService> unsupported = CreateTextInputService(m_arena.arena, nullptr);
+    auto unsupportedResult = CreateTextInputService(m_arena.arena, nullptr);
+    ASSERT_TRUE(unsupportedResult);
+    const GlobalUniquePtr<ITextInputService> unsupported = Move(*unsupportedResult);
     Expected<u32> codePoint = MakeUnexpected(Failure{});
     EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*unsupported, 'A')));
 
@@ -413,7 +465,8 @@ TEST_F(Win32TextInputFixture, SceneFallbackBridgeRejectsForeignServiceAndWrongTh
         EXPECT_FALSE((workerCodePoint = DecodeWin32FallbackCharInput(*m_service, 'A')));
 
         EXPECT_FALSE(ResetWin32FallbackCharInput(*m_service));
-    });
+    }
+    );
     worker.join();
     ASSERT_TRUE((codePoint = DecodeWin32FallbackCharInput(*m_service, 'C')));
     EXPECT_EQ(*codePoint, static_cast<u32>('C'));
@@ -473,9 +526,13 @@ TEST_F(Win32TextInputFixture, KeyboardFocusMessagesCancelQueuedWorkWithoutActiva
     EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
     EXPECT_TRUE(event.text.empty());
     EXPECT_EQ(m_service->poll(m_token, event), TextInputPollResult::InvalidSession);
-    EXPECT_EQ(m_service->begin({}).admission, TextInputAdmission::Unavailable);
+    const auto unavailableBegin = m_service->begin({});
+    ASSERT_FALSE(unavailableBegin);
+    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
     EXPECT_EQ(SendMessageW(m_window, WM_SETFOCUS, 0u, 0), 0);
-    m_token = m_service->begin({}).token;
+    const auto tokenAdmission = m_service->begin({});
+    ASSERT_TRUE(tokenAdmission);
+    m_token = *tokenAdmission;
     ASSERT_TRUE(m_token.valid());
     EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 'B', 0), 0);
     ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);

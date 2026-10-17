@@ -81,16 +81,17 @@ TEST(MathNativeMask, RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads){
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     // Packing binary64 high words must ignore low-word sign bits and must not classify signaling NaNs as floating-point values.
-    constexpr u64 magnitudes[]{ 0x0000000080000000ull, 0x0000000000000001ull, 0x7FF0000080000001ull, 0x7FF8123476543210ull };
+    constexpr u64 s_Magnitudes[]{ 0x0000000080000000ull, 0x0000000000000001ull, 0x7FF0000080000001ull, 0x7FF8123476543210ull };
     for(u32 expected = 0u; expected < 16u; ++expected){
         const SIMDVectorDouble value = VectorDoubleSetInt(
-            magnitudes[0] | (static_cast<u64>(expected & 1u) << 63u),
-            magnitudes[1] | (static_cast<u64>((expected >> 1u) & 1u) << 63u),
-            magnitudes[2] | (static_cast<u64>((expected >> 2u) & 1u) << 63u),
-            magnitudes[3] | (static_cast<u64>((expected >> 3u) & 1u) << 63u)
+            s_Magnitudes[0] | (static_cast<u64>(expected & 1u) << 63u),
+            s_Magnitudes[1] | (static_cast<u64>((expected >> 1u) & 1u) << 63u),
+            s_Magnitudes[2] | (static_cast<u64>((expected >> 2u) & 1u) << 63u),
+            s_Magnitudes[3] | (static_cast<u64>((expected >> 3u) & 1u) << 63u)
         );
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
         EXPECT_EQ(ExtractMask(value), expected) << expected;
@@ -106,10 +107,11 @@ TEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions){
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
-    constexpr i32 roundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    for(const i32 roundingMode : roundingModes){
+    constexpr i32 s_RoundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    for(const i32 roundingMode : s_RoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
         for(usize poisonLane = 0u; poisonLane < 4u; ++poisonLane){
             const SIMDVectorSingle referenceSingle = VectorReplicate(1.0f);

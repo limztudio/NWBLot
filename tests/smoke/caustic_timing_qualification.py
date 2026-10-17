@@ -161,12 +161,12 @@ def validate_log(text, settings, capture=False):
     if not math.isclose(fov, math.pi / 3, rel_tol=1e-6) \
         or any(not math.isclose(a, b, rel_tol=1e-6) for a, b in zip(light, (.9, .65, 2.0))):
         raise SmokeFailure("actual camera projection or light changed")
-    phase = single_match(r"^CausticTimingProbe: photon phases bootstrap (\d+) converged (\d+) warmup (\d+)$", text, "photon temporal schedule")
-    if tuple(map(int, phase)) != (2, 4, 8):
+    phase = single_match(r"^CausticTimingProbe: photon phases (\d+)$", text, "photon temporal schedule")
+    if tuple(map(int, phase)) != (2,):
         raise SmokeFailure("photon temporal schedule changed")
     producers = [tuple(map(int, row)) for row in PRODUCER.findall(text)]
     if enabled:
-        if len(producers) != 1 or producers[0][2:] != (262144, 1, 1) or producers[0][1] not in (2, 4) \
+        if len(producers) != 1 or producers[0][2:] != (262144, 1, 1) or producers[0][1] != 2 \
             or producers[0][0] * producers[0][1] != 262144:
             raise SmokeFailure("actual hardware photon budget, phase count, light or refractor count changed")
     elif producers:
@@ -250,7 +250,7 @@ def validate_metrics(metrics):
 
 
 def validate_warmup(scopes):
-    # Require actual completed GPU observations beyond the eight-frame warm-up and one four-phase cycle.
+    # Require twelve actual completed GPU observations, covering six checkerboard parity cycles.
     for name in ("render.frame", PHOTONS):
         value = scopes.get(name)
         if value is None or value["gpu_samples"] < 12 or value["total_ms"] <= 0:

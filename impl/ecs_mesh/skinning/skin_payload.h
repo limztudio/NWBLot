@@ -40,7 +40,9 @@ struct RuntimeSkinPayloadScratch final{
     usize skinInfluenceCount = 0u;
     u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
 
-    explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
+
+public:
+    explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)noexcept
         : poseJoints(scratchArena)
         , jointMatrices(scratchArena)
     {}

@@ -26,6 +26,8 @@ struct AssetGatherOptions{
     ACompactString configuration;
     Core::Assets::AssetGatherMergeFunction mergePayloads = nullptr;
 
+
+public:
     explicit AssetGatherOptions(Core::Assets::AssetArena& arena)noexcept
         : inputs(arena)
         , outputDirectory(arena)

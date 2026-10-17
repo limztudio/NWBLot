@@ -37,9 +37,33 @@ namespace __hidden_mesh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_RayTracingReconstructionScratchPaddingBytes = 4096u;
-inline constexpr Name s_PaddedMeshUploadArena("impl/ecs_render/padded_mesh_upload");
 inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pruning");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UnpublishedMeshDescriptors final : NoCopy{
+public:
+    UnpublishedMeshDescriptors(RendererMeshSystem& meshSystem, MeshResources& mesh)noexcept
+        : m_meshSystem(meshSystem)
+        , m_mesh(mesh)
+    {}
+    ~UnpublishedMeshDescriptors()noexcept(noexcept(DeclVal<RendererMeshSystem&>().releaseMeshGeometryHeapHandles(DeclVal<MeshResources&>()))){
+        if(m_active)
+            m_meshSystem.releaseMeshGeometryHeapHandles(m_mesh);
+    }
+
+
+public:
+    void release()noexcept{ m_active = false; }
+
+
+private:
+    RendererMeshSystem& m_meshSystem;
+    MeshResources& m_mesh;
+    bool m_active = true;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,16 +119,17 @@ static void ReportMeshBufferSetupFailure(const RuntimeMeshBufferUpload::BufferSe
     return;
 }
 
-[[nodiscard]] static Name DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const TStringView label){
-    const Name bufferName = DeriveName(meshName, suffix);
+[[nodiscard]] static Expected<Name> DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const TStringView label){
+    const auto bufferName = DeriveName(meshName, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'"), label, StringConvert(meshName.resolvedText()));
+        return MakeUnexpected(Failure{});
     }
     return bufferName;
 }
 
 template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] static Core::BufferHandle SetupMeshBuffer(
+[[nodiscard]] static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupMeshBuffer(
     Core::GraphicsRuntime& graphics,
     const Name& meshName,
     const AStringView suffix,
@@ -113,48 +138,37 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false
 ){
-    const Name bufferName = DeriveMeshBufferName(meshName, suffix, label);
+    const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
-        return {};
+        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed);
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, bufferName, payload, { false, canHaveRawViews, accelStructBuildInput, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, *bufferName, payload, { false, canHaveRawViews, accelStructBuildInput, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
     if(!buffer){
         ReportMeshBufferSetupFailure(buffer.error(), meshName, label);
-        return {};
+        return MakeUnexpected(buffer.error());
     }
     return Move(*buffer);
 }
 
-template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] static bool AssignMeshBuffer(
+template<typename PayloadVector>
+[[nodiscard]] static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupPaddedRawMeshBuffer(
     Core::GraphicsRuntime& graphics,
+    Core::Alloc::ScratchArena& scratchArena,
     const Name& meshName,
-    Core::BufferHandle& outBuffer,
     const AStringView suffix,
     const PayloadVector& payload,
-    const TStringView label,
-    const bool canHaveRawViews = false,
-    const bool accelStructBuildInput = false
+    const TStringView label
 ){
-    outBuffer = SetupMeshBuffer<PayloadT>(graphics, meshName, suffix, payload, label, canHaveRawViews, accelStructBuildInput);
-    return outBuffer != nullptr;
-}
-
-template<typename PayloadVector>
-[[nodiscard]] static bool AssignPaddedRawMeshBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::ScratchArena& scratchArena, const Name& meshName, Core::BufferHandle& outBuffer, const AStringView suffix, const PayloadVector& payload, const TStringView label){
-    outBuffer = nullptr;
-
-    const Name bufferName = DeriveMeshBufferName(meshName, suffix, label);
+    const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
-        return false;
+        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed);
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, bufferName, payload, { false, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, *bufferName, payload, { false, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
     if(!buffer){
         ReportMeshBufferSetupFailure(buffer.error(), meshName, label);
-        return false;
+        return MakeUnexpected(buffer.error());
     }
-    outBuffer = Move(*buffer);
-    return true;
+    return Move(*buffer);
 }
 
 [[nodiscard]] static bool ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const TStringView label){
@@ -201,7 +215,7 @@ template<typename PositionVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset){
+Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena){
 
     const Name meshPath = meshAsset.name();
     if(!meshPath){
@@ -225,7 +239,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
 
     const Mesh& mesh = *loadedMesh;
     // Mesh::loadBinary already ran the full payload validation (including u32 stream limits).
-    NWB_ASSERT(mesh.validatePayload());
+    NWB_ASSERT(mesh.validatePayload(scratchArena));
     NWB_ASSERT(mesh.meshlets().size() <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(mesh.meshletPrimitiveIndices().size() <= static_cast<usize>(Limit<u32>::s_Max));
 
@@ -250,63 +264,84 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     const bool swShadow = !rtSupported;
 
     bool uploaded = true;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(m_graphics, meshPath, createdMesh.positionBuffer, RendererArenaScope::s_PositionsBufferName, mesh.positionStream(), RendererArenaScope::s_PositionBufferLabel, true, rtSupported) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(m_graphics, meshPath, createdMesh.normalBuffer, RendererArenaScope::s_NormalsBufferName, mesh.normalStream(), RendererArenaScope::s_NormalBufferLabel) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(m_graphics, meshPath, createdMesh.tangentBuffer, RendererArenaScope::s_TangentsBufferName, mesh.tangentStream(), RendererArenaScope::s_TangentBufferLabel) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Float2U>(m_graphics, meshPath, createdMesh.uv0Buffer, RendererArenaScope::s_Uv0BufferName, mesh.uv0Stream(), RendererArenaScope::s_Uv0BufferLabel) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(m_graphics, meshPath, createdMesh.colorBuffer, RendererArenaScope::s_ColorsBufferName, mesh.colorStream(), RendererArenaScope::s_ColorBufferLabel) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(m_graphics, meshPath, createdMesh.meshletDescBuffer, RendererArenaScope::s_MeshletsBufferName, mesh.meshlets(), RendererArenaScope::s_MeshletDescriptorBufferLabel) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(m_graphics, meshPath, createdMesh.meshletBoundsBuffer, RendererArenaScope::s_MeshletBoundsBufferName, mesh.meshletBounds(), RendererArenaScope::s_MeshletBoundsBufferLabel, true) && uploaded;
-    Core::Alloc::ScratchArena uploadScratchArena(__hidden_mesh::s_PaddedMeshUploadArena);
-    uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
-        m_graphics,
-        uploadScratchArena,
-        meshPath,
-        createdMesh.meshletPositionRefDeltaBuffer,
-        RendererArenaScope::s_MeshletPositionRefDeltasBufferName,
-        mesh.meshletPositionRefDeltas(),
-        RendererArenaScope::s_MeshletPositionRefDeltaBufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
-        m_graphics,
-        uploadScratchArena,
-        meshPath,
-        createdMesh.meshletAttributeRefDeltaBuffer,
-        RendererArenaScope::s_MeshletAttributeRefDeltasBufferName,
-        mesh.meshletAttributeRefDeltas(),
-        RendererArenaScope::s_MeshletAttributeRefDeltaBufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
-        m_graphics,
-        meshPath,
-        createdMesh.meshletLocalVertexRefBuffer,
-        RendererArenaScope::s_MeshletLocalVertexRefsBufferName,
-        mesh.meshletLocalVertexRefs(),
-        RendererArenaScope::s_MeshletLocalVertexRefBufferLabel
-    ) && uploaded;
-    uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
-        m_graphics,
-        uploadScratchArena,
-        meshPath,
-        createdMesh.meshletPrimitiveIndexBuffer,
-        RendererArenaScope::s_MeshletPrimitiveIndicesBufferName,
-        mesh.meshletPrimitiveIndices(),
-        RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
-    ) && uploaded;
+    auto positionBufferResult = __hidden_mesh::SetupMeshBuffer<Float3U>(m_graphics, meshPath, RendererArenaScope::s_PositionsBufferName, mesh.positionStream(), RendererArenaScope::s_PositionBufferLabel, true, rtSupported);
+    if(positionBufferResult)
+        createdMesh.positionBuffer = Move(*positionBufferResult);
+    else
+        createdMesh.positionBuffer.reset();
+    uploaded = static_cast<bool>(positionBufferResult) && uploaded;
+    auto normalBufferResult = __hidden_mesh::SetupMeshBuffer<Half4U>(m_graphics, meshPath, RendererArenaScope::s_NormalsBufferName, mesh.normalStream(), RendererArenaScope::s_NormalBufferLabel);
+    if(normalBufferResult)
+        createdMesh.normalBuffer = Move(*normalBufferResult);
+    else
+        createdMesh.normalBuffer.reset();
+    uploaded = static_cast<bool>(normalBufferResult) && uploaded;
+    auto tangentBufferResult = __hidden_mesh::SetupMeshBuffer<Half4U>(m_graphics, meshPath, RendererArenaScope::s_TangentsBufferName, mesh.tangentStream(), RendererArenaScope::s_TangentBufferLabel);
+    if(tangentBufferResult)
+        createdMesh.tangentBuffer = Move(*tangentBufferResult);
+    else
+        createdMesh.tangentBuffer.reset();
+    uploaded = static_cast<bool>(tangentBufferResult) && uploaded;
+    auto uv0BufferResult = __hidden_mesh::SetupMeshBuffer<Float2U>(m_graphics, meshPath, RendererArenaScope::s_Uv0BufferName, mesh.uv0Stream(), RendererArenaScope::s_Uv0BufferLabel);
+    if(uv0BufferResult)
+        createdMesh.uv0Buffer = Move(*uv0BufferResult);
+    else
+        createdMesh.uv0Buffer.reset();
+    uploaded = static_cast<bool>(uv0BufferResult) && uploaded;
+    auto colorBufferResult = __hidden_mesh::SetupMeshBuffer<Half4U>(m_graphics, meshPath, RendererArenaScope::s_ColorsBufferName, mesh.colorStream(), RendererArenaScope::s_ColorBufferLabel);
+    if(colorBufferResult)
+        createdMesh.colorBuffer = Move(*colorBufferResult);
+    else
+        createdMesh.colorBuffer.reset();
+    uploaded = static_cast<bool>(colorBufferResult) && uploaded;
+    auto meshletDescBufferResult = __hidden_mesh::SetupMeshBuffer<MeshletDesc>(m_graphics, meshPath, RendererArenaScope::s_MeshletsBufferName, mesh.meshlets(), RendererArenaScope::s_MeshletDescriptorBufferLabel);
+    if(meshletDescBufferResult)
+        createdMesh.meshletDescBuffer = Move(*meshletDescBufferResult);
+    else
+        createdMesh.meshletDescBuffer.reset();
+    uploaded = static_cast<bool>(meshletDescBufferResult) && uploaded;
+    auto meshletBoundsBufferResult = __hidden_mesh::SetupMeshBuffer<MeshletBounds>(m_graphics, meshPath, RendererArenaScope::s_MeshletBoundsBufferName, mesh.meshletBounds(), RendererArenaScope::s_MeshletBoundsBufferLabel, true);
+    if(meshletBoundsBufferResult)
+        createdMesh.meshletBoundsBuffer = Move(*meshletBoundsBufferResult);
+    else
+        createdMesh.meshletBoundsBuffer.reset();
+    uploaded = static_cast<bool>(meshletBoundsBufferResult) && uploaded;
+    auto meshletPositionRefDeltaBufferResult = __hidden_mesh::SetupPaddedRawMeshBuffer(m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPositionRefDeltasBufferName, mesh.meshletPositionRefDeltas(), RendererArenaScope::s_MeshletPositionRefDeltaBufferLabel);
+    if(meshletPositionRefDeltaBufferResult)
+        createdMesh.meshletPositionRefDeltaBuffer = Move(*meshletPositionRefDeltaBufferResult);
+    else
+        createdMesh.meshletPositionRefDeltaBuffer.reset();
+    uploaded = static_cast<bool>(meshletPositionRefDeltaBufferResult) && uploaded;
+    auto meshletAttributeRefDeltaBufferResult = __hidden_mesh::SetupPaddedRawMeshBuffer(m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletAttributeRefDeltasBufferName, mesh.meshletAttributeRefDeltas(), RendererArenaScope::s_MeshletAttributeRefDeltaBufferLabel);
+    if(meshletAttributeRefDeltaBufferResult)
+        createdMesh.meshletAttributeRefDeltaBuffer = Move(*meshletAttributeRefDeltaBufferResult);
+    else
+        createdMesh.meshletAttributeRefDeltaBuffer.reset();
+    uploaded = static_cast<bool>(meshletAttributeRefDeltaBufferResult) && uploaded;
+    auto meshletLocalVertexRefBufferResult = __hidden_mesh::SetupMeshBuffer<MeshletLocalVertexRef>(m_graphics, meshPath, RendererArenaScope::s_MeshletLocalVertexRefsBufferName, mesh.meshletLocalVertexRefs(), RendererArenaScope::s_MeshletLocalVertexRefBufferLabel);
+    if(meshletLocalVertexRefBufferResult)
+        createdMesh.meshletLocalVertexRefBuffer = Move(*meshletLocalVertexRefBufferResult);
+    else
+        createdMesh.meshletLocalVertexRefBuffer.reset();
+    uploaded = static_cast<bool>(meshletLocalVertexRefBufferResult) && uploaded;
+    auto meshletPrimitiveIndexBufferResult = __hidden_mesh::SetupPaddedRawMeshBuffer(m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPrimitiveIndicesBufferName, mesh.meshletPrimitiveIndices(), RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel);
+    if(meshletPrimitiveIndexBufferResult)
+        createdMesh.meshletPrimitiveIndexBuffer = Move(*meshletPrimitiveIndexBufferResult);
+    else
+        createdMesh.meshletPrimitiveIndexBuffer.reset();
+    uploaded = static_cast<bool>(meshletPrimitiveIndexBufferResult) && uploaded;
     if(!uploaded)
         return MakeUnexpected(Failure{});
 
     // Both shadow backends trace triangles; always create the reconstructed index buffer.
     {
-        const usize indexCount = static_cast<usize>(createdMesh.meshletPrimitiveIndexCount);
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingBuildArena, indexCount * sizeof(u32) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes);
         const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, mesh);
         if(!triangleIndices){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
-        const Name indexBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleIndicesBufferName);
+        const auto indexBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleIndicesBufferName);
         if(!indexBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -318,7 +353,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
         indexFlags.accelStructBuildInput = rtSupported;
         // Async shadow packet shares this stream; keep sharing consistent to avoid ownership transfer.
         indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
-        auto indexBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(m_graphics, indexBufferName, *triangleIndices, indexFlags);
+        auto indexBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(m_graphics, *indexBufferName, *triangleIndices, indexFlags);
         if(!indexBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -339,15 +374,13 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
 
     // Flat per-corner trace attributes in lockstep with the index buffer; always carries a raw view.
     {
-        const usize attributeCount = mesh.meshletPrimitiveIndices().size();
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingAttributeArena, attributeCount * sizeof(AttribGpu) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes);
         const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, mesh);
         if(!triangleAttributes){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
-        const Name attributeBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleAttributesBufferName);
+        const auto attributeBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleAttributesBufferName);
         if(!attributeBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -357,7 +390,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
         attributeFlags.canHaveRawViews = true;
         // Tracing shares these attributes on AsyncCompute; keep shared-read input.
         attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
-        auto attributeBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(m_graphics, attributeBufferName, *triangleAttributes, attributeFlags);
+        auto attributeBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(m_graphics, *attributeBufferName, *triangleAttributes, attributeFlags);
         if(!attributeBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace triangle attribute buffer for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -367,10 +400,13 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     }
 
     NWB_ASSERT(createdMesh.valid());
+    __hidden_mesh::UnpublishedMeshDescriptors retireUnpublished(*this, createdMesh);
     if(!createMeshRenderBindings(createdMesh))
         return MakeUnexpected(Failure{});
 
     auto result = m_meshState.m_meshes.try_emplace(meshPath, Move(createdMesh));
+    if(result.second)
+        retireUnpublished.release();
     auto it = result.first;
 
     NWB_ASSERT(it.value().valid());
@@ -462,10 +498,13 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
     if(!__hidden_mesh::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel))
         return MakeUnexpected(Failure{});
     NWB_ASSERT(createdMesh.valid());
+    __hidden_mesh::UnpublishedMeshDescriptors retireUnpublished(*this, createdMesh);
     if(!createMeshRenderBindings(createdMesh))
         return MakeUnexpected(Failure{});
 
     auto result = m_meshState.m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
+    if(result.second)
+        retireUnpublished.release();
     auto it = result.first;
 
     NWB_ASSERT(it.value().valid());

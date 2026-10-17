@@ -31,7 +31,7 @@ inline void AppendCodePointGlyphs(Impl::Ui::ShapedRun& run, const AStringView te
     }
 }
 
-inline void ReverseGlyphs(Impl::Ui::ShapedRun& run){
+inline void ReverseGlyphs(Impl::Ui::ShapedRun& run)noexcept{
     for(usize index = 0u; index < run.glyphs.size() / 2u; ++index)
         Swap(run.glyphs[index], run.glyphs[run.glyphs.size() - index - 1u]);
 }

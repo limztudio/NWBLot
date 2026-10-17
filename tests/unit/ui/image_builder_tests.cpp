@@ -21,11 +21,9 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
-using ImagePaintSample = SkinPaintSample;
-
 class UiImageBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f){
+    [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
         ImageOptions options;
         options.width = { LayoutSizePolicy::Fixed, width };
         options.height = { LayoutSizePolicy::Fixed, height };
@@ -60,9 +58,6 @@ protected:
         return begin(generation) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
     }
 
-    [[nodiscard]] Expected<ImagePaintSample> sample(const DrawSnapshot& snapshot, const Name& name)const noexcept{
-        return sampleSkinPaint(snapshot, name);
-    }
 };
 
 
@@ -79,7 +74,7 @@ TEST_F(UiImageBuilderTests, CallerMutationCannotChangeDeferredImageNameSizeOrStr
     options = Fixed(20.0f, 20.0f);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto sprite = sample(snapshot, Name("image.sprite"));
+    const auto sprite = sampleSkinPaint(snapshot, Name("image.sprite"));
     ASSERT_TRUE(sprite);
     EXPECT_FLOAT_EQ(sprite->bounds.width, 80.0f);
     EXPECT_FLOAT_EQ(sprite->bounds.height, 32.0f);
@@ -97,7 +92,7 @@ TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack
     ASSERT_TRUE(m_paint.popClip());
     m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto sprite = sample(snapshot, Name("image.sprite"));
+    const auto sprite = sampleSkinPaint(snapshot, Name("image.sprite"));
     ASSERT_TRUE(sprite);
     EXPECT_FLOAT_EQ(sprite->bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(sprite->bounds.width, 20.0f);
@@ -120,7 +115,7 @@ TEST_F(UiImageBuilderTests, FullyTransparentAndEmptyImagesRemainValidWithoutQuad
     ASSERT_TRUE(m_builder.image("empty", Name("image.sprite"), Fixed(0.0f, 20.0f)));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_FALSE(sample(snapshot, Name("image.sprite")));
+    EXPECT_FALSE(sampleSkinPaint(snapshot, Name("image.sprite")));
 }
 
 TEST_F(UiImageBuilderTests, UnknownRegionRejectsWithoutReplacingAcceptedTargets){

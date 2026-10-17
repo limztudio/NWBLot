@@ -23,13 +23,13 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
         m_context.fail();
         return false;
     }
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::Tooltip);
-    if(!widget || !m_context.claimState(*widget, state.instanceGeneration()))
+    const auto widget = m_context.declare(stableKey, WidgetKind::Tooltip);
+    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
         return false;
-    if(state.m_owner != widget->id || state.m_ownerDeclaration != widget->declarationGeneration){
+    if(state.m_owner != (*widget)->id || state.m_ownerDeclaration != (*widget)->declarationGeneration){
         state.reset();
-        state.m_owner = widget->id;
-        state.m_ownerDeclaration = widget->declarationGeneration;
+        state.m_owner = (*widget)->id;
+        state.m_ownerDeclaration = (*widget)->declarationGeneration;
     }
     const InputRouter& input = m_context.input();
     const HitTarget* accepted = input.findTarget(anchor->state.id, anchor->state.declarationGeneration);
@@ -43,7 +43,7 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
         return false;
     }
     TooltipFrame frame(m_arena);
-    frame.widget = *widget;
+    frame.widget = **widget;
     frame.anchor = anchor->state;
     frame.state = &state;
     frame.style = m_tooltipStyle;
@@ -112,7 +112,7 @@ bool Builder::paintTooltips(){
         options.size = { VectorGetX(boundedSize), VectorGetY(boundedSize) };
         options.gap = frame.options.gap;
         options.side = frame.options.side;
-            const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+        const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
         if(!placement || !m_paint.beginOverlay(frame.layer))
             return false;
         m_paint.pushClip(placement->bounds);

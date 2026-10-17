@@ -53,7 +53,7 @@ struct HardwareCausticsResolveChainResult{
 
 class HardwareCausticsResolveChainBuilder final : NoCopy{
 public:
-    HardwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
+    HardwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept;
 
 
 public:

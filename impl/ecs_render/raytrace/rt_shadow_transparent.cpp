@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -45,7 +45,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMergeTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTemporalMergeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -78,7 +78,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWaveletTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFirstWaveletTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -111,7 +111,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -143,7 +143,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -198,7 +198,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         commandList.commitBarriers();
         if(!RecordLightSpaceResolve(commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(),
             *lightSpace, *targets.transparentSoftHalf, frameIndex, transparentShadowSampleCount(),
-            targets.bindless.transparentSoftHalfStorage.slot(), true))
+            targets.bindless.transparentSoftHalfStorage.slot(), true
+        ))
             return false;
     }
     if(!hardwareTransparentShadowReady())
@@ -259,28 +260,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
     const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
-    dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList,
-        targets,
-        deferredLightingResources,
-        frameIndex,
-        groups.x,
-        groups.y,
-        false,
-        false,
-        false,
-        true,
-        false,
-        false,
-        graphOwnsTransparentWaveletInputBoundary,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true,
-        false
-    );
+    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, false, false, false, true, false, false, graphOwnsTransparentWaveletInputBoundary, false, false, false, false, false, true, false);
     return true;
 }
 

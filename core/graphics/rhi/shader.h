@@ -19,6 +19,11 @@ NWB_CORE_BEGIN
 
 namespace ShaderType{
     static constexpr u8 s_ShaderTypeVertexStageBase = 0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
     enum Enum : u8{
         VertexStage = s_ShaderTypeVertexStageBase,
         HullStage,
@@ -139,6 +144,8 @@ struct CustomSemantic{
     Enum type;
     Name name;
 
+
+public:
     constexpr CustomSemantic& setType(Enum value)noexcept{ type = value; return *this; }
     constexpr CustomSemantic& setName(const Name& value)noexcept{ name = value; return *this; }
 };
@@ -158,6 +165,7 @@ struct ShaderDesc{
     bool useSpecificShaderExt = false;
 
 
+public:
     constexpr ShaderDesc& setShaderType(ShaderType::Mask value)noexcept{ shaderType = value; return *this; }
     constexpr ShaderDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
     constexpr ShaderDesc& setEntryName(const AStringView value)noexcept{ entryName = value; return *this; }
@@ -176,6 +184,8 @@ struct ShaderSpecialization{
         f32 f;
     } value;
 
+
+public:
     static constexpr ShaderSpecialization FromU32(u32 constantID, u32 u)noexcept{
         ShaderSpecialization s;
         s.constantID = constantID;

@@ -62,7 +62,7 @@ protected:
         return m_router.process();
     }
 
-    void revise(){
+    void revise()noexcept{
         for(auto& target : m_targets)
             ++target.control.contentRevision;
     }

@@ -73,10 +73,15 @@ bool Context::beginRoot(const WidgetRoot& root){
         fail();
         return false;
     }
+    const auto rootId = MakeRootId(root);
+    if(!rootId){
+        fail();
+        return false;
+    }
     m_root = root;
     m_rootActive = true;
     m_scopes.clear();
-    m_scopes.push_back(MakeRootId(root));
+    m_scopes.push_back(*rootId);
     return true;
 }
 
@@ -94,12 +99,12 @@ bool Context::pushScope(const AStringView stableKey){
         fail();
         return false;
     }
-    const WidgetId id = MakeWidgetId(m_scopes.back(), stableKey);
-    if(!id.valid()){
+    const auto id = MakeWidgetId(m_scopes.back(), stableKey);
+    if(!id){
         fail();
         return false;
     }
-    m_scopes.push_back(id);
+    m_scopes.push_back(*id);
     return true;
 }
 
@@ -112,19 +117,28 @@ bool Context::popScope()noexcept{
     return !m_failed;
 }
 
-WidgetState* Context::declare(const AStringView stableKey, const WidgetKind::Enum kind){
+Expected<NotNull<WidgetState*>> Context::declare(const AStringView stableKey, const WidgetKind::Enum kind){
     if(m_failed || !m_rootActive)
-        return nullptr;
-    const WidgetId id = MakeWidgetId(m_scopes.back(), stableKey);
-    return declareId(id, kind);
+        return MakeUnexpected(Failure{});
+    const auto id = MakeWidgetId(m_scopes.back(), stableKey);
+    if(!id){
+        fail();
+        return MakeUnexpected(id.error());
+    }
+    return declareId(*id, kind);
 }
 
-WidgetState* Context::declarePart(const WidgetState& owner, const AStringView stableKey, const WidgetKind::Enum kind){
+Expected<NotNull<WidgetState*>> Context::declarePart(const WidgetState& owner, const AStringView stableKey, const WidgetKind::Enum kind){
     if(m_failed || !currentDeclaration(owner)){
         fail();
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
-    return declareId(MakeWidgetId(owner.id, stableKey), kind);
+    const auto id = MakeWidgetId(owner.id, stableKey);
+    if(!id){
+        fail();
+        return MakeUnexpected(id.error());
+    }
+    return declareId(*id, kind);
 }
 
 bool Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
@@ -267,15 +281,15 @@ void Context::retainRoots(const WidgetRoot* roots, const usize count){
     }
 }
 
-WidgetState* Context::declareId(const WidgetId id, const WidgetKind::Enum kind){
+Expected<NotNull<WidgetState*>> Context::declareId(const WidgetId id, const WidgetKind::Enum kind){
     if(m_declarationCount >= s_WidgetMaxStates){
         fail();
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const WidgetState* previous = m_states.find(id);
     if(previous && previous->kind != kind)
         m_input.invalidateTarget(id);
-    WidgetState* state = m_states.touch(id, m_root, kind, m_frameGeneration);
+    const auto state = m_states.touch(id, m_root, kind, m_frameGeneration);
     if(!state)
         fail();
     else

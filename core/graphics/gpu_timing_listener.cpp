@@ -27,13 +27,16 @@ static Atomic<u64> s_NextSampleSubscriptionIdentity{ 1u };
 inline constexpr Name s_GpuTimingListenerScratchArena("graphics.gpu_timing.listener_scratch");
 
 
-[[nodiscard]] static u64 AllocateSampleSubscriptionIdentity()noexcept{
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<u64> AllocateSampleSubscriptionIdentity()noexcept{
     u64 identity = s_NextSampleSubscriptionIdentity.load(MemoryOrder::relaxed);
     while(identity != Limit<u64>::s_Max){
         if(s_NextSampleSubscriptionIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return identity;
     }
-    return 0u;
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -84,21 +87,21 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTimingSampleSubscription GpuTimingRecorder::subscribeSampleListener(const GpuTimingSampleListener& listener){
+Expected<GpuTimingSampleSubscription> GpuTimingRecorder::subscribeSampleListener(const GpuTimingSampleListener& listener){
     if(!listener.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     SampleListenerRecord* const listenerRecord = NewArenaObject<SampleListenerRecord>(m_arena, m_arena);
     if(!listenerRecord)
-        return {};
+        return MakeUnexpected(Failure{});
     SampleListenerRecordPtr record(listenerRecord, SampleListenerRecordPtr::deleter_type(&m_arena), s_AdoptRef);
 
     ScopedLock lock(m_sampleListenerMutex);
-    const u64 identity = __hidden_gpu_timing_listener::AllocateSampleSubscriptionIdentity();
-    if(identity == 0u)
-        return {};
+    const auto identity = __hidden_gpu_timing_listener::AllocateSampleSubscriptionIdentity();
+    if(!identity)
+        return MakeUnexpected(identity.error());
 
-    const GpuTimingSampleSubscription subscription(identity);
+    const GpuTimingSampleSubscription subscription(*identity);
     record->subscription = subscription;
     record->listener = listener;
     m_sampleListeners.push_back(Move(record));

@@ -73,6 +73,8 @@ struct CrashSpoolRetentionConfig{
 struct CrashDumpResult{
     CrashDumpStatus::Enum status = CrashDumpStatus::NotInstalled;
 
+
+public:
     [[nodiscard]] bool requestAccepted()const noexcept{
         return status != CrashDumpStatus::NotInstalled && status != CrashDumpStatus::RequestFailed;
     }
@@ -96,7 +98,9 @@ struct CrashConfigT{
     CrashCapturePolicy capturePolicy;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
 
-    explicit CrashConfigT(ArenaT& arena)
+
+public:
+    explicit CrashConfigT(ArenaT& arena)noexcept(noexcept(::Path<ArenaT>(arena)))
         : spoolDirectory(arena)
     {}
 };
@@ -105,14 +109,17 @@ using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
 
 
 template<typename ArenaT>
-[[nodiscard]] bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config);
-void UninstallCrashHandler();
+[[nodiscard]] bool InstallCrashHandler(const CrashConfigT<ArenaT>& config);
+// Hook registration/removal belongs to quiescent process startup/shutdown; native terminate/filter APIs provide no compare-exchange.
+// Windows preserves detached upload completion after its bounded shutdown wait.
+// POSIX alternate-stack restoration requires the installing thread; failed native restorations remain retriable.
+void UninstallCrashHandler()noexcept;
 
-[[nodiscard]] bool SetCrashMetadata(AStringView key, AStringView value);
+[[nodiscard]] bool SetCrashMetadata(AStringView key, AStringView value)noexcept;
 // Updates the crash-upload destination on an already-installed handler.
 // This lets capture be armed first (before the CLI is parsed) and the upload destination supplied later, once it is known.
-[[nodiscard]] bool SetCrashUploadDestination(AStringView logServerUrl, AStringView crashUploadToken);
-[[nodiscard]] bool AddCrashBreadcrumb(AStringView category, AStringView message);
+[[nodiscard]] bool SetCrashUploadDestination(AStringView logServerUrl, AStringView crashUploadToken)noexcept;
+void AddCrashBreadcrumb(AStringView category, AStringView message)noexcept;
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
 [[nodiscard]] CrashDumpResult CaptureGpuCrashDump(AStringView message, AStringView binaryDump = AStringView(), GpuCrashDumpKind::Enum dumpKind = GpuCrashDumpKind::Aftermath);
 

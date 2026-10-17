@@ -36,6 +36,8 @@ struct SinglePassStereoState{
     bool enabled = false;
     bool independentViewportMask = false;
 
+
+public:
     constexpr SinglePassStereoState& setEnabled(bool value)noexcept{ enabled = value; return *this; }
     constexpr SinglePassStereoState& setIndependentViewportMask(bool value)noexcept{ independentViewportMask = value; return *this; }
     constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value)noexcept{ renderTargetIndexOffset = static_cast<u8>(value); return *this; }
@@ -51,6 +53,8 @@ struct RenderState{
     DepthStencilState depthStencilState;
     SinglePassStereoState singlePassStereo;
 
+
+public:
     constexpr RenderState& setBlendState(const BlendState& value)noexcept{ blendState = value; return *this; }
     constexpr RenderState& setDepthStencilState(const DepthStencilState& value)noexcept{ depthStencilState = value; return *this; }
     constexpr RenderState& setRasterState(const RasterState& value)noexcept{ rasterState = value; return *this; }
@@ -85,6 +89,8 @@ struct VariableRateShadingState{
     ShadingRateCombiner::Enum imageCombiner = ShadingRateCombiner::Passthrough;
     bool enabled = false;
 
+
+public:
     constexpr VariableRateShadingState& setEnabled(bool value)noexcept{ enabled = value; return *this; }
     constexpr VariableRateShadingState& setShadingRate(VariableShadingRate::Enum value)noexcept{ shadingRate = value; return *this; }
     constexpr VariableRateShadingState& setPipelinePrimitiveCombiner(ShadingRateCombiner::Enum value)noexcept{ pipelinePrimitiveCombiner = value; return *this; }
@@ -113,6 +119,8 @@ struct GraphicsPipelineDesc{
 
     BindingLayoutVector bindingLayouts;
 
+
+public:
     ~GraphicsPipelineDesc();
 
 
@@ -140,6 +148,8 @@ struct ComputePipelineDesc{
 
     BindingLayoutVector bindingLayouts;
 
+
+public:
     ~ComputePipelineDesc();
 
 
@@ -161,6 +171,8 @@ struct MeshletPipelineDesc{
 
     PrimitiveType::Enum primType = PrimitiveType::TriangleList;
 
+
+public:
     ~MeshletPipelineDesc();
 
 
@@ -183,6 +195,8 @@ struct RayTracingPipelineShaderDesc{
     // Borrowed until pipeline creation; retained descriptions refer to pipeline-owned group metadata.
     AStringView exportName;
 
+
+public:
     ~RayTracingPipelineShaderDesc();
 
 
@@ -201,6 +215,8 @@ struct RayTracingPipelineHitGroupDesc{
     AStringView exportName;
     bool isProceduralPrimitive = false;
 
+
+public:
     ~RayTracingPipelineHitGroupDesc();
 
 
@@ -226,7 +242,9 @@ struct RayTracingPipelineDesc{
     bool allowSpheres = false;
     bool allowLinearSweptSpheres = false;
 
-    explicit RayTracingPipelineDesc(GraphicsArena& arena)
+
+public:
+    explicit RayTracingPipelineDesc(GraphicsArena& arena)noexcept
         : shaders(arena)
         , hitGroups(arena)
     {}

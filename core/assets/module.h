@@ -64,10 +64,8 @@ protected:
         : m_assetType(assetType)
         , m_virtualPath(virtualPath)
     {}
-
-
 public:
-    virtual ~IAsset() = default;
+    virtual ~IAsset()noexcept = default;
 
 
 public:
@@ -98,16 +96,16 @@ template<typename ArenaT>
 template<typename AssetT>
 class TypedAsset : public IAsset{
 protected:
-    TypedAsset()noexcept(noexcept(Name(AssetT::AssetTypeName())))
+    TypedAsset()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(AssetT::AssetTypeName())))
         : IAsset(AssetT::AssetTypeName())
     {}
-    explicit TypedAsset(const Name& virtualPath)noexcept(noexcept(Name(AssetT::AssetTypeName())))
+    explicit TypedAsset(const Name& virtualPath)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(AssetT::AssetTypeName())))
         : IAsset(AssetT::AssetTypeName(), virtualPath)
     {}
 };
 
 template<typename AssetT>
-[[nodiscard]] inline const AssetT* CastAsset(const IAsset* asset){
+[[nodiscard]] inline const AssetT* CastAsset(const IAsset* asset)noexcept(noexcept((!asset || asset->assetType() != AssetT::AssetTypeName()) ? true : false) && noexcept(checked_cast<const AssetT*>(asset))){
     if(!asset || asset->assetType() != AssetT::AssetTypeName())
         return nullptr;
     return checked_cast<const AssetT*>(asset);
@@ -120,10 +118,8 @@ protected:
     explicit IAssetCodec(const Name& assetType)noexcept
         : m_assetType(assetType)
     {}
-
-
 public:
-    virtual ~IAssetCodec() = default;
+    virtual ~IAssetCodec()noexcept = default;
 
 
 public:
@@ -158,7 +154,7 @@ private:
 template<typename AssetT>
 class AssetCodec : public IAssetCodec{
 protected:
-    AssetCodec()noexcept(noexcept(Name(AssetT::AssetTypeName())))
+    AssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(AssetT::AssetTypeName())))
         : IAssetCodec(AssetT::AssetTypeName())
     {}
 
@@ -166,7 +162,7 @@ protected:
 public:
     [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const final override{
         auto asset = MakeUnique<AssetT>(arena, virtualPath);
-        if(!asset->loadBinary(binary))
+        if(!asset || !asset->loadBinary(binary))
             return MakeUnexpected(Failure{});
 
         return UniquePtr<IAsset>(Move(asset));

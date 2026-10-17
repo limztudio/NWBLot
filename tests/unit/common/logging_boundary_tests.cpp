@@ -69,7 +69,8 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
                 sawConcurrentError = true;
             YieldThread();
         }while(activeWriters.load(MemoryOrder::acquire) != 0u);
-    });
+    }
+    );
     Thread writers[s_ThreadCount];
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         writers[threadIndex] = Thread([&logger, &startGate, &activeWriters](){
@@ -79,7 +80,8 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
                 NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, type, s_PARALLEL_LOGGER_MESSAGE);
             }
             activeWriters.fetch_sub(1u, MemoryOrder::release);
-        });
+        }
+        );
     }
 
     startGate.arrive_and_wait();

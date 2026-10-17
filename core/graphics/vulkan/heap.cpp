@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
+Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_bindingReservations(context.objectArena)
     , m_context(context)
@@ -28,7 +28,7 @@ Heap::~Heap(){
     {
         ScopedLock lock(m_bindingMutex);
         if(!m_bindingReservations.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing to free a heap with live placed-resource bindings"));
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "vulkan_heap_lifecycle", .message = "Vulkan: Refusing to free a heap with live placed-resource bindings", .file = __FILE__, .line = __LINE__, });
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Heap destroyed with live placed-resource bindings"));
             return;
         }
@@ -51,7 +51,7 @@ void Heap::eraseBindingReservationLocked(const void* owner){
         return;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unregister a placed-resource heap binding"));
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "vulkan_heap_lifecycle", .message = "Vulkan: Failed to unregister a placed-resource heap binding", .file = __FILE__, .line = __LINE__, });
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Missing placed-resource heap binding"));
 }
 
@@ -59,13 +59,13 @@ void Heap::eraseBindingReservationLocked(const void* owner){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-HeapHandle Device::createHeap(const HeapDesc& d){
+Expected<HeapHandle> Device::createHeap(const HeapDesc& d){
     VkResult res = VK_SUCCESS;
 
     if(d.capacity == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     switch(d.type){
@@ -76,18 +76,18 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     HeapHandle heap(NewArenaObject<Heap>(m_context.objectArena, m_context, m_allocator), HeapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!heap)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     heap->m_desc = d;
 
     res = m_allocator.allocateHeap(*heap);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     return heap;

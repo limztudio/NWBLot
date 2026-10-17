@@ -88,12 +88,12 @@ TEST(AssetsFontMetadata, BunchRejectsInvalidAndDuplicateChildrenWithoutPublicati
     ASSERT_TRUE(PrepareFiles(testArena, directory));
     Core::Common::InitializerGuard initializers;
     ASSERT_TRUE(initializers.initialize());
+    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     Core::Assets::CookEntryRegistry registry(testArena.arena);
-    ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(registry));
+    ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(registry, scratchArena));
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(LoadMetadata(testArena, document));
     Core::CpuTaskScheduler scheduler(1u);
-    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     Core::Assets::ExpandedAssetMetadataVector expanded(scratchArena);
     const Path filePath = directory / "latin.nwb";
     {

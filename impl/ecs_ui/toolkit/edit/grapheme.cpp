@@ -45,6 +45,8 @@ struct BoundaryState{
     bool indicLinker = false;
     bool first = true;
 
+
+public:
     [[nodiscard]] bool breaksBefore(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const bool pictograph)const noexcept{
         if(first)
             return true;

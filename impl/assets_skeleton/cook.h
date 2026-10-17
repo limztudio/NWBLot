@@ -36,6 +36,8 @@ struct SkeletonCookEntry{
     Name virtualPath = s_NameNone;
     Core::Assets::AssetVector<SkeletonCookJoint> joints;
 
+
+public:
     explicit SkeletonCookEntry(Core::Assets::AssetArena& arena)noexcept
         : joints(arena)
     {}

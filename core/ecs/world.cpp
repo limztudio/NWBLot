@@ -31,10 +31,21 @@ World::World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler)
     , m_freeEntityComponentNode(s_InvalidEntityComponentNode)
 {}
 World::~World()noexcept(false){
-    ScopeExit drainOnFailure([this]()noexcept{ m_tasks.drain(); });
-
-    clear();
-    drainOnFailure.release();
+    bool joined = false;
+    ScopeExit retireOwned([this, &joined]()noexcept{
+        if(!joined)
+            m_tasks.drain();
+        m_messageBus.discardForDestruction();
+        m_scheduler.clear();
+        while(!m_systems.empty())
+            m_systems.pop_back();
+        m_pools.clear();
+    }
+    );
+    if(UncaughtExceptionCount() == 0){
+        m_tasks.wait();
+        joined = true;
+    }
 }
 
 
@@ -61,17 +72,16 @@ void World::removeSystem(ISystem& system){
     m_tasks.wait();
     m_scheduler.removeSystem(system);
 
-    auto itr = FindIf(m_systems.begin(), m_systems.end(), [&system](const SystemEntry& entry)noexcept{ return entry.system.get() == &system; }
-    );
+    auto itr = FindIf(m_systems.begin(), m_systems.end(), [&system](const SystemEntry& entry)noexcept{ return entry.system.get() == &system; });
     if(itr != m_systems.end())
         m_systems.erase(itr);
 }
 
 
-void World::tick(f32 delta){
+Expected<void, CpuTaskAdmissionError::Enum> World::tick(f32 delta){
     m_tasks.wait();
     m_messageBus.swapBuffers();
-    m_scheduler.execute(*this, delta);
+    return m_scheduler.execute(*this, delta);
 }
 
 void World::clear(){
@@ -81,7 +91,8 @@ void World::clear(){
         m_tasks.wait();
     m_messageBus.clear();
     m_scheduler.clear();
-    m_systems.clear();
+    while(!m_systems.empty())
+        m_systems.pop_back();
     m_pools.clear();
     m_entityComponentHeads.clear();
     m_entityComponentNodes.clear();
@@ -96,11 +107,11 @@ void World::destroyEntityComponents(EntityID entityId){
         return;
 
     u32 nodeIndex = m_entityComponentHeads[index];
-    m_entityComponentHeads[index] = s_InvalidEntityComponentNode;
     while(nodeIndex != s_InvalidEntityComponentNode){
         EntityComponentNode& node = m_entityComponentNodes[nodeIndex];
         const u32 nextNode = node.next;
         node.pool->remove(entityId);
+        m_entityComponentHeads[index] = nextNode;
         releaseEntityComponentNode(nodeIndex);
         nodeIndex = nextNode;
     }
@@ -121,7 +132,7 @@ void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IC
 }
 
 
-void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId){
+void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)noexcept{
     const usize index = static_cast<usize>(entityId.index());
     if(index >= m_entityComponentHeads.size())
         return;
@@ -163,7 +174,7 @@ u32 World::acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& po
 }
 
 
-void World::releaseEntityComponentNode(u32 nodeIndex){
+void World::releaseEntityComponentNode(u32 nodeIndex)noexcept{
     NWB_ASSERT(nodeIndex < m_entityComponentNodes.size());
     m_entityComponentNodes[nodeIndex].next = m_freeEntityComponentNode;
     m_freeEntityComponentNode = nodeIndex;

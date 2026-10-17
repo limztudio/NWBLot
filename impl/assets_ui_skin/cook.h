@@ -39,6 +39,7 @@ struct UiSkinCookEntry{
     UiSkinTypography typography;
 
 
+public:
     explicit UiSkinCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
         : arena(memoryArena)
         , regions(memoryArena)

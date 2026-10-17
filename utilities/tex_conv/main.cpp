@@ -24,6 +24,9 @@ inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[tex_conv] logg
 inline constexpr int s_TexConvEntryFailure = -1;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(s_LoggerAppName)){

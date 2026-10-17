@@ -37,8 +37,12 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(m_materialState.m_objectGeometryDecodeShader).addBindingLayout(m_materialState.m_computeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        m_materialState.m_objectGeometryDecodePipeline = device.createComputePipeline(desc);
-        if(!m_materialState.m_objectGeometryDecodePipeline)
+        auto objectGeometryDecodePipelineResult = device.createComputePipeline(desc);
+        if(objectGeometryDecodePipelineResult)
+            m_materialState.m_objectGeometryDecodePipeline = Move(*objectGeometryDecodePipelineResult);
+        else
+            m_materialState.m_objectGeometryDecodePipeline.reset();
+        if(!objectGeometryDecodePipelineResult)
             return false;
     }
     if(!m_shaderSystem.loadShader<VertexShader>(resources.objectGeometryVertexShader, meshShaderName, variantName, "ECSRender_ObjectGeometryVS", &MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName))
@@ -47,12 +51,16 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
         Core::VertexAttributeDesc attributes[5];
         const Core::Format::Enum formats[] = { Core::Format::RGBA32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RG32_FLOAT, Core::Format::RGBA16_FLOAT, };
         const u32 offsets[] = { NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET, };
-        constexpr AStringView names[] = { "POSITION", "NORMAL", "TANGENT", "TEXCOORD", "COLOR" };
+        constexpr NameText<char> s_Names[] = { "POSITION", "NORMAL", "TANGENT", "TEXCOORD", "COLOR" };
         for(u32 index = 0u; index < LengthOf(attributes); ++index){
-            attributes[index].setFormat(formats[index]).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsets[index]).setElementStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setName(Name(names[index]));
+            attributes[index].setFormat(formats[index]).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsets[index]).setElementStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setName(Name(s_Names[index]));
         }
-        m_materialState.m_objectGeometryInputLayout = device.createInputLayout(attributes, static_cast<u32>(LengthOf(attributes)), resources.objectGeometryVertexShader.get());
-        if(!m_materialState.m_objectGeometryInputLayout)
+        auto objectGeometryInputLayoutResult = device.createInputLayout(attributes, static_cast<u32>(LengthOf(attributes)), resources.objectGeometryVertexShader.get());
+        if(objectGeometryInputLayoutResult)
+            m_materialState.m_objectGeometryInputLayout = Move(*objectGeometryInputLayoutResult);
+        else
+            m_materialState.m_objectGeometryInputLayout.reset();
+        if(!objectGeometryInputLayoutResult)
             return false;
     }
     resources.objectGeometryDecodePipeline = m_materialState.m_objectGeometryDecodePipeline;

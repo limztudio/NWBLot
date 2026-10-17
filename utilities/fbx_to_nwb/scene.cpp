@@ -37,7 +37,7 @@ AStringView UfbxStringView(const ufbx_string value)noexcept{
     return AStringView(value.data, value.length);
 }
 
-AString MeshDisplayName(const MeshInstance& instance){
+void AppendMeshDisplayName(ScratchStringStream& out, const MeshInstance& instance){
     AStringView nodeName = UfbxStringView(instance.node->name);
     AStringView meshName = UfbxStringView(instance.mesh->name);
     if(nodeName.empty())
@@ -45,17 +45,15 @@ AString MeshDisplayName(const MeshInstance& instance){
     if(meshName.empty())
         meshName = "<unnamed mesh>";
 
-    AStringStream out;
     out << "[" << instance.index << "] node=\"" << nodeName << "\" mesh=\"" << meshName << "\" triangles=" << instance.mesh->num_triangles;
     if(!instance.node->visible)
         out << " hidden";
-    return out.str();
 }
 
-AString FormatUfbxError(const ufbx_error& error){
+ScratchString FormatUfbxError(const ufbx_error& error, Core::Alloc::ScratchArena& scratchArena){
     char buffer[s_UfbxErrorBufferSize] = {};
-    ufbx_format_error(buffer, sizeof(buffer), &error);
-    return buffer;
+    const usize written = ufbx_format_error(buffer, sizeof(buffer), &error);
+    return ScratchString(buffer, written, scratchArena);
 }
 
 Expected<usize> ParseIndexSelector(const AStringView text)noexcept{
@@ -82,6 +80,10 @@ Expected<usize> ParseIndexSelector(const AStringView text)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+SceneHandle::SceneHandle(SceneHandle&& other)noexcept
+    : scene(Exchange(other.scene, nullptr))
+{}
+
 SceneHandle::~SceneHandle()noexcept{
     if(scene){
         ufbx_free_scene(scene);
@@ -89,15 +91,11 @@ SceneHandle::~SceneHandle()noexcept{
     }
 }
 
-SceneHandle::SceneHandle(SceneHandle&& other)noexcept
-    : scene(Exchange(other.scene, nullptr))
-{}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SceneHandle> LoadScene(const ImportOptions& options){
+Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena){
     SceneHandle outScene;
     ufbx_load_opts loadOptions = {};
     loadOptions.load_external_files = true;
@@ -116,12 +114,12 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options){
         loadOptions.target_unit_meters = __hidden_scene::s_TargetUnitMeters;
     }
 
-    const Path nativeInputPath(UtilityDetail::Arena(), options.inputPath);
-    const AString inputPath = PathToGenericString<AString>(nativeInputPath);
+    const ScratchPath nativeInputPath(scratchArena, options.inputPath);
+    const auto inputPath = PathToGenericString(scratchArena, nativeInputPath);
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), StringConvert(__hidden_scene::FormatUfbxError(error)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), StringConvert(__hidden_scene::FormatUfbxError(error, scratchArena)));
         return MakeUnexpected(Failure{});
     }
 
@@ -151,8 +149,8 @@ UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const bool i
     return instances;
 }
 
-void PrintMeshInstances(const UtilityVector<MeshInstance>& instances){
-    AStringStream report;
+void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Alloc::ScratchArena& scratchArena){
+    ScratchStringStream report(s_FileOpenWrite, scratchArena);
     if(instances.empty()){
         report << "No mesh instances found.\n";
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
@@ -160,15 +158,18 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances){
     }
 
     report << "Mesh instances:\n";
-    for(const MeshInstance& instance : instances)
-        report << "  " << __hidden_scene::MeshDisplayName(instance) << "\n";
+    for(const MeshInstance& instance : instances){
+        report << "  ";
+        __hidden_scene::AppendMeshDisplayName(report, instance);
+        report << "\n";
+    }
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 }
 
-Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector){
+Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena){
     UtilityVector<usize> outSelection;
 
-    const AString normalized = NormalizeOptionText(AString(selector));
+    const ScratchString normalized = NormalizeOptionText(ScratchString(selector, scratchArena));
     if(normalized.empty() || normalized == s_DefaultMeshSelectorText){
         outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)

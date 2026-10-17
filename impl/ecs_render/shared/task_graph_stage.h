@@ -33,6 +33,10 @@ inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 5u;
 inline constexpr usize s_SharedComputeEmulationMinimumPhaseCount = s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
 inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationDrawCount(const usize drawCount)noexcept{
     return drawCount >= s_SharedComputeEmulationMinimumDrawCount && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
 }
@@ -72,6 +76,8 @@ struct RendererTaskGraphTransparencyStage{
     Core::GpuTaskId completionTask;
     bool hasTransparentTasks = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return firstTask.valid() && completionTask.valid(); }
 };
 

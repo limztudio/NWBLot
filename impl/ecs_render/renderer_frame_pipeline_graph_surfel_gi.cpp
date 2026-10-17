@@ -28,6 +28,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererFramePipeline::declareDeferredSurfelGiTask(
+    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -121,14 +122,15 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const Core::GpuGraphResourceId surfelIrradianceHalf = importTexture(deferredTargets.surfelIrradianceHalf, Name("render.surfel_gi.irradiance_half"), "Surfel Irradiance Half");
-    const Core::GpuGraphResourceId sceneGeometryDomain = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), "Scene Acceleration and Geometry"));
-    if(!surfelIrradianceHalf.valid() || !sceneGeometryDomain.valid()){
+    const auto surfelIrradianceHalfResult = importTexture(deferredTargets.surfelIrradianceHalf, Name("render.surfel_gi.irradiance_half"), "Surfel Irradiance Half");
+    const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), "Scene Acceleration and Geometry"));
+    if(!surfelIrradianceHalfResult || !sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
         return false;
     }
+    const Core::GpuGraphResourceId surfelIrradianceHalf = *surfelIrradianceHalfResult;
+    const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> ageFreeResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hashBuildResourceUses{ scratchArena };
@@ -170,9 +172,10 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
                 *outResource = {};
             return true;
         }
-        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importBuffer(buffer, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         if(outResource)
             *outResource = resource;
         resourceUses.push_back(ReadUse(resource, state));
@@ -184,9 +187,10 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
                 *outResource = {};
             return true;
         }
-        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importBuffer(buffer, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         if(outResource)
             *outResource = resource;
         resourceUses.push_back(WriteUse(resource, state));
@@ -243,8 +247,10 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             resourceUses.push_back(ReadUse(csgTraceContext, Core::ResourceStates::ShaderResource));
     }
     if(optionalResourcesImported && rayTracingSurfelResources.traceIndirectArgsBuffer){
-        surfelTraceIndirectArgs = importBuffer(rayTracingSurfelResources.traceIndirectArgsBuffer, Name("render.surfel_gi.trace_args"), "Surfel Trace Arguments");
-        optionalResourcesImported = surfelTraceIndirectArgs.valid();
+        const auto surfelTraceIndirectArgsResult = importBuffer(rayTracingSurfelResources.traceIndirectArgsBuffer, Name("render.surfel_gi.trace_args"), "Surfel Trace Arguments");
+        if(surfelTraceIndirectArgsResult)
+            surfelTraceIndirectArgs = *surfelTraceIndirectArgsResult;
+        optionalResourcesImported = surfelTraceIndirectArgsResult.has_value();
     }
     if(optionalResourcesImported && !useHwTrace){
         optionalResourcesImported =
@@ -256,12 +262,14 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         if(!rayTracingResources.sceneTlas)
             optionalResourcesImported = false;
         else{
-            tlas = m_deferredLightingTaskGraph.importAccelStruct(
+            const auto tlasResult = m_deferredLightingTaskGraph.importAccelStruct(
                 rayTracingResources.sceneTlas,
                 AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)
                     .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
             );
-            optionalResourcesImported = tlas.valid();
+            if(tlasResult)
+                tlas = *tlasResult;
+            optionalResourcesImported = tlasResult.has_value();
             if(optionalResourcesImported){
                 resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
             }
@@ -387,7 +395,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Core::GpuTaskId surfelGiDependency = surfelGiLifecycleResult->dependency;
 
 
-// Zero coverage is the no-op; keep its clear at the front of the GI packet.
+    // Zero coverage is the no-op; keep its clear at the front of the GI packet.
     Core::GpuTaskSchedulingHint surfelIrradianceClearScheduling;
     surfelIrradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     surfelIrradianceClearScheduling.allowPacketMerge = true;
@@ -405,14 +413,15 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         .setDependencies(&surfelGiDependency, 1u)
         .setResourceUses(&surfelIrradianceClearResourceUse, 1u)
     ;
-    const Core::GpuTaskId surfelIrradianceClearTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::FloatTextureClearGraphTask>(
+    const auto surfelIrradianceClearTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::FloatTextureClearGraphTask>(
         surfelIrradianceClearDesc,
         ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = surfelIrradiance, .subresources = ECSRenderDetail::s_FramebufferSubresources, .floatValue = ECSRenderDetail::s_SurfelIrradianceClearColor, }
     );
-    if(!surfelIrradianceClearTask.valid()){
+    if(!surfelIrradianceClearTaskResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
         return false;
     }
+    const Core::GpuTaskId surfelIrradianceClearTask = *surfelIrradianceClearTaskResult;
     m_deferredSurfelGiIrradianceClearTask = surfelIrradianceClearTask;
     surfelGiDependency = surfelIrradianceClearTask;
 
@@ -440,11 +449,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setExternalStateSources(surfelGiComputeCounterStateSources.count != 0u ? surfelGiComputeCounterStateSources.values : nullptr, surfelGiComputeCounterStateSources.count)
             .setResourceUses(ageFreeResourceUses.data(), ageFreeResourceUses.size())
         ;
-        m_deferredSurfelGiAgeFreeTask = m_raytracingSystem.declareSurfelGiAgeFreeTask(m_deferredLightingTaskGraph, ageFreeDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
-        if(!m_deferredSurfelGiAgeFreeTask.valid()){
+        const auto mDeferredSurfelGiAgeFreeTaskResult = m_raytracingSystem.declareSurfelGiAgeFreeTask(m_deferredLightingTaskGraph, ageFreeDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
+        if(!mDeferredSurfelGiAgeFreeTaskResult){
+            m_deferredSurfelGiAgeFreeTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI age/free graph task"));
             return false;
         }
+        m_deferredSurfelGiAgeFreeTask = *mDeferredSurfelGiAgeFreeTaskResult;
 
         Core::GpuTaskDesc cellHeadClearDesc;
         cellHeadClearDesc
@@ -454,11 +465,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setDependencies(&m_deferredSurfelGiAgeFreeTask, 1u)
             .setExternalStateSources(surfelGiComputeStateSource.states ? &surfelGiComputeStateSource : nullptr, surfelGiComputeStateSource.states ? 1u : 0u)
         ;
-        m_deferredSurfelGiCellHeadClearTask = m_deferredLightingTaskGraph.addClearBufferTask(cellHeadClearDesc, Core::GpuClearBufferTaskDesc{ .destination = surfelCellHead, .clearValue = NWB_SURFEL_CELL_INVALID, });
-        if(!m_deferredSurfelGiCellHeadClearTask.valid()){
+        const auto mDeferredSurfelGiCellHeadClearTaskResult = m_deferredLightingTaskGraph.addClearBufferTask(cellHeadClearDesc, Core::GpuClearBufferTaskDesc{ .destination = surfelCellHead, .clearValue = NWB_SURFEL_CELL_INVALID, });
+        if(!mDeferredSurfelGiCellHeadClearTaskResult){
+            m_deferredSurfelGiCellHeadClearTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel cell-head clear"));
             return false;
         }
+        m_deferredSurfelGiCellHeadClearTask = *mDeferredSurfelGiCellHeadClearTaskResult;
 
         hashBuildResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         hashBuildResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
@@ -471,11 +484,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setDependencies(&m_deferredSurfelGiCellHeadClearTask, 1u)
             .setResourceUses(hashBuildResourceUses.data(), hashBuildResourceUses.size())
         ;
-        m_deferredSurfelGiHashBuildTask = m_raytracingSystem.declareSurfelGiHashBuildTask(m_deferredLightingTaskGraph, hashBuildDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
-        if(!m_deferredSurfelGiHashBuildTask.valid()){
+        const auto mDeferredSurfelGiHashBuildTaskResult = m_raytracingSystem.declareSurfelGiHashBuildTask(m_deferredLightingTaskGraph, hashBuildDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
+        if(!mDeferredSurfelGiHashBuildTaskResult){
+            m_deferredSurfelGiHashBuildTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
             return false;
         }
+        m_deferredSurfelGiHashBuildTask = *mDeferredSurfelGiHashBuildTaskResult;
 
         spawnResourceUses.push_back(ReadUse(worldPosition));
         spawnResourceUses.push_back(ReadUse(normal));
@@ -489,11 +504,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         spawnResourceUses.push_back(ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource));
         Core::GpuTaskDesc spawnDesc;
         spawnDesc.setIdentity(Name("render.surfel_gi.spawn")).setMarkerLabel("Surfel GI Spawn").setScheduling(surfelGiScheduling).setDependencies(&m_deferredSurfelGiHashBuildTask, 1u).setResourceUses(spawnResourceUses.data(), spawnResourceUses.size());
-        m_deferredSurfelGiSpawnTask = m_raytracingSystem.declareSurfelGiSpawnTask(m_deferredLightingTaskGraph, spawnDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
-        if(!m_deferredSurfelGiSpawnTask.valid()){
+        const auto mDeferredSurfelGiSpawnTaskResult = m_raytracingSystem.declareSurfelGiSpawnTask(m_deferredLightingTaskGraph, spawnDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
+        if(!mDeferredSurfelGiSpawnTaskResult){
+            m_deferredSurfelGiSpawnTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
             return false;
         }
+        m_deferredSurfelGiSpawnTask = *mDeferredSurfelGiSpawnTaskResult;
 
         traceBuildArgsResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         traceBuildArgsResourceUses.push_back(ReadUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
@@ -507,11 +524,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setExternalStateSources(surfelGiComputeCounterStateSources.count != 0u ? surfelGiComputeCounterStateSources.values : nullptr, surfelGiComputeCounterStateSources.count)
             .setResourceUses(traceBuildArgsResourceUses.data(), traceBuildArgsResourceUses.size())
         ;
-        m_deferredSurfelGiTraceBuildArgsTask = m_raytracingSystem.declareSurfelGiTraceBuildArgsTask(m_deferredLightingTaskGraph, traceBuildArgsDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
-        if(!m_deferredSurfelGiTraceBuildArgsTask.valid()){
+        const auto mDeferredSurfelGiTraceBuildArgsTaskResult = m_raytracingSystem.declareSurfelGiTraceBuildArgsTask(m_deferredLightingTaskGraph, traceBuildArgsDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
+        if(!mDeferredSurfelGiTraceBuildArgsTaskResult){
+            m_deferredSurfelGiTraceBuildArgsTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
             return false;
         }
+        m_deferredSurfelGiTraceBuildArgsTask = *mDeferredSurfelGiTraceBuildArgsTaskResult;
 
         Core::GpuTaskDesc traceDesc;
         const SurfelGiTaskStateSourceSet traceStateSources = makeSurfelGiTaskStateSources(true, csgTraceContext.valid(), false);
@@ -524,11 +543,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setResourceUses(traceResourceUses.data(), traceResourceUses.size())
             .setResourceSetUses(traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, traceResourceSetUseCount)
         ;
-        m_deferredSurfelGiTraceTask = m_raytracingSystem.declareSurfelGiTraceTask(m_deferredLightingTaskGraph, traceDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
-        if(!m_deferredSurfelGiTraceTask.valid()){
+        const auto mDeferredSurfelGiTraceTaskResult = m_raytracingSystem.declareSurfelGiTraceTask(m_deferredLightingTaskGraph, traceDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
+        if(!mDeferredSurfelGiTraceTaskResult){
+            m_deferredSurfelGiTraceTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
             return false;
         }
+        m_deferredSurfelGiTraceTask = *mDeferredSurfelGiTraceTaskResult;
 
         Core::GpuTaskDesc resolveDesc;
         resolveDesc
@@ -539,11 +560,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setExternalStateSources(surfelGiComputeStateSource.states ? &surfelGiComputeStateSource : nullptr, surfelGiComputeStateSource.states ? 1u : 0u)
             .setResourceUses(resolveResourceUses.data(), resolveResourceUses.size())
         ;
-        m_deferredSurfelGiResolveTask = m_raytracingSystem.declareSurfelGiResolveTask(m_deferredLightingTaskGraph, resolveDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
-        if(!m_deferredSurfelGiResolveTask.valid()){
+        const auto mDeferredSurfelGiResolveTaskResult = m_raytracingSystem.declareSurfelGiResolveTask(m_deferredLightingTaskGraph, resolveDesc, deferredTargets, deferredLightingResources, timingTicket, asyncTiming);
+        if(!mDeferredSurfelGiResolveTaskResult){
+            m_deferredSurfelGiResolveTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));
             return false;
         }
+        m_deferredSurfelGiResolveTask = *mDeferredSurfelGiResolveTaskResult;
         surfelGiDependency = m_deferredSurfelGiResolveTask;
     }
 
@@ -559,11 +582,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(!graphOwnsSurfelGiResolve && traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, !graphOwnsSurfelGiResolve ? traceResourceSetUseCount : 0u)
     ;
-    m_deferredSurfelGiTask = m_raytracingSystem.declareSurfelGiTask(m_deferredLightingTaskGraph, desc, deferredTargets, deferredLightingResources, timingTicket, graphOwnsSurfelGiResolve ? &asyncTiming : nullptr);
-    if(!m_deferredSurfelGiTask.valid()){
+    const auto mDeferredSurfelGiTaskResult = m_raytracingSystem.declareSurfelGiTask(m_deferredLightingTaskGraph, desc, deferredTargets, deferredLightingResources, timingTicket, graphOwnsSurfelGiResolve ? &asyncTiming : nullptr);
+    if(!mDeferredSurfelGiTaskResult){
+        m_deferredSurfelGiTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));
         return false;
     }
+    m_deferredSurfelGiTask = *mDeferredSurfelGiTaskResult;
     return true;
 
 

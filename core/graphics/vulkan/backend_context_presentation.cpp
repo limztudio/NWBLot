@@ -98,8 +98,9 @@ BeginFrameResult BackendContext::beginFrame(){
     m_activeAcquireSyncSlotIndex = m_acquireSyncSlotIndex;
     m_acquireSyncSlotIndex = (m_acquireSyncSlotIndex + 1u) % static_cast<u32>(m_acquireSyncSlots.size());
     m_frameAcquired = true;
-    slot.consumerToken = m_rhiDevice->consumeAcquiredImageSemaphore(slot.semaphore);
-    if(!slot.consumerToken.valid()){
+    const auto consumerToken = m_rhiDevice->consumeAcquiredImageSemaphore(slot.semaphore);
+    if(!consumerToken || !consumerToken->valid()){
+        slot.consumerToken = {};
         slot.state = AcquireSyncSlotState::Unconsumed;
         m_rhiDevice->quarantineDevice();
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
@@ -110,6 +111,7 @@ BeginFrameResult BackendContext::beginFrame(){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to bridge an acquired WSI semaphore into a queue completion token."));
         return result;
     }
+    slot.consumerToken = *consumerToken;
     slot.state = AcquireSyncSlotState::ConsumerAccepted;
 
     if(acquiredIndex >= m_swapChainImages.size() || !m_swapChainImages[acquiredIndex].rhiHandle){
@@ -139,7 +141,8 @@ bool BackendContext::abandonAcquiredFrame(){
     UniqueLock<Futex> presentationLock(m_framePresentationMutex);
     m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
-    });
+    }
+    );
     if(!m_frameAcquired)
         return true;
     if(m_frameAbandonmentComplete){
@@ -417,9 +420,10 @@ bool BackendContext::ensureDirectPresentCommandList(const GpuPhysicalQueueId& ex
     resetDirectPresentCommandList();
     CommandListParameters commandListParams;
     commandListParams.setPhysicalQueue(executionQueue);
-    m_directPresentCommandList = m_rhiDevice->createCommandList(commandListParams);
-    if(!m_directPresentCommandList)
+    auto commandList = m_rhiDevice->createCommandList(commandListParams);
+    if(!commandList)
         return false;
+    m_directPresentCommandList = Move(*commandList);
     m_directPresentQueue = executionQueue;
     return true;
 }

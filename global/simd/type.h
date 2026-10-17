@@ -417,7 +417,7 @@ struct alignas(16) Float4{
             f32 y;
             f32 z;
             f32 w;
-    };
+        };
         struct{
             f32 r;
             f32 g;

@@ -87,8 +87,8 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     }
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::RadioGroup);
-    if(!widget || !m_context.claimState(*widget, state.instanceGeneration()))
+    const auto widget = m_context.declare(stableKey, WidgetKind::RadioGroup);
+    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
         return result;
     auto frame = Core::MakeGlobalUnique<RadioGroupFrame>(m_arena, m_arena, source, state);
     frame->m_options = options;
@@ -101,7 +101,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
         return result;
     }
     frame->m_metrics = *metrics;
-    const bool previouslyFocused = m_context.input().focus() == widget->id;
+    const bool previouslyFocused = m_context.input().focus() == (*widget)->id;
     __hidden_builder_radio_group::ReconcileGuard guard(m_context);
     for(const BuilderScopeFrame* scope = m_scope.get(); scope; scope = scope->m_parent){
         if(scope->m_popupState && !guard.add(*scope->m_popupState, scope->m_popupToken)){
@@ -129,14 +129,14 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     }
     frame->m_snapshot = state.snapshot();
     frame->m_token = { state.inputGeneration(), frame->m_choices.sourceGeneration, frame->m_choices.sourceRevision };
-    m_context.input().fenceControl(widget->id, widget->declarationGeneration, frame->m_token);
+    m_context.input().fenceControl((*widget)->id, (*widget)->declarationGeneration, frame->m_token);
     bool interactive = false;
     for(u32 index = 0u; index < frame->m_choices.count; ++index)
         interactive = interactive || frame->m_choices.rows[index].enabled;
     interactive = interactive && options.enabled;
     if(!interactive)
-        m_context.input().invalidateTarget(widget->id);
-    while(auto action = m_context.takeControlAction(*widget, interactive, frame->m_token)){
+        m_context.input().invalidateTarget((*widget)->id);
+    while(auto action = m_context.takeControlAction(**widget, interactive, frame->m_token)){
         if(!RadioGroupBehavior::Apply(state, frame->m_choices, options, *action, result)){
             result.valid = false;
             m_context.fail();
@@ -144,7 +144,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
         }
     }
     frame->m_snapshot = state.snapshot();
-    result.focused = interactive && m_context.input().focus() == widget->id;
+    result.focused = interactive && m_context.input().focus() == (*widget)->id;
     frame->m_focusOnCommit = interactive && previouslyFocused && !result.focused;
     if(!prepareRadioGroup(*frame)){
         result.valid = false;
@@ -152,7 +152,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
         return result;
     }
     Item item(m_arena);
-    item.state = *widget;
+    item.state = **widget;
     item.enabled = interactive;
     item.radioGroup = static_cast<u32>(m_scope->m_radioGroups.size());
     LayoutNodeDesc description;

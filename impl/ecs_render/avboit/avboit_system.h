@@ -75,7 +75,7 @@ namespace ECSRenderDetail{
 
 class RendererAvboitSystem final : NoCopy{
 public:
-    RendererAvboitSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererAvboitState& avboitState, RendererShaderSystem& shaderSystem, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
+    RendererAvboitSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererAvboitState& avboitState, RendererShaderSystem& shaderSystem, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept;
 
 
 public:
@@ -100,7 +100,7 @@ public:
     [[nodiscard]] bool createAvboitFrameTargets(DeferredFrameTargets& createdTargets);
     [[nodiscard]] bool registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
     [[nodiscard]] Core::Sampler& linearSampler()const noexcept;
-    [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
+    [[nodiscard]] bool prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -128,7 +128,8 @@ public:
         bool occupancyComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate.
-        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false);
+        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false
+    );
     void renderAvboitExtinctionPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -143,7 +144,8 @@ public:
         bool extinctionComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false);
+        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false
+    );
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -158,9 +160,11 @@ public:
         bool accumulationComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false);
+        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false
+    );
     void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, bool* timingRecorded = nullptr);
     void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, bool* timingRecorded = nullptr);
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

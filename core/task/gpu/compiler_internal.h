@@ -152,7 +152,7 @@ private:
 
 
 public:
-    explicit GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena);
+    explicit GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena)noexcept;
     GpuTaskSchedulingReachability(GpuTaskSchedulingReachability&&) = delete;
 
 
@@ -196,6 +196,7 @@ struct GpuTaskQueueScoringData{
     usize m_externalQueueLoadCount = 0u;
 
 
+public:
     GpuTaskQueueScoringData(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, const GpuTaskSchedulingReachability& reachability, const GpuTaskGraphQueueAssignmentOptions& options, Alloc::ScratchArena& scratchArena);
 
 

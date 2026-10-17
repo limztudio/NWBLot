@@ -36,7 +36,7 @@ public:
 
 public:
     virtual bool initialize()override;
-    virtual void finalize()override{}
+    virtual void finalize()noexcept override{}
 
 
 private:

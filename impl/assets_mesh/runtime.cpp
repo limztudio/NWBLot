@@ -64,15 +64,15 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!Core::Assets::ReadCompletePayload(binary, cursor, loadFailureContext))
         return false;
 
-    if(!candidate.validatePayload())
+    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
+    if(!candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;
 }
 
 
-bool Mesh::validatePayload()const{
-    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
+bool Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(hasIncompleteGeometryPayload()){
@@ -86,7 +86,7 @@ bool Mesh::validatePayload()const{
         return false;
     }
 
-    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(*this, 0u, false, NWB_TEXT("Mesh::validatePayload"), meshPathText))
+    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(scratchArena, *this, 0u, false, NWB_TEXT("Mesh::validatePayload"), meshPathText))
         return false;
 
     return true;

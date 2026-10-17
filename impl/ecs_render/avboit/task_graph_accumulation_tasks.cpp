@@ -33,19 +33,34 @@ namespace RendererTaskGraphDetail{
 
     static_cast<void>(context);
     const AvboitComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
-    return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &payload.accumulationTiming, trait);
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.accumulationTiming, trait);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] bool AvboitAccumulationSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &payload.accumulationTiming, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait);
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.accumulationTiming, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] bool AvboitAccumulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
     return RecordAvboitRasterPassFromPayload(
+        scratchArena,
         payload,
         commandList,
         context,
@@ -74,6 +89,10 @@ namespace RendererTaskGraphDetail{
         }
     );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] bool AvboitAccumulationFinalizeGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
     static_cast<void>(payload);

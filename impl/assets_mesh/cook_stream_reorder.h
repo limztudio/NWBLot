@@ -34,6 +34,8 @@ struct MeshCookCommonStreamReorder{
     ScratchVector<u32> uv0Remap;
     ScratchVector<u32> colorRemap;
 
+
+public:
     MeshCookCommonStreamReorder(Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena)noexcept
         : positions(assetArena)
         , normals(assetArena)

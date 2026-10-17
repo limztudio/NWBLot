@@ -239,7 +239,7 @@ void WaylandTextInputService::releaseDevice(){
     clearPending();
 }
 
-void WaylandTextInputService::clearPending(){
+void WaylandTextInputService::clearPending()noexcept{
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     m_pendingPreedit.clear();
     m_pendingCommit.clear();
@@ -268,10 +268,10 @@ bool WaylandTextInputService::flush(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<ITextInputService> CreateWaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface){
+Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface){
     auto service = MakeGlobalUnique<WaylandTextInputService>(arena, arena, display, surface);
-    if(!service->initialize())
-        return nullptr;
+    if(!service || !service->initialize())
+        return MakeUnexpected(Failure{});
     return service;
 }
 

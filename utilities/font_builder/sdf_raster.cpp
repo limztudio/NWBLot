@@ -19,8 +19,8 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
-    RasterGlyphs glyphs(font.bytes().get_allocator().arena());
-    FT_Face face = font.face();
+    RasterGlyphs glyphs(font.m_bytes.get_allocator().arena());
+    FT_Face face = font.m_face;
     const SIMDVectorSingle designPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(face->units_per_EM)), VectorReplicate(static_cast<f32>(options.ppem)));
     const u64 capacity = static_cast<u64>(options.extent) * options.extent * 4u * options.maxGroups;
     u64 rasterBytes = 0u;
@@ -28,8 +28,9 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
     for(u32 glyphId = 0u; glyphId < static_cast<u32>(face->num_glyphs); ++glyphId){
         RasterGlyph glyph(glyphs.get_allocator().arena());
         glyph.record.glyphId = glyphId;
-        if(FT_Load_Glyph(face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: design metrics failed for glyph {}"), glyphId);
+        const FT_Error loaded = FT_Load_Glyph(face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
+        if(loaded != 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: design metrics failed for glyph {}, FreeType error {}"), glyphId, loaded);
             return MakeUnexpected(Failure{});
         }
         glyph.record.advanceUnits = static_cast<f32>(face->glyph->advance.x);

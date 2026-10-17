@@ -55,7 +55,6 @@ namespace ECSRenderDetail{
 
 
 // The material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: every interval record pass works against this frame's bindings.
-// Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
 struct CsgOpaqueIntervalRecordInputs{
     RendererMaterialSystem& materialSystem;
     RendererCsgSystem& csgSystem;
@@ -69,6 +68,8 @@ struct CsgOpaqueIntervalRecordInputs{
     bool materialDrawBuffersUploaded = false;
     bool csgFrameBuffersUploaded = false;
 
+
+public:
     explicit CsgOpaqueIntervalRecordInputs(
         Core::Alloc::GlobalArena& arena,
         RendererMaterialSystem& materialSystemIn,
@@ -77,7 +78,7 @@ struct CsgOpaqueIntervalRecordInputs{
         Core::GpuTimingSubmissionTicket*& timingTicketIn,
         const bool& meshViewSetupReadyIn,
         const bool& sceneShadingSetupReadyIn
-    )
+    )noexcept
         : materialSystem(materialSystemIn)
         , csgSystem(csgSystemIn)
         , targets(targetsIn)
@@ -95,6 +96,8 @@ struct CsgReceiverSpanBuildGraphTask{
         using CsgOpaqueIntervalRecordInputs::CsgOpaqueIntervalRecordInputs;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
@@ -107,6 +110,8 @@ struct CsgIntervalCombineGraphTask{
         using CsgOpaqueIntervalRecordInputs::CsgOpaqueIntervalRecordInputs;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
@@ -117,7 +122,6 @@ struct CsgIntervalSampleGraphTask{
 
     // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: interval sample always rasterizes this frame's CSG pass.
     // The compute-emulation timing stays optional: it is bound only when the emulation output is graph-owned.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -137,6 +141,8 @@ struct CsgIntervalSampleGraphTask{
         bool csgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* opaqueCsgComputeEmulationTiming = nullptr;
 
+
+    public:
         explicit Payload(
             Core::Alloc::GlobalArena& arena,
             Core::GraphicsRuntime& graphicsIn,
@@ -146,9 +152,11 @@ struct CsgIntervalSampleGraphTask{
             Core::GpuTimingSubmissionTicket*& timingTicketIn,
             const bool& meshViewSetupReadyIn,
             const bool& sceneShadingSetupReadyIn
-        );
+        )noexcept;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){

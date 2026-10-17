@@ -53,7 +53,7 @@ TEST(ModelRuntime, RemovingMultipleModelsDestroysEveryOwnedObjectInOneSync){
     }
 
     context.system.prepare(world);
-    context.system.update(world, 0.0f);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
     for(const auto owner : removedOwners){
         EXPECT_TRUE(world.entity(owner).alive());
         EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(owner), nullptr);
@@ -85,7 +85,7 @@ TEST(ModelRuntime, InvalidBindingsAndRemovedModelsUseIndependentCleanupBatches){
     world.entity(removedOwner).removeComponent<ModelComponent>();
 
     context.system.syncModelRuntimes();
-    context.system.update(world, 0.0f);
+    ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FALSE(world.entity(invalidObject).alive());
     EXPECT_FALSE(world.entity(removedObject).alive());
     EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(invalidOwner), nullptr);

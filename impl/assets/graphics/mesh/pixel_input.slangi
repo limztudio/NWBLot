@@ -65,6 +65,10 @@ struct NwbMeshSurfaceInputs{
     float3 incidentDirection;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Loads the surface-input statics a hook reads. Raster and trace paths both route through here so the hook sees the same inputs regardless of stage.
 void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
     inColor = inputs.color;

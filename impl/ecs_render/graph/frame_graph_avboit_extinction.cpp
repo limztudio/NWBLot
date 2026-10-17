@@ -2,11 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/graph/frame_graph_avboit_extinction.h>
+#include "frame_graph_avboit_extinction.h"
 
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 #include <impl/ecs_render/avboit/material_upload_builder.h>
 #include <impl/ecs_render/avboit/geometry_preparation_builder.h>
@@ -25,7 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
+FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem){
@@ -33,6 +32,7 @@ FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(Cor
 
 
 Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploadChain::declare(
+    Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitExtinctionUploadInputs& inputs,
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload,
@@ -65,19 +65,17 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
     usize extinctionSharedComputeEmulationInstanceCount = 0u;
     usize extinctionSharedComputeEmulationMaterialTypedByteCount = 0u;
     bool extinctionMaterialSampledTexturesCollected = false;
-    Core::Alloc::ScratchArena extinctionMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId extinctionMaterialGeometrySet;
     Core::GpuGraphResourceSetId extinctionMaterialSampledTextureSet;
     result.uploadTask = extinctionUploadTask;
     if(inputs.hasTransparentRenderers){
-        Core::Alloc::ScratchArena extinctionUploadScratch(RendererArenaScope::s_TaskGraphArena);
-        MaterialPassDrawItemPartitions extinctionDrawItems{ extinctionUploadScratch };
-        InstanceGpuDataVector extinctionInstanceData{ extinctionUploadScratch };
-        CsgFrameGpuData extinctionCsgFrameData{ extinctionUploadScratch };
+        MaterialPassDrawItemPartitions extinctionDrawItems{ scratchArena };
+        InstanceGpuDataVector extinctionInstanceData{ scratchArena };
+        CsgFrameGpuData extinctionCsgFrameData{ scratchArena };
 #if defined(NWB_DEBUG)
-        ECSRenderDetail::MaterialTypedInstanceRangeVector extinctionMaterialTypedRanges{ extinctionUploadScratch };
+        ECSRenderDetail::MaterialTypedInstanceRangeVector extinctionMaterialTypedRanges{ scratchArena };
 #endif
-        MaterialTypedByteDataVector extinctionMaterialTypedBytes{ extinctionUploadScratch };
+        MaterialTypedByteDataVector extinctionMaterialTypedBytes{ scratchArena };
         AvboitPassUploadHelper extinctionUploadHelper(m_materialSystem);
         auto extinctionUploadResult = extinctionUploadHelper.gather(
             AvboitPassUploadInputs{
@@ -100,7 +98,8 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
 #if defined(NWB_DEBUG)
             extinctionMaterialTypedRanges,
 #endif
-            extinctionMaterialTypedBytes);
+            extinctionMaterialTypedBytes
+        );
         if(!extinctionUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
             return MakeUnexpected(Failure{});
@@ -114,7 +113,7 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
         if(extinctionUploadResult->hasDrawItems){
 
             const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = { &extinctionDrawItems.regular, &extinctionDrawItems.csg, };
-            AvboitGeometryPreparationBuilder extinctionGeometryPreparationBuilder(m_graph, m_materialSystem, extinctionMaterialGeometryScratch);
+            AvboitGeometryPreparationBuilder extinctionGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
             auto extinctionGeometryPreparationResult = extinctionGeometryPreparationBuilder.declare(
                 AvboitGeometryPreparationInputs{ .drawItemSets = extinctionMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(extinctionMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Extinction, }
             );
@@ -181,7 +180,7 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
                 },
                 avboitExtinctionComputeEmulationPayload.plan,
                 avboitExtinctionComputeEmulationPayload.csgPlan,
-                extinctionUploadScratch,
+                scratchArena,
                 extinctionInstanceData.size(),
                 extinctionMaterialTypedBytes.size()
             );

@@ -21,7 +21,7 @@ namespace GlobalFilesystemRetentionDetail{
 
 struct KeepAllEntries{
     template<typename PathT>
-    [[nodiscard]] bool operator()(const PathT&)const noexcept{
+    [[nodiscard]] Expected<bool, ErrorCode> operator()(const PathT&)const noexcept{
         return true;
     }
 };
@@ -37,42 +37,49 @@ struct KeepAllEntries{
 
 
 template<typename ArenaT, typename PredicateT>
-[[nodiscard]] inline bool ApplyDirectoryRetention(ArenaT& arena, const Path<ArenaT>& directory, const usize maxEntries, PredicateT&& shouldRetainPath){
+[[nodiscard]] inline Expected<void, ErrorCode> ApplyDirectoryRetention(ArenaT& arena, const Path<ArenaT>& directory, const usize maxEntries, PredicateT&& shouldRetainPath){
     if(maxEntries == 0u)
-        return true;
+        return {};
 
     const auto exists = IsDirectory(directory);
     if(!exists)
-        return false;
+        return MakeUnexpected(exists.error());
     if(!*exists)
-        return true;
+        return {};
 
     Vector<Path<ArenaT>, ArenaT> entries{arena};
     auto directoryIt = DirectoryIterator<ArenaT>::Create(directory);
     if(!directoryIt)
-        return false;
+        return MakeUnexpected(directoryIt.error());
 
+    entries.reserve(static_cast<usize>(directoryIt->end() - directoryIt->begin()));
     for(const auto& entry : *directoryIt){
-        if(shouldRetainPath(entry.path()))
+        const auto retained = shouldRetainPath(entry.path());
+        if(!retained)
+            return MakeUnexpected(retained.error());
+        if(*retained)
             entries.emplace_back(arena, entry.path());
     }
 
     if(entries.size() <= maxEntries)
-        return true;
+        return {};
 
     Sort(entries.begin(), entries.end());
 
-    bool ok = true;
+    ErrorCode firstError;
     const usize removeCount = entries.size() - maxEntries;
     for(usize i = 0u; i < removeCount; ++i){
-        if(!RemoveAllIfExists(entries[i]))
-            ok = false;
+        const auto removed = RemoveAllIfExists(entries[i]);
+        if(!removed && !firstError)
+            firstError = removed.error();
     }
-    return ok;
+    if(firstError)
+        return MakeUnexpected(firstError);
+    return {};
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool ApplyDirectoryRetention(ArenaT& arena, const Path<ArenaT>& directory, const usize maxEntries){
+[[nodiscard]] inline Expected<void, ErrorCode> ApplyDirectoryRetention(ArenaT& arena, const Path<ArenaT>& directory, const usize maxEntries){
     return ApplyDirectoryRetention(arena, directory, maxEntries, GlobalFilesystemRetentionDetail::KeepAllEntries{});
 }
 

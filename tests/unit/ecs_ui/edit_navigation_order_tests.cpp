@@ -30,8 +30,9 @@ TEST_F(UiEditNavigationHostTests, CopiedCommitDownAndCommitResolveTheCurrentEven
     const auto& record = m_resolver.records.front();
     EXPECT_EQ(record.text, "aQb\ncdef\nxy");
     EXPECT_EQ(record.caret, 2u);
-    EXPECT_FLOAT_EQ(record.result.preferredX, 20.0f);
-    EXPECT_EQ(record.result.committedByte, 6u);
+    ASSERT_TRUE(record.result);
+    EXPECT_FLOAT_EQ(record.result->preferredX, 20.0f);
+    EXPECT_EQ(record.result->committedByte, 6u);
     EXPECT_EQ(m_navigationModel.text(), "aQb\ncd!ef\nxy");
     EXPECT_EQ(m_navigationModel.caret(), 7u);
     ASSERT_TRUE(m_navigationModel.undo());
@@ -51,8 +52,10 @@ TEST_F(UiEditNavigationHostTests, RepeatedVerticalMovementPreservesTheColumnAcro
     ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::KeyUp, .key = Core::Key::Down, .shift = true }));
     ASSERT_TRUE(navigationFrame());
     ASSERT_EQ(m_resolver.records.size(), 2u);
-    EXPECT_EQ(m_resolver.records[0u].result.committedByte, 8u);
-    EXPECT_EQ(m_resolver.records[1u].result.committedByte, 14u);
+    ASSERT_TRUE(m_resolver.records[0u].result);
+    EXPECT_EQ(m_resolver.records[0u].result->committedByte, 8u);
+    ASSERT_TRUE(m_resolver.records[1u].result);
+    EXPECT_EQ(m_resolver.records[1u].result->committedByte, 14u);
     EXPECT_TRUE(m_resolver.records[1u].navigation.valid);
     EXPECT_FLOAT_EQ(m_resolver.records[1u].navigation.preferredX, 50.0f);
     EXPECT_EQ(m_navigationModel.anchor(), 5u);
@@ -61,8 +64,10 @@ TEST_F(UiEditNavigationHostTests, RepeatedVerticalMovementPreservesTheColumnAcro
     ASSERT_TRUE(key(Core::Key::Up));
     ASSERT_TRUE(navigationFrame());
     ASSERT_EQ(m_resolver.records.size(), 4u);
-    EXPECT_EQ(m_resolver.records[2u].result.committedByte, 8u);
-    EXPECT_EQ(m_resolver.records[3u].result.committedByte, 5u);
+    ASSERT_TRUE(m_resolver.records[2u].result);
+    EXPECT_EQ(m_resolver.records[2u].result->committedByte, 8u);
+    ASSERT_TRUE(m_resolver.records[3u].result);
+    EXPECT_EQ(m_resolver.records[3u].result->committedByte, 5u);
     EXPECT_FLOAT_EQ(m_resolver.records[3u].navigation.preferredX, 50.0f);
     EXPECT_EQ(m_navigationModel.anchor(), 5u);
     EXPECT_EQ(m_navigationModel.caret(), 5u);
@@ -84,7 +89,8 @@ TEST_F(UiEditNavigationHostTests, AcceptedEndpointNoOpResetsThePreferredColumn){
     ASSERT_EQ(m_resolver.records.size(), 2u);
     EXPECT_GT(m_resolver.records.back().selectionGeneration, selectionGeneration);
     EXPECT_FALSE(m_resolver.records.back().navigation.valid);
-    EXPECT_FLOAT_EQ(m_resolver.records.back().result.preferredX, 10.0f);
+    ASSERT_TRUE(m_resolver.records.back().result);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().result->preferredX, 10.0f);
     EXPECT_EQ(m_navigationModel.caret(), 10u);
     EXPECT_FALSE(m_navigationModel.canUndo());
 }
@@ -101,7 +107,8 @@ TEST_F(UiEditNavigationHostTests, AcceptedNativeInsertionReseedsTheNextVerticalM
     ASSERT_EQ(m_resolver.records.size(), 2u);
     EXPECT_FALSE(m_resolver.records.back().navigation.valid);
     EXPECT_EQ(m_resolver.records.back().text, "abcdef\nxz\nabcdef");
-    EXPECT_FLOAT_EQ(m_resolver.records.back().result.preferredX, 20.0f);
+    ASSERT_TRUE(m_resolver.records.back().result);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().result->preferredX, 20.0f);
     EXPECT_EQ(m_navigationModel.caret(), 12u);
     ASSERT_TRUE(m_navigationModel.undo());
     EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
@@ -130,7 +137,8 @@ TEST_F(UiEditNavigationHostTests, AppliedDelayedPasteResetsTheColumnAtItsComplet
     ASSERT_TRUE(navigationFrame());
     ASSERT_EQ(m_resolver.records.size(), 2u);
     EXPECT_FALSE(m_resolver.records.back().navigation.valid);
-    EXPECT_FLOAT_EQ(m_resolver.records.back().result.preferredX, 30.0f);
+    ASSERT_TRUE(m_resolver.records.back().result);
+    EXPECT_FLOAT_EQ(m_resolver.records.back().result->preferredX, 30.0f);
     EXPECT_EQ(m_navigationModel.caret(), 14u);
 }
 
@@ -195,7 +203,8 @@ TEST_F(UiEditNavigationHostTests, NewlineThenDownShapesTheNewHardLineBeforeLater
     ASSERT_EQ(m_resolver.records.size(), 1u);
     EXPECT_EQ(m_resolver.records.front().text, "a\nb\ncdef");
     EXPECT_EQ(m_resolver.records.front().caret, 2u);
-    EXPECT_EQ(m_resolver.records.front().result.committedByte, 4u);
+    ASSERT_TRUE(m_resolver.records.front().result);
+    EXPECT_EQ(m_resolver.records.front().result->committedByte, 4u);
     EXPECT_EQ(m_navigationModel.text(), "a\nb\n!cdef");
     EXPECT_EQ(m_navigationModel.caret(), 5u);
     EXPECT_FALSE(m_result.submitted);

@@ -62,12 +62,20 @@ void GpuPersistentResourceStateCache::reset()noexcept{
     m_buffers.clear();
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void GpuPersistentResourceStateCache::Candidate::reset()noexcept{
     m_states.reset();
     m_textures.clear();
     m_buffers.clear();
     m_consumed = false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 bool GpuPersistentResourceStateCache::replaceResourceSubset(
     const CommandListResourceStateHandoff& source,

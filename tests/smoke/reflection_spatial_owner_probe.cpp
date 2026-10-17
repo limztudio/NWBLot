@@ -77,8 +77,7 @@ bool ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& stati
         || !m_phaseWork.valid() || statistics.graphicsFrameIndex < m_phaseWork.lastSampleFrameIndex
     )
         return true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWarm: index={} sequence={} generation={} graphics_frame={} epoch={}")
-        NWB_TEXT(" start_graphics_frame={} sample_index={} seed={} work_publish={} work_first={} work_last={} work_samples={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWarm: index={} sequence={} generation={} graphics_frame={} epoch={}") NWB_TEXT(" start_graphics_frame={} sample_index={} seed={} work_publish={} work_first={} work_last={} work_samples={}")
         , m_phase, statistics.sequence, statistics.generation, statistics.graphicsFrameIndex, statistics.historyEpoch
         , statistics.historyStartGraphicsFrame, statistics.sampleIndex, statistics.samplingSeed
         , m_phaseWork.publishFrameIndex, m_phaseWork.firstSampleFrameIndex, m_phaseWork.lastSampleFrameIndex, m_phaseWork.sampleCount

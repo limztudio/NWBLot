@@ -84,7 +84,7 @@ public:
     [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const noexcept override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }
-    virtual void update(Core::ECS::World& world, f32 delta)override;
+    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;

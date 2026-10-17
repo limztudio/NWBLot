@@ -28,6 +28,10 @@ namespace __hidden_contract_boundary_tests{
 constexpr u32 s_ConversionFailure = 0xE301u;
 constexpr u32 s_DeleterTag = 47u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T>
 void VerifySignedLowerSaturation(){
     constexpr T s_Minimum = Limit<T>::s_Min;
@@ -61,6 +65,9 @@ struct PotentiallyThrowingPointerDestruction{
 
 public:
     ~PotentiallyThrowingPointerDestruction()noexcept(false){}
+
+
+public:
     [[nodiscard]] operator int*()const noexcept{ return value; }
 };
 
@@ -105,6 +112,8 @@ public:
         , deleteCount(other.deleteCount)
     {}
 
+
+public:
     void operator()(T* value)const noexcept{
         ++deleteCount;
         delete value;

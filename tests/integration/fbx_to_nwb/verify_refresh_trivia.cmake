@@ -3,6 +3,57 @@ cmake_minimum_required(VERSION 3.25)
 include("${CMAKE_CURRENT_LIST_DIR}/fbx_to_nwb_test_helpers.cmake")
 
 file(MAKE_DIRECTORY "${OUTPUT_DIR}")
+# Canonical identity follows the existing emitted float policy, including signed zero and tiny values.
+set(identity_source [=[mesh asset;
+asset.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0]];
+asset.normals = [[0.0, 0, 1], [-0.0, 0, 1], [0.0, 0, 1]];
+asset.tangents = [[0.0, 1, 0, 1], [-0.0, 1, 0, 1], [0.0, 1, 0, 1]];
+asset.uv0 = [[0.0, 0], [-0.0, 0], [0.000000001, 0]];
+asset.colors = [[0.0, 1, 1, 1], [-0.0, 1, 1, 1], [0.000000001, 1, 1, 1]];
+asset.vertex_refs = [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2]];
+asset.indices = [[0, 1, 2]];
+]=])
+string(REPLACE "\r\n" "\n" identity_source "${identity_source}")
+if(NOT CMAKE_HOST_WIN32)
+    string(REPLACE "\n" "\r\n" identity_source "${identity_source}")
+endif()
+set(identity_input "${OUTPUT_DIR}/emitted_identity.nwb")
+set(identity_output "${OUTPUT_DIR}/emitted_identity_refreshed.nwb")
+set(identity_repeat "${OUTPUT_DIR}/emitted_identity_repeat.nwb")
+file(WRITE "${identity_input}" "${identity_source}")
+execute_process(COMMAND "${FBX_TO_NWB_EXE}" "${identity_input}" --output "${identity_output}" --refresh-nwb --yes --force RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr TIMEOUT 30)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Emitted-identity refresh failed: ${stdout}\n${stderr}")
+endif()
+nwb_require_crlf_text_file("${identity_output}" "Emitted-identity refresh")
+file(READ "${identity_output}" identity_refreshed)
+string(REPLACE "\r\n" "\n" identity_refreshed "${identity_refreshed}")
+foreach(field IN ITEMS normals tangents uv0 colors)
+    nwb_extract_asset_list_body("${identity_refreshed}" "asset.${field} = [" body)
+    string(REGEX MATCHALL "\\[[^]\r\n]+\\]" entries "${body}")
+    list(LENGTH entries count)
+    if(NOT count EQUAL 1)
+        message(FATAL_ERROR "Emitted-identity ${field} must contain one canonical record, got ${count}")
+    endif()
+endforeach()
+nwb_extract_asset_list_body("${identity_refreshed}" "asset.vertex_refs = [" identity_refs)
+string(REGEX REPLACE "[ \t\r\n]" "" identity_refs "${identity_refs}")
+if(NOT identity_refs STREQUAL "[0,0,0,0,0],[1,0,0,0,0],[2,0,0,0,0],")
+    message(FATAL_ERROR "Emitted-identity refresh lost position/value associations: ${identity_refs}")
+endif()
+execute_process(COMMAND "${FBX_TO_NWB_EXE}" "${identity_output}" --output "${identity_repeat}" --refresh-nwb --yes --force RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr TIMEOUT 30)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Emitted-identity repeated refresh failed: ${stdout}\n${stderr}")
+endif()
+file(READ "${identity_output}" identity_first_bytes HEX)
+file(READ "${identity_repeat}" identity_repeat_bytes HEX)
+if(NOT identity_first_bytes STREQUAL identity_repeat_bytes)
+    message(FATAL_ERROR "Emitted-identity refresh must be byte-idempotent after its first pass")
+endif()
+if(FBX_REFRESH_EMITTED_IDENTITY_ONLY)
+    return()
+endif()
+
 set(mesh_source [=[mesh asset;
 
 @positions_assignment@ [
@@ -55,7 +106,7 @@ foreach(case_name IN ITEMS comments trivia)
     if(NOT result EQUAL 0)
         message(FATAL_ERROR "fbx_to_nwb refresh rejected valid ${case_name}:\n${stdout}\n${stderr}")
     endif()
-    require_crlf_text_file("${output_path}" "${case_name} refresh")
+    nwb_require_crlf_text_file("${output_path}" "${case_name} refresh")
     file(READ "${output_path}" refreshed)
     string(REPLACE "\r\n" "\n" refreshed "${refreshed}")
     string(FIND "${refreshed}" "${decoys}" decoy_offset)

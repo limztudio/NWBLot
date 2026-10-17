@@ -25,6 +25,8 @@ struct SamplerGpuResource final : NoCopy{
     Core::SamplerHandle sampler;
     Core::GpuDescriptorHandle samplerHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return sampler != nullptr && samplerHeapHandle.valid();
     }

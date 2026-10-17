@@ -128,7 +128,11 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is completing an interrupted descriptor-buffer lifecycle transition."));
     }
 
-    savePipelineCacheData();
+    {
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PipelineCacheSaveArena);
+
+        savePipelineCacheData(scratchArena);
+    }
     m_gpuDescriptorHeap.shutdownForDeviceTeardown();
     m_descriptorBufferManager.shutdownForDeviceTeardown();
 }

@@ -67,8 +67,12 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_shadow_visibility")
     ;
-    history.shadowVisibility = m_graphics.createTexture(shadowHistoryDesc);
-    if(!history.shadowVisibility){
+    auto shadowVisibilityResult = m_graphics.createTexture(shadowHistoryDesc);
+    if(shadowVisibilityResult)
+        history.shadowVisibility = Move(*shadowVisibilityResult);
+    else
+        history.shadowVisibility.reset();
+    if(!shadowVisibilityResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged shadow-visibility history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
@@ -84,21 +88,28 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_caustic_irradiance")
     ;
-    history.causticIrradiance = m_graphics.createTexture(irradianceHistoryDesc);
-    if(!history.causticIrradiance){
+    auto causticIrradianceResult = m_graphics.createTexture(irradianceHistoryDesc);
+    if(causticIrradianceResult)
+        history.causticIrradiance = Move(*causticIrradianceResult);
+    else
+        history.causticIrradiance.reset();
+    if(!causticIrradianceResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged caustic-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
 
     irradianceHistoryDesc.setFormat(targets.surfelIrradianceFormat).setName("engine/temporal/lagged_surfel_irradiance");
-    history.surfelIrradiance = m_graphics.createTexture(irradianceHistoryDesc);
-    if(!history.surfelIrradiance){
+    auto surfelIrradianceResult = m_graphics.createTexture(irradianceHistoryDesc);
+    if(surfelIrradianceResult)
+        history.surfelIrradiance = Move(*surfelIrradianceResult);
+    else
+        history.surfelIrradiance.reset();
+    if(!surfelIrradianceResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
-
 
 
     const auto descriptorsRegistered = [&]() -> Expected<void>{
@@ -156,8 +167,12 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    history.slotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
-    if(!history.slotsBuffer){
+    auto slotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
+    if(slotsBufferResult)
+        history.slotsBuffer = Move(*slotsBufferResult);
+    else
+        history.slotsBuffer.reset();
+    if(!slotsBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged lighting-history slot buffer"));
         resetLaggedLightingHistoryResources(targets);
         return false;

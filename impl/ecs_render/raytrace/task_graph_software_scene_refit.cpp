@@ -43,6 +43,8 @@ struct RefitTask{
         SoftwareSceneRefitHandle snapshot;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.snapshot || context.commandIrCapture)
             return false;
@@ -71,21 +73,22 @@ struct RefitTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(Core::GpuTaskGraph& graph, const SoftwareSceneRefitHandle& snapshot, const Core::GpuGraphResourceId sceneNodes, const Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena){
+Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(Core::GpuTaskGraph& graph, const SoftwareSceneRefitHandle& snapshot, const Core::GpuGraphResourceId sceneNodes, const Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena){
     if(!snapshot || !sceneNodes.valid() || !dependency.valid() || snapshot->inputs.empty())
-        return {};
+        return MakeUnexpected(Failure{});
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         if(!declarations.valid() || declarations.findImportedBuffer(snapshot->sceneNodes) != sceneNodes)
-            return {};
+            return MakeUnexpected(Failure{});
     }
-    const Core::GpuGraphResourceId input = graph.importBuffer(
+    const auto inputResult = graph.importBuffer(
         snapshot->inputBuffer,
         RendererTaskGraphDetail::BufferResourceDesc(Name("software_scene_refit_inputs"), "Software Scene Refit Inputs")
             .setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common)
     );
-    if(!input.valid())
-        return {};
+    if(!inputResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceId input = *inputResult;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses(scratchArena);
     uses.reserve(snapshot->meshNodes.size() + 2u);
     uses.push_back(RendererTaskGraphDetail::ReadUse(input, Core::ResourceStates::ShaderResource));
@@ -96,17 +99,18 @@ SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(Core::GpuTaskGraph& graph
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
             if(!declarations.valid())
-                return {};
+                return MakeUnexpected(Failure{});
             resource = declarations.findImportedBuffer(root);
         }
         if(!resource.valid())
-            return {};
+            return MakeUnexpected(Failure{});
         if(FindIf(uses.begin(), uses.end(), [&](const auto& use)noexcept{ return use.resource == resource; }) == uses.end())
             uses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
-    const Core::GpuUploadBlobId upload = graph.copyUploadData(snapshot->inputs.data(), snapshot->inputs.size() * sizeof(SoftwareSceneRefitInstanceGpu), alignof(u32));
-    if(!upload.valid())
-        return {};
+    const auto uploadResult = graph.copyUploadData(snapshot->inputs.data(), snapshot->inputs.size() * sizeof(SoftwareSceneRefitInstanceGpu), alignof(u32));
+    if(!uploadResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuUploadBlobId upload = *uploadResult;
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.allowPacketMerge = true;
@@ -115,19 +119,26 @@ SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(Core::GpuTaskGraph& graph
     Core::GpuTaskDesc uploadDesc;
     uploadDesc.setIdentity(Name("render.shadow_prepare.scene_refit_inputs_upload")).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(scheduling).setDependencies(&dependency, 1u);
     SoftwareSceneRefitGraphTasks result;
-    result.inputUpload = graph.addUploadBufferTask(
+    const auto resultInputUploadResult = graph.addUploadBufferTask(
         uploadDesc,
         Core::GpuUploadBufferTaskDesc{
             .source = upload,
             .destination = input,
             // Retained storage restores Common; the refit read owns the following SRV transition.
-            .finalState = Core::ResourceStates::Common, });
-    if(!result.inputUpload.valid())
-        return {};
+            .finalState = Core::ResourceStates::Common, }
+    );
+    if(!resultInputUploadResult){
+        result.inputUpload = {};
+        return MakeUnexpected(Failure{});
+    }
+    result.inputUpload = *resultInputUploadResult;
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("render.shadow_prepare.scene_refit")).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependencies(&result.inputUpload, 1u).setResourceUses(uses.data(), uses.size());
-    result.refit = graph.addTask<__hidden_task_graph_software_scene_refit::RefitTask>(desc, __hidden_task_graph_software_scene_refit::RefitTask::Payload{ snapshot });
-    return result.refit.valid() ? result : SoftwareSceneRefitGraphTasks{};
+    const auto refitResult = graph.addTask<__hidden_task_graph_software_scene_refit::RefitTask>(desc, __hidden_task_graph_software_scene_refit::RefitTask::Payload{ snapshot });
+    if(!refitResult)
+        return MakeUnexpected(refitResult.error());
+    result.refit = *refitResult;
+    return result;
 }
 
 

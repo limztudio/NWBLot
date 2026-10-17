@@ -10,6 +10,8 @@
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/api.h>
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -131,7 +133,8 @@ struct DeviceDesc{
     Filesystem::FilesystemFactory filesystemFactory;
 
 
-    explicit DeviceDesc(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef)
+public:
+    explicit DeviceDesc(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef)noexcept
         : allocator(allocatorRef)
         , cpuScheduler(cpuSchedulerRef)
         , pipelineCacheDirectory(allocatorRef.getObjectArena())
@@ -142,7 +145,7 @@ struct DeviceDesc{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern DeviceHandle CreateDevice(const DeviceDesc& desc);
+extern Expected<DeviceHandle> CreateDevice(const DeviceDesc& desc);
 
 extern VkFormat ConvertFormat(Format::Enum format)noexcept;
 

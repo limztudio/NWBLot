@@ -6,11 +6,9 @@
 
 #include <global/blocking_io.h>
 #include <global/scope_exit.h>
-#include <global/termination.h>
 
 #include <cstdlib>
 #include <cstring>
-#include <exception>
 #include <windows.h>
 
 
@@ -29,10 +27,67 @@ namespace __hidden_crash_win32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_HandlerCommandLineReserveSlack = 160u;
 inline constexpr DWORD s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr DWORD s_CrashWaitHandleCount = 2u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Detail::PlatformFailure NativeFailure(const Detail::PlatformOperation::Enum operation, const DWORD code)noexcept{
+    return { operation, Detail::PlatformErrorDomain::Windows, static_cast<u64>(code) };
+}
+
+[[nodiscard]] static Expected<void, Detail::PlatformFailure> ReleaseOwnedHandle(HANDLE& handle, const HANDLE emptyValue = nullptr)noexcept{
+    const HANDLE owned = handle;
+    handle = emptyValue;
+    if(!owned || owned == INVALID_HANDLE_VALUE)
+        return {};
+    if(!CloseHandle(owned))
+        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::CloseHandle, GetLastError()));
+    return {};
+}
+
+static void CleanupOwnedHandle(HANDLE& handle, Detail::PlatformCleanupObservations& observations, const HANDLE emptyValue = nullptr)noexcept{
+    const auto released = ReleaseOwnedHandle(handle, emptyValue);
+    if(!released)
+        observations.record(released.error());
+}
+
+static void WaitForOwnedProcess(const HANDLE process, const bool terminateImmediately, Detail::PlatformCleanupObservations& observations)noexcept{
+    if(!process || process == INVALID_HANDLE_VALUE)
+        return;
+    DWORD waited = WaitForSingleObject(process, terminateImmediately ? 0u : s_HandlerExitWaitMilliseconds);
+    bool terminated = false;
+    if(!terminateImmediately && waited != WAIT_OBJECT_0){
+        // Preserve detached upload completion after the existing bounded normal shutdown wait.
+        observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
+        return;
+    }
+    if(waited != WAIT_OBJECT_0){
+        if(waited != WAIT_TIMEOUT)
+            observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_INVALID_DATA));
+        if(!TerminateProcess(process, ERROR_CANCELLED)){
+            const DWORD error = GetLastError();
+            waited = WaitForSingleObject(process, 0u);
+            if(waited != WAIT_OBJECT_0)
+                observations.record(NativeFailure(Detail::PlatformOperation::TerminateProcess, error));
+        }
+        else{
+            terminated = true;
+            waited = WaitForSingleObject(process, s_HandlerExitWaitMilliseconds);
+        }
+        if(waited != WAIT_OBJECT_0){
+            observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
+            return;
+        }
+    }
+    DWORD exitCode = 0u;
+    if(!GetExitCodeProcess(process, &exitCode))
+        observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, GetLastError()));
+    else if(exitCode != 0u && !terminated)
+        observations.record({ Detail::PlatformOperation::WaitProcess, Detail::PlatformErrorDomain::ExitCode, static_cast<u64>(exitCode) });
+}
 
 static void DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
     if(ackReadHandle == INVALID_HANDLE_VALUE)
@@ -134,7 +189,8 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     storage.exceptionPointers.ExceptionRecord = &storage.exceptionRecord;
     storage.exceptionPointers.ContextRecord = &storage.context;
 
-    outOptions.exceptionPointers = static_cast<u64>(reinterpret_cast<usize>(&storage.exceptionPointers));
+    outOptions.exceptionPointers = 0u;
+    outOptions.manualContext = &storage;
     outOptions.instructionPointer = __hidden_crash_win32::ContextInstructionPointer(storage.context);
     outOptions.stackPointer = __hidden_crash_win32::ContextStackPointer(storage.context);
     outOptions.framePointer = __hidden_crash_win32::ContextFramePointer(storage.context);
@@ -218,206 +274,155 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 }
 
 template<typename ArenaT>
-bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
+Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations){
     if(g_State.handlerStarted)
-        return true;
+        return {};
+    constexpr usize s_MaxCommandCharacters = 32766u;
+    constexpr usize s_HandleTextCharacters = 20u;
+    constexpr usize s_ArgumentCharacters = s_RequestHandleArgument.size() + s_AckHandleArgument.size() + s_AckEventArgument.size() + 3u * s_HandleTextCharacters + 8u;
     if(handlerExecutablePath.empty())
-        return false;
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareCommand, ERROR_INVALID_PARAMETER));
+    if(handlerExecutablePath.size() > s_MaxCommandCharacters - s_ArgumentCharacters)
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareCommand, ERROR_FILENAME_EXCED_RANGE));
 
+    // Allocate all command and attribute storage before the first native handle exists.
+    TString<Alloc::ScratchArena> commandLine(scratchArena);
+    commandLine.resize(handlerExecutablePath.size() + s_ArgumentCharacters);
+    SIZE_T attributeListBytes = 0u;
+    const BOOL sizeQueried = InitializeProcThreadAttributeList(nullptr, 1u, 0u, &attributeListBytes);
+    const DWORD sizeError = sizeQueried ? ERROR_SUCCESS : GetLastError();
+    if(sizeQueried || sizeError != ERROR_INSUFFICIENT_BUFFER || attributeListBytes == 0u)
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareAttributes, sizeError == ERROR_SUCCESS ? ERROR_INVALID_DATA : sizeError));
+    Vector<MaxAlign, Alloc::ScratchArena> attributeStorage((static_cast<usize>(attributeListBytes) - 1u) / sizeof(MaxAlign) + 1u, scratchArena);
+    auto* const attributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributeStorage.data());
+    if(!InitializeProcThreadAttributeList(attributeList, 1u, 0u, &attributeListBytes))
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareAttributes, GetLastError()));
+    ScopeExit releaseAttributes([&]()noexcept{ DeleteProcThreadAttributeList(attributeList); });
+
+    HANDLE requestReadHandle = nullptr;
+    HANDLE requestWriteHandle = nullptr;
+    HANDLE ackReadHandle = nullptr;
+    HANDLE ackWriteHandle = nullptr;
+    HANDLE ackEvent = nullptr;
+    PROCESS_INFORMATION processInfo = {};
+    ScopeExit releaseHandles([&]()noexcept{
+        __hidden_crash_win32::CleanupOwnedHandle(requestReadHandle, observations);
+        __hidden_crash_win32::CleanupOwnedHandle(requestWriteHandle, observations);
+        __hidden_crash_win32::CleanupOwnedHandle(ackReadHandle, observations);
+        __hidden_crash_win32::CleanupOwnedHandle(ackWriteHandle, observations);
+        __hidden_crash_win32::CleanupOwnedHandle(ackEvent, observations);
+        __hidden_crash_win32::WaitForOwnedProcess(processInfo.hProcess, true, observations);
+        __hidden_crash_win32::CleanupOwnedHandle(processInfo.hThread, observations);
+        __hidden_crash_win32::CleanupOwnedHandle(processInfo.hProcess, observations);
+    }
+    );
     SECURITY_ATTRIBUTES securityAttributes = {};
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
-
-    HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
-    HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
-    // Size the request pipe for a whole CrashRequest so a single write never blocks waiting for the handler to drain (the POD exceeds the 64 KB default), which combined with the handler-death wakeup bounds the writer.
+    // The request pipe admits a whole fixed CrashRequest without waiting for a child drain.
     if(!CreatePipe(&requestReadHandle, &requestWriteHandle, &securityAttributes, static_cast<DWORD>(sizeof(CrashRequest))))
-        return false;
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::CreateRequestChannel, GetLastError()));
+    if(!SetHandleInformation(requestWriteHandle, HANDLE_FLAG_INHERIT, 0u))
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::SetInheritance, GetLastError()));
+    if(!CreatePipe(&ackReadHandle, &ackWriteHandle, &securityAttributes, 0u))
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::CreateAckChannel, GetLastError()));
+    if(!SetHandleInformation(ackReadHandle, HANDLE_FLAG_INHERIT, 0u))
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::SetInheritance, GetLastError()));
+    ackEvent = CreateEventW(&securityAttributes, TRUE, FALSE, nullptr);
+    if(!ackEvent)
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::CreateAckEvent, GetLastError()));
 
-    if(!SetHandleInformation(requestWriteHandle, HANDLE_FLAG_INHERIT, 0u)){
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        return false;
-    }
-
-    HANDLE ackReadHandle = INVALID_HANDLE_VALUE;
-    HANDLE ackWriteHandle = INVALID_HANDLE_VALUE;
-    if(!CreatePipe(&ackReadHandle, &ackWriteHandle, &securityAttributes, 0u)){
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        return false;
-    }
-
-    if(!SetHandleInformation(ackReadHandle, HANDLE_FLAG_INHERIT, 0u)){
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        CloseHandle(ackReadHandle);
-        CloseHandle(ackWriteHandle);
-        return false;
-    }
-
-    HANDLE ackEvent = CreateEventW(&securityAttributes, TRUE, FALSE, nullptr);
-    if(!ackEvent){
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        CloseHandle(ackReadHandle);
-        CloseHandle(ackWriteHandle);
-        return false;
-    }
-
-    char requestHandleText[s_HandlerArgumentTextCapacity] = {};
-    char ackHandleText[s_HandlerArgumentTextCapacity] = {};
-    char ackEventText[s_HandlerArgumentTextCapacity] = {};
-    AppendUnsignedToFixedBuffer(requestHandleText, reinterpret_cast<uintptr_t>(requestReadHandle));
-    AppendUnsignedToFixedBuffer(ackHandleText, reinterpret_cast<uintptr_t>(ackWriteHandle));
-    AppendUnsignedToFixedBuffer(ackEventText, reinterpret_cast<uintptr_t>(ackEvent));
-
-    ScopeExit releaseHandlesOnFailure([&]()noexcept{
-        if(!CloseHandle(requestReadHandle))
-            TerminateInvariant();
-        if(!CloseHandle(requestWriteHandle))
-            TerminateInvariant();
-        if(!CloseHandle(ackReadHandle))
-            TerminateInvariant();
-        if(!CloseHandle(ackWriteHandle))
-            TerminateInvariant();
-        if(!CloseHandle(ackEvent))
-            TerminateInvariant();
-    });
-
-    TString<ArenaT> commandLine(handlerExecutablePath.arena());
-    commandLine.reserve(handlerExecutablePath.size() + __hidden_crash_win32::s_HandlerCommandLineReserveSlack);
-    commandLine += NWB_TEXT("\"");
-    commandLine += handlerExecutablePath.native();
-    commandLine += NWB_TEXT("\" ");
-    commandLine += s_RequestHandleArgument;
-    commandLine += NWB_TEXT(" ");
-    commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(requestHandleText));
-    commandLine += NWB_TEXT(" ");
-    commandLine += s_AckHandleArgument;
-    commandLine += NWB_TEXT(" ");
-    commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(ackHandleText));
-    commandLine += NWB_TEXT(" ");
-    commandLine += s_AckEventArgument;
-    commandLine += NWB_TEXT(" ");
-    commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(ackEventText));
-
-    SIZE_T attributeListBytes = 0u;
-    const BOOL attributeListSizeQueried = InitializeProcThreadAttributeList(nullptr, 1u, 0u, &attributeListBytes);
-    if(attributeListSizeQueried || GetLastError() != ERROR_INSUFFICIENT_BUFFER || attributeListBytes == 0u){
-        releaseHandlesOnFailure.release();
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        CloseHandle(ackReadHandle);
-        CloseHandle(ackWriteHandle);
-        CloseHandle(ackEvent);
-        return false;
-    }
-
-    void* const attributeListMemory = AllocateArenaCMemory(handlerExecutablePath.arena(), static_cast<usize>(attributeListBytes));
-    releaseHandlesOnFailure.release();
-    if(!attributeListMemory){
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        CloseHandle(ackReadHandle);
-        CloseHandle(ackWriteHandle);
-        CloseHandle(ackEvent);
-        return false;
-    }
-
-    auto* const attributeList = static_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributeListMemory);
-    if(!InitializeProcThreadAttributeList(attributeList, 1u, 0u, &attributeListBytes)){
-        DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        CloseHandle(ackReadHandle);
-        CloseHandle(ackWriteHandle);
-        CloseHandle(ackEvent);
-        return false;
-    }
+    usize cursor = 0u;
+    const auto append = [&](const TStringView text)noexcept{
+        for(const tchar value : text)
+            commandLine[cursor++] = value;
+    };
+    const auto appendHandle = [&](const HANDLE handle)noexcept{
+        char text[s_HandlerArgumentTextCapacity] = {};
+        AppendUnsignedToFixedBuffer(text, static_cast<u64>(reinterpret_cast<usize>(handle)));
+        for(const char value : AStringView(text))
+            commandLine[cursor++] = static_cast<tchar>(value);
+    };
+    append(NWB_TEXT("\""));
+    append(handlerExecutablePath.native());
+    append(NWB_TEXT("\" "));
+    append(s_RequestHandleArgument);
+    append(NWB_TEXT(" "));
+    appendHandle(requestReadHandle);
+    append(NWB_TEXT(" "));
+    append(s_AckHandleArgument);
+    append(NWB_TEXT(" "));
+    appendHandle(ackWriteHandle);
+    append(NWB_TEXT(" "));
+    append(s_AckEventArgument);
+    append(NWB_TEXT(" "));
+    appendHandle(ackEvent);
+    commandLine[cursor] = 0;
 
     HANDLE inheritedHandles[] = { requestReadHandle, ackWriteHandle, ackEvent };
-    if(!UpdateProcThreadAttribute(attributeList, 0u, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles, sizeof(inheritedHandles), nullptr, nullptr)){
-        DeleteProcThreadAttributeList(attributeList);
-        DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);
-        CloseHandle(requestReadHandle);
-        CloseHandle(requestWriteHandle);
-        CloseHandle(ackReadHandle);
-        CloseHandle(ackWriteHandle);
-        CloseHandle(ackEvent);
-        return false;
-    }
-
+    if(!UpdateProcThreadAttribute(attributeList, 0u, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles, sizeof(inheritedHandles), nullptr, nullptr))
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareAttributes, GetLastError()));
     STARTUPINFOEX startupInfo = {};
     startupInfo.StartupInfo.cb = sizeof(startupInfo);
     startupInfo.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
     startupInfo.StartupInfo.wShowWindow = SW_HIDE;
     startupInfo.lpAttributeList = attributeList;
-
-    PROCESS_INFORMATION processInfo = {};
-    const DWORD creationFlags = CREATE_NO_WINDOW | DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT;
-    const BOOL created = CreateProcess(handlerExecutablePath.c_str(), commandLine.data(), nullptr, nullptr, TRUE, creationFlags, nullptr, nullptr, &startupInfo.StartupInfo, &processInfo);
-
-    DeleteProcThreadAttributeList(attributeList);
-    DeallocateArenaCMemory(handlerExecutablePath.arena(), attributeListMemory);
-
-    CloseHandle(requestReadHandle);
-    CloseHandle(ackWriteHandle);
-    SetHandleInformation(ackEvent, HANDLE_FLAG_INHERIT, 0u);
-
-    if(!created){
-        CloseHandle(requestWriteHandle);
-        CloseHandle(ackReadHandle);
-        CloseHandle(ackEvent);
-        return false;
-    }
+    constexpr DWORD s_CreationFlags = CREATE_NO_WINDOW | DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT;
+    if(!CreateProcess(handlerExecutablePath.c_str(), commandLine.data(), nullptr, nullptr, TRUE, s_CreationFlags, nullptr, nullptr, &startupInfo.StartupInfo, &processInfo))
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::CreateProcess, GetLastError()));
+    if(!SetHandleInformation(ackEvent, HANDLE_FLAG_INHERIT, 0u))
+        return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::SetInheritance, GetLastError()));
+    const auto requestReleased = __hidden_crash_win32::ReleaseOwnedHandle(requestReadHandle);
+    if(!requestReleased)
+        return MakeUnexpected(requestReleased.error());
+    const auto ackReleased = __hidden_crash_win32::ReleaseOwnedHandle(ackWriteHandle);
+    if(!ackReleased)
+        return MakeUnexpected(ackReleased.error());
 
     g_State.requestWriteHandle = requestWriteHandle;
     g_State.ackReadHandle = ackReadHandle;
     g_State.crashHandledEvent = ackEvent;
     g_State.handlerProcessInfo = processInfo;
     g_State.handlerStarted = true;
-    return true;
+    releaseHandles.release();
+    return {};
 }
 
-template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
+template Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<Alloc::ScratchArena>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations);
 
-void InstallPlatformHandlers(){
+Expected<void, PlatformFailure> InstallPlatformHandlers()noexcept{
     g_State.previousExceptionFilter = SetUnhandledExceptionFilter(__hidden_crash_win32::UnhandledExceptionFilter);
-    std::set_terminate(__hidden_crash_win32::TerminateHandler);
+    g_State.exceptionFilterInstalled = true;
+    g_State.previousTerminateHandler = ExchangeTerminateHandler(__hidden_crash_win32::TerminateHandler);
+    g_State.terminateHandlerInstalled = true;
+    return {};
 }
 
-void UninstallPlatformResources(){
-    if(g_State.requestWriteHandle != INVALID_HANDLE_VALUE){
-        CloseHandle(g_State.requestWriteHandle);
-        g_State.requestWriteHandle = INVALID_HANDLE_VALUE;
+void UninstallPlatformResources(PlatformCleanupObservations& observations)noexcept{
+    __hidden_crash_win32::CleanupOwnedHandle(g_State.requestWriteHandle, observations, INVALID_HANDLE_VALUE);
+    __hidden_crash_win32::CleanupOwnedHandle(g_State.ackReadHandle, observations, INVALID_HANDLE_VALUE);
+    __hidden_crash_win32::WaitForOwnedProcess(g_State.handlerProcessInfo.hProcess, false, observations);
+    __hidden_crash_win32::CleanupOwnedHandle(g_State.crashHandledEvent, observations);
+    __hidden_crash_win32::CleanupOwnedHandle(g_State.handlerProcessInfo.hThread, observations);
+    __hidden_crash_win32::CleanupOwnedHandle(g_State.handlerProcessInfo.hProcess, observations);
+    g_State.handlerStarted = false;
+    if(g_State.exceptionFilterInstalled){
+        const auto replaced = SetUnhandledExceptionFilter(g_State.previousExceptionFilter);
+        if(replaced != __hidden_crash_win32::UnhandledExceptionFilter){
+            const auto restored = SetUnhandledExceptionFilter(replaced);
+            if(restored != g_State.previousExceptionFilter)
+                observations.record({ PlatformOperation::RestoreExceptionFilter, PlatformErrorDomain::Contract, 1u });
+        }
+        g_State.exceptionFilterInstalled = false;
+        g_State.previousExceptionFilter = nullptr;
     }
-
-    if(g_State.ackReadHandle != INVALID_HANDLE_VALUE){
-        CloseHandle(g_State.ackReadHandle);
-        g_State.ackReadHandle = INVALID_HANDLE_VALUE;
+    if(g_State.terminateHandlerInstalled){
+        if(QueryTerminateHandler() == __hidden_crash_win32::TerminateHandler)
+            ExchangeTerminateHandler(g_State.previousTerminateHandler);
+        g_State.terminateHandlerInstalled = false;
+        g_State.previousTerminateHandler = nullptr;
     }
-
-    if(g_State.handlerProcessInfo.hProcess)
-        WaitForSingleObject(g_State.handlerProcessInfo.hProcess, __hidden_crash_win32::s_HandlerExitWaitMilliseconds);
-
-    if(g_State.crashHandledEvent){
-        CloseHandle(g_State.crashHandledEvent);
-        g_State.crashHandledEvent = nullptr;
-    }
-
-    if(g_State.handlerProcessInfo.hThread){
-        CloseHandle(g_State.handlerProcessInfo.hThread);
-        g_State.handlerProcessInfo.hThread = nullptr;
-    }
-
-    if(g_State.handlerProcessInfo.hProcess){
-        CloseHandle(g_State.handlerProcessInfo.hProcess);
-        g_State.handlerProcessInfo.hProcess = nullptr;
-    }
-
-    SetUnhandledExceptionFilter(g_State.previousExceptionFilter);
-    g_State.previousExceptionFilter = nullptr;
+    g_State.platformRestorePending = false;
 }
 
 

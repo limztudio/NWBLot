@@ -50,6 +50,10 @@ static constexpr f32 s_Hdr10MinimumLuminance = 0.005f;
 static constexpr f32 s_Hdr10MaximumFrameAverageLightLevel = 400.0f;
 static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Transfer is guaranteed for Graphics/Compute families, but Graphics does not imply Compute.
 // Keep the registry faithful to family flags so a cross-family Graphics queue never receives Compute work by inheritance.
 [[nodiscard]] inline constexpr GpuQueueCapability::Mask QueueCapabilitiesForQueueFlags(const VkQueueFlags queueFlags)noexcept{
@@ -200,6 +204,9 @@ inline ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 versi
 
 inline constexpr StringView s_UnknownDebugLabel = "unknown";
 inline constexpr StringView s_DisabledQueueReason = "disabled";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 inline AStringView PhysicalDeviceTypeToString(VkPhysicalDeviceType type)noexcept{

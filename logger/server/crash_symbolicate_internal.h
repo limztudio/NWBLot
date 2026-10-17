@@ -43,18 +43,30 @@ inline constexpr AStringView s_AndroidPlatformName = "android";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendHexAddress(LogArena& arena, CrashReportText& outReport, u64 address);
-[[nodiscard]] Path EffectiveSymbolStoreDirectory(LogArena& arena, const CrashSymbolicationConfig& config);
+struct CrashSymbolicationFailure{
+    AStringView operation;
+    ErrorCode code;
+};
 
-void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport, Core::Alloc::ScratchArena& scratchArena);
-void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport);
+void AppendNativeFailure(CrashReportText& outReport, const CrashSymbolicationFailure& failure);
+void AppendHexAddress(CrashReportText& outReport, u64 address);
+[[nodiscard]] CrashScratchPath EffectiveSymbolStoreDirectory(Core::Alloc::ScratchArena& arena, const CrashSymbolicationConfig& config);
+
+void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
+void AppendAndroidTombstoneSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, CrashReportText& outReport);
 // Cross-platform: rgd ships for Windows + Linux, and a .rgd may be decoded by whichever server ingests the package.
-void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
+void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
 // Cross-platform: the Aftermath runtime ships for Windows + Linux, and a .nv-gpudmp may be decoded by whichever server ingests the package.
-void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport, Core::Alloc::ScratchArena& scratchArena);
+void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
 
 #if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(
+    Core::Alloc::ScratchArena& scratchArena,
+    const CrashScratchPath& packageDirectory,
+    const CrashPackageSummary& summary,
+    const CrashSymbolicationConfig& config,
+    CrashReportText& outReport
+);
 #endif
 
 

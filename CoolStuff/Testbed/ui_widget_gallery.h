@@ -22,6 +22,8 @@
 
 #include <impl/ecs_ui/components.h>
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,7 +48,7 @@ public:
 
 
 private:
-    void paintControls(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
+    void paintControls(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, f32 x, f32 y);
 
 
 private:

@@ -24,6 +24,10 @@ static constexpr f32 s_DefaultSceneViewYaw = 0.82f;
 static constexpr f32 s_DefaultSceneViewPitch = 0.94f;
 static constexpr f32 s_DefaultSceneViewDepthOffset = 2.2f;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void BuildDefaultSceneViewBasisVectors(SIMDVectorSingle& outRight, SIMDVectorSingle& outUp, SIMDVectorSingle& outForward)noexcept{
     SIMDVectorSingle sinAngles;
     SIMDVectorSingle cosAngles;

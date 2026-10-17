@@ -3,6 +3,7 @@
 
 
 #include "slider_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,14 +21,14 @@ using namespace NWB::UiSliderTests;
 
 class UiSliderPopupTests : public SliderFixture{
 protected:
-    [[nodiscard]] static PopupOptions ParentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions()noexcept{
         PopupOptions popup;
         popup.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         popup.size = { 340.0f, 360.0f };
         return popup;
     }
 
-    [[nodiscard]] static PopupOptions ChildOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
         PopupOptions popup;
         popup.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
         popup.size = { 340.0f, 300.0f };
@@ -41,11 +42,6 @@ protected:
         ASSERT_TRUE(m_childState.setValue(0.5));
         m_parent.open();
         m_child.open();
-    }
-
-    [[nodiscard]] WidgetId childHost()const noexcept{
-        const WidgetId parent = MakeWidgetId(MakeRootId(m_root), "parent");
-        return MakeWidgetId(MakeWidgetId(parent, "child"), "slider");
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){

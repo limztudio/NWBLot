@@ -32,10 +32,19 @@ using MaterialBindInterfaceLookup = HashMap<Name, const MaterialBindEntry*, Core
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void BuildMaterialBindInterfaceLookup(const CookVector<MaterialBindEntry>& materialBindEntries, MaterialBindInterfaceLookup& outLookup){
-    outLookup.reserve(materialBindEntries.size());
-    for(const MaterialBindEntry& bindEntry : materialBindEntries)
-        outLookup.emplace(Name(AStringView(bindEntry.virtualPath)), &bindEntry);
+static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena){
+    MaterialBindInterfaceLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
+    lookup.reserve(materialBindEntries.size());
+    for(const MaterialBindEntry& bindEntry : materialBindEntries){
+        const auto interfaceName = Name::FromText(AStringView(bindEntry.virtualPath));
+        if(!interfaceName)
+            return MakeUnexpected(Failure{});
+        if(!lookup.emplace(*interfaceName, &bindEntry).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind interface '{}' is duplicated"), StringConvert(AStringView(bindEntry.virtualPath)));
+            return MakeUnexpected(Failure{});
+        }
+    }
+    return lookup;
 }
 
 
@@ -43,8 +52,10 @@ static void BuildMaterialBindInterfaceLookup(const CookVector<MaterialBindEntry>
 
 
 bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materialBindEntries, CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
-    MaterialBindInterfaceLookup materialBindLookup(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
-    BuildMaterialBindInterfaceLookup(materialBindEntries, materialBindLookup);
+    auto materialBindLookupResult = BuildMaterialBindInterfaceLookup(materialBindEntries, scratchArena);
+    if(!materialBindLookupResult)
+        return false;
+    const MaterialBindInterfaceLookup& materialBindLookup = *materialBindLookupResult;
 
     const usize cacheReserveCount = Min(materialBindEntries.size(), materialEntries.size());
     MaterialBindTypedLayoutCache layoutCache(materialEntries.get_allocator().arena());
@@ -62,7 +73,12 @@ bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materia
             return false;
         }
 
-        const Name materialInterfaceName(AStringView(materialEntry.materialInterface));
+        const auto materialInterfaceNameResult = Name::FromText(AStringView(materialEntry.materialInterface));
+        if(!materialInterfaceNameResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown material interface '{}'"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(AStringView(materialEntry.materialInterface)));
+            return false;
+        }
+        const Name materialInterfaceName = *materialInterfaceNameResult;
         const auto bindEntryIt = materialBindLookup.find(materialInterfaceName);
         if(bindEntryIt == materialBindLookup.end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown material interface '{}'"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(AStringView(materialEntry.materialInterface)));
@@ -78,7 +94,10 @@ bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materia
 
         const MaterialBindTypedLayout* layout = *layoutResult;
         CopyMaterialBindTypedLayoutDefaults(*layout, materialEntry.typedLayoutHash, materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.typedBlockBytes);
-        if(!ApplyMaterialBindTypedLayoutParameters(*layout, Name(AStringView(materialEntry.virtualPath)), materialEntry.parameters, materialEntry.typedBlockBytes, materialEntry.resourceReferences))
+        const auto materialName = Name::FromText(AStringView(materialEntry.virtualPath));
+        if(!materialName)
+            return false;
+        if(!ApplyMaterialBindTypedLayoutParameters(*layout, *materialName, materialEntry.parameters, materialEntry.typedBlockBytes, materialEntry.resourceReferences))
             return false;
         if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.resourceReferences)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters"), StringConvert(AStringView(materialEntry.virtualPath)));

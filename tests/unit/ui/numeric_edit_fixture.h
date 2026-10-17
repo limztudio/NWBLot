@@ -84,14 +84,14 @@ public:
         m_events.push_back(Move(event));
     }
 
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)noexcept override{
         ++ordinaryLoans;
         EditBoxResult result;
         result.valid = true;
         return result;
     }
 
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel& draft, const EditBoxOptions& options, const PopupToken& popup, IEditActionSink& sink)override{
         ++loans;
@@ -151,7 +151,7 @@ public:
         return result;
     }
 
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
         ++publishes;
@@ -203,7 +203,7 @@ protected:
         return finishPanel() && m_context.commitFrame(m_context.readyGeneration());
     }
 
-    void useHost(){ m_builder.setEditHost(&m_host); }
+    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
 
 
 protected:

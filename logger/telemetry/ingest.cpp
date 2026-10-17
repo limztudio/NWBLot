@@ -4,6 +4,7 @@
 
 #include "ingest.h"
 
+#include <core/alloc/scratch.h>
 #include <core/telemetry/codec.h>
 
 #include <global/binary.h>
@@ -24,6 +25,12 @@ namespace __hidden_telemetry_ingest{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr int s_LocalTimeYearBase = 1900;
 inline constexpr int s_LocalTimeMonthBase = 1;
 inline constexpr StringView s_StorageDirectoryName = "telemetry";
@@ -39,7 +46,7 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Path MakeTelemetryUploadStem(LogArena& arena){
+[[nodiscard]] ScratchPath MakeTelemetryUploadStem(Core::Alloc::ScratchArena& arena){
     const auto timeResult = GetLocalTime();
     if(!timeResult)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for telemetry upload name"));
@@ -58,7 +65,7 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
         counter
     );
 
-    return Path(arena, fileName);
+    return ScratchPath(arena, fileName);
 }
 
 void SetResultMessage(TelemetryIngestResult& result, AStringView message, const Core::Common::LogType::Enum type){
@@ -71,26 +78,26 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
     return WriteBinaryFile(rawPath, view);
 }
 
-[[nodiscard]] Path DefaultRootDirectory(LogArena& arena){
+[[nodiscard]] ScratchPath DefaultRootDirectory(Core::Alloc::ScratchArena& arena){
     const auto executableDirectory = GetExecutableDirectory(arena);
     if(executableDirectory)
         return *executableDirectory / s_StorageDirectoryName;
 
-    return Path(arena, s_StorageDirectoryName);
+    return ScratchPath(arena, s_StorageDirectoryName);
 }
 
-[[nodiscard]] Path StorageDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+[[nodiscard]] ScratchPath StorageDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
     if(!configuredStorageDirectory.empty())
-        return Path(arena, configuredStorageDirectory);
+        return ScratchPath(arena, configuredStorageDirectory);
 
     return DefaultRootDirectory(arena);
 }
 
-[[nodiscard]] Path RawDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+[[nodiscard]] ScratchPath RawDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
     return StorageDirectory(arena, configuredStorageDirectory) / s_RawDirectoryName;
 }
 
-[[nodiscard]] Path ReportDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+[[nodiscard]] ScratchPath ReportDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
     return StorageDirectory(arena, configuredStorageDirectory) / s_ReportDirectoryName;
 }
 
@@ -111,14 +118,15 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
         return result;
     }
 
-    const Path rawDirectory = __hidden_telemetry_ingest::RawDirectory(arena, config.storageDirectory);
-    const Path reportDirectory = __hidden_telemetry_ingest::ReportDirectory(arena, config.storageDirectory);
+    Core::Alloc::ScratchArena scratchArena(Name("logger/telemetry/report"));
+    const auto rawDirectory = __hidden_telemetry_ingest::RawDirectory(scratchArena, config.storageDirectory);
+    const auto reportDirectory = __hidden_telemetry_ingest::ReportDirectory(scratchArena, config.storageDirectory);
     if(!EnsureDirectories(rawDirectory) || !EnsureDirectories(reportDirectory)){
         __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not create storage directories", Core::Common::LogType::Error);
         return result;
     }
 
-    const Path uploadStem = __hidden_telemetry_ingest::MakeTelemetryUploadStem(arena);
+    const auto uploadStem = __hidden_telemetry_ingest::MakeTelemetryUploadStem(scratchArena);
     result.rawPath = rawDirectory / uploadStem;
     result.rawPath.replaceExtension(__hidden_telemetry_ingest::s_RawStreamFileExtension);
     result.jsonPath = reportDirectory / uploadStem;
@@ -143,7 +151,6 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
         return result;
     }
 
-    Core::Alloc::ScratchArena scratchArena(Name("logger/telemetry/report"));
     auto report = BuildTelemetryReport(arena, recorder.view(), scratchArena);
     if(!report){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));

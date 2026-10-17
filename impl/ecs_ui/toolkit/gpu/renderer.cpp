@@ -39,8 +39,8 @@ namespace __hidden_ui_gpu{
     if(!token.hasPhysicalQueueIdentity())
         return false;
     const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
-    const Core::GpuQueueTimelineSnapshot timeline = device.getQueueTimelineSnapshot(queue);
-    return timeline.valid() && timeline.queue == queue && timeline.completedValue >= token.value;
+    const auto timeline = device.getQueueTimelineSnapshot(queue);
+    return timeline && timeline->valid() && timeline->queue == queue && timeline->completedValue >= token.value;
 }
 
 
@@ -91,7 +91,7 @@ GpuSharedResources::~GpuSharedResources()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)
+GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept
     : m_arena(arena)
     , m_snapshot(Move(snapshot))
     , m_skin(Move(skin))
@@ -166,9 +166,10 @@ bool GpuRenderer::validateResources(const u32 width, const u32 height){
         return false;
     Array<GpuVersion<GpuTargetVersion>, 3u> targets;
     for(auto& target : targets){
-        target = m_state->createTarget(width, height);
-        if(!target)
+        auto created = m_state->createTarget(width, height);
+        if(!created)
             return false;
+        target = Move(*created);
     }
     for(usize i = 0u; i < targets.size(); ++i){
         m_state->m_slots[i] = {};
@@ -214,9 +215,10 @@ bool GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const 
     const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!texture || !skin.validateTexture(*texture))
         return false;
-    GpuVersion<GpuSkinVersion> version = MakeGpuVersion<GpuSkinVersion>(m_state->m_arena, m_state->m_graphics);
-    if(!version)
+    auto versionResult = MakeGpuVersion<GpuSkinVersion>(m_state->m_arena, m_state->m_graphics);
+    if(!versionResult)
         return false;
+    GpuVersion<GpuSkinVersion> version = Move(*versionResult);
     version->m_binding = binding;
     if(!TextureAssetLoader::Create(version->m_texture, *texture, Name("ui.atlas"), m_state->m_graphics, NWB_TEXT("GpuRenderer")))
         return false;
@@ -242,11 +244,15 @@ bool GpuRenderer::submit(DrawSnapshot&& snapshot){
         return false;
     if(!GpuRendererState::ValidateGlyphPages(snapshot) || !GpuRendererState::ValidateSdfPages(snapshot) || !GpuRendererState::ValidateTextureImages(snapshot))
         return false;
-    m_state->m_pending = MakeGpuVersion<GpuFrameData>(m_state->m_arena, m_state->m_arena, Move(snapshot), m_state->m_skin);
-    if(m_state->m_pending)
-        m_state->m_pending->m_recordingMode = m_state->m_recordingMode;
+    auto pending = MakeGpuVersion<GpuFrameData>(m_state->m_arena, m_state->m_arena, Move(snapshot), m_state->m_skin);
+    if(!pending){
+        m_state->m_claimed = false;
+        return false;
+    }
+    m_state->m_pending = Move(*pending);
+    m_state->m_pending->m_recordingMode = m_state->m_recordingMode;
     m_state->m_claimed = false;
-    return m_state->m_pending != nullptr;
+    return true;
 }
 
 void GpuRenderer::setCommandRecordingMode(const GpuCommandRecordingMode::Enum mode)noexcept{

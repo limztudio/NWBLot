@@ -73,7 +73,33 @@ template<usize Count>
 
 
 template<typename StatisticsT>
-[[nodiscard]] static bool SubmissionCountsAreValid(const StatisticsT& statistics)noexcept{
+[[nodiscard]] static bool SubmissionCountsAreValid(const StatisticsT& statistics)noexcept([]()consteval noexcept{
+    using Compile = RemoveReference_T<decltype(DeclVal<const StatisticsT&>().compile)>;
+    using Recording = RemoveReference_T<decltype(DeclVal<const StatisticsT&>().recording)>;
+    using Submission = RemoveReference_T<decltype(DeclVal<const StatisticsT&>().submission)>;
+    return
+        noexcept((DeclVal<const Submission&>().acceptedPacketCount > DeclVal<const Compile&>().packetCount || DeclVal<const Submission&>().acceptedTaskCount > DeclVal<const Compile&>().taskCount) ? 0 : 0)
+        && noexcept((DeclVal<const Submission&>().rejectedPacketCount > DeclVal<const Compile&>().packetCount - DeclVal<const Submission&>().acceptedPacketCount
+            || DeclVal<const Submission&>().rejectedTaskCount > DeclVal<const Compile&>().taskCount - DeclVal<const Submission&>().acceptedTaskCount
+            || DeclVal<const Submission&>().acceptedPacketCount > DeclVal<const Submission&>().acceptedTaskCount
+            || DeclVal<const Submission&>().rejectedPacketCount > DeclVal<const Submission&>().rejectedTaskCount
+            || DeclVal<const Submission&>().nativeSubmissionCount > DeclVal<const Submission&>().acceptedPacketCount
+            || DeclVal<const Submission&>().rejectedSubmissionCount > DeclVal<const Submission&>().rejectedPacketCount
+            || DeclVal<const Submission&>().acceptedFrontierSubmissionCount > DeclVal<const Submission&>().nativeSubmissionCount
+            || DeclVal<const Submission&>().recoverySubmissionCount > DeclVal<const Submission&>().acceptedFrontierSubmissionCount
+            || DeclVal<const Submission&>().nativeSubmissionCount > DeclVal<const Recording&>().packetCount
+            || DeclVal<const Submission&>().nativeSubmissionCount > DeclVal<const Submission&>().nativeCommandListCount
+            || DeclVal<const Submission&>().nativeCommandListCount > DeclVal<const Recording&>().commandListCount
+            || DeclVal<const Submission&>().sameQueueWaitElisionCount > DeclVal<const Submission&>().plannedWaitTokenCount
+            || (DeclVal<const Submission&>().nativeSubmissionCount == 0u && DeclVal<const Submission&>().inheritedTimelineWaitElisionCount != 0u)) ? 0 : 0)
+        && noexcept(DeclVal<void(*)(u64)noexcept>()(DeclVal<const Submission&>().plannedWaitTokenCount - DeclVal<const Submission&>().sameQueueWaitElisionCount))
+        && noexcept((DeclVal<const Submission&>().mergedTimelineWaitCount > DeclVal<u64&>()) ? 0 : 0)
+        && noexcept(DeclVal<u64&>() -= DeclVal<const Submission&>().mergedTimelineWaitCount)
+        && noexcept((DeclVal<const Submission&>().inheritedTimelineWaitElisionCount > DeclVal<u64&>()) ? 0 : 0)
+        && noexcept(DeclVal<u64&>() -= DeclVal<const Submission&>().inheritedTimelineWaitElisionCount)
+        && noexcept((DeclVal<const Submission&>().timelineWaitCount != DeclVal<u64&>()) ? 0 : 0)
+    ;
+}()){
     const auto& compile = statistics.compile;
     const auto& recording = statistics.recording;
     const auto& submission = statistics.submission;
@@ -490,7 +516,8 @@ bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)no
     const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
     // Submission acceptance and per-queue snapshots visit packets in different orders, their positive floating duration sums can differ by one rounding bit.
     // Counts remain the exact owner-conservation contract.
-    return submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
+    return
+        submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
         && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
         && submission.rejectedPacketCount <= ownerSubmission.rejectedPacketCount
         && submission.rejectedTaskCount <= ownerSubmission.rejectedTaskCount
@@ -751,7 +778,8 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
     const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
     // Submission acceptance and per-queue snapshots visit packets in different orders, their positive floating duration sums can differ by one rounding bit.
     // Counts remain the exact owner-conservation contract.
-    return submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
+    return
+        submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
         && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
         && submission.rejectedPacketCount <= ownerSubmission.rejectedPacketCount
         && submission.rejectedTaskCount <= ownerSubmission.rejectedTaskCount

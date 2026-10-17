@@ -7,8 +7,6 @@
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
 
-#include <global/scope_exit.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -385,16 +383,6 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout has no descriptor capacity."));
             return MakeUnexpected(Failure{});
         }
-        const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocateForBindingGeneration(bindingLayout->getDescriptorBufferSegmentKind(), setSizeBytes, offsetAlignmentBytes, m_descriptorBufferGeneration);
-        if(!block.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
-            return MakeUnexpected(Failure{});
-        }
-        bool admitted = false;
-        ScopeExit releaseBlock([&]()noexcept{
-            if(!admitted)
-                m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
-        });
         const auto& bindingOffsets = bindingLayout->getDescriptorBufferBindingOffsets();
         for(u32 c = 0u; c < classCount; ++c){
             const GpuDescriptorClass::Enum cls = classes[c];
@@ -412,7 +400,11 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             }
             m_classBufferOffset[static_cast<u32>(cls)] = it->second;
         }
-        admitted = true;
+        const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocateForBindingGeneration(bindingLayout->getDescriptorBufferSegmentKind(), setSizeBytes, offsetAlignmentBytes, m_descriptorBufferGeneration);
+        if(!block.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
+            return MakeUnexpected(Failure{});
+        }
         return block;
     };
 

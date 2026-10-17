@@ -86,55 +86,55 @@ concept DeviceApi = requires(
     const QueueSubmissionDesc& submissionDesc,
     Object nativeObject
 ){
-    { device.createHeap(heapDesc) }->SameAs<HeapHandle>;
-    { device.createTexture(textureDesc) }->SameAs<TextureHandle>;
-    { device.getTextureMemoryRequirements(texture) }->SameAs<MemoryRequirements>;
+    { device.createHeap(heapDesc) }->SameAs<Expected<HeapHandle>>;
+    { device.createTexture(textureDesc) }->SameAs<Expected<TextureHandle>>;
+    { device.getTextureMemoryRequirements(texture) }->SameAs<Expected<MemoryRequirements>>;
     { device.bindTextureMemory(texture, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc, {}) }->SameAs<TextureHandle>;
+    { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc, {}) }->SameAs<Expected<TextureHandle>>;
     requires (!requires{ device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc); });
-    { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<StagingTextureHandle>;
+    { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<Expected<StagingTextureHandle>>;
     { device.mapStagingTexture(stagingTexture, textureSlice, CpuAccessMode::Read) }->SameAs<Expected<StagingTextureMapping>>;
     device.unmapStagingTexture(stagingTexture);
 
-    { device.createBuffer(bufferDesc) }->SameAs<BufferHandle>;
+    { device.createBuffer(bufferDesc) }->SameAs<Expected<BufferHandle>>;
     { device.mapBuffer(buffer, CpuAccessMode::Write) }->SameAs<void*>;
     device.unmapBuffer(buffer);
-    { device.getBufferMemoryRequirements(buffer) }->SameAs<MemoryRequirements>;
+    { device.getBufferMemoryRequirements(buffer) }->SameAs<Expected<MemoryRequirements>>;
     { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, {}) }->SameAs<BufferHandle>;
+    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, {}) }->SameAs<Expected<BufferHandle>>;
     requires (!requires{ device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, u32{}); });
 
-    { device.createShader(shaderDesc, binary, usize{}) }->SameAs<ShaderHandle>;
-    { device.createShaderSpecialization(*shader, specializationConstants, u32{}) }->SameAs<ShaderHandle>;
-    { device.createShaderLibrary(binary, usize{}) }->SameAs<ShaderLibraryHandle>;
-    { device.createSampler(samplerDesc) }->SameAs<SamplerHandle>;
-    { device.createInputLayout(vertexAttributeDescs, u32{}, shader) }->SameAs<InputLayoutHandle>;
+    { device.createShader(shaderDesc, binary, usize{}) }->SameAs<Expected<ShaderHandle>>;
+    { device.createShaderSpecialization(*shader, specializationConstants, u32{}) }->SameAs<Expected<ShaderHandle>>;
+    { device.createShaderLibrary(binary, usize{}) }->SameAs<Expected<ShaderLibraryHandle>>;
+    { device.createSampler(samplerDesc) }->SameAs<Expected<SamplerHandle>>;
+    { device.createInputLayout(vertexAttributeDescs, u32{}, shader) }->SameAs<Expected<InputLayoutHandle>>;
 
-    { device.createEventQuery() }->SameAs<EventQueryHandle>;
+    { device.createEventQuery() }->SameAs<Expected<EventQueryHandle>>;
     { device.setEventQuery(eventQuery, CommandQueue::Graphics) }->SameAs<bool>;
-    { device.pollEventQuery(eventQuery) }->SameAs<bool>;
+    { device.pollEventQuery(eventQuery) }->SameAs<Expected<bool>>;
     { device.waitEventQuery(eventQuery) }->SameAs<bool>;
-    { device.createTimerQuery() }->SameAs<TimerQueryHandle>;
-    { device.pollTimerQuery(timerQuery) }->SameAs<bool>;
+    { device.createTimerQuery() }->SameAs<Expected<TimerQueryHandle>>;
+    { device.pollTimerQuery(timerQuery) }->SameAs<Expected<bool>>;
     { device.getTimerQueryResult(timerQuery) }->SameAs<Expected<TimerQueryResult>>;
-    { device.getTimerQueryTime(timerQuery) }->SameAs<f32>;
+    { device.getTimerQueryTime(timerQuery) }->SameAs<Expected<f32>>;
     { device.resetTimerQuery(timerQuery) }->SameAs<bool>;
 
-    { device.createFramebuffer(framebufferDesc) }->SameAs<FramebufferHandle>;
-    { device.createGraphicsPipeline(graphicsPipelineDesc, framebufferInfo) }->SameAs<GraphicsPipelineHandle>;
-    { device.createComputePipeline(computePipelineDesc) }->SameAs<ComputePipelineHandle>;
-    { device.createMeshletPipeline(meshletPipelineDesc, framebufferInfo) }->SameAs<MeshletPipelineHandle>;
-    { device.createRayTracingPipeline(rayTracingPipelineDesc) }->SameAs<RayTracingPipelineHandle>;
-    { device.createBindingLayout(bindingLayoutDesc) }->SameAs<BindingLayoutHandle>;
-    { device.createBindlessLayout(bindlessLayoutDesc) }->SameAs<BindingLayoutHandle>;
+    { device.createFramebuffer(framebufferDesc) }->SameAs<Expected<FramebufferHandle>>;
+    { device.createGraphicsPipeline(graphicsPipelineDesc, framebufferInfo) }->SameAs<Expected<GraphicsPipelineHandle>>;
+    { device.createComputePipeline(computePipelineDesc) }->SameAs<Expected<ComputePipelineHandle>>;
+    { device.createMeshletPipeline(meshletPipelineDesc, framebufferInfo) }->SameAs<Expected<MeshletPipelineHandle>>;
+    { device.createRayTracingPipeline(rayTracingPipelineDesc) }->SameAs<Expected<RayTracingPipelineHandle>>;
+    { device.createBindingLayout(bindingLayoutDesc) }->SameAs<Expected<BindingLayoutHandle>>;
+    { device.createBindlessLayout(bindlessLayoutDesc) }->SameAs<Expected<BindingLayoutHandle>>;
 
-    { device.createOpacityMicromap(opacityMicromapDesc) }->SameAs<RayTracingOpacityMicromapHandle>;
-    { device.createAccelStruct(accelStructDesc) }->SameAs<RayTracingAccelStructHandle>;
-    { device.getAccelStructMemoryRequirements(*accelStruct) }->SameAs<MemoryRequirements>;
+    { device.createOpacityMicromap(opacityMicromapDesc) }->SameAs<Expected<RayTracingOpacityMicromapHandle>>;
+    { device.createAccelStruct(accelStructDesc) }->SameAs<Expected<RayTracingAccelStructHandle>>;
+    { device.getAccelStructMemoryRequirements(*accelStruct) }->SameAs<Expected<MemoryRequirements>>;
     { device.getClusterOperationSizeInfo(clusterOperationParams) }->SameAs<RayTracingClusterOperationSizeInfo>;
     { device.bindAccelStructMemory(*accelStruct, heap, u64{}) }->SameAs<bool>;
 
-    { device.createCommandList(commandListParams) }->SameAs<CommandListHandle>;
+    { device.createCommandList(commandListParams) }->SameAs<Expected<CommandListHandle>>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<Expected<QueueSubmissionReceipt>>;
     { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, submissionDesc) }->SameAs<Expected<QueueSubmissionReceipt>>;
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
@@ -143,7 +143,7 @@ concept DeviceApi = requires(
     { device.getPrimaryPhysicalQueue(CommandQueue::Graphics) }->SameAs<GpuPhysicalQueueId>;
     { device.getPhysicalQueueTopology() }->SameAs<GpuPhysicalQueueTopology>;
     { device.getPhysicalQueueInfo(GpuPhysicalQueueId{}) }->SameAs<const GpuPhysicalQueueInfo*>;
-    { device.getQueueTimelineSnapshot(GpuPhysicalQueueId{}) }->SameAs<GpuQueueTimelineSnapshot>;
+    { device.getQueueTimelineSnapshot(GpuPhysicalQueueId{}) }->SameAs<Expected<GpuQueueTimelineSnapshot>>;
     { device.getCommandArenaStatistics(GpuPhysicalQueueId{}) }->SameAs<GpuCommandArenaStatistics>;
     { device.getCommandArenaWorkerStatistics(GpuPhysicalQueueId{}, u64{}, u32{}) }->SameAs<GpuCommandArenaWorkerStatistics>;
     { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<bool>;
@@ -156,8 +156,8 @@ concept DeviceApi = requires(
     { constDevice.queryFeatureSupport(Feature::Meshlets) }noexcept->SameAs<bool>;
     { constDevice.getWaveLaneCounts() }noexcept->SameAs<WaveLaneCountRange>;
     { device.queryFormatSupport(Format::RGBA8_UNORM) }->SameAs<FormatSupport::Mask>;
-    { device.queryCoopVecFeatures() }->SameAs<CooperativeVectorDeviceFeatures>;
-    { device.getCoopVecMatrixSize(CooperativeVectorDataType::Float16, CooperativeVectorMatrixLayout::RowMajor, i32{}, i32{}) }->SameAs<usize>;
+    { device.queryCoopVecFeatures() }->SameAs<Expected<CooperativeVectorDeviceFeatures>>;
+    { device.getCoopVecMatrixSize(CooperativeVectorDataType::Float16, CooperativeVectorMatrixLayout::RowMajor, i32{}, i32{}) }->SameAs<Expected<usize>>;
     { device.getNativeQueue(ObjectType{}, CommandQueue::Graphics) }->SameAs<Object>;
     { device.getNativeQueue(ObjectType{}, GpuPhysicalQueueId{}) }->SameAs<Object>;
     { device.isGpuCrashDiagnosticsEnabled() }->SameAs<bool>;
@@ -311,7 +311,7 @@ template<typename T>
 concept TextureApi = DescribedResourceApi<T, TextureDesc> && requires(T& texture, TextureSubresourceSet subresources){
     { texture.getCreationDescription() }->SameAs<const TextureDesc&>;
     { texture.descriptionMatchesCreation() }->SameAs<bool>;
-    { texture.getNativeView(ObjectType{}, Format::UNKNOWN, subresources, TextureDimension::Unknown, bool{}) }->SameAs<Object>;
+    { texture.getNativeView(ObjectType{}, Format::UNKNOWN, subresources, TextureDimension::Unknown, bool{}) }->SameAs<Expected<Object>>;
 };
 
 template<typename T>
@@ -322,7 +322,7 @@ concept ShaderApi = DescribedResourceApi<T, ShaderDesc> && requires(const T& sha
 template<typename T>
 concept ShaderLibraryApi = requires(const T& constLibrary, T& library, const void** bytecode, usize* bytecodeSize){
     constLibrary.getBytecode(bytecode, bytecodeSize);
-    { library.getShader(AStringView{}, ShaderType::All) }->SameAs<ShaderHandle>;
+    { library.getShader(AStringView{}, ShaderType::All) }->SameAs<Expected<ShaderHandle>>;
 };
 
 template<typename T>
@@ -367,15 +367,15 @@ concept MeshletPipelineApi = DescribedResourceApi<T, MeshletPipelineDesc> && req
 
 template<typename T>
 concept RayTracingPipelineApi = DescribedResourceApi<T, RayTracingPipelineDesc> && requires(T& pipeline){
-    { pipeline.createShaderTable() }->SameAs<RayTracingShaderTableHandle>;
+    { pipeline.createShaderTable() }->SameAs<Expected<RayTracingShaderTableHandle>>;
 };
 
 template<typename T>
 concept RayTracingShaderTableApi = requires(T& shaderTable, AStringView exportName){
     { shaderTable.setRayGenerationShader(exportName) }->SameAs<bool>;
-    { shaderTable.addMissShader(exportName) }->SameAs<u32>;
-    { shaderTable.addHitGroup(exportName) }->SameAs<u32>;
-    { shaderTable.addCallableShader(exportName) }->SameAs<u32>;
+    { shaderTable.addMissShader(exportName) }->SameAs<Expected<u32>>;
+    { shaderTable.addHitGroup(exportName) }->SameAs<Expected<u32>>;
+    { shaderTable.addCallableShader(exportName) }->SameAs<Expected<u32>>;
     shaderTable.clearMissShaders();
     shaderTable.clearHitShaders();
     shaderTable.clearCallableShaders();

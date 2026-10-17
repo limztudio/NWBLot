@@ -41,7 +41,7 @@ namespace GpuTaskSubmissionDetail{
 using namespace __hidden_gpu_task_submission_bindings;
 
 
-TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena)
+TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena)noexcept
     : scratchArena(scratchArena)
     , timingTickets(scratchArena)
     , submissionHooks(scratchArena)

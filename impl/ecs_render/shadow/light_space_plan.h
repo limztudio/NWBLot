@@ -25,12 +25,13 @@ NWB_IMPL_BEGIN
 
 
 struct LightSpaceViewGpu{
-    Float4U worldToClipRows[4] = {};
-    Float4U originOrDirection = {};
-    Float4U depthRange = {};
+    Float4 worldToClipRows[4] = {};
+    Float4 originOrDirection = {};
+    Float4 depthRange = {};
     u32 map[4] = {};
     u32 light[4] = {};
 };
+static_assert(alignof(LightSpaceViewGpu) >= 16u);
 static_assert(sizeof(LightSpaceViewGpu) == NWB_LIGHT_SPACE_VIEW_BYTES);
 static constexpr usize s_LightSpaceViewGpuOriginOrDirectionOffset = 64u;
 static constexpr usize s_LightSpaceViewGpuDepthRangeOffset = 80u;

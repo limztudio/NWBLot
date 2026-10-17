@@ -32,6 +32,8 @@ struct ModelCookEntry{
     Model::StaticMeshObjectVector staticMeshObjects;
     Model::SkinnedMeshObjectVector skinnedMeshObjects;
 
+
+public:
     explicit ModelCookEntry(Core::Assets::AssetArena& arena)noexcept
         : skeletonObjects(arena)
         , staticMeshObjects(arena)

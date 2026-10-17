@@ -16,12 +16,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CpuTaskScheduler::ProfileMeasure::ProfileMeasure(CpuTaskScheduler& scheduler, const CpuTaskProfileKind::Enum kind, const TaskHandle task, const CpuTaskProfileLabel label)
+CpuTaskScheduler::ProfileMeasure::ProfileMeasure(CpuTaskScheduler& scheduler, const CpuTaskProfileKind::Enum kind, const TaskHandle task, const CpuTaskProfileLabel label)noexcept
     : m_scheduler(scheduler)
 {
     if(!m_scheduler.m_profileEnabled.load(MemoryOrder::relaxed))
         return;
-    ScopedLock lock(m_scheduler.m_mutex);
+    NothrowScopedLock lock(m_scheduler.m_mutex);
 
     if(m_scheduler.m_profileEnabled.load(MemoryOrder::relaxed)){
         m_sample = m_scheduler.prepareProfileLocked(kind, task, label, scheduler.currentWorkerIndex(), scheduler.currentWorkerAffinity());

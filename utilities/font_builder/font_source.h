@@ -22,21 +22,23 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 class FontSource final : NoCopy{
+    friend Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options);
+    friend bool ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
+
+
 private:
-    [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size);
-    static void Release(FT_Memory memory, void* block);
-    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block);
+    [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size)noexcept;
+    static void Release(FT_Memory memory, void* block)noexcept;
+    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block)noexcept;
 
 
 public:
-    explicit FontSource(Core::Assets::AssetArena& arena);
+    explicit FontSource(Core::Assets::AssetArena& arena)noexcept;
     ~FontSource()noexcept;
 
 
 public:
-    [[nodiscard]] bool open(const BakeOptions& options, Impl::FontAtlasPayload& payload);
-    [[nodiscard]] FT_Face face()const noexcept{ return m_face; }
-    [[nodiscard]] const Core::Assets::AssetBytes& bytes()const noexcept{ return m_bytes; }
+    [[nodiscard]] bool open(const BakeOptions& options, Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
 
 
 private:

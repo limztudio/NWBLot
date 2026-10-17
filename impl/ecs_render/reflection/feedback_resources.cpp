@@ -36,7 +36,7 @@ ReflectionFeedbackExtent ComputeReflectionFeedbackExtent(const u32 width, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererReflectionFeedback::RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)
+RendererReflectionFeedback::RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
     : m_arena(arena)
     , m_graphics(graphics)
 {}
@@ -118,11 +118,12 @@ bool RendererReflectionFeedback::prepareBank(ReflectionFeedbackBinding& bank, co
     }
     Core::BufferDesc desc;
     desc.setByteSize(byteCount).setCanHaveRawViews(true).setCanHaveUAVs(true).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    Core::BufferHandle buffer = m_graphics.createBuffer(desc);
-    if(!buffer){
+    auto bufferResult = m_graphics.createBuffer(desc);
+    if(!bufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to create {}-byte buffer"), byteCount);
         return false;
     }
+    Core::BufferHandle buffer = Move(*bufferResult);
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
         if(descriptor.valid())

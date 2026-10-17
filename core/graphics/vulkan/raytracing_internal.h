@@ -38,7 +38,9 @@ struct BlasGeometryScratch{
     BlasPrimitiveCountVector primitiveCounts;
     BlasTransformOffsetVector transformOffsets;
 
-    explicit BlasGeometryScratch(Alloc::ScratchArena& scratchArena)
+
+public:
+    explicit BlasGeometryScratch(Alloc::ScratchArena& scratchArena)noexcept
         : geometries(scratchArena)
         , spheresData(scratchArena)
         , lssData(scratchArena)

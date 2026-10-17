@@ -36,6 +36,8 @@ namespace ECSRenderDetail{
         Core::GpuDescriptorHandle clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
         Core::GpuDescriptorHandle intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
+
+    public:
         [[nodiscard]] bool bindingValid()const noexcept;
         [[nodiscard]] bool frameReady(const CsgFrameGpuData& csgFrameData)const noexcept;
         [[nodiscard]] Expected<u32> findClipContextHeapSlot()const noexcept;

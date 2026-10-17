@@ -149,15 +149,6 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 
 class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
-        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
-    }
-
-    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
-        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
-    }
-
-
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("CsgSkinnedVisibleSmokeProject"));
 
@@ -293,7 +284,6 @@ public:
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
     {}
-
     virtual ~CsgSkinnedVisibleSmokeProject()override{
         destroyWorld();
     }
@@ -361,7 +351,11 @@ public:
         updateReceiverTransforms(receiverRotation);
         updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
 
-        m_world->tick(safeDelta);
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         ++m_rendererBaselineRenderedFrameCount;
         return true;
     }

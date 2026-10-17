@@ -8,8 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/diagnostics.h>
 #include <global/expected.h>
 #include <global/floating_point_environment.h>
+#include <global/scope_exit.h>
 #include <global/simdmath.h>
 #include <global/timer.h>
 #include <global/text_utils.h>
@@ -29,6 +31,10 @@ namespace SimdOptimizationBenchmark{
 
 inline constexpr usize s_DataCount = 64u;
 inline constexpr u64 s_InitialSeed = 0x8923409102431291ull;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct Dataset{
     SIMDVectorDouble left[s_DataCount];
@@ -71,7 +77,12 @@ struct Observation{
 };
 
 template<typename Evaluate>
-[[nodiscard]] Expected<Observation> Observe(Evaluate&& evaluate)noexcept{
+[[nodiscard]] Expected<Observation> Observe(Evaluate&& evaluate)noexcept(
+    noexcept(Observation{})
+    && noexcept(DeclVal<Observation&>().value = DeclVal<Evaluate&>()())
+    && noexcept(Expected<Observation>(DeclVal<Observation&&>()))
+    && noexcept(Expected<Observation>(MakeUnexpected(Failure{})))
+){
 #pragma STDC FENV_ACCESS ON
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure{});
@@ -92,22 +103,22 @@ struct NoAdditionalReductionCheck{
 };
 
 template<typename Baseline, typename Candidate, typename Additional = NoAdditionalReductionCheck>
-u32 VerifyReductionCases(const StringView operation, u64& seed, Baseline&& baseline, Candidate&& candidate, Additional&& additional = {})noexcept{
+u32 VerifyReductionCases(const StringView operation, u64& seed, Baseline&& baseline, Candidate&& candidate, Additional&& additional = {}){
 #pragma STDC FENV_ACCESS ON
-    constexpr u64 exceptional[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
+    constexpr u64 s_Exceptional[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
         0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull };
     u32 failures = 0u;
     for(usize index = 0u; index < 16384u; ++index){
         u64 bits[8];
         for(auto& value : bits){
             const u64 random = NextSeed(seed);
-            value = index < 8192u ? exceptional[random % LengthOf(exceptional)] : random;
+            value = index < 8192u ? s_Exceptional[random % LengthOf(s_Exceptional)] : random;
         }
         const SIMDVectorDouble lhs = VectorDoubleSetInt(bits[0], bits[1], bits[2], bits[3]), rhs = VectorDoubleSetInt(bits[4], bits[5], bits[6], bits[7]);
-        const auto expected = Observe([&]()noexcept{ return baseline(lhs, rhs); });
+        const auto expected = Observe([&]()noexcept(noexcept(DeclVal<void(*)(Decay_T<decltype(baseline(lhs, rhs))>)noexcept>()(baseline(lhs, rhs)))){ return baseline(lhs, rhs); });
         if(!expected)
             return failures + 1u;
-        const auto actual = Observe([&]()noexcept{ return candidate(lhs, rhs); });
+        const auto actual = Observe([&]()noexcept(noexcept(DeclVal<void(*)(Decay_T<decltype(candidate(lhs, rhs))>)noexcept>()(candidate(lhs, rhs)))){ return candidate(lhs, rhs); });
         if(!actual)
             return failures + 1u;
         if(!additional(lhs, rhs, *expected, *actual, index, failures))
@@ -126,15 +137,20 @@ struct VerificationSweep{
 };
 
 template<typename Verify>
-VerificationSweep VerifyRoundingModes(Verify&& verify)noexcept{
+VerificationSweep VerifyRoundingModes(Verify&& verify)noexcept(noexcept(DeclVal<u32&>() += DeclVal<Verify&>()(DeclVal<u64&>()))){
 #pragma STDC FENV_ACCESS ON
     const auto environment = HoldFloatingPointExceptions();
     if(!environment)
         return { 1u, false };
-    constexpr i32 modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(!SetFloatingPointEnvironment(*environment))
+            CaptureDiagnosticEvent("simd_benchmark", "Failed to restore the floating-point environment while unwinding", __FILE__, __LINE__);
+    });
+
+    constexpr i32 s_Modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     u64 seed = s_InitialSeed;
     u32 failures = 0u;
-    for(const i32 mode : modes){
+    for(const i32 mode : s_Modes){
         if(!SetFloatingPointRoundingMode(mode)){
             ++failures;
             break;
@@ -143,6 +159,7 @@ VerificationSweep VerifyRoundingModes(Verify&& verify)noexcept{
     }
     if(!SetFloatingPointEnvironment(*environment))
         ++failures;
+    restoreEnvironment.release();
     return { failures, true };
 }
 

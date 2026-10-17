@@ -22,11 +22,11 @@ namespace __hidden_shader_archive{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_SerializeIndexArena("core/graphics/shader_archive_serialize");
-
-
 static constexpr char s_IndexMagic[] = "NWBSDX1";
 inline constexpr usize s_IndexMagicByteCount = sizeof(s_IndexMagic);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct IndexHeaderDisk{
@@ -151,7 +151,7 @@ Name ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringVi
     return Name(derivedHash);
 }
 
-Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, const Span<const Record> records){
+Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, const Span<const Record> records, Alloc::ScratchArena& scratchArena){
     GraphicsBytes binary(arena);
 
     if(records.size() > Limit<u32>::s_Max){
@@ -159,7 +159,6 @@ Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, cons
         return MakeUnexpected(Failure{});
     }
 
-    Alloc::ScratchArena scratchArena(__hidden_shader_archive::s_SerializeIndexArena);
     Vector<const Record*, Alloc::ScratchArena> sortedRecords{scratchArena};
     sortedRecords.reserve(records.size());
     for(const Record& record : records)

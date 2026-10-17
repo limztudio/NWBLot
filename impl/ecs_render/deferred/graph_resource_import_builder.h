@@ -115,11 +115,12 @@ struct DeferredGraphResourceImportResult{
 
 class DeferredGraphResourceImportBuilder final : NoCopy{
 public:
-    explicit DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph);
+    explicit DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph)noexcept;
 
 
 public:
     [[nodiscard]] Expected<DeferredGraphResourceImportResult> declare(const DeferredGraphResourceImportInputs& inputs)const;
+
 
 private:
     Core::GpuTaskGraph& m_graph;

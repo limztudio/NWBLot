@@ -115,7 +115,9 @@ TEST_F(UiImageSourceTests, NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds){
     Texture texture(m_inputArena, Name("tests/ui/image/paint"));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
     ASSERT_TRUE(texture.validatePayload());
-    const auto source = MakeImageSource(m_sourceArena, texture);
+    auto sourceResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(sourceResult);
+    const auto source = Move(*sourceResult);
     ASSERT_TRUE(source);
     const auto& mips = source->texture().mipLevels();
     ASSERT_EQ(mips.size(), 4u);
@@ -138,7 +140,9 @@ TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsA
         Core::Alloc::GlobalArena callerArena(Name("tests/ui/image_source/temporary"));
         Texture texture(callerArena, Name("tests/ui/image/temporary"));
         ASSERT_TRUE(Prepare(callerArena, texture));
-        source = MakeImageSource(m_sourceArena, texture);
+        auto sourceReplacement = MakeImageSource(m_sourceArena, texture);
+        ASSERT_TRUE(sourceReplacement);
+        source = Move(*sourceReplacement);
         ASSERT_TRUE(source);
         ExpectCopy(texture, source->texture());
         TextureDescription replacement;
@@ -163,8 +167,12 @@ TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsA
 TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGenerations){
     Texture texture(m_inputArena, Name("tests/ui/image/shared_path"));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
-    const auto original = MakeImageSource(m_sourceArena, texture);
-    const auto identical = MakeImageSource(m_sourceArena, texture);
+    auto originalResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(originalResult);
+    const auto original = Move(*originalResult);
+    auto identicalResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(identicalResult);
+    const auto identical = Move(*identicalResult);
     ASSERT_TRUE(original);
     ASSERT_TRUE(identical);
     EXPECT_EQ(original->identity(), identical->identity());
@@ -173,7 +181,9 @@ TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGener
     TextureDescription changed;
     changed.seed = 149u;
     ASSERT_TRUE(Prepare(m_inputArena, texture, changed));
-    const auto replacement = MakeImageSource(m_sourceArena, texture);
+    auto replacementResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(replacementResult);
+    const auto replacement = Move(*replacementResult);
     ASSERT_TRUE(replacement);
     EXPECT_EQ(replacement->identity(), original->identity());
     EXPECT_NE(replacement->generation(), original->generation());
@@ -186,7 +196,9 @@ TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGener
 TEST_F(UiImageSourceTests, CopiedSharedHandleRetainsTheSameImmutableVersionAfterOriginalRelease){
     Texture texture(m_inputArena, Name("tests/ui/image/retained"));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
-    auto original = MakeImageSource(m_sourceArena, texture);
+    auto originalResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(originalResult);
+    auto original = Move(*originalResult);
     ASSERT_TRUE(original);
     const u64 generation = original->generation();
     SharedImageSource retained = original;
@@ -205,7 +217,9 @@ TEST_F(UiImageSourceTests, SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream)
     Texture texture(m_inputArena, Name("tests/ui/image/hdr"));
     ASSERT_TRUE(Prepare(m_inputArena, texture, description));
     ASSERT_TRUE(texture.validatePayload());
-    const auto source = MakeImageSource(m_sourceArena, texture);
+    auto sourceResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(sourceResult);
+    const auto source = Move(*sourceResult);
     ASSERT_TRUE(source);
     const Texture& copied = source->texture();
     EXPECT_EQ(copied.primaryPayloadByteCount(), 144u);
@@ -320,7 +334,9 @@ TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
 TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAcceptedOwnedVersion){
     Texture texture(m_inputArena, Name("tests/ui/image/replace"));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
-    const auto accepted = MakeImageSource(m_sourceArena, texture);
+    auto acceptedResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(acceptedResult);
+    const auto accepted = Move(*acceptedResult);
     ASSERT_TRUE(accepted);
     const u64 generation = accepted->generation();
     Texture::MipLevelVector mips(m_inputArena);
@@ -337,7 +353,9 @@ TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAccepte
     TextureDescription replacement;
     replacement.seed = 73u;
     ASSERT_TRUE(Prepare(m_inputArena, texture, replacement));
-    const auto next = MakeImageSource(m_sourceArena, texture);
+    auto nextResult = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(nextResult);
+    const auto next = Move(*nextResult);
     ASSERT_TRUE(next);
     EXPECT_NE(next->generation(), generation);
     EXPECT_EQ(next->texture().payloadBytes()[0u], 73u);

@@ -33,7 +33,7 @@ inline constexpr u64 s_PendingMetricRetentionFrames = static_cast<u64>(s_MaxFram
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTimingMetricCorrelator::GpuTimingMetricCorrelator(Alloc::GlobalArena& arena, Perf::TimingSink& timing)
+GpuTimingMetricCorrelator::GpuTimingMetricCorrelator(Alloc::GlobalArena& arena, Perf::TimingSink& timing)noexcept
     : m_arena(arena)
     , m_timing(timing)
     , m_overlapRecords(arena)
@@ -72,8 +72,8 @@ bool GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, con
             return false;
     }
 
-    const Perf::TimingScopeId output = m_timing.registerScope(outputScope);
-    if(!output.valid())
+    const auto output = m_timing.registerScope(outputScope);
+    if(!output)
         return false;
 
     m_overlapRecords.emplace_back(m_arena);
@@ -81,7 +81,7 @@ bool GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, con
     record.firstScope = canonicalFirstScope;
     record.secondScope = canonicalSecondScope;
     record.outputScopeName = outputScope;
-    record.outputScope = output;
+    record.outputScope = *output;
     return true;
 }
 
@@ -216,14 +216,14 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
         return true;
     }
 
-    const Perf::TimingScopeId overlapOutput = m_timing.registerScope(queueOverlapScope);
-    if(!overlapOutput.valid())
+    const auto overlapOutput = m_timing.registerScope(queueOverlapScope);
+    if(!overlapOutput)
         return false;
     rememberMetricOutput(queueOverlapScope, {}, false);
 
     candidate.sourceFrameIndex = sourceFrameIndex;
     candidate.queueOverlapScopeName = queueOverlapScope;
-    candidate.queueOverlapScope = overlapOutput;
+    candidate.queueOverlapScope = *overlapOutput;
     candidate.scopes.reserve(scopeCount);
     candidate.queueOutputs.reserve(queueOutputCount);
     candidate.remainingScopeCount = scopeCount;
@@ -232,11 +232,11 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     }
     for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
         const GpuPacketEnvelopeMetricQueueOutput& output = queueOutputs[outputIndex];
-        const Perf::TimingScopeId idleOutput = m_timing.registerScope(output.internalIdleScopeName);
-        if(!idleOutput.valid())
+        const auto idleOutput = m_timing.registerScope(output.internalIdleScopeName);
+        if(!idleOutput)
             return false;
         rememberMetricOutput(output.internalIdleScopeName, output.physicalQueue, true);
-        candidate.queueOutputs.push_back(PacketEnvelopeMetricQueueOutputRecord{ .physicalQueue = output.physicalQueue, .internalIdleScopeName = output.internalIdleScopeName, .internalIdleScope = idleOutput, });
+        candidate.queueOutputs.push_back(PacketEnvelopeMetricQueueOutputRecord{ .physicalQueue = output.physicalQueue, .internalIdleScopeName = output.internalIdleScopeName, .internalIdleScope = *idleOutput, });
     }
 
     // Publish only a complete frame; candidate cleanup preserves output roles already recorded above.

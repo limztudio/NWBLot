@@ -23,8 +23,32 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct X11Property final : NoCopy{
+    Atom type = 0u;
+    int format = 0;
+    unsigned long count = 0u;
+    unsigned long remaining = 0u;
+    unsigned char* bytes = nullptr;
+
+
+public:
+    X11Property()noexcept = default;
+    X11Property(X11Property&& other)noexcept;
+    ~X11Property()noexcept;
+};
+
+
+struct X11PropertyFailure{
+    i32 nativeStatus = 0;
+    u8 errorCode = 0u;
+};
+
+
 // Foreign selection requestors can disappear between Xlib calls. Check those errors without a fatal Xlib handler.
 class X11CheckedOperation final : NoCopy{
+    friend Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, Window window, Atom property, bool remove, usize maxBytes);
+
+
 private:
     static int OnError(Display* display, XErrorEvent* event);
 
@@ -45,20 +69,7 @@ private:
 };
 
 
-struct X11Property final : NoCopy{
-    Atom type = 0u;
-    int format = 0;
-    unsigned long count = 0u;
-    unsigned long remaining = 0u;
-    unsigned char* bytes = nullptr;
-
-    X11Property()noexcept = default;
-    X11Property(X11Property&& other)noexcept;
-    ~X11Property()noexcept;
-};
-
-
-[[nodiscard]] Expected<X11Property> ReadX11Property(Display& display, Window window, Atom property, bool remove, usize maxBytes);
+[[nodiscard]] Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, Window window, Atom property, bool remove, usize maxBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

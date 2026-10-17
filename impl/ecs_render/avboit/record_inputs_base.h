@@ -69,6 +69,8 @@ struct AvboitRecordInputsBase{
     usize sharedComputeEmulationInstanceCount = 0u;
     usize sharedComputeEmulationMaterialTypedByteCount = 0u;
 
+
+public:
     explicit AvboitRecordInputsBase(Core::Alloc::GlobalArena& arena)noexcept{
         static_cast<void>(arena);
     }

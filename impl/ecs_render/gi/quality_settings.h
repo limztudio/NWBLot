@@ -34,7 +34,7 @@ struct SurfelGiResolveSize{
 };
 
 [[nodiscard]] bool ValidateSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept;
-[[nodiscard]] SurfelGiResolveSize MakeSurfelGiResolveSize(u32 width, u32 height, u32 factor);
+[[nodiscard]] SurfelGiResolveSize MakeSurfelGiResolveSize(u32 width, u32 height, u32 factor)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -55,12 +55,14 @@ struct RayTracingOpticalSceneSnapshot{
     bool boundsComplete = false;
     bool unspecifiedBoundariesOnly = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid() && upload && uploadState; }
 };
 
 class RayTracingOpticalSceneResources final : NoCopy{
 public:
-    RayTracingOpticalSceneResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Name identity);
+    RayTracingOpticalSceneResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Name identity)noexcept;
 
 
 public:
@@ -69,6 +71,7 @@ public:
     [[nodiscard]] bool prepare(const RayTracingOpticalSceneGather& gather);
     [[nodiscard]] bool prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem);
     [[nodiscard]] RayTracingOpticalSceneSnapshot snapshot()const noexcept;
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

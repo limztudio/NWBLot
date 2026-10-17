@@ -49,7 +49,8 @@ int Run(const int argc, char** argv){
     cpuScheduler.wait();
     if(prompted && result >= s_PromptSuccessThreshold){
         NWB_COUT << "Press Enter to exit...";
-        NWB::FbxToNwb::AString line;
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::FbxToNwb::UtilityDetail::s_UtilityScratch);
+        NWB::FbxToNwb::ScratchString line(scratchArena);
         if(!ReadTextLine(NWB_CIN, line))
             NWB_COUT << "\n";
     }

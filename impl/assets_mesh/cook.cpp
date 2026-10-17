@@ -9,12 +9,12 @@
 
 
 #include "cook.h"
+#include "arena_names.h"
 #include "cook_metadata.h"
 #include "cook_source_streams.h"
 #include "cook_stream_reorder.h"
 #include "cook_ref_encoding.h"
 #include "cook_meshlets.h"
-#include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
 #include "meshlet_ref_codec.h"
@@ -99,46 +99,11 @@ static Expected<MeshCookEntry> ParseMeshMeta(
 
 static Expected<MeshCookEntry> ParseMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
     Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, scratchArena);
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
     return ParseMeshMeta(discoveredFile, doc.asset(), virtualPath, arena, cpuScheduler, scratchArena);
-}
-
-static Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena){
-    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_BuildMeshAssetArena);
-    if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
-        return MakeUnexpected(Failure{});
-    if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
-        return MakeUnexpected(Failure{});
-
-    const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, meshEntry.meshlets, meshEntry.meshletLocalVertexRefs, meshEntry.meshletPositionRefDeltas, meshEntry.meshletPrimitiveIndices, meshEntry.positions.size());
-    if(!triangleIndices)
-        return MakeUnexpected(Failure{});
-    auto solidTriangleWords = BuildSolidTriangleWords(meshEntry.positions, *triangleIndices, scratchArena);
-    if(!solidTriangleWords)
-        return MakeUnexpected(Failure{});
-    Core::Assets::AssetVector<u32> solidWords(solidTriangleWords->begin(), solidTriangleWords->end(), arena);
-
-    Mesh mesh(arena, meshEntry.virtualPath);
-    mesh.setPayload(
-        Move(meshEntry.positions),
-        Move(meshEntry.normals),
-        Move(meshEntry.tangents),
-        Move(meshEntry.uv0),
-        Move(meshEntry.colors),
-        Move(meshEntry.meshlets),
-        Move(meshEntry.meshletBounds),
-        Move(meshEntry.meshletPositionRefDeltas),
-        Move(meshEntry.meshletAttributeRefDeltas),
-        Move(meshEntry.meshletLocalVertexRefs),
-        Move(meshEntry.meshletPrimitiveIndices),
-        Move(solidWords)
-    );
-    if(!mesh.validatePayload())
-        return MakeUnexpected(Failure{});
-    return mesh;
 }
 
 
@@ -172,8 +137,38 @@ Expected<MeshCookEntry> ParseMeshCookMetadata(const Name virtualPath, const Path
     return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, arena, cpuScheduler, scratchArena);
 }
 
-Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena){
-    return __hidden_assets_mesh_cook::BuildMeshAsset(meshEntry, arena);
+Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
+        return MakeUnexpected(Failure{});
+    if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
+        return MakeUnexpected(Failure{});
+
+    const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, meshEntry.meshlets, meshEntry.meshletLocalVertexRefs, meshEntry.meshletPositionRefDeltas, meshEntry.meshletPrimitiveIndices, meshEntry.positions.size());
+    if(!triangleIndices)
+        return MakeUnexpected(Failure{});
+    auto solidTriangleWords = BuildSolidTriangleWords(meshEntry.positions, *triangleIndices, scratchArena);
+    if(!solidTriangleWords)
+        return MakeUnexpected(Failure{});
+    Core::Assets::AssetVector<u32> solidWords(solidTriangleWords->begin(), solidTriangleWords->end(), arena);
+
+    Mesh mesh(arena, meshEntry.virtualPath);
+    mesh.setPayload(
+        Move(meshEntry.positions),
+        Move(meshEntry.normals),
+        Move(meshEntry.tangents),
+        Move(meshEntry.uv0),
+        Move(meshEntry.colors),
+        Move(meshEntry.meshlets),
+        Move(meshEntry.meshletBounds),
+        Move(meshEntry.meshletPositionRefDeltas),
+        Move(meshEntry.meshletAttributeRefDeltas),
+        Move(meshEntry.meshletLocalVertexRefs),
+        Move(meshEntry.meshletPrimitiveIndices),
+        Move(solidWords)
+    );
+    if(!mesh.validatePayload(scratchArena))
+        return MakeUnexpected(Failure{});
+    return mesh;
 }
 
 
@@ -184,8 +179,9 @@ bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(!checkSerializeAssetType(asset, NWB_TEXT("MeshAssetCodec::serialize")))
         return false;
 
+    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
     const Mesh& mesh = static_cast<const Mesh&>(asset);
-    if(!mesh.validatePayload())
+    if(!mesh.validatePayload(scratchArena))
         return false;
 
     usize reserveBytes = sizeof(MeshBinaryPayload::MeshHeaderBinary);

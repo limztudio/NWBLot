@@ -26,7 +26,12 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;
-        const WidgetId thumbId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb");
+        const auto thumbIdResult = MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb");
+        if(!thumbIdResult){
+            painted = false;
+            break;
+        }
+        const WidgetId thumbId = *thumbIdResult;
         const bool hovered = m_context.input().hover() == thumbId;
         const bool pressed = m_context.input().capture() == thumbId;
         const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
@@ -76,7 +81,8 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
             target.rectangle.width = before;
         else
             target.rectangle.height = before;
-        if(!m_context.addPartTarget(item.state, MakeWidgetId(item.state.id, horizontal ? "scroll.x.before" : "scroll.y.before"), target))
+        const auto beforeId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.before" : "scroll.y.before");
+        if(!beforeId || !m_context.addPartTarget(item.state, *beforeId, target))
             return false;
         target.value = horizontal ? 2u : 4u;
         target.rectangle = bar.track;
@@ -88,7 +94,8 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
             target.rectangle.y = VectorGetY(VectorAdd(VectorReplicate(thumbStart), VectorReplicate(thumbExtent)));
             target.rectangle.height = after;
         }
-        if(!m_context.addPartTarget(item.state, MakeWidgetId(item.state.id, horizontal ? "scroll.x.after" : "scroll.y.after"), target))
+        const auto afterId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.after" : "scroll.y.after");
+        if(!afterId || !m_context.addPartTarget(item.state, *afterId, target))
             return false;
         target.rectangle = bar.thumb;
         target.activatable = false;
@@ -96,7 +103,8 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         target.pointerGesture = trackExtent > thumbExtent;
         target.gestureReference = bar.track;
         target.gestureMaximum = bar.maximum;
-        if(!m_context.addPartTarget(item.state, MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb"), target))
+        const auto thumbId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb");
+        if(!thumbId || !m_context.addPartTarget(item.state, *thumbId, target))
             return false;
     }
     if(placement.corner.width > 0.0f && placement.corner.height > 0.0f){
@@ -104,7 +112,8 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         target.rectangle = placement.corner;
         target.clip = clip;
         target.control = token;
-        if(!m_context.addPartTarget(item.state, MakeWidgetId(item.state.id, "scroll.corner"), target))
+        const auto cornerId = MakeWidgetId(item.state.id, "scroll.corner");
+        if(!cornerId || !m_context.addPartTarget(item.state, *cornerId, target))
             return false;
     }
     return true;

@@ -7,6 +7,8 @@
 
 #include "recorder.h"
 
+#include <core/alloc/scratch.h>
+
 #include <global/expected.h>
 
 
@@ -45,7 +47,9 @@ struct FrameGraphNodePayload{
     FrameGraphCompiledTask compiledTask;
     FrameGraphRuntimeStatistics runtimeStatistics;
 
-    explicit FrameGraphNodePayload(TelemetryArena& arena)
+
+public:
+    explicit FrameGraphNodePayload(TelemetryArena& arena)noexcept
         : label(arena)
     {}
 };
@@ -65,7 +69,9 @@ struct FrameGraphPayload{
     u64 frameIndex = 0u;
     bool packetSubmissionStatisticsPresent = false;
 
-    explicit FrameGraphPayload(TelemetryArena& arena)
+
+public:
+    explicit FrameGraphPayload(TelemetryArena& arena)noexcept
         : nodes(arena)
         , edges(arena)
         , physicalQueueRuntimeStatistics(arena)
@@ -94,9 +100,9 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
 [[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept;
 [[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
 [[nodiscard]] bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept;
-[[nodiscard]] bool BuildFrameGraphPayload(TelemetryArena& arena, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, TelemetryBytes& outPayload);
+[[nodiscard]] bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, TelemetryBytes& outPayload);
 [[nodiscard]] bool BuildFrameGraphPayload(
-    TelemetryArena& arena,
+    Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
@@ -104,7 +110,7 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
     TelemetryBytes& outPayload
 );
 [[nodiscard]] bool BuildFrameGraphPayload(
-    TelemetryArena& arena,
+    Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
@@ -112,11 +118,20 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
     const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     TelemetryBytes& outPayload
 );
-[[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, u32 streamId = 0u);
-[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, u32 streamId = 0u);
+[[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc::ScratchArena& scratchArena, const void* payload, usize payloadBytes);
+[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, u32 streamId = 0u);
 [[nodiscard]] bool RecordFrameGraph(
     Recorder& recorder,
+    Alloc::ScratchArena& scratchArena,
+    u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    u32 streamId = 0u
+);
+[[nodiscard]] bool RecordFrameGraph(
+    Recorder& recorder,
+    Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,

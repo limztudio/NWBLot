@@ -43,13 +43,13 @@ const GpuPhysicalQueueInfo* Device::getPhysicalQueueInfo(const GpuPhysicalQueueI
     return info.id == queue ? &info : nullptr;
 }
 
-GpuQueueTimelineSnapshot Device::getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue){
+Expected<GpuQueueTimelineSnapshot> Device::getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue){
     if(isDeviceLost())
-        return {};
+        return MakeUnexpected(Failure{});
 
     Queue* const physicalQueue = getQueue(queue);
     if(!physicalQueue)
-        return {};
+        return MakeUnexpected(Failure{});
 
     VkResult result = VK_SUCCESS;
     GpuQueueTimelineSnapshot snapshot;
@@ -62,7 +62,7 @@ GpuQueueTimelineSnapshot Device::getQueueTimelineSnapshot(const GpuPhysicalQueue
         captureDeviceLoss("queue timeline snapshot");
     if(result != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to snapshot queue timeline semaphore: {}"), ResultToString(result));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     return snapshot;
 }
@@ -90,11 +90,11 @@ bool Device::matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const 
     return getPhysicalQueueInfo(queue) != nullptr;
 }
 
-
 Queue* Device::getQueue(const CommandQueue::Enum queueType)noexcept{
     const u32 index = static_cast<u32>(queueType);
     return index < static_cast<u32>(CommandQueue::kCount) ? m_primaryQueues[index] : nullptr;
 }
+
 
 Queue* Device::getQueue(const GpuPhysicalQueueId& queue)noexcept{
     if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration || queue.index >= m_physicalQueues.size())

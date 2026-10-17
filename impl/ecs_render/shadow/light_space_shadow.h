@@ -105,7 +105,7 @@ struct LightSpaceShadowCaster{
     bool csg = false;
 };
 
-[[nodiscard]] u32 LightSpaceShadowDrawCount(const LightSpaceShadowCaster* casters, usize casterCount)noexcept;
+[[nodiscard]] Expected<u32> LightSpaceShadowDrawCount(const LightSpaceShadowCaster* casters, usize casterCount)noexcept;
 
 struct LightSpaceShadowDiagnostics{
     Core::BufferHandle readback;
@@ -196,7 +196,7 @@ public:
 
 
 public:
-    explicit LightSpaceShadowState(Core::Alloc::GlobalArena& arena)
+    explicit LightSpaceShadowState(Core::Alloc::GlobalArena& arena)noexcept
         : m_csg(arena)
         , m_casters(arena)
         , m_sceneBuffers(arena)

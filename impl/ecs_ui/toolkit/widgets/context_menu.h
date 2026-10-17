@@ -43,6 +43,9 @@ class ContextMenuState final : NoCopy{
 public:
     ContextMenuState()noexcept = default;
     ContextMenuState(ContextMenuState&&) = delete;
+
+
+public:
     ContextMenuState& operator=(ContextMenuState&&) = delete;
 
 

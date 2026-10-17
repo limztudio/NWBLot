@@ -125,7 +125,7 @@ protected:
         return layout && m_view.adoptLayout(Move(*layout));
     }
 
-    [[nodiscard]] bool place(const f32 width = 100.0f, const f32 height = 100.0f, const Point previousScroll = {}){
+    [[nodiscard]] bool place(const f32 width = 100.0f, const f32 height = 100.0f, const Point previousScroll = {})noexcept{
         const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, previousScroll);
         if(!placement)
             return false;
@@ -134,6 +134,7 @@ protected:
     }
 
     [[nodiscard]] bool loadFont(){
+        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
         auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
@@ -144,7 +145,7 @@ protected:
         if(!m_font.validatePayload())
             return false;
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/widgets/multiline_view/font"), m_font, 1u };
-        return m_text.setFonts(&source, 1u);
+        return m_text.setFonts(fontScratchArena, &source, 1u);
     }
 
     [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){

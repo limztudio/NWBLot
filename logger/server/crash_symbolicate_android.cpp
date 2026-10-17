@@ -44,15 +44,16 @@ inline constexpr AStringView s_TombstoneCallstackSectionHeader = "\n[tombstone_c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
-    CrashReportText tombstone{arena};
+void AppendAndroidTombstoneSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
+    AString<Core::Alloc::ScratchArena> tombstone{arena};
     const bool tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
     if(!tombstonePresent){
         outReport += s_AndroidTombstoneMissingReport;
         return;
     }
 
-    CrashReportText frames{arena};
+    AString<Core::Alloc::ScratchArena> frames{arena};
+    frames.reserve(AddSize(tombstone.size(), 1u));
     const AStringView tombstoneText(tombstone.data(), tombstone.size());
     usize cursor = 0u;
     while(const auto line = NextTextLine(tombstoneText, cursor)){

@@ -16,34 +16,34 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Path CrashDefaultRootDirectory(LogArena& arena){
+CrashScratchPath CrashDefaultRootDirectory(Core::Alloc::ScratchArena& arena){
     const auto executableDirectory = GetExecutableDirectory(arena);
     if(executableDirectory)
         return *executableDirectory / Core::Crash::PackageNames::s_DefaultRootDirectoryName;
 
-    return Path(arena, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
+    return CrashScratchPath(arena, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
 }
 
-Path CrashStorageDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+CrashScratchPath CrashStorageDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
     if(!configuredStorageDirectory.empty())
-        return Path(arena, configuredStorageDirectory);
+        return CrashScratchPath(arena, configuredStorageDirectory);
 
     return CrashDefaultRootDirectory(arena);
 }
 
-Path CrashRawDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+CrashScratchPath CrashRawDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
     return CrashStorageDirectory(arena, configuredStorageDirectory) / s_CrashRawDirectoryName;
 }
 
-Path CrashInvalidDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+CrashScratchPath CrashInvalidDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
     return CrashStorageDirectory(arena, configuredStorageDirectory) / s_CrashInvalidDirectoryName;
 }
 
-Path CrashExtractedDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+CrashScratchPath CrashExtractedDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
     return CrashStorageDirectory(arena, configuredStorageDirectory) / s_CrashExtractedDirectoryName;
 }
 
-Path CrashExtractedPackageDirectory(LogArena& arena, const Path& configuredStorageDirectory, const Path& archivePath){
+CrashScratchPath CrashExtractedPackageDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory, const CrashScratchPath& archivePath){
     return CrashExtractedDirectory(arena, configuredStorageDirectory) / archivePath.stem();
 }
 

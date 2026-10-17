@@ -269,6 +269,26 @@ class LauncherPlatformTests(unittest.TestCase):
             launcher.resolve_launch_settings(args, LIT_FULL)
 
 
+    def test_windows_handle_wrapper_failure_closes_unpublished_native_handle(self):
+        for can_terminate in (False, True):
+            with self.subTest(can_terminate=can_terminate):
+                kernel32 = mock.Mock()
+                kernel32.OpenProcess.side_effect = [707] if can_terminate else [0, 707]
+                with mock.patch.object(ctypes, LIT_WINDOWS_DLL, side_effect=[kernel32, mock.Mock(), mock.Mock()], create=True):
+                    api = repository_windows_process.WindowsProcessApi()
+                failure = MemoryError("handle wrapper allocation failed")
+
+                with mock.patch.object(repository_windows_process, "WindowsProcessHandle", side_effect=failure), self.assertRaises(MemoryError) as result:
+                    api.open_process(708)
+
+                self.assertIs(failure, result.exception)
+                access = repository_windows_process.PROCESS_QUERY_WAIT_AND_TERMINATE_ACCESS
+                expected = [mock.call(access, False, 708)]
+                if not can_terminate:
+                    expected.append(mock.call(repository_windows_process.PROCESS_QUERY_AND_WAIT_ACCESS, False, 708))
+                self.assertEqual(expected, kernel32.OpenProcess.call_args_list)
+                kernel32.CloseHandle.assert_called_once_with(707)
+
     def test_windows_kill_existing_matches_exact_image_not_same_basename(self):
         x64_image = r"C:\Build\x64\viewer.exe"
         arm64_image = r"C:\Build\arm64\viewer.exe"
@@ -497,6 +517,80 @@ class LauncherDurationBoundaryTests(unittest.TestCase):
 
 
 class LauncherProcessStopTests(unittest.TestCase):
+    def test_profile_spawn_diagnostic_failure_reaps_unpublished_server(self):
+        events = []
+        process = FakeSpawnedProcess(701, 0, events)
+        failure = BrokenPipeError("closed launcher output")
+        args = argparse.Namespace(with_profile=True, profile_logserver_timeout=1.0, profile_logserver_target="server", profile_logserver_executable=None, profile_logserver_name=None, profile_logserver_args=[], dry_run=False)
+
+        def print_status(message, **_options):
+            if str(message).startswith("launched "):
+                raise failure
+
+        with (mock.patch.object(launcher, "resolve_profile_log_port", return_value=12345), mock.patch.object(launcher, "resolve_executable_path", return_value=Path("server")), mock.patch.object(launcher, "validate_launch_paths"),
+            mock.patch.object(launcher, "wait_for_tcp_port") as ready, mock.patch.object(subprocess, LIT_POPEN, return_value=process), mock.patch(LIT_BUILTINS_PRINT, side_effect=print_status)):
+            with self.assertRaises(BrokenPipeError) as result:
+                launcher.start_profile_session(args, mock.sentinel.settings, ROOT, {})
+
+        self.assertIs(failure, result.exception)
+        self.assertEqual([(LIT_TERMINATE, 701), (LIT_WAIT, launcher.PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS)], events)
+        self.assertEqual(0, process.returncode)
+        ready.assert_not_called()
+
+    def test_cleanup_diagnostic_failure_still_forces_and_reaps_process(self):
+        process = mock.Mock(pid=702)
+        process.poll.return_value = None
+        process.wait.side_effect = [subprocess.TimeoutExpired("server", 1.0), 9]
+        failure = BrokenPipeError("closed cleanup output")
+
+        with mock.patch(LIT_BUILTINS_PRINT, side_effect=failure), self.assertRaises(BrokenPipeError) as result:
+            launcher.terminate_process(process, "server", 1.0)
+
+        self.assertIs(failure, result.exception)
+        self.assertEqual([mock.call.poll(), mock.call.terminate(), mock.call.wait(timeout=1.0), mock.call.kill(), mock.call.wait()], process.mock_calls)
+
+    def test_application_spawn_diagnostic_failure_reaps_application_and_server(self):
+        for detach in (False, True):
+            with self.subTest(detach=detach):
+                events = []
+                process = FakeSpawnedProcess(703, 0, events)
+                server = FakeSpawnedProcess(704, 0, events)
+                session = launcher.ProfileSession(12345, Path("server"), server)
+                args = argparse.Namespace(kill_existing=False, dry_run=False, gpudbg=False, detach=detach, run_seconds=None, profile_log_address="http://localhost")
+                failure = BrokenPipeError("closed application output")
+
+                def print_status(message, **_options):
+                    if str(message).startswith("launched "):
+                        raise failure
+
+                with mock.patch.object(subprocess, LIT_POPEN, return_value=process), mock.patch(LIT_BUILTINS_PRINT, side_effect=print_status), self.assertRaises(BrokenPipeError) as result:
+                    launcher.launch_process(args, Path("application"), ROOT, {}, (), session, paths_validated=True)
+
+                self.assertIs(failure, result.exception)
+                self.assertEqual([(LIT_TERMINATE, 703), (LIT_WAIT, launcher.PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS), (LIT_TERMINATE, 704), (LIT_WAIT, launcher.PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS)], events)
+                self.assertEqual(0, process.returncode)
+                self.assertEqual(0, server.returncode)
+
+    def test_explicit_detach_and_keyboard_interrupt_retain_live_application_and_server(self):
+        for detach in (False, True):
+            with self.subTest(detach=detach):
+                process = mock.Mock(pid=705)
+                process.poll.return_value = None
+                process.wait.side_effect = KeyboardInterrupt
+                server = mock.Mock(pid=706)
+                session = launcher.ProfileSession(12345, Path("server"), server)
+                args = argparse.Namespace(kill_existing=False, dry_run=False, gpudbg=False, detach=detach, run_seconds=None, profile_log_address="http://localhost")
+
+                with mock.patch.object(subprocess, LIT_POPEN, return_value=process), mock.patch(LIT_BUILTINS_PRINT):
+                    self.assertEqual(0, launcher.launch_process(args, Path("application"), ROOT, {}, (), session, paths_validated=True))
+
+                self.assertEqual(0 if detach else 1, process.wait.call_count)
+                process.terminate.assert_not_called()
+                process.kill.assert_not_called()
+                server.terminate.assert_not_called()
+                server.kill.assert_not_called()
+                server.wait.assert_not_called()
+
     def test_no_matching_posix_process_does_not_prevent_launch(self):
         with (mock.patch("launcher.process.shutil.which", return_value="/usr/bin/pkill"), mock.patch.object(subprocess, "run", return_value=mock.Mock(returncode=1)),):
             launcher.stop_existing_process(Path("absent-application"), launcher.PLATFORM_LINUX)

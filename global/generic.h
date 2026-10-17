@@ -16,6 +16,8 @@ public:
     NoAssign(const NoAssign&)noexcept = default;
     NoAssign()noexcept = default;
 
+
+public:
     void operator=(const NoAssign&) = delete;
 };
 
@@ -25,6 +27,8 @@ public:
     NoCopy(NoCopy&&)noexcept = default;
     NoCopy()noexcept = default;
 
+
+public:
     NoCopy& operator=(NoCopy&&) = delete;
 };
 
@@ -33,7 +37,7 @@ public:
 
 
 template<typename T, typename U>
-inline T checked_cast(U u){
+inline T checked_cast(U u)noexcept(IsPointer_V<T> && IsPointer_V<U>){
     static_assert(!IsSame<T, U>::value, "Unnecessary checked_cast");
     if(!u)
         return nullptr;

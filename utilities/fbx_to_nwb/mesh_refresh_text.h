@@ -28,8 +28,10 @@ namespace MeshRefreshTextDetail{
 struct TextReplacement{
     usize begin = 0u;
     usize end = 0u;
-    AString text;
+    ScratchString text;
 };
+
+using TextReplacements = ::Vector<TextReplacement, Core::Alloc::ScratchArena>;
 
 struct SkinReference{
     const Core::Metascript::Value* value = nullptr;
@@ -42,10 +44,9 @@ struct SkinReference{
 
 [[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs)noexcept;
 [[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName);
-[[nodiscard]] AString WriteSkinInfluenceList(const UtilityVector<MeshSkinInfluence>& influences);
-[[nodiscard]] bool AddReplacement(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText);
-[[nodiscard]] bool AppendMeshReplacements(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after);
-[[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityScratchVector<TextReplacement>& replacements);
+[[nodiscard]] bool AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText);
+[[nodiscard]] bool AppendMeshReplacements(TextReplacements& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replacements);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

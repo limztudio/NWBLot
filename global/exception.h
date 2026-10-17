@@ -16,10 +16,19 @@
 
 
 using LengthException = std::length_error;
+using TerminateHandler = std::terminate_handler;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] inline TerminateHandler QueryTerminateHandler()noexcept{
+    return std::get_terminate();
+}
+
+inline TerminateHandler ExchangeTerminateHandler(const TerminateHandler handler)noexcept{
+    return std::set_terminate(handler);
+}
 
 [[nodiscard]] NWB_INLINE i32 UncaughtExceptionCount()noexcept{
     return std::uncaught_exceptions();

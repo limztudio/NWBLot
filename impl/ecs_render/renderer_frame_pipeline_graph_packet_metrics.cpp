@@ -99,10 +99,10 @@ namespace __hidden_task_graph_deferred_lighting{
         if(!packetView.valid() || !packetView.plan->recordsPacketEnvelopeTiming || packetView.plan->taskCount == 0u)
             return false;
 
-        const Name packetScopeName = Core::GpuTaskPacketTimingScopeName(graph.taskAt(packetView.tasks[0u].index).identity);
+        const auto packetScopeName = Core::GpuTaskPacketTimingScopeName(graph.taskAt(packetView.tasks[0u].index).identity);
         if(!packetScopeName)
             return false;
-        packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{ .scopeName = packetScopeName, .physicalQueue = packetView.plan->queue, });
+        packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{ .scopeName = *packetScopeName, .physicalQueue = packetView.plan->queue, });
 
         bool hasQueueOutput = false;
         for(const Core::GpuPacketEnvelopeMetricQueueOutput& output : queueOutputs)
@@ -110,10 +110,10 @@ namespace __hidden_task_graph_deferred_lighting{
         if(hasQueueOutput)
             continue;
 
-        const Name internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena);
-        if(!internalIdleScopeName)
+        const auto internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena);
+        if(!internalIdleScopeName || !*internalIdleScopeName)
             return false;
-        queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = packetView.plan->queue, .internalIdleScopeName = internalIdleScopeName, });
+        queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = packetView.plan->queue, .internalIdleScopeName = **internalIdleScopeName, });
     }
 
     return timingRecorder.preparePacketEnvelopeMetrics(

@@ -64,6 +64,10 @@ struct NwbSceneLight{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbHeapSceneShadingBuffers[];
 #pragma warning(pop)
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> nwbHeapSceneShading(const uint slot){
     return g_NwbHeapSceneShadingBuffers[slot];
 }

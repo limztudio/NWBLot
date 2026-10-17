@@ -29,7 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Element type of the uniform-buffer (CBV) heap array. A CBV is at least a 16-byte float4 lane; the payload is the leading uint, the rest pads the constant-buffer row.
+// Generic uniform-buffer heap alias: the leading uint is at byte 0, uint3 padding starts at byte 16, and the configured std140 layout has a 32-byte extent.
 struct NwbBindlessHeapUint{
     uint value;
     uint3 _pad;

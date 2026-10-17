@@ -44,21 +44,30 @@ NwbCsgSample nwbEvalCsgBoxShape(const float3 shapePosition, const NwbCsgCutter c
 }
 
 #if defined(NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN)
+#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN
+#else
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN nwbTryEvalProjectCsgShape
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool nwbTryEvalCsgBoxShape(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter, out NwbCsgSample outSample){
-    if(shapeType == NWB_CSG_BOX_SHAPE_ID){
+    if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
         outSample = nwbEvalCsgBoxShape(shapePosition, cutter);
         return true;
     }
-#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
-    return NWB_CSG_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample);
-#else
-    return nwbTryEvalProjectCsgShape(shapeType, shapePosition, cutter, outSample);
-#endif
+    return NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample);
 }
 
-#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN
 #undef NWB_CSG_SHAPE_EVAL_CHAIN
-#endif
 #define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalCsgBoxShape
 #endif
 

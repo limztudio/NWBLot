@@ -103,15 +103,6 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
-        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
-    }
-
-    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
-        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
-    }
-
-
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("SoftShadowTestSmokeProject"));
 
@@ -149,13 +140,22 @@ private:
     }
 
 
+public:
+    explicit SoftShadowTestSmokeProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateWorldOrDie(context))
+    {}
+    virtual ~SoftShadowTestSmokeProject()override{
+        m_timingRenderPass.stop();
+        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
+        destroyWorld();
+    }
+
+
 private:
     void destroyWorld(){
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
-
-
-
 
     void spinCasters(){
         for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
@@ -163,19 +163,6 @@ private:
             if(transform)
                 StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
         }
-    }
-
-
-public:
-    explicit SoftShadowTestSmokeProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateWorldOrDie(context))
-    {}
-
-    virtual ~SoftShadowTestSmokeProject()override{
-        m_timingRenderPass.stop();
-        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
-        destroyWorld();
     }
 
 
@@ -254,7 +241,8 @@ public:
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             // Coverage and absorption share authored tint/density; Beer-Lambert integrates the actual mesh chord.
-            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), glassTintApplied);
+            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), glassTintApplied
+        );
         if(!glassTintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
 
@@ -312,7 +300,11 @@ public:
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCasters();
         updateWindowTitle();
-        m_world->tick(safeDelta);
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         ++m_rendererBaselineRenderedFrameCount;
         return true;
     }

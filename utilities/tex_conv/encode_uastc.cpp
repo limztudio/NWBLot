@@ -282,8 +282,13 @@ struct EncodedMip{
     }
 
     basisu::basis_compressor compressor;
-    if(!compressor.init(params) || compressor.process() != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to encode a linear mip."));
+    if(!compressor.init(params)){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize a linear mip encoder."));
+        return false;
+    }
+    const basisu::basis_compressor::error_code encoded = compressor.process();
+    if(encoded != basisu::basis_compressor::cECSuccess){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to encode a linear mip, error {}."), static_cast<i32>(encoded));
         return false;
     }
     if(!AppendEncodedMip(compressor.get_uastc_backend_output(), mip, basisFormat, bytes, scratchArena)){

@@ -212,10 +212,15 @@ struct MeshInstance{
 struct SceneHandle{
     ufbx_scene* scene = nullptr;
 
+
+public:
     SceneHandle()noexcept = default;
-    ~SceneHandle()noexcept;
     SceneHandle(SceneHandle&& other)noexcept;
     SceneHandle(const SceneHandle&) = delete;
+    ~SceneHandle()noexcept;
+
+
+public:
     SceneHandle& operator=(const SceneHandle&) = delete;
 };
 
@@ -223,37 +228,46 @@ struct SceneHandle{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AString OutputAssetTypeOptionsText();
-AString OutputAssetTypeErrorText();
-Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value);
+ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena);
+ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena);
+Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena);
 bool ValidateAssetTypeText(AString& inOutValue);
-AString NormalModeOptionsText();
-AString NormalModeErrorText();
-Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value);
+ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena);
+ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena);
+Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena);
 bool ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode)noexcept;
-Expected<Vec4> ParseColorText(const AStringView text);
-Path DefaultOutputPath(const AStringView inputPath);
+Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena);
+ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena);
 
-Expected<SceneHandle> LoadScene(const ImportOptions& options);
+Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena);
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
-void PrintMeshInstances(const UtilityVector<MeshInstance>& instances);
-Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector);
-Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection, const ImportOptions& options, bool wantsSkinning, const Vec4& defaultColor, Core::CpuTaskScheduler& cpuScheduler);
+void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Alloc::ScratchArena& scratchArena);
+Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena);
+Expected<MeshBuildResult> BuildMesh(
+    const UtilityVector<MeshInstance>& instances,
+    const UtilityVector<usize>& selection,
+    const ImportOptions& options,
+    bool wantsSkinning,
+    const Vec4& defaultColor,
+    Core::CpuTaskScheduler& cpuScheduler,
+    Core::Alloc::ScratchArena& scratchArena
+);
 
 [[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept;
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler);
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 
 bool WriteNwbAsset(
-    const Path& outputPath,
+    const ScratchPath& outputPath,
     const SourceMeshStreams& mesh,
     const AStringView assetTypeText,
     const AStringView virtualRoot,
     bool separateAssets,
     const UtilityVector<ufbx_node*>& skeletonJoints,
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
-    const UtilityVector<JointMatrix>& inverseBindMatrices
+    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& prompted);

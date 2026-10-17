@@ -71,11 +71,12 @@ struct TransparentCsgIntervalProducerResult{
 
 class TransparentCsgIntervalBuilder final : NoCopy{
 public:
-    TransparentCsgIntervalBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem, RendererAvboitSystem& avboitSystem);
+    TransparentCsgIntervalBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem, RendererAvboitSystem& avboitSystem)noexcept;
 
 
 public:
     [[nodiscard]] Expected<TransparentCsgIntervalProducerResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
         const TransparentCsgIntervalProducerInputs& inputs,
         RendererTaskGraphDetail::AvboitPreGraphTask::Payload& avboitPrePayload,
         ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,

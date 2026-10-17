@@ -26,6 +26,13 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Native positive scale factors have no smaller protocol bound than i32; avoid an overflowing ceil-division numerator.
+[[nodiscard]] inline i32 LogicalDimensionForPixels(const u16 pixelDimension, const i32 bufferScale)noexcept{
+    const i32 scale = Max(bufferScale, 1);
+    const i32 pixels = pixelDimension > 0u ? static_cast<i32>(pixelDimension) : 1;
+    return 1 + (pixels - 1) / scale;
+}
+
 [[nodiscard]] inline u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 availableDimension)noexcept{
     if(availableDimension <= 0)
         return requestedDimension;

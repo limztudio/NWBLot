@@ -3,7 +3,6 @@
 
 
 #include "runtime_cache.h"
-#include "arena_names.h"
 #include "local_bounds.h"
 #include "resource_names.h"
 
@@ -34,10 +33,6 @@ namespace __hidden_runtime_cache_resources{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Each runtime-BLAS stream needs allocator overhead beyond its typed payload.
-static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
-inline constexpr Name s_RuntimeMeshUploadArena("impl/ecs_mesh/skinning_runtime_mesh_upload");
 
 static constexpr AStringView s_RestPositionsSuffix = "rest_positions";
 static constexpr AStringView s_RestNormalsSuffix = "rest_normals";
@@ -71,6 +66,9 @@ static constexpr TStringView s_MeshletPrimitiveIndexLabel = NWB_TEXT("meshlet pr
 static constexpr TStringView s_AttributeSkinLabel = NWB_TEXT("attribute skin");
 static constexpr TStringView s_RtTriangleIndexLabel = NWB_TEXT("rt triangle index");
 static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle attribute");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::ScratchArena& scratchArena, const MeshSkinningRuntimeInstance& instance){
@@ -185,7 +183,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
 }
 
 template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] Core::BufferHandle SetupRuntimeBuffer(
+[[nodiscard]] Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupRuntimeBuffer(
     Core::GraphicsRuntime& graphics,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
@@ -197,27 +195,27 @@ template<typename PayloadT, typename PayloadVector>
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
     const bool isIndexBuffer = false
 ){
-    const Name bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
+    const auto bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
-        return {};
+        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed);
     }
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, bufferName, payload, { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer });
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, *bufferName, payload, { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer });
     if(buffer)
         return Move(*buffer);
     switch(buffer.error()){
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
-        return {};
+        return MakeUnexpected(buffer.error());
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
-        return {};
+        return MakeUnexpected(buffer.error());
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"), label, instance.handle.value);
-    return {};
+    return MakeUnexpected(buffer.error());
 }
 
 template<typename PayloadT, typename PayloadVector>
@@ -234,8 +232,13 @@ template<typename PayloadT, typename PayloadVector>
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
     const bool isIndexBuffer = false
 ){
-    outBuffer = SetupRuntimeBuffer<PayloadT>(graphics, instance, suffix, payload, canHaveUavs, label, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer);
-    return outBuffer != nullptr;
+    auto buffer = SetupRuntimeBuffer<PayloadT>(graphics, instance, suffix, payload, canHaveUavs, label, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer);
+    if(!buffer){
+        outBuffer.reset();
+        return false;
+    }
+    outBuffer = Move(*buffer);
+    return true;
 }
 
 template<typename PayloadVector>
@@ -252,13 +255,13 @@ template<typename PayloadVector>
 ){
     outBuffer = nullptr;
 
-    const Name bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
+    const auto bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
         return false;
     }
 
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, bufferName, payload, { canHaveUavs, true, false, queueSharing });
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, *bufferName, payload, { canHaveUavs, true, false, queueSharing });
     if(buffer){
         outBuffer = Move(*buffer);
         return true;
@@ -289,9 +292,8 @@ template<typename PayloadVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance){
-    Core::Alloc::ScratchArena uploadScratchArena(__hidden_runtime_cache_resources::s_RuntimeMeshUploadArena);
-    if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(uploadScratchArena, instance))
+bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
+    if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(scratchArena, instance))
         return false;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
@@ -378,7 +380,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
-        uploadScratchArena,
+        scratchArena,
         instance,
         instance.meshletPositionRefDeltaBuffer,
         __hidden_runtime_cache_resources::s_MeshletPositionRefDeltasSuffix,
@@ -388,7 +390,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
-        uploadScratchArena,
+        scratchArena,
         instance,
         instance.meshletAttributeRefDeltaBuffer,
         __hidden_runtime_cache_resources::s_MeshletAttributeRefDeltasSuffix,
@@ -407,7 +409,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
-        uploadScratchArena,
+        scratchArena,
         instance,
         instance.meshletPrimitiveIndexBuffer,
         __hidden_runtime_cache_resources::s_MeshletPrimitiveIndicesSuffix,
@@ -428,7 +430,6 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
         const usize indexCount = instance.meshletPrimitiveIndices.size();
-        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasIndexArena, indexCount * sizeof(u32) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes);
         const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size());
         if(!triangleIndices){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
@@ -456,8 +457,6 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
 
     // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
-        const usize attributeCount = instance.meshletPrimitiveIndices.size();
-        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasAttributeArena, attributeCount * sizeof(AttribGpu) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes);
         const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0);
         if(!triangleAttributes){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
@@ -471,7 +470,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             MeshResourceNames::s_RtTriangleAttributesBufferName,
             *triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
-            __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute) && uploaded;
+            __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute
+        ) && uploaded;
     }
 
     return uploaded;

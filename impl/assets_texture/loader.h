@@ -29,6 +29,8 @@ struct TextureGpuResource final : NoCopy{
     // Authoritative completion of the static upload, imported by later graph consumers.
     Core::QueueSubmissionToken readinessToken;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return texture != nullptr && sampledImageHeapHandle.valid() && format != Core::Format::UNKNOWN;
     }

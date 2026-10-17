@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/opaque_emulation_merge_validator.h>
+#include "opaque_emulation_merge_validator.h"
+
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
@@ -15,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueEmulationMergeValidator::OpaqueEmulationMergeValidator(NotNull<RendererFramePipeline*> pipeline)
+OpaqueEmulationMergeValidator::OpaqueEmulationMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
     : m_pipeline(pipeline){
 }
 
@@ -96,10 +97,12 @@ void OpaqueEmulationMergeValidator::validate(
             if(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid())
                 return false;
         }
-        return compiledPlan.tasksFormContiguousPacketSequence(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks, phaseCount) && compiledPlan.taskPrecedesInSamePacket(
+        return
+            compiledPlan.tasksFormContiguousPacketSequence(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks, phaseCount) && compiledPlan.taskPrecedesInSamePacket(
             pipeline.m_graphicsPrefixGbufferTask,
             pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
-        );
+        )
+        ;
     }();
     // Declared producers must share G-buffer's packet for the same handoff.
     outResult.opaqueCsgReceiverComputeEmulationMerged =

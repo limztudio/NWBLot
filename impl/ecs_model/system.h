@@ -97,7 +97,7 @@ public:
 
 public:
     virtual void prepare(Core::ECS::World& world)override;
-    virtual void update(Core::ECS::World& world, f32 delta)override;
+    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
     void syncModelRuntimes();
 
 
@@ -109,7 +109,7 @@ private:
     [[nodiscard]] bool spawnSkeletonObject(Core::ECS::EntityID owner, const ModelSkeletonObject& object);
     [[nodiscard]] bool spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
     [[nodiscard]] bool spawnSkinnedMeshObject(Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object);
-    void updateModelObjectTransforms();
+    [[nodiscard]] Expected<void, Core::CpuTaskAdmissionError::Enum> updateModelObjectTransforms();
     void updateStaticMeshAttachments();
     [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const;
 

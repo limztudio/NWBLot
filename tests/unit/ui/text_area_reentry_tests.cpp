@@ -28,9 +28,9 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ observeCallback(); return generation; }
-    [[nodiscard]] virtual u64 revision()const override{ observeCallback(); return contentRevision; }
-    [[nodiscard]] virtual u64 rowCount()const override{ observeCallback(); return count; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ observeCallback(); return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         observeCallback();
@@ -172,10 +172,10 @@ TEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPubli
     sibling.open();
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(m_builder.textArea("parentArea", m_model, m_state, AreaOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.textArea("siblingArea", siblingModel, siblingState, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     bool beginAccepted = true;

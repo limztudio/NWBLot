@@ -258,7 +258,7 @@ bool CommandList::prepareFramebufferForRendering(Framebuffer* const framebuffer,
             return true;
         const TextureSubresourceSet resolved = attachment.subresources.resolve(attachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
         const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(attachment.texture->m_creationDesc, resolved);
-        if(attachment.texture->getView(attachment.subresources, viewDimension, attachment.format) == VK_NULL_HANDLE){
+        if(!attachment.texture->getView(attachment.subresources, viewDimension, attachment.format)){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment view could not be created"));
             return false;
         }

@@ -30,7 +30,8 @@ bool nwbOpticalClosestSurfaceHit(
 #if NWB_CSG_RAY_OPTICAL_REUSE
     out NwbRayTraceCsgBoundaryCertificate certificate,
 #endif
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     hit = (NwbRayTraceSurfaceHit)0;
 #if NWB_CSG_RAY_OPTICAL_REUSE
     certificate = (NwbRayTraceCsgBoundaryCertificate)0;
@@ -81,7 +82,8 @@ bool nwbOpticalCheckBoundary(
 #if NWB_CSG_RAY_OPTICAL_REUSE
     __constref NwbRayTraceCsgBoundaryCertificate certificate,
 #endif
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     if(!nwbOpticalConsumeQuery(config, result))
         return false;
     const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.position));

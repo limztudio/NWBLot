@@ -47,6 +47,7 @@ using CookArena = MaterialCookArena;
 using CookString = MaterialCookString;
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
+using ScratchPath = ::Path<ScratchArena>;
 
 template<typename T>
 using CookVector = MaterialCookVector<T>;

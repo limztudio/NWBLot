@@ -71,22 +71,29 @@ class TextLayout final{
 public:
     explicit TextLayout(Core::Alloc::GlobalArena& arena)noexcept;
     TextLayout(TextLayout&&)noexcept = default;
-    TextLayout& operator=(TextLayout&&)noexcept = default;
+    TextLayout(const TextLayout&) = delete;
 
 
 public:
-    TextLayout(const TextLayout&) = delete;
+    TextLayout& operator=(TextLayout&&)noexcept = default;
     TextLayout& operator=(const TextLayout&) = delete;
 
 
 public:
     [[nodiscard]] StringView utf8()const noexcept{ return { m_text.data(), m_text.size() }; }
+
     [[nodiscard]] f32 fontSize()const noexcept{ return m_fontSize; }
+
     [[nodiscard]] Point measure()const noexcept{ return m_measure; }
+
     [[nodiscard]] Rect inkBounds()const noexcept{ return m_inkBounds; }
+
     [[nodiscard]] const PaintVector<PlacedGlyph>& glyphs()const noexcept{ return m_glyphs; }
+
     [[nodiscard]] const PaintVector<TextCluster>& clusters()const noexcept{ return m_clusters; }
+
     [[nodiscard]] const PaintVector<TextLine>& lines()const noexcept{ return m_lines; }
+
     [[nodiscard]] TextHit hitTest(Point point)const noexcept;
     [[nodiscard]] Expected<Rect> caretRect(u32 byteOffset, TextCaretEdge::Enum edge)const noexcept;
 

@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShadowPrepareGeometryResources::ShadowPrepareGeometryResources(const ShadowPrepareGeometryInputs& inputs, Core::Alloc::ScratchArena& scratchArena)
+ShadowPrepareGeometryResources::ShadowPrepareGeometryResources(const ShadowPrepareGeometryInputs& inputs, Core::Alloc::ScratchArena& scratchArena)noexcept
     : m_blasBuildInputs(scratchArena)
     , m_remainingTraceGeometry(scratchArena)
     , m_inputs(inputs)
@@ -128,8 +128,10 @@ ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::f
 
 void ShadowPrepareGeometryResources::promoteRequests(){
     RequestIndex requests(s_InlineCount * 4u, m_scratchArena);
-    for(const InlineRequest& entry : m_inlineRequests)
-        requests.emplace(entry.buffer, entry.request);
+    for(const InlineRequest& entry : m_inlineRequests){
+        if(!requests.emplace(entry.buffer, entry.request).second)
+            TerminateInvariant();
+    }
     static_assert(IsNothrowMoveConstructible_V<RequestIndex>);
     m_requests.emplace(Move(requests));
 }

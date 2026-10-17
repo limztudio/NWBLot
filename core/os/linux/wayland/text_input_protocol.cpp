@@ -123,11 +123,11 @@ void WaylandTextInputService::OnDone(void* const data, zwp_text_input_v3* const 
 
 
 #if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
-void WaylandTextInputService::OnAction(void*, zwp_text_input_v3*, u32, u32){}
+void WaylandTextInputService::OnAction(void*, zwp_text_input_v3*, u32, u32)noexcept{}
 
-void WaylandTextInputService::OnLanguage(void*, zwp_text_input_v3*, const char*){}
+void WaylandTextInputService::OnLanguage(void*, zwp_text_input_v3*, const char*)noexcept{}
 
-void WaylandTextInputService::OnPreeditHint(void*, zwp_text_input_v3*, u32, u32, u32){}
+void WaylandTextInputService::OnPreeditHint(void*, zwp_text_input_v3*, u32, u32, u32)noexcept{}
 #endif
 
 
@@ -141,6 +141,10 @@ void WaylandTextInputService::sendCaret(const TextInputRect caret){
     const TextInputRect logical = WaylandTextInputRectForPixels(caret, m_bufferScale);
     zwp_text_input_v3_set_cursor_rectangle(m_input, logical.x, logical.y, logical.width, logical.height);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void WaylandTextInputService::sendSurrounding(const AStringView text, const usize anchorByte, const usize caretByte, const u64 revision){
     const WaylandTextInputSurrounding slice = m_wireState.update(text, anchorByte, caretByte, revision);

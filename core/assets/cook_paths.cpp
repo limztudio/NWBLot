@@ -70,15 +70,15 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
             }
             if(!*directory)
                 path = path.parentPath();
-            Path ancestor = path;
+            ::Path<ScratchArena> ancestor(scratchArena, path);
             while(!ancestor.empty()){
                 ScratchString name = PathToString(scratchArena, ancestor.filename());
                 CanonicalizeTextInPlace(name);
                 if(name == s_AssetsDirectoryName){
-                    path = ancestor;
+                    path = Path(arena, ancestor);
                     break;
                 }
-                const Path parent = ancestor.parentPath();
+                const ::Path<ScratchArena> parent = ancestor.parentPath();
                 if(parent == ancestor)
                     break;
                 ancestor = parent;

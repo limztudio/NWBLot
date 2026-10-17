@@ -54,6 +54,9 @@ public:
     {}
     ~AlignedBytes()noexcept{ ::operator delete(storage, AlignValT{ s_Alignment }); }
     AlignedBytes(const AlignedBytes&) = delete;
+
+
+public:
     AlignedBytes& operator=(const AlignedBytes&) = delete;
 };
 
@@ -214,7 +217,7 @@ struct GuardedBytes final{
 
 
 public:
-    GuardedBytes(){
+    GuardedBytes()noexcept{
         const isize systemPageBytes = static_cast<isize>(sysconf(_SC_PAGESIZE));
         if(systemPageBytes <= 0)
             ::abort();
@@ -233,12 +236,15 @@ public:
             ::abort();
     }
     GuardedBytes(const GuardedBytes&) = delete;
+
+
+public:
     GuardedBytes& operator=(const GuardedBytes&) = delete;
 };
 
 static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
 
-[[nodiscard]] bool RejectedBeforeAccess(void* destination, usize capacity, const void* source, usize count){
+[[nodiscard]] bool RejectedBeforeAccess(void* destination, usize capacity, const void* source, usize count)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return false;
@@ -252,7 +258,7 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
     return waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == s_AbortExit;
 }
 
-[[nodiscard]] bool QualifyProtectedRanges(){
+[[nodiscard]] bool QualifyProtectedRanges()noexcept{
     GuardedBytes source, destination;
     if(source.accessibleBytes < s_QualifyLengths[sizeof(s_QualifyLengths) / sizeof(s_QualifyLengths[0]) - 1u])
         return false;

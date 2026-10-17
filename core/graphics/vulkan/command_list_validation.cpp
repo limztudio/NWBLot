@@ -58,6 +58,9 @@ void CommandList::cancelTaskCapabilityTracking(){
 #endif
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     if(!m_currentCmdBuf){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable"));
@@ -176,14 +179,13 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
     if(validRecordingScope && validExactQueue)
         return true;
 
-    NWB_LOGGER_CRITICAL_WARNING(
-        NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, recording {})"),
-        !operationName.empty() ? operationName : NWB_TEXT("unnamed command"),
-        m_creationDesc.physicalQueue.index,
-        m_creationDesc.physicalQueue.deviceGeneration,
-        static_cast<u32>(m_creationDesc.queueType),
-        static_cast<u32>(exactQueueClass),
-        validRecordingScope
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, recording {})")
+        , !operationName.empty() ? operationName : NWB_TEXT("unnamed command")
+        , m_creationDesc.physicalQueue.index
+        , m_creationDesc.physicalQueue.deviceGeneration
+        , static_cast<u32>(m_creationDesc.queueType)
+        , static_cast<u32>(exactQueueClass)
+        , validRecordingScope
     );
     invalidateCommandRecording();
     return false;
@@ -215,16 +217,15 @@ bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::M
     if(supported)
         return true;
 
-    NWB_LOGGER_CRITICAL_WARNING(
-        NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, required mask {}, available mask {}, recording {})"),
-        !operationName.empty() ? operationName : NWB_TEXT("unnamed command"),
-        m_creationDesc.physicalQueue.index,
-        m_creationDesc.physicalQueue.deviceGeneration,
-        static_cast<u32>(m_creationDesc.queueType),
-        static_cast<u32>(exactQueueClass),
-        static_cast<u32>(requiredBits),
-        static_cast<u32>(availableBits),
-        true
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, required mask {}, available mask {}, recording {})")
+        , !operationName.empty() ? operationName : NWB_TEXT("unnamed command")
+        , m_creationDesc.physicalQueue.index
+        , m_creationDesc.physicalQueue.deviceGeneration
+        , static_cast<u32>(m_creationDesc.queueType)
+        , static_cast<u32>(exactQueueClass)
+        , static_cast<u32>(requiredBits)
+        , static_cast<u32>(availableBits)
+        , true
     );
     invalidateCommandRecording();
     return false;
@@ -299,9 +300,6 @@ void CommandList::discardInvalidCommandBuffer(){
     m_hostReadbackBarrierTracker.clear();
     clearStateInternal();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

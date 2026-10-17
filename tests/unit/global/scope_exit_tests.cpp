@@ -49,6 +49,8 @@ public:
             ++state->destructions;
     }
 
+
+public:
     void operator()()noexcept{ ++state->calls; }
 };
 

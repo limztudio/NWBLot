@@ -9,6 +9,8 @@
 
 #include <impl/assets_font_atlas/asset.h>
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,7 +49,7 @@ private:
 
 using SharedBakedFontAtlas = RefCountPtr<RefCounter<BakedFontAtlas>, ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] SharedBakedFontAtlas CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration);
+[[nodiscard]] Expected<SharedBakedFontAtlas> CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -19,8 +19,14 @@ bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placem
         return false;
     if(!interactive || placement.centerTravel.width <= 0.0f)
         return true;
-    const WidgetId track = MakeWidgetId(frame.m_widget.id, "track");
-    const WidgetId thumb = MakeWidgetId(frame.m_widget.id, "thumb");
+    const auto trackResult = MakeWidgetId(frame.m_widget.id, "track");
+    if(!trackResult)
+        return false;
+    const WidgetId track = *trackResult;
+    const auto thumbResult = MakeWidgetId(frame.m_widget.id, "thumb");
+    if(!thumbResult)
+        return false;
+    const WidgetId thumb = *thumbResult;
     auto control = m_context.takeControlAction(frame.m_widget, true, frame.m_token);
     bool hasControl = control.has_value();
     auto trackGesture = m_context.takePartPointerGesture(frame.m_widget, track, true);

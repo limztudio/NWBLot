@@ -183,7 +183,7 @@ struct MalformedLifecycleTask{
 
 
 public:
-    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&, const u32 lookalike = 0u){
+    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&, const u32 lookalike = 0u)noexcept{
         static_cast<void>(lookalike);
         if(payload.recordCount)
             ++*payload.recordCount;
@@ -194,7 +194,7 @@ public:
             ++*payload.acceptedCount;
         return true;
     }
-    static void Discarded(const Payload& payload){
+    static void Discarded(const Payload& payload)noexcept{
         if(payload.discardedCount)
             ++*payload.discardedCount;
     }

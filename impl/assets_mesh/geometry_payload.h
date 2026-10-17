@@ -84,7 +84,8 @@ protected:
     }
 
     [[nodiscard]] bool hasIncompleteGeometryPayload()const noexcept{
-        return m_positionStream.empty()
+        return
+            m_positionStream.empty()
             || m_normalStream.empty()
             || m_tangentStream.empty()
             || m_uv0Stream.empty()

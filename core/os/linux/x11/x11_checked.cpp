@@ -24,6 +24,23 @@ thread_local X11CheckedOperation* g_Operation = nullptr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+X11Property::X11Property(X11Property&& other)noexcept
+    : type(other.type)
+    , format(other.format)
+    , count(other.count)
+    , remaining(other.remaining)
+    , bytes(Exchange(other.bytes, nullptr))
+{}
+
+X11Property::~X11Property()noexcept{
+    if(bytes && XFree(bytes) == 0)
+        TerminateInvariant();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 int X11CheckedOperation::OnError(Display* const display, XErrorEvent* const event){
     X11CheckedOperation* const operation = __hidden_x11_checked::g_Operation;
     if(operation && display == &operation->m_display){
@@ -58,25 +75,12 @@ bool X11CheckedOperation::succeeded(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-X11Property::X11Property(X11Property&& other)noexcept
-    : type(other.type)
-    , format(other.format)
-    , count(other.count)
-    , remaining(other.remaining)
-    , bytes(Exchange(other.bytes, nullptr))
-{}
-
-X11Property::~X11Property()noexcept{
-    if(bytes && XFree(bytes) == 0)
-        TerminateInvariant();
-}
-
-Expected<X11Property> ReadX11Property(Display& display, const Window window, const Atom property, const bool remove, const usize maxBytes){
+Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, const Window window, const Atom property, const bool remove, const usize maxBytes){
     X11Property result;
     X11CheckedOperation operation(display);
     const int status = XGetWindowProperty(&display, window, property, 0, static_cast<long>((maxBytes + 3u) / 4u), remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);
     if(!operation.succeeded() || status != 0)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(X11PropertyFailure{ .nativeStatus = status, .errorCode = operation.m_error, });
     return result;
 }
 

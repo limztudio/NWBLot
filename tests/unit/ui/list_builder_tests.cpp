@@ -3,6 +3,7 @@
 
 
 #include "widget_fixture.h"
+#include "widget_id_assertion.h"
 
 #include <impl/ecs_ui/toolkit/widgets/selectable_paint.h>
 
@@ -29,11 +30,11 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ invalidateText(); return generation; }
-    [[nodiscard]] virtual u64 revision()const override{ invalidateText(); return contentRevision; }
-    [[nodiscard]] virtual u64 rowCount()const override{ invalidateText(); return count; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ invalidateText(); return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ invalidateText(); return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ invalidateText(); return count; }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         invalidateText();
         ++keyCalls;
         if(duplicate)
@@ -41,7 +42,7 @@ public:
         return rawKey(index);
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
         u64 index = 0u;
         invalidateText();
         ++lookupCalls;
@@ -61,7 +62,7 @@ public:
         return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         ++textCalls;
         if(index < textCallsByIndex.size())
             ++textCallsByIndex[index];
@@ -111,7 +112,7 @@ public:
     mutable Array<char, 128u> temporary{};
 };
 
-[[nodiscard]] static ListOptions Options(){
+[[nodiscard]] static ListOptions Options()noexcept{
     ListOptions options;
     options.width = { LayoutSizePolicy::Fixed, 280.0f };
     options.height = { LayoutSizePolicy::Fixed, 120.0f };
@@ -161,10 +162,10 @@ protected:
         return m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId host()const noexcept{ return id("list", "panel"); }
+    [[nodiscard]] WidgetId host()const{ return id("list", "panel"); }
 
-    [[nodiscard]] WidgetId row(const u64 key)const noexcept{
-        return MakeWidgetPartId(MakeWidgetId(host(), "rows"), key);
+    [[nodiscard]] WidgetId row(const u64 key)const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "rows")), key));
     }
 
     [[nodiscard]] bool wheel(const f64 delta = -1.0){
@@ -250,6 +251,7 @@ TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixel
 }
 
 TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplayAndResolvedRowGeometry){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     const SelectableStyle originalStyle = m_builder.listStyle().row;
     u64 generation = 1u;
     for(u32 change = 0u; change < 7u; ++change){
@@ -277,7 +279,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         ASSERT_NE(target(row(1u)), nullptr);
         ASSERT_FLOAT_EQ(target(row(1u))->rectangle.height, grown);
         switch(change){
-        case 0u: ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text)); break;
+        case 0u: ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text)); break;
         case 1u: m_builder.style().fontSize = 12.0f; break;
         case 2u: display.pixelScaleX = 1.25f; display.pixelScaleY = 1.5f; break;
         case 3u: ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "ko")); break;
@@ -308,6 +310,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
 }
 
 TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     m_source.specialIndex = 50000u;
     ASSERT_TRUE(accept(1u));
     ASSERT_NE(target(row(1u)), nullptr);
@@ -322,7 +325,7 @@ TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesT
     ASSERT_NE(target(row(1u)), nullptr);
     ASSERT_FLOAT_EQ(target(row(1u))->rectangle.height, grown);
     TextService replacement(m_arena);
-    ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, replacement));
+    ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, replacement));
     ASSERT_EQ(replacement.generation(), m_text.generation());
     ASSERT_NE(replacement.identity(), m_text.identity());
     Builder builder(m_arena, m_context, m_paint, replacement);
@@ -360,7 +363,7 @@ TEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutCo
         ASSERT_TRUE(m_context.commitFrame(generation++));
         ASSERT_NE(target(row(1u)), nullptr);
         const f32 firstHeight = target(row(1u))->rectangle.height;
-        const WidgetId secondRow = MakeWidgetPartId(MakeWidgetId(id("second", "panel"), "rows"), 1u);
+        const WidgetId secondRow = UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id("second", "panel"), "rows")), 1u));
         ASSERT_NE(target(secondRow), nullptr);
         const f32 secondHeight = target(secondRow)->rectangle.height;
         ASSERT_GT(firstHeight, secondHeight);
@@ -379,8 +382,8 @@ TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInher
     ASSERT_NE(target(row(1u)), nullptr);
     const f32 naturalHeight = target(row(1u))->rectangle.height;
     ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(naturalHeight) * 10.25));
-    const WidgetId earlier = MakeWidgetId(id("clipped", "panel"), "earlier");
-    const WidgetId earlierRows = MakeWidgetId(earlier, "rows");
+    const WidgetId earlier = UiTestSupport::RequireWidgetId(MakeWidgetId(id("clipped", "panel"), "earlier"));
+    const WidgetId earlierRows = UiTestSupport::RequireWidgetId(MakeWidgetId(earlier, "rows"));
     Rect previousRow;
     Rect previousClip;
     for(u64 generation = 2u; generation <= 3u; ++generation){
@@ -399,11 +402,11 @@ TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInher
         ASSERT_TRUE(finishPanel());
         ASSERT_TRUE(m_context.commitFrame(generation));
         const HitTarget* hostTarget = target(earlier);
-        const HitTarget* first = target(MakeWidgetPartId(earlierRows, 11u));
+        const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(earlierRows, 11u)));
         ASSERT_NE(hostTarget, nullptr);
         ASSERT_NE(first, nullptr);
-        EXPECT_EQ(target(MakeWidgetPartId(earlierRows, 10u)), nullptr);
-        EXPECT_EQ(target(MakeWidgetPartId(earlierRows, 17u)), nullptr);
+        EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(earlierRows, 10u))), nullptr);
+        EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(earlierRows, 17u))), nullptr);
         EXPECT_FLOAT_EQ(first->rectangle.height, naturalHeight);
         EXPECT_FLOAT_EQ(hostTarget->clip.height, clipped.height.value);
         EXPECT_GT(hostTarget->rectangle.height, hostTarget->clip.height);
@@ -776,7 +779,7 @@ TEST_F(UiListBuilderTests, EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardSt
 
 TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightChanges){
     ASSERT_TRUE(accept(1u));
-    const WidgetId thumb = MakeWidgetId(host(), "scrollbar");
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar"));
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     const Point origin = Center(accepted.rectangle);
@@ -794,7 +797,7 @@ TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightCh
 
 TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInputOrder){
     ASSERT_TRUE(accept(1u));
-    const HitTarget accepted = *target(MakeWidgetId(host(), "scrollbar"));
+    const HitTarget accepted = *target(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar")));
     const Point origin = Center(accepted.rectangle);
     const Point destination{ origin.x, accepted.gestureReference.y + accepted.gestureReference.height - accepted.rectangle.height * 0.5f };
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
@@ -874,7 +877,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
 
 TEST_F(UiListBuilderTests, TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline){
     ASSERT_TRUE(accept(1u));
-    const WidgetId thumb = MakeWidgetId(host(), "scrollbar");
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar"));
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     const Point origin = Center(accepted.rectangle);
@@ -892,7 +895,7 @@ TEST_F(UiListBuilderTests, FullHeightMinimumThumbFocusesItsHostWithoutStartingAn
     ListOptions options = Options();
     options.height.value = 20.0f;
     ASSERT_TRUE(accept(1u, options));
-    const WidgetId thumb = MakeWidgetId(host(), "scrollbar");
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar"));
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     EXPECT_FLOAT_EQ(m_state.placement().track.height, m_state.placement().thumb.height);

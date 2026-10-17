@@ -39,7 +39,14 @@ struct MaterialInstanceParameterNames{
         return MakeUnexpected(Failure{});
     }
 
-    return MaterialInstanceParameterNames{ Name(parameterName), Name(parameterName.substr(0u, dotIndex)), Name(parameterName.substr(dotIndex + 1u)) };
+    const auto name = Name::FromText(parameterName);
+    const auto blockName = Name::FromText(parameterName.substr(0u, dotIndex));
+    const auto fieldName = Name::FromText(parameterName.substr(dotIndex + 1u));
+    if(!name || !blockName || !fieldName){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), StringConvert(parameterName));
+        return MakeUnexpected(Failure{});
+    }
+    return MaterialInstanceParameterNames{ *name, *blockName, *fieldName };
 }
 
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount){
@@ -56,6 +63,8 @@ template<>
 struct MaterialInstanceValueTraits<f32>{
     static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Float;
 
+
+public:
     [[nodiscard]] static UInt4U Pack(const f32 value){
         return PackMaterialInstanceBytes(&value, sizeof(value));
     }
@@ -65,6 +74,8 @@ template<>
 struct MaterialInstanceValueTraits<Float4>{
     static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Float4;
 
+
+public:
     [[nodiscard]] static UInt4U Pack(const Float4& value){
         return PackMaterialInstanceBytes(value.raw, sizeof(f32) * 4u);
     }
@@ -74,6 +85,8 @@ template<>
 struct MaterialInstanceValueTraits<Half4U>{
     static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Half4;
 
+
+public:
     [[nodiscard]] static UInt4U Pack(const Half4U& value){
         return PackMaterialInstanceBytes(value.raw, sizeof(Half) * 4u);
     }
@@ -119,6 +132,15 @@ struct MaterialInstanceValueTraits<Half4U>{
     return true;
 }
 
+[[nodiscard]] inline MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
+    MaterialInstanceComponent* component = world.tryGetComponent<MaterialInstanceComponent>(entity);
+    if(component)
+        return component;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
+    return nullptr;
+}
+
 [[nodiscard]] inline bool SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
     if(!IsMaterialLayoutNumericFieldType(fieldType)){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type"), StringConvert(parameterNameText));
@@ -138,15 +160,6 @@ struct MaterialInstanceValueTraits<Half4U>{
     parameter.value = value;
 
     return StoreMaterialMutableParameter(component, parameter, parameterNameText);
-}
-
-[[nodiscard]] inline MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
-    MaterialInstanceComponent* component = world.tryGetComponent<MaterialInstanceComponent>(entity);
-    if(component)
-        return component;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
-    return nullptr;
 }
 
 [[nodiscard]] inline bool SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){

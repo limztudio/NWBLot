@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -259,8 +261,19 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
     shapeType.id = id;
     shapeType.desc = desc;
     m_shapeTypes.push_back(Move(shapeType));
-    m_shapeTypeIds.emplace(desc.name, id);
-    m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u);
+    ScopeExit discardShapeType([&]()noexcept{ m_shapeTypes.pop_back(); });
+    const auto [nameEntry, nameInserted] = m_shapeTypeIds.emplace(desc.name, id);
+    if(!nameInserted){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    ScopeExit discardNameEntry([&]()noexcept{ m_shapeTypeIds.erase(nameEntry); });
+    if(!m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u).second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    discardNameEntry.release();
+    discardShapeType.release();
     ++m_revision;
     return id;
 }

@@ -85,6 +85,7 @@ struct ProjectRuntimeContext{
     using RequestQuitCallback = Function<void()>;
 
 
+public:
     Core::GraphicsRuntime& graphics;
     Core::InputDispatcher& input;
     Core::IClipboardService& clipboard;
@@ -105,6 +106,8 @@ struct ProjectRuntimeContext{
     PerfCaptureCallback perfCapture;
     RequestQuitCallback requestQuit;
 
+
+public:
     void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options);
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
     void setPerfCapture(const Core::Perf::CaptureOptions& options);

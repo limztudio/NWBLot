@@ -48,6 +48,23 @@ using CandidatePointer = NotNull<const Candidate*>;
 }
 
 struct CandidateHasher{
+public:
+    usize operator()(const CandidatePointer candidate)const{
+        usize hash = Hasher<Name>{}(candidate->mesh.name());
+        HashCombine(hash, candidate->material.name());
+        HashCombine(hash, candidate->group);
+        hash = hashTransformLanes(LoadFloat(candidate->position), LoadFloat(candidate->rotation), LoadFloat(candidate->scale), hash);
+        if(candidate->group == s_NameNone){
+            HashCombine(hash, candidate->boundaryMode);
+            HashCombine(hash, candidate->mediumPriority);
+            HashCombine(hash, candidate->mutableTypedByteCount);
+            HashCombine(hash, ComputeFnv64Bytes(candidate->mutableTypedBytes, candidate->mutableTypedByteCount));
+        }
+        return hash;
+    }
+
+
+public:
     usize hashTransformLanes(SIMDVectorSingle positionLanes, SIMDVectorSingle rotationLanes, SIMDVectorSingle scaleLanes, usize hash)const{
         HashCombineFloating(hash, VectorGetX(positionLanes));
         HashCombineFloating(hash, VectorGetY(positionLanes));
@@ -62,26 +79,11 @@ struct CandidateHasher{
         return hash;
     }
 
-    usize operator()(const CandidatePointer candidate)const{
-        usize hash = Hasher<Name>{}(candidate->mesh.name());
-        HashCombine(hash, candidate->material.name());
-        HashCombine(hash, candidate->group);
-        hash = hashTransformLanes(LoadFloat(candidate->position), LoadFloat(candidate->rotation), LoadFloat(candidate->scale), hash);
-        if(candidate->group == s_NameNone){
-            HashCombine(hash, candidate->boundaryMode);
-            HashCombine(hash, candidate->mediumPriority);
-            HashCombine(hash, candidate->mutableTypedByteCount);
-            HashCombine(hash, ComputeFnv64Bytes(candidate->mutableTypedBytes, candidate->mutableTypedByteCount));
-        }
-        return hash;
-    }
+
 };
 
 struct CandidateEqual{
-    bool equalTransformLanes(SIMDVectorSingle lhsPosition, SIMDVectorSingle lhsRotation, SIMDVectorSingle lhsScale, SIMDVectorSingle rhsPosition, SIMDVectorSingle rhsRotation, SIMDVectorSingle rhsScale)const noexcept{
-        return Vector3Equal(lhsPosition, rhsPosition) && Vector4Equal(lhsRotation, rhsRotation) && Vector3Equal(lhsScale, rhsScale);
-    }
-
+public:
     bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{
         if(
             lhs->mesh != rhs->mesh || lhs->material != rhs->material || lhs->group != rhs->group
@@ -89,12 +91,22 @@ struct CandidateEqual{
         )
             return false;
         // Shared groups assert preserved boundaries; otherwise all material bytes must agree.
-        return lhs->group != s_NameNone || (
+        return
+            lhs->group != s_NameNone || (
             lhs->boundaryMode == rhs->boundaryMode && lhs->mediumPriority == rhs->mediumPriority
             && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
             && (lhs->mutableTypedByteCount == 0u || NWB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
-        );
+        )
+        ;
     }
+
+
+public:
+    bool equalTransformLanes(SIMDVectorSingle lhsPosition, SIMDVectorSingle lhsRotation, SIMDVectorSingle lhsScale, SIMDVectorSingle rhsPosition, SIMDVectorSingle rhsRotation, SIMDVectorSingle rhsScale)const noexcept{
+        return Vector3Equal(lhsPosition, rhsPosition) && Vector4Equal(lhsRotation, rhsRotation) && Vector3Equal(lhsScale, rhsScale);
+    }
+
+
 };
 
 

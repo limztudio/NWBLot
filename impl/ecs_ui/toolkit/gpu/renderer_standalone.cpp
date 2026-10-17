@@ -39,38 +39,43 @@ struct StandaloneDeclarationContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction){
+Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction){
     if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
-        return {};
+        return MakeUnexpected(Failure{});
     Core::GpuTaskSchedulingHint beginScheduling;
     beginScheduling.cost = Core::GpuTaskCostHint::Tiny;
     beginScheduling.forceSubmissionBoundary = true;
     beginScheduling.allowPacketMerge = false;
-    const Core::GpuTaskId begin = graph.addTask<Core::FrameTimingBeginGraphTask>(
+    const auto beginResult = graph.addTask<Core::FrameTimingBeginGraphTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_begin")).setMarkerLabel("UI Frame Timing Begin")
             .setScheduling(beginScheduling)
             .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
         Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{}, }
     );
-    if(!begin.valid() || !graph.setNormalExecutionPrelude(begin))
-        return {};
+    if(!beginResult || !graph.setNormalExecutionPrelude(*beginResult))
+        return MakeUnexpected(Failure{});
     const auto layer = declare(graph, false);
-    if(!layer || !layer->color.valid())
-        return {};
+    if(!layer)
+        return MakeUnexpected(layer.error());
+    if(!layer->color.valid())
+        return MakeUnexpected(Failure{});
     const GpuFrame frame = m_pending;
-    const Core::GpuExternalCompletionId acquired = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.acquired_ready")).setMarkerLabel("UI Acquired Image").setToken(frame->m_acquired.backBuffer.availabilityCompletion));
-    if(!acquired.valid())
-        return {};
-    const Core::GpuGraphResourceId backBuffer = graph.importTexture(
+    const auto acquiredResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.acquired_ready")).setMarkerLabel("UI Acquired Image").setToken(frame->m_acquired.backBuffer.availabilityCompletion));
+    if(!acquiredResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuExternalCompletionId acquired = *acquiredResult;
+    const auto backBufferResult = graph.importTexture(
         frame->m_acquired.backBuffer.texture,
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.backbuffer")).setMarkerLabel("UI Acquired Backbuffer").setType(Core::GpuGraphResourceType::Texture)
             .setInitialState(frame->m_acquired.backBuffer.nativeInitialState)
             .setExternalFinalState(Core::ResourceStates::Present)
             .setInitialAvailabilityCompletion(acquired)
     );
-    const Core::GpuGraphPipelineId pipeline = graph.importGraphicsPipeline(frame->m_outputPipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.output_pipeline")).setMarkerLabel("UI Output Pipeline").setType(Core::GpuGraphPipelineType::Graphics));
-    if(!backBuffer.valid() || !pipeline.valid())
-        return {};
+    const auto pipelineResult = graph.importGraphicsPipeline(frame->m_outputPipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.output_pipeline")).setMarkerLabel("UI Output Pipeline").setType(Core::GpuGraphPipelineType::Graphics));
+    if(!backBufferResult || !pipelineResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuGraphPipelineId pipeline = *pipelineResult;
+    const Core::GpuGraphResourceId backBuffer = *backBufferResult;
     const Core::GpuTaskResourceUse uses[]{
         { layer->color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read },
         { backBuffer, {}, Core::ResourceStates::RenderTarget, Core::GpuTaskResourceAccess::Write },
@@ -79,19 +84,23 @@ Core::GpuTaskId GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph, C
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Small;
     scheduling.avoidQueueCrossing = true;
-    const Core::GpuTaskId output = graph.addTask<GpuOutputTask>(
+    const auto outputResult = graph.addTask<GpuOutputTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.output")).setMarkerLabel("UI Standalone Output").setScheduling(scheduling)
             .setDependencies(&layer->readyTask, 1u).setResourceUses(uses, 2u).setResourceVersionUses(&consume, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
         GpuOutputTask::Payload{ frame, backBuffer, layer->color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
     );
-    if(!output.valid())
-        return {};
+    if(!outputResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuTaskId output = *outputResult;
     Core::GpuTaskId timingEndDependency = output;
     if(m_presentationContributor && m_presentationContributor->hasTaskGraphPresentationWork()){
-        timingEndDependency = m_presentationContributor->declareTaskGraphPresentation(graph, frame->m_acquired, backBuffer, output);
-        if(!timingEndDependency.valid())
-            return {};
+        const auto timingEndDependencyResult = m_presentationContributor->declareTaskGraphPresentation(graph, frame->m_acquired, backBuffer, output);
+        if(!timingEndDependencyResult){
+            timingEndDependency = {};
+            return MakeUnexpected(Failure{});
+        }
+        timingEndDependency = *timingEndDependencyResult;
     }
     Core::GpuTaskSchedulingHint timingEndScheduling;
     timingEndScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -99,14 +108,15 @@ Core::GpuTaskId GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph, C
     timingEndScheduling.avoidQueueCrossing = true;
     timingEndScheduling.forceSubmissionBoundary = true;
     timingEndScheduling.allowPacketMerge = false;
-    const Core::GpuTaskId terminal = graph.addTask<GpuFrameTimingEndTask>(
+    const auto terminalResult = graph.addTask<GpuFrameTimingEndTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_end")).setMarkerLabel("UI Frame Timing End")
             .setScheduling(timingEndScheduling).setDependencies(&timingEndDependency, 1u)
             .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
         GpuFrameTimingEndTask::Payload{ frameTimingTransaction }
     );
-    if(!terminal.valid() || !graph.declarePresentEndpoint({ terminal, backBuffer }))
-        return {};
+    if(!terminalResult || !graph.declarePresentEndpoint({ *terminalResult, backBuffer }))
+        return MakeUnexpected(Failure{});
+    const Core::GpuTaskId terminal = *terminalResult;
     return terminal;
 }
 

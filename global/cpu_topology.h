@@ -33,6 +33,7 @@ struct CpuWorkerPlacement{
     CpuAffinity::Enum affinity = CpuAffinity::Any;
 
 
+public:
     [[nodiscard]] inline bool valid()const noexcept{ return logicalProcessorIndex != s_InvalidProcessor; }
 };
 

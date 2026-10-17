@@ -11,6 +11,7 @@
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
 
@@ -35,6 +36,10 @@ namespace ECSRenderDetail{
 bool ObjectGeometryCacheSnapshot::valid()const noexcept{
     return buffer && decoderPipeline && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer && indexByteOffset != 0u && indexCount != 0u;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(const u64 localVertexRefByteSize, const u32 primitiveIndexCount)noexcept{
     if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
@@ -127,7 +132,7 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
         const auto layout = ECSRenderDetail::ResolveObjectGeometryCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
         if(!layout)
             return false;
-        const Name bufferName = DeriveName(mesh.meshName, AStringView(":object_geometry"));
+        const auto bufferName = DeriveName(mesh.meshName, AStringView(":object_geometry"));
         if(!bufferName)
             return false;
         Core::BufferDesc desc;
@@ -139,10 +144,14 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
             .setIsVertexBuffer(true)
             .setIsIndexBuffer(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(bufferName)
+            .setDebugName(*bufferName)
         ;
-        cache.buffer = m_graphics.createBuffer(desc);
-        if(!cache.buffer){
+        auto bufferResult = m_graphics.createBuffer(desc);
+        if(bufferResult)
+            cache.buffer = Move(*bufferResult);
+        else
+            cache.buffer.reset();
+        if(!bufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
             return false;
         }
@@ -155,12 +164,11 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     if(!heap.isInitialized())
         return false;
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, cache.buffer.get()))){
-        if(handle.valid())
-            heap.free(handle);
+    Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
+    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, cache.buffer.get())))
         return false;
-    }
     cache.heapHandle = handle;
+    retireHandle.release();
     return true;
 }
 

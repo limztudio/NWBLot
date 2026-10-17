@@ -29,6 +29,9 @@ inline constexpr u32 s_TasksPerProducer = 128u;
 inline constexpr u32 s_GateTimeoutMS = 4000u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class DeadlineGuard final{
 public:
     DeadlineGuard()
@@ -39,7 +42,8 @@ public:
                     TerminateInvariant();
                 SleepMS(1u);
             }
-        })
+        }
+        )
     {}
 
 
@@ -83,19 +87,29 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
         const u32 slot = (producer * s_TasksPerProducer + task) * 4u;
         auto callback = [&scheduler, &state, slot](){
             state.visits[slot].fetch_add(1u, MemoryOrder::relaxed);
-            if(!scheduler.submit([&scheduler, &state, slot](){
+            const auto cpuAdmission45 = scheduler.submit([&scheduler, &state, slot](){
                 state.visits[slot + 1u].fetch_add(1u, MemoryOrder::relaxed);
-                if(!scheduler.submit([&state, slot](){
+                const auto cpuAdmission46 = scheduler.submit([&state, slot](){
                     state.visits[slot + 2u].fetch_add(1u, MemoryOrder::relaxed);
-                }).valid())
+                }
+                );
+                if(!cpuAdmission46 || !cpuAdmission46->valid())
                     state.rejected.store(true, MemoryOrder::release);
-            }).valid())
+            }
+            );
+            if(!cpuAdmission45 || !cpuAdmission45->valid())
                 state.rejected.store(true, MemoryOrder::release);
         };
         CpuTaskOptions options;
         options.cost = static_cast<CpuTaskCost::Enum>(task % 3u);
         options.priority = static_cast<CpuTaskPriority::Enum>((task / 3u) % 3u);
-        const CpuTaskHandle handle = task % 2u == 0u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
+        const auto cpuAdmission47 = task % 2u == 0u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
+        if(!cpuAdmission47){
+            state.rejected.store(true, MemoryOrder::release);
+            state.published[producer].store(true, MemoryOrder::release);
+            return;
+        }
+        const CpuTaskHandle handle = *cpuAdmission47;
         state.handles[producer][task] = handle;
         if(!handle.valid())
             state.rejected.store(true, MemoryOrder::release);
@@ -119,13 +133,15 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
     for(u32 task = 0u; task < s_TasksPerProducer; ++task){
         const u32 slot = (producer * s_TasksPerProducer + task) * 4u;
         const u32 precedingSlot = (predecessor * s_TasksPerProducer + task) * 4u;
-        if(!scope.submit([&state, slot, precedingSlot](){
+        const auto cpuAdmission49 = scope.submit([&state, slot, precedingSlot](){
             for(u32 descendant = 0u; descendant < 3u; ++descendant){
                 if(state.visits[precedingSlot + descendant].load(MemoryOrder::acquire) != 1u)
                     state.invalidOrder.store(true, MemoryOrder::release);
             }
             state.visits[slot + 3u].fetch_add(1u, MemoryOrder::relaxed);
-        }, state.handles[predecessor][task]).valid())
+        }, state.handles[predecessor][task]
+        );
+        if(!cpuAdmission49 || !cpuAdmission49->valid())
             state.rejected.store(true, MemoryOrder::release);
     }
 }
@@ -157,22 +173,28 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
                 producer.join();
         }
         scheduler.drain();
-    });
+    }
+    );
 
     for(u32 producer = 0u; producer < s_WorkerCount; ++producer){
-        EXPECT_TRUE(scope.submit([&, producer](){
+        const auto cpuAdmission50 = scope.submit([&, producer](){
             const usize worker = scheduler.currentWorkerIndex();
             if(worker >= 1u && worker <= s_WorkerCount)
                 state.workerMask.fetch_or(1u << (worker - 1u), MemoryOrder::release);
             state.ready.fetch_add(1u, MemoryOrder::release);
             Produce(scheduler, scope, state, 1u + s_ExternalProducerCount + producer);
-        }, { .cost = CpuTaskCost::Any }).valid());
+        }, { .cost = CpuTaskCost::Any }
+        );
+        EXPECT_TRUE(cpuAdmission50);
+        if(cpuAdmission50)
+            EXPECT_TRUE(cpuAdmission50->valid());
     }
     for(u32 producer = 0u; producer < s_ExternalProducerCount; ++producer){
         producers[producer] = JoiningThread([&, producer](){
             state.ready.fetch_add(1u, MemoryOrder::release);
             Produce(scheduler, scope, state, 1u + producer);
-        });
+        }
+        );
     }
     EXPECT_TRUE(WaitUntil([&]()noexcept{ return state.ready.load(MemoryOrder::acquire) == s_ProducerCount - 1u; }));
     EXPECT_EQ(state.workerMask.load(MemoryOrder::acquire), (1u << s_WorkerCount) - 1u);
@@ -222,7 +244,8 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
             if(producer.joinable())
                 producer.join();
         }
-    });
+    }
+    );
 
     for(u32 producer = 0u; producer < s_ExternalProducerCount; ++producer){
         producers[producer] = JoiningThread([&, producer](){
@@ -242,7 +265,12 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
                 };
                 const CpuTaskOptions options{ .cost = CpuTaskCost::Light, .target = CpuTaskTarget::MainThread };
                 const u32 joinKind = task % s_JoinKinds;
-                const CpuTaskHandle handle = task % 2u == 0u || joinKind == 1u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
+                const auto cpuAdmission51 = task % 2u == 0u || joinKind == 1u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
+                if(!cpuAdmission51){
+                    rejected.store(true, MemoryOrder::release);
+                    return;
+                }
+                const CpuTaskHandle handle = *cpuAdmission51;
                 if(!handle.valid()){
                     rejected.store(true, MemoryOrder::release);
                     return;
@@ -256,7 +284,8 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
                 else
                     scheduler.wait();
             }
-        });
+        }
+        );
     }
     EXPECT_TRUE(WaitUntil([&]()noexcept{ return ready.load(MemoryOrder::acquire) == s_ExternalProducerCount; }));
     start.store(true, MemoryOrder::release);
@@ -298,7 +327,9 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
     u32 callbacks = 0u;
     for(u32 round = 0u; round < s_Rounds; ++round){
         CpuTaskScope scope(scheduler);
-        const auto handle = scope.submit([&]()noexcept{ ++callbacks; }, { .target = CpuTaskTarget::MainThread });
+        const auto cpuAdmission53 = scope.submit([&]()noexcept{ ++callbacks; }, { .target = CpuTaskTarget::MainThread });
+        ASSERT_TRUE(cpuAdmission53);
+        const auto handle = *cpuAdmission53;
         ASSERT_TRUE(handle.valid());
         Atomic<bool> start{ false };
         Atomic<bool> expired{ false };
@@ -313,7 +344,8 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
                 if(waiter.joinable())
                     waiter.join();
             }
-        });
+        }
+        );
         for(u32 kind = 0u; kind < s_JoinKinds; ++kind){
             waiters[kind] = JoiningThread([&, kind](){
                 if(!WaitUntil([&](){ return start.load(MemoryOrder::acquire); })){
@@ -328,7 +360,8 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
                 else
                     scheduler.wait();
                 finished.fetch_add(1u, MemoryOrder::release);
-            });
+            }
+            );
         }
         if(round % 2u == 0u){
             start.store(true, MemoryOrder::release);

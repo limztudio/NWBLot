@@ -142,20 +142,20 @@ const AtlasGlyph* GlyphAtlas::find(const SharedFontFace& face, u32 glyphId, u32 
     return found == m_index.end() ? nullptr : &m_glyphs[found.value()];
 }
 
-SharedGlyphPage GlyphAtlas::page(u32 index){
+Expected<SharedGlyphPage> GlyphAtlas::page(u32 index){
     if(index >= m_pages.size())
-        return {};
+        return MakeUnexpected(Failure{});
     AtlasPage& page = m_pages[index];
     if(page.dirty){
         if(page.generation == Limit<u64>::s_Max)
-            return {};
+            return MakeUnexpected(Failure{});
         GlyphPage::Pixels copy(m_arena);
         copy.assign(page.pixels.begin(), page.pixels.end());
         const GlyphPageBinding binding{ page.face->identity(), page.face->generation(), m_identity, page.generation + 1u, index, s_GlyphAtlasPageExtent, s_GlyphAtlasPageExtent };
-        SharedGlyphPage published = CreateGlyphPage(m_arena, binding, Move(copy));
+        auto published = CreateGlyphPage(m_arena, binding, Move(copy));
         if(!published)
-            return {};
-        page.published = Move(published);
+            return MakeUnexpected(Failure{});
+        page.published = Move(*published);
         ++page.generation;
         page.dirty = false;
     }

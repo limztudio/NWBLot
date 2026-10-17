@@ -3,6 +3,7 @@
 
 
 #include "text_area_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,16 +20,16 @@ using namespace NWB::UiTextAreaTests;
 
 class OrdinaryAreaHost final : public IEditBoxHost{
 public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)noexcept override{
         ++ordinaryLoans;
         EditBoxResult result;
         result.valid = true;
         return result;
     }
 
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
         ++publishes;
@@ -117,7 +118,7 @@ TEST_F(UiTextAreaBuilderTests, DisabledAreaRetainsAPointerBarrierAndDiscardsHost
     ASSERT_TRUE(area);
     EXPECT_FALSE(area->enabled || area->focusable || area->textEditable || area->pointerGesture);
     const Point point{ area->rectangle.x + 5.0f, area->rectangle.y + 5.0f };
-    EXPECT_EQ(m_context.input().hitTest(point), MakeWidgetId(MakeRootId(m_root), "panel"));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
@@ -181,7 +182,8 @@ TEST_F(UiTextAreaBuilderTests, OrderedHostUsesTheRealResolverAfterEarlierInserte
     ASSERT_EQ(m_host.resolutions.size(), 1u);
     EXPECT_EQ(m_host.resolutions.front().text, "aaa\naaaa\nxx");
     EXPECT_EQ(m_host.resolutions.front().caret, 2u);
-    EXPECT_EQ(m_host.resolutions.front().result.committedByte, 6u);
+    ASSERT_TRUE(m_host.resolutions.front().result);
+    EXPECT_EQ(m_host.resolutions.front().result->committedByte, 6u);
     EXPECT_EQ(m_model.text(), "aaa\naa!aa\nxx");
     EXPECT_EQ(m_model.caret(), 7u);
     ASSERT_EQ(m_host.publications.size(), 1u);
@@ -208,8 +210,10 @@ TEST_F(UiTextAreaBuilderTests, BorrowedPreferredColumnSurvivesShortLineThenRetur
     m_host.key(Core::Key::Down);
     ASSERT_TRUE(frameArea(1u));
     ASSERT_EQ(m_host.resolutions.size(), 2u);
-    EXPECT_EQ(m_host.resolutions[0u].result.committedByte, 8u);
-    EXPECT_EQ(m_host.resolutions[1u].result.committedByte, 14u);
+    ASSERT_TRUE(m_host.resolutions[0u].result);
+    EXPECT_EQ(m_host.resolutions[0u].result->committedByte, 8u);
+    ASSERT_TRUE(m_host.resolutions[1u].result);
+    EXPECT_EQ(m_host.resolutions[1u].result->committedByte, 14u);
     EXPECT_TRUE(m_host.resolutions[1u].preferred.valid);
     EXPECT_FLOAT_EQ(m_host.resolutions[1u].preferred.preferredX, caret->x);
     EXPECT_FLOAT_EQ(m_state.navigation().preferredX(), caret->x);

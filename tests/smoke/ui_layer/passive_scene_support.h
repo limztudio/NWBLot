@@ -26,7 +26,15 @@ struct PassiveSmokeTargetObservation{
 };
 
 template<typename RectanglesT, typename IncludeIndexT>
-[[nodiscard]] inline PassiveSmokeTargetObservation ObservePassiveSmokeTargets(const Impl::Ui::InputRouter& input, RectanglesT& rectangles, const u64 parentGeneration, const u64 childGeneration, const usize beginIndex, const usize endIndex, const IncludeIndexT& includeIndex){
+[[nodiscard]] inline PassiveSmokeTargetObservation ObservePassiveSmokeTargets(
+    const Impl::Ui::InputRouter& input,
+    RectanglesT& rectangles,
+    const u64 parentGeneration,
+    const u64 childGeneration,
+    const usize beginIndex,
+    const usize endIndex,
+    const IncludeIndexT& includeIndex
+){
     PassiveSmokeTargetObservation observation;
     u32 rootButton = 0u;
     for(const Impl::Ui::HitTarget& target : input.targets()){
@@ -58,7 +66,21 @@ struct PassiveSmokeSnapshotUpdate{
 };
 
 template<typename SnapshotT, typename StateChangedT>
-[[nodiscard]] inline PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(SnapshotT& current, SnapshotT& snapshot, const StateChangedT& stateChanged){
+[[nodiscard]] inline PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(SnapshotT& current, SnapshotT& snapshot, const StateChangedT& stateChanged)noexcept(
+    noexcept(DeclVal<void(*)(const Impl::Ui::DisplayMetrics&)noexcept>()(snapshot.display))
+    && noexcept(DeclVal<void(*)(bool)noexcept>()(
+        current.display.logicalWidth != DeclVal<const Impl::Ui::DisplayMetrics&>().logicalWidth
+        || current.display.logicalHeight != DeclVal<const Impl::Ui::DisplayMetrics&>().logicalHeight
+        || current.display.pixelScaleX != DeclVal<const Impl::Ui::DisplayMetrics&>().pixelScaleX
+        || current.display.pixelScaleY != DeclVal<const Impl::Ui::DisplayMetrics&>().pixelScaleY
+    ))
+    && noexcept(DeclVal<void(*)(bool)noexcept>()(stateChanged()))
+    && noexcept(static_cast<bool>(DeclVal<usize&>() < current.rectangles.size()))
+    && noexcept(SameSmokeRect(current.rectangles[DeclVal<usize&>()], snapshot.rectangles[DeclVal<usize&>()]))
+    && noexcept(static_cast<bool>(snapshot.sequence != 0u && !bool{} && !bool{}))
+    && noexcept(current.sequence = snapshot.sequence + 1u)
+    && noexcept(snapshot = current)
+){
     const Impl::Ui::DisplayMetrics& previous = snapshot.display;
     const bool displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
     bool changed = stateChanged();

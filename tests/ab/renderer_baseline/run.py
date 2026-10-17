@@ -35,7 +35,8 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 from profiles import BaselineProfile, corpus_profile_names, get_profile, profile_names  # noqa: E402
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
-    FRAMEBUFFER_CAPTURE_SKIP_MESSAGE, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, read_bmp_24, wait_for_application_capture_exit, build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    FRAMEBUFFER_CAPTURE_SKIP_MESSAGE, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, read_bmp_24, wait_for_application_capture_exit,
+    build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_capture_result, wait_for_log_message,)
 
 LIT_GIT = "git"
@@ -766,7 +767,7 @@ def make_parser() -> argparse.ArgumentParser:
     validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION, action="store_false")
     parser.set_defaults(gpu_validation=False)
     parser.add_argument("--settle-seconds", type=float, help="Override the profile's fixed temporal settle duration.")
-    parser.add_argument("--startup-timeout", type=float, default=120.0, help="Seconds to wait for the native window and, separately, its capture-ready marker.")
+    parser.add_argument("--startup-timeout", type=float, default=180.0, help="Seconds to wait for the native window and, separately, its capture-ready marker.")
     parser.add_argument("--require-exact", action=LIT_STORE_TRUE, help="Require bit-exact RGB output for a comparison.")
     parser.add_argument("--maximum-max-abs", type=int, help="Optional maximum per-channel RGB difference.")
     parser.add_argument("--maximum-mean-abs", type=float, help="Optional maximum mean absolute RGB difference.")

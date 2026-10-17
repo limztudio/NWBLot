@@ -19,8 +19,9 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena){
-    if(LowerPathExtension<AString>(path) == ".font"){
+Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
+    const ScratchPath source(scratch, path);
+    if(ToAsciiLowerCopy(PathToGenericString(scratch, source.extension())) == ".font"){
         auto prepared = Impl::ReadPreparedFontSource(path, arena, false);
         if(!prepared)
             return MakeUnexpected(prepared.error());

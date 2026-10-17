@@ -40,8 +40,12 @@ namespace CsgIntervalDetail{
     // Push range selects the CSG context and mesh view; the rest is heap-owned.
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
 
-    layout = device.createBindingLayout(bindingLayoutDesc);
-    return layout != nullptr;
+    auto layoutResult = device.createBindingLayout(bindingLayoutDesc);
+    if(layoutResult)
+        layout = Move(*layoutResult);
+    else
+        layout.reset();
+    return static_cast<bool>(layoutResult);
 }
 
 [[nodiscard]] static bool CreateIntervalPeelPipeline(Core::Device& device, Core::ComputePipelineHandle& pipeline, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalBindingLayout){
@@ -54,8 +58,12 @@ namespace CsgIntervalDetail{
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(shader).addBindingLayout(intervalBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
-    pipeline = device.createComputePipeline(pipelineDesc);
-    return pipeline != nullptr;
+    auto pipelineResult = device.createComputePipeline(pipelineDesc);
+    if(pipelineResult)
+        pipeline = Move(*pipelineResult);
+    else
+        pipeline.reset();
+    return static_cast<bool>(pipelineResult);
 }
 
 [[nodiscard]] static bool CreateReceiverSpanBuildPipeline(Core::Device& device, Core::ComputePipelineHandle& pipeline, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& receiverSpanBuildBindingLayout){
@@ -68,8 +76,12 @@ namespace CsgIntervalDetail{
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(shader).addBindingLayout(receiverSpanBuildBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
-    pipeline = device.createComputePipeline(pipelineDesc);
-    return pipeline != nullptr;
+    auto pipelineResult = device.createComputePipeline(pipelineDesc);
+    if(pipelineResult)
+        pipeline = Move(*pipelineResult);
+    else
+        pipeline.reset();
+    return static_cast<bool>(pipelineResult);
 }
 
 [[nodiscard]] static bool CreateIntervalCombinePipeline(Core::Device& device, Core::ComputePipelineHandle& pipeline, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalCombineBindingLayout){
@@ -82,8 +94,12 @@ namespace CsgIntervalDetail{
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(shader).addBindingLayout(intervalCombineBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
-    pipeline = device.createComputePipeline(pipelineDesc);
-    return pipeline != nullptr;
+    auto pipelineResult = device.createComputePipeline(pipelineDesc);
+    if(pipelineResult)
+        pipeline = Move(*pipelineResult);
+    else
+        pipeline.reset();
+    return static_cast<bool>(pipelineResult);
 }
 
 [[nodiscard]] static bool CreateIntervalCapFillPipeline(
@@ -103,8 +119,12 @@ namespace CsgIntervalDetail{
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc.setVertexShader(vertexShader).setPixelShader(pixelShader).setRenderState(ECSRenderDetail::BuildCompositeRenderState()).addBindingLayout(clipBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
-    pipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
-    return pipeline != nullptr;
+    auto pipelineResult = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    if(pipelineResult)
+        pipeline = Move(*pipelineResult);
+    else
+        pipeline.reset();
+    return static_cast<bool>(pipelineResult);
 }
 
 
@@ -287,8 +307,12 @@ bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
 
-    m_csgState.m_intervalSampleStateBuffer = m_graphics.createBuffer(bufferDesc);
-    if(!m_csgState.m_intervalSampleStateBuffer){
+    auto intervalSampleStateBufferResult = m_graphics.createBuffer(bufferDesc);
+    if(intervalSampleStateBufferResult)
+        m_csgState.m_intervalSampleStateBuffer = Move(*intervalSampleStateBufferResult);
+    else
+        m_csgState.m_intervalSampleStateBuffer.reset();
+    if(!intervalSampleStateBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample state buffer"));
         return false;
     }

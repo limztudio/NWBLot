@@ -107,7 +107,9 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         addDefine(entry.defineValues, option, values);
         addDefine(entry.defineValues, "AUTHORED", { "inherited" });
         auto key = PathToString(testArena.arena, path);
+#if defined(NWB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(key);
+#endif
         ASSERT_TRUE(includeMetadata.emplace(Move(key), Move(entry)).second);
     };
     addIncludeMetadata(root / "common.slangi", "SHARED_OPTION", { "0", "1" });
@@ -141,7 +143,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         ASSERT_EQ(prepared.dependencies.size(), mode == 2u ? 4u : 2u);
         EXPECT_EQ(prepared.dependencies[0], root / "shader.slang");
         EXPECT_EQ(prepared.dependencies[1], root / "common.slangi");
-        const auto authored = prepared.entry.defineValues.find(ShaderCook::CookString("AUTHORED", testArena.arena));
+        const auto authored = prepared.entry.defineValues.find(AStringView("AUTHORED"));
         ASSERT_NE(authored, prepared.entry.defineValues.end());
         ASSERT_EQ(authored.value().values.size(), 1u);
         EXPECT_EQ(authored.value().values.front(), "authored");
@@ -150,7 +152,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         if(mode == 2u){
             EXPECT_EQ(prepared.dependencies[2], csgRoot / "first.slangi");
             EXPECT_EQ(prepared.dependencies[3], csgRoot / "second.slangi");
-            const auto inherited = prepared.entry.defineValues.find(ShaderCook::CookString("MODULE_OPTION", testArena.arena));
+            const auto inherited = prepared.entry.defineValues.find(AStringView("MODULE_OPTION"));
             ASSERT_NE(inherited, prepared.entry.defineValues.end());
             ASSERT_EQ(inherited.value().values.size(), 2u);
             EXPECT_EQ(inherited.value().values[0], "0");
@@ -233,7 +235,9 @@ asset.shape = "project/csg/mixed_case_shape";
 asset.module = "project/csg/mixed_case_module";
 asset.module_include = "project/csg/Generated/MixedCaseEvaluator.slangi";
 asset.eval = "project/csg/MixedCaseEval.slangi";
-)"));
+)"
+    )
+    );
     auto cooked = Impl::AssetsCsgCook::ParseCsgShapeCookMetadata(testArena.arena, root / "shape.nwb", document, scratchArena);
     ASSERT_TRUE(cooked);
     const AStringView moduleInclude = "project/csg/Generated/MixedCaseEvaluator.slangi";
@@ -273,7 +277,9 @@ TEST(AssetsGraphics, CsgRegistryOwnsExactModuleTextAfterSourceRetirementAndRepla
     EXPECT_EQ(*selected, originalInclude);
     for(u32 index = 0u; index < 32u; ++index){
         char indexText[32u] = {};
-        const Name extraName = DeriveName(Name("project/csg/exact_text_extra/"), FormatDecimal(index, indexText));
+        const auto derivedNameAt278Col31 = DeriveName(Name("project/csg/exact_text_extra/"), FormatDecimal(index, indexText));
+        ASSERT_TRUE(derivedNameAt278Col31);
+        const Name extraName = *derivedNameAt278Col31;
         auto extra = CsgCookTestShapeDesc(registryArena.arena, extraName, s_NameNone, AStringView{});
         ASSERT_TRUE(registry.registerShapeType(extra));
     }

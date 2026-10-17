@@ -31,7 +31,6 @@ struct EditNavigationSnapshot{
 struct EditNavigationResult{
     usize committedByte = 0u;
     f32 preferredX = 0.0f;
-    bool resolved = false;
 };
 
 // Caller-owned preferred-column intent is lent synchronously; identical accepted intentions still retire old snapshots.
@@ -39,6 +38,9 @@ class EditNavigationState final : NoCopy{
 public:
     EditNavigationState()noexcept;
     EditNavigationState(EditNavigationState&&) = delete;
+
+
+public:
     EditNavigationState& operator=(EditNavigationState&&) = delete;
 
 
@@ -75,7 +77,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual EditNavigationResult resolve(const EditModel& model, EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, f32 viewportHeight) = 0;
+    [[nodiscard]] virtual Expected<EditNavigationResult> resolve(const EditModel& model, EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, f32 viewportHeight) = 0;
 };
 
 [[nodiscard]] Expected<EditNavigationDirection::Enum> TranslateEditNavigation(const InputCommandIntent& intent)noexcept;

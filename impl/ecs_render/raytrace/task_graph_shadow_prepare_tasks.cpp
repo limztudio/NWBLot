@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
+#include "task_graph_shadow_prepare_tasks.h"
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/compiled_graph.h>
@@ -51,7 +51,7 @@ bool ShadowPrepareGraphTask::Record(const Payload& payload, Core::CommandList& c
 }
 
 
-void ShadowPrepareGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void ShadowPrepareGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     if(payload.currentBindlessSlotsGraphOwned)
         payload.targets.bindless.slotsUploaded = true;
@@ -72,6 +72,9 @@ void ShadowPrepareGraphTask::Discarded(Payload& payload){
     payload.targets.bindless.slotsUploaded = payload.deferredBindlessSlotsWereUploaded;
     payload.raytracingSystem.discardPreflightShadowVisibilityResources();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool ShadowPrepareSoftwareBvhBuildGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){

@@ -22,7 +22,8 @@ bool TimerQuery::hasCompletedCycleWithinLock()const noexcept{
 }
 
 bool TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* const queueInfo)const noexcept{
-    return !m_resetRecordingOwner.commandBuffer
+    return
+        !m_resetRecordingOwner.commandBuffer
         && m_cycleGeneration == 0u
         && !m_recordingActive
         && m_completedCycleGeneration == generation
@@ -33,25 +34,29 @@ bool TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const Que
     ;
 }
 
-TimerQueryHandle Device::createTimerQuery(){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<TimerQueryHandle> Device::createTimerQuery(){
     u64 priorIncarnation = m_nextTimerQueryIncarnation.load(MemoryOrder::relaxed);
     while(priorIncarnation != Limit<u64>::s_Max && !m_nextTimerQueryIncarnation.compare_exchange_weak(priorIncarnation, priorIncarnation + 1u, MemoryOrder::relaxed)){}
     if(priorIncarnation == Limit<u64>::s_Max){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Timer-query identity space is exhausted"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const u64 incarnation = priorIncarnation + 1u;
     auto* query = NewArenaObject<TimerQuery>(m_context.objectArena, m_context, incarnation);
     if(!query || !query->m_queryPool){
         DestroyArenaObject(m_context.objectArena, query);
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     return TimerQueryHandle(query, TimerQueryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-bool Device::pollTimerQuery(TimerQuery& query){
+Expected<bool> Device::pollTimerQuery(TimerQuery& query){
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context)
-        return false;
+        return MakeUnexpected(Failure{});
 
     QueueSubmissionToken completedSubmission;
     u64 completedGeneration = 0u;
@@ -81,6 +86,10 @@ bool Device::pollTimerQuery(TimerQuery& query){
     }
     if(res == VK_ERROR_DEVICE_LOST)
         captureDeviceLoss("timer query poll");
+    if(res != VK_SUCCESS && res != VK_NOT_READY){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to poll timer query results: {}"), ResultToString(res));
+        return MakeUnexpected(Failure{});
+    }
     return res == VK_SUCCESS;
 }
 
@@ -139,10 +148,10 @@ Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
     return result;
 }
 
-f32 Device::getTimerQueryTime(TimerQuery& query){
+Expected<f32> Device::getTimerQueryTime(TimerQuery& query){
     const auto result = getTimerQueryResult(query);
     if(!result)
-        return 0.f;
+        return MakeUnexpected(result.error());
     return static_cast<f32>(result->durationSeconds());
 }
 

@@ -85,10 +85,12 @@ bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResou
         if(hasTextures){
             RetainSelectedStates(m_textureStates, [&](const TextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
-            });
+            }
+            );
             RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
-            });
+            }
+            );
         }
         else{
             m_textureStates.clear();
@@ -97,10 +99,12 @@ bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResou
         if(hasBuffers){
             RetainSelectedStates(m_bufferStates, [&](const BufferState& state)noexcept{
                 return selection.containsBuffer(state.buffer);
-            });
+            }
+            );
             RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state)noexcept{
                 return selection.containsBuffer(state.buffer);
-            });
+            }
+            );
         }
         else{
             m_bufferStates.clear();
@@ -205,10 +209,12 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(const CommandListR
         using namespace __hidden_command_list_state_handoff;
         RetainSelectedStates(m_textureStates, [&](const TextureState& state)noexcept{
             return state.texture == texture && contains(state.mipLevel, state.arraySlice);
-        });
+        }
+        );
         RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
             return state.texture == texture;
-        });
+        }
+        );
         m_bufferStates.clear();
         m_permanentBufferStates.clear();
     }
@@ -259,7 +265,8 @@ bool CommandListResourceStateHandoff::buildBufferRangeSubset(const CommandListRe
         using namespace __hidden_command_list_state_handoff;
         RetainSelectedStates(m_bufferStates, [&](const BufferState& state)noexcept{
             return state.buffer == buffer && state.range.overlaps(resolvedRange);
-        });
+        }
+        );
         for(BufferState& state : m_bufferStates)
             state.range = state.range.intersect(resolvedRange);
         RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state)noexcept{ return state.buffer == buffer; });
@@ -288,7 +295,7 @@ bool CommandListResourceStateHandoff::buildBufferRangeSubset(const CommandListRe
     return true;
 }
 
-bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* const texture, const TextureSubresourceSet subresources, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue)const{
+bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* const texture, const TextureSubresourceSet subresources, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept{
     if(!m_valid || m_deviceGeneration == 0u || !texture || !expectedOwnerQueue.valid())
         return false;
 
@@ -326,7 +333,7 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* c
     return true;
 }
 
-bool CommandListResourceStateHandoff::coversBufferWithOwnership(Buffer* const buffer, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue, const BufferRange range)const{
+bool CommandListResourceStateHandoff::coversBufferWithOwnership(Buffer* const buffer, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue, const BufferRange range)const noexcept{
     if(!m_valid || m_deviceGeneration == 0u || !buffer || !expectedOwnerQueue.valid())
         return false;
 
@@ -405,7 +412,8 @@ bool CommandListResourceStateHandoff::equivalentTo(const CommandListResourceStat
         return false;
 
     const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs)noexcept{
-        return lhs.texture == rhs.texture
+        return
+            lhs.texture == rhs.texture
             && lhs.mipLevel == rhs.mipLevel
             && lhs.arraySlice == rhs.arraySlice
             && lhs.state == rhs.state

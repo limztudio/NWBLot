@@ -19,6 +19,19 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace CpuTaskAdmissionError{
+    enum Enum : u8{
+        InvalidFunction,
+        InvalidDependencies,
+        InvalidOptions,
+        Aborting,
+        ScopeCanceled,
+        ForeignDependency,
+        CapacityExhausted,
+        DependencyCycle,
+    };
+};
+
 namespace CpuTaskCost{
     enum Enum : u8{
         Any,
@@ -46,6 +59,8 @@ namespace CpuTaskTarget{
 struct CpuTaskProfileLabel{
     u64 value = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
 };
 
@@ -60,6 +75,8 @@ struct CpuTaskSchedulerConfig{
     static constexpr u32 s_AutomaticWorkerCount = Limit<u32>::s_Max;
     static constexpr usize s_DefaultProfileEventCapacity = 4096u;
 
+
+public:
     u32 workerCount = s_AutomaticWorkerCount;
     u32 reservedThreadCount = 1u;
     usize profileEventCapacity = s_DefaultProfileEventCapacity;
@@ -73,8 +90,14 @@ struct CpuTaskHandle{
     u32 index = s_InvalidIndex;
     u32 generation = 0u;
 
-    [[nodiscard]] bool valid()const noexcept{ return domainIdentity != 0u && index != s_InvalidIndex && generation != 0u; }
+
+public:
     explicit operator bool()const noexcept{ return valid(); }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return domainIdentity != 0u && index != s_InvalidIndex && generation != 0u; }
+
 };
 
 struct CpuTaskSchedulerStatistics{

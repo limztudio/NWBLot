@@ -27,6 +27,8 @@ struct UiTextEditOwner{
     u64 declarationGeneration = 0u;
     u64 modelGeneration = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return widget.valid() && declarationGeneration != 0u && modelGeneration != 0u;
     }
@@ -58,7 +60,7 @@ struct UiTextEditResult{
 // End with the old owner/model before removal or replacement so its transient preedit is cleared as well.
 class UiTextEditSession final : NoCopy{
 public:
-    UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service);
+    UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept;
     ~UiTextEditSession();
 
 

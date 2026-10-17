@@ -17,6 +17,7 @@
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX)
 #include <global/blocking_io.h>
+
 #include <signal.h>
 #endif
 
@@ -43,6 +44,9 @@ inline constexpr int s_ProcessSuccessExitCode = 0;
 inline constexpr int s_ProcessFailureExitCode = -1;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static u64 ParseU64(const TStringView text)noexcept{
     u64 value = 0u;
     for(const tchar ch : text){
@@ -60,7 +64,7 @@ static Detail::CrashAck MakeAck(const Detail::CrashRequest& request, const bool 
     return ack;
 }
 
-static void SilenceProcess()noexcept{
+[[nodiscard]] static bool SilenceProcess()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #if defined(_MSC_VER) && defined(NWB_DEBUG)
@@ -72,8 +76,10 @@ static void SilenceProcess()noexcept{
     if(HWND consoleWindow = GetConsoleWindow())
         ShowWindow(consoleWindow, SW_HIDE);
 #elif defined(NWB_PLATFORM_LINUX)
-    signal(SIGPIPE, SIG_IGN);
+    if(signal(SIGPIPE, SIG_IGN) == SIG_ERR)
+        return false;
 #endif
+    return true;
 }
 
 
@@ -87,7 +93,8 @@ static void SilenceProcess()noexcept{
 
 
 int RunCrashHandlerProcess(const isize argc, tchar** argv){
-    __hidden_crash_handler::SilenceProcess();
+    if(!__hidden_crash_handler::SilenceProcess())
+        return __hidden_crash_handler::s_ProcessFailureExitCode;
     Detail::InitializeDumpArena();
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -112,7 +119,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         if(!ReadAllWin32Handle(requestReadHandle, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
-        if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
+        if(!Detail::IsCurrentCrashRequest(request))
             break;
 
         const bool packageWritten = Detail::WriteCrashPackage(request);
@@ -121,8 +128,8 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
             if(!WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack)))
                 break;
         }
-        if(ackEvent)
-            SetEvent(ackEvent);
+        if(ackEvent && !SetEvent(ackEvent))
+            return __hidden_crash_handler::s_ProcessFailureExitCode;
         if(packageWritten){
             if(!Detail::FlushCrashReportsForRequest(request))
                 continue;
@@ -148,7 +155,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         if(!ReadAllFileDescriptor(requestReadFd, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
-        if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
+        if(!Detail::IsCurrentCrashRequest(request))
             break;
 
         const bool packageWritten = Detail::WriteCrashPackage(request);

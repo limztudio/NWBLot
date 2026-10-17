@@ -73,7 +73,6 @@ struct RayTracingFrameCpuStateSnapshot{
     Core::QueueSubmissionToken surfelCountReadbackSubmissionToken;
 
     u32 softShadowFrameIndex = 0u;
-    u32 causticTemporalReuseFrameCount = 0u;
     u32 surfelFrameIndex = 0u;
     u32 surfelCountReadbackFrame = 0u;
     u32 softShadowSlotMask = 0u;
@@ -158,6 +157,8 @@ struct RayTracingRefractionGraphResources{
     bool refractionEnabled = true;
     bool usesHardwareTrace = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return pipeline && viewBuffer && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
     }

@@ -16,6 +16,21 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool InputRouter::IsPointerEvent(const InputEventType::Enum type)noexcept{
+    switch(type){
+    case InputEventType::PointerMove:
+    case InputEventType::PrimaryDown:
+    case InputEventType::PrimaryUp:
+    case InputEventType::SecondaryDown:
+    case InputEventType::SecondaryUp:
+    case InputEventType::PointerWheel:
+    case InputEventType::PointerLeave:
+    case InputEventType::PointerCaptureLost:
+        return true;
+    default: return false;
+    }
+}
+
 Expected<InputEvent> InputRouter::queuePointer(const PointerInput& input){
     if(input.phase > PointerPhase::Scroll || input.intent > PointerIntent::ContextMenu)
         return MakeUnexpected(Failure{});
@@ -38,21 +53,6 @@ Expected<InputEvent> InputRouter::queuePointer(const PointerInput& input){
     return queue(event);
 }
 
-bool InputRouter::IsPointerEvent(const InputEventType::Enum type)noexcept{
-    switch(type){
-    case InputEventType::PointerMove:
-    case InputEventType::PrimaryDown:
-    case InputEventType::PrimaryUp:
-    case InputEventType::SecondaryDown:
-    case InputEventType::SecondaryUp:
-    case InputEventType::PointerWheel:
-    case InputEventType::PointerLeave:
-    case InputEventType::PointerCaptureLost:
-        return true;
-    default: return false;
-    }
-}
-
 Expected<InputEvent> InputRouter::resolvePointerEvent(const InputEvent& event){
     if(!IsPointerEvent(event.type))
         return event;
@@ -66,10 +66,12 @@ Expected<InputEvent> InputRouter::resolvePointerEvent(const InputEvent& event){
     const PointerIntent::Enum intent = event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp ? PointerIntent::ContextMenu : PointerIntent::Activate;
     const auto held = FindIf(m_pointerBindings.begin(), m_pointerBindings.end(), [&event, intent](const PointerBinding& binding)noexcept{
         return binding.source == event.source && binding.intent == intent;
-    });
+    }
+    );
     const auto contact = FindIf(m_pointerBindings.begin(), m_pointerBindings.end(), [&event](const PointerBinding& binding)noexcept{
         return binding.source == event.source;
-    });
+    }
+    );
     if(contact != m_pointerBindings.end())
         resolved.hoverCapable = contact->hoverCapable;
     if(press){

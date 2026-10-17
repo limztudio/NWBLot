@@ -31,7 +31,7 @@ struct Case{
 
 inline constexpr usize s_CaseCount = 32768u;
 inline constexpr usize s_DataCount = 128u;
-volatile u64 s_Checksum = 0u;
+static volatile u64 s_Checksum = 0u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,16 +96,16 @@ template<typename Scalar>
 [[nodiscard]] Case<Scalar> Fill(const usize index, u64& seed)noexcept{
     using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
     using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
-    constexpr u64 exceptional64[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull,
+    constexpr u64 s_Exceptional64[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull,
         0x7fefffffffffffffull, 0xffefffffffffffffull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000142ull, 0xfff8000000000284ull, 0x7ff0000000000011ull, 0xfff0000000000022ull };
-    constexpr u32 exceptional32[]{ 0u, 0x80000000u, 1u, 0x80000001u, 0x00800000u, 0x3f800000u, 0xbf800000u, 0x7f7fffffu, 0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00142u, 0xffc00284u, 0x7f800011u, 0xff800022u };
+    constexpr u32 s_Exceptional32[]{ 0u, 0x80000000u, 1u, 0x80000001u, 0x00800000u, 0x3f800000u, 0xbf800000u, 0x7f7fffffu, 0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00142u, 0xffc00284u, 0x7f800011u, 0xff800022u };
     Bits words[13];
     for(usize word = 0u; word < LengthOf(words); ++word){
         const u64 random = Next(seed);
         if constexpr(IsSame_V<Scalar, f64>)
-            words[word] = index < 8192u ? exceptional64[random % LengthOf(exceptional64)] : random;
+            words[word] = index < 8192u ? s_Exceptional64[random % LengthOf(s_Exceptional64)] : random;
         else
-            words[word] = index < 8192u ? exceptional32[random % LengthOf(exceptional32)] : static_cast<u32>(random);
+            words[word] = index < 8192u ? s_Exceptional32[random % LengthOf(s_Exceptional32)] : static_cast<u32>(random);
     }
     Vector position;
     Vector extents;
@@ -135,7 +135,7 @@ template<typename Scalar, bool Candidate>
 }
 
 template<typename Scalar>
-[[nodiscard]] u32 Verify()noexcept{
+[[nodiscard]] u32 Verify(){
 #pragma STDC FENV_ACCESS ON
     using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
     u64 seed = 0x12ace40f893d5847ull;
@@ -208,7 +208,7 @@ template<typename Scalar, bool Candidate, bool Latency>
 }
 
 template<typename Scalar>
-[[nodiscard]] i32 Measure(const bool candidate, const bool latency, const usize iterations)noexcept{
+[[nodiscard]] i32 Measure(const bool candidate, const bool latency, const usize iterations){
     const Timer begin = TimerNow();
     const u64 checksum = latency ? (candidate ? Workload<Scalar, true, true>(iterations) : Workload<Scalar, false, true>(iterations)) : (candidate ? Workload<Scalar, true, false>(iterations) : Workload<Scalar, false, false>(iterations));
     const f64 seconds = DurationInNS<f64>(TimerNow(), begin) / 1.0e9;
@@ -236,7 +236,8 @@ int main(const int argc, const char* const* argv){
         ScopeExit restore([&]()noexcept{
             if(!SetFloatingPointEnvironment(*original))
                 __builtin_trap();
-        });
+        }
+        );
         const u32 singleFailures = Verify<f32>();
         const u32 doubleFailures = Verify<f64>();
         NWB_COUT << "verification single=" << singleFailures << " double=" << doubleFailures << " cases=262144\n";

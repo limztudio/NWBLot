@@ -57,6 +57,8 @@ template<usize InlineCapacity>
 struct ResourceUseCollector : NoCopy{
     using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, Core::Alloc::ScratchArena, ResourceHash, EqualTo<Core::GpuGraphResourceId>>;
 
+
+public:
     Core::Alloc::ScratchArena& m_scratchArena;
     ResourceUseEntry m_inline[InlineCapacity] = {};
     usize m_count = 0u;
@@ -74,7 +76,7 @@ public:
 
 
 public:
-    explicit ResourceUseCollector(Core::Alloc::ScratchArena& scratchArena)
+    explicit ResourceUseCollector(Core::Alloc::ScratchArena& scratchArena)noexcept
         : m_scratchArena(scratchArena)
     {}
 
@@ -96,17 +98,24 @@ public:
             return true;
         }
 
-        promoteIndex();
+        if(!promoteIndex())
+            return false;
         return addIndexed(resource, state, access);
     }
 
-    void promoteIndex(){
+    [[nodiscard]] bool promoteIndex(){
         NWB_ASSERT(!m_index && m_count == InlineCapacity);
         Index index(InlineCapacity * 4u, ResourceHash{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
-        for(const ResourceUseEntry& entry : m_inline)
-            index.emplace(entry.resource, entry.info);
+        for(const ResourceUseEntry& entry : m_inline){
+            const auto [found, inserted] = index.emplace(entry.resource, entry.info);
+            if(!inserted){
+                NWB_ASSERT(false);
+                return false;
+            }
+        }
         static_assert(IsNothrowMoveConstructible_V<Index>);
         m_index.emplace(Move(index));
+        return true;
     }
 
     [[nodiscard]] bool addIndexed(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){

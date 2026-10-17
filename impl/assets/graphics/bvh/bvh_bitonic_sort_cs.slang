@@ -24,6 +24,10 @@ struct NwbBvhBitonicSortPushConstants{
 
 [[vk::push_constant]] ConstantBuffer<NwbBvhBitonicSortPushConstants> g_NwbBvhBitonicSortPushConstants;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Payload breaks equal Morton-code ties for stable BVH topology.
 bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, const uint payloadB){
     if(keyA != keyB)

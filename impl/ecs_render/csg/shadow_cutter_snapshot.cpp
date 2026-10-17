@@ -105,7 +105,8 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
         NWB_MEMCPY(&gpuCutter.parameter0, sizeof(Float4), parameterBytes, parameterByteCount);
         snapshot.cutters.push_back(gpuCutter);
         ++range.cutterCount;
-    });
+    }
+    );
     if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u){
         snapshot.cutters.resize(range.firstCutter);
         range.cutterCount = 0u;

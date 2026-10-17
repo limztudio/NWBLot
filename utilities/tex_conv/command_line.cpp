@@ -40,10 +40,15 @@ inline constexpr int s_AlphaOptionPresentCount = 0;
 inline constexpr int s_TexConvExitSuccess = 0;
 inline constexpr int s_TexConvExitFailure = 1;
 inline constexpr int s_TexConvExitFatal = -1;
+inline constexpr usize s_CompletionReportReserveSlack = 128u;
+inline constexpr Name s_ConversionScratchArena("utilities/tex_conv/conversion");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<bool AlphaMask>
-[[nodiscard]] bool ValidateInputImage(const Path& path){
+[[nodiscard]] bool ValidateInputImage(const ScratchPath& path){
     const auto isRegularFile = IsRegularFile(path);
     if(!isRegularFile && !IsMissingPathError(isRegularFile.error())){
         if constexpr(AlphaMask)
@@ -68,7 +73,6 @@ template<bool AlphaMask>
     }
     return true;
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,13 +104,13 @@ int Run(const int argc, char** argv){
 
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
+        Core::Alloc::ScratchArena scratchArena(TexConvCliDetail::s_ConversionScratchArena);
 
         {
             const AStringView outputPathText(outputArgument);
             TextureDimension::Enum dimension = TextureDimension::Texture2D;
-            Core::Alloc::ScratchArena scratchArena(Name("utilities/tex_conv/encode"));
-            ::Vector<Path, Core::Alloc::ScratchArena> inputPaths(scratchArena);
-            AlphaSource alphaSource;
+            ::Vector<ScratchPath, Core::Alloc::ScratchArena> inputPaths(scratchArena);
+            AlphaSource alphaSource(scratchArena);
 
             const u32 modeCount = static_cast<u32>(!inputArgument.empty()) + static_cast<u32>(!cubeArguments.empty()) + static_cast<u32>(!volumeArguments.empty());
             if(modeCount != TexConvCliDetail::s_SingleTextureInputModeCount){
@@ -117,14 +121,14 @@ int Run(const int argc, char** argv){
             if(!inputArgument.empty()){
                 const AStringView inputPathText(inputArgument);
                 inputPaths.reserve(1u);
-                inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
+                inputPaths.emplace_back(scratchArena, inputPathText);
             }
             else if(!cubeArguments.empty()){
                 dimension = TextureDimension::TextureCube;
                 inputPaths.reserve(cubeArguments.size());
                 for(const AInteropString& argument : cubeArguments){
                     const AStringView inputPathText(argument);
-                    inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
+                    inputPaths.emplace_back(scratchArena, inputPathText);
                 }
             }
             else{
@@ -132,18 +136,17 @@ int Run(const int argc, char** argv){
                 inputPaths.reserve(volumeArguments.size());
                 for(const AInteropString& argument : volumeArguments){
                     const AStringView inputPathText(argument);
-                    inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
+                    inputPaths.emplace_back(scratchArena, inputPathText);
                 }
             }
 
             if(alphaOption->count() > TexConvCliDetail::s_AlphaOptionPresentCount){
                 const AStringView alphaText(alphaArgument);
-                const AString alphaKeyword = ToAsciiLowerCopy(AString(alphaText));
-                if(alphaKeyword == s_AlphaWhiteKeyword){
+                if(EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword)){
                     alphaSource.mode = AlphaSourceMode::Constant;
                     alphaSource.constant = s_AlphaWhiteConstant;
                 }
-                else if(alphaKeyword == s_AlphaBlackKeyword){
+                else if(EqualsAsciiIgnoreCase(alphaText, s_AlphaBlackKeyword)){
                     alphaSource.mode = AlphaSourceMode::Constant;
                     alphaSource.constant = s_AlphaBlackConstant;
                 }
@@ -153,38 +156,42 @@ int Run(const int argc, char** argv){
                 }
                 else{
                     alphaSource.mode = AlphaSourceMode::Image;
-                    alphaSource.path = Path(UtilityDetail::Arena(), alphaText);
+                    alphaSource.path = alphaText;
                 }
             }
 
-            for(const Path& inputPath : inputPaths){
+            for(const ScratchPath& inputPath : inputPaths){
                 if(!TexConvCliDetail::ValidateInputImage<false>(inputPath))
                     return TexConvCliDetail::s_TexConvExitFailure;
             }
             if(alphaSource.mode == AlphaSourceMode::Image && !TexConvCliDetail::ValidateInputImage<true>(alphaSource.path))
                 return TexConvCliDetail::s_TexConvExitFailure;
 
-            const auto outputPaths = ResolveOutputPaths(inputPaths.front(), outputPathText);
-            if(!outputPaths || !ValidateOutputPaths(*outputPaths, force))
+            const auto outputPaths = ResolveOutputPaths(inputPaths.front(), outputPathText, scratchArena);
+            if(!outputPaths || !ValidateOutputPaths(*outputPaths, force, scratchArena))
                 return TexConvCliDetail::s_TexConvExitFailure;
 
-            const auto payload = PrepareTexture(scratchArena, inputPaths, dimension, !linear, alphaSource);
+            const auto payload = PrepareTexture(inputPaths, dimension, !linear, alphaSource, scratchArena);
             if(!payload)
                 return TexConvCliDetail::s_TexConvExitFailure;
-            if(!WriteOutputs(*outputPaths, *payload, force))
+            if(!WriteOutputs(*outputPaths, *payload, force, scratchArena))
                 return TexConvCliDetail::s_TexConvExitFailure;
 
-            AStringStream report;
-            report << "Wrote " << PathToGenericString<AString>(outputPaths->metadata) << "\n" << "Wrote " << PathToGenericString<AString>(outputPaths->data) << "\n" << "  " << payload->width << "x" << payload->height;
+            const auto metadataPathText = PathToGenericString(scratchArena, outputPaths->metadata);
+            const auto dataPathText = PathToGenericString(scratchArena, outputPaths->data);
+            ScratchString report(scratchArena);
+            report.reserve(AddSize(AddSize(metadataPathText.size(), dataPathText.size()), TexConvCliDetail::s_CompletionReportReserveSlack));
+            StringAppendFormat(report, "Wrote {}\nWrote {}\n  {}x{}", metadataPathText, dataPathText, payload->width, payload->height);
             if(payload->dimension == TextureDimension::TextureCube)
-                report << " cube";
+                report += " cube";
             else if(payload->dimension == TextureDimension::Texture3D)
-                report << "x" << payload->depth;
-            report << ", " << payload->mipCount << " linear UASTC mips, " << payload->bytes.size() << " raw bytes\n";
-            NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
+                StringAppendFormat(report, "x{}", payload->depth);
+            StringAppendFormat(report, ", {} linear UASTC mips, {} raw bytes\n", payload->mipCount, payload->bytes.size());
+            NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report));
             return TexConvCliDetail::s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return TexConvCliDetail::s_TexConvExitFatal; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return TexConvCliDetail::s_TexConvExitFatal; }
+    );
 }
 
 

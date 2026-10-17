@@ -82,11 +82,13 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     instanceBufferDesc.isAccelStructBuildInput = true;
     instanceBufferDesc.debugName = "TLAS_InstanceBuffer";
 
-    BufferHandle instanceBuffer = m_device.createBuffer(instanceBufferDesc);
-    if(!instanceBuffer){
+    auto instanceBufferResult = m_device.createBuffer(instanceBufferDesc);
+    if(!instanceBufferResult){
+        invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS instance buffer"));
         return;
     }
+    BufferHandle instanceBuffer = Move(*instanceBufferResult);
     if(!isBufferReadyForCommandQueue(instanceBuffer.get(), VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: TLAS instance buffer is not ready for device-address access"));
         return;
@@ -140,8 +142,15 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         NWB_MEMCPY(mappedInstanceData + static_cast<usize>(destinationOffset), sizeof(VkAccelerationStructureInstanceKHR), &vkInst, sizeof(VkAccelerationStructureInstanceKHR));
     };
 
-    if(taskScheduler().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold)
-        taskScheduler().parallelFor(static_cast<usize>(0), numInstances, s_TlasInstanceGrainSize, buildVkInstance);
+    if(taskScheduler().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold){
+        const auto parallelWork = taskScheduler().parallelFor(static_cast<usize>(0), numInstances, s_TlasInstanceGrainSize, buildVkInstance);
+        if(!parallelWork){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: acceleration-structure preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            m_device.unmapBuffer(*instanceBuffer);
+            m_commandRecordingFailed = true;
+            return;
+        }
+    }
     else{
         for(usize i = 0u; i < numInstances; ++i)
             buildVkInstance(i);
@@ -157,7 +166,6 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
 
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
 }
-
 
 void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* accelStructResource, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build top-level acceleration structure from buffer")))

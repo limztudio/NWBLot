@@ -95,7 +95,8 @@ bool X11TextInputService::filterEvent(XEvent& event){
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    });
+    }
+    );
 
     // XIM transport replies target its hidden connection window, not the application window.
     return XFilterEvent(&event, None) != False;
@@ -112,7 +113,8 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    });
+    }
+    );
 
     m_lookup.resize(128u);
     KeySym symbol = NoSymbol;
@@ -164,7 +166,8 @@ TextInputAdmission::Enum X11TextInputService::startNativeSession(const TextInput
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    });
+    }
+    );
 
     m_nativeToken = token;
     m_preedit.clear();
@@ -201,19 +204,20 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    });
+    }
+    );
 
     XPoint spot{ static_cast<short>(Clamp<i32>(caret.x, -32768, 32767)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, -32768, 32767)), };
     XVaNestedList attributes = XVaCreateNestedList(0, XNSpotLocation, &spot, nullptr);
     if(!attributes)
         return TextInputAdmission::NativeFailure;
     // Callback/no-preedit styles may ignore this optional candidate-window hint.
-    const char* const unsupported = XSetICValues(m_context, XNPreeditAttributes, attributes, nullptr);
-    if(unsupported){
+    const bool unsupported = XSetICValues(m_context, XNPreeditAttributes, attributes, nullptr) != nullptr;
+    if(unsupported)
         m_caretHintSupported = false;
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: active input style does not support native caret positioning"));
-    }
     XFree(attributes);
+    if(unsupported)
+        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: active input style does not support native caret positioning"));
     return TextInputAdmission::Accepted;
 }
 
@@ -304,10 +308,10 @@ void X11TextInputService::releaseContext()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<ITextInputService> CreateX11TextInputService(Alloc::GlobalArena& arena, Display& display, const u64 window){
+Expected<GlobalUniquePtr<ITextInputService>> CreateX11TextInputService(Alloc::GlobalArena& arena, Display& display, const u64 window){
     auto service = MakeGlobalUnique<X11TextInputService>(arena, arena, display, static_cast<Window>(window));
-    if(!service->initialize())
-        return nullptr;
+    if(!service || !service->initialize())
+        return MakeUnexpected(Failure{});
     return service;
 }
 

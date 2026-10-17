@@ -291,15 +291,19 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
 TEST(ReflectionStatistics, RejectedGraphRegistrationReleasesLease){
     StatisticsContext context;
     Core::GpuTaskGraph graph(context.arena);
-    const Core::GpuTaskId task = graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
-    EXPECT_FALSE(task.valid());
+    const auto task = graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
+    EXPECT_FALSE(task.has_value());
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
 }
 
 TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
     StatisticsContext context;
     Core::GpuTaskGraph graph(context.arena);
-    ASSERT_TRUE(graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}).valid());
+    {
+        const auto gpuAdmissionAt300 = graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
+        ASSERT_TRUE(gpuAdmissionAt300);
+        ASSERT_TRUE(gpuAdmissionAt300->valid());
+    }
     graph.reset();
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
 }
@@ -307,7 +311,11 @@ TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
 TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback){
     StatisticsContext context;
     Core::GpuTaskGraph graph(context.arena);
-    ASSERT_TRUE(graph.addTask<DestructorLeaseTask>(TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}).valid());
+    {
+        const auto gpuAdmissionAt308 = graph.addTask<DestructorLeaseTask>(TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
+        ASSERT_TRUE(gpuAdmissionAt308);
+        ASSERT_TRUE(gpuAdmissionAt308->valid());
+    }
     graph.reset();
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
 }

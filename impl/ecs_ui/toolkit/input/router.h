@@ -25,12 +25,10 @@ private:
         PointerGesture gesture;
         bool pendingUpdate = true;
     };
-
     struct TargetLookup{
         u64 value = 0u;
         u32 index = 0u;
     };
-
     struct PopupRecord{
         PopupScope scope;
         WidgetId restoreFocus;
@@ -38,7 +36,6 @@ private:
         PopupToken restorePopup;
         bool closing = false;
     };
-
     struct ControlCommandOwner{
         WidgetId host;
         u64 declarationGeneration = 0u;
@@ -46,19 +43,16 @@ private:
         ControlToken control;
         bool horizontal = false;
     };
-
     struct TargetOwner{
         WidgetId target;
         u64 declarationGeneration = 0u;
         PopupToken popup;
         ControlToken control;
     };
-
     struct BoundSource{
         InputSource source;
         InputCommandIntent intent;
     };
-
     struct CommandSource{
         InputSource source;
         ControlCommandOwner controlOwner{};
@@ -69,26 +63,27 @@ private:
         bool submitArmed = false;
         bool contextArmed = false;
     };
-
     struct HoverIdentity{
         WidgetId owner;
         u64 declarationGeneration = 0u;
         PopupToken popup;
         ControlToken control;
     };
-
     struct PointerBinding{
         InputSource source;
         PointerIntent::Enum intent = PointerIntent::Activate;
         bool hoverCapable = false;
     };
-
     struct PointerSource{
         InputSource source;
         PointerIntent::Enum intent = PointerIntent::Activate;
         bool consumed = false;
         bool inert = false;
     };
+
+
+private:
+    [[nodiscard]] static bool IsPointerEvent(InputEventType::Enum type)noexcept;
 
 
 public:
@@ -101,7 +96,9 @@ public:
     [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input);
     [[nodiscard]] bool setBindings(const InputKeyBinding* bindings, usize count);
     void restoreDefaultBindings();
+
     [[nodiscard]] const InputBindings& bindings()const noexcept{ return m_bindings; }
+
     // Drain events exactly once against the current committed layout; pending actions survive subsequent process calls.
     [[nodiscard]] InputRoutingResult process();
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
@@ -111,13 +108,19 @@ public:
     [[nodiscard]] bool dismissPopup(PopupDismissReason::Enum reason);
     void closePopup(const PopupToken& token)noexcept;
     void fencePopup(const PopupToken& token)noexcept;
+
     [[nodiscard]] bool hasPopup()const noexcept{ return !m_popups.empty(); }
+
     [[nodiscard]] usize popupCount()const noexcept{ return m_popups.size(); }
+
     // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
     [[nodiscard]] const PopupScope* popupScope(const PopupToken& token)const noexcept;
     [[nodiscard]] const HitTarget* findTarget(WidgetId id, u64 declarationGeneration = 0u)const noexcept;
+
     [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
+
     [[nodiscard]] u64 focusLossGeneration()const noexcept{ return m_focusLossGeneration; }
+
     // Remove a hidden/deleted declaration immediately while a prior GPU frame remains pending.
     void invalidateTarget(WidgetId id);
     // Transfer command focus to another input owner without cancelling already accepted UI actions.
@@ -135,24 +138,40 @@ public:
     [[nodiscard]] Expected<PointerGesture> consumePointerGesture(WidgetId id, u64 declarationGeneration)noexcept;
     [[nodiscard]] WidgetId hitTest(const Point& position)const noexcept;
     [[nodiscard]] bool wouldConsumePointer(const Point& position)const noexcept;
+
     [[nodiscard]] u64 layoutGeneration()const noexcept{ return m_layoutGeneration; }
+
     [[nodiscard]] const InputVector<HitTarget>& targets()const noexcept{ return m_targets; }
+
     [[nodiscard]] const InputVector<InputAction>& actions()const noexcept{ return m_actions; }
+
     [[nodiscard]] const InputVector<ControlAction>& controlActions()const noexcept{ return m_controlActions; }
+
     [[nodiscard]] WidgetId hover()const noexcept{ return m_hover; }
+
     [[nodiscard]] u64 hoverActivityGeneration()const noexcept{ return m_hoverActivityGeneration; }
+
     [[nodiscard]] WidgetId focus()const noexcept{ return m_focus; }
+
     [[nodiscard]] WidgetId capture()const noexcept{ return m_capture; }
+
     // One spatial source can own activation and context-menu roles concurrently; other held contacts remain inert.
     [[nodiscard]] InputSource activePointerSource()const noexcept{ return m_activePointerSource; }
+
     [[nodiscard]] bool acceptsPointerSource(const InputSource& source)const noexcept;
     [[nodiscard]] bool ownsPointerSource(const InputSource& source, PointerIntent::Enum intent = PointerIntent::Activate)const noexcept;
+
     [[nodiscard]] bool primaryDown()const noexcept{ return m_primaryDown; }
+
     [[nodiscard]] bool secondaryDown()const noexcept{ return m_secondaryDown; }
+
     [[nodiscard]] bool pointerKnown()const noexcept{ return m_pointerKnown; }
+
     // Only an explicitly hover-capable source supplies cursor geometry; contact gestures keep their own position.
     [[nodiscard]] const Point& pointerPosition()const noexcept{ return m_pointer; }
+
     [[nodiscard]] bool windowFocused()const noexcept{ return m_windowFocused; }
+
     [[nodiscard]] bool wantsPointer()const noexcept;
     [[nodiscard]] bool wantsCommands()const noexcept;
     [[nodiscard]] bool ownsKey(i32 key)const noexcept;
@@ -166,7 +185,6 @@ public:
 
 
 private:
-    [[nodiscard]] static bool IsPointerEvent(InputEventType::Enum type)noexcept;
     [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event);
     [[nodiscard]] Expected<InputEvent> resolvePointerEvent(const InputEvent& event);
     void retireQueuedReleases()noexcept;

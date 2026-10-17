@@ -60,7 +60,7 @@ protected:
         return m_state.setValue(value) && refresh();
     }
 
-    [[nodiscard]] ControlAction key(const ControlActionKind::Enum kind, const u64 sequence = 1u)const{
+    [[nodiscard]] ControlAction key(const ControlActionKind::Enum kind, const u64 sequence = 1u)const noexcept{
         ControlAction action;
         action.id = { { 41u }, 3u, 7u, sequence };
         action.control = m_state.controlToken();
@@ -68,7 +68,7 @@ protected:
         return action;
     }
 
-    [[nodiscard]] PointerGesture gesture(const bool thumb = true)const{
+    [[nodiscard]] PointerGesture gesture(const bool thumb = true)const noexcept{
         PointerGesture gesture;
         gesture.id = { { thumb ? 42u : 43u }, 3u, 7u, 11u };
         gesture.origin = { m_placement.thumb.x + m_placement.thumb.width * 0.5f, 36.0f };

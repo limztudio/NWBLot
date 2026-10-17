@@ -55,7 +55,7 @@ struct SoftwareCausticsResolveChainResult{
 
 class SoftwareCausticsResolveChainBuilder final : NoCopy{
 public:
-    SoftwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
+    SoftwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept;
 
 
 public:

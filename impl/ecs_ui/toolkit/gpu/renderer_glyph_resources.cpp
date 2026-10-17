@@ -5,6 +5,7 @@
 #include "renderer_internal.h"
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 #include <global/text_utils.h>
 
@@ -54,11 +55,11 @@ namespace __hidden_ui_gpu_glyphs{
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(!descriptor.valid())
         return false;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, version.m_texture.get(), Core::Format::R8_UNORM, Core::s_AllSubresources, Core::TextureDimension::Texture2D))){
-        heap.free(descriptor);
+    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, version.m_texture.get(), Core::Format::R8_UNORM, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
         return false;
-    }
     version.m_sampledImage = descriptor;
+    descriptorGuard.release();
     return true;
 }
 
@@ -117,7 +118,7 @@ bool GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
     return true;
 }
 
-GpuVersion<GpuGlyphVersion> GpuRendererState::prepareGlyphPage(const SharedGlyphPage& page){
+Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const SharedGlyphPage& page){
     usize replaceIndex = m_glyphCache.size();
     for(usize index = 0u; index < m_glyphCache.size(); ++index){
         const auto& existing = m_glyphCache[index];
@@ -127,21 +128,22 @@ GpuVersion<GpuGlyphVersion> GpuRendererState::prepareGlyphPage(const SharedGlyph
         if(existing->m_page->binding().generation != page->binding().generation)
             break;
         if(!__hidden_ui_gpu_glyphs::SamePageVersion(*existing->m_page, *page))
-            return {};
+            return MakeUnexpected(Failure{});
         GpuVersion<GpuGlyphVersion> reused = existing;
         m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(index));
         m_glyphCache.push_back(reused);
         if(!__hidden_ui_gpu_glyphs::PrepareDescriptor(*reused))
-            return {};
-        return reused;
+            return MakeUnexpected(Failure{});
+        return Move(reused);
     }
     Core::Device& device = m_graphics.getDevice();
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
-    if((device.queryFormatSupport(Core::Format::R8_UNORM) & requiredSupport) != requiredSupport)
-        return {};
-    auto version = MakeGpuVersion<GpuGlyphVersion>(m_arena, m_graphics, page);
-    if(!version)
-        return {};
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
+    if((device.queryFormatSupport(Core::Format::R8_UNORM) & s_RequiredSupport) != s_RequiredSupport)
+        return MakeUnexpected(Failure{});
+    auto versionResult = MakeGpuVersion<GpuGlyphVersion>(m_arena, m_graphics, page);
+    if(!versionResult)
+        return MakeUnexpected(versionResult.error());
+    GpuVersion<GpuGlyphVersion> version = Move(*versionResult);
     const GlyphPageBinding& binding = page->binding();
     Core::TextureDesc description;
     description
@@ -149,9 +151,13 @@ GpuVersion<GpuGlyphVersion> GpuRendererState::prepareGlyphPage(const SharedGlyph
         .setFormat(Core::Format::R8_UNORM).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
-    version->m_texture = device.createTexture(description);
-    if(!version->m_texture)
-        return {};
+    auto textureResult = device.createTexture(description);
+    if(textureResult)
+        version->m_texture = Move(*textureResult);
+    else
+        version->m_texture.reset();
+    if(!textureResult)
+        return MakeUnexpected(Failure{});
     const Core::GraphicsRuntime::TextureUploadRegion region{ .data = page->pixels().data(), .dataSize = page->pixels().size(), .rowPitch = binding.width, .depthPitch = page->pixels().size(), };
     // Upload only a fresh immutable image. Accepted readiness stays with this version across presentation retries.
     if(!m_graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
@@ -162,10 +168,11 @@ GpuVersion<GpuGlyphVersion> GpuRendererState::prepareGlyphPage(const SharedGlyph
         .finalState = Core::ResourceStates::ShaderResource,
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
-    }))
-        return {};
+    }
+    ))
+        return MakeUnexpected(Failure{});
     if(!version->m_readinessToken.valid() || !version->m_readinessToken.hasPhysicalQueueIdentity())
-        return {};
+        return MakeUnexpected(Failure{});
     // Frames retain superseded versions; evicting a cache entry never overwrites an image or frees a live frame's descriptor.
     if(replaceIndex < m_glyphCache.size())
         m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(replaceIndex));
@@ -174,8 +181,8 @@ GpuVersion<GpuGlyphVersion> GpuRendererState::prepareGlyphPage(const SharedGlyph
     m_glyphCache.push_back(version);
     // Cache accepted uploads before descriptor publication so descriptor exhaustion retries cannot discard their readiness.
     if(!__hidden_ui_gpu_glyphs::PrepareDescriptor(*version))
-        return {};
-    return version;
+        return MakeUnexpected(Failure{});
+    return Move(version);
 }
 
 bool GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
@@ -186,7 +193,7 @@ bool GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
         auto version = prepareGlyphPage(pages[frame.m_glyphPages.size()]);
         if(!version)
             return false;
-        frame.m_glyphPages.push_back(Move(version));
+        frame.m_glyphPages.push_back(Move(*version));
     }
     return true;
 }
@@ -202,23 +209,27 @@ Expected<GpuGlyphGraphResources> GpuRendererState::declareGlyphPages(Core::GpuTa
         char identityText[32u];
         const AStringView suffix = FormatDecimal(index, identityText);
         // Graph imports unify equal identities; every immutable snapshot page needs a distinct texture and completion name.
-        const Name readyIdentity = DeriveName(Name("ui.glyph_page_ready/"), suffix);
-        const Name textureIdentity = DeriveName(Name("ui.glyph_page/"), suffix);
-        const Core::GpuExternalCompletionId ready = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(readyIdentity).setMarkerLabel("UI Glyph Page Upload Completion").setToken(page->m_readinessToken));
-        if(!ready.valid()){
+        const auto readyIdentity = DeriveName(Name("ui.glyph_page_ready/"), suffix);
+        const auto textureIdentity = DeriveName(Name("ui.glyph_page/"), suffix);
+        if(!readyIdentity || !textureIdentity)
+            return MakeUnexpected(Failure{});
+        const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(*readyIdentity).setMarkerLabel("UI Glyph Page Upload Completion").setToken(page->m_readinessToken));
+        if(!readyResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: glyph page {} upload completion import failed (queue={}, generation={}, value={})"), index, page->m_readinessToken.physicalQueueIndex, page->m_readinessToken.deviceGeneration, page->m_readinessToken.value);
             return MakeUnexpected(Failure{});
         }
-        const Core::GpuGraphResourceId texture = graph.importTexture(
+        const Core::GpuExternalCompletionId ready = *readyResult;
+        const auto textureResult = graph.importTexture(
             page->m_texture,
-            Core::GpuGraphResourceDesc().setIdentity(textureIdentity).setMarkerLabel("UI Glyph Coverage Page")
+            Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel("UI Glyph Coverage Page")
                 .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );
-        if(!texture.valid()){
+        if(!textureResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})"), index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation);
             return MakeUnexpected(Failure{});
         }
+        const Core::GpuGraphResourceId texture = *textureResult;
         resources->push_back(texture);
         uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     }

@@ -40,10 +40,10 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     }
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, search ? WidgetKind::SearchComboBox : WidgetKind::ComboBox);
+    const auto widget = m_context.declare(stableKey, search ? WidgetKind::SearchComboBox : WidgetKind::ComboBox);
     if(!widget)
         return result;
-    const WidgetState field = *widget;
+    const WidgetState field = **widget;
     const u64 previousSelection = state.selectedKey();
     const bool previouslyOpen = state.isOpen();
     const bool previouslyFocused = m_context.input().focus() == field.id;
@@ -111,14 +111,14 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     frame.token = { state.inputGeneration(), source.instanceGeneration(), source.revision() };
     frame.rowCount = source.rowCount();
     frame.resultCount = results.rowCount();
-    WidgetState* popup = m_context.declarePart(field, "popup", WidgetKind::Popup);
+    const auto popup = m_context.declarePart(field, "popup", WidgetKind::Popup);
     if(!popup)
         return result;
-    frame.popup = *popup;
-    WidgetState* rows = m_context.declarePart(field, "rows", WidgetKind::VirtualList);
+    frame.popup = **popup;
+    const auto rows = m_context.declarePart(field, "rows", WidgetKind::VirtualList);
     if(!rows)
         return result;
-    frame.rows = *rows;
+    frame.rows = **rows;
     frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration, state.m_popup.instanceGeneration(), state.m_popup.openGeneration() };
     frame.listToken = { state.m_list.inputGeneration(), results.instanceGeneration(), results.revision() };
     frame.open = state.isOpen();

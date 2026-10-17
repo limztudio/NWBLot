@@ -43,11 +43,15 @@ private:
         Core::Buffer* buffer = nullptr;
         BufferRequest request;
     };
+
+
+private:
     using RequestIndex = HashMap<Core::Buffer*, BufferRequest, Core::Alloc::ScratchArena>;
     using ResourceIndex = HashMap<u32, BufferRequest*, Core::Alloc::ScratchArena>;
     using NameReference = NotNull<const NameHash*>;
 
 
+private:
     struct NameReferenceHash{
         [[nodiscard]] usize operator()(const NameReference& identity)const noexcept{
             return Hasher<NameHash>{}(*identity);
@@ -58,6 +62,9 @@ private:
             return *lhs == *rhs;
         }
     };
+
+
+private:
     using NameIndex = HashSet<NameReference, Core::Alloc::ScratchArena, NameReferenceHash, NameReferenceEqual>;
 
 
@@ -66,7 +73,7 @@ private:
 
 
 public:
-    ShadowPrepareGeometryResources(const ShadowPrepareGeometryInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
+    ShadowPrepareGeometryResources(const ShadowPrepareGeometryInputs& inputs, Core::Alloc::ScratchArena& scratchArena)noexcept;
     ShadowPrepareGeometryResources(ShadowPrepareGeometryResources&&) = delete;
 
 

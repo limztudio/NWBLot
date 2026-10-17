@@ -303,7 +303,8 @@ TEST(Math, UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutI
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     struct alignas(16) MatrixRecord{
         u32 prefix{};

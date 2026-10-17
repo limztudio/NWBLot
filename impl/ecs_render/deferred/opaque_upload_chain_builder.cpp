@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/opaque_upload_chain_builder.h>
+#include "opaque_upload_chain_builder.h"
+
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/material_system.h>
@@ -23,7 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)
+OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem){
@@ -78,29 +79,38 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         ECSRenderDetail::AssertMaterialTypedUploadRanges(*inputs.materialTypedRanges, materialTypedBytes);
 #endif
 
-        const Core::GpuUploadBlobId instanceBlob = m_graph.copyUploadData(instanceData.data(), instanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
-        const Core::GpuUploadBlobId materialTypedBlob = m_graph.copyUploadData(materialTypedBytes.data(), materialTypedBytes.size(), alignof(u32));
-        if(!instanceBlob.valid() || !materialTypedBlob.valid())
+        const auto instanceBlobResult = m_graph.copyUploadData(instanceData.data(), instanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
+        const auto materialTypedBlobResult = m_graph.copyUploadData(materialTypedBytes.data(), materialTypedBytes.size(), alignof(u32));
+        if(!instanceBlobResult || !materialTypedBlobResult)
             return MakeUnexpected(Failure{});
+        const Core::GpuUploadBlobId instanceBlob = *instanceBlobResult;
+        const Core::GpuUploadBlobId materialTypedBlob = *materialTypedBlobResult;
 
         Core::GpuTaskDesc instanceUploadDesc;
         instanceUploadDesc.setIdentity(Name("render.graphics_prefix.material_instances_upload")).setMarkerLabel("Material Instances Upload").setScheduling(immutableUploadScheduling).setDependencies(&materialDrawUploadTask, 1u);
-        materialDrawUploadTask = m_graph.addUploadBufferTask(
+        const auto materialDrawUploadTaskResult = m_graph.addUploadBufferTask(
             instanceUploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = instanceBlob,
                 .destination = inputs.materialInstances,
                 // Both draw buffers use automatic Common restoration when the native packet closes.
                 // Keep that graph-visible boundary exact; the G-buffer read below owns the transient SRV transition.
-                .finalState = Core::ResourceStates::Common, });
-        if(!materialDrawUploadTask.valid())
+                .finalState = Core::ResourceStates::Common, }
+        );
+        if(!materialDrawUploadTaskResult){
+            materialDrawUploadTask = {};
             return MakeUnexpected(Failure{});
+        }
+        materialDrawUploadTask = *materialDrawUploadTaskResult;
 
         Core::GpuTaskDesc materialTypedUploadDesc;
         materialTypedUploadDesc.setIdentity(Name("render.graphics_prefix.material_typed_upload")).setMarkerLabel("Material Typed Upload").setScheduling(immutableUploadScheduling).setDependencies(&materialDrawUploadTask, 1u);
-        materialDrawUploadTask = m_graph.addUploadBufferTask(materialTypedUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = materialTypedBlob, .destination = inputs.materialTyped, .finalState = Core::ResourceStates::Common, });
-        if(!materialDrawUploadTask.valid())
+        const auto materialDrawUploadTaskResult2 = m_graph.addUploadBufferTask(materialTypedUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = materialTypedBlob, .destination = inputs.materialTyped, .finalState = Core::ResourceStates::Common, });
+        if(!materialDrawUploadTaskResult2){
+            materialDrawUploadTask = {};
             return MakeUnexpected(Failure{});
+        }
+        materialDrawUploadTask = *materialDrawUploadTaskResult2;
         result.materialDrawBuffersUploaded = true;
     }
     result.materialUploadTask = materialDrawUploadTask;
@@ -125,42 +135,62 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         if(!csgIntervalSampleStateData)
             return MakeUnexpected(Failure{});
 
-        const Core::GpuUploadBlobId receiverRangesBlob = m_graph.copyUploadData(csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData));
-        const Core::GpuUploadBlobId cuttersBlob = m_graph.copyUploadData(csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData));
-        const Core::GpuUploadBlobId clipContextSlotsBlob = m_graph.copyUploadData(&*csgClipContextSlotData, sizeof(*csgClipContextSlotData), alignof(CsgClipContextSlots));
-        const Core::GpuUploadBlobId intervalSampleStateBlob = m_graph.copyUploadData(&*csgIntervalSampleStateData, sizeof(*csgIntervalSampleStateData), alignof(CsgIntervalSampleStateGpuData));
-        if(!receiverRangesBlob.valid() || !cuttersBlob.valid() || !clipContextSlotsBlob.valid() || !intervalSampleStateBlob.valid())
+        const auto receiverRangesBlobResult = m_graph.copyUploadData(csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData));
+        const auto cuttersBlobResult = m_graph.copyUploadData(csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData));
+        const auto clipContextSlotsBlobResult = m_graph.copyUploadData(&*csgClipContextSlotData, sizeof(*csgClipContextSlotData), alignof(CsgClipContextSlots));
+        const auto intervalSampleStateBlobResult = m_graph.copyUploadData(&*csgIntervalSampleStateData, sizeof(*csgIntervalSampleStateData), alignof(CsgIntervalSampleStateGpuData));
+        if(!receiverRangesBlobResult || !cuttersBlobResult || !clipContextSlotsBlobResult || !intervalSampleStateBlobResult)
             return MakeUnexpected(Failure{});
+        const Core::GpuUploadBlobId receiverRangesBlob = *receiverRangesBlobResult;
+        const Core::GpuUploadBlobId cuttersBlob = *cuttersBlobResult;
+        const Core::GpuUploadBlobId clipContextSlotsBlob = *clipContextSlotsBlobResult;
+        const Core::GpuUploadBlobId intervalSampleStateBlob = *intervalSampleStateBlobResult;
 
         Core::GpuTaskDesc receiverRangesUploadDesc;
         receiverRangesUploadDesc.setIdentity(Name("render.graphics_prefix.csg_receiver_ranges_upload")).setMarkerLabel("CSG Receiver Ranges Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
-        csgFrameUploadTask = m_graph.addUploadBufferTask(
+        const auto csgFrameUploadTaskResult = m_graph.addUploadBufferTask(
             receiverRangesUploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = receiverRangesBlob,
                 .destination = inputs.csgReceiverRanges,
                 // CSG structured buffers restore Common at native packet close; G-buffer owns their transient SRV state exactly like the graph-owned material streams above.
-                .finalState = Core::ResourceStates::Common, });
-        if(!csgFrameUploadTask.valid())
+                .finalState = Core::ResourceStates::Common, }
+        );
+        if(!csgFrameUploadTaskResult){
+            csgFrameUploadTask = {};
             return MakeUnexpected(Failure{});
+        }
+        csgFrameUploadTask = *csgFrameUploadTaskResult;
 
         Core::GpuTaskDesc cuttersUploadDesc;
         cuttersUploadDesc.setIdentity(Name("render.graphics_prefix.csg_cutters_upload")).setMarkerLabel("CSG Cutters Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
-        csgFrameUploadTask = m_graph.addUploadBufferTask(cuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = cuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
-        if(!csgFrameUploadTask.valid())
+        const auto csgFrameUploadTaskResult2 = m_graph.addUploadBufferTask(cuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = cuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
+        if(!csgFrameUploadTaskResult2){
+            csgFrameUploadTask = {};
             return MakeUnexpected(Failure{});
+        }
+        csgFrameUploadTask = *csgFrameUploadTaskResult2;
 
         Core::GpuTaskDesc clipContextSlotsUploadDesc;
         clipContextSlotsUploadDesc.setIdentity(Name("render.graphics_prefix.csg_clip_context_slots_upload")).setMarkerLabel("CSG Clip Context Slots Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
-        csgFrameUploadTask = m_graph.addUploadBufferTask(clipContextSlotsUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = clipContextSlotsBlob, .destination = inputs.csgClipContextSlots, .finalState = Core::ResourceStates::Common, });
-        if(!csgFrameUploadTask.valid())
+        const auto csgFrameUploadTaskResult3 = m_graph.addUploadBufferTask(clipContextSlotsUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = clipContextSlotsBlob, .destination = inputs.csgClipContextSlots, .finalState = Core::ResourceStates::Common, });
+        if(!csgFrameUploadTaskResult3){
+            csgFrameUploadTask = {};
             return MakeUnexpected(Failure{});
+        }
+        csgFrameUploadTask = *csgFrameUploadTaskResult3;
 
         Core::GpuTaskDesc intervalSampleStateUploadDesc;
         intervalSampleStateUploadDesc.setIdentity(Name("render.graphics_prefix.csg_interval_sample_state_upload")).setMarkerLabel("CSG Interval Sample State Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
-        csgFrameUploadTask = m_graph.addUploadBufferTask(intervalSampleStateUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = intervalSampleStateBlob, .destination = inputs.csgIntervalSampleState, .finalState = Core::ResourceStates::Common, });
-        if(!csgFrameUploadTask.valid())
+        const auto csgFrameUploadTaskResult4 = m_graph.addUploadBufferTask(
+            intervalSampleStateUploadDesc,
+            Core::GpuUploadBufferTaskDesc{ .source = intervalSampleStateBlob, .destination = inputs.csgIntervalSampleState, .finalState = Core::ResourceStates::Common, }
+        );
+        if(!csgFrameUploadTaskResult4){
+            csgFrameUploadTask = {};
             return MakeUnexpected(Failure{});
+        }
+        csgFrameUploadTask = *csgFrameUploadTaskResult4;
         result.csgFrameBuffersUploaded = true;
     }
     result.csgUploadTask = csgFrameUploadTask;

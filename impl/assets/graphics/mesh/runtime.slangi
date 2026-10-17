@@ -58,6 +58,10 @@ struct NwbMeshGeneratedVertex{
 #pragma warning(pop)
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 uint2 nwbMeshPackGeneratedHalf4(const half4 value){
     return uint2(nwbPackHalf2x16(float2(value.xy)), nwbPackHalf2x16(float2(value.zw)));
@@ -120,6 +124,10 @@ groupshared uint g_NwbMeshletRasterFlags;
 // Every invocation in a meshlet group renders one draw item, so all source-stream slots are identical. Load them once from the local per-draw instance record before any heap access instead of rereading that record at every vertex/attribute fetch.
 groupshared uint g_NwbMeshGeometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void nwbMeshSetMeshletRasterFlags(const uint rasterFlags, const uint groupThreadIndex){
     if(groupThreadIndex == 0u)
         g_NwbMeshletRasterFlags = rasterFlags;
@@ -153,6 +161,10 @@ struct NwbMeshPushConstants{
 };
 
 [[vk::push_constant]] ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 uint nwbMeshFrameGeneratedVertexHeapSlot(){

@@ -64,6 +64,8 @@ struct ObjectGeometryCacheSnapshot{
     bool initialized = false;
     bool requiresDecode = true;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept;
 };
 

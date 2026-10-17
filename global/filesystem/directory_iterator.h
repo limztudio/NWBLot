@@ -40,7 +40,7 @@ public:
 
 
 protected:
-    explicit DirectoryIteratorBase(const Path<ArenaT>& path)
+    explicit DirectoryIteratorBase(const Path<ArenaT>& path)noexcept(noexcept(EntryVector(path.arena())))
         : m_entries(path.arena())
     {}
 
@@ -62,6 +62,9 @@ class DirectoryIterator : public DirectoryIteratorBase<ArenaT>{
 public:
     using Entry = typename BaseType::Entry;
     using iterator = typename BaseType::iterator;
+
+
+public:
     using BaseType::begin;
     using BaseType::end;
 
@@ -77,7 +80,7 @@ public:
 
 
 private:
-    explicit DirectoryIterator(const Path<ArenaT>& path)
+    explicit DirectoryIterator(const Path<ArenaT>& path)noexcept(noexcept(typename BaseType::EntryVector(path.arena())))
         : BaseType(path)
     {}
 
@@ -136,6 +139,9 @@ class RecursiveDirectoryIterator : public DirectoryIteratorBase<ArenaT>{
 public:
     using Entry = typename BaseType::Entry;
     using iterator = typename BaseType::iterator;
+
+
+public:
     using BaseType::begin;
     using BaseType::end;
 
@@ -151,7 +157,7 @@ public:
 
 
 private:
-    explicit RecursiveDirectoryIterator(const Path<ArenaT>& path)
+    explicit RecursiveDirectoryIterator(const Path<ArenaT>& path)noexcept(noexcept(typename BaseType::EntryVector(path.arena())))
         : BaseType(path)
     {}
 

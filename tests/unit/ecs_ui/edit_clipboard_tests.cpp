@@ -227,7 +227,8 @@ TEST(UiEditClipboard, OwnerThreadViolationCannotPollApplyOrCancelAHostRequest){
         requestStatus = controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status;
         drainStatus = controller.drain(s_Owner, model).status;
         cancelled = controller.cancel();
-    });
+    }
+    );
     other.join();
     EXPECT_EQ(requestStatus, UiEditClipboardStatus::WrongThread);
     EXPECT_EQ(drainStatus, UiEditClipboardStatus::WrongThread);

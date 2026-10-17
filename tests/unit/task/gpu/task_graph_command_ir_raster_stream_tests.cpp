@@ -33,6 +33,9 @@ using namespace TaskGraphTestUtils;
 static constexpr Graphics::GpuGraphPipelineId s_Pipeline{ .generation = s_CommandIrTask.generation, .index = 2u };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Graphics::GpuCommandIrRasterStateDesc RasterState(){
     Graphics::GpuCommandIrRasterStateDesc state;
     state.pipeline = s_Pipeline;

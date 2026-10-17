@@ -11,6 +11,10 @@
 
 [[vk::push_constant]] ConstantBuffer<NwbBvhBuildPushConstants> g_NwbBvhBuildPushConstants;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Common-prefix length of the augmented keys: 32-bit Morton, then the leaf index as a tie-break so equal Morton codes still yield a strict total order (Karras requires this to avoid degenerate nodes). Returns -1 for an out-of-range neighbour, which terminates the range searches below.
 int nwbBvhDelta(const int lhs, const int rhs, const uint primitiveCount){
     if(rhs < 0 || rhs >= (int)primitiveCount)

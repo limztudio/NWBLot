@@ -32,6 +32,8 @@ struct GpuTimingScope{
     // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
     u32 epoch = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return scopeName != s_NameNone && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
 
@@ -43,15 +45,28 @@ struct GpuTimingScopeDefinition{
     AStringView markerLabel;
 
 
+public:
+    [[nodiscard]] static Expected<GpuTimingScopeDefinition, NameTextError::Enum> FromText(const AStringView label){
+        const auto name = Name::FromText(label);
+        if(!name)
+            return MakeUnexpected(name.error());
+        GpuTimingScopeDefinition definition;
+        definition.identity = *name;
+        definition.markerLabel = label;
+        return definition;
+    }
+
+
+public:
     constexpr GpuTimingScopeDefinition() = default;
     template<usize LabelSize>
-    constexpr explicit GpuTimingScopeDefinition(const char (&label)[LabelSize])
+    constexpr explicit GpuTimingScopeDefinition(const char (&label)[LabelSize])noexcept
         : identity(label)
         , markerLabel(label)
     {}
-    explicit GpuTimingScopeDefinition(const AStringView label)
+    explicit GpuTimingScopeDefinition(const NameText<char> label)
         : identity(label)
-        , markerLabel(label)
+        , markerLabel(label.text())
     {}
 
 
@@ -72,16 +87,14 @@ class GpuTimingSampleAttribution final{
 
 public:
     constexpr GpuTimingSampleAttribution() = default;
-
-
-public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
-
-
 private:
     constexpr explicit GpuTimingSampleAttribution(const u64 identity)noexcept
         : m_identity(identity)
     {}
+
+
+public:
+    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
 
 
 private:
@@ -96,6 +109,10 @@ inline constexpr bool operator!=(const GpuTimingSampleAttribution& lhs, const Gp
 }
 
 inline constexpr GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct GpuTimingSample{
     u64 sourceFrameIndex = 0u;
@@ -120,6 +137,7 @@ struct GpuTimingSampleListener{
     void (*invoke)(void* context, const GpuTimingSample& sample) = nullptr;
 
 
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr; }
 };
 
@@ -131,16 +149,14 @@ class GpuTimingSampleSubscription final{
 
 public:
     constexpr GpuTimingSampleSubscription() = default;
-
-
-public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
-
-
 private:
     constexpr explicit GpuTimingSampleSubscription(const u64 identity)noexcept
         : m_identity(identity)
     {}
+
+
+public:
+    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
 
 
 private:
@@ -192,6 +208,7 @@ struct GpuTimingRecorderStatistics{
     bool comparableTimestampsSupported = false;
 
 
+public:
     [[nodiscard]] bool valid()const noexcept{ return deviceGeneration != 0u; }
 };
 

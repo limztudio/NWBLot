@@ -4,7 +4,6 @@
 
 #include "runtime_validation.h"
 
-#include "arena_names.h"
 #include "binary_payload_io.h"
 
 
@@ -121,13 +120,13 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidateMeshletAttributeSkinSharing(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
     const TStringView contextText,
     const TStringView meshPathText
 ){
-    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_MeshletAttributeSkinSharingArena);
     Vector<u32, Core::Alloc::ScratchArena> attributeSkins{scratchArena};
     usize attributeRefCount = 0u;
     for(const MeshletDesc& meshlet : meshlets)
@@ -162,6 +161,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidateMeshletPayload(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<u8>& attributeRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
@@ -180,6 +180,10 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 ){
     if(meshlets.empty() || meshletBounds.size() != meshlets.size()){
         MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("has incomplete meshlet payload"));
+        return false;
+    }
+    if(meshlets.size() > Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE){
+        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet bounds exceed u32 byte-address limits"));
         return false;
     }
     if(!FitsU32(positionRefDeltas.size()) || !FitsU32(attributeRefDeltas.size()) || (skinRequired && !FitsU32(skinCount))){
@@ -295,7 +299,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return false;
     }
 
-    if(skinRequired && !ValidateMeshletAttributeSkinSharing(positionRefDeltas, localVertexRefs, meshlets, contextText, meshPathText))
+    if(skinRequired && !ValidateMeshletAttributeSkinSharing(scratchArena, positionRefDeltas, localVertexRefs, meshlets, contextText, meshPathText))
         return false;
 
     return true;
@@ -303,6 +307,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::Assets::AssetVector<Float3U>& positions,
     const Core::Assets::AssetVector<Half4U>& normals,
     const Core::Assets::AssetVector<Half4U>& tangents,
@@ -323,6 +328,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return false;
 
     return ValidateMeshletPayload(
+        scratchArena,
         positionRefDeltas,
         attributeRefDeltas,
         localVertexRefs,

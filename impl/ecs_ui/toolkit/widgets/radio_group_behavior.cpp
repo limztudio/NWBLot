@@ -82,10 +82,7 @@ namespace __hidden_ui_radio_group_behavior{
 }
 
 [[nodiscard]] static bool ValidOptions(const RadioGroupOptions& options)noexcept{
-    return
-        options.enabled && options.width.policy <= LayoutSizePolicy::Stretch && IsFinite(options.width.value) && options.width.value >= 0.0f
-        && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f)
-    ;
+    return options.enabled && options.width.policy <= LayoutSizePolicy::Stretch && IsFinite(options.width.value) && options.width.value >= 0.0f && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f);
 }
 
 [[nodiscard]] static u64 NavigationTarget(const RadioGroupChoices& choices, const u64 cursor, const ControlActionKind::Enum kind)noexcept{

@@ -94,17 +94,23 @@ public:
 TEST(TextInput, BeginRequiresFocusCapabilityAndOnlyOneActiveSession){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
-    EXPECT_EQ(service.begin({}).admission, TextInputAdmission::Unavailable);
+    const auto unavailableBegin = service.begin({});
+    ASSERT_FALSE(unavailableBegin);
+    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
     ASSERT_TRUE(service.setFocused(true));
     service.m_supported = false;
-    EXPECT_EQ(service.begin({}).admission, TextInputAdmission::Unsupported);
+    const auto unsupportedBegin = service.begin({});
+    ASSERT_FALSE(unsupportedBegin);
+    EXPECT_EQ(unsupportedBegin.error(), TextInputAdmission::Unsupported);
     service.m_supported = true;
-    const TextInputBeginResult first = service.begin({});
-    ASSERT_EQ(first.admission, TextInputAdmission::Accepted);
-    ASSERT_TRUE(first.token.valid());
-    EXPECT_EQ(service.activeSession(), first.token);
-    EXPECT_EQ(service.begin({}).admission, TextInputAdmission::Busy);
-    ASSERT_TRUE(service.end(first.token));
+    const auto first = service.begin({});
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(first->valid());
+    EXPECT_EQ(service.activeSession(), *first);
+    const auto busyBegin = service.begin({});
+    ASSERT_FALSE(busyBegin);
+    EXPECT_EQ(busyBegin.error(), TextInputAdmission::Busy);
+    ASSERT_TRUE(service.end(*first));
     EXPECT_FALSE(service.activeSession().valid());
 }
 
@@ -113,7 +119,9 @@ TEST(TextInput, InputsAndPolledEventsOwnCopiedUtf8Bytes){
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
     AString<Alloc::GlobalArena> surrounding("A\xED\x95\x9C\xF0\x9F\x98\x80", arena.arena);
-    const TextInputSessionToken token = service.begin({ {}, surrounding, 1u, 4u }).token;
+    const auto tokenAdmission = service.begin({ {}, surrounding, 1u, 4u });
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     ASSERT_TRUE(token.valid());
     surrounding.assign("changed caller input");
     EXPECT_EQ(service.surroundingText(), "A\xED\x95\x9C\xF0\x9F\x98\x80");
@@ -136,11 +144,17 @@ TEST(TextInput, EndRejectsLateEventsForeignTokensAndReusedGenerations){
     FakeTextInputService foreign(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(foreign.setFocused(true));
-    const TextInputSessionToken old = service.begin({}).token;
-    const TextInputSessionToken other = foreign.begin({}).token;
+    const auto oldAdmission = service.begin({});
+    ASSERT_TRUE(oldAdmission);
+    const TextInputSessionToken old = *oldAdmission;
+    const auto otherAdmission = foreign.begin({});
+    ASSERT_TRUE(otherAdmission);
+    const TextInputSessionToken other = *otherAdmission;
     ASSERT_EQ(service.emitCommit(old, "queued"), TextInputAdmission::Accepted);
     ASSERT_TRUE(service.end(old));
-    const TextInputSessionToken current = service.begin({}).token;
+    const auto currentAdmission = service.begin({});
+    ASSERT_TRUE(currentAdmission);
+    const TextInputSessionToken current = *currentAdmission;
     ASSERT_TRUE(current.valid());
     EXPECT_NE(old.generation, current.generation);
     EXPECT_NE(other.service, current.service);
@@ -157,7 +171,9 @@ TEST(TextInput, FocusLossReplacesQueuedWorkWithOneTerminalCancellation){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     ASSERT_EQ(service.emitCommit(token, "unconsumed"), TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitPreedit(token, "draft", 5u, 5u), TextInputAdmission::Accepted);
     ASSERT_TRUE(service.setFocused(false));
@@ -170,18 +186,26 @@ TEST(TextInput, FocusLossReplacesQueuedWorkWithOneTerminalCancellation){
     EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
     EXPECT_TRUE(event.text.empty());
     EXPECT_EQ(service.poll(token, event), TextInputPollResult::InvalidSession);
-    EXPECT_EQ(service.begin({}).admission, TextInputAdmission::Unavailable);
+    const auto unavailableBegin = service.begin({});
+    ASSERT_FALSE(unavailableBegin);
+    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
     ASSERT_TRUE(service.setFocused(true));
-    EXPECT_TRUE(service.begin({}).token.valid());
+    const auto resumed = service.begin({});
+    ASSERT_TRUE(resumed);
+    EXPECT_TRUE(resumed->valid());
 }
 
 TEST(TextInput, NewSessionInvalidatesUnpolledCancellation){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken old = service.begin({}).token;
+    const auto oldAdmission = service.begin({});
+    ASSERT_TRUE(oldAdmission);
+    const TextInputSessionToken old = *oldAdmission;
     ASSERT_TRUE(service.cancelSession(old, TextInputCancelReason::NativeCancelled));
-    const TextInputSessionToken current = service.begin({}).token;
+    const auto currentAdmission = service.begin({});
+    ASSERT_TRUE(currentAdmission);
+    const TextInputSessionToken current = *currentAdmission;
     TextInputEvent event(arena.arena);
     EXPECT_EQ(service.poll(old, event), TextInputPollResult::InvalidSession);
     EXPECT_EQ(service.poll(current, event), TextInputPollResult::Pending);
@@ -191,7 +215,9 @@ TEST(TextInput, ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({ {}, "abc", 1u, 1u }).token;
+    const auto tokenAdmission = service.begin({ {}, "abc", 1u, 1u });
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     const u64 revision = service.surroundingRevision(token);
     ASSERT_EQ(service.emitPreedit(token, "draft", 5u, 5u), TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitPreedit(token, "final draft", 11u, 11u, false), TextInputAdmission::Accepted);
@@ -225,7 +251,9 @@ TEST(TextInput, QueueOverflowCancelsInsteadOfApplyingPartialCommittedText){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     for(usize index = 0u; index < s_TextInputMaxEvents; ++index)
         ASSERT_EQ(service.emitCommit(token, "x"), TextInputAdmission::Accepted);
     EXPECT_EQ(service.emitCommit(token, "overflow"), TextInputAdmission::QueueFull);
@@ -241,7 +269,9 @@ TEST(TextInput, QueuedByteBudgetCancelsEvenBelowEventCountLimit){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     AString<Alloc::GlobalArena> text(arena.arena);
     text.assign(s_TextInputMaxEventTextBytes, 'x');
     for(usize index = 0u; index < s_TextInputMaxQueuedTextBytes / text.size(); ++index)
@@ -256,7 +286,9 @@ TEST(TextInput, InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndR
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({ {}, "A\xED\x95\x9C" "B", 4u, 4u }).token;
+    const auto tokenAdmission = service.begin({ {}, "A\xED\x95\x9C" "B", 4u, 4u });
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     ASSERT_TRUE(token.valid());
     EXPECT_EQ(service.updateSurrounding(token, "bad\xF0\x9F", 0u, 0u), TextInputAdmission::InvalidText);
     EXPECT_EQ(service.updateSurrounding(token, "\xED\x95\x9C", 1u, 3u), TextInputAdmission::InvalidRange);
@@ -284,7 +316,9 @@ TEST(TextInput, MalformedNativeTextAndPreeditSelectionsCannotEnterQueue){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     EXPECT_EQ(service.emitCommit(token, AStringView("a\0b", 3u)), TextInputAdmission::InvalidText);
     EXPECT_EQ(service.emitPreedit(token, "\xED\x95\x9C", 1u, 3u), TextInputAdmission::InvalidRange);
     AString<Alloc::GlobalArena> large(arena.arena);
@@ -299,17 +333,23 @@ TEST(TextInput, CancellationInvalidatesBeforeNativeCleanupAndRejectsReentry){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     service.m_onEnd = [&](const TextInputSessionToken ended){
         EXPECT_EQ(ended, token);
         EXPECT_EQ(service.emitCommit(ended, "reentrant late"), TextInputAdmission::InvalidSession);
-        EXPECT_EQ(service.begin({}).admission, TextInputAdmission::Busy);
+        const auto busyBegin = service.begin({});
+        ASSERT_FALSE(busyBegin);
+        EXPECT_EQ(busyBegin.error(), TextInputAdmission::Busy);
         EXPECT_FALSE(service.end(ended));
     };
-    ASSERT_TRUE(service.cancelSession(token, TextInputCancelReason::NativeCancelled));
+    ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.cancelSession(token, TextInputCancelReason::NativeCancelled)));
     EXPECT_EQ(service.m_endCount, 1u);
     service.m_onEnd = {};
-    ASSERT_TRUE(service.begin({}).token.valid());
+    const auto resumed = service.begin({});
+    ASSERT_TRUE(resumed);
+    ASSERT_TRUE(resumed->valid());
 }
 
 TEST(TextInput, NativeStartFailureRetiresTokenAndAnyEarlyEvent){
@@ -322,7 +362,9 @@ TEST(TextInput, NativeStartFailureRetiresTokenAndAnyEarlyEvent){
         EXPECT_EQ(service.emitCommit(failed, "early event"), TextInputAdmission::Accepted);
     };
     service.m_startAdmission = TextInputAdmission::NativeFailure;
-    EXPECT_EQ(service.begin({}).admission, TextInputAdmission::NativeFailure);
+    const auto nativeFailureBegin = service.begin({});
+    ASSERT_FALSE(nativeFailureBegin);
+    EXPECT_EQ(nativeFailureBegin.error(), TextInputAdmission::NativeFailure);
     EXPECT_FALSE(service.activeSession().valid());
     TextInputEvent event(arena.arena);
     EXPECT_EQ(service.poll(failed, event), TextInputPollResult::InvalidSession);
@@ -333,21 +375,27 @@ TEST(TextInput, WrongThreadCannotMutateOrPollOwnerSession){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     Thread worker([&](){
         TextInputEvent event(arena.arena);
         EXPECT_FALSE(service.isOwnerThread());
         EXPECT_FALSE(service.activeSession().valid());
         EXPECT_EQ(service.surroundingRevision(token), 0u);
-        EXPECT_EQ(service.begin({}).admission, TextInputAdmission::WrongThread);
+        const auto wrongThreadBegin = service.begin({});
+        ASSERT_FALSE(wrongThreadBegin);
+        EXPECT_EQ(wrongThreadBegin.error(), TextInputAdmission::WrongThread);
         EXPECT_EQ(service.emitCommit(token, "wrong thread"), TextInputAdmission::WrongThread);
         EXPECT_EQ(service.poll(token, event), TextInputPollResult::WrongThread);
         EXPECT_EQ(service.updateCaret(token, {}), TextInputAdmission::WrongThread);
         EXPECT_EQ(service.updateSurrounding(token, {}, 0u, 0u), TextInputAdmission::WrongThread);
         EXPECT_FALSE(service.setFocused(false));
         EXPECT_FALSE(service.end(token));
-    });
+    }
+    );
     worker.join();
+    ASSERT_FALSE(::testing::Test::HasFatalFailure());
     EXPECT_EQ(service.activeSession(), token);
     TextInputEvent event(arena.arena);
     EXPECT_EQ(service.poll(token, event), TextInputPollResult::Pending);
@@ -355,21 +403,27 @@ TEST(TextInput, WrongThreadCannotMutateOrPollOwnerSession){
 
 TEST(TextInput, NullNativeFactoryReportsUnsupportedWithoutClaimingTextInput){
     NWB::Tests::TestArena arena;
-    const GlobalUniquePtr<ITextInputService> service = CreateTextInputService(arena.arena, nullptr);
+    auto serviceResult = CreateTextInputService(arena.arena, nullptr);
+    ASSERT_TRUE(serviceResult);
+    const GlobalUniquePtr<ITextInputService> service = Move(*serviceResult);
     ASSERT_NE(service.get(), nullptr);
     EXPECT_FALSE(service->capabilities().commit);
     EXPECT_FALSE(service->capabilities().preedit);
     EXPECT_FALSE(service->capabilities().surrounding);
     EXPECT_FALSE(service->capabilities().deleteSurrounding);
     ASSERT_TRUE(service->setFocused(true));
-    EXPECT_EQ(service->begin({}).admission, TextInputAdmission::Unsupported);
+    const auto unsupportedBegin = service->begin({});
+    ASSERT_FALSE(unsupportedBegin);
+    EXPECT_EQ(unsupportedBegin.error(), TextInputAdmission::Unsupported);
 }
 
 TEST(TextInput, ReentrantNativeCaretCancellationReturnsFailureAndRetainsTerminalEvent){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     service.m_onCaret = [&](){
         EXPECT_TRUE(service.cancelSession(token, TextInputCancelReason::NativeFailure));
     };
@@ -385,7 +439,9 @@ TEST(TextInput, ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTe
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     service.m_onSurrounding = [&](){
         EXPECT_TRUE(service.cancelSession(token, TextInputCancelReason::NativeFailure));
     };
@@ -403,7 +459,9 @@ TEST(TextInput, UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    const TextInputSessionToken token = service.begin({}).token;
+    const auto tokenAdmission = service.begin({});
+    ASSERT_TRUE(tokenAdmission);
+    const TextInputSessionToken token = *tokenAdmission;
     ASSERT_EQ(service.updateSurrounding(token, "local change", 0u, 12u), TextInputAdmission::Accepted);
     const u64 revision = service.surroundingRevision(token);
     EXPECT_EQ(service.updateSurrounding(token, "invalid", 0u, 0u, static_cast<TextInputChangeCause::Enum>(255u)), TextInputAdmission::InvalidRange);

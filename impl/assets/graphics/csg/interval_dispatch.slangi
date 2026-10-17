@@ -28,6 +28,10 @@ struct NwbCsgIntervalDispatchPushConstants{
 #include "bindless_resources.slangi"
 #undef NWB_CSG_CONTEXT_HEAP_SLOT
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint2 nwbCsgIntervalDispatchWorkOffset(){
     return uint2(g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_X], g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y]);
 }

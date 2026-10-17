@@ -42,7 +42,7 @@ int RunPipelineTool(const int argc, char** argv){
         usize outputReserveBytes = 0u;
         for(const auto& input : inputs)
             outputReserveBytes += input.size() + __hidden_dependency_computer::s_LineFeedReserveBytes;
-        NWB::Core::Assets::AssetString text(arena);
+        AString<NWB::Core::Alloc::ScratchArena> text(scratchArena);
         text.reserve(outputReserveBytes);
         for(const auto& input : inputs){
             text += input;
@@ -55,7 +55,8 @@ int RunPipelineTool(const int argc, char** argv){
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs (skin dependencies: {})"), inputs.size(), parsed.includeSkinDependencies);
         return s_PipelineExitSuccess;
-    });
+    }
+    );
 }
 
 

@@ -54,20 +54,16 @@ static Expected<SkinCookEntry> ParseSkinValue(const Name virtualPath, const Path
 }
 
 static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(
-        registry,
-        MeshBinaryPayload::s_MeshAssetKindLabel,
-        &ParseMeshDocument,
-        &ParseMeshValue,
-        [](MeshCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildMeshAsset(entry, arena); }
-    )
+    return
+        Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(registry, MeshBinaryPayload::s_MeshAssetKindLabel, &ParseMeshDocument, &ParseMeshValue, &BuildMeshAsset)
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
             registry,
             SkinBinaryPayload::s_SkinAssetKindLabel,
             &ParseSkinDocument,
             &ParseSkinValue,
-            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildSkinAsset(entry, arena); }
-        );
+            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSkinAsset(entry, arena); }
+        )
+    ;
 }
 
 

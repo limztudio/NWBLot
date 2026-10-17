@@ -53,7 +53,7 @@ struct DecodedRecordContext{
     const GpuPhysicalQueueInfo& queue
 )noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList, const GpuPhysicalQueueInfo& queue)noexcept;
-[[nodiscard]] bool LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList)noexcept;
+[[nodiscard]] bool LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList);
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(const CommandListParameters& commandListDescription, const GpuPhysicalQueueId& packetQueue, CommandQueue::Enum packetQueueClass)noexcept;
 
 struct RasterReplayState{
@@ -96,7 +96,7 @@ struct RasterReplayState{
     u64 recordIndex,
     RasterReplayState& state
 )noexcept;
-[[nodiscard]] bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, BinaryByteView blobBytes, CommandList& commandList)noexcept;
+[[nodiscard]] bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, BinaryByteView blobBytes, CommandList& commandList);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

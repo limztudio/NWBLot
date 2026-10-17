@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/lighting_stage_builder.h>
+#include "lighting_stage_builder.h"
+
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
@@ -19,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem)
+DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem)noexcept
     : m_graph(graph)
     , m_deferredSystem(deferredSystem){
 }
@@ -70,9 +71,10 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     const bool laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
     Core::GpuTaskId historySlotsUploadTask;
     if(laggedBindlessSlotsGraphOwned){
-        const Core::GpuUploadBlobId laggedBindlessSlotsBlob = m_graph.copyUploadData(&history->slots, sizeof(history->slots), alignof(DeferredBindlessResourceSlots));
-        if(!laggedBindlessSlotsBlob.valid())
+        const auto laggedBindlessSlotsBlobResult = m_graph.copyUploadData(&history->slots, sizeof(history->slots), alignof(DeferredBindlessResourceSlots));
+        if(!laggedBindlessSlotsBlobResult)
             return MakeUnexpected(Failure{});
+        const Core::GpuUploadBlobId laggedBindlessSlotsBlob = *laggedBindlessSlotsBlobResult;
 
         Core::GpuTaskSchedulingHint uploadScheduling;
         uploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -85,15 +87,19 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
             .setScheduling(uploadScheduling)
             .setDependencies(laggedLightingSelectorUploadDependencies, LengthOf(laggedLightingSelectorUploadDependencies))
         ;
-        historySlotsUploadTask = m_graph.addUploadBufferTask(
+        const auto historySlotsUploadTaskResult = m_graph.addUploadBufferTask(
             uploadDesc,
             Core::GpuUploadBufferTaskDesc{
                 .source = laggedBindlessSlotsBlob,
                 .destination = inputs.bindlessSlots,
                 // Automatic-state selector buffers publish Common; Deferred Lighting owns the following ConstantBuffer transition in this same externally gated packet.
-                .finalState = Core::ResourceStates::Common, });
-        if(!historySlotsUploadTask.valid())
+                .finalState = Core::ResourceStates::Common, }
+        );
+        if(!historySlotsUploadTaskResult){
+            historySlotsUploadTask = {};
             return MakeUnexpected(Failure{});
+        }
+        historySlotsUploadTask = *historySlotsUploadTaskResult;
     }
     const Core::GpuTaskId laggedLightingWithSelectorDependencies[] = { inputs.graphicsPrefixTask, historySlotsUploadTask, inputs.avboitFinalTask, };
     const Core::GpuTaskId* const lightingDependencies = inputs.declaresHardwareCaustics
@@ -136,9 +142,12 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
         .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
-    result.lightingTask = m_deferredSystem.declareDeferredLightingTask(m_graph, desc, deferredTargets, useLaggedLightingHistory, timingTicket);
-    if(!result.lightingTask.valid())
+    const auto resultLightingTaskResult = m_deferredSystem.declareDeferredLightingTask(m_graph, desc, deferredTargets, useLaggedLightingHistory, timingTicket);
+    if(!resultLightingTaskResult){
+        result.lightingTask = {};
         return MakeUnexpected(Failure{});
+    }
+    result.lightingTask = *resultLightingTaskResult;
     result.historySlotsUploadTask = historySlotsUploadTask;
     return result;
 }

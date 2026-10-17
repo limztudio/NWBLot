@@ -68,7 +68,6 @@ bool GpuTaskGraph::discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph
 }
 
 
-
 bool GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,

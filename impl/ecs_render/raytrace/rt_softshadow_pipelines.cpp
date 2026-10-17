@@ -41,8 +41,12 @@ namespace __hidden_softshadow_pipelines{
         }
         Core::ComputePipelineDesc pipelineDesc;
         pipelineDesc.setComputeShader(stage.m_state.m_shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        stage.m_state.m_pipeline = device.createComputePipeline(pipelineDesc);
-        if(!stage.m_state.m_pipeline){
+        auto pipelineResult = device.createComputePipeline(pipelineDesc);
+        if(pipelineResult)
+            stage.m_state.m_pipeline = Move(*pipelineResult);
+        else
+            stage.m_state.m_pipeline.reset();
+        if(!pipelineResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
             channel.m_failed = true;
             return false;
@@ -88,8 +92,12 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
-        resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
-        if(!resolve.m_bindingLayout){
+        auto bindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(bindingLayoutResult)
+            resolve.m_bindingLayout = Move(*bindingLayoutResult);
+        else
+            resolve.m_bindingLayout.reset();
+        if(!bindingLayoutResult){
             resolve.m_scalar.m_failed = true;
             return false;
         }
@@ -111,8 +119,12 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
-        m_rayTracingState.m_shadowGeometryDownsampleBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_shadowGeometryDownsampleBindingLayout){
+        auto shadowGeometryDownsampleBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(shadowGeometryDownsampleBindingLayoutResult)
+            m_rayTracingState.m_shadowGeometryDownsampleBindingLayout = Move(*shadowGeometryDownsampleBindingLayoutResult);
+        else
+            m_rayTracingState.m_shadowGeometryDownsampleBindingLayout.reset();
+        if(!shadowGeometryDownsampleBindingLayoutResult){
             m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
             return false;
         }
@@ -123,8 +135,12 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     }
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_rayTracingState.m_shadowGeometryDownsampleShader).addBindingLayout(m_rayTracingState.m_shadowGeometryDownsampleBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_rayTracingState.m_shadowGeometryDownsamplePipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_shadowGeometryDownsamplePipeline){
+    auto shadowGeometryDownsamplePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(shadowGeometryDownsamplePipelineResult)
+        m_rayTracingState.m_shadowGeometryDownsamplePipeline = Move(*shadowGeometryDownsamplePipelineResult);
+    else
+        m_rayTracingState.m_shadowGeometryDownsamplePipeline.reset();
+    if(!shadowGeometryDownsamplePipelineResult){
         m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
         return false;
     }
@@ -278,8 +294,12 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowReprojectMergePushConstants)));
-        m_rayTracingState.m_shadowReprojectMergeBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_shadowReprojectMergeBindingLayout){
+        auto shadowReprojectMergeBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(shadowReprojectMergeBindingLayoutResult)
+            m_rayTracingState.m_shadowReprojectMergeBindingLayout = Move(*shadowReprojectMergeBindingLayoutResult);
+        else
+            m_rayTracingState.m_shadowReprojectMergeBindingLayout.reset();
+        if(!shadowReprojectMergeBindingLayoutResult){
             m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
             return false;
         }
@@ -290,8 +310,12 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     }
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_rayTracingState.m_shadowReprojectMergeShader).addBindingLayout(m_rayTracingState.m_shadowReprojectMergeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_rayTracingState.m_shadowReprojectMergePipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_shadowReprojectMergePipeline){
+    auto shadowReprojectMergePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(shadowReprojectMergePipelineResult)
+        m_rayTracingState.m_shadowReprojectMergePipeline = Move(*shadowReprojectMergePipelineResult);
+    else
+        m_rayTracingState.m_shadowReprojectMergePipeline.reset();
+    if(!shadowReprojectMergePipelineResult){
         m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
         return false;
     }

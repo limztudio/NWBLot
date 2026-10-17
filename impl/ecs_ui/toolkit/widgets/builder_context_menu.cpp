@@ -42,12 +42,12 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     }
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::ContextMenu);
-    if(!widget || !m_context.claimState(*widget, state.instanceGeneration()))
+    const auto widget = m_context.declare(stableKey, WidgetKind::ContextMenu);
+    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
         return result;
     ContextMenuFrame frame;
     frame.parentToken = m_context.popupToken();
-    frame.widget = *widget;
+    frame.widget = **widget;
     frame.anchor = anchor->state;
     frame.anchorIndex = static_cast<u32>(anchor - m_scope->m_items.data());
     frame.source = &source;
@@ -56,11 +56,11 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     frame.options = options;
     frame.options.enabled = options.enabled && anchor->enabled;
     const bool previouslyOpen = state.isOpen();
-    if(state.m_owner != widget->id || state.m_ownerDeclaration != widget->declarationGeneration || state.m_anchorWidget != anchor->state.id || state.m_anchorDeclaration != anchor->state.declarationGeneration){
+    if(state.m_owner != (*widget)->id || state.m_ownerDeclaration != (*widget)->declarationGeneration || state.m_anchorWidget != anchor->state.id || state.m_anchorDeclaration != anchor->state.declarationGeneration){
         if(state.m_owner.valid())
             state.close();
-        state.m_owner = widget->id;
-        state.m_ownerDeclaration = widget->declarationGeneration;
+        state.m_owner = (*widget)->id;
+        state.m_ownerDeclaration = (*widget)->declarationGeneration;
         state.m_anchorWidget = anchor->state.id;
         state.m_anchorDeclaration = anchor->state.declarationGeneration;
         state.advanceRevision();
@@ -69,14 +69,14 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     state.m_popup.bindParent(frame.parentToken);
     if(boundOpen && !state.isOpen())
         state.close();
-    WidgetState* popup = m_context.declarePart(frame.widget, "popup", WidgetKind::Popup);
+    const auto popup = m_context.declarePart(frame.widget, "popup", WidgetKind::Popup);
     if(!popup)
         return result;
-    frame.popup = *popup;
-    WidgetState* rows = m_context.declarePart(frame.widget, "rows", WidgetKind::VirtualList);
+    frame.popup = **popup;
+    const auto rows = m_context.declarePart(frame.widget, "rows", WidgetKind::VirtualList);
     if(!rows)
         return result;
-    frame.rows = *rows;
+    frame.rows = **rows;
     const bool previouslyListFocused = m_context.input().focus() == frame.rows.id;
     frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration, state.instanceGeneration(), state.m_popup.openGeneration() };
     frame.revision = state.revision();

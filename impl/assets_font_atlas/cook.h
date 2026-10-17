@@ -32,6 +32,7 @@ struct FontAtlasCookEntry{
     Name virtualPath = s_NameNone;
 
 
+public:
     explicit FontAtlasCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
         : arena(memoryArena)
         , payload(memoryArena)

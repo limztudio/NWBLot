@@ -118,8 +118,9 @@ The converter's mip generation filter is a linear-space box filter. Runtime
 nearest/linear interpolation belongs to the separate Sampler asset's
 `mip_filter` field; textures do not carry an ignored interpolation setting.
 
-Cooking derives block grids, mip dimensions, slice counts, and byte ranges from
-the descriptors and checks the complete raw byte count. It packages the blocks
+Cooking derives the complete mip chain through 1x1, and depth 1 for volumes,
+from the semantic dimensions. It derives block grids, slice counts, and byte
+ranges and checks the complete raw byte count. It packages the blocks
 without source decoding, color conversion, filtering, or re-encoding. The cooked
 runtime asset carries its internal header and mip records; the authored `.tex`
 file remains the raw block stream. Runtime sampling always uses linear formats.

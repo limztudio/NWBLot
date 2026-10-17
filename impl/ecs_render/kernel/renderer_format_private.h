@@ -42,8 +42,12 @@ inline bool CreateClampSampler(Core::Device& device, Core::SamplerHandle& sample
 
     Core::SamplerDesc samplerDesc;
     samplerDesc.setAllFilters(linearFiltering).setAllAddressModes(Core::SamplerAddressMode::Clamp);
-    sampler = device.createSampler(samplerDesc);
-    if(sampler)
+    auto samplerResult = device.createSampler(samplerDesc);
+    if(samplerResult)
+        sampler = Move(*samplerResult);
+    else
+        sampler.reset();
+    if(samplerResult)
         return true;
 
     return false;

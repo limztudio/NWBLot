@@ -135,12 +135,13 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, De
             return scope;
         }
 
-        const usize publicationIndex = ticket->reserveScopePublication();
-        if(publicationIndex == Limit<usize>::s_Max){
+        const auto publicationIndexResult = ticket->reserveScopePublication();
+        if(!publicationIndexResult){
             ++m_statistics.beginFailureCount;
             return MakeUnexpected(Failure{});
         }
 
+        const usize publicationIndex = *publicationIndexResult;
         GpuTimingAccumulator& accumulator = *found.value();
         BeginQueryPublicationUnwindScope publicationUnwind(*this, *ticket, accumulator, scope, publicationIndex);
         const auto began = accumulator.beginQuery(commandList, m_currentFrameIndex, m_epoch, m_performanceCaptureEpoch, attribution);

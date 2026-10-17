@@ -31,15 +31,19 @@ using TaskGraphTestUtils::TestArena;
 
 
 TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse){
+    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+
     constexpr usize s_TaskCount = 129u;
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskId tasks[s_TaskCount] = {};
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
         char identityText[32u] = {};
-        tasks[taskIndex] = AddTaskWithCommands(
+        const auto derivedNameAt42Col12 = DeriveName(Name("tests/queue_scaling/serial/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(derivedNameAt42Col12);
+        const auto gpuAdmissionAt40 = AddTaskWithCommands(
             graph,
-            DeriveName(Name("tests/queue_scaling/serial/"), FormatDecimal(taskIndex, identityText)),
+            *derivedNameAt42Col12,
             "Serial Reachability Task",
             ComputeCommands(),
             {},
@@ -47,11 +51,12 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
             taskIndex != 0u ? &tasks[taskIndex - 1u] : nullptr,
             taskIndex != 0u ? 1u : 0u
         );
+        ASSERT_TRUE(gpuAdmissionAt40);
+        tasks[taskIndex] = *gpuAdmissionAt40;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+    ASSERT_TRUE(Analyze(scratch, graph, analysis));
     Graphics::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability reachability(scratch);
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
@@ -74,14 +79,20 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
     }
 
     Graphics::GpuTaskGraph partialGraph(testArena.arena);
-    const Graphics::GpuTaskId producer = AddTask(partialGraph, Name("tests/queue_scaling/partial/producer"), "Partial Producer");
-    const Graphics::GpuTaskId consumer = AddTask(partialGraph, Name("tests/queue_scaling/partial/consumer"), "Partial Consumer", &producer, 1u);
-    const Graphics::GpuTaskId independent = AddTask(partialGraph, Name("tests/queue_scaling/partial/independent"), "Independent");
+    const auto producerResult = AddTask(partialGraph, Name("tests/queue_scaling/partial/producer"), "Partial Producer");
+    ASSERT_TRUE(producerResult);
+    const Graphics::GpuTaskId producer = *producerResult;
+    const auto consumerResult = AddTask(partialGraph, Name("tests/queue_scaling/partial/consumer"), "Partial Consumer", &producer, 1u);
+    ASSERT_TRUE(consumerResult);
+    const Graphics::GpuTaskId consumer = *consumerResult;
+    const auto independentResult = AddTask(partialGraph, Name("tests/queue_scaling/partial/independent"), "Independent");
+    ASSERT_TRUE(independentResult);
+    const Graphics::GpuTaskId independent = *independentResult;
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
     ASSERT_TRUE(independent.valid());
     Graphics::GpuTaskGraphAnalysis partialAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(partialGraph, partialAnalysis));
+    ASSERT_TRUE(Analyze(scratch, partialGraph, partialAnalysis));
     const Graphics::GpuTaskGraph::DeclarationReadView partialDeclarations(partialGraph);
     ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(partialDeclarations, partialAnalysis, reachability));
     EXPECT_TRUE(reachability.reaches(producer, consumer));
@@ -98,6 +109,8 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
 }
 
 TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuTaskCostHint::Enum costs[] = {
@@ -113,7 +126,9 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     Graphics::GpuTaskId tasks[LengthOf(costs)] = {};
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
         char identityText[32u] = {};
-        const Name identity = DeriveName(Name("tests/queue_scaling/prefix/"), FormatDecimal(taskIndex, identityText));
+        const auto derivedNameAt124Col30 = DeriveName(Name("tests/queue_scaling/prefix/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(derivedNameAt124Col30);
+        const Name identity = *derivedNameAt124Col30;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = costs[taskIndex];
         scheduling.overlapPreferred = taskIndex != 3u;
@@ -121,7 +136,9 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
         scheduling.mergeWithPrevious = taskIndex == 1u;
         scheduling.preserveSameClassQueueWithDirectDependency = taskIndex == 6u;
         const Graphics::GpuTaskId dependency = taskIndex == 1u ? tasks[0u] : taskIndex == 6u ? tasks[2u] : Graphics::GpuTaskId{};
-        tasks[taskIndex] = AddTaskWithCommands(graph, identity, "Weighted Prefix Task", GraphicsCommands(), scheduling, {}, dependency.valid() ? &dependency : nullptr, dependency.valid() ? 1u : 0u);
+        const auto gpuAdmissionAt124 = AddTaskWithCommands(graph, identity, "Weighted Prefix Task", GraphicsCommands(), scheduling, {}, dependency.valid() ? &dependency : nullptr, dependency.valid() ? 1u : 0u);
+        ASSERT_TRUE(gpuAdmissionAt124);
+        tasks[taskIndex] = *gpuAdmissionAt124;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
     Graphics::GpuPhysicalQueueInfo firstAuxiliary = GraphicsQueue(7u);
@@ -132,8 +149,8 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
 
     // The first merged group and later fixed task remain on queue zero; dependency affinity keeps task six on seven.
     const u16 expectedQueueIndices[] = { 0u, 0u, 7u, 0u, 11u, 11u, 7u, 7u };

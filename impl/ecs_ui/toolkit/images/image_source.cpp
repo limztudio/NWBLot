@@ -60,14 +60,17 @@ ImageSource::ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedImageSource MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture){
+Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture){
     if(texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u){
         NWB_LOGGER_ERROR(NWB_TEXT("MakeImageSource: texture '{}' must be a static 2D image with depth one"), StringConvert(texture.virtualPath().resolvedText()));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     if(!texture.validatePayload())
-        return {};
-    return SharedImageSource(NewArenaObject<RefCounter<ImageSource>>(arena, arena, texture, ImageSource::ConstructionToken{}), ArenaRefDeleter<RefCounter<ImageSource>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+        return MakeUnexpected(Failure{});
+    auto* const source = NewArenaObject<RefCounter<ImageSource>>(arena, arena, texture, ImageSource::ConstructionToken{});
+    if(!source)
+        return MakeUnexpected(Failure{});
+    return SharedImageSource(source, ArenaRefDeleter<RefCounter<ImageSource>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

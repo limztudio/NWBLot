@@ -40,12 +40,24 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId textureCopyDest = AddTextureMetadata(graph, Name("tests/task_graph/same_state_texture_copy_dest"), "Same-state Texture Copy Destination");
-    const Graphics::GpuGraphResourceId bufferCopyDest = AddBufferMetadata(graph, Name("tests/task_graph/same_state_buffer_copy_dest"), "Same-state Buffer Copy Destination");
-    const Graphics::GpuGraphResourceId renderTarget = AddTextureMetadata(graph, Name("tests/task_graph/same_state_render_target"), "Same-state Render Target");
-    const Graphics::GpuGraphResourceId depthWrite = AddTextureMetadata(graph, Name("tests/task_graph/same_state_depth_write"), "Same-state Depth Write");
-    const Graphics::GpuGraphResourceId accelStructWrite = AddAccelStructMetadata(graph, Name("tests/task_graph/same_state_accel_struct_write"), "Same-state Acceleration Structure Write");
-    const Graphics::GpuGraphResourceId readOnly = AddTextureMetadata(graph, Name("tests/task_graph/same_state_read_only"), "Same-state Read Only");
+    const auto textureCopyDestResult = AddTextureMetadata(graph, Name("tests/task_graph/same_state_texture_copy_dest"), "Same-state Texture Copy Destination");
+    ASSERT_TRUE(textureCopyDestResult);
+    const Graphics::GpuGraphResourceId textureCopyDest = *textureCopyDestResult;
+    const auto bufferCopyDestResult = AddBufferMetadata(graph, Name("tests/task_graph/same_state_buffer_copy_dest"), "Same-state Buffer Copy Destination");
+    ASSERT_TRUE(bufferCopyDestResult);
+    const Graphics::GpuGraphResourceId bufferCopyDest = *bufferCopyDestResult;
+    const auto renderTargetResult = AddTextureMetadata(graph, Name("tests/task_graph/same_state_render_target"), "Same-state Render Target");
+    ASSERT_TRUE(renderTargetResult);
+    const Graphics::GpuGraphResourceId renderTarget = *renderTargetResult;
+    const auto depthWriteResult = AddTextureMetadata(graph, Name("tests/task_graph/same_state_depth_write"), "Same-state Depth Write");
+    ASSERT_TRUE(depthWriteResult);
+    const Graphics::GpuGraphResourceId depthWrite = *depthWriteResult;
+    const auto accelStructWriteResult = AddAccelStructMetadata(graph, Name("tests/task_graph/same_state_accel_struct_write"), "Same-state Acceleration Structure Write");
+    ASSERT_TRUE(accelStructWriteResult);
+    const Graphics::GpuGraphResourceId accelStructWrite = *accelStructWriteResult;
+    const auto readOnlyResult = AddTextureMetadata(graph, Name("tests/task_graph/same_state_read_only"), "Same-state Read Only");
+    ASSERT_TRUE(readOnlyResult);
+    const Graphics::GpuGraphResourceId readOnly = *readOnlyResult;
     ASSERT_TRUE(textureCopyDest.valid());
     ASSERT_TRUE(bufferCopyDest.valid());
     ASSERT_TRUE(renderTarget.valid());
@@ -63,14 +75,18 @@ TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
     };
     Graphics::GpuTaskDesc producerDesc;
     producerDesc.setIdentity(Name("tests/task_graph/same_state_dependency_producer")).setMarkerLabel("Same-state Dependency Producer").setResourceUses(uses, LengthOf(uses));
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const auto producerResult = graph.addTask(producerDesc);
+    ASSERT_TRUE(producerResult);
+    const Graphics::GpuTaskId producer = *producerResult;
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskSchedulingHint consumerScheduling;
     consumerScheduling.mergeWithPrevious = true;
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc.setIdentity(Name("tests/task_graph/same_state_dependency_consumer")).setMarkerLabel("Same-state Dependency Consumer").setScheduling(consumerScheduling).setDependencies(&producer, 1u).setResourceUses(uses, LengthOf(uses));
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const auto consumerResult = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumerResult);
+    const Graphics::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(consumer.valid());
 
     SingleQueueCompile singleQueueCompile(testArena);
@@ -126,15 +142,23 @@ TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
 TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/planned_transitions"), "Planned Transitions");
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/planned_transitions"), "Planned Transitions");
+    ASSERT_TRUE(textureResult);
+    const Graphics::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
 
     const Graphics::GpuTaskResourceUse writeUse[] = { Graphics::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, }, };
     const Graphics::GpuTaskResourceUse uavReadUse[] = { Graphics::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Read, }, };
     const Graphics::GpuTaskResourceUse shaderReadUse[] = { Graphics::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, }, };
-    const Graphics::GpuTaskId writer = AddTask(graph, Name("tests/task_graph/planned_writer"), "Writer", nullptr, 0u, writeUse, LengthOf(writeUse));
-    const Graphics::GpuTaskId uavReader = AddTask(graph, Name("tests/task_graph/planned_uav_reader"), "UAV Reader", nullptr, 0u, uavReadUse, LengthOf(uavReadUse));
-    const Graphics::GpuTaskId shaderReader = AddTask(graph, Name("tests/task_graph/planned_shader_reader"), "Shader Reader", nullptr, 0u, shaderReadUse, LengthOf(shaderReadUse));
+    const auto writerResult = AddTask(graph, Name("tests/task_graph/planned_writer"), "Writer", nullptr, 0u, writeUse, LengthOf(writeUse));
+    ASSERT_TRUE(writerResult);
+    const Graphics::GpuTaskId writer = *writerResult;
+    const auto uavReaderResult = AddTask(graph, Name("tests/task_graph/planned_uav_reader"), "UAV Reader", nullptr, 0u, uavReadUse, LengthOf(uavReadUse));
+    ASSERT_TRUE(uavReaderResult);
+    const Graphics::GpuTaskId uavReader = *uavReaderResult;
+    const auto shaderReaderResult = AddTask(graph, Name("tests/task_graph/planned_shader_reader"), "Shader Reader", nullptr, 0u, shaderReadUse, LengthOf(shaderReadUse));
+    ASSERT_TRUE(shaderReaderResult);
+    const Graphics::GpuTaskId shaderReader = *shaderReaderResult;
     ASSERT_TRUE(writer.valid());
     ASSERT_TRUE(uavReader.valid());
     ASSERT_TRUE(shaderReader.valid());
@@ -188,8 +212,12 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
 TEST(GpuTaskGraph, PlansCompositeUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/composite_uav_texture"), "Composite UAV Texture");
-    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(graph, Name("tests/task_graph/composite_uav_buffer"), "Composite UAV Buffer");
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/composite_uav_texture"), "Composite UAV Texture");
+    ASSERT_TRUE(textureResult);
+    const Graphics::GpuGraphResourceId texture = *textureResult;
+    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/composite_uav_buffer"), "Composite UAV Buffer");
+    ASSERT_TRUE(bufferResult);
+    const Graphics::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(texture.valid());
     ASSERT_TRUE(buffer.valid());
 
@@ -202,8 +230,12 @@ TEST(GpuTaskGraph, PlansCompositeUavDependencies){
         Graphics::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = compositeState, .access = Graphics::GpuTaskResourceAccess::Read, },
         Graphics::GpuTaskResourceUse{ .resource = buffer, .range = {}, .requiredState = compositeState, .access = Graphics::GpuTaskResourceAccess::Read, },
     };
-    const Graphics::GpuTaskId producer = AddTask(graph, Name("tests/task_graph/composite_uav_producer"), "Composite UAV Producer", nullptr, 0u, producerUses, LengthOf(producerUses));
-    const Graphics::GpuTaskId consumer = AddTask(graph, Name("tests/task_graph/composite_uav_consumer"), "Composite UAV Consumer", nullptr, 0u, consumerUses, LengthOf(consumerUses));
+    const auto producerResult = AddTask(graph, Name("tests/task_graph/composite_uav_producer"), "Composite UAV Producer", nullptr, 0u, producerUses, LengthOf(producerUses));
+    ASSERT_TRUE(producerResult);
+    const Graphics::GpuTaskId producer = *producerResult;
+    const auto consumerResult = AddTask(graph, Name("tests/task_graph/composite_uav_consumer"), "Composite UAV Consumer", nullptr, 0u, consumerUses, LengthOf(consumerUses));
+    ASSERT_TRUE(consumerResult);
+    const Graphics::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
 
@@ -233,13 +265,17 @@ TEST(GpuTaskGraph, PlansCompositeUavDependencies){
 }
 
 TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExports){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
 
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/intra_task_final_state_consumer"), "Intra-Task Final State Consumer");
+        const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/intra_task_final_state_consumer"), "Intra-Task Final State Consumer");
+        ASSERT_TRUE(textureResult);
+        const Graphics::GpuGraphResourceId texture = *textureResult;
         ASSERT_TRUE(texture.valid());
 
         const Graphics::GpuTaskResourceUse producerUses[] = {
@@ -247,15 +283,19 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
             Graphics::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Graphics::ResourceStates::RenderTarget, .access = Graphics::GpuTaskResourceAccess::Write, },
         };
         const Graphics::GpuTaskResourceUse consumerUse{ .resource = texture, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
-        const Graphics::GpuTaskId producer = AddTask(graph, Name("tests/task_graph/intra_task_final_state_producer"), "Intra-Task Final State Producer", nullptr, 0u, producerUses, LengthOf(producerUses));
-        const Graphics::GpuTaskId consumer = AddTask(graph, Name("tests/task_graph/intra_task_final_state_consumer_task"), "Intra-Task Final State Consumer Task", nullptr, 0u, &consumerUse, 1u);
+        const auto producerResult = AddTask(graph, Name("tests/task_graph/intra_task_final_state_producer"), "Intra-Task Final State Producer", nullptr, 0u, producerUses, LengthOf(producerUses));
+        ASSERT_TRUE(producerResult);
+        const Graphics::GpuTaskId producer = *producerResult;
+        const auto consumerResult = AddTask(graph, Name("tests/task_graph/intra_task_final_state_consumer_task"), "Intra-Task Final State Consumer Task", nullptr, 0u, &consumerUse, 1u);
+        ASSERT_TRUE(consumerResult);
+        const Graphics::GpuTaskId consumer = *consumerResult;
         ASSERT_TRUE(producer.valid());
         ASSERT_TRUE(consumer.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -284,7 +324,7 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
 
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId texture = graph.importResource(
+        const auto textureResult = graph.importResource(
             Graphics::GpuGraphResourceDesc{}
                 .setIdentity(Name("tests/task_graph/intra_task_final_state_export"))
                 .setMarkerLabel("Intra-Task Final State Export")
@@ -292,19 +332,23 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
                 .setInitialState(Graphics::ResourceStates::Common)
                 .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
         );
+        ASSERT_TRUE(textureResult);
+        const Graphics::GpuGraphResourceId texture = *textureResult;
         ASSERT_TRUE(texture.valid());
 
         const Graphics::GpuTaskResourceUse uses[] = {
             Graphics::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, },
             Graphics::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Graphics::ResourceStates::RenderTarget, .access = Graphics::GpuTaskResourceAccess::Write, },
         };
-        const Graphics::GpuTaskId producer = AddTask(graph, Name("tests/task_graph/intra_task_final_state_export_task"), "Intra-Task Final State Export Task", nullptr, 0u, uses, LengthOf(uses));
+        const auto producerResult = AddTask(graph, Name("tests/task_graph/intra_task_final_state_export_task"), "Intra-Task Final State Export Task", nullptr, 0u, uses, LengthOf(uses));
+        ASSERT_TRUE(producerResult);
+        const Graphics::GpuTaskId producer = *producerResult;
         ASSERT_TRUE(producer.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -320,17 +364,21 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
 }
 
 TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWithinTask){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = graph.importResource(
+    const auto textureResult = graph.importResource(
         Graphics::GpuGraphResourceDesc{}
             .setIdentity(Name("tests/task_graph/intra_task_first_use_texture_tail"))
             .setMarkerLabel("Intra-Task First-Use Texture Tail")
             .setType(Graphics::GpuGraphResourceType::Texture)
             .setInitialState(Graphics::ResourceStates::CopySource)
     );
+    ASSERT_TRUE(textureResult);
+    const Graphics::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
 
     const Graphics::GpuTaskResourceRange mipZeroRange{ .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, Graphics::TextureSubresourceSet::s_AllArraySlices), };
@@ -340,13 +388,15 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
         Graphics::GpuTaskResourceUse{ .resource = texture, .range = mipZeroRange, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, },
         Graphics::GpuTaskResourceUse{ .resource = texture, .range = allMipsRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, },
     };
-    const Graphics::GpuTaskId task = AddTask(graph, Name("tests/task_graph/intra_task_first_use_texture_tail_task"), "Intra-Task First-Use Texture Tail Task", nullptr, 0u, uses, LengthOf(uses));
+    const auto taskResult = AddTask(graph, Name("tests/task_graph/intra_task_first_use_texture_tail_task"), "Intra-Task First-Use Texture Tail Task", nullptr, 0u, uses, LengthOf(uses));
+    ASSERT_TRUE(taskResult);
+    const Graphics::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -384,6 +434,8 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
 }
 
 TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
@@ -392,9 +444,15 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         desc.setIdentity(identity).setMarkerLabel(label).setType(Graphics::GpuGraphResourceType::Texture).setInitialState(initialState).setQueueSharing(queueSharing);
         return graph.importResource(desc);
     };
-    const Graphics::GpuGraphResourceId concurrentTexture = importTexture(Name("tests/task_graph/concurrent_read_only"), "Concurrent Read Only", Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute, Graphics::ResourceStates::ShaderResource);
-    const Graphics::GpuGraphResourceId defaultConcurrentTexture = importTexture(Name("tests/task_graph/default_concurrent_read_only"), "Default Concurrent Read Only", Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
-    const Graphics::GpuGraphResourceId exclusiveTexture = importTexture(Name("tests/task_graph/exclusive_read_only"), "Exclusive Read Only", Graphics::ResourceQueueSharing::Exclusive);
+    const auto concurrentTextureResult = importTexture(Name("tests/task_graph/concurrent_read_only"), "Concurrent Read Only", Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute, Graphics::ResourceStates::ShaderResource);
+    ASSERT_TRUE(concurrentTextureResult);
+    const Graphics::GpuGraphResourceId concurrentTexture = *concurrentTextureResult;
+    const auto defaultConcurrentTextureResult = importTexture(Name("tests/task_graph/default_concurrent_read_only"), "Default Concurrent Read Only", Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_TRUE(defaultConcurrentTextureResult);
+    const Graphics::GpuGraphResourceId defaultConcurrentTexture = *defaultConcurrentTextureResult;
+    const auto exclusiveTextureResult = importTexture(Name("tests/task_graph/exclusive_read_only"), "Exclusive Read Only", Graphics::ResourceQueueSharing::Exclusive);
+    ASSERT_TRUE(exclusiveTextureResult);
+    const Graphics::GpuGraphResourceId exclusiveTexture = *exclusiveTextureResult;
     ASSERT_TRUE(concurrentTexture.valid());
     ASSERT_TRUE(defaultConcurrentTexture.valid());
     ASSERT_TRUE(exclusiveTexture.valid());
@@ -412,12 +470,24 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling).setResourceUses(uses, LengthOf(uses));
         return graph.addTask(desc, commands);
     };
-    const Graphics::GpuTaskId concurrentGraphics = addReadTask(Name("tests/task_graph/concurrent_read_graphics"), "Concurrent Graphics Read", concurrentTexture, graphicsCommands, false);
-    const Graphics::GpuTaskId concurrentCompute = addReadTask(Name("tests/task_graph/concurrent_read_compute"), "Concurrent Compute Read", concurrentTexture, computeCommands, true);
-    const Graphics::GpuTaskId defaultConcurrentGraphics = addReadTask(Name("tests/task_graph/default_concurrent_read_graphics"), "Default Concurrent Graphics Read", defaultConcurrentTexture, graphicsCommands, false);
-    const Graphics::GpuTaskId defaultConcurrentCompute = addReadTask(Name("tests/task_graph/default_concurrent_read_compute"), "Default Concurrent Compute Read", defaultConcurrentTexture, computeCommands, false);
-    const Graphics::GpuTaskId exclusiveGraphics = addReadTask(Name("tests/task_graph/exclusive_read_graphics"), "Exclusive Graphics Read", exclusiveTexture, graphicsCommands, false);
-    const Graphics::GpuTaskId exclusiveCompute = addReadTask(Name("tests/task_graph/exclusive_read_compute"), "Exclusive Compute Read", exclusiveTexture, computeCommands, true);
+    const auto concurrentGraphicsResult = addReadTask(Name("tests/task_graph/concurrent_read_graphics"), "Concurrent Graphics Read", concurrentTexture, graphicsCommands, false);
+    ASSERT_TRUE(concurrentGraphicsResult);
+    const Graphics::GpuTaskId concurrentGraphics = *concurrentGraphicsResult;
+    const auto concurrentComputeResult = addReadTask(Name("tests/task_graph/concurrent_read_compute"), "Concurrent Compute Read", concurrentTexture, computeCommands, true);
+    ASSERT_TRUE(concurrentComputeResult);
+    const Graphics::GpuTaskId concurrentCompute = *concurrentComputeResult;
+    const auto defaultConcurrentGraphicsResult = addReadTask(Name("tests/task_graph/default_concurrent_read_graphics"), "Default Concurrent Graphics Read", defaultConcurrentTexture, graphicsCommands, false);
+    ASSERT_TRUE(defaultConcurrentGraphicsResult);
+    const Graphics::GpuTaskId defaultConcurrentGraphics = *defaultConcurrentGraphicsResult;
+    const auto defaultConcurrentComputeResult = addReadTask(Name("tests/task_graph/default_concurrent_read_compute"), "Default Concurrent Compute Read", defaultConcurrentTexture, computeCommands, false);
+    ASSERT_TRUE(defaultConcurrentComputeResult);
+    const Graphics::GpuTaskId defaultConcurrentCompute = *defaultConcurrentComputeResult;
+    const auto exclusiveGraphicsResult = addReadTask(Name("tests/task_graph/exclusive_read_graphics"), "Exclusive Graphics Read", exclusiveTexture, graphicsCommands, false);
+    ASSERT_TRUE(exclusiveGraphicsResult);
+    const Graphics::GpuTaskId exclusiveGraphics = *exclusiveGraphicsResult;
+    const auto exclusiveComputeResult = addReadTask(Name("tests/task_graph/exclusive_read_compute"), "Exclusive Compute Read", exclusiveTexture, computeCommands, true);
+    ASSERT_TRUE(exclusiveComputeResult);
+    const Graphics::GpuTaskId exclusiveCompute = *exclusiveComputeResult;
     ASSERT_TRUE(concurrentGraphics.valid());
     ASSERT_TRUE(concurrentCompute.valid());
     ASSERT_TRUE(defaultConcurrentGraphics.valid());
@@ -430,7 +500,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     EXPECT_EQ(FindEdge(analysis, concurrentGraphics, concurrentCompute), nullptr);
     EXPECT_EQ(FindEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute), nullptr);
     EXPECT_EQ(FindEdge(analysis, exclusiveGraphics, exclusiveCompute), nullptr);
@@ -515,7 +585,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskGraphAnalysis sameFamilyAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments sameFamilyAssignments(testArena.arena);
     Graphics::GpuCompiledGraph sameFamilyCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, sameFamilyAnalysis, sameFamilyTopology, sameFamilyAssignments, sameFamilyCompiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, sameFamilyAnalysis, sameFamilyTopology, sameFamilyAssignments, sameFamilyCompiledGraph));
     const Graphics::GpuCompiledGraph::ReadView sameFamilyPlan(sameFamilyCompiledGraph);
     const Graphics::GpuSubmissionPacketId sameFamilyGraphicsPacket = sameFamilyPlan.packetForTask(concurrentGraphics);
     const Graphics::GpuSubmissionPacketId sameFamilyComputePacket = sameFamilyPlan.packetForTask(concurrentCompute);

@@ -7,6 +7,9 @@
 
 #include <core/global.h>
 
+#include <global/span.h>
+#include <global/type_properties.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,8 +62,11 @@ namespace GpuDescriptorClass{
 struct GpuDescriptorHandle{
     static constexpr u32 s_Invalid = 0xFFFFFFFFu;
     static constexpr u32 s_ClassShift = 28u;
-    static constexpr u32 s_SlotMask = (1u << s_ClassShift) - 1u; // 0x0FFFFFFF, max slot index per namespace
+    static constexpr u32 s_SlotMask = (1u << s_ClassShift) - 1u;
 
+
+public:
+    // 0x0FFFFFFF, max slot index per namespace
     u32 value = s_Invalid;
 
 
@@ -68,6 +74,7 @@ public:
     static constexpr GpuDescriptorHandle Make(GpuDescriptorClass::Enum cls, u32 slot)noexcept{
         return GpuDescriptorHandle((static_cast<u32>(cls) << s_ClassShift) | (slot & s_SlotMask));
     }
+
     static constexpr GpuDescriptorHandle Invalid()noexcept{ return GpuDescriptorHandle(s_Invalid); }
 
 
@@ -78,7 +85,9 @@ public:
 
 public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return value != s_Invalid; }
+
     [[nodiscard]] constexpr GpuDescriptorClass::Enum descriptorClass()const noexcept{ return static_cast<GpuDescriptorClass::Enum>(value >> s_ClassShift); }
+
     [[nodiscard]] constexpr u32 slot()const noexcept{ return value & s_SlotMask; }
 };
 inline constexpr bool operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value == rhs.value; }
@@ -107,8 +116,11 @@ struct GpuDescriptorHeapAbi{
     u32 samplerBinding = s_Unspecified;
     u32 accelStructBinding = s_Unspecified;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
-        return resourceSetIndex != s_Unspecified
+        return
+            resourceSetIndex != s_Unspecified
             && samplerSetIndex != s_Unspecified
             && accelStructSetIndex != s_Unspecified
             && sampledImageBinding != s_Unspecified
@@ -134,6 +146,8 @@ struct GpuDescriptorHeapDesc{
     u32 samplerCapacity = 0;    // samplers live in their own global namespace
     GpuDescriptorHeapAbi bindlessHeapAbi;
 
+
+public:
     constexpr GpuDescriptorHeapDesc& setResourceCapacity(u32 value)noexcept{ resourceCapacity = value; return *this; }
     constexpr GpuDescriptorHeapDesc& setSamplerCapacity(u32 value)noexcept{ samplerCapacity = value; return *this; }
     constexpr GpuDescriptorHeapDesc& setBindlessHeapAbi(const GpuDescriptorHeapAbi& value)noexcept{ bindlessHeapAbi = value; return *this; }
@@ -164,6 +178,52 @@ struct GpuDescriptorHeapLifecycleStatistics{
     // Heap uses whose command buffer was discarded without an accepted token.
     // They have no trustworthy physical queue identity and remain visible only until collectRetired() releases the associated deferred-free slots.
     usize abandonedHeapUseCount = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Borrows unpublished descriptor handles until their owning operation publishes or abandons them.
+// Named handles and arrays must outlive the guard; clearing a published array entry transfers that entry's retirement responsibility.
+template<typename HeapT>
+class GpuDescriptorRetirementGuard final : NoCopy{
+public:
+    GpuDescriptorRetirementGuard(HeapT& heap, const GpuDescriptorHandle& handle)noexcept
+        : m_heap(heap)
+        , m_handles(&handle, 1u)
+    {}
+    GpuDescriptorRetirementGuard(HeapT& heap, const Span<const GpuDescriptorHandle> handles)noexcept
+        : m_heap(heap)
+        , m_handles(handles)
+    {}
+    GpuDescriptorRetirementGuard(HeapT&, GpuDescriptorHandle&&) = delete;
+    GpuDescriptorRetirementGuard(HeapT&, const GpuDescriptorHandle&&) = delete;
+    GpuDescriptorRetirementGuard(const GpuDescriptorRetirementGuard&) = delete;
+    GpuDescriptorRetirementGuard(GpuDescriptorRetirementGuard&&) = delete;
+    ~GpuDescriptorRetirementGuard()noexcept(noexcept(DeclVal<HeapT&>().free(DeclVal<GpuDescriptorHandle>()))){
+        if(!m_active)
+            return;
+        for(const GpuDescriptorHandle handle : m_handles){
+            if(handle.valid())
+                m_heap.free(handle);
+        }
+    }
+
+
+public:
+    GpuDescriptorRetirementGuard& operator=(const GpuDescriptorRetirementGuard&) = delete;
+    GpuDescriptorRetirementGuard& operator=(GpuDescriptorRetirementGuard&&) = delete;
+
+
+public:
+    void release()noexcept{ m_active = false; }
+
+
+private:
+    HeapT& m_heap;
+    Span<const GpuDescriptorHandle> m_handles;
+    bool m_active = true;
 };
 
 

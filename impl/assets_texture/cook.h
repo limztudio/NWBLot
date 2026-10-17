@@ -33,11 +33,12 @@ struct TextureCookEntry{
     u32 depth = 1u;
     TextureDimension::Enum dimension = TextureDimension::Texture2D;
     TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    u32 mipCount = 0u;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
     u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     Core::Assets::AssetBytes payloadBytes;
 
+
+public:
     explicit TextureCookEntry(Core::Assets::AssetArena& arena)noexcept
         : payloadBytes(arena)
     {}

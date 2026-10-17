@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
+#include "task_graph_gbuffer_task.h"
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>

@@ -34,7 +34,8 @@ TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
             ExitProcess(1u);
         const auto selected = FindIf(placements->begin(), placements->end(), [&original](const CpuWorkerPlacement& placement){
             return placement.processorGroup == original.Group;
-        });
+        }
+        );
         if(selected == placements->end())
             ExitProcess(2u);
         const u32 processorIndex = selected->logicalProcessorIndex;
@@ -47,7 +48,8 @@ TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
         if(placements->size() != 1u || placements->front().processorGroup != original.Group || placements->front().logicalProcessorIndex != processorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
             ExitProcess(4u);
         ExitProcess(0u);
-    }, testing::ExitedWithCode(0), "");
+    }, testing::ExitedWithCode(0), ""
+    );
 }
 
 
@@ -80,7 +82,8 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
         if(!placements || placements->size() != 1u || placements->front().processorGroup != selected.processorGroup || placements->front().logicalProcessorIndex != selected.logicalProcessorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
             ExitProcess(6u);
         ExitProcess(0u);
-    }, testing::ExitedWithCode(0), "");
+    }, testing::ExitedWithCode(0), ""
+    );
 }
 #endif
 
@@ -100,7 +103,8 @@ TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcess
             return;
         restrictedPlacements = QueryCpuWorkerPlacements();
         usableCount = QueryCpuCoreCount(CpuAffinity::Any);
-    });
+    }
+    );
     worker.join();
     ASSERT_TRUE(applied);
     ASSERT_TRUE(restrictedPlacements);

@@ -29,6 +29,9 @@ const Skin* MeshSkinningRuntimeCache::MeshSkinningSource::skin()const{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MeshSkinningRuntimeCache::MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager)
     : m_arena(arena)
     , m_graphics(graphics)
@@ -39,7 +42,7 @@ MeshSkinningRuntimeCache::MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& are
 {}
 
 
-void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world){
+void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena){
     auto skinningBindingView = world.view<SkinnedMeshBindingComponent>();
     const usize rendererCandidateCount = skinningBindingView.candidateCount();
     if(rendererCandidateCount == 0u){
@@ -53,7 +56,7 @@ void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world){
 
     const bool pruneStaleInstances = !m_instances.empty();
     skinningBindingView.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
-            if(!ensureRuntimeMesh(entity, component))
+            if(!ensureRuntimeMesh(entity, component, scratchArena))
                 component.runtimeMesh.reset();
         }
     );
@@ -138,7 +141,7 @@ Core::ECS::EntityID MeshSkinningRuntimeCache::entityForHandle(const RuntimeMeshH
     return foundEntity.value();
 }
 
-MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstanceByEntity(const Core::ECS::EntityID entity){
+MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstanceByEntity(const Core::ECS::EntityID entity)noexcept{
     if(!entity.valid())
         return nullptr;
 
@@ -148,7 +151,7 @@ MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstanceByEntity(cons
     return &foundInstance.value();
 }
 
-const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstanceByEntity(const Core::ECS::EntityID entity)const{
+const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstanceByEntity(const Core::ECS::EntityID entity)const noexcept{
     if(!entity.valid())
         return nullptr;
 

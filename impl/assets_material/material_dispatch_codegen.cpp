@@ -189,7 +189,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
     source += "    }\n";
     source += "}\n\n#endif\n";
 
-    const Path outputPath = includeRoot / s_DeferredBxdfModuleSubPath;
+    const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_DeferredBxdfModuleSubPath;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
@@ -332,11 +332,12 @@ static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(
     ShadowSurfaceBindEntryLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), arena);
     lookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
-        const Name interfaceName(AStringView(bindEntry.virtualPath));
-        if(!interfaceName){
+        const auto interfaceNameResult = Name::FromText(AStringView(bindEntry.virtualPath));
+        if(!interfaceNameResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid"), StringConvert(bindEntry.virtualPath));
             return MakeUnexpected(Failure{});
         }
+        const Name interfaceName = *interfaceNameResult;
         if(!lookup.emplace(interfaceName, &bindEntry).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
             return MakeUnexpected(Failure{});
@@ -410,7 +411,12 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         if(surfaceById[id].empty())
             continue;
 
-        const Name interfaceName(interfaceById[id]);
+        const auto interfaceNameResult = Name::FromText(interfaceById[id]);
+        if(!interfaceNameResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, StringConvert(interfaceById[id]));
+            return MakeUnexpected(Failure{});
+        }
+        const Name interfaceName = *interfaceNameResult;
         const auto bindEntryIt = bindEntryLookup->find(interfaceName);
         if(bindEntryIt == bindEntryLookup->end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, StringConvert(interfaceById[id]));
@@ -421,7 +427,10 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         const auto namespaceIt = bindNamespaceLookup.find(interfaceName);
         if(namespaceIt == bindNamespaceLookup.end()){
             bindNamespaceIdById[id] = static_cast<u32>(id);
-            bindNamespaceLookup.emplace(interfaceName, static_cast<u32>(id));
+            if(!bindNamespaceLookup.emplace(interfaceName, static_cast<u32>(id)).second){
+                NWB_ASSERT(false);
+                return MakeUnexpected(Failure{});
+            }
         }
         else
             bindNamespaceIdById[id] = namespaceIt.value();
@@ -505,7 +514,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
     source += "    }\n";
     source += "}\n\n#endif\n";
 
-    const Path outputPath = includeRoot / s_ShadowSurfaceModuleSubPath;
+    const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_ShadowSurfaceModuleSubPath;
     auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult2){
         NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult2.error().message()));

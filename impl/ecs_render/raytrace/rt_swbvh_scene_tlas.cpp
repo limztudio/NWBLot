@@ -10,6 +10,8 @@
 #include <impl/ecs_csg/components.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
 
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+
 #include <global/algorithm.h>
 #include <global/hash_utils.h>
 
@@ -46,11 +48,13 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     // All-occluder trace context; draw buffers hold one transparency class.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
+    ECSRenderDetail::MaterialTypedConstantRangeMap shadowConstantTypedRanges(0, ECSRenderDetail::MaterialTypedConstantRangeMap::hasher(), ECSRenderDetail::MaterialTypedConstantRangeMap::key_equal(), scratchArena);
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
     instances.reserve(candidateCount);
     instanceBlases.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
+    shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
     MeshBufferSlotLookup meshSlotLookup(0, Hasher<const Core::Buffer*>(), EqualTo<const Core::Buffer*>(), scratchArena);
     meshSlotLookup.reserve(candidateCount);
@@ -131,7 +135,11 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             m_rayTracingState.m_shadowMeshIndexHandles.push_back(*indexHandle);
             m_rayTracingState.m_shadowMeshAttributeHandles.push_back(*attributeHandle);
             m_rayTracingState.m_shadowMeshPositionHandles.push_back(*positionHandle);
-            meshSlotLookup.emplace(meshIndexBuffer, meshSlot);
+            if(!meshSlotLookup.emplace(meshIndexBuffer, meshSlot).second){
+                NWB_ASSERT(false);
+                SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
+                return false;
+            }
             ++m_rayTracingState.m_shadowMeshCount;
         }
 
@@ -158,7 +166,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight
             if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
                 return false;
-            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, transformPtr, shadowMaterialTypedBytes, shadowMutableTypedRanges);
+            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, transformPtr, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges);
             if(!materialContext)
                 return false;
             shadowInstance = materialContext->instance;
@@ -195,7 +203,8 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
                 .meshletBoundsSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletLocalBoundsHeapHandle.slot() : 0u,
                 .transparent = transparent,
                 .csg = false,
-            });
+            }
+            );
             m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.positionBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.triangleIndexBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.attributeBuffer);
@@ -223,7 +232,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         }
         const bool runtimeOpticalBounds = transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid();
         if(runtimeOpticalBounds){
-            Float34U opticalWorld{};
+            Float34 opticalWorld{};
             StoreFloat(objectToWorld, opticalWorld);
             opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
         }
@@ -298,11 +307,12 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         accelStructDesc.setDebugName(Name("scene_tlas"));
 
         auto& device = m_graphics.getDevice();
-        Core::RayTracingAccelStructHandle tlas = device.createAccelStruct(accelStructDesc);
-        if(!tlas){
+        auto tlasResult = device.createAccelStruct(accelStructDesc);
+        if(!tlasResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})"), static_cast<u64>(capacity));
             return false;
         }
+        Core::RayTracingAccelStructHandle tlas = Move(*tlasResult);
         // Retire the old heap block before replacing the TLAS generation.
         if(m_rayTracingState.m_tlasHeapHandle.valid()){
             heap.free(m_rayTracingState.m_tlasHeapHandle);
@@ -323,13 +333,13 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
         const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
+        Core::GpuDescriptorRetirementGuard retireUnpublished(heap, tlasHeapHandle);
         if(!tlasHeapHandle.valid() || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
-            if(tlasHeapHandle.valid())
-                heap.free(tlasHeapHandle);
             return false;
         }
         m_rayTracingState.m_tlasHeapHandle = tlasHeapHandle;
+        retireUnpublished.release();
     }
 
     // Preserve a valid typed buffer and hash the descriptor-slot representation.

@@ -28,6 +28,7 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
@@ -158,14 +159,6 @@ private:
 #endif
     }
 
-    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
-        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
-    }
-
-    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
-        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
-    }
-
     // The benchmark compares hardware transparent shadows against an opaque-only scene.
     [[nodiscard]] static bool HardwareShadowOpaqueBaseline(){
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
@@ -179,9 +172,13 @@ private:
     [[nodiscard]] static Expected<u32> ReadCharactersPerClass(){
         NWB::Core::Alloc::GlobalArena arena(Name("tests/stress/workload"));
         const auto value = ReadEnvironmentVariable(arena, "NWB_STRESS_CHARACTERS_PER_CLASS");
-        if(!value)
+        if(!value){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), StringConvert(value.error().message()));
+            return MakeUnexpected(Failure{});
+        }
+        if(!*value)
             return s_DefaultCharactersPerClass;
-        const AStringView text(value->data(), value->size());
+        const AStringView text((*value)->data(), (*value)->size());
         if(text == "5")
             return s_ComparisonCharactersPerClass;
         if(text != "10"){
@@ -389,10 +386,10 @@ public:
             auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
             NWB_FATAL_ASSERT(renderer);
             return *renderer;
-        }())
+        }()
+        )
         , m_characterOwners(context.objectArena)
     {}
-
     virtual ~StressTestSmokeProject()override{
         m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
         m_timingRenderPass.stop();
@@ -402,6 +399,7 @@ public:
 
 public:
     virtual bool onStartup()override{
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 #if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
         constexpr bool s_AsyncRequested = false;
@@ -469,12 +467,12 @@ public:
         m_charactersPerClass = *charactersPerClass;
         NWB::Impl::ReflectionSettings reflectionSettings;
         reflectionSettings.diagnosticsEnabled = m_reflectionDiagnosticsEnabled;
-        if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(m_renderer, reflectionSettings, m_context.objectArena))
+        if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(m_renderer, reflectionSettings, scratchArena))
             return false;
         if(m_reflectionDiagnosticsEnabled)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
         // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
-        const auto cpuTimingPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_STRESS_CPU_TIMING_FILE");
+        const auto cpuTimingPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CPU_TIMING_FILE");
         if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled, cpuTimingPath ? AStringView(cpuTimingPath->data(), cpuTimingPath->size()) : AStringView{}))
             return false;
         NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
@@ -548,7 +546,7 @@ public:
             m_characterOwners.push_back(createCharacter(index));
 
         SyncSmokeModelRuntimes(*m_world);
-        if(!m_csgScene.initialize(*m_world, m_context.objectArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()))
+        if(!m_csgScene.initialize(*m_world, m_context.objectArena, scratchArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()))
             return false;
 
         bool allCharactersValid = m_characterOwners.size() == characterCount;
@@ -575,8 +573,7 @@ public:
 #endif
 
         const u32 transparentCharacterCount = HardwareShadowOpaqueBaseline() ? 0u : m_charactersPerClass;
-        NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
             , m_characterOwners.size()
             , transparentCharacterCount
             , characterCount - transparentCharacterCount
@@ -657,7 +654,11 @@ public:
         if(!m_csgScene.update(*m_world, m_yaw.yaw()))
             return false;
         SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
-        m_world->tick(safeDelta);
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         reportReflectionStatistics();
         ++m_m4RenderedFrameCount;
         return true;

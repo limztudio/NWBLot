@@ -64,7 +64,7 @@ struct PrefixSceneUploadResult{
 
 class PrefixSceneUploadBuilder final : NoCopy{
 public:
-    PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem, RendererMeshSystem& meshSystem, Core::GraphicsRuntime& graphics);
+    PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem, RendererMeshSystem& meshSystem, Core::GraphicsRuntime& graphics)noexcept;
 
 
 public:

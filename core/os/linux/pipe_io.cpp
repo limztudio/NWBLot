@@ -120,7 +120,7 @@ Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, Clipboa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ClipboardPipeWriter::ClipboardPipeWriter(Alloc::GlobalArena& arena)
+ClipboardPipeWriter::ClipboardPipeWriter(Alloc::GlobalArena& arena)noexcept
     : m_text(arena)
 {}
 

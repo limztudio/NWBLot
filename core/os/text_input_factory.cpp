@@ -32,26 +32,33 @@ public:
 
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return {}; }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<ITextInputService> CreateTextInputService(Alloc::GlobalArena& arena, void* const nativeWindowHandle){
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<GlobalUniquePtr<ITextInputService>> CreateTextInputService(Alloc::GlobalArena& arena, void* const nativeWindowHandle){
 #if defined(NWB_PLATFORM_WINDOWS)
-    if(nativeWindowHandle)
-        return MakeGlobalUnique<Win32TextInputService>(arena, arena, MakeNotNull(nativeWindowHandle));
+    if(nativeWindowHandle){
+        auto service = MakeGlobalUnique<Win32TextInputService>(arena, arena, MakeNotNull(nativeWindowHandle));
+        if(!service)
+            return MakeUnexpected(Failure{});
+        return service;
+    }
 #else
     static_cast<void>(nativeWindowHandle);
 #endif
-    return MakeGlobalUnique<__hidden_text_input_factory::UnsupportedTextInputService>(arena, arena);
+    auto service = MakeGlobalUnique<__hidden_text_input_factory::UnsupportedTextInputService>(arena, arena);
+    if(!service)
+        return MakeUnexpected(Failure{});
+    return service;
 }
 
 

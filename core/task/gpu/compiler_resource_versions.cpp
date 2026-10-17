@@ -166,7 +166,7 @@ private:
 
 
 public:
-    explicit FrozenResourceVersionReachability(Alloc::ScratchArena& scratchArena)
+    explicit FrozenResourceVersionReachability(Alloc::ScratchArena& scratchArena)noexcept
         : m_incomingOffsets(scratchArena)
         , m_incomingProducers(scratchArena)
         , m_rowIndices(scratchArena)

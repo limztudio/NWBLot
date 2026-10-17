@@ -40,6 +40,10 @@ inline constexpr usize s_CommandIrCopyTextureOffset = s_CommandIrCopyBufferOffse
 inline constexpr usize s_CommandIrClearBufferOffset = s_CommandIrCopyTextureOffset + sizeof(Graphics::GpuCommandIrCopyTextureRecord);
 inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOffset + sizeof(Graphics::GpuCommandIrClearBufferRecord);
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture);
 
 void CopyCommandIrBytes(Graphics::GraphicsBytes& outBytes, const BinaryByteView source);

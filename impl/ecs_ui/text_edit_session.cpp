@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextEditSession::UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)
+UiTextEditSession::UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept
     : m_service(service)
     , m_event(arena)
     , m_expectedModel(arena)
@@ -38,9 +38,9 @@ Core::TextInputAdmission::Enum UiTextEditSession::begin(const UiTextEditOwner& o
         return Core::TextInputAdmission::Busy;
     const Core::TextInputSessionDesc desc{ caret, model.text(), model.anchor(), model.caret() };
     const auto result = m_service.begin(desc);
-    if(result.admission != Core::TextInputAdmission::Accepted)
-        return result.admission;
-    m_token = result.token;
+    if(!result)
+        return result.error();
+    m_token = *result;
     m_owner = owner;
     m_lastSequence = 0u;
     m_expectedModel.capture(model);

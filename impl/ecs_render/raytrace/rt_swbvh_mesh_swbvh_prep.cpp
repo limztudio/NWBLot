@@ -191,7 +191,8 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
             .buildPending = mesh.swBvhBuildPending,
             .firstBuild = firstBuild,
             .performRefit = performRefit,
-        });
+        }
+        );
     }
     m_preparedMeshSwBvhBuildsReady = !m_preparedMeshSwBvhBuilds.empty();
     m_preparedMeshSwBvhBuildPlanFrozen = true;

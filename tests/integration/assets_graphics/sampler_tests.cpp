@@ -162,6 +162,43 @@ TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAnd
 }
 
 
+TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreservesReload){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/wide_enum_admission"));
+    NWB::Core::SamplerDesc description;
+    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+    description.addressU = NWB::Core::SamplerAddressMode::MirrorOnce;
+    description.addressV = NWB::Core::SamplerAddressMode::MirrorOnce;
+    description.addressW = NWB::Core::SamplerAddressMode::MirrorOnce;
+    description.reductionType = NWB::Core::SamplerReductionType::Comparison;
+    sampler.setDescription(description);
+    NWB::Impl::SamplerAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary(testArena.arena);
+    ASSERT_TRUE(codec.serialize(sampler, binary));
+    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryPayload::HeaderBinary));
+
+    for(const usize offset : {
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, addressU),
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, addressV),
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, addressW),
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType)
+    }){
+        for(const u32 rawValue : { 0x100u, 0x101u }){
+            NWB::Core::Assets::AssetBytes malformed(binary);
+            NWB_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
+            EXPECT_FALSE(sampler.loadBinary(malformed)) << offset << ":" << rawValue;
+            NWB::Core::Assets::AssetBytes retained(testArena.arena);
+            ASSERT_TRUE(codec.serialize(sampler, retained));
+            EXPECT_EQ(retained, binary) << offset << ":" << rawValue;
+            EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), malformed)) << offset << ":" << rawValue;
+        }
+    }
+    EXPECT_EQ(logger.errorCount(), 16u);
+}
+
+
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
     static constexpr AStringView s_UnsupportedAssignments[] = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n", };
 

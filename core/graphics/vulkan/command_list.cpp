@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
@@ -95,13 +96,14 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
-    m_currentCmdBuf = queue->getOrCreateCommandBuffer(m_creationDesc.recordingWorkerDomain, m_creationDesc.recordingWorkerIndex);
-    if(!m_currentCmdBuf || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
+    auto commandBuffer = queue->getOrCreateCommandBuffer(m_creationDesc.recordingWorkerDomain, m_creationDesc.recordingWorkerIndex);
+    if(!commandBuffer || !*commandBuffer || (*commandBuffer)->m_cmdBuf == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire command buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to acquire command buffer"));
         m_currentCmdBuf = nullptr;
         return;
     }
+    m_currentCmdBuf = Move(*commandBuffer);
     m_nativeRecordingID = m_currentCmdBuf->m_recordingID;
     if(!matchesNativeLeaseIdentity()){
         rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("native lease does not match resolved creation identity"));
@@ -129,9 +131,13 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_stateTracker.beginRecordingAttempt();
     m_textureOwnershipReleaseDestinations.clear();
     m_bufferOwnershipReleaseDestinations.clear();
-    if(initialStates && !importResourceStateHandoff(*initialStates)){
-        rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("resource-state handoff is incompatible"));
-        discardInvalidCommandBuffer();
+    if(initialStates){
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
+
+        if(!importResourceStateHandoff(scratchArena, *initialStates)){
+            rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("resource-state handoff is incompatible"));
+            discardInvalidCommandBuffer();
+        }
     }
 }
 

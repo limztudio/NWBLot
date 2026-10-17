@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphSoftwareBvhBuildStateResult::FrameGraphSoftwareBvhBuildStateResult(Core::Alloc::ScratchArena& scratchArena)
+FrameGraphSoftwareBvhBuildStateResult::FrameGraphSoftwareBvhBuildStateResult(Core::Alloc::ScratchArena& scratchArena)noexcept
     : buildStateResources(scratchArena)
 {}
 
@@ -26,7 +26,7 @@ FrameGraphSoftwareBvhBuildStateResult::FrameGraphSoftwareBvhBuildStateResult(Cor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphSoftwareBvhBuildStateImporter::FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem)
+FrameGraphSoftwareBvhBuildStateImporter::FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem)noexcept
     : m_graph(graph)
     , m_meshSystem(meshSystem){
 }
@@ -54,9 +54,10 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
                 if(existing == buffer.get())
                     return true;
             }
-            const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
-            if(!resource.valid())
+            const auto resourceResult = importBuffer(buffer, identity, label);
+            if(!resourceResult)
                 return false;
+            const Core::GpuGraphResourceId resource = *resourceResult;
             softwareBvhBuildStateBuffers.push_back(buffer.get());
             softwareBvhBuildStateResources.push_back(resource);
             return true;

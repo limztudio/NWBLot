@@ -54,10 +54,6 @@ Value::Value(MStringView val, MetaArena& arena)
     m_type = ValueType::String;
 }
 
-Value::~Value()noexcept{
-    destroy();
-}
-
 Value::Value(const Value& other)
     : m_arena(other.m_arena)
 {
@@ -68,6 +64,10 @@ Value::Value(Value&& other)noexcept
     : m_arena(other.m_arena)
 {
     moveFrom(Move(other));
+}
+
+Value::~Value()noexcept{
+    destroy();
 }
 
 Value& Value::operator=(const Value& other){
@@ -121,8 +121,10 @@ Value Value::operator+(const Value& rhs)const{
         result.append(rsv.data(), rsv.size());
 
         Value v(m_arena);
-        v.m_type = ValueType::String;
         v.m_data.m_string = NewArenaObject<StringType>(m_arena, Move(result));
+        if(!v.m_data.m_string)
+            throw AllocationException{};
+        v.m_type = ValueType::String;
         return v;
     }
 
@@ -374,12 +376,12 @@ Value::MapType& Value::asMap()noexcept{
     return *m_data.m_map;
 }
 
-
 void Value::setInteger(i64 val)noexcept{
     destroy();
     m_type = ValueType::Integer;
     m_data.m_integer = val;
 }
+
 
 void Value::setDouble(f64 val)noexcept{
     destroy();
@@ -406,16 +408,16 @@ void Value::setReference(MStringView val){
 }
 
 void Value::makeList(){
-    ListType* const replacement = allocList();
+    const NotNull<ListType*> replacement = allocList();
     destroy();
-    m_data.m_list = replacement;
+    m_data.m_list = replacement.get();
     m_type = ValueType::List;
 }
 
 void Value::makeMap(){
-    MapType* const replacement = allocMap();
+    const NotNull<MapType*> replacement = allocMap();
     destroy();
-    m_data.m_map = replacement;
+    m_data.m_map = replacement.get();
     m_type = ValueType::Map;
 }
 
@@ -430,6 +432,10 @@ Value& Value::field(MStringView name){
 
     StringType key(name.data(), name.size(), m_arena);
     auto result = m_data.m_map->emplace(Move(key), Value(m_arena));
+    if(!result.second){
+        NWB_ASSERT(false);
+        return result.first.value();
+    }
     return result.first.value();
 }
 
@@ -578,18 +584,18 @@ void Value::appendListCopies(const ListType& values, const usize count){
         appendListCopy(values[i]);
 }
 
-Value::ListType* Value::allocList()const{
+NotNull<Value::ListType*> Value::allocList()const{
     ListType* const created = NewArenaObject<ListType>(m_arena, m_arena);
     if(!created)
         throw AllocationException{};
-    return created;
+    return MakeNotNull(created);
 }
 
-Value::MapType* Value::allocMap()const{
+NotNull<Value::MapType*> Value::allocMap()const{
     MapType* const created = NewArenaObject<MapType>(m_arena, 0, MStringHash(), MStringEqual(), m_arena);
     if(!created)
         throw AllocationException{};
-    return created;
+    return MakeNotNull(created);
 }
 
 

@@ -27,7 +27,7 @@ static constexpr InputSource s_Contact{ 13u, 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static HitTarget Target(const u64 id, const Rect& rectangle = { 0.0f, 0.0f, 100.0f, 100.0f }){
+[[nodiscard]] static HitTarget Target(const u64 id, const Rect& rectangle = { 0.0f, 0.0f, 100.0f, 100.0f })noexcept{
     HitTarget target;
     target.id = { id };
     target.declarationGeneration = 7u;
@@ -39,7 +39,7 @@ static constexpr InputSource s_Contact{ 13u, 1u };
     return target;
 }
 
-[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position, const bool hoverCapable = false, const PointerIntent::Enum intent = PointerIntent::Activate){
+[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position, const bool hoverCapable = false, const PointerIntent::Enum intent = PointerIntent::Activate)noexcept{
     PointerInput input;
     input.source = source;
     input.phase = phase;

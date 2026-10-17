@@ -39,6 +39,8 @@ struct CopyTextureCopy{
 struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTextureCopy>{
     using Copy = CopyTextureCopy;
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy)noexcept{ return copy.source && copy.destination; },
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
@@ -65,7 +67,9 @@ struct ResolveTexturePayload{
     GraphicsVector<ResolveTextureResolve> resolves;
     QueueSubmissionToken* acceptedToken = nullptr;
 
-    explicit ResolveTexturePayload(GraphicsArena& arena)
+
+public:
+    explicit ResolveTexturePayload(GraphicsArena& arena)noexcept
         : resolves(arena)
     {}
 };
@@ -73,6 +77,8 @@ struct ResolveTexturePayload{
 struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ResolveTexturePayload>{
     using Resolve = ResolveTextureResolve;
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         if(payload.resolves.empty() || context.commandIrCapture)
             return false;
@@ -138,21 +144,21 @@ struct TextureResolveContract{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc){
+Expected<GpuTaskId> GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc){
     if(copyDesc.acceptedToken)
         *copyDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !copyDesc.regions || copyDesc.regionCount == 0u || copyDesc.regionCount > Limit<u32>::s_Max || copyDesc.regionCount > Limit<usize>::s_Max / 2u)
-        return {};
+        return MakeUnexpected(Failure{});
 
     using CopyTask = __hidden_gpu_task_graph_builtin_texture_transfers::CopyTextureTask;
     CopyTask::Payload* const payloadObject = NewArenaObject<CopyTask::Payload>(m_arena, m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<CopyTask::Payload> payload(m_arena, payloadObject);
     payload->copies.reserve(copyDesc.regionCount);
     payload->acceptedToken = copyDesc.acceptedToken;
@@ -208,7 +214,8 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
                 .destinationResource = region.destination,
                 .destination = destinationResource.texture,
                 .destinationSlice = contract->destinationSlice,
-            });
+            }
+            );
         }
     }
     if(!valid)
@@ -226,21 +233,21 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     return appendBuiltinTaskWithinMutation<CopyTask>(resolvedDesc, payload, mutation, commands);
 }
 
-GpuTaskId GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc){
+Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc){
     if(resolveDesc.acceptedToken)
         *resolveDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !resolveDesc.regions || resolveDesc.regionCount == 0u || resolveDesc.regionCount > Limit<u32>::s_Max || resolveDesc.regionCount > Limit<usize>::s_Max / 2u)
-        return {};
+        return MakeUnexpected(Failure{});
 
     using ResolveTask = __hidden_gpu_task_graph_builtin_texture_transfers::ResolveTextureTask;
     ResolveTask::Payload* const payloadObject = NewArenaObject<ResolveTask::Payload>(m_arena, m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<ResolveTask::Payload> payload(m_arena, payloadObject);
     payload->resolves.reserve(resolveDesc.regionCount);
     payload->acceptedToken = resolveDesc.acceptedToken;
@@ -293,7 +300,8 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc, const Gpu
                 .destinationResource = region.destination,
                 .destination = destinationResource.texture,
                 .destinationSubresources = resolvedSubresources->destinationSubresources,
-            });
+            }
+            );
         }
     }
     if(!valid)

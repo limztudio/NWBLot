@@ -45,7 +45,7 @@ static void WriteU16LE(u8* const destination, const u16 value)noexcept{
     destination[1] = static_cast<u8>((value >> 8u) & 0xffu);
 }
 
-static void WriteU32LE(u8* const destination, const u32 value){
+static void WriteU32LE(u8* const destination, const u32 value)noexcept{
     destination[0] = static_cast<u8>(value & 0xffu);
     destination[1] = static_cast<u8>((value >> 8u) & 0xffu);
     destination[2] = static_cast<u8>((value >> 16u) & 0xffu);
@@ -302,7 +302,7 @@ bool FramebufferCapture::hasTaskGraphPresentationWork()const noexcept{
     return m_taskGraphPresentationPrepared && m_readback && !m_completionState->acceptedToken.valid() && !m_captureReady && !m_skipped && !m_failed;
 }
 
-Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, const Core::GpuGraphResourceId backbuffer, const Core::GpuTaskId previousTask){
+Expected<Core::GpuTaskId> FramebufferCapture::declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, const Core::GpuGraphResourceId backbuffer, const Core::GpuTaskId previousTask){
     u64 graphGeneration = 0u;
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -313,7 +313,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(Core::GpuTaskGr
         m_preparedGraphGeneration = 0u;
     }
     if(!m_taskGraphPresentationPrepared || m_taskGraphPresentationClaimed || !m_readback || m_completionState->acceptedToken.valid())
-        return {};
+        return MakeUnexpected(Failure{});
     if(
         !frame.valid()
         || !previousTask.valid()
@@ -324,7 +324,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(Core::GpuTaskGr
         || frame.framebuffer != m_preparedFrame.framebuffer
     ){
         markFailed(NWB_TEXT("presentation declaration no longer matches the prepared acquired frame"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskSchedulingHint scheduling;
@@ -334,16 +334,18 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(Core::GpuTaskGr
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
 
-    const Core::GpuGraphResourceId stagingHazard = graph.importHazardDomain(
+    const auto stagingHazardResult = graph.importHazardDomain(
         Core::GpuGraphResourceDesc{}
             .setIdentity(Name("tests.smoke.framebuffer_capture.staging"))
             .setMarkerLabel("Framebuffer Capture Staging")
             .setType(Core::GpuGraphResourceType::HazardDomain)
     );
-    if(!stagingHazard.valid()){
+    if(!stagingHazardResult){
         markFailed(NWB_TEXT("failed to declare the framebuffer staging hazard domain"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
+
+    const Core::GpuGraphResourceId stagingHazard = *stagingHazardResult;
 
     Core::GpuTaskDesc taskDesc;
     const Core::GpuTaskResourceUse resourceUses[] = {
@@ -351,13 +353,13 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(Core::GpuTaskGr
         { .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write, },
     };
     taskDesc.setIdentity(Name("tests.smoke.framebuffer_capture")).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(&previousTask, 1u).setResourceUses(resourceUses, LengthOf(resourceUses));
-    const Core::GpuTaskId readbackTask = graph.addTask<ReadbackTask>(
+    const auto readbackTask = graph.addTask<ReadbackTask>(
         taskDesc,
         ReadbackTask::Payload{ .source = frame.backBuffer.texture, .sourceSlice = {}, .destination = m_readback, .destinationSlice = {}, .completionState = m_completionState, .graphicsFrameIndex = m_lastCountedGraphicsFrame, }
     );
-    if(!readbackTask.valid()){
+    if(!readbackTask){
         markFailed(NWB_TEXT("failed to declare the framebuffer readback task"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
     m_taskGraphPresentationClaimed = true;
@@ -395,7 +397,7 @@ void FramebufferCapture::resetPendingReadback(){
     m_taskGraphPresentationClaimed = false;
 }
 
-bool FramebufferCapture::stagingMatches(const Core::TextureDesc& description)const{
+bool FramebufferCapture::stagingMatches(const Core::TextureDesc& description)const noexcept{
     return
         m_readback
         && m_captureDescription.width == description.width
@@ -425,8 +427,12 @@ bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
 
     m_readback.reset();
     m_captureDescription = description;
-    m_readback = getGraphics().getDevice().createStagingTexture(description, Core::CpuAccessMode::Read);
-    if(!m_readback){
+    auto readbackResult = getGraphics().getDevice().createStagingTexture(description, Core::CpuAccessMode::Read);
+    if(readbackResult)
+        m_readback = Move(*readbackResult);
+    else
+        m_readback.reset();
+    if(!readbackResult){
         markFailed(NWB_TEXT("failed to allocate the matching framebuffer readback staging texture"));
         return false;
     }
@@ -486,11 +492,14 @@ bool FramebufferCapture::writeCapture(const u8* const sourceBytes, const usize s
         }
     }
 
-    const ::Path<Core::Alloc::GlobalArena> outputDirectory = m_outputPath.parentPath();
-    if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory))
-        return false;
+    const ::Path<Core::Alloc::ScratchArena> outputPath(scratchArena, m_outputPath);
+    {
+        const auto outputDirectory = outputPath.parentPath();
+        if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory))
+            return false;
+    }
 
-    ::Path<Core::Alloc::GlobalArena> partialPath(m_outputPath);
+    ::Path<Core::Alloc::ScratchArena> partialPath(scratchArena, outputPath);
     partialPath += NWB_TEXT(".partial");
     if(!WriteBinaryFile(partialPath, bitmapBytes)){
         const auto removed = RemoveFile(partialPath);
@@ -498,7 +507,7 @@ bool FramebufferCapture::writeCapture(const u8* const sourceBytes, const usize s
             NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
         return false;
     }
-    if(!RenamePath(partialPath, m_outputPath)){
+    if(!RenamePath(partialPath, outputPath)){
         const auto removed = RemoveFile(partialPath);
         if(!removed)
             NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));

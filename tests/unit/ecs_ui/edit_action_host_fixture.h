@@ -110,7 +110,7 @@ protected:
         return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id;
     }
 
-    [[nodiscard]] usize actionCount(const Ui::EditAction::Enum action)const{
+    [[nodiscard]] usize actionCount(const Ui::EditAction::Enum action)const noexcept{
         usize count = 0u;
         for(const auto& record : m_actions.records)
             count += record.action == action ? 1u : 0u;

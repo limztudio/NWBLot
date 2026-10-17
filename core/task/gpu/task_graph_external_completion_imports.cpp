@@ -41,15 +41,15 @@ namespace __hidden_gpu_task_graph_external_completion_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternalCompletionDesc& desc){
+Expected<GpuExternalCompletionId> GpuTaskGraph::importExternalCompletion(const GpuExternalCompletionDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     using namespace __hidden_gpu_task_graph_external_completion_imports;
     const bool hasToken = HasExternalCompletionTokenValue(desc.token);
     if(!desc.identity || desc.markerLabel.empty() || (hasToken && (!desc.token.valid() || !desc.token.hasPhysicalQueueIdentity() || !validForDeviceGeneration(desc.token.deviceGeneration))))
-        return {};
+        return MakeUnexpected(Failure{});
 
     const u32 completionIndex = findExternalCompletionIdentity(desc.identity);
     if(completionIndex != s_InvalidImportIndex){
@@ -57,7 +57,7 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
         if(hasToken){
             if(existing.hasToken){
                 if(!SameSubmissionToken(existing.token, desc.token))
-                    return {};
+                    return MakeUnexpected(Failure{});
             }
             else{
                 existing.token = desc.token;

@@ -27,11 +27,15 @@ static constexpr AStringView s_SupportedInputExtensions[] = { s_PngExtension, s_
 
 static constexpr AStringView s_HdrInputExtensions[] = { s_ExrExtension, s_HdrExtension, };
 
-bool IsSupportedInputPath(const Path& path){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool IsSupportedInputPath(const ScratchPath& path){
     return PathHasListedExtension(path, s_SupportedInputExtensions);
 }
 
-bool IsHdrInputPath(const Path& path){
+bool IsHdrInputPath(const ScratchPath& path){
     return PathHasListedExtension(path, s_HdrInputExtensions);
 }
 

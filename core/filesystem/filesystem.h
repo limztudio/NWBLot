@@ -47,6 +47,7 @@ struct FileCursor{
 interface IFilesystem{
 public:
     IFilesystem() = default;
+    // Commit pending writes through checked flush/unmount calls before destruction; destruction only releases resources.
     virtual ~IFilesystem() = default;
 
 

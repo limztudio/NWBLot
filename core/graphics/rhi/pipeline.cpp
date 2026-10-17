@@ -28,9 +28,17 @@ GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& v
 GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
 GraphicsPipelineDesc& GraphicsPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ComputePipelineDesc::~ComputePipelineDesc() = default;
 ComputePipelineDesc& ComputePipelineDesc::setComputeShader(const ShaderHandle& value)noexcept{ computeShader = value; return *this; }
 ComputePipelineDesc& ComputePipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 MeshletPipelineDesc::~MeshletPipelineDesc() = default;
 MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value)noexcept{ amplificationShader = value; return *this; }
@@ -40,15 +48,27 @@ MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& val
 MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
 MeshletPipelineDesc& MeshletPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 RayTracingPipelineShaderDesc::~RayTracingPipelineShaderDesc() = default;
 RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setShader(const ShaderHandle& value)noexcept{ shader = value; return *this; }
 RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setBindingLayout(const BindingLayoutHandle& value)noexcept{ bindingLayout = value; return *this; }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 RayTracingPipelineHitGroupDesc::~RayTracingPipelineHitGroupDesc() = default;
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setClosestHitShader(const ShaderHandle& value)noexcept{ closestHitShader = value; return *this; }
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setAnyHitShader(const ShaderHandle& value)noexcept{ anyHitShader = value; return *this; }
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setIntersectionShader(const ShaderHandle& value)noexcept{ intersectionShader = value; return *this; }
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setBindingLayout(const BindingLayoutHandle& value)noexcept{ bindingLayout = value; return *this; }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 RayTracingPipelineDesc::~RayTracingPipelineDesc() = default;
 RayTracingPipelineDesc& RayTracingPipelineDesc::addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }

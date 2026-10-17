@@ -37,9 +37,7 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
     switch(message){
     case WM_CHAR:
     case WM_SYSCHAR:
-        admission = wParam <= 0xffffu
-            ? acceptUtf16Unit(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText
-        ;
+        admission = wParam <= 0xffffu ? acceptUtf16Unit(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText;
         break;
     case WM_UNICHAR:
         if(wParam == UNICODE_NOCHAR)

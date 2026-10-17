@@ -13,16 +13,16 @@
 
 template<typename Tag>
 class TypeCounter{
+private:
+    inline static Atomic<usize> s_NextId{ 0 };
+
+
 public:
     template<typename T>
     static usize Id()noexcept{
         static const usize s_value = s_NextId.fetch_add(1, MemoryOrder::relaxed);
         return s_value;
     }
-
-
-private:
-    inline static Atomic<usize> s_NextId{ 0 };
 };
 
 

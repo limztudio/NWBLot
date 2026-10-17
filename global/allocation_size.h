@@ -21,11 +21,11 @@ using AlignValT = std::align_val_t;
 
 template<usize size>
 constexpr inline usize SizeOf(usize count)noexcept(size <= 1u){
-    constexpr auto overflowIsPossible = size > 1;
+    constexpr auto s_OverflowIsPossible = size > 1;
 
-    if constexpr(overflowIsPossible){
-        constexpr auto maxPossible = static_cast<usize>(-1) / size;
-        if(count > maxPossible)
+    if constexpr(s_OverflowIsPossible){
+        constexpr auto s_MaxPossible = static_cast<usize>(-1) / size;
+        if(count > s_MaxPossible)
             throw AllocationSizeException{};
     }
 

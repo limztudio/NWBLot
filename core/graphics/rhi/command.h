@@ -38,6 +38,8 @@ struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return index != Limit<u16>::s_Max && deviceGeneration != 0u;
     }
@@ -56,6 +58,8 @@ struct QueueSubmissionToken{
     u16 deviceGeneration = 0u;
     CommandQueue::Enum queue = CommandQueue::kCount;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
     }
@@ -73,6 +77,8 @@ struct GpuQueueTimelineSnapshot{
     u64 submittedValue = 0u;
     u64 completedValue = 0u;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return queue.valid() && completedValue <= submittedValue;
     }
@@ -110,7 +116,8 @@ struct GpuPhysicalQueueTopology{
     usize queueCount = 0u;
 };
 
-// Current backend-native command storage for one physical queue. Snapshots sample thread-safe counters, so fields may advance during recording/submission. The storage estimate covers client-visible pool and command-buffer handles only, not opaque driver memory or wrapper capacity.
+// Current backend-native command storage for one physical queue. Snapshots sample thread-safe counters, so fields may advance during recording/submission.
+// The storage estimate covers client-visible pool and command-buffer handles only, not opaque driver memory or wrapper capacity.
 struct GpuCommandArenaStatistics{
     u64 workerArenaCount = 0u;
     u64 commandPoolEpochCount = 0u;
@@ -126,6 +133,7 @@ struct GpuCommandArenaStatistics{
     GpuPhysicalQueueId queue;
 
 
+public:
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
 };
 
@@ -148,6 +156,7 @@ struct GpuCommandArenaWorkerStatistics{
     u32 recordingWorkerIndex = 0u;
 
 
+public:
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
 };
 
@@ -168,6 +177,7 @@ struct TimerQueryRecordingToken{
     GpuPhysicalQueueId physicalQueue;
 
 
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return query != nullptr && physicalQueue.valid() && queryIncarnation != 0u && generation != 0u;
     }
@@ -180,6 +190,7 @@ struct CommandMarkerRecordingToken{
     u64 markerSerial = 0u;
 
 
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return recordingLeaseSerial != 0u && nativeRecordingID != 0u && markerSerial != 0u;
     }
@@ -196,6 +207,8 @@ struct TimerQueryResult{
     u32 timestampValidBits = 0u;
     bool comparableAcrossSubmissions = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return timestampValidBits > 0u && timestampValidBits <= s_FullWidthBits && secondsPerTick > 0.0;
     }
@@ -225,7 +238,8 @@ struct TimerQueryResult{
 
 // Final tracked state of one primary list for the next to begin from (scheduler orders producer < consumer). Caller-owned lifetimes: refs stay alive until the consumer opens.
 
-// It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while keepInitialState resources are captured after their close-time restore barriers. Before the producer is accepted, this handoff is the only valid cross-list source for that restored native state.
+// It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while keepInitialState resources are captured after their close-time restore barriers.
+// Before the producer is accepted, this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
     friend class GpuNativePacketRecorder;
@@ -263,7 +277,7 @@ private:
 
 
 public:
-    explicit CommandListResourceStateHandoff(GraphicsArena& arena)
+    explicit CommandListResourceStateHandoff(GraphicsArena& arena)noexcept
         : m_textureStates(arena)
         , m_bufferStates(arena)
         , m_permanentTextureStates(arena)
@@ -301,10 +315,11 @@ public:
     [[nodiscard]] bool buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
     // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges
     [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
-    // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource. Verify that exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination captured by the producer's native state tracker.
-    [[nodiscard]] bool coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const;
+    // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource.
+    // Verify that exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination captured by the producer's native state tracker.
+    [[nodiscard]] bool coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept;
     // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
-    [[nodiscard]] bool coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const;
+    [[nodiscard]] bool coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept;
     // Copies a valid state snapshot without exposing backend tracker storage.
     // Packet recording retains graph-owned producer seeds while individual command-list consumers request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);
@@ -366,6 +381,8 @@ struct VertexBufferBinding{
     u64 offset = 0;
     u32 slot = 0;
 
+
+public:
     constexpr VertexBufferBinding& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
     constexpr VertexBufferBinding& setSlot(u32 value)noexcept{ slot = value; return *this; }
     constexpr VertexBufferBinding& setOffset(u64 value)noexcept{ offset = value; return *this; }
@@ -380,6 +397,8 @@ struct IndexBufferBinding{
     u32 offset = 0;
     Format::Enum format = Format::UNKNOWN;
 
+
+public:
     constexpr IndexBufferBinding& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
     constexpr IndexBufferBinding& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
     constexpr IndexBufferBinding& setOffset(u32 value)noexcept{ offset = value; return *this; }
@@ -401,6 +420,8 @@ struct GraphicsState{
 
     Buffer* indirectParams = nullptr;
 
+
+public:
     constexpr GraphicsState& setPipeline(GraphicsPipeline* value)noexcept{ pipeline = value; return *this; }
     constexpr GraphicsState& setFramebuffer(Framebuffer* value)noexcept{ framebuffer = value; return *this; }
     constexpr GraphicsState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
@@ -419,6 +440,8 @@ struct DrawArguments{
     u32 startVertexLocation = 0;
     u32 startInstanceLocation = 0;
 
+
+public:
     constexpr DrawArguments& setVertexCount(u32 value)noexcept{ vertexCount = value; return *this; }
     constexpr DrawArguments& setInstanceCount(u32 value)noexcept{ instanceCount = value; return *this; }
     constexpr DrawArguments& setStartIndexLocation(u32 value)noexcept{ startIndexLocation = value; return *this; }
@@ -432,6 +455,8 @@ struct DrawIndirectArguments{
     u32 startVertexLocation = 0;
     u32 startInstanceLocation = 0;
 
+
+public:
     constexpr DrawIndirectArguments& setVertexCount(u32 value)noexcept{ vertexCount = value; return *this; }
     constexpr DrawIndirectArguments& setInstanceCount(u32 value)noexcept{ instanceCount = value; return *this; }
     constexpr DrawIndirectArguments& setStartVertexLocation(u32 value)noexcept{ startVertexLocation = value; return *this; }
@@ -445,6 +470,8 @@ struct DrawIndexedIndirectArguments{
     i32  baseVertexLocation = 0;
     u32 startInstanceLocation = 0;
 
+
+public:
     constexpr DrawIndexedIndirectArguments& setIndexCount(u32 value)noexcept{ indexCount = value; return *this; }
     constexpr DrawIndexedIndirectArguments& setInstanceCount(u32 value)noexcept{ instanceCount = value; return *this; }
     constexpr DrawIndexedIndirectArguments& setStartIndexLocation(u32 value)noexcept{ startIndexLocation = value; return *this; }
@@ -457,6 +484,8 @@ struct ComputeState{
 
     Buffer* indirectParams = nullptr;
 
+
+public:
     constexpr ComputeState& setPipeline(ComputePipeline* value)noexcept{ pipeline = value; return *this; }
     constexpr ComputeState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
 };
@@ -466,6 +495,8 @@ struct DispatchIndirectArguments{
     u32 groupsY = 1;
     u32 groupsZ = 1;
 
+
+public:
     constexpr DispatchIndirectArguments& setGroupsX(u32 value)noexcept{ groupsX = value; return *this; }
     constexpr DispatchIndirectArguments& setGroupsY(u32 value)noexcept{ groupsY = value; return *this; }
     constexpr DispatchIndirectArguments& setGroupsZ(u32 value)noexcept{ groupsZ = value; return *this; }
@@ -481,6 +512,8 @@ struct MeshletState{
     Buffer* indirectParams = nullptr;
     u8 dynamicStencilRefValue = 0;
 
+
+public:
     constexpr MeshletState& setPipeline(MeshletPipeline* value)noexcept{ pipeline = value; return *this; }
     constexpr MeshletState& setFramebuffer(Framebuffer* value)noexcept{ framebuffer = value; return *this; }
     constexpr MeshletState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
@@ -495,11 +528,11 @@ struct MeshletState{
 
 typedef GraphicsBackend::Handle<RayTracingShaderTable> RayTracingShaderTableHandle;
 
-inline constexpr u32 s_InvalidRayTracingShaderTableRecordIndex = Limit<u32>::s_Max;
-
 struct RayTracingState{
     RayTracingShaderTable* shaderTable = nullptr;
 
+
+public:
     constexpr RayTracingState& setShaderTable(RayTracingShaderTable* value)noexcept{ shaderTable = value; return *this; }
 };
 
@@ -508,6 +541,8 @@ struct RayTracingDispatchRaysArguments{
     u32 height = 1;
     u32 depth = 1;
 
+
+public:
     constexpr RayTracingDispatchRaysArguments& setWidth(u32 value)noexcept{ width = value; return *this; }
     constexpr RayTracingDispatchRaysArguments& setHeight(u32 value)noexcept{ height = value; return *this; }
     constexpr RayTracingDispatchRaysArguments& setDepth(u32 value)noexcept{ depth = value; return *this; }

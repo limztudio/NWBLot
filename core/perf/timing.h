@@ -9,6 +9,8 @@
 
 #include <core/alloc/module.h>
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,12 +25,13 @@ class TimingAccumulator;
 class TimingRecorder;
 class TimingSink;
 class TimingView;
-class CpuTimingMeasure;
 
 struct TimingScopeId{
     u32 index = Limit<u32>::s_Max;
     u32 generation = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 
@@ -44,6 +47,8 @@ struct TimingStats{
     u64 lastSampleFrameIndex = 0u;
     u32 sampleCount = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return sampleCount != 0u; }
 };
 
@@ -78,7 +83,7 @@ public:
 
 public:
     [[nodiscard]] virtual bool enabled()const noexcept = 0;
-    [[nodiscard]] virtual TimingScopeId registerScope(const Name& scopeName) = 0;
+    [[nodiscard]] virtual Expected<TimingScopeId> registerScope(const Name& scopeName) = 0;
     virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex) = 0;
     virtual void publishFrame(u64 publishFrameIndex) = 0;
 };
@@ -94,11 +99,15 @@ private:
         TimingAccumulator accumulator;
         u32 generation = 0u;
 
+
+    public:
         explicit ScopeRecord(const Name& scopeName)noexcept
             : name(scopeName)
         {}
     };
 
+
+private:
     using ScopeRecordPtr = GlobalUniquePtr<ScopeRecord>;
     using ScopeVector = Vector<ScopeRecordPtr, Alloc::GlobalArena>;
     using ScopeMap = HashMap<Name, TimingScopeId, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
@@ -116,7 +125,7 @@ public:
     void setEnabled(bool enabled)noexcept;
     [[nodiscard]] virtual bool enabled()const noexcept override{ return m_enabled; }
     void clear()noexcept;
-    [[nodiscard]] virtual TimingScopeId registerScope(const Name& scopeName)override;
+    [[nodiscard]] virtual Expected<TimingScopeId> registerScope(const Name& scopeName)override;
     virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex)noexcept override;
     void recordSample(const Name& scopeName, f64 seconds)noexcept;
     void recordSample(const Name& scopeName, f64 seconds, u64 sampleFrameIndex)noexcept;
@@ -169,39 +178,6 @@ public:
 
 private:
     const TimingRecorder* m_recorder = nullptr;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CpuTimingMeasure final : NoCopy{
-public:
-    CpuTimingMeasure(CpuTimingMeasure&&) = delete;
-    CpuTimingMeasure& operator=(CpuTimingMeasure&&) = delete;
-
-    CpuTimingMeasure(TimingSink& timing, const Name& scopeName, const u64 sampleFrameIndex)
-        : m_timing(timing)
-        , m_scope(timing.registerScope(scopeName))
-        , m_sampleFrameIndex(sampleFrameIndex)
-        , m_begin(TimerNow())
-    {}
-    CpuTimingMeasure(TimingSink& timing, const TimingScopeId scope, const u64 sampleFrameIndex)
-        : m_timing(timing)
-        , m_scope(scope)
-        , m_sampleFrameIndex(sampleFrameIndex)
-        , m_begin(TimerNow())
-    {}
-    ~CpuTimingMeasure(){
-        m_timing.recordSample(m_scope, DurationInSeconds<f64>(TimerNow(), m_begin), m_sampleFrameIndex);
-    }
-
-
-private:
-    TimingSink& m_timing;
-    TimingScopeId m_scope;
-    u64 m_sampleFrameIndex = 0u;
-    Timer m_begin = {};
 };
 
 

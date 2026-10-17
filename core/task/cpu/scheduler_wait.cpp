@@ -38,11 +38,13 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
         ScopeExit unregisterWaiter([this]()noexcept{
             --m_handleJoinWaiters;
             --m_joinWaiters;
-        });
+        }
+        );
 
         m_changed.wait(lock, [this, handle]()noexcept{
             return !resolveLocked(handle) || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting());
-        });
+        }
+        );
     }
 }
 
@@ -66,7 +68,8 @@ void CpuTaskScheduler::wait(){
 
         m_changed.wait(lock, [this]()noexcept{
             return m_outstanding == 0u || hasReadyLocked(CpuAffinity::Any, isMainThread(), false);
-        });
+        }
+        );
     }
 }
 
@@ -90,7 +93,7 @@ void CpuTaskScheduler::drainTask(const TaskHandle handle)noexcept{
 
 void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTaskScope* const scope){
     beginLockedSearch();
-    const auto visit = [this](const TaskHandle candidate){
+    const auto visit = [this](const TaskHandle candidate)noexcept{
         if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
             m_searchVisits[candidate.index] = m_searchGeneration;
             m_searchStack.push_back(candidate.index);
@@ -139,7 +142,8 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
         m_changed.wait(lock, [this, &scope, &wait](){
             validateWaitLocked({}, &scope);
             return scope.m_pending.load(MemoryOrder::acquire) == 0u || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &wait);
-        });
+        }
+        );
     }
 }
 

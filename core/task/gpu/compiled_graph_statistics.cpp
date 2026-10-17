@@ -84,7 +84,8 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             .queue = queue.id,
             .queueClass = queue.queueClass,
             .deviceGeneration = m_deviceGeneration,
-        });
+        }
+        );
     }
     const auto countOwnershipBarriers = [](GpuTaskGraphPhysicalQueueCompileStatistics& physical, const GraphicsVector<GpuCompiledBarrier>& barriers, const u32 barrierOffset, const u32 barrierCount)noexcept{
         if(barrierCount == 0u || barrierOffset > barriers.size() || barrierCount > barriers.size() - barrierOffset)

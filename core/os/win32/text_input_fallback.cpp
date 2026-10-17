@@ -54,13 +54,13 @@ bool Win32TextInputService::resetFallbackCharInput()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u32> DecodeWin32FallbackCharInput(ITextInputService& service, const u32 unit){
+Expected<u32> DecodeWin32FallbackCharInput(ITextInputService& service, const u32 unit)noexcept{
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return MakeUnexpected(Failure{});
     return checked_cast<Win32TextInputService*>(&service)->decodeFallbackCharInput(unit);
 }
 
-bool ResetWin32FallbackCharInput(ITextInputService& service){
+bool ResetWin32FallbackCharInput(ITextInputService& service)noexcept{
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
     return checked_cast<Win32TextInputService*>(&service)->resetFallbackCharInput();

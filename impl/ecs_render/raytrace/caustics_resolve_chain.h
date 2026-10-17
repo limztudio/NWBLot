@@ -95,7 +95,7 @@ struct CausticsResolveChainNaming{
 
 class CausticsResolveChainBuilder final : NoCopy{
 public:
-    CausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
+    CausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept;
 
 
 public:

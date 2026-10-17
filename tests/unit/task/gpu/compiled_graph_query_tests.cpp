@@ -31,6 +31,8 @@ using TaskGraphTestUtils::TestArena;
 
 
 static void CheckPacketQueries(const usize taskCount){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     u64 graphGeneration = 0u;
@@ -47,9 +49,11 @@ static void CheckPacketQueries(const usize taskCount){
         scheduling.mergeWithPrevious = orderIndex != 0u;
         const Graphics::GpuTaskId dependency{ .generation = graphGeneration, .index = static_cast<u32>(declarationIndex + 1u), };
         char identityText[32u] = {};
-        tasks[orderIndex] = AddTaskWithCommands(
+        const auto derivedNameAt52Col12 = DeriveName(Name("tests/compiled_query/task/"), FormatDecimal(declarationIndex, identityText));
+        ASSERT_TRUE(derivedNameAt52Col12);
+        const auto gpuAdmissionAt50 = AddTaskWithCommands(
             graph,
-            DeriveName(Name("tests/compiled_query/task/"), FormatDecimal(declarationIndex, identityText)),
+            *derivedNameAt52Col12,
             "Compiled Query Task",
             GraphicsCommands(),
             scheduling,
@@ -57,16 +61,20 @@ static void CheckPacketQueries(const usize taskCount){
             orderIndex != 0u ? &dependency : nullptr,
             orderIndex != 0u ? 1u : 0u
         );
+        ASSERT_TRUE(gpuAdmissionAt50);
+        tasks[orderIndex] = *gpuAdmissionAt50;
         ASSERT_TRUE(tasks[orderIndex].valid());
     }
-    const Graphics::GpuTaskId nextPacketTask = AddTaskWithCommands(graph, Name("tests/compiled_query/next_packet"), "Next Packet", GraphicsCommands(), {}, {}, &tasks.back(), 1u);
+    const auto nextPacketTaskResult = AddTaskWithCommands(graph, Name("tests/compiled_query/next_packet"), "Next Packet", GraphicsCommands(), {}, {}, &tasks.back(), 1u);
+    ASSERT_TRUE(nextPacketTaskResult);
+    const Graphics::GpuTaskId nextPacketTask = *nextPacketTaskResult;
     ASSERT_TRUE(nextPacketTask.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
     ASSERT_EQ(views.compiled.packetCount(), 2u);
@@ -103,7 +111,7 @@ static void CheckPacketQueries(const usize taskCount){
 
 
 TEST(GpuCompiledGraph, PacketQueriesFollowExecutionOrderAcrossReverseDeclarations){
-    __hidden_compiled_graph_query_tests::CheckPacketQueries(32u);
+    ASSERT_NO_FATAL_FAILURE(__hidden_compiled_graph_query_tests::CheckPacketQueries(32u));
 }
 
 

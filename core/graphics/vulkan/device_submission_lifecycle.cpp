@@ -97,20 +97,20 @@ bool Device::sealLifecycleDrainForDestruction()noexcept{
     return true;
 }
 
-QueueSubmissionToken Device::consumeAcquiredImageSemaphore(const VkSemaphore semaphore){
+Expected<QueueSubmissionToken> Device::consumeAcquiredImageSemaphore(const VkSemaphore semaphore){
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid() || semaphore == VK_NULL_HANDLE)
-        return {};
+        return MakeUnexpected(Failure{});
 
     const GpuPhysicalQueueId executionQueue = getPrimaryPhysicalQueue(CommandQueue::Graphics);
     Queue* const queue = getQueue(executionQueue);
     if(!queue)
-        return {};
+        return MakeUnexpected(Failure{});
 
     const Queue::SubmissionWait acquireWait{ semaphore, 0u };
     const auto submission = queue->submit(nullptr, 0u, nullptr, &acquireWait, 1u, nullptr, 0u, true);
     if(!submission || !submission->accepted)
-        return {};
+        return MakeUnexpected(Failure{});
 
     return QueueSubmissionToken{ .value = submission->submittedID, .physicalQueueIndex = executionQueue.index, .deviceGeneration = executionQueue.deviceGeneration, .queue = queue->m_queueID, };
 }

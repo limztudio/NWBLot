@@ -6,6 +6,7 @@
 
 
 #include "component.h"
+#include "type_id.h"
 
 #include <core/task/cpu/scheduler.h>
 
@@ -25,15 +26,6 @@ namespace AccessMode{
         Write
     };
 };
-
-
-using SystemTypeId = usize;
-
-
-template<typename T>
-inline SystemTypeId SystemType()noexcept{
-    return ::TypeCounter<ECSDetail::SystemTypeTag>::Id<Decay_T<T>>();
-}
 
 
 struct ComponentAccess{
@@ -56,17 +48,22 @@ class ISystem{
 
 
 public:
-    explicit ISystem(Alloc::GlobalArena& arena);
+    explicit ISystem(Alloc::GlobalArena& arena)noexcept;
     ISystem(const ISystem&) = delete;
-    ISystem& operator=(const ISystem&) = delete;
     virtual ~ISystem() = default;
 
 
 public:
+    ISystem& operator=(const ISystem&) = delete;
+
+
+public:
     virtual void prepare(World& world){ static_cast<void>(world); }
+
     // The scheduler keeps this task incomplete until update and its submitted descendants finish.
-    virtual void update(World& world, f32 delta) = 0;
-    [[nodiscard]] virtual CpuTaskOptions taskOptions()const{
+    [[nodiscard]] virtual Expected<void, CpuTaskAdmissionError::Enum> update(World& world, f32 delta) = 0;
+
+    [[nodiscard]] virtual CpuTaskOptions taskOptions()const noexcept{
         return { .cost = CpuTaskCost::Heavy };
     }
 
@@ -76,10 +73,12 @@ protected:
     inline void readAccess(){
         registerAccess(ComponentType<T>(), AccessMode::Read);
     }
+
     template<typename T>
     inline void writeAccess(){
         registerAccess(ComponentType<T>(), AccessMode::Write);
     }
+
     void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
 
 
@@ -98,16 +97,16 @@ private:
 
 
 public:
-    explicit SystemScheduler(Alloc::GlobalArena& arena);
+    explicit SystemScheduler(Alloc::GlobalArena& arena)noexcept;
     ~SystemScheduler() = default;
 
 
 public:
     void addSystem(ISystem& system);
-    void removeSystem(ISystem& system);
-    void clear();
+    void removeSystem(ISystem& system)noexcept;
+    void clear()noexcept;
     void rebuild();
-    void execute(World& world, f32 delta);
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> execute(World& world, f32 delta);
 
 
 private:
@@ -119,6 +118,7 @@ private:
     // Retain capacity across execute() calls.
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionHandles;
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionDependencies;
+    Vector<Expected<void, CpuTaskAdmissionError::Enum>, Alloc::GlobalArena> m_executionResults;
     bool m_dirty;
 };
 

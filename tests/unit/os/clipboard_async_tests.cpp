@@ -79,10 +79,16 @@ TEST(ClipboardAsync, PendingNativeRequestPreservesFifoAndCopiedWriteInput){
     NWB::Tests::TestArena arena;
     DelayedClipboardService service(arena.arena);
     ClipboardCompletion completion(arena.arena);
-    const ClipboardRequestToken first = service.requestReadText(ClipboardChannel::Clipboard).token;
+    const auto firstAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(firstAdmission);
+    const ClipboardRequestToken first = *firstAdmission;
     AString<Alloc::GlobalArena> input("copied write", arena.arena);
-    const ClipboardRequestToken second = service.requestWriteText(ClipboardChannel::Clipboard, input).token;
-    const ClipboardRequestToken third = service.requestReadText(ClipboardChannel::Clipboard).token;
+    const auto secondAdmission = service.requestWriteText(ClipboardChannel::Clipboard, input);
+    ASSERT_TRUE(secondAdmission);
+    const ClipboardRequestToken second = *secondAdmission;
+    const auto thirdAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(thirdAdmission);
+    const ClipboardRequestToken third = *thirdAdmission;
     input.assign("changed caller input");
 
     ASSERT_TRUE(service.pump());
@@ -114,12 +120,18 @@ TEST(ClipboardAsync, CancellationReleasesFifoAndLateNativeRepliesCannotCompleteR
     NWB::Tests::TestArena arena;
     DelayedClipboardService service(arena.arena);
     ClipboardCompletion completion(arena.arena);
-    const ClipboardRequestToken old = service.requestReadText(ClipboardChannel::Clipboard).token;
-    const ClipboardRequestToken next = service.requestWriteText(ClipboardChannel::Clipboard, "next").token;
+    const auto oldAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(oldAdmission);
+    const ClipboardRequestToken old = *oldAdmission;
+    const auto nextAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "next");
+    ASSERT_TRUE(nextAdmission);
+    const ClipboardRequestToken next = *nextAdmission;
     ASSERT_TRUE(service.pump());
     ASSERT_TRUE(service.cancel(old));
     EXPECT_EQ(service.m_cancelCount, 1u);
-    const ClipboardRequestToken replacement = service.requestReadText(ClipboardChannel::Clipboard).token;
+    const auto replacementAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(replacementAdmission);
+    const ClipboardRequestToken replacement = *replacementAdmission;
     ASSERT_TRUE(service.pump());
     EXPECT_EQ(service.m_nativeToken, next);
     EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success, "stale bytes"));
@@ -138,7 +150,9 @@ TEST(ClipboardAsync, CancellationInvalidatesTokenBeforeReentrantNativeCleanup){
     NWB::Tests::TestArena arena;
     DelayedClipboardService service(arena.arena);
     ClipboardCompletion completion(arena.arena);
-    const ClipboardRequestToken old = service.requestReadText(ClipboardChannel::Clipboard).token;
+    const auto oldAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(oldAdmission);
+    const ClipboardRequestToken old = *oldAdmission;
     ASSERT_TRUE(service.pump());
     ClipboardRequestToken replacement;
     bool observedCancellation = false;
@@ -149,10 +163,12 @@ TEST(ClipboardAsync, CancellationInvalidatesTokenBeforeReentrantNativeCleanup){
         EXPECT_FALSE(service.cancel(old));
         EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
         EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success, "late during cancellation"));
-        replacement = service.requestReadText(ClipboardChannel::Clipboard).token;
+        const auto replacementAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+        ASSERT_TRUE(replacementAdmission);
+        replacement = *replacementAdmission;
     };
 
-    ASSERT_TRUE(service.cancel(old));
+    ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.cancel(old)));
     EXPECT_TRUE(observedCancellation);
     EXPECT_EQ(service.m_cancelCount, 1u);
     ASSERT_TRUE(replacement.valid());
@@ -169,18 +185,22 @@ TEST(ClipboardAsync, ReentrantStartCancellationDefersNewGenerationToNextPump){
     NWB::Tests::TestArena arena;
     DelayedClipboardService service(arena.arena);
     ClipboardCompletion completion(arena.arena);
-    const ClipboardRequestToken old = service.requestWriteText(ClipboardChannel::Clipboard, "old input").token;
+    const auto oldAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "old input");
+    ASSERT_TRUE(oldAdmission);
+    const ClipboardRequestToken old = *oldAdmission;
     ClipboardRequestToken replacement;
     service.m_onStart = [&](){
         if(service.m_nativeToken != old)
             return;
         ASSERT_TRUE(service.cancel(old));
-        replacement = service.requestWriteText(ClipboardChannel::Clipboard, "new input").token;
+        const auto replacementAdmission = service.requestWriteText(ClipboardChannel::Clipboard, "new input");
+        ASSERT_TRUE(replacementAdmission);
+        replacement = *replacementAdmission;
         EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success));
         EXPECT_FALSE(service.pump());
     };
 
-    ASSERT_TRUE(service.pump());
+    ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.pump()));
     EXPECT_EQ(service.m_startCount, 1u);
     EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
     EXPECT_EQ(service.poll(replacement, completion), ClipboardPollResult::Pending);
@@ -196,14 +216,18 @@ TEST(ClipboardAsync, DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes){
     NWB::Tests::TestArena arena;
     DelayedClipboardService service(arena.arena);
     ClipboardCompletion completion(arena.arena);
-    const ClipboardRequestToken invalid = service.requestReadText(ClipboardChannel::Clipboard).token;
+    const auto invalidAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(invalidAdmission);
+    const ClipboardRequestToken invalid = *invalidAdmission;
     ASSERT_TRUE(service.pump());
     ASSERT_TRUE(service.deliver(invalid, ClipboardStatus::Success, "\xF0\x9F"));
     ASSERT_EQ(service.poll(invalid, completion), ClipboardPollResult::Completed);
     EXPECT_EQ(completion.status, ClipboardStatus::InvalidText);
     EXPECT_TRUE(completion.text.empty());
 
-    const ClipboardRequestToken valid = service.requestReadText(ClipboardChannel::Clipboard).token;
+    const auto validAdmission = service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(validAdmission);
+    const ClipboardRequestToken valid = *validAdmission;
     ASSERT_TRUE(service.pump());
     AString<Alloc::GlobalArena> reply("\xED\x95\x9C\xF0\x9F\x98\x80", arena.arena);
     ASSERT_TRUE(service.deliver(valid, ClipboardStatus::Success, reply));

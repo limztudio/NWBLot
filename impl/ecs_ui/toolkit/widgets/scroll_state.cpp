@@ -83,10 +83,7 @@ bool ScrollState::scrollBy(const f64 delta, const f64 contentHeight, const f64 v
 bool ScrollState::clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{
     if(!__hidden_ui_scroll_state::ValidRange(contentHeight, viewportHeight))
         return false;
-    m_offset = VectorDoubleGetX(VectorDoubleMin(
-        VectorDoubleReplicate(m_offset),
-        VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(contentHeight), VectorDoubleReplicate(viewportHeight)))
-    ));
+    m_offset = VectorDoubleGetX(VectorDoubleMin(VectorDoubleReplicate(m_offset), VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(contentHeight), VectorDoubleReplicate(viewportHeight)))));
     return true;
 }
 

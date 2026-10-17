@@ -5,6 +5,7 @@
 #include "task_graph.h"
 #include "compiler.h"
 
+#include <global/exception.h>
 #include <global/termination.h>
 
 
@@ -66,7 +67,8 @@ bool GpuTaskGraph::tryReset(){
         resetCompletion.activateWithinLock();
     }
 
-    if(!destroyTaskPayloads())
+    const bool taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
+    if(!taskPayloadsDestroyed)
         return false;
     resetCompletion.complete();
     return true;

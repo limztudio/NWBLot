@@ -49,6 +49,7 @@ struct EntityID{
     u32 id;
 
 
+public:
     inline constexpr EntityID()noexcept
         : id(~0u)
     {}
@@ -79,7 +80,7 @@ class EntityManager{
 
 
 public:
-    explicit EntityManager(Alloc::GlobalArena& arena);
+    explicit EntityManager(Alloc::GlobalArena& arena)noexcept;
 
 
 public:

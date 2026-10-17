@@ -70,7 +70,7 @@ ClipboardStatus::Enum EncodeClipboardLatin1(const AStringView text, AString<Allo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ClipboardTextAccumulator::ClipboardTextAccumulator(Alloc::GlobalArena& arena)
+ClipboardTextAccumulator::ClipboardTextAccumulator(Alloc::GlobalArena& arena)noexcept
     : m_text(arena)
 {}
 

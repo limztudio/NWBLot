@@ -192,7 +192,7 @@ public:
         RendererRayTracingState& rayTracingState,
         const RendererOpticalVolumeSelection& opticalVolumes,
         const CsgShapeRegistry& csgShapeRegistry
-    );
+    )noexcept;
     ~RendererRayTracingSystem();
 
 
@@ -218,9 +218,9 @@ public:
     [[nodiscard]] bool surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept;
     void confirmSurfelCountReadbackSubmission(const Core::QueueSubmissionToken& submissionToken)noexcept;
 
-    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings);
-    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
-    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);
+    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
+    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
+    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
     [[nodiscard]] u32 requestedShadowReceiverFactor()const noexcept;
     [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
     void acceptLightSpaceShadowCapture(const LightSpaceCaptureTicket& ticket, bool prepared);
@@ -264,12 +264,12 @@ public:
     // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities.
     // The shared graph retains this POD as an immutable upload blob before recording begins.
     [[nodiscard]] Expected<RayTraceMaterialContextSlots> snapshotRayTraceMaterialContextSlots();
-    [[nodiscard]] Expected<Core::GpuUploadBlobId> retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const;
+    [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const;
     void confirmCsgTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept;
     // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result authoritatively represents a frame without refractive emission targets.
-    [[nodiscard]] Expected<Core::GpuUploadBlobId> retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const;
+    [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const;
     // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents an inactive surfel frame
-    [[nodiscard]] Expected<Core::GpuUploadBlobId> retainPreparedSurfelFrameConstantsUpload(Core::GpuTaskGraph& graph, const DeferredFrameTargets& targets)const;
+    [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedSurfelFrameConstantsUpload(Core::GpuTaskGraph& graph, const DeferredFrameTargets& targets)const;
     // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch
     [[nodiscard]] Expected<PreparedShadowMaterialContextUploads> retainPreparedShadowMaterialContextUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedShadowMaterialContextUploads()noexcept;
@@ -308,7 +308,7 @@ public:
         bool splitOpaqueSoftResolve = false,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
-    [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -319,7 +319,7 @@ public:
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = {}
     );
     // A prepared soft-transparent frame splits opaque visibility and transparent fold in one semantic packet. The opaque task opens the shared timing scopes
-    [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -336,7 +336,7 @@ public:
     );
     // The prepared opaque producer records the trace and geometry downsample first.
     // This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet
-    [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueFirstWaveletTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueFirstWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -352,7 +352,7 @@ public:
         bool deferUpsample = false,
         bool deferWavelet = false
     );
-    [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueResolveTailTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueResolveTailTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -367,7 +367,7 @@ public:
     );
     // The prepared transparent temporal merge receives frozen history/moment entry states and starts the resolve timing interval.
     // Its output reaches the first wavelet through the compiler-owned task handoff.
-    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTemporalMergeTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftTemporalMergeTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -383,7 +383,7 @@ public:
     );
     // The prepared transparent trace or temporal merge's first wavelet inherits its graph-declared input and output states.
     // The terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
-    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFirstWaveletTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftFirstWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -397,7 +397,7 @@ public:
         bool startsTransparentResolveTiming = true,
         bool combinedWavelet = false
     );
-    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFoldTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftFoldTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -411,7 +411,7 @@ public:
         const u32& opaqueFrameIndex,
         bool combinedUpsample = false
     );
-    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTraceTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareShadowTransparentSoftTraceTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -427,7 +427,7 @@ public:
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear()noexcept;
     // A warm temporal accumulator decays in its own graph task before the selected photon producer.  The task shares the producer packet, so the compiler owns the UAV handoff between the two dispatches.
-    [[nodiscard]] Core::GpuTaskId declareCausticAccumulatorDecayTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticAccumulatorDecayTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -452,7 +452,7 @@ public:
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
-    [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSoftwareCausticsTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -468,7 +468,7 @@ public:
     [[nodiscard]] bool hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
-    [[nodiscard]] Core::GpuTaskId declareHardwareCausticsTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareHardwareCausticsTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -483,7 +483,7 @@ public:
     );
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
     // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, and upsample after the selected photon producer. Their exact resource uses own the immutable and ping-pong UAV-to-SRV handoffs
-    [[nodiscard]] Core::GpuTaskId declareCausticGeometryDownsampleTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -492,14 +492,20 @@ public:
         Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
     [[nodiscard]] CausticResolveActivitySnapshot causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const;
-    [[nodiscard]] Core::GpuTaskId declareCausticResolveTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, Core::GpuTimingSubmissionTicket& timingTicket, const bool& causticProducerDispatched, Optional<Core::GpuTimingMeasure>& causticResolveTiming);
-    [[nodiscard]] Core::GpuTaskId declareCausticResolvePrepareTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
-    [[nodiscard]] Core::GpuTaskId declareCausticResolveWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
-    [[nodiscard]] Core::GpuTaskId declareCausticResolveSecondWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
-    [[nodiscard]] Core::GpuTaskId declareCausticResolveThirdWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
-    [[nodiscard]] Core::GpuTaskId declareCausticResolveFourthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
-    [[nodiscard]] Core::GpuTaskId declareCausticResolveFifthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
-    [[nodiscard]] Core::GpuTaskId declareCausticResolveUpsampleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        const bool& causticProducerDispatched,
+        Optional<Core::GpuTimingMeasure>& causticResolveTiming
+    );
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolvePrepareTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveSecondWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveThirdWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveFourthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveFifthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveUpsampleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched);
     // Typed stages own immutable inputs and each ping-pong handoff.
     void dispatchCausticGeometryDownsample(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void dispatchCausticResolvePrepare(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -510,12 +516,12 @@ public:
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool needsSurfelResourceInitialization()const noexcept;
     // Typed graph clear primitives own the persistent-buffer writes. This resource-free task only records and publishes their CPU lifecycle after the shared producer packet has accepted.
-    [[nodiscard]] Core::GpuTaskId declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc);
     [[nodiscard]] bool recordSurfelResourceInitializationLifecycle()noexcept;
     // The initialization mirror commits only after the typed-clear producer packet accepts.
     void finalizeSurfelResourceInitialization()noexcept;
     void discardSurfelResourceInitialization()noexcept;
-    [[nodiscard]] Core::GpuTaskId declareSurfelGiAgeFreeTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiAgeFreeTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -523,7 +529,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
-    [[nodiscard]] Core::GpuTaskId declareSurfelGiHashBuildTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiHashBuildTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -531,7 +537,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
-    [[nodiscard]] Core::GpuTaskId declareSurfelGiSpawnTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiSpawnTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -539,7 +545,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
-    [[nodiscard]] Core::GpuTaskId declareSurfelGiTraceBuildArgsTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiTraceBuildArgsTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -547,7 +553,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
-    [[nodiscard]] Core::GpuTaskId declareSurfelGiTraceTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiTraceTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -555,7 +561,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
-    [[nodiscard]] Core::GpuTaskId declareSurfelGiResolveTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiResolveTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -563,7 +569,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
-    [[nodiscard]] Core::GpuTaskId declareSurfelGiTask(
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -613,12 +619,12 @@ private:
     [[nodiscard]] bool shadowMaterialContextStorageReady(usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)const noexcept;
     void capturePreparedShadowMaterialContextStorage(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     [[nodiscard]] bool preparedTraversalStorageMatchesCurrent()const noexcept;
-    [[nodiscard]] bool capturePreparedShadowMaterialContextCacheReuse(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount);
+    [[nodiscard]] bool capturePreparedShadowMaterialContextCacheReuse(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     void clearPreparedShadowMaterialContext()noexcept;
     [[nodiscard]] bool appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector);
     void clearPreparedShadowTraceMaterialSampledTextures()noexcept;
     [[nodiscard]] bool capturePreparedSceneBvh(bool staticScene, u64 staticSceneHash, const void* nodeData, usize nodeCount, usize nodeByteCount, const void* instanceData, usize instanceCount, usize instanceByteCount);
-    [[nodiscard]] bool capturePreparedSceneBvhCacheReuse(u64 staticSceneHash, u32 instanceCount);
+    [[nodiscard]] bool capturePreparedSceneBvhCacheReuse(u64 staticSceneHash, u32 instanceCount)noexcept;
     void clearPreparedSceneBvh()noexcept;
     [[nodiscard]] bool capturePreparedSceneSwBvhTraversal(const PreparedSceneSwBvhMesh* meshes, usize meshCount, u32 instanceCount);
     // Preflight leaves the exact software descriptor tables populated. The frozen traversal validates those tables and retained resource identities without republishing mutable state.
@@ -668,7 +674,7 @@ private:
     // Hardware shadow layouts are push-only; resources come from heap sets.
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     [[nodiscard]] bool ensureSwShadowPipeline();
-    [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const AStringView debugLabel);
+    [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const NameText<char> debugLabel);
     [[nodiscard]] bool ensureSoftwareTransparentSamplingPipeline();
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
@@ -785,10 +791,6 @@ private:
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const;
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
-    [[nodiscard]] f32 causticTemporalDecay()noexcept;
-    // Temporal phase changes only after accepted producer updates.
-    [[nodiscard]] u32 causticTemporalPhaseCount();
-    void advanceCausticTemporalReuse();
     [[nodiscard]] bool ensureCausticRtPipeline();
     [[nodiscard]] bool ensureBvhSortPipeline();
     [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);

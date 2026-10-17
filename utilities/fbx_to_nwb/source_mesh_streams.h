@@ -120,6 +120,8 @@ struct SourceMeshBuildContext{
     MeshSkinInfluenceIndexMap skin;
     SourceVertexRefIndexMap vertexRefs;
 
+
+public:
     SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)
         : mesh(sourceMesh)
         , scratchArena(sourceScratchArena)
@@ -142,7 +144,7 @@ public:
     static void ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const bool wantsSkinning);
     static void ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning);
     [[nodiscard]] static bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept;
-    static void DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static bool DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices);
     template<typename Value, typename Lookup>
     [[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName);
@@ -172,7 +174,11 @@ template<typename Value, typename Lookup>
 
     const u32 index = static_cast<u32>(stream.size());
     stream.push_back(value);
-    lookup.emplace(value, index);
+    const auto inserted = lookup.emplace(value, index);
+    if(!inserted.second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
     return index;
 }
 

@@ -49,8 +49,12 @@ namespace __hidden_ui_gpu_texture_image_validation_tests{
 
 
 TEST_F(GpuTextureImageValidationFixture, SameIdentityDistinctGenerationsRemainValidImageBindings){
-    const SharedImageSource first = makeImage("tests/ui/versioned_gpu_image", 37u);
-    const SharedImageSource second = makeImage("tests/ui/versioned_gpu_image", 73u);
+    auto firstResult = makeImage("tests/ui/versioned_gpu_image", 37u);
+    ASSERT_TRUE(firstResult);
+    const SharedImageSource first = Move(*firstResult);
+    auto secondResult = makeImage("tests/ui/versioned_gpu_image", 73u);
+    ASSERT_TRUE(secondResult);
+    const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());
@@ -66,7 +70,9 @@ TEST_F(GpuTextureImageValidationFixture, SameIdentityDistinctGenerationsRemainVa
 }
 
 TEST_F(GpuTextureImageValidationFixture, ImageIndexMustAddressAnOwnedTextureSource){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
     DrawSnapshot snapshot = m_builder.freeze();
@@ -83,7 +89,9 @@ TEST_F(GpuTextureImageValidationFixture, ImageIndexMustAddressAnOwnedTextureSour
 }
 
 TEST_F(GpuTextureImageValidationFixture, NullTextureSourceRejectsTheSnapshot){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
     DrawSnapshot snapshot = m_builder.freeze();
@@ -94,7 +102,9 @@ TEST_F(GpuTextureImageValidationFixture, NullTextureSourceRejectsTheSnapshot){
 }
 
 TEST_F(GpuTextureImageValidationFixture, DuplicateSourceGenerationRejectsTheSnapshot){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
     DrawSnapshot snapshot = m_builder.freeze();
@@ -107,13 +117,17 @@ TEST_F(GpuTextureImageValidationFixture, DuplicateSourceGenerationRejectsTheSnap
 }
 
 TEST_F(GpuTextureImageValidationFixture, TextureBindingCountOverflowRejectsEveryValidator){
-    const SharedImageSource first = makeImage();
+    auto firstResult = makeImage();
+    ASSERT_TRUE(firstResult);
+    const SharedImageSource first = Move(*firstResult);
     ASSERT_TRUE(first);
     ASSERT_TRUE(m_builder.drawImage(first, { 2.0f, 3.0f, 16.0f, 8.0f }));
     DrawSnapshot snapshot = m_builder.freeze();
     auto& images = const_cast<PaintVector<SharedImageSource>&>(snapshot.textureImages());
     for(usize index = 1u; index <= s_PaintMaxImages; ++index){
-        SharedImageSource addition = makeImage("tests/ui/overflow_gpu_image", static_cast<u8>(index));
+        auto additionResult = makeImage("tests/ui/overflow_gpu_image", static_cast<u8>(index));
+        ASSERT_TRUE(additionResult);
+        SharedImageSource addition = Move(*additionResult);
         ASSERT_TRUE(addition);
         images.push_back(Move(addition));
     }
@@ -128,12 +142,18 @@ TEST_F(GpuTextureImageValidationFixture, TextureBindingCountOverflowRejectsEvery
 TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetAcceptsMixedSourcesAtCapacity){
     FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
     for(usize index = 0u; index < glyphs.max_size(); ++index){
-        SharedGlyphPage glyph = makeGlyph(100u + index);
+        auto glyphCreationResult = makeGlyph(100u + index);
+        ASSERT_TRUE(glyphCreationResult);
+        SharedGlyphPage glyph = Move(*glyphCreationResult);
         ASSERT_TRUE(glyph);
         glyphs.push_back(Move(glyph));
     }
-    const SharedSdfAtlasPage sdf = makeSdf();
-    const SharedImageSource image = makeImage();
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(sdf && image);
     ASSERT_TRUE(m_builder.prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
     const Rect rectangle{ 2.0f, 3.0f, 16.0f, 8.0f };
@@ -151,13 +171,21 @@ TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetAcceptsMixedSourcesAtC
 TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetOverflowIncludesEveryImageKind){
     FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
     for(usize index = 0u; index < glyphs.max_size(); ++index){
-        SharedGlyphPage glyph = makeGlyph(100u + index);
+        auto glyphCreationResult = makeGlyph(100u + index);
+        ASSERT_TRUE(glyphCreationResult);
+        SharedGlyphPage glyph = Move(*glyphCreationResult);
         ASSERT_TRUE(glyph);
         glyphs.push_back(Move(glyph));
     }
-    const SharedSdfAtlasPage sdf = makeSdf();
-    const SharedImageSource image = makeImage();
-    const SharedImageSource addition = makeImage("tests/ui/overflow_gpu_image", 73u);
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
+    auto additionResult = makeImage("tests/ui/overflow_gpu_image", 73u);
+    ASSERT_TRUE(additionResult);
+    const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(sdf && image && addition);
     ASSERT_TRUE(m_builder.prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
@@ -172,9 +200,15 @@ TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetOverflowIncludesEveryI
 }
 
 TEST_F(GpuTextureImageValidationFixture, NonImageCommandsCannotReferenceTextureBindings){
-    const SharedImageSource image = makeImage();
-    const SharedGlyphPage glyph = makeGlyph();
-    const SharedSdfAtlasPage sdf = makeSdf();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
+    auto glyphCreationResult = makeGlyph();
+    ASSERT_TRUE(glyphCreationResult);
+    const SharedGlyphPage glyph = Move(*glyphCreationResult);
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
     ASSERT_TRUE(image && glyph && sdf);
     const Rect rectangle{ 2.0f, 3.0f, 16.0f, 8.0f };
     const Rect uv{ 0.0f, 0.0f, 1.0f, 1.0f };
@@ -202,9 +236,15 @@ TEST_F(GpuTextureImageValidationFixture, NonImageCommandsCannotReferenceTextureB
 }
 
 TEST_F(GpuTextureImageValidationFixture, ImageCommandRejectsGlyphAndSdfMetadata){
-    const SharedImageSource image = makeImage();
-    const SharedGlyphPage glyph = makeGlyph();
-    const SharedSdfAtlasPage sdf = makeSdf();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
+    auto glyphCreationResult = makeGlyph();
+    ASSERT_TRUE(glyphCreationResult);
+    const SharedGlyphPage glyph = Move(*glyphCreationResult);
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
     ASSERT_TRUE(image && glyph && sdf);
     ASSERT_TRUE(m_builder.prepareImages(&glyph, 1u, &sdf, 1u, &image, 1u));
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
@@ -229,7 +269,9 @@ TEST_F(GpuTextureImageValidationFixture, ImageCommandRejectsGlyphAndSdfMetadata)
 }
 
 TEST_F(GpuTextureImageValidationFixture, UnknownMaterialRejectsCombinedImageValidation){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
     DrawSnapshot snapshot = m_builder.freeze();

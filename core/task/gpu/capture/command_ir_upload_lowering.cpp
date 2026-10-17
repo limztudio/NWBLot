@@ -51,7 +51,7 @@ GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBui
     return GpuCommandIrReplayError::StreamChangedDuringReplay;
 }
 
-bool LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList)noexcept{
+bool LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
     if(!blobBytes.data() || record.blobSizeBytes == 0u || record.blobOffsetBytes > static_cast<u64>(blobBytes.size()) || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes)
         return false;
     const void* const bytes = blobBytes.data() + static_cast<usize>(record.blobOffsetBytes);

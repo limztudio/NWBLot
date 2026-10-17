@@ -93,6 +93,8 @@ struct ReflectionDepthPyramidSnapshot{
     u32 sampledSlot = 0u;
     u32 sourceDepthSlot = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return texture && pipeline && mipCount > 0u && mipCount <= s_MaxMipCount;
     }
@@ -117,6 +119,8 @@ struct ReflectionFrameSnapshot{
     ReflectionFeedbackSnapshot feedback;
     u32 frameParametersSlot = 0u;
 
+
+public:
     [[nodiscard]] bool hasHardwareWork()const noexcept{ return parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u; }
 
     [[nodiscard]] bool valid()const noexcept{
@@ -128,7 +132,9 @@ struct ReflectionCsgDispatchState{
     ReflectionFrameSnapshot resources;
     Core::GpuTimingFrameTransaction timing;
 
-    ReflectionCsgDispatchState(const ReflectionFrameSnapshot& frame, Core::GpuTimingRecorder& recorder)
+
+public:
+    ReflectionCsgDispatchState(const ReflectionFrameSnapshot& frame, Core::GpuTimingRecorder& recorder)noexcept
         : resources(frame)
         , timing(recorder)
     {}
@@ -142,14 +148,14 @@ private:
 
 
 public:
-    RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);
+    RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept;
 
 
 public:
     // Caller joins submitted work and discards snapshots before teardown.
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, bool prepareCsgHardware, const ReflectionSettings& settings);
-    [[nodiscard]] ReflectionCsgDispatchHandle createCsgDispatchState(const ReflectionFrameSnapshot& resources)const;
+    [[nodiscard]] Expected<ReflectionCsgDispatchHandle> createCsgDispatchState(const ReflectionFrameSnapshot& resources)const;
     void pollStatistics();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
@@ -161,11 +167,13 @@ public:
         const ReflectionSceneContentStamp& stamp
     )const;
 
+
 private:
     void releaseTargets();
     [[nodiscard]] bool prepareQueue(u32 capacity);
     [[nodiscard]] bool prepareArguments(u32 capacity, bool sliced);
     [[nodiscard]] bool preparePipelines(bool prepareHardware, bool prepareCsgHardware);
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

@@ -10,6 +10,7 @@
 #include <core/crash/package_names.h>
 
 #include <global/environment.h>
+#include <global/error_code.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/thread.h>
@@ -203,10 +204,6 @@ bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGr
     return WriteBinaryFile(ArchivePath(arena, testGroup, stem), archive);
 }
 
-Expected<CrashTestBytes> BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory){
-    return Core::Crash::Detail::BuildPackageArchive(arena, packageDirectory);
-}
-
 Expected<CrashTestText, ErrorCode> ReadServerSymbolication(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
     CrashTestText report(arena);
     const auto result = ReadTextFile(ExtractedPackageDirectory(arena, testGroup, stem) / Log::s_ServerSymbolicationFileName, report);
@@ -267,19 +264,22 @@ static Expected<CrashTestPath> FindTriggerPackage(Core::Alloc::GlobalArena& aren
     return MakeUnexpected(Failure{});
 }
 
-Expected<CrashTestPath> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
+Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     constexpr u32 s_TimeoutMilliseconds = 3000u;
     constexpr u32 s_PollMilliseconds = 10u;
     const Timer deadline = TimerAddMS(TimerNow(), s_TimeoutMilliseconds);
     for(;;){
-        if(PathIsDirectory(pendingDirectory)){
+        const auto directory = IsDirectory(pendingDirectory);
+        if(!directory)
+            return MakeUnexpected(directory.error());
+        if(*directory){
             auto packageDirectory = FindTriggerPackage(arena, pendingDirectory, category, expression, message, file);
             if(packageDirectory)
                 return Move(*packageDirectory);
         }
         const Timer now = TimerNow();
         if(now >= deadline)
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::timed_out));
         const u32 remainingMilliseconds = static_cast<u32>(Max(DurationInMS<i64>(deadline, now), i64(1)));
         SleepMS(Min(s_PollMilliseconds, remainingMilliseconds));
     }
@@ -316,10 +316,11 @@ static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const C
 
 void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, const AStringView suffix){
     const auto outputPathText = ReadEnvironmentVariable(arena, "NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH");
-    if(!outputPathText || outputPathText->empty())
+    EXPECT_TRUE(outputPathText);
+    if(!outputPathText || !*outputPathText || (*outputPathText)->empty())
         return;
 
-    const CrashTestPath baseOutputPath(arena, AStringView(outputPathText->data(), outputPathText->size()));
+    const CrashTestPath baseOutputPath(arena, AStringView((*outputPathText)->data(), (*outputPathText)->size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
     EXPECT_TRUE(EnsureDirectories(outputPath.parentPath()));
     EXPECT_TRUE(WriteTextFile(outputPath, AStringView(report.data(), report.size())));

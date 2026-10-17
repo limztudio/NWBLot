@@ -40,31 +40,31 @@ u64 AppendInteger(u64 hash, const u64 value)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-WidgetId MakeRootId(const WidgetRoot& root)noexcept{
+Expected<WidgetId> MakeRootId(const WidgetRoot& root)noexcept{
     if(root.generation == 0u)
-        return {};
+        return MakeUnexpected(Failure{});
     u64 hash = __hidden_ui_id::AppendInteger(14695981039346656037ull, root.value);
     hash = __hidden_ui_id::AppendInteger(hash, root.generation);
-    return { hash == 0u ? 1u : hash };
+    return WidgetId{ hash == 0u ? 1u : hash };
 }
 
-WidgetId MakeWidgetId(const WidgetId parent, const AStringView stableKey)noexcept{
+Expected<WidgetId> MakeWidgetId(const WidgetId parent, const AStringView stableKey)noexcept{
     if(!parent.valid() || stableKey.empty())
-        return {};
+        return MakeUnexpected(Failure{});
     u64 hash = __hidden_ui_id::AppendInteger(14695981039346656037ull, parent.value);
     hash = __hidden_ui_id::AppendInteger(hash, stableKey.size());
     for(const char byte : stableKey)
         hash = __hidden_ui_id::Append(hash, static_cast<u8>(byte));
-    return { hash == 0u ? 1u : hash };
+    return WidgetId{ hash == 0u ? 1u : hash };
 }
 
-WidgetId MakeWidgetPartId(const WidgetId parent, const u64 stableKey)noexcept{
+Expected<WidgetId> MakeWidgetPartId(const WidgetId parent, const u64 stableKey)noexcept{
     if(!parent.valid() || stableKey == 0u)
-        return {};
+        return MakeUnexpected(Failure{});
     u64 hash = __hidden_ui_id::AppendInteger(14695981039346656037ull, parent.value);
     hash = __hidden_ui_id::AppendInteger(hash, 0u);
     hash = __hidden_ui_id::AppendInteger(hash, stableKey);
-    return { hash == 0u ? 1u : hash };
+    return WidgetId{ hash == 0u ? 1u : hash };
 }
 
 

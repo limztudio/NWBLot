@@ -318,11 +318,15 @@ TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
     ASSERT_TRUE(control);
     Core::GpuTaskGraph graph(arena);
     const auto rejected = control->plan(Stamp(), ReflectionSettings{}, 1u);
-    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionHistoryReservation(control, rejected)}).valid());
+    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionHistoryReservation(control, rejected)}).has_value());
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("tests.history.lease")).setMarkerLabel("History Lease");
     const auto pending = control->plan(Stamp(), ReflectionSettings{}, s_ExpectedDualCount);
-    ASSERT_TRUE(graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionHistoryReservation(control, pending)}).valid());
+    {
+        const auto gpuAdmissionAt322 = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionHistoryReservation(control, pending)});
+        ASSERT_TRUE(gpuAdmissionAt322);
+        ASSERT_TRUE(gpuAdmissionAt322->valid());
+    }
     graph.reset();
     const auto retry = control->plan(Stamp(), ReflectionSettings{}, 3u);
     EXPECT_TRUE(control->reserve(retry));

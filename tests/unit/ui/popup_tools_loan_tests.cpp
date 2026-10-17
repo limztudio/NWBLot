@@ -35,16 +35,16 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return m_rows.instanceGeneration(); }
-    [[nodiscard]] virtual u64 revision()const override{ return m_rows.revision(); }
-    [[nodiscard]] virtual u64 rowCount()const override{ return m_rows.rowCount(); }
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ return m_rows.key(index); }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return m_rows.indexOf(key); }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_rows.instanceGeneration(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return m_rows.revision(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_rows.rowCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_rows.key(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_rows.indexOf(key); }
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return m_rows.findEnabled(start, reverse);
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         ++textCalls;
         if(!armed){
             m_menuSource.closeComboOnRevision = &m_combo;
@@ -53,7 +53,7 @@ public:
         return m_rows.text(index);
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return m_rows.enabled(index); }
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return m_rows.enabled(index); }
 
 
 private:

@@ -11,6 +11,8 @@ target_sources(nwb_telemetry PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/perf.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/recorder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_log.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/frame_graph_statistics_codec_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/codec.h"
     "${CMAKE_CURRENT_LIST_DIR}/diagnostic.h"
     "${CMAKE_CURRENT_LIST_DIR}/event.h"

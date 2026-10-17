@@ -10,6 +10,8 @@
 #include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/widgets/numeric_edit.h>
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,7 +28,7 @@ public:
 
 
 public:
-    void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
+    void paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, f32 x, f32 y);
 
 
 private:

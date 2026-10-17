@@ -72,7 +72,7 @@ public:
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
 
-    virtual void update(Core::ECS::World& world, f32 delta)override;
+    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
 
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
@@ -80,17 +80,18 @@ public:
 
     void setRefractionEnabled(bool enabled)noexcept;
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
-    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings);
-    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings);
-    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
-    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);
-    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
+    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
+    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept;
+    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
+    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
+    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings)noexcept;
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
-    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
+    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings)noexcept;
     void setFrameLaggedAsyncLightingEnabled(bool enabled)noexcept;
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept;
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
+
 
 private:
     NotNullUniquePtr<RendererFramePipeline, PipelineOwner::deleter_type> m_pipeline;

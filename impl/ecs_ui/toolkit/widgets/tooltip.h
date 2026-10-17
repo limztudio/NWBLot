@@ -38,10 +38,10 @@ class TooltipState final : NoCopy{
 
 public:
     TooltipState()noexcept;
+    TooltipState(TooltipState&&) = delete;
 
 
 public:
-    TooltipState(TooltipState&&) = delete;
     TooltipState& operator=(TooltipState&&) = delete;
 
 

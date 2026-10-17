@@ -45,7 +45,9 @@ struct AvboitOccupancyRecordInputs : public AvboitRecordInputsBase{
     Core::GpuTimingSubmissionTicket* preTimingTicket = nullptr;
     Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr;
 
-    explicit AvboitOccupancyRecordInputs(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit AvboitOccupancyRecordInputs(Core::Alloc::GlobalArena& arena)noexcept
         : AvboitRecordInputsBase(arena){
     }
 };
@@ -61,11 +63,12 @@ struct AvboitOccupancyRecordResult{
 
 class AvboitOccupancyRecordBuilder final : NoCopy{
 public:
-    AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem);
+    AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept;
 
 
 public:
     [[nodiscard]] Expected<AvboitOccupancyRecordResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         ObjectGeometryCacheGraph& objectGeometry,

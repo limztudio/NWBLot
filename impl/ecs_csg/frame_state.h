@@ -57,6 +57,8 @@ struct CsgFrameState{
     u32 receiverCount = 0u;
     u32 cutterCount = 0u;
 
+
+public:
     [[nodiscard]] bool empty()const noexcept{ return !hasAnyWork; }
 };
 
@@ -100,6 +102,8 @@ private:
         u32 writtenCount = 0u;
     };
 
+
+private:
     using CutterRangeMap = HashMap<Name, CutterRangeEntry, Core::Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
     using CutterRefVector = Vector<CsgFrameCutterRef, Core::Alloc::ScratchArena>;
 
@@ -170,7 +174,7 @@ struct CsgResolvedReceiver{
 };
 
 [[nodiscard]] Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, Core::ECS::EntityID entity);
-void AddCsgFrameReceiverWork(CsgFrameState& inOutState, CsgReceiverKind::Enum receiverKind, bool opaqueWork, bool transparentWork, u32 cutterCount);
+void AddCsgFrameReceiverWork(CsgFrameState& inOutState, CsgReceiverKind::Enum receiverKind, bool opaqueWork, bool transparentWork, u32 cutterCount)noexcept;
 void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept;
 [[nodiscard]] CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc = CsgFrameBuildDesc{});
 

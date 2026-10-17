@@ -48,6 +48,9 @@ public:
     TangentFrameFixture() = delete;
     TangentFrameFixture(const TangentFrameFixture&) = delete;
     ~TangentFrameFixture() = delete;
+
+
+public:
     TangentFrameFixture& operator=(const TangentFrameFixture&) = delete;
 };
 

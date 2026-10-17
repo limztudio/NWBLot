@@ -28,13 +28,17 @@ struct OpaqueRegularComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
 
+
+public:
     DrawItemVector meshDrawItems;
     DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
     BufferVector outputBuffers;
     bool captured = false;
 
-    explicit OpaqueRegularComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit OpaqueRegularComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
         : meshDrawItems(arena)
         , indexedDrawItems(arena)
         , drawItems(arena)

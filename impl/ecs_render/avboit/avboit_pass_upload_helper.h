@@ -58,7 +58,7 @@ struct AvboitPassUploadResult{
 
 class AvboitPassUploadHelper final : NoCopy{
 public:
-    AvboitPassUploadHelper(RendererMaterialSystem& materialSystem);
+    AvboitPassUploadHelper(RendererMaterialSystem& materialSystem)noexcept;
 
 
 public:
@@ -70,7 +70,8 @@ public:
 #if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-        MaterialTypedByteDataVector& materialTypedBytes);
+        MaterialTypedByteDataVector& materialTypedBytes
+    );
 
 
 private:

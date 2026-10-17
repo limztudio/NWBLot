@@ -92,12 +92,20 @@ class WindowsProcessApi:
             capacity *= PROCESS_ENUM_CAPACITY_GROWTH_FACTOR
 
     def open_process(self, pid: int) -> Optional[WindowsProcessHandle]:
-        handle = self._kernel32.OpenProcess(PROCESS_QUERY_WAIT_AND_TERMINATE_ACCESS, False, pid)
-        if handle:
-            return WindowsProcessHandle(int(handle), True)
-
-        handle = self._kernel32.OpenProcess(PROCESS_QUERY_AND_WAIT_ACCESS, False, pid)
-        return WindowsProcessHandle(int(handle), False) if handle else None
+        handle = None
+        published = False
+        try:
+            handle = self._kernel32.OpenProcess(PROCESS_QUERY_WAIT_AND_TERMINATE_ACCESS, False, pid)
+            if handle:
+                result = WindowsProcessHandle(int(handle), True)
+            else:
+                handle = self._kernel32.OpenProcess(PROCESS_QUERY_AND_WAIT_ACCESS, False, pid)
+                result = WindowsProcessHandle(int(handle), False) if handle else None
+            published = True
+            return result
+        finally:
+            if handle and not published:
+                self._kernel32.CloseHandle(handle)
 
     def query_process_image_path(self, handle: WindowsProcessHandle) -> Optional[str]:
         buffer = ctypes.create_unicode_buffer(MAX_WINDOWS_IMAGE_PATH)

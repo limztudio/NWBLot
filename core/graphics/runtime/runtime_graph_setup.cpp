@@ -76,6 +76,7 @@ struct StandaloneTaskGraphRecoveryTask{
     };
 
 
+public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept{
         static_cast<void>(payload);
         static_cast<void>(commandList);
@@ -92,13 +93,14 @@ struct StandaloneTaskGraphTimingRetirementTask{
     };
 
 
+public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
         return !payload.frameTimingTransaction.needsRetirement() || payload.frameTimingTransaction.recordEnd(commandList);
     }
 };
 
-[[nodiscard]] static GpuTaskId DeclareStandaloneTaskGraphRecoveryTask(GpuTaskGraph& graph, GpuTimingFrameTransaction* const frameTimingTransaction){
+[[nodiscard]] static Expected<GpuTaskId> DeclareStandaloneTaskGraphRecoveryTask(GpuTaskGraph& graph, GpuTimingFrameTransaction* const frameTimingTransaction){
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
     scheduling.overlapPreferred = false;
@@ -108,37 +110,43 @@ struct StandaloneTaskGraphTimingRetirementTask{
     scheduling.isRecoverySubmission = true;
     GpuTaskDesc recoveryDesc;
     recoveryDesc.setIdentity(s_StandaloneTaskGraphRecoveryIdentity).setMarkerLabel("Standalone Task Graph Recovery").setScheduling(scheduling);
+    Expected<GpuTaskId> task = MakeUnexpected(Failure{});
     if(frameTimingTransaction == nullptr)
-        return graph.addTask<StandaloneTaskGraphRecoveryTask>(recoveryDesc, StandaloneTaskGraphRecoveryTask::Payload{});
-    return graph.addTask<StandaloneTaskGraphTimingRetirementTask>(recoveryDesc, StandaloneTaskGraphTimingRetirementTask::Payload{ *frameTimingTransaction });
+        task = graph.addTask<StandaloneTaskGraphRecoveryTask>(recoveryDesc, StandaloneTaskGraphRecoveryTask::Payload{});
+    else
+        task = graph.addTask<StandaloneTaskGraphTimingRetirementTask>(recoveryDesc, StandaloneTaskGraphTimingRetirementTask::Payload{ *frameTimingTransaction });
+    if(!task)
+        return MakeUnexpected(task.error());
+    return task;
 }
 
-[[nodiscard]] static GpuTaskId DeclareSetupUploadReadinessBridgeTasks(GpuTaskGraph& graph, GraphicsBackend::Device& device, const ResourceQueueSharing::Mask queueSharing, const CommandQueue::Enum directConsumerQueue, const GpuTaskId uploadTask){
+[[nodiscard]] static Expected<GpuTaskId> DeclareSetupUploadReadinessBridgeTasks(GpuTaskGraph& graph, GraphicsBackend::Device& device, const ResourceQueueSharing::Mask queueSharing, const CommandQueue::Enum directConsumerQueue, const GpuTaskId uploadTask){
     if(!uploadTask.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     GpuTaskId terminalTask = uploadTask;
-    constexpr CommandQueue::Enum consumerQueues[] = { CommandQueue::Graphics, CommandQueue::Compute, CommandQueue::Transfer, };
+    constexpr CommandQueue::Enum s_ConsumerQueues[] = { CommandQueue::Graphics, CommandQueue::Compute, CommandQueue::Transfer, };
     const auto appendBridge = [&graph, &device, uploadTask, &terminalTask](const CommandQueue::Enum consumerQueue){
         GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraphScheduling(0u);
         scheduling.overlapPreferred = false;
         GpuTaskDesc bridgeDesc;
         bridgeDesc.setIdentity(s_SetupUploadReadinessBridgeIdentity).setMarkerLabel("Setup Upload Readiness Bridge").setScheduling(scheduling).setDependencies(&uploadTask, 1u);
-        const GpuTaskId bridgeTask = graph.addTask<SetupUploadReadinessBridgeGraphTask>(bridgeDesc, SetupUploadReadinessBridgeGraphTask::Payload{ device.getPrimaryPhysicalQueue(consumerQueue) });
-        if(!bridgeTask.valid())
+        const auto bridgeTaskResult = graph.addTask<SetupUploadReadinessBridgeGraphTask>(bridgeDesc, SetupUploadReadinessBridgeGraphTask::Payload{ device.getPrimaryPhysicalQueue(consumerQueue) });
+        if(!bridgeTaskResult)
             return false;
+        const GpuTaskId bridgeTask = *bridgeTaskResult;
         terminalTask = bridgeTask;
         return true;
     };
-    for(const CommandQueue::Enum consumerQueue : consumerQueues){
+    for(const CommandQueue::Enum consumerQueue : s_ConsumerQueues){
         if(consumerQueue == directConsumerQueue || !ResourceQueueSharing::IncludesQueueClass(queueSharing, consumerQueue) || !device.getQueue(consumerQueue))
             continue;
         if(!appendBridge(consumerQueue))
-            return {};
+            return MakeUnexpected(Failure{});
     }
     // The returned resource is ready on its direct consumer timeline even when the scheduler offloads its producer.
     if(!device.getQueue(directConsumerQueue) || !appendBridge(directConsumerQueue))
-        return {};
+        return MakeUnexpected(Failure{});
     return terminalTask;
 }
 
@@ -151,13 +159,15 @@ struct SetupUploadSubmissionData{
     CommandQueue::Enum consumerQueue = CommandQueue::Graphics;
 };
 
-[[nodiscard]] static GpuTaskId DeclareSetupUploadGraph(void* const userData, GpuTaskGraph& graph){
+[[nodiscard]] static Expected<GpuTaskId> DeclareSetupUploadGraph(void* const userData, GpuTaskGraph& graph){
     auto& submissionData = *static_cast<SetupUploadSubmissionData*>(userData);
     if(!submissionData.declareTask)
-        return {};
+        return MakeUnexpected(Failure{});
 
-    const GpuTaskId uploadTask = submissionData.declareTask(submissionData.userData, graph);
-    return DeclareSetupUploadReadinessBridgeTasks(graph, submissionData.device, submissionData.queueSharing, submissionData.consumerQueue, uploadTask);
+    const auto uploadTask = submissionData.declareTask(submissionData.userData, graph);
+    if(!uploadTask)
+        return MakeUnexpected(uploadTask.error());
+    return DeclareSetupUploadReadinessBridgeTasks(graph, submissionData.device, submissionData.queueSharing, submissionData.consumerQueue, *uploadTask);
 }
 
 
@@ -169,6 +179,7 @@ struct FrameTimingResetGraphTask{
     };
 
 
+public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.timing)
@@ -203,11 +214,15 @@ struct FrameTimingResetSubmissionData{
     GpuTimingRecorder& timing;
 };
 
-[[nodiscard]] static GpuTaskId DeclareFrameTimingResetGraph(void* const userData, GpuTaskGraph& graph){
+[[nodiscard]] static Expected<GpuTaskId> DeclareFrameTimingResetGraph(void* const userData, GpuTaskGraph& graph){
     auto& submissionData = *static_cast<FrameTimingResetSubmissionData*>(userData);
     GpuTaskDesc resetDesc;
     resetDesc.setIdentity(s_FrameTimingResetIdentity).setMarkerLabel("Frame GPU-Timing Reset").setScheduling(FrameTimingResetScheduling());
-    return graph.addTask<FrameTimingResetGraphTask>(resetDesc, FrameTimingResetGraphTask::Payload{ .timing = &submissionData.timing, });
+    const auto taskResult = graph.addTask<FrameTimingResetGraphTask>(resetDesc, FrameTimingResetGraphTask::Payload{ .timing = &submissionData.timing, });
+    if(!taskResult)
+        return MakeUnexpected(Failure{});
+    const GpuTaskId task = *taskResult;
+    return task;
 }
 
 
@@ -321,9 +336,12 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     auto& device = graphics.getDevice();
 
     GpuTaskGraph graph(graphArena);
-    const GpuTaskId terminalTask = declareTask(userData, graph);
-    if(!terminalTask.valid())
+    const auto declaredTerminal = declareTask(userData, graph);
+    if(!declaredTerminal)
+        return MakeUnexpected(declaredTerminal.error());
+    if(!declaredTerminal->valid())
         return MakeUnexpected(Failure{});
+    const GpuTaskId terminalTask = *declaredTerminal;
     GpuTaskId frameTimingBeginTask;
     if(frameTimingTransaction){
         const GpuTaskGraph::DeclarationReadView declaredTasks(graph);
@@ -333,9 +351,10 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
         if(!frameTimingBeginTask.valid() || frameTimingBeginTask == terminalTask)
             return MakeUnexpected(Failure{});
     }
-    const GpuTaskId recoveryTask = __hidden_graphics_graph_setup::DeclareStandaloneTaskGraphRecoveryTask(graph, frameTimingTransaction);
-    if(!recoveryTask.valid())
-        return MakeUnexpected(Failure{});
+    const auto declaredRecovery = __hidden_graphics_graph_setup::DeclareStandaloneTaskGraphRecoveryTask(graph, frameTimingTransaction);
+    if(!declaredRecovery)
+        return MakeUnexpected(declaredRecovery.error());
+    const GpuTaskId recoveryTask = *declaredRecovery;
 
     GpuTaskGraphAnalysis analysis(graphArena);
     GpuTaskGraphQueueAssignments assignments(graphArena);

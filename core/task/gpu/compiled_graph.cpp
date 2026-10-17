@@ -86,6 +86,7 @@ void GpuCompiledGraph::CompilationScope::publish()noexcept{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void GpuCompiledGraph::clearAttemptBindingWithinLock()noexcept{
@@ -144,7 +145,7 @@ void GpuCompiledGraph::resetPlanStorageWithinPlanWriteScope()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
+GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)noexcept
     : m_tasks(arena)
     , m_compiledTaskIndexByTask(arena)
     , m_packets(arena)

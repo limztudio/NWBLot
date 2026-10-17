@@ -29,13 +29,13 @@ inline constexpr Name s_GpuTimingScratchArena("graphics.gpu_timing.scratch");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 AllocateMonotonicIdentity(Atomic<u64>& nextIdentity)noexcept{
+[[nodiscard]] static Expected<u64> AllocateMonotonicIdentity(Atomic<u64>& nextIdentity)noexcept{
     u64 identity = nextIdentity.load(MemoryOrder::relaxed);
     while(identity != Limit<u64>::s_Max){
         if(nextIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return identity;
     }
-    return 0u;
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -81,22 +81,25 @@ void GpuTimingRecorder::setQueryCollectionEnabled(const bool enabled){
     dispatchCompletedSamples(retiredSamples);
 }
 
-GpuTimingSampleAttribution GpuTimingRecorder::allocateSampleAttribution()noexcept{
-    return GpuTimingSampleAttribution(__hidden_gpu_timing::AllocateMonotonicIdentity(__hidden_gpu_timing::s_NextSampleAttributionIdentity));
+Expected<GpuTimingSampleAttribution> GpuTimingRecorder::allocateSampleAttribution()noexcept{
+    const auto identity = __hidden_gpu_timing::AllocateMonotonicIdentity(__hidden_gpu_timing::s_NextSampleAttributionIdentity);
+    if(!identity)
+        return MakeUnexpected(identity.error());
+    return GpuTimingSampleAttribution(*identity);
 }
 
-bool GpuTimingRecorder::queryCollectionEnabled()const{
-    ScopedLock lock(m_mutex);
+bool GpuTimingRecorder::queryCollectionEnabled()const noexcept{
+    NothrowScopedLock lock(m_mutex);
     return m_enabled;
 }
 
-bool GpuTimingRecorder::collectionActive()const{
-    ScopedLock lock(m_mutex);
+bool GpuTimingRecorder::collectionActive()const noexcept{
+    NothrowScopedLock lock(m_mutex);
     return (m_enabled && m_timing.enabled()) || !m_feedbackScopeDemands.empty();
 }
 
-GpuTimingRecorderStatistics GpuTimingRecorder::statistics(const Device& device)const{
-    ScopedLock lock(m_mutex);
+GpuTimingRecorderStatistics GpuTimingRecorder::statistics(const Device& device)const noexcept{
+    NothrowScopedLock lock(m_mutex);
     GpuTimingRecorderStatistics result = m_statistics;
     result.deviceGeneration = device.getDeviceGeneration();
     result.preparedScopeCount = static_cast<u64>(m_accumulators.size());
@@ -192,8 +195,8 @@ void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){
     dispatchCompletedSamples(completedSamples);
 }
 
-void GpuTimingRecorder::beginFrame(const u64 frameIndex){
-    ScopedLock lock(m_mutex);
+void GpuTimingRecorder::beginFrame(const u64 frameIndex)noexcept{
+    NothrowScopedLock lock(m_mutex);
     m_currentFrameIndex = frameIndex;
 }
 
@@ -203,12 +206,13 @@ bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device& devic
     if(!scopeName)
         return false;
 
-    GpuTimingAccumulator* accumulator = findOrCreateAccumulator(scopeName);
-    if(!accumulator)
+    const auto accumulatorResult = findOrCreateAccumulator(scopeName);
+    if(!accumulatorResult || !*accumulatorResult)
         return false;
 
-    accumulator->requestQueries(queryCount);
-    const bool materialized = accumulator->materializeRequestedQueries(device);
+    GpuTimingAccumulator& accumulator = ***accumulatorResult;
+    accumulator.requestQueries(queryCount);
+    const bool materialized = accumulator.materializeRequestedQueries(device);
     if(!materialized)
         ++m_statistics.queryMaterializationFailureCount;
     return materialized;
@@ -220,11 +224,12 @@ bool GpuTimingRecorder::requestScopeQueries(const Name& scopeName, const u32 que
     if(!scopeName)
         return false;
 
-    GpuTimingAccumulator* accumulator = findOrCreateAccumulator(scopeName);
-    if(!accumulator)
+    const auto accumulatorResult = findOrCreateAccumulator(scopeName);
+    if(!accumulatorResult || !*accumulatorResult)
         return false;
 
-    accumulator->requestQueries(queryCount);
+    GpuTimingAccumulator& accumulator = ***accumulatorResult;
+    accumulator.requestQueries(queryCount);
     return true;
 }
 
@@ -452,29 +457,29 @@ GpuTimingAccumulator* GpuTimingRecorder::findAccumulator(const GpuTimingScope& s
     return found != m_accumulators.end() ? found.value().get() : nullptr;
 }
 
-GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& scopeName){
+Expected<Optional<NotNull<GpuTimingAccumulator*>>> GpuTimingRecorder::findOrCreateAccumulator(const Name& scopeName){
     if(m_metricCorrelator.hasOutputRole(scopeName))
-        return nullptr;
+        return Optional<NotNull<GpuTimingAccumulator*>>{};
 
     auto found = m_accumulators.find(scopeName);
     if(found != m_accumulators.end())
-        return found.value().get();
+        return Optional<NotNull<GpuTimingAccumulator*>>(MakeNotNull(found.value().get()));
 
-    const Perf::TimingScopeId timingScope = m_timing.registerScope(scopeName);
-    if(!timingScope.valid())
-        return nullptr;
+    const auto timingScope = m_timing.registerScope(scopeName);
+    if(!timingScope)
+        return MakeUnexpected(timingScope.error());
 
-    AccumulatorPtr accumulator = MakeGlobalUnique<GpuTimingAccumulator>(m_arena, m_arena, scopeName, timingScope);
+    AccumulatorPtr accumulator = MakeGlobalUnique<GpuTimingAccumulator>(m_arena, m_arena, scopeName, *timingScope);
     if(!accumulator)
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto [it, inserted] = m_accumulators.try_emplace(scopeName, Move(accumulator));
     if(!inserted)
-        return it.value().get();
+        return Optional<NotNull<GpuTimingAccumulator*>>(MakeNotNull(it.value().get()));
 
     if(it.value()->setCaptureEnabled(m_performanceCollectionActive || feedbackScopeDemandedLocked(scopeName), m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
         m_pendingAttributionRetirements = true;
-    return it.value().get();
+    return Optional<NotNull<GpuTimingAccumulator*>>(MakeNotNull(it.value().get()));
 }
 
 bool GpuTimingRecorder::collectLocked(Device& device, const u64 subscriptionIdentityLimit, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena){

@@ -47,6 +47,11 @@ struct AllocationLayout{
     usize spanBytes = 0u;
 };
 
+struct FreeBlockSelection{
+    Block* block = nullptr;
+    AllocationLayout layout;
+};
+
 
 static_assert(alignof(Block) <= alignof(MaxAlign), "PersistentArena block alignment must fit CoreAlloc storage");
 static_assert(sizeof(Block) % s_BlockAlignment == 0u, "PersistentArena block headers must preserve physical alignment");
@@ -65,42 +70,27 @@ static_assert(alignof(FreeLinks) <= alignof(MaxAlign), "PersistentArena free lin
     return AlignUp(sizeof(FreeLinks), s_BlockAlignment);
 }
 
-class PersistentArenaScopedLock final : NoCopy{
-public:
-    NWB_INLINE explicit PersistentArenaScopedLock(MallocMutex& mutex)noexcept
-        : m_mutex(mutex)
-    {
-        if(!m_mutex.try_lock())
-            m_mutex.lock();
-    }
-    NWB_INLINE ~PersistentArenaScopedLock()noexcept{ m_mutex.unlock(); }
-
-
-private:
-    MallocMutex& m_mutex;
-};
-
-[[nodiscard]] inline u8* BlockData(Block& block)noexcept{
-    return reinterpret_cast<u8*>(&block) + sizeof(Block);
+[[nodiscard]] inline NotNull<u8*> BlockData(Block& block)noexcept{
+    return MakeNotNull(reinterpret_cast<u8*>(&block) + sizeof(Block));
 }
 
-[[nodiscard]] inline const u8* BlockData(const Block& block)noexcept{
-    return reinterpret_cast<const u8*>(&block) + sizeof(Block);
+[[nodiscard]] inline NotNull<const u8*> BlockData(const Block& block)noexcept{
+    return MakeNotNull(reinterpret_cast<const u8*>(&block) + sizeof(Block));
 }
 
 [[nodiscard]] inline FreeLinks& Links(Block& block)noexcept{
-    return *reinterpret_cast<FreeLinks*>(BlockData(block));
+    return *reinterpret_cast<FreeLinks*>(BlockData(block).get());
 }
 
-[[nodiscard]] inline Block* BlockFromAllocation(void* const p)noexcept{
+[[nodiscard]] inline Block* BlockFromAllocation(NotNull<void*> p)noexcept{
     Block* block = nullptr;
-    NWB_MEMCPY(&block, sizeof(block), static_cast<u8*>(p) - sizeof(block), sizeof(block));
+    NWB_MEMCPY(&block, sizeof(block), static_cast<u8*>(p.get()) - sizeof(block), sizeof(block));
     return block;
 }
 
-inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
+inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
     Block* const blockPtr = &block;
-    NWB_MEMCPY(static_cast<u8*>(p) - sizeof(blockPtr), sizeof(blockPtr), &blockPtr, sizeof(blockPtr));
+    NWB_MEMCPY(static_cast<u8*>(p.get()) - sizeof(blockPtr), sizeof(blockPtr), &blockPtr, sizeof(blockPtr));
 }
 
 [[nodiscard]] inline bool IsLiveBlock(const void* const bucket, const usize bucketSize, const Block* const block)noexcept{
@@ -116,7 +106,7 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
 }
 
 [[nodiscard]] inline Expected<AllocationLayout> BuildAllocationLayout(const Block& block, const usize alignment, const usize requestedBytes)noexcept{
-    const usize dataAddress = reinterpret_cast<usize>(BlockData(block));
+    const usize dataAddress = reinterpret_cast<usize>(BlockData(block).get());
     if(AddOverflows<usize>(dataAddress, sizeof(Block*)))
         return MakeUnexpected(Failure{});
 
@@ -156,7 +146,7 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
 }
 
 [[nodiscard]] inline Expected<AllocationLayout> BuildExistingPointerLayout(const Block& block, void* const p, const usize requestedBytes)noexcept{
-    const usize dataAddress = reinterpret_cast<usize>(BlockData(block));
+    const usize dataAddress = reinterpret_cast<usize>(BlockData(block).get());
     const usize pointerAddress = reinterpret_cast<usize>(p);
     if(pointerAddress < dataAddress || pointerAddress - dataAddress < sizeof(Block*))
         return MakeUnexpected(Failure{});
@@ -174,12 +164,12 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
     return AllocationLayout{ .userOffset = userOffset, .spanBytes = spanBytes, };
 }
 
-[[nodiscard]] inline Block* CreateBlock(void* const address, const usize spanBytes, Block* const previous, Block* const next, const bool isFree)noexcept{
-    return new(address) Block{ .spanBytes = spanBytes, .requestedBytes = 0u, .previous = previous, .next = next, .isFree = isFree, };
+[[nodiscard]] inline Block& CreateBlock(NotNull<void*> address, const usize spanBytes, Block* const previous, Block* const next, const bool isFree)noexcept{
+    return *new(address.get()) Block{ .spanBytes = spanBytes, .requestedBytes = 0u, .previous = previous, .next = next, .isFree = isFree, };
 }
 
 inline void InitializeLinks(Block& block, Block* const previous, Block* const next)noexcept{
-    new(BlockData(block)) FreeLinks{ .previous = previous, .next = next, };
+    new(BlockData(block).get()) FreeLinks{ .previous = previous, .next = next, };
 }
 
 inline void InsertFreeBlock(void*& freeHead, Block& block)noexcept{
@@ -223,17 +213,17 @@ inline void SplitUsedBlock(void*& freeHead, Block& block, const usize requestedS
         return;
 
     Block* const oldNext = block.next;
-    Block* const tail = CreateBlock(BlockData(block) + requestedSpan, remainder - sizeof(Block), &block, oldNext, true);
+    Block& tail = CreateBlock(MakeNotNull(static_cast<void*>(BlockData(block).get() + requestedSpan)), remainder - sizeof(Block), &block, oldNext, true);
     block.spanBytes = requestedSpan;
-    block.next = tail;
+    block.next = &tail;
     if(oldNext)
-        oldNext->previous = tail;
+        oldNext->previous = &tail;
 
     if(oldNext && oldNext->isFree){
         RemoveFreeBlock(freeHead, *oldNext);
-        MergeNextBlock(*tail, *oldNext);
+        MergeNextBlock(tail, *oldNext);
     }
-    InsertFreeBlock(freeHead, *tail);
+    InsertFreeBlock(freeHead, tail);
 }
 
 inline void CoalesceFreeBlocks(void*& freeHead, Block* block)noexcept{
@@ -254,11 +244,6 @@ inline void CoalesceFreeBlocks(void*& freeHead, Block* block)noexcept{
         block = block->next;
     }
 }
-
-struct FreeBlockSelection{
-    Block* block = nullptr;
-    AllocationLayout layout;
-};
 
 [[nodiscard]] inline Expected<FreeBlockSelection> FindFreeBlock(void* const freeHead, const usize alignment, const usize requestedBytes)noexcept{
     const bool normalAlignment = alignment == s_BlockAlignment;
@@ -335,11 +320,11 @@ PersistentArena::PersistentArena(const Name& allocationLog, const usize maxSize)
     if(managedBytes < sizeof(__hidden_persistent::Block) + __hidden_persistent::MinimumFreeSpan())
         return;
 
-    auto* const first = __hidden_persistent::CreateBlock(m_bucket, managedBytes - sizeof(__hidden_persistent::Block), nullptr, nullptr, true);
-    __hidden_persistent::InsertFreeBlock(m_freeHead, *first);
+    auto& first = __hidden_persistent::CreateBlock(MakeNotNull(m_bucket), managedBytes - sizeof(__hidden_persistent::Block), nullptr, nullptr, true);
+    __hidden_persistent::InsertFreeBlock(m_freeHead, first);
 }
 
-PersistentArena::~PersistentArena(){
+PersistentArena::~PersistentArena()noexcept{
     CoreFree(m_bucket);
     m_bucket = nullptr;
     m_freeHead = nullptr;
@@ -356,14 +341,14 @@ void* PersistentArena::allocate(const usize align, usize size){
         return nullptr;
     }
 
-    __hidden_persistent::PersistentArenaScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
 
     const auto allocation = allocateLocked(align, size);
     if(!allocation)
         return nullptr;
-    const auto* const allocatedBlock = static_cast<__hidden_persistent::Block*>(allocation->block);
+    const auto* const allocatedBlock = static_cast<__hidden_persistent::Block*>(allocation->block.get());
     m_memoryStats.recordAllocation(static_cast<u64>(allocatedBlock->spanBytes));
-    return allocation->pointer;
+    return allocation->pointer.get();
 }
 
 void* PersistentArena::reallocate(void* const p, const usize align, usize size){
@@ -371,9 +356,9 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     if(!p)
         return size != 0u ? allocate(align, size) : nullptr;
 
-    __hidden_persistent::PersistentArenaScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
 
-    auto* const block = __hidden_persistent::BlockFromAllocation(p);
+    auto* const block = __hidden_persistent::BlockFromAllocation(MakeNotNull(p));
     const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, block);
     NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena reallocation must reference a live block from this arena"));
     if(!liveBlock)
@@ -381,7 +366,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
 
     const u64 oldSpanBytes = static_cast<u64>(block->spanBytes);
     if(size == 0u){
-        deallocateBlockLocked(block);
+        deallocateBlockLocked(MakeNotNull(static_cast<void*>(block)));
         m_memoryStats.recordReallocation(oldSpanBytes, 0u);
         return nullptr;
     }
@@ -427,29 +412,29 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     if(!replacement)
         return nullptr;
 
-    auto* const replacementBlock = static_cast<__hidden_persistent::Block*>(replacement->block);
-    NWB_MEMCPY(replacement->pointer, replacementBlock->requestedBytes, p, copyBytes);
-    deallocateBlockLocked(block);
+    auto* const replacementBlock = static_cast<__hidden_persistent::Block*>(replacement->block.get());
+    NWB_MEMCPY(replacement->pointer.get(), replacementBlock->requestedBytes, p, copyBytes);
+    deallocateBlockLocked(MakeNotNull(static_cast<void*>(block)));
     m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(replacementBlock->spanBytes));
-    return replacement->pointer;
+    return replacement->pointer.get();
 }
 
-void PersistentArena::deallocate(void* const p, const usize align, const usize size){
+void PersistentArena::deallocate(void* const p, const usize align, const usize size)noexcept{
     static_cast<void>(align);
     static_cast<void>(size);
     if(!p)
         return;
 
-    __hidden_persistent::PersistentArenaScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
 
-    auto* const block = __hidden_persistent::BlockFromAllocation(p);
+    auto* const block = __hidden_persistent::BlockFromAllocation(MakeNotNull(p));
     const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, block);
     NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena deallocation must reference a live block from this arena"));
     if(!liveBlock)
         return;
 
     m_memoryStats.recordDeallocation(static_cast<u64>(block->spanBytes));
-    deallocateBlockLocked(block);
+    deallocateBlockLocked(MakeNotNull(static_cast<void*>(block)));
 }
 
 
@@ -468,13 +453,13 @@ Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usiz
     __hidden_persistent::RemoveFreeBlock(m_freeHead, *selected);
     __hidden_persistent::SplitUsedBlock(m_freeHead, *selected, selectedLayout.spanBytes);
     selected->requestedBytes = size;
-    void* const p = __hidden_persistent::BlockData(*selected) + selectedLayout.userOffset;
-    __hidden_persistent::StoreBlockForAllocation(p, *selected);
-    return Allocation{ .pointer = p, .block = selected };
+    void* const p = __hidden_persistent::BlockData(*selected).get() + selectedLayout.userOffset;
+    __hidden_persistent::StoreBlockForAllocation(MakeNotNull(p), *selected);
+    return Allocation{ .pointer = MakeNotNull(p), .block = MakeNotNull(static_cast<void*>(selected)) };
 }
 
-void PersistentArena::deallocateBlockLocked(void* const blockPointer)noexcept{
-    auto* const block = static_cast<__hidden_persistent::Block*>(blockPointer);
+void PersistentArena::deallocateBlockLocked(NotNull<void*> blockPointer)noexcept{
+    auto* const block = static_cast<__hidden_persistent::Block*>(blockPointer.get());
     block->requestedBytes = 0u;
     // Keep exact blocks for reuse; coalesce only when a request needs it.
     block->isFree = true;

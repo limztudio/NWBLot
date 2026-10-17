@@ -66,8 +66,8 @@ AStringView NodeDisplayName(const ufbx_node* node)noexcept{
     return AStringView(node->name.data, node->name.length);
 }
 
-Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context){
-    UtilityVector<u16> outClusterJoints;
+Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context, Core::Alloc::ScratchArena& scratchArena){
+    ::Vector<u16, Core::Alloc::ScratchArena> outClusterJoints(scratchArena);
     if(!skin){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
         return MakeUnexpected(Failure{});
@@ -89,7 +89,6 @@ Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, 
     context.joints.reserve(reservedJointCount);
     context.bindPoseMatrices.reserve(reservedJointCount);
     context.inverseBindMatrices.reserve(reservedJointCount);
-    context.jointLookup.reserve(reservedJointCount);
     outClusterJoints.reserve(skin->clusters.count);
     const f64 inverseScale = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(s_UniformScaleNumerator), VectorDoubleReplicate(options.scale)));
     ufbx_matrix meshFromOutput = {};
@@ -150,14 +149,18 @@ Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, 
         context.joints.push_back(cluster->bone_node);
         context.bindPoseMatrices.push_back(storedBindPose);
         context.inverseBindMatrices.push_back(storedInverseBind);
-        context.jointLookup.emplace(cluster->bone_node, joint);
+        const auto inserted = context.jointLookup.emplace(cluster->bone_node, joint);
+        if(!inserted.second){
+            NWB_ASSERT(false);
+            return MakeUnexpected(Failure{});
+        }
         outClusterJoints.push_back(joint);
     }
 
     return outClusterJoints;
 }
 
-Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const UtilityVector<u16>& clusterJoints, const u32 logicalVertex){
+Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const Span<const u16> clusterJoints, const u32 logicalVertex){
     SkinInfluenceCalculation result{ VectorZero(), VectorZero() };
     if(!skin || logicalVertex >= skin->vertices.count){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer does not contain weights for every logical vertex"));

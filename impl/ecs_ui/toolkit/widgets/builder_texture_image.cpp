@@ -25,7 +25,7 @@ bool Builder::image(const AStringView stableKey, const SharedImageSource& source
         return true;
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::Image);
+    const auto widget = m_context.declare(stableKey, WidgetKind::Image);
     ImageFrame frame;
     frame.source = source;
     frame.options = options;
@@ -39,7 +39,7 @@ bool Builder::image(const AStringView stableKey, const SharedImageSource& source
         return false;
     }
     frame.metrics = *metrics;
-    return publishImageFrame(*widget, Move(frame));
+    return publishImageFrame(**widget, Move(frame));
 }
 
 

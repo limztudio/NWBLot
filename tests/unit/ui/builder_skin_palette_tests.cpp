@@ -19,7 +19,7 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
-[[nodiscard]] static UiSkinPalette MakePalette(const f32 offset){
+[[nodiscard]] static UiSkinPalette MakePalette(const f32 offset)noexcept{
     UiSkinPalette palette;
     for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
         const f32 value = offset + static_cast<f32>(index) * 0.02f;

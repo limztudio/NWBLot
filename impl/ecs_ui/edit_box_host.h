@@ -35,7 +35,9 @@ struct UiEditBoxGeometry{
     u64 modelGeneration = 0u;
     Ui::EditTextMode::Enum textMode = Ui::EditTextMode::SingleLine;
 
-    explicit UiEditBoxGeometry(Core::Alloc::GlobalArena& arena) : stops(arena), lines(arena){}
+
+public:
+    explicit UiEditBoxGeometry(Core::Alloc::GlobalArena& arena)noexcept : stops(arena), lines(arena){}
 };
 
 namespace UiEditBoxEventKind{
@@ -75,7 +77,9 @@ private:
         bool navigationResetPending = false;
         Core::TextInputSessionToken rejectedNative;
 
-        explicit Entry(Core::Alloc::GlobalArena& arena) : expected(arena), candidate(arena), displayed(arena){}
+
+    public:
+        explicit Entry(Core::Alloc::GlobalArena& arena)noexcept : expected(arena), candidate(arena), displayed(arena){}
     };
 
     struct Event{
@@ -103,7 +107,9 @@ private:
         bool completed = false;
         bool wordSelect = false;
 
-        explicit Event(Core::Alloc::GlobalArena& arena) : native(arena){}
+
+    public:
+        explicit Event(Core::Alloc::GlobalArena& arena)noexcept : native(arena){}
     };
 
 
@@ -118,7 +124,8 @@ public:
     [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions)override;
     [[nodiscard]] virtual Ui::EditBoxResult editNavigated(const Ui::WidgetState& widget, Ui::EditModel& model,
         const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
-        Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions)override;
+        Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
+    )override;
     [[nodiscard]] virtual bool publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
     void beginFrame(u64 generation, const Ui::DisplayMetrics& display);
     void finishFrame();

@@ -14,6 +14,7 @@
 #include <impl/assets_texture/loader.h>
 #include <impl/ecs_ui/toolkit/text/glyph_page.h>
 
+#include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/presentation_contributor.h>
 #include <core/task/gpu/task_graph.h>
@@ -70,6 +71,11 @@ static_assert(s_SdfDistanceEncodingFreeTypeU8 == NWB_UI_SDF_DISTANCE_ENCODING_FR
 inline constexpr usize s_GpuMaxGlyphPages = s_PaintMaxImages;
 inline constexpr usize s_GpuMaxSdfPages = s_PaintMaxImages;
 inline constexpr usize s_GpuMaxTextureImages = s_PaintMaxImages;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyphPages + 4u>;
 using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxGlyphPages>;
 using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxSdfPages>;
@@ -80,8 +86,11 @@ template<typename T>
 using GpuVersion = RefCountPtr<RefCounter<T>, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>>;
 
 template<typename T, typename... Args>
-[[nodiscard]] GpuVersion<T> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args){
-    return GpuVersion<T>(NewArenaObject<RefCounter<T>>(arena, Forward<Args>(args)...), ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+[[nodiscard]] Expected<GpuVersion<T>> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args){
+    auto* const value = NewArenaObject<RefCounter<T>>(arena, Forward<Args>(args)...);
+    if(!value)
+        return MakeUnexpected(Failure{});
+    return GpuVersion<T>(value, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 
@@ -94,6 +103,7 @@ struct GpuSkinVersion : NoCopy{
     TextureGpuResource m_texture;
 
 
+public:
     explicit GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept;
     ~GpuSkinVersion()noexcept;
 };
@@ -106,6 +116,7 @@ struct GpuGlyphVersion : NoCopy{
     Core::QueueSubmissionToken m_readinessToken;
 
 
+public:
     GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPage page)noexcept;
     ~GpuGlyphVersion()noexcept;
 };
@@ -118,6 +129,7 @@ struct GpuTargetVersion : NoCopy{
     Core::QueueSubmissionToken m_readinessToken;
 
 
+public:
     explicit GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept;
     ~GpuTargetVersion()noexcept;
 };
@@ -137,6 +149,7 @@ struct GpuSharedResources : NoCopy{
     Core::GpuDescriptorHandle m_samplerDescriptor;
 
 
+public:
     explicit GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept;
     ~GpuSharedResources()noexcept;
 };
@@ -165,7 +178,8 @@ struct GpuFrameData : NoCopy{
     bool m_prepared = false;
 
 
-    GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin);
+public:
+    GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept;
 
 
 public:
@@ -193,6 +207,8 @@ struct GpuRasterGeometry{
     SIMDVectorSingle pixelScale;
     SIMDVectorSingle targetSize;
 
+
+public:
     GpuRasterGeometry(const DisplayMetrics& display, const Core::TextureDesc& target)noexcept
         : pixelScale(VectorSet(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY))
         , targetSize(VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height), static_cast<f32>(target.width), static_cast<f32>(target.height)))
@@ -200,13 +216,16 @@ struct GpuRasterGeometry{
 
 
 public:
-    [[nodiscard]] bool initializePushConstants(GpuPaintPushConstants& push, const u32 samplerSlot)const noexcept{
+    [[nodiscard]] Expected<GpuPaintPushConstants> initializePushConstants(const u32 samplerSlot)const noexcept{
         const SIMDVectorSingle projection = VectorMultiply(VectorSet(2.0f, -2.0f, 2.0f, -2.0f), pixelScale);
         const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
+        GpuPaintPushConstants push;
         push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
         push.translate = { -1.0f, 1.0f };
         push.samplerSlot = samplerSlot;
-        return IsFinite(push.scale.x) && IsFinite(push.scale.y);
+        if(!IsFinite(push.scale.x) || !IsFinite(push.scale.y))
+            return MakeUnexpected(Failure{});
+        return push;
     }
 
     [[nodiscard]] Optional<Core::Rect> scissor(const DrawCommand& draw)const noexcept{
@@ -275,6 +294,9 @@ struct GpuRasterTask{
         GpuSdfGraphResources sdfPages;
         GpuTextureGraphResources textureImages;
     };
+
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 };
@@ -290,6 +312,9 @@ struct GpuOutputTask{
         Core::GraphicsPipelineHandle pipeline;
         u32 presentationMode = NWB_UI_PRESENTATION_SDR;
     };
+
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 };
@@ -337,14 +362,14 @@ public:
 
 public:
     [[nodiscard]] bool createResources();
-    [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
-    [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
+    [[nodiscard]] Expected<GpuVersion<GpuTargetVersion>> createTarget(u32 width, u32 height);
+    [[nodiscard]] Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(const SharedGlyphPage& page);
     [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
     [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    [[nodiscard]] GpuVersion<GpuSdfAtlasVersion> prepareSdfPage(const SharedSdfAtlasPage& page);
+    [[nodiscard]] Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page);
     [[nodiscard]] bool prepareSdfPages(GpuFrameData& frame);
     [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
-    [[nodiscard]] GpuVersion<GpuTextureImageVersion> prepareTextureImage(const SharedImageSource& source);
+    [[nodiscard]] Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(const SharedImageSource& source);
     [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
     [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     void trimImageCache(const DrawSnapshot& snapshot);
@@ -353,7 +378,7 @@ public:
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer);
-    [[nodiscard]] Core::GpuTaskId declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
 };
 
 

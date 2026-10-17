@@ -69,7 +69,7 @@ TEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead
     ASSERT_EQ(publications.request(source), UiClipboardPublicationStatus::Pending);
     source.assign("changed");
     const auto read = service.requestReadText(ClipboardChannel::Clipboard);
-    ASSERT_EQ(read.admission, ClipboardAdmission::Accepted);
+    ASSERT_TRUE(read);
     ASSERT_TRUE(service.pump());
     EXPECT_EQ(service.startedOperation, ClipboardOperation::WriteText);
     EXPECT_EQ(service.startedText, "copied");
@@ -77,14 +77,14 @@ TEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead
     ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::Success));
     ASSERT_TRUE(service.pump());
     EXPECT_EQ(service.startedOperation, ClipboardOperation::ReadText);
-    EXPECT_EQ(service.startedToken, read.token);
-    ASSERT_TRUE(service.deliver(read.token, ClipboardStatus::Success, "copied"));
+    EXPECT_EQ(service.startedToken, *read);
+    ASSERT_TRUE(service.deliver(*read, ClipboardStatus::Success, "copied"));
     const auto result = publications.drain();
     EXPECT_EQ(result.status, UiClipboardPublicationStatus::Published);
     EXPECT_EQ(result.published, 1u);
     EXPECT_EQ(publications.pending(), 0u);
     ClipboardCompletion completion(arena.arena);
-    ASSERT_EQ(service.poll(read.token, completion), ClipboardPollResult::Completed);
+    ASSERT_EQ(service.poll(*read, completion), ClipboardPollResult::Completed);
     EXPECT_EQ(completion.text, "copied");
 }
 
@@ -150,7 +150,8 @@ TEST(UiClipboardPublications, AnotherThreadCannotRequestDrainOrCancelOwnedPublic
         requested = publications.request("other");
         drained = publications.drain().status;
         cancelled = publications.cancel();
-    });
+    }
+    );
     other.join();
     EXPECT_EQ(requested, UiClipboardPublicationStatus::WrongThread);
     EXPECT_EQ(drained, UiClipboardPublicationStatus::WrongThread);

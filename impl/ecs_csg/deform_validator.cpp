@@ -25,7 +25,8 @@ bool CsgDeformValidator::FiniteFloat(const f32 value)noexcept{
 }
 
 bool CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle uv0, const SIMDVectorSingle color)noexcept{
-    return VectorIsFinite(position, VectorComponentMask::s_XYZ)
+    return
+        VectorIsFinite(position, VectorComponentMask::s_XYZ)
         && VectorIsFinite(normal, VectorComponentMask::s_XYZW)
         && VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
         && VectorIsFinite(uv0, VectorComponentMask::s_XY)

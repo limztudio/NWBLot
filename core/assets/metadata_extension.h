@@ -43,6 +43,8 @@ public:
         , m_destroy(destroy)
     {}
 
+
+public:
     void operator()(void* value)const noexcept{
         m_destroy.get()(*m_arena, value);
     }

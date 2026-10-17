@@ -41,7 +41,8 @@ static void Append(ShapedRun& run, const SharedFontFace& face, const PaintVector
     for(usize index = begin; index < end; ++index){
         const RawShapedGlyph& glyph = glyphs[index];
         run.glyphs.push_back({ face, glyph.glyphId, glyph.byteBegin, glyph.byteEnd,
-            glyph.offset, glyph.advance, glyph.ink, glyph.coverage });
+            glyph.offset, glyph.advance, glyph.ink, glyph.coverage }
+        );
     }
 }
 
@@ -55,7 +56,7 @@ static void Append(ShapedRun& run, const SharedFontFace& face, const PaintVector
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextShaper::TextShaper(Core::Alloc::GlobalArena& arena)
+TextShaper::TextShaper(Core::Alloc::GlobalArena& arena)noexcept
     : m_arena(arena)
     , m_fonts(arena)
     , m_primary(arena)
@@ -63,7 +64,7 @@ TextShaper::TextShaper(Core::Alloc::GlobalArena& arena)
     , m_spans(arena)
 {}
 
-bool TextShaper::setFonts(const FontSource* sources, usize count){
+bool TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
     if(!sources || count == 0u || count > 8u)
         return false;
     PaintVector<SharedFontFace> fonts(m_arena);
@@ -72,7 +73,7 @@ bool TextShaper::setFonts(const FontSource* sources, usize count){
         const FontSource& source = sources[index];
         if(!source.identity.valid() || source.generation == 0u || !source.font.validatePayload())
             return false;
-        SharedFontFace face = MakeFontFace(m_arena, source);
+        SharedFontFace face = MakeFontFace(scratchArena, m_arena, source);
         if(!face || !face->valid())
             return false;
         fonts.push_back(Move(face));

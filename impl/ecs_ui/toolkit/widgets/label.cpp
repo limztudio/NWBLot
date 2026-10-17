@@ -28,12 +28,12 @@ TextLayoutStatus::Enum Label::setText(const ShapeRequest& request){
     const TextLayoutStatus::Enum status = ValidateTextRequest(request, true);
     if(status != TextLayoutStatus::Success)
         return status;
+    m_dirty = true;
     m_text.assign(request.text.data(), request.text.size());
     m_language.assign(request.language.data(), request.language.size());
     m_fontSize = request.fontSize;
     m_scriptTag = request.scriptTag;
     m_direction = request.direction;
-    m_dirty = true;
     return TextLayoutStatus::Success;
 }
 

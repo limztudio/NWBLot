@@ -74,20 +74,20 @@ u64 QueuedTextInputService::surroundingRevision(const TextInputSessionToken toke
     return isOwnerThread() && token.valid() && token == m_activeToken ? m_surroundingRevision : 0u;
 }
 
-TextInputBeginResult QueuedTextInputService::begin(const TextInputSessionDesc& desc){
+Expected<TextInputSessionToken, TextInputAdmission::Enum> QueuedTextInputService::begin(const TextInputSessionDesc& desc){
     if(!isOwnerThread())
-        return { .token = {}, .admission = TextInputAdmission::WrongThread };
+        return MakeUnexpected(TextInputAdmission::WrongThread);
     if(m_transitioning || m_activeToken.valid())
-        return { .token = {}, .admission = TextInputAdmission::Busy };
+        return MakeUnexpected(TextInputAdmission::Busy);
     if(!capabilities().commit)
-        return { .token = {}, .admission = TextInputAdmission::Unsupported };
+        return MakeUnexpected(TextInputAdmission::Unsupported);
     if(!m_focused)
-        return { .token = {}, .admission = TextInputAdmission::Unavailable };
+        return MakeUnexpected(TextInputAdmission::Unavailable);
     if(!IsTextInputCaretRectValid(desc.caret))
-        return { .token = {}, .admission = TextInputAdmission::InvalidRange };
+        return MakeUnexpected(TextInputAdmission::InvalidRange);
     const TextInputAdmission::Enum validation = __hidden_text_input_service::ValidateSurrounding(desc.surrounding, desc.anchorByte, desc.caretByte);
     if(validation != TextInputAdmission::Accepted)
-        return { .token = {}, .admission = validation };
+        return MakeUnexpected(validation);
     if(m_nextGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
 
@@ -109,11 +109,11 @@ TextInputBeginResult QueuedTextInputService::begin(const TextInputSessionDesc& d
         invalidateSession();
         clearEvents();
         endNativeSession(token);
-        return { .token = {}, .admission = admission };
+        return MakeUnexpected(admission);
     }
     if(m_activeToken != token)
-        return { .token = {}, .admission = TextInputAdmission::Unavailable };
-    return { .token = token, .admission = TextInputAdmission::Accepted };
+        return MakeUnexpected(TextInputAdmission::Unavailable);
+    return token;
 }
 
 bool QueuedTextInputService::end(const TextInputSessionToken token){

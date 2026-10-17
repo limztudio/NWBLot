@@ -39,7 +39,7 @@ SdfAtlasPage::SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedSdfAtlasPage CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels){
+Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels){
     if(
         !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
         || binding.index >= s_FontAtlasMaxGroupCount || binding.width == 0u || binding.height == 0u
@@ -49,17 +49,20 @@ SharedSdfAtlasPage CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const Sdf
         || binding.distanceEncoding != s_SdfDistanceEncodingFreeTypeU8
         || pixels.size() != static_cast<usize>(binding.width) * binding.height * binding.channelCount
     )
-        return {};
+        return MakeUnexpected(Failure{});
     SdfAtlasPageBinding immutable = binding;
     immutable.pixelsSha256 = ComputeSha256(BinaryByteView(pixels.data(), pixels.size()));
-    return SharedSdfAtlasPage(NewArenaObject<RefCounter<SdfAtlasPage>>(arena, arena, immutable, Move(pixels)), ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    auto* const page = NewArenaObject<RefCounter<SdfAtlasPage>>(arena, arena, immutable, Move(pixels));
+    if(!page)
+        return MakeUnexpected(Failure{});
+    return SharedSdfAtlasPage(page, ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
-SharedSdfAtlasPage CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration, const u64 atlasIdentity, const u32 groupIndex){
+Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration, const u64 atlasIdentity, const u32 groupIndex){
     // The asset codec/font installation validates the whole payload once before publishing matching glyph metadata.
     const FontAtlasPayload& payload = atlas.payload();
     if(groupIndex >= payload.groups.size())
-        return {};
+        return MakeUnexpected(Failure{});
     const FontAtlasGroup& group = payload.groups[groupIndex];
     const SdfAtlasPageBinding binding{
         .font = payload.font,

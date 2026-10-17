@@ -154,10 +154,11 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 [[nodiscard]] static bool EnvironmentFlagEnabled(const AStringView name){
     NWB::Core::Alloc::GlobalArena arena(s_EnvironmentFlagArena);
     const auto value = ReadEnvironmentVariable(arena, name);
-    if(!value)
+    if(!value){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skinning benchmark: failed to read environment '{}': {}"), StringConvert(name), StringConvert(value.error().message()));
         return false;
-
-    return !value->empty() && (*value)[0] != '\0' && (*value)[0] != '0';
+    }
+    return *value && !(*value)->empty() && (**value)[0] != '\0' && (**value)[0] != '0';
 }
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
@@ -185,20 +186,10 @@ static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 join
     SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(VectorSet(timeSeconds, timeSeconds, 0.0f, 0.0f), VectorSet(primarySpeed, secondarySpeed, 0.0f, 0.0f), VectorAndInt(phase, s_SIMDMaskXY));
     wavePhases = VectorAdd(wavePhases, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
     const SIMDVectorSingle waves = VectorSin(wavePhases);
-    const SIMDVectorSingle coefficientIndices = VectorSet(
-        static_cast<f32>((seed >> 16u) % 5u), static_cast<f32>((seed >> 3u) & 3u),
-        static_cast<f32>((seed >> 6u) & 3u), static_cast<f32>((seed >> 9u) & 3u)
-    );
-    const SIMDVectorSingle coefficients = VectorMultiplyAddExpression(
-        coefficientIndices, VectorSet(angleJitter, 0.035f, 0.04f, rollJitter), VectorSet(baseAngle, 0.18f, 0.58f, rollBase)
-    );
+    const SIMDVectorSingle coefficientIndices = VectorSet(static_cast<f32>((seed >> 16u) % 5u), static_cast<f32>((seed >> 3u) & 3u), static_cast<f32>((seed >> 6u) & 3u), static_cast<f32>((seed >> 9u) & 3u));
+    const SIMDVectorSingle coefficients = VectorMultiplyAddExpression(coefficientIndices, VectorSet(angleJitter, 0.035f, 0.04f, rollJitter), VectorSet(baseAngle, 0.18f, 0.58f, rollBase));
     const SIMDVectorSingle angle = VectorMultiply(VectorSplatX(waves), VectorSplatX(coefficients));
-    const SIMDVectorSingle rotationAngles = VectorMergeX(
-        VectorMultiply(angle, VectorSplatY(coefficients)),
-        VectorMultiply(angle, VectorSplatZ(coefficients)),
-        VectorMultiply(VectorSplatY(waves), VectorSplatW(coefficients)),
-        VectorZero()
-    );
+    const SIMDVectorSingle rotationAngles = VectorMergeX(VectorMultiply(angle, VectorSplatY(coefficients)), VectorMultiply(angle, VectorSplatZ(coefficients)), VectorMultiply(VectorSplatY(waves), VectorSplatW(coefficients)), VectorZero());
 
     SIMDMatrix matrix = MatrixRotationRollPitchYawFromVector(rotationAngles);
     matrix = MatrixMultiply(bindJoint, matrix);
@@ -221,16 +212,15 @@ public:
 
 
 public:
-    bool install(NWB::Impl::MeshSystem& meshSystem, NWB::Impl::MeshSkinningSystem& meshSkinningSystem){
+    void install(NWB::Impl::MeshSystem& meshSystem, NWB::Impl::MeshSkinningSystem& meshSkinningSystem){
         if(m_registered)
-            return true;
+            return;
 
         m_meshSystem = &meshSystem;
         m_meshSkinningSystem = &meshSkinningSystem;
         m_meshSystem->unregisterRuntimeMeshProvider(*m_meshSkinningSystem);
         m_meshSystem->registerRuntimeMeshProvider(*this);
         m_registered = true;
-        return true;
     }
 
     void uninstall(){
@@ -481,6 +471,7 @@ private:
         }
     }
 
+
 public:
     explicit SkinningCullingBenchmarkProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
@@ -490,7 +481,6 @@ public:
         , m_staticPreview(StaticPreviewEnabled())
         , m_fastSmoke(!m_staticPreview && FastSmokeEnabled())
     {}
-
     virtual ~SkinningCullingBenchmarkProject()override{
         destroyWorld();
     }
@@ -508,13 +498,14 @@ public:
             requestQuit();
             return true;
         }
-        auto* meshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
-        auto* meshSkinningSystemPtr = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
-        if(!meshSystemPtr || !meshSkinningSystemPtr || !m_runtimeMeshProvider.install(*meshSystemPtr, *meshSkinningSystemPtr)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to install benchmark runtime mesh provider"));
-            requestQuit();
-            return true;
-        }
+        auto* const meshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
+        NWB_ASSERT(meshSystemPtr);
+        NWB::Impl::MeshSystem& meshSystem = *meshSystemPtr;
+        auto* const meshSkinningSystemPtr = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
+        NWB_ASSERT(meshSkinningSystemPtr);
+        NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
+
+        m_runtimeMeshProvider.install(meshSystem, meshSkinningSystem);
 
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
@@ -601,7 +592,11 @@ public:
         if(m_staticPreview){
             m_totalTimeSeconds += static_cast<f64>(safeDelta);
             animatePoses();
-            m_world->tick(safeDelta);
+            const auto updated = m_world->tick(safeDelta);
+            if(!updated){
+                NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+                return false;
+            }
             ++m_caseRenderedFrames;
             return true;
         }
@@ -612,7 +607,11 @@ public:
 
         m_totalTimeSeconds += static_cast<f64>(safeDelta);
         animatePoses();
-        m_world->tick(safeDelta);
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         ++m_caseRenderedFrames;
         return true;
     }

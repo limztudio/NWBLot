@@ -13,6 +13,7 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
@@ -83,6 +84,10 @@ struct Box{
     Float3U maximum;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static Box StoreBoxBounds(const SIMDVectorSingle minimum, const SIMDVectorSingle maximum)noexcept{
     Box box;
     StoreFloat(minimum, box.minimum);
@@ -112,7 +117,8 @@ private:
 
 private:
     bool readMode(){
-        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_ARM")){
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+        if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_ARM")){
             const AStringView arm(value->data(), value->size());
             if(arm == "reference")
                 m_arm = Arm::Reference;
@@ -127,19 +133,19 @@ private:
             else
                 return false;
         }
-        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_LIGHT")){
+        if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT")){
             const AStringView light(value->data(), value->size());
             if(light != s_DIRECTIONAL && light != s_POINT)
                 return false;
             m_pointLight = light == s_POINT;
         }
-        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_LIGHT_SOURCE")){
+        if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT_SOURCE")){
             const AStringView source(value->data(), value->size());
             if(source != s_HARD && source != s_FINITE)
                 return false;
             m_finiteLightSource = source == s_FINITE;
         }
-        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_ATLAS")){
+        if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_ATLAS")){
             const AStringView atlas(value->data(), value->size());
             if(atlas != "boxes" && atlas != "analytic" && atlas != "open")
                 return false;
@@ -147,7 +153,7 @@ private:
             m_openAtlas = atlas == "open";
         }
         if(m_openAtlas){
-            const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_OPEN_CASE");
+            const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_OPEN_CASE");
             if(!value || m_pointLight || m_finiteLightSource || m_arm != Arm::Cut)
                 return false;
             const AStringView selected(value->data(), value->size());
@@ -177,7 +183,7 @@ private:
         StoreFloat(VectorSubtract(maximum, minimum), extent);
         const auto entity = CreateTintedStaticMeshEntity(
             *m_world, m_context.objectArena, mesh, transparent ? (m_openAtlas ? s_OpenMaterial : s_GlassMaterial) : s_OpaqueMaterial,
-            transparent && m_openAtlas ? s_OpenInterface : s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f),
+            transparent && m_openAtlas ? NameText<char>{s_OpenInterface} : NameText<char>{s_MaterialInterface}, Float4(1.0f, 1.0f, 1.0f, 1.0f),
             center, extent
         );
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProject: box creation failed"));
@@ -187,11 +193,13 @@ private:
             NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
                 *m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::Half,
                 NWB::Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))
-            ), NWB_TEXT("CsgShadowSmokeProject: open-sheet IOR override failed"));
+            ), NWB_TEXT("CsgShadowSmokeProject: open-sheet IOR override failed")
+            );
             NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
                 *m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::Half3,
                 NWB::Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)
-            ), NWB_TEXT("CsgShadowSmokeProject: open-sheet transmission override failed"));
+            ), NWB_TEXT("CsgShadowSmokeProject: open-sheet transmission override failed")
+            );
         }
         return entity;
     }
@@ -407,12 +415,12 @@ private:
         DestroySmokeRenderWorld(m_context, m_world);
     }
 
+
 public:
     explicit CsgShadowSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(CreateWorld(context))
     {}
-
     virtual ~CsgShadowSmokeProject()override{ destroyWorld(); }
 
 
@@ -484,9 +492,14 @@ public:
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: cutters moved at update40"));
         }
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
+        const auto updated = m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         return true;
     }
+
 
 private:
     NWB::ProjectRuntimeContext& m_context;

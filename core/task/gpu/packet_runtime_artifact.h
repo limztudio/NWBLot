@@ -58,6 +58,7 @@ struct GpuTaskGraphExternalResourceHandoff{
     const CommandListResourceStateHandoff* stateSource = nullptr;
 
 
+public:
     [[nodiscard]] bool valid()const noexcept{
         return planGeneration != 0u && resource.valid() && destinationQueue.valid() && finalState != ResourceStates::Unknown && producerCount != 0u && producers && waitTokenCount != 0u && waitTokens && terminalRangeCount != 0u && terminalRanges && stateSource;
     }
@@ -75,7 +76,7 @@ private:
 
 
 public:
-    explicit GpuTaskGraphExternalResourceHandoffSnapshot(GraphicsArena& arena);
+    explicit GpuTaskGraphExternalResourceHandoffSnapshot(GraphicsArena& arena)noexcept;
     ~GpuTaskGraphExternalResourceHandoffSnapshot()noexcept;
 
 

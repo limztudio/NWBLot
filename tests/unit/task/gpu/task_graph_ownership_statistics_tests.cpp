@@ -41,8 +41,12 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     uses.reserve(resourceCount * 2u);
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
         char identityText[32u] = {};
-        const Name identity = DeriveName(Name("tests/ownership_statistics/resource/"), FormatDecimal(resourceIndex, identityText));
-        const Graphics::GpuGraphResourceId resource = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
+        const auto derivedNameAt44Col30 = DeriveName(Name("tests/ownership_statistics/resource/"), FormatDecimal(resourceIndex, identityText));
+        ASSERT_TRUE(derivedNameAt44Col30);
+        const Name identity = *derivedNameAt44Col30;
+        const auto resourceResult = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         for(u32 rangeIndex = 0u; rangeIndex < 2u; ++rangeIndex){
             uses.push_back({ .resource = resource, .range = { .textureSubresources = Graphics::TextureSubresourceSet(rangeIndex * 2u, 1u, 0u, 1u) }, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Write, });
@@ -51,9 +55,15 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     for(usize taskIndex = 0u; taskIndex < 3u; ++taskIndex){
         char identityText[32u] = {};
         Graphics::GpuTaskDesc desc;
-        desc.setIdentity(DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText))).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses.data(), uses.size());
+        const auto derivedNameAt62Col25 = DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(derivedNameAt62Col25);
+        desc.setIdentity(*derivedNameAt62Col25).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses.data(), uses.size());
         const auto commands = taskIndex == 1u ? ComputeCommands() : GraphicsCommands();
-        ASSERT_TRUE(graph.addTask(desc, commands).valid());
+        {
+            const auto gpuAdmissionAt62 = graph.addTask(desc, commands);
+            ASSERT_TRUE(gpuAdmissionAt62);
+            ASSERT_TRUE(gpuAdmissionAt62->valid());
+        }
     }
     ThreeQueueCompile compilation(testArena);
 
@@ -108,7 +118,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     }
     ASSERT_TRUE(compilation.compile(graph));
     const Graphics::GpuPhysicalQueueTopology invalidTopology{};
-    EXPECT_FALSE(Compile(graph, compilation.analysis, invalidTopology, compilation.assignments, compilation.compiledGraph));
+    EXPECT_FALSE(Compile(declarationScratch, graph, compilation.analysis, invalidTopology, compilation.assignments, compilation.compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
     EXPECT_FALSE(plan.physicalQueueCompileStatistics(compilation.graphicsQueue.id).valid());
 }
@@ -124,8 +134,8 @@ static void CheckOwnershipStatistics(const usize resourceCount){
 
 
 TEST(GpuTaskGraph, CountsRepeatedOwnershipSignaturesAcrossResourcesAndSubranges){
-    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(3u);
-    __hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(17u);
+    ASSERT_NO_FATAL_FAILURE(__hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(3u));
+    ASSERT_NO_FATAL_FAILURE(__hidden_task_graph_ownership_statistics_tests::CheckOwnershipStatistics(17u));
 }
 
 

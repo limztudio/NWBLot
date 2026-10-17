@@ -22,9 +22,10 @@ namespace __hidden_telemetry_recorder_codec_tests{
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 using namespace TelemetryTestDetail;
-
 
 
 TEST(Telemetry, RecorderFiltersOwnsCallerPayloadAndRejectsEndIndex){
@@ -93,6 +94,37 @@ TEST(Telemetry, EventCodecReportsTruncatedPayload){
     const auto result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size() - 1u);
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::TruncatedPayload);
+}
+
+TEST(Telemetry, EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSubranges){
+    TestArena testArena;
+    constexpr u8 s_Expected[] = { 17u, 29u, 43u, 71u, 113u };
+    const usize prefixes[] = { 0u, sizeof(Telemetry::EncodedEventHeader) + 3u };
+    for(const usize prefix : prefixes){
+        for(const bool spareCapacity : { false, true }){
+            SCOPED_TRACE(prefix);
+            SCOPED_TRACE(spareCapacity);
+            Telemetry::EventRecord event(testArena.arena);
+            event.header.kind = Telemetry::EventKind::PerfFrame;
+            event.header.payloadBytes = sizeof(s_Expected);
+            event.payload.resize(prefix + sizeof(s_Expected));
+            NWB_MEMCPY(event.payload.data() + prefix, sizeof(s_Expected), s_Expected, sizeof(s_Expected));
+            if(spareCapacity)
+                event.payload.reserve(event.payload.size() + sizeof(Telemetry::EncodedEventHeader));
+            if(prefix == 0u){
+                if(!spareCapacity)
+                    ASSERT_LT(event.payload.capacity(), event.payload.size() + sizeof(Telemetry::EncodedEventHeader));
+                ASSERT_TRUE(Telemetry::EncodeEvent(event, event.payload));
+            }
+            else
+                ASSERT_TRUE(Telemetry::EncodeEvent(event.header, event.payload.data() + prefix, sizeof(s_Expected), event.payload));
+
+            const auto decoded = Telemetry::DecodeEvent(testArena.arena, event.payload.data(), event.payload.size());
+            ASSERT_TRUE(decoded);
+            ASSERT_EQ(decoded->event.payload.size(), sizeof(s_Expected));
+            EXPECT_EQ(NWB_MEMCMP(decoded->event.payload.data(), s_Expected, sizeof(s_Expected)), 0);
+        }
+    }
 }
 
 TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
@@ -270,7 +302,8 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
                 if(!Telemetry::RecordTextLog(recorder, NWB::Core::Common::LogType::Info, NWB_TEXT("concurrent telemetry record"), eventIndex, threadIndex))
                     return;
             }
-        });
+        }
+        );
     }
 
     for(Thread& thread : threads)

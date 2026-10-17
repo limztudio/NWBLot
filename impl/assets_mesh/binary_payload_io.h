@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "meshlet_constants.h"
+
 #include <core/assets/binary_payload_io.h>
 
 #include <global/binary.h>
@@ -49,6 +51,7 @@ template<typename HeaderT>
         && header.uv0Count != 0u
         && header.colorCount != 0u
         && header.meshletCount != 0u
+        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE)
         && header.meshletBoundCount == header.meshletCount
         && header.meshletPositionRefDeltaByteCount != 0u
         && header.meshletAttributeRefDeltaByteCount != 0u
@@ -76,7 +79,8 @@ template<
     ColorContainer& outColors,
     const TStringView failureContext
 ){
-    return Core::Assets::ReadVectorPayload(binary, inOutCursor, header.positionCount, outPositions, failureContext, s_PositionsStreamLabel)
+    return
+        Core::Assets::ReadVectorPayload(binary, inOutCursor, header.positionCount, outPositions, failureContext, s_PositionsStreamLabel)
         && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.normalCount, outNormals, failureContext, s_NormalsStreamLabel)
         && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.tangentCount, outTangents, failureContext, s_TangentsStreamLabel)
         && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.uv0Count, outUv0, failureContext, s_Uv0StreamLabel)
@@ -133,8 +137,24 @@ template<
 
 
 template<typename MeshT>
-[[nodiscard]] bool AddMeshBaseReserveBytes(usize& reserveBytes, const MeshT& mesh){
-    return AddBinaryVectorReserveBytes(reserveBytes, mesh.positionStream())
+[[nodiscard]] bool AddMeshBaseReserveBytes(usize& reserveBytes, const MeshT& mesh)noexcept(
+    noexcept(
+        AddBinaryVectorReserveBytes(reserveBytes, mesh.positionStream())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.normalStream())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.tangentStream())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.uv0Stream())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.colorStream())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshlets())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletBounds())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPositionRefDeltas())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletAttributeRefDeltas())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletLocalVertexRefs())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPrimitiveIndices())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.solidTriangleWords())
+    )
+){
+    return
+        AddBinaryVectorReserveBytes(reserveBytes, mesh.positionStream())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.normalStream())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.tangentStream())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.uv0Stream())
@@ -167,7 +187,8 @@ void FillMeshBaseHeader(HeaderT& header, const MeshT& mesh){
 
 template<typename MeshT>
 [[nodiscard]] bool AppendMeshAttributeStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
-    return Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, s_PositionsStreamLabel)
+    return
+        Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, s_PositionsStreamLabel)
         && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, s_NormalsStreamLabel)
         && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, s_TangentsStreamLabel)
         && Core::Assets::AppendVectorPayload(outBinary, mesh.uv0Stream(), failureContext, s_Uv0StreamLabel)
@@ -177,7 +198,8 @@ template<typename MeshT>
 
 template<typename MeshT>
 [[nodiscard]] bool AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
-    return Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
+    return
+        Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, NWB_TEXT("meshlet bounds"))
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, NWB_TEXT("meshlet position ref deltas"))
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, NWB_TEXT("meshlet attribute ref deltas"))

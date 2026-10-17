@@ -22,6 +22,8 @@ private:
         alignas(MaxAlign) u8 data[InlineStorageSize];
     };
 
+
+private:
     using InvokeFn = void(*)(void*);
     using DestroyFn = void(*)(void*)noexcept;
     using MoveFn = void(*)(void*, void*)noexcept;
@@ -30,19 +32,9 @@ private:
 public:
     inline InplaceFunction()noexcept = default;
     inline ~InplaceFunction()noexcept{ reset(); }
-
     inline InplaceFunction(InplaceFunction&& rhs)noexcept{
         moveFrom(Move(rhs));
     }
-
-    inline InplaceFunction& operator=(InplaceFunction&& rhs)noexcept{
-        if(this != &rhs){
-            reset();
-            moveFrom(Move(rhs));
-        }
-        return *this;
-    }
-
     template<
         typename Func,
         typename FuncType = Decay_T<Func>,
@@ -56,6 +48,16 @@ public:
     >
     inline explicit InplaceFunction(Func&& func)noexcept(noexcept(assign(Forward<Func>(func)))){
         assign(Forward<Func>(func));
+    }
+
+
+public:
+    inline InplaceFunction& operator=(InplaceFunction&& rhs)noexcept{
+        if(this != &rhs){
+            reset();
+            moveFrom(Move(rhs));
+        }
+        return *this;
     }
 
     template<
@@ -117,7 +119,7 @@ private:
         };
         m_move = [](void* dst, void* src)noexcept{
             FuncType* source = static_cast<FuncType*>(src);
-            new(dst) FuncType(Move(*source));
+            ::new(dst) FuncType(Move(*source));
             source->~FuncType();
         };
     }

@@ -39,7 +39,7 @@ static constexpr AStringView s_ColorField = "color";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<f32> ParseFiniteF32(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
+[[nodiscard]] Expected<f32> ParseFiniteF32(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
     if(!value.isNumeric()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
         return MakeUnexpected(Failure{});
@@ -54,7 +54,7 @@ static constexpr AStringView s_ColorField = "color";
     return static_cast<f32>(numericValue);
 }
 
-[[nodiscard]] Expected<u32> ParseU32(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
+[[nodiscard]] Expected<u32> ParseU32(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
     if(!value.isNumeric()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
         return MakeUnexpected(Failure{});
@@ -69,46 +69,46 @@ static constexpr AStringView s_ColorField = "color";
     return static_cast<u32>(numericValue);
 }
 
-[[nodiscard]] AString MakeIndexedLabel(const AStringView fieldName, const usize index){
-    AStringStream out;
+[[nodiscard]] ScratchString MakeIndexedLabel(const AStringView fieldName, const usize index, Core::Alloc::ScratchArena& scratchArena){
+    ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out << fieldName << "[" << index << "]";
-    return out.str();
+    return Move(out).str();
 }
 
-[[nodiscard]] const Core::Metascript::Value* FindRequiredListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
+[[nodiscard]] Expected<NotNull<const Core::Metascript::Value*>> FindRequiredListField(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
     const Core::Metascript::Value* field = Core::Metascript::FindField(asset, fieldName);
     if(!field){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': missing required '{}' field"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!field->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
-    return field;
+    return MakeNotNull(field);
 }
 
 template<typename ElementT, usize ComponentCount>
-[[nodiscard]] Expected<UtilityVector<ElementT>> ParseFloatListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
+[[nodiscard]] Expected<UtilityVector<ElementT>> ParseFloatListField(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName, Core::Alloc::ScratchArena& scratchArena){
     UtilityVector<ElementT> outValues;
 
-    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, fieldName);
+    const auto field = FindRequiredListField(nwbFilePath, asset, fieldName);
     if(!field)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(field.error());
 
-    const auto& list = field->asList();
+    const auto& list = (*field)->asList();
     outValues.reserve(list.size());
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& value = list[i];
         if(!value.isList() || value.asList().size() != ComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(MakeIndexedLabel(fieldName, i)), ComponentCount);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(MakeIndexedLabel(fieldName, i, scratchArena)), ComponentCount);
             return MakeUnexpected(Failure{});
         }
 
         f32 tuple[ComponentCount] = {};
         const auto& components = value.asList();
         for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
-            AStringStream label;
+            ScratchStringStream label(s_FileOpenWrite, scratchArena);
             label << fieldName << "[" << i << "][" << componentIndex << "]";
             const auto component = ParseFiniteF32(nwbFilePath, components[componentIndex], label.str());
             if(!component)
@@ -133,14 +133,14 @@ template<typename ElementT, usize ComponentCount>
     return outValues;
 }
 
-[[nodiscard]] Expected<UtilityVector<SourceVertexRef>> ParseVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset){
+[[nodiscard]] Expected<UtilityVector<SourceVertexRef>> ParseVertexRefs(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
     UtilityVector<SourceVertexRef> outVertexRefs;
 
-    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_VertexRefsField);
+    const auto field = FindRequiredListField(nwbFilePath, asset, s_VertexRefsField);
     if(!field)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(field.error());
 
-    const auto& list = field->asList();
+    const auto& list = (*field)->asList();
     outVertexRefs.reserve(list.size());
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& value = list[i];
@@ -153,7 +153,7 @@ template<typename ElementT, usize ComponentCount>
         const auto& components = value.asList();
         u32* const componentValues[] = { &ref.position, &ref.normal, &ref.tangent, &ref.uv0, &ref.color, };
         for(usize componentIndex = 0u; componentIndex < s_AuthoredVertexRefComponentCount; ++componentIndex){
-            AStringStream label;
+            ScratchStringStream label(s_FileOpenWrite, scratchArena);
             label << "vertex_refs[" << i << "][" << componentIndex << "]";
             const auto component = ParseU32(nwbFilePath, components[componentIndex], label.str());
             if(!component)
@@ -171,14 +171,14 @@ template<typename ElementT, usize ComponentCount>
     return outVertexRefs;
 }
 
-[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const Path& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName){
+[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName, Core::Alloc::ScratchArena& scratchArena){
     UtilityVector<MeshSkinInfluence> outInfluences;
 
-    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, skinAsset, "influences");
+    const auto field = FindRequiredListField(nwbFilePath, skinAsset, "influences");
     if(!field)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(field.error());
 
-    const auto& list = field->asList();
+    const auto& list = (*field)->asList();
     outInfluences.reserve(list.size());
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& influenceValue = list[i];
@@ -200,7 +200,7 @@ template<typename ElementT, usize ComponentCount>
 
         MeshSkinInfluence influence;
         for(usize componentIndex = 0u; componentIndex < s_MeshSkinInfluenceCount; ++componentIndex){
-            AStringStream jointLabel;
+            ScratchStringStream jointLabel(s_FileOpenWrite, scratchArena);
             jointLabel << skinVariableName << ".influences[" << i << "].joints[" << componentIndex << "]";
             const auto jointIndex = ParseU32(nwbFilePath, jointsValue->asList()[componentIndex], jointLabel.str());
             if(!jointIndex)
@@ -210,7 +210,7 @@ template<typename ElementT, usize ComponentCount>
                 return MakeUnexpected(Failure{});
             }
 
-            AStringStream weightLabel;
+            ScratchStringStream weightLabel(s_FileOpenWrite, scratchArena);
             weightLabel << skinVariableName << ".influences[" << i << "].weights[" << componentIndex << "]";
             influence.joint[componentIndex] = static_cast<u16>(*jointIndex);
             const auto weight = ParseFiniteF32(nwbFilePath, weightsValue->asList()[componentIndex], weightLabel.str());
@@ -229,13 +229,13 @@ template<typename ElementT, usize ComponentCount>
     return outInfluences;
 }
 
-[[nodiscard]] bool FillIndicesRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, UtilityVector<u32>& outIndices){
+[[nodiscard]] bool FillIndicesRecursive(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, UtilityVector<u32>& outIndices, Core::Alloc::ScratchArena& scratchArena){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0u; i < list.size(); ++i){
-            AStringStream childLabel;
+            ScratchStringStream childLabel(s_FileOpenWrite, scratchArena);
             childLabel << label << "[" << i << "]";
-            if(!FillIndicesRecursive(nwbFilePath, list[i], childLabel.str(), outIndices))
+            if(!FillIndicesRecursive(nwbFilePath, list[i], childLabel.str(), outIndices, scratchArena))
                 return false;
         }
         return true;
@@ -248,13 +248,13 @@ template<typename ElementT, usize ComponentCount>
     return true;
 }
 
-[[nodiscard]] Expected<UtilityVector<u32>> ParseIndices(const Path& nwbFilePath, const Core::Metascript::Value& asset){
+[[nodiscard]] Expected<UtilityVector<u32>> ParseIndices(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
     UtilityVector<u32> outIndices;
 
-    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_IndicesField);
+    const auto field = FindRequiredListField(nwbFilePath, asset, s_IndicesField);
     if(!field)
-        return MakeUnexpected(Failure{});
-    if(!FillIndicesRecursive(nwbFilePath, *field, s_IndicesField, outIndices))
+        return MakeUnexpected(field.error());
+    if(!FillIndicesRecursive(nwbFilePath, **field, s_IndicesField, outIndices, scratchArena))
         return MakeUnexpected(Failure{});
     if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
@@ -263,7 +263,7 @@ template<typename ElementT, usize ComponentCount>
     return outIndices;
 }
 
-[[nodiscard]] bool ValidateStreamIndex(const Path& nwbFilePath, const AStringView streamName, const u32 index, const usize count){
+[[nodiscard]] bool ValidateStreamIndex(const ScratchPath& nwbFilePath, const AStringView streamName, const u32 index, const usize count){
     if(index < count)
         return true;
 
@@ -271,7 +271,7 @@ template<typename ElementT, usize ComponentCount>
     return false;
 }
 
-[[nodiscard]] bool ValidateMesh(const Path& nwbFilePath, const SourceMeshStreams& mesh){
+[[nodiscard]] bool ValidateMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
     for(const SourceVertexRef& ref : mesh.vertexRefs){
         if(!ValidateStreamIndex(nwbFilePath, s_PositionField, ref.position, mesh.positions.size()))
             return false;
@@ -300,7 +300,8 @@ template<typename ElementT, usize ComponentCount>
 }
 
 [[nodiscard]] bool IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName)noexcept{
-    return fieldName == Core::Metascript::MStringView(s_PositionsField.data(), s_PositionsField.size())
+    return
+        fieldName == Core::Metascript::MStringView(s_PositionsField.data(), s_PositionsField.size())
         || fieldName == Core::Metascript::MStringView(s_NormalsField.data(), s_NormalsField.size())
         || fieldName == Core::Metascript::MStringView(s_TangentsField.data(), s_TangentsField.size())
         || fieldName == Core::Metascript::MStringView(s_Uv0Field.data(), s_Uv0Field.size())
@@ -310,7 +311,7 @@ template<typename ElementT, usize ComponentCount>
     ;
 }
 
-[[nodiscard]] bool ValidateMeshAssetFields(const Path& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
+[[nodiscard]] bool ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!asset.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(meshVariableName));
         return false;
@@ -332,35 +333,35 @@ template<typename ElementT, usize ComponentCount>
     return true;
 }
 
-[[nodiscard]] Expected<SourceMeshStreams> ParseMeshValue(const Path& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
+[[nodiscard]] Expected<SourceMeshStreams> ParseMeshValue(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
     if(!ValidateMeshAssetFields(nwbFilePath, meshVariableName, asset))
         return MakeUnexpected(Failure{});
     SourceMeshStreams mesh;
-    auto positions = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_PositionsField);
+    auto positions = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_PositionsField, scratchArena);
     if(!positions)
         return MakeUnexpected(positions.error());
     mesh.positions = Move(*positions);
-    auto normals = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_NormalsField);
+    auto normals = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_NormalsField, scratchArena);
     if(!normals)
         return MakeUnexpected(normals.error());
     mesh.normals = Move(*normals);
-    auto tangents = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_TangentsField);
+    auto tangents = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_TangentsField, scratchArena);
     if(!tangents)
         return MakeUnexpected(tangents.error());
     mesh.tangents = Move(*tangents);
-    auto uv0 = ParseFloatListField<Vec2, 2u>(nwbFilePath, asset, s_Uv0Field);
+    auto uv0 = ParseFloatListField<Vec2, 2u>(nwbFilePath, asset, s_Uv0Field, scratchArena);
     if(!uv0)
         return MakeUnexpected(uv0.error());
     mesh.uv0 = Move(*uv0);
-    auto colors = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_ColorsField);
+    auto colors = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_ColorsField, scratchArena);
     if(!colors)
         return MakeUnexpected(colors.error());
     mesh.colors = Move(*colors);
-    auto vertexRefs = ParseVertexRefs(nwbFilePath, asset);
+    auto vertexRefs = ParseVertexRefs(nwbFilePath, asset, scratchArena);
     if(!vertexRefs)
         return MakeUnexpected(vertexRefs.error());
     mesh.vertexRefs = Move(*vertexRefs);
-    auto indices = ParseIndices(nwbFilePath, asset);
+    auto indices = ParseIndices(nwbFilePath, asset, scratchArena);
     if(!indices)
         return MakeUnexpected(indices.error());
     mesh.indices = Move(*indices);

@@ -37,7 +37,7 @@ static bool RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
         [](Name virtualPath, const Path& path, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
             return ParseFontCookMetadataValue(virtualPath, path, asset, context.cookArena);
         },
-        [](FontCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildFontAsset(entry, arena); }, false
+        [](FontCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildFontAsset(entry, arena); }, false
     );
 }
 

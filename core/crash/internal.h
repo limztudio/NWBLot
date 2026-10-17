@@ -8,7 +8,13 @@
 #include "module.h"
 #include "package_names.h"
 
+#include <core/alloc/scratch.h>
+
+#include <global/exception.h>
+#include <global/generic.h>
 #include <global/sync.h>
+#include <global/thread.h>
+#include <global/type_borrow.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -35,7 +41,7 @@ namespace Detail{
 
 inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
 inline constexpr u32 s_AckMagic = 0x4E574241u; // NWBA
-inline constexpr u32 s_RequestVersion = 1u;
+inline constexpr u32 s_RequestVersion = 2u;
 inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
 inline constexpr usize s_MaxDiagnosticSites = 64u;
@@ -54,6 +60,9 @@ inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
 #endif
 
 #if defined(NWB_PLATFORM_WINDOWS)
+inline constexpr u32 s_WindowsContextArchitectureMask = 0x00FF0000u;
+inline constexpr u32 s_WindowsContextArchitecture = CONTEXT_CONTROL & s_WindowsContextArchitectureMask;
+inline constexpr u32 s_WindowsExtendedContextFlag = CONTEXT_XSTATE & ~s_WindowsContextArchitectureMask;
 inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) NWB_TEXT(".exe");
 #else
 inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
@@ -67,6 +76,9 @@ inline constexpr StringView s_AckFdArgument = "--ack-fd";
 inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
 inline constexpr StringView s_ManualDumpCategory = "manual_dump";
 inline constexpr StringView s_GpuCrashCategory = "gpu_crash";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename ArenaT>
@@ -103,6 +115,73 @@ namespace CrashDumpTransportStatus{
         TimedOut,
         PackageWriteFailed,
     };
+};
+
+
+namespace PlatformOperation{
+    enum Enum : u8{
+        None,
+        PrepareSpool,
+        PrepareCommand,
+        PrepareAttributes,
+        CreateRequestChannel,
+        CreateAckChannel,
+        CreateStartupChannel,
+        SetInheritance,
+        CreateAckEvent,
+        CreateProcess,
+        CloseHandle,
+        WaitProcess,
+        TerminateProcess,
+        CloseDescriptor,
+        SetDescriptorFlags,
+        PrepareChild,
+        ExecHandler,
+        WaitChild,
+        KillChild,
+        InstallSignalStack,
+        RestoreSignalStack,
+        InstallSignalAction,
+        RestoreSignalAction,
+        OpenEmergencyFile,
+        RestoreExceptionFilter,
+    };
+};
+
+namespace PlatformErrorDomain{
+    enum Enum : u8{
+        Windows,
+        Posix,
+        ExitCode,
+        Signal,
+        Contract,
+        Filesystem,
+    };
+};
+
+struct PlatformFailure{
+    PlatformOperation::Enum operation = PlatformOperation::None;
+    PlatformErrorDomain::Enum domain = PlatformErrorDomain::Contract;
+    u64 code = 0u;
+    ErrorCode filesystemError{};
+};
+
+// Created before the lifecycle lock: deferred observation runs after unlocking, including during unwind.
+// Retains the primary operation failure (or first cleanup failure) and total count; other details are coalesced into that explicit count.
+class PlatformCleanupObservations final : NoCopy{
+public:
+    PlatformCleanupObservations()noexcept = default;
+    ~PlatformCleanupObservations()noexcept;
+
+
+public:
+    void record(const PlatformFailure& failure)noexcept;
+    void recordPrimary(const PlatformFailure& failure)noexcept;
+
+
+private:
+    PlatformFailure m_first{};
+    u64 m_failureCount = 0u;
 };
 
 
@@ -161,7 +240,19 @@ struct CrashRequest{
     FixedMetadata metadata[s_MaxMetadata] = {};
     FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
     u64 callstackFrames[s_MaxCallstackFrames] = {};
+#if defined(NWB_PLATFORM_WINDOWS)
+    u32 manualContextSize = 0u;
+    u32 manualExceptionRecordSize = 0u;
+    u32 manualContextArchitecture = 0u;
+    CONTEXT manualContext = {};
+    EXCEPTION_RECORD manualExceptionRecord = {};
+#endif
 };
+
+static_assert(IsTriviallyCopyable_V<CrashRequest>, "crash request transport requires an owning fixed native value");
+#if defined(NWB_PLATFORM_WINDOWS)
+static_assert(alignof(CrashRequest) >= alignof(CONTEXT), "crash request must preserve native context alignment");
+#endif
 
 struct CrashAck{
     u32 magic = s_AckMagic;
@@ -170,9 +261,33 @@ struct CrashAck{
     char crashId[s_MaxShortText] = {};
 };
 
+// This fixed-size native protocol is shared only by the application and its same-build handler.
+// Native context admission does not provide mixed-binary or cross-architecture message framing.
+[[nodiscard]] inline bool IsCurrentCrashRequest(const CrashRequest& request)noexcept{
+    if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
+        return false;
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(request.manualContextSize == 0u)
+        return request.manualExceptionRecordSize == 0u && request.manualContextArchitecture == 0u;
+    if(request.platform != PlatformKind::Windows || request.exceptionPointers != 0u)
+        return false;
+    if(request.manualContextSize != sizeof(CONTEXT) || request.manualExceptionRecordSize != sizeof(EXCEPTION_RECORD) || request.manualContextArchitecture != s_WindowsContextArchitecture)
+        return false;
+    if((request.manualContext.ContextFlags & s_WindowsContextArchitectureMask) != s_WindowsContextArchitecture || (request.manualContext.ContextFlags & CONTEXT_CONTROL) != CONTEXT_CONTROL)
+        return false;
+    if((request.manualContext.ContextFlags & s_WindowsExtendedContextFlag) != 0u)
+        return false;
+    return request.manualExceptionRecord.ExceptionCode == s_ManualDumpExceptionCode && request.manualExceptionRecord.ExceptionRecord == nullptr && request.manualExceptionRecord.NumberParameters == 0u;
+#else
+    return true;
+#endif
+}
+
 [[nodiscard]] inline bool CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
     return ack.magic == s_AckMagic && ack.version == s_RequestVersion && AStringView(ack.crashId) == AStringView(request.crashId);
 }
+
+struct ManualDumpContextStorage;
 
 struct CrashDumpRequestOptions{
     u32 waitMilliseconds = 0u;
@@ -194,14 +309,54 @@ struct CrashDumpRequestOptions{
     u64 triggerInstructionPointer = 0u;
     u32 triggerLine = 0u;
     u32 callstackFramesToSkip = 0u;
+#if defined(NWB_PLATFORM_WINDOWS)
+    const ManualDumpContextStorage* manualContext = nullptr;
+#endif
 };
 
-struct ManualDumpContextStorage{
+struct ManualDumpContextStorage final : NoCopy{
 #if defined(NWB_PLATFORM_WINDOWS)
     CONTEXT context = {};
     EXCEPTION_RECORD exceptionRecord = {};
     EXCEPTION_POINTERS exceptionPointers = {};
 #endif
+
+
+public:
+    ManualDumpContextStorage()noexcept = default;
+    ManualDumpContextStorage(const ManualDumpContextStorage&) = delete;
+    ManualDumpContextStorage(ManualDumpContextStorage&&) = delete;
+#if defined(NWB_PLATFORM_WINDOWS)
+    explicit ManualDumpContextStorage(const CrashRequest& request)noexcept
+        : context(request.manualContext)
+        , exceptionRecord(request.manualExceptionRecord)
+        , exceptionPointers{ &exceptionRecord, &context }{}
+#endif
+};
+
+// Snapshot images are immutable while pinned; only normal-context writers hold the lifecycle mutex.
+// A fault reader never takes that mutex or waits for an interrupted writer to finish.
+inline constexpr u64 s_SnapshotWriteClaim = u64{ 1u } << 63u;
+inline constexpr u64 s_SnapshotMaxReaders = s_SnapshotWriteClaim - 1u;
+static_assert(Atomic<u64>::is_always_lock_free && Atomic<u32>::is_always_lock_free, "crash snapshot publication requires native lock-free atomics");
+
+struct CrashStateSnapshot{
+    CrashSpoolRetentionConfig spoolRetention;
+    FixedMetadata metadata[s_MaxMetadata] = {};
+    FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
+    usize nextBreadcrumb = 0u;
+    char applicationName[s_MaxShortText] = {};
+    char versionText[s_MaxShortText] = {};
+    char buildId[s_MaxMediumText] = {};
+    char spoolDirectoryText[s_MaxPathText] = {};
+    char logServerUrl[s_MaxUrlText] = {};
+    char crashUploadToken[s_MaxMediumText] = {};
+    DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
+};
+
+struct CrashSnapshotImage{
+    CrashStateSnapshot value;
+    Atomic<u64> access{ 0u };
 };
 
 struct CrashState{
@@ -211,6 +366,8 @@ struct CrashState{
     usize nextBreadcrumb = 0u;
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
+    CrashSnapshotImage snapshotImages[2u];
+    Atomic<u32> publishedSnapshotImage{ 0u };
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
@@ -218,11 +375,26 @@ struct CrashState{
     HANDLE crashHandledEvent = nullptr;
     PROCESS_INFORMATION handlerProcessInfo = {};
     LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
+    bool exceptionFilterInstalled = false;
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
+    struct sigaction previousSignalActions[6u] = {};
+    int installedSignals[6u] = {};
+    bool signalActionInstalled[6u] = {};
+    bool signalStackInstalled = false;
+    ThreadId signalStackOwner{};
 #elif defined(NWB_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
+    struct sigaction previousSignalActions[6u] = {};
+    int installedSignals[6u] = {};
+    bool signalActionInstalled[6u] = {};
+    bool signalStackInstalled = false;
+    ThreadId signalStackOwner{};
 #endif
+
+    ::TerminateHandler previousTerminateHandler = nullptr;
+    bool terminateHandlerInstalled = false;
+    bool platformRestorePending = false;
 
     CrashCapturePolicy capturePolicy;
     Futex mutex;
@@ -292,23 +464,31 @@ template<typename ArenaT>
 [[nodiscard]] StringView PlatformKindName(u32 platform)noexcept;
 [[nodiscard]] StringView ReasonKindName(u32 reasonKind)noexcept;
 
+// The caller owns g_State.mutex and has completed its normal-context mutation.
+void PublishCrashStateSnapshot()noexcept;
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
 void SuppressNextPlatformCrashCapture()noexcept;
 [[nodiscard]] bool TryConsumeSuppressedPlatformCrashCapture()noexcept;
 void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept;
+[[nodiscard]] CrashRequest BuildCrashDumpRequest(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options)noexcept;
 [[nodiscard]] CrashDumpResult RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);
 [[nodiscard]] CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, u32 waitMilliseconds)noexcept;
 void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options = CrashDumpRequestOptions{})noexcept;
 
 template<typename ArenaT>
-[[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
+[[nodiscard]] Expected<void, ErrorCode> EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
-void InitializeDumpArena()noexcept;
+void InitializeDumpArena();
 
+#if defined(NWB_PLATFORM_WINDOWS)
 template<typename ArenaT>
-[[nodiscard]] bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath);
-void InstallPlatformHandlers();
-void UninstallPlatformResources();
+[[nodiscard]] Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations);
+#else
+template<typename ArenaT>
+[[nodiscard]] Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations)noexcept;
+#endif
+[[nodiscard]] Expected<void, PlatformFailure> InstallPlatformHandlers()noexcept;
+void UninstallPlatformResources(PlatformCleanupObservations& observations)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

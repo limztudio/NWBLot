@@ -30,19 +30,28 @@ namespace __hidden_texture_clear_color{
 };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void CommandList::clearTextureFloat(Texture& texture, TextureSubresourceSet subresources, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(texture, subresources, NWB_TEXT("color value"), clearValue, false, false);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTexture(scratchArena, texture, subresources, NWB_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearTextureRectFloat(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("color value"), clearValue, false, false);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearTextureBoxFloat(Texture& texture, TextureSubresourceSet subresources, const Box& box, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, box, NWB_TEXT("color value"), clearValue, false, false);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTextureBox(scratchArena, texture, subresources, box, NWB_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor){
@@ -51,7 +60,9 @@ void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subre
 
 void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, const UIntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(texture, subresources, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTexture(scratchArena, texture, subresources, NWB_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor){
@@ -60,7 +71,9 @@ void CommandList::clearTextureRectUInt(Texture& texture, TextureSubresourceSet s
 
 void CommandList::clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const UIntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, u32 clearColor){
@@ -69,7 +82,9 @@ void CommandList::clearTextureBoxUInt(Texture& texture, TextureSubresourceSet su
 
 void CommandList::clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, const UIntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, box, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTextureBox(scratchArena, texture, subresources, box, NWB_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subresources, i32 clearColor){
@@ -78,7 +93,9 @@ void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subres
 
 void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subresources, const IntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(texture, subresources, NWB_TEXT("signed integer value"), clearValue, true, true);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTexture(scratchArena, texture, subresources, NWB_TEXT("signed integer value"), clearValue, true, true);
 }
 
 void CommandList::clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor){
@@ -87,7 +104,9 @@ void CommandList::clearTextureRectInt(Texture& texture, TextureSubresourceSet su
 
 void CommandList::clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const IntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("signed integer value"), clearValue, true, true);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("signed integer value"), clearValue, true, true);
 }
 
 void CommandList::clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, i32 clearColor){
@@ -96,14 +115,16 @@ void CommandList::clearTextureBoxInt(Texture& texture, TextureSubresourceSet sub
 
 void CommandList::clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, const IntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, box, NWB_TEXT("signed integer value"), clearValue, true, true);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+
+    clearColorTextureBox(scratchArena, texture, subresources, box, NWB_TEXT("signed integer value"), clearValue, true, true);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::clearColorTexture(Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, const bool integerValue, const bool signedIntegerValue){
+void CommandList::clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, const bool integerValue, const bool signedIntegerValue){
     if(!publicCommandStateAccessible())
         return;
     static_cast<void>(valueName);
@@ -145,7 +166,7 @@ void CommandList::clearColorTexture(Texture& texture, TextureSubresourceSet subr
 
     if(blockCompressed){
         constexpr Box s_FullTextureBox(Limit<i32>::s_Max, Limit<i32>::s_Max, Limit<i32>::s_Max);
-        clearColorTextureBox(texture, resolvedSubresources, s_FullTextureBox, valueName, clearValue, integerValue, signedIntegerValue);
+        clearColorTextureBox(scratchArena, texture, resolvedSubresources, s_FullTextureBox, valueName, clearValue, integerValue, signedIntegerValue);
         return;
     }
 
@@ -156,7 +177,6 @@ void CommandList::clearColorTexture(Texture& texture, TextureSubresourceSet subr
     if(m_commandRecordingFailed)
         return;
     if(texture.m_creationDesc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
-        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
         VulkanTextureDetail::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT, ranges);
         m_context.deviceDispatch.vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, static_cast<u32>(ranges.size()), ranges.data());
@@ -168,7 +188,7 @@ void CommandList::clearColorTexture(Texture& texture, TextureSubresourceSet subr
     retainResource(&texture);
 }
 
-void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, const bool integerValue, const bool signedIntegerValue){
+void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, const bool integerValue, const bool signedIntegerValue){
     if(!publicCommandStateAccessible())
         return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
@@ -190,7 +210,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
 
     const bool blockCompressed = Format::IsBlockCompressedFormat(desc.format);
     if((m_renderPassActive || desc.sampleCount != 1u) && VulkanTextureDetail::TextureClearBoxFullyCoversSubresources(desc, resolvedSubresources, box)){
-        clearColorTexture(texture, resolvedSubresources, valueName, clearValue, integerValue, signedIntegerValue);
+        clearColorTexture(scratchArena, texture, resolvedSubresources, valueName, clearValue, integerValue, signedIntegerValue);
         return;
     }
 
@@ -243,7 +263,6 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
         VulkanTextureDetail::TextureClearUploadLayout uploadLayout;
     };
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
     Vector<MipClearPlan, Alloc::ScratchArena> mipClearPlans(resolvedSubresources.numMipLevels, scratchArena);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const u64 blockWidth = static_cast<u64>(texture.m_formatLayout.blockWidth);

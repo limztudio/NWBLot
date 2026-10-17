@@ -53,9 +53,11 @@ static_assert(offsetof(RayTracingOpticalInstanceGpu, flags) == NWB_RT_OPTICAL_IN
 struct RayTracingOpticalRuntimeBounds{
     Core::BufferHandle buffer;
     Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
-    Float34U objectToWorld = {};
+    Float34 objectToWorld = {};
     u32 instanceIndex = 0u;
 };
+static_assert(alignof(RayTracingOpticalRuntimeBounds) >= 16u);
+static_assert(offsetof(RayTracingOpticalRuntimeBounds, objectToWorld) % 16u == 0u);
 
 // Built in the existing RT gather, after duplicate suppression and with the exact emitted instance ordering.
 // Invalid or omitted geometry clears the air-shortcut proof, including when no known transparent instance remains.
@@ -68,12 +70,14 @@ struct RayTracingOpticalSceneGather{
     // Policy-only specialization; incomplete geometry and bounds still reject transport in the shader.
     bool unspecifiedBoundariesOnly = true;
 
+
+public:
     explicit RayTracingOpticalSceneGather(Core::Alloc::ScratchArena& arena, usize capacity);
 
 
 public:
     void append(Core::ECS::EntityID entity, const RendererComponent& renderer, bool transparent, const Float3U& boundsMin, const Float3U& boundsMax, bool boundsValid);
-    void appendRuntime(Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, Core::GpuDescriptorHandle boundsDescriptor, const Float34U& objectToWorld);
+    void appendRuntime(Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, Core::GpuDescriptorHandle boundsDescriptor, const Float34& objectToWorld);
     void markIncomplete()noexcept{
         header.flags &= ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;
         boundsCompleteExceptRuntime = false;

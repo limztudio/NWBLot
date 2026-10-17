@@ -23,7 +23,8 @@ namespace __hidden_queue_assignment_telemetry{
 
 
 [[nodiscard]] static bool MatchesAssignment(const GpuTaskQueueAssignment& lhs, const GpuTaskQueueAssignment& rhs)noexcept{
-    return lhs.task == rhs.task
+    return
+        lhs.task == rhs.task
         && lhs.initialQueue == rhs.initialQueue
         && lhs.queue == rhs.queue
         && lhs.score.overlap == rhs.score.overlap

@@ -39,7 +39,7 @@ public:
     // `previousTask` is the scene-output endpoint and `backbuffer` is the exact typed acquired texture imported by the renderer.
     // The returned task must be Graphics-capable and ordered after that endpoint.
     // A task that writes the backbuffer must declare that same resource; an upload-only contributor may instead return a terminal completion packet.
-    [[nodiscard]] virtual GpuTaskId declareTaskGraphPresentation(GpuTaskGraph& graph, const AcquiredPresentationFrame& frame, GpuGraphResourceId backbuffer, GpuTaskId previousTask) = 0;
+    [[nodiscard]] virtual Expected<GpuTaskId> declareTaskGraphPresentation(GpuTaskGraph& graph, const AcquiredPresentationFrame& frame, GpuGraphResourceId backbuffer, GpuTaskId previousTask) = 0;
 };
 
 

@@ -25,7 +25,6 @@ namespace AssetsVolumeArenaScope{
 
 inline constexpr Name s_CookArena("core/assets/volume/cook");
 inline constexpr Name s_PrepareQueueArena("core/assets/volume/prepare_queue");
-inline constexpr Name s_RegisterPreparersArena("core/assets/volume/register_preparers");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

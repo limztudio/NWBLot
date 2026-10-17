@@ -7,6 +7,9 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -14,8 +17,6 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
-
-#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,7 +57,8 @@ struct AccelStructBuildSignatureRole{
     AccelStructBuildSignatureRole* nextRetiredRole = nullptr;
 
 
-    explicit AccelStructBuildSignatureRole(Alloc::GlobalArena& arena)
+public:
+    explicit AccelStructBuildSignatureRole(Alloc::GlobalArena& arena)noexcept
         : geometrySignatures(arena)
     {}
 };
@@ -115,11 +117,14 @@ private:
 
 
 public:
-    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, u32 queueFamilyIndex, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex);
+    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex)noexcept;
     ~TrackedCommandBuffer();
 
 
 private:
+
+
+    [[nodiscard]] Expected<void, VkResult> initialize(u32 queueFamilyIndex);
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
     [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;

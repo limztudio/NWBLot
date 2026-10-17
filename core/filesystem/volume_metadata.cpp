@@ -5,7 +5,6 @@
 #include "volume_build.h"
 #include "volume_file_system.h"
 #include "volume_storage_detail.h"
-#include "arena_names.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -63,7 +62,11 @@ Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexcept{
     return FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount);
 }
 
-bool VolumeFileSystem::loadMetadataLocked(){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     FilesystemVolumeDetail::VolumeHeaderDisk header;
     if(!readBytesLocked(0, &header, sizeof(header))){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "failed to read metadata header");
@@ -133,7 +136,6 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_LoadMetadataScratch);
     Vector<u8, Core::Alloc::ScratchArena> indexData(static_cast<usize>(header.indexBytes), 0, scratchArena);
     if(header.indexBytes > 0 && !readBytesLocked(static_cast<u64>(sizeof(header)), indexData.data(), header.indexBytes)){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "failed to read metadata index");
@@ -170,6 +172,10 @@ bool VolumeFileSystem::loadMetadataLocked(){
         }
 
         const Name pathName(entry.hash);
+        if(!pathName){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "invalid path hash in metadata index");
+            return false;
+        }
         if(!loadedFiles.emplace(pathName, FileRecord{ entry.offset, entry.size }).second){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "duplicate path hash in metadata index");
             return false;
@@ -188,7 +194,8 @@ bool VolumeFileSystem::loadMetadataLocked(){
     return true;
 }
 
-bool VolumeFileSystem::flushMetadataLocked(){
+bool VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath){
+    NWB_ASSERT(excludedPath == nullptr || m_files.find(*excludedPath) != m_files.end());
     if(m_segmentPaths.empty()){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "no segments are mounted");
         return false;
@@ -212,7 +219,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     NWB_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(FilesystemVolumeDetail::s_VolumeMagic));
     header.segmentSize = m_segmentSize;
     header.metadataBytes = m_metadataBytes;
-    header.fileCount = static_cast<u64>(m_files.size());
+    header.fileCount = static_cast<u64>(m_files.size() - (excludedPath != nullptr ? 1u : 0u));
     header.nextFreeOffset = m_nextFreeOffset;
 
     using FilesystemVolumeDetail::VolumeIndexEntryDisk;
@@ -240,14 +247,17 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
     Vector<VolumeIndexEntryDisk, Core::Alloc::ScratchArena> sortedRecords{scratchArena};
-    sortedRecords.reserve(m_files.size());
-    for(const auto& [path, record] : m_files)
+    sortedRecords.reserve(static_cast<usize>(header.fileCount));
+    for(const auto& [path, record] : m_files){
+        if(excludedPath != nullptr && path == *excludedPath)
+            continue;
         sortedRecords.push_back(VolumeIndexEntryDisk{ path.hash(), record.offset, record.size });
+    }
     Sort(sortedRecords.begin(), sortedRecords.end(), [](const VolumeIndexEntryDisk& lhs, const VolumeIndexEntryDisk& rhs)noexcept{
         return ::LessNameHash(lhs.hash, rhs.hash);
-    });
+    }
+    );
 
     Vector<u8, Core::Alloc::ScratchArena> metadataBuffer{scratchArena};
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));

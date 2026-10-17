@@ -37,7 +37,9 @@ private:
         bool latin1Available = false;
         bool owned = false;
 
-        explicit OwnedSelection(Alloc::GlobalArena& arena)
+
+    public:
+        explicit OwnedSelection(Alloc::GlobalArena& arena)noexcept
             : utf8(arena)
             , latin1(arena)
         {}
@@ -52,7 +54,9 @@ private:
         usize offset = 0u;
         Timer deadline;
 
-        explicit OutgoingTransfer(Alloc::GlobalArena& arena)
+
+    public:
+        explicit OutgoingTransfer(Alloc::GlobalArena& arena)noexcept
             : text(arena)
         {}
     };

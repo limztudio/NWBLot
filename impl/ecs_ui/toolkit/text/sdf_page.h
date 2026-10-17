@@ -8,6 +8,7 @@
 #include <impl/ecs_ui/toolkit/global.h>
 #include <impl/assets_font_atlas/asset.h>
 
+#include <global/expected.h>
 #include <global/refcount_ptr.h>
 #include <global/sha256.h>
 
@@ -22,6 +23,10 @@ NWB_IMPL_UI_BEGIN
 
 
 inline constexpr u32 s_SdfDistanceEncodingFreeTypeU8 = s_FontAtlasDistanceEncoding;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct SdfAtlasPageBinding{
     Core::Assets::AssetRef<Font> font;
@@ -73,8 +78,8 @@ private:
 using SharedSdfAtlasPage = RefCountPtr<RefCounter<SdfAtlasPage>, ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>>;
 
 // The factory calculates pixelsSha256 from the exact immutable bytes; callers need not supply it.
-[[nodiscard]] SharedSdfAtlasPage CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels);
-[[nodiscard]] SharedSdfAtlasPage CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration, u64 atlasIdentity, u32 groupIndex);
+[[nodiscard]] Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels);
+[[nodiscard]] Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration, u64 atlasIdentity, u32 groupIndex);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -40,10 +40,10 @@ struct ScrollPlacement{
 class ScrollState final : NoCopy{
 public:
     ScrollState()noexcept;
+    ScrollState(ScrollState&&) = delete;
 
 
 public:
-    ScrollState(ScrollState&&) = delete;
     ScrollState& operator=(ScrollState&&) = delete;
 
 

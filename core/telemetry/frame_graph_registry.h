@@ -25,14 +25,12 @@ class CaptureSession;
 
 class FrameGraphRegistry final : NoCopy{
 public:
-    explicit FrameGraphRegistry(Alloc::GlobalArena& arena)
-        : m_contributors(arena)
-    {}
+    explicit FrameGraphRegistry(Alloc::GlobalArena& arena);
 
 
 public:
     void registerContributor(IFrameGraphContributor& contributor);
-    void unregisterContributor(IFrameGraphContributor& contributor);
+    void unregisterContributor(IFrameGraphContributor& contributor)noexcept;
     void clear()noexcept{ m_contributors.clear(); }
 
     [[nodiscard]] bool record(CaptureSession& session);
@@ -41,7 +39,13 @@ public:
 
 
 private:
-    List<IFrameGraphContributor*, Alloc::GlobalArena> m_contributors;
+    List<NotNull<IFrameGraphContributor*>, Alloc::GlobalArena> m_contributors;
+    FrameGraphNodeDescs m_nodes;
+    FrameGraphEdgeDescs m_edges;
+    FrameGraphPendingNameEdges m_pendingNameEdges;
+    FrameGraphPhysicalQueueRuntimeStatisticsRecords m_physicalQueueRuntimeStatistics;
+    FrameGraphPacketSubmissionStatisticsRecords m_packetSubmissionStatistics;
+    bool m_recording = false;
 };
 
 

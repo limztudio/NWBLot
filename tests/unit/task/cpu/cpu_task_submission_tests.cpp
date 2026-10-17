@@ -42,6 +42,7 @@ struct ThrowingMoveTask{
     ThrowingMoveTask(ThrowingMoveTask&&){ throw s_ConstructionException; }
 
 
+public:
     void operator()()const noexcept{}
 };
 
@@ -51,6 +52,7 @@ struct ThrowingCopyTask{
     ThrowingCopyTask(ThrowingCopyTask&&)noexcept = default;
 
 
+public:
     void operator()()const noexcept{}
 };
 
@@ -73,7 +75,8 @@ public:
                     ExitTestProcess(0u);
                 SleepMS(1u);
             }
-        })
+        }
+        )
     {}
     ~DeadlineGuard() = default;
 
@@ -104,17 +107,19 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
     };
     const int schedulerResult = InvokeTerminalEntry<u32>([&]()->int{
         const auto task = scheduler.submit(callable);
-        EXPECT_FALSE(task.valid());
+        EXPECT_FALSE(task);
         return -1;
-    }, handleError, []()noexcept{ return -2; });
+    }, handleError, []()noexcept{ return -2; }
+    );
     EXPECT_EQ(schedulerResult, static_cast<int>(s_ConstructionException));
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 
     const int scopeResult = InvokeTerminalEntry<u32>([&]()->int{
         const auto task = scope.submit(callable);
-        EXPECT_FALSE(task.valid());
+        EXPECT_FALSE(task);
         return -1;
-    }, handleError, []()noexcept{ return -2; });
+    }, handleError, []()noexcept{ return -2; }
+    );
     EXPECT_EQ(scopeResult, static_cast<int>(s_ConstructionException));
     EXPECT_EQ(handled, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
@@ -125,24 +130,63 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
 }
 
 
+TEST(CpuTaskSubmissionTests, ExpectedAdmissionErrorsPreservePublicationAndCancellationBoundaries){
+    using namespace __hidden_cpu_task_submission_tests;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope canceled(scheduler);
+    u32 callbacks = 0u;
+    const auto invalidDependencies = scheduler.submit([&]()noexcept{ ++callbacks; }, {}, nullptr, 1u);
+    ASSERT_FALSE(invalidDependencies);
+    EXPECT_EQ(invalidDependencies.error(), CpuTaskAdmissionError::InvalidDependencies);
+    CpuTaskOptions options;
+    options.target = static_cast<CpuTaskTarget::Enum>(CpuTaskTarget::MainThread + 1u);
+    const auto invalidOptions = scheduler.submit([&]()noexcept{ ++callbacks; }, options);
+    ASSERT_FALSE(invalidOptions);
+    EXPECT_EQ(invalidOptions.error(), CpuTaskAdmissionError::InvalidOptions);
+    canceled.cancel();
+    const auto scopeRejected = canceled.submit([&]()noexcept{ ++callbacks; });
+    ASSERT_FALSE(scopeRejected);
+    EXPECT_EQ(scopeRejected.error(), CpuTaskAdmissionError::ScopeCanceled);
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+    EXPECT_EQ(callbacks, 0u);
+    const auto accepted = scheduler.submit([&]()noexcept{ ++callbacks; });
+    ASSERT_TRUE(accepted);
+    EXPECT_TRUE(accepted->valid());
+    scheduler.wait(*accepted);
+    EXPECT_EQ(callbacks, 1u);
+    scheduler.drain();
+    const auto shutdownRejected = scheduler.submit([&]()noexcept{ ++callbacks; });
+    ASSERT_FALSE(shutdownRejected);
+    EXPECT_EQ(shutdownRejected.error(), CpuTaskAdmissionError::Aborting);
+    EXPECT_EQ(callbacks, 1u);
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+}
+
+
 TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery){
     EXPECT_DEATH({
         using namespace __hidden_cpu_task_submission_tests;
         DeadlineGuard deadline;
         const int result = InvokeTerminalEntry<u32>([]()->int{
             CpuTaskScheduler scheduler(1u);
-            const auto task = scheduler.submit([&](){
+            const auto cpuAdmission135 = scheduler.submit([&](){
                 if(scheduler.currentWorkerIndex() == 0u)
                     ExitTestProcess(0u);
                 throw s_WorkerException;
-            });
+            }
+            );
+            if(!cpuAdmission135)
+                ExitTestProcess(0u);
+            const auto task = *cpuAdmission135;
             if(!task.valid())
                 return 0;
             scheduler.wait(task);
             return 0;
-        }, [](const u32){ return 0; }, []()noexcept{ return 0; });
+        }, [](const u32){ return 0; }, []()noexcept{ return 0; }
+        );
         ExitTestProcess(static_cast<u32>(result));
-    }, "");
+    }, ""
+    );
 }
 
 
@@ -153,7 +197,7 @@ TEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferred
         const int result = InvokeTerminalEntry<u32>([]()->int{
             CpuTaskScheduler scheduler(1u);
             AtomicFlag workerEntered;
-            scheduler.parallelFor(0u, 64u, [&](const usize){
+            EXPECT_TRUE((scheduler.parallelFor(0u, 64u, [&](const usize){
                 if(scheduler.currentWorkerIndex() == 0u){
                     while(!workerEntered.test(MemoryOrder::acquire))
                         workerEntered.wait(false, MemoryOrder::acquire);
@@ -162,11 +206,14 @@ TEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferred
                 workerEntered.testAndSet(MemoryOrder::release);
                 workerEntered.notifyAll();
                 throw s_WorkerException;
-            });
+            }
+            )));
             return 0;
-        }, [](const u32){ return 0; }, []()noexcept{ return 0; });
+        }, [](const u32){ return 0; }, []()noexcept{ return 0; }
+        );
         ExitTestProcess(static_cast<u32>(result));
-    }, "");
+    }, ""
+    );
 }
 
 

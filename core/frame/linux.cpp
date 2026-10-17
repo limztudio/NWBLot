@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+#include <core/alloc/scratch.h>
 
 #include <global/environment.h>
 
@@ -41,7 +42,10 @@ inline constexpr StringView s_XdgSessionTypeEnvName = "XDG_SESSION_TYPE";
 inline constexpr StringView s_WaylandDisplayEnvName = "WAYLAND_DISPLAY";
 
 
-static StringView BackendName(Common::LinuxFrameBackend::Enum backend){
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static StringView BackendName(Common::LinuxFrameBackend::Enum backend)noexcept{
     switch(backend){
     case Common::LinuxFrameBackend::Enum::X11: return s_X11BackendName;
     case Common::LinuxFrameBackend::Enum::Wayland: return s_WaylandBackendName;
@@ -54,18 +58,26 @@ static StringView BackendName(Common::LinuxFrameBackend::Enum backend){
 
 inline constexpr usize s_LinuxBackendOrderCapacity = 2u;
 
-static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity], usize& count, const Common::LinuxFrameBackend::Enum backend){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity], usize& count, const Common::LinuxFrameBackend::Enum backend)noexcept{
     NWB_ASSERT(count < LengthOf(outOrder));
     outOrder[count] = backend;
     ++count;
 }
 
-static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity]){
-    Alloc::GlobalArena arena(FrameArenaScope::s_LinuxEnvironmentArena);
+static Expected<usize> BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity], Alloc::ScratchArena& scratchArena){
     usize count = 0;
 
-    if(const auto requestedBackend = ReadEnvironmentVariable(arena, s_LinuxBackendEnvName)){
-        if(*requestedBackend == s_X11BackendRequest){
+    const auto requestedBackend = ReadEnvironmentVariable(scratchArena, s_LinuxBackendEnvName);
+    if(!requestedBackend){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Linux backend environment: {}"), StringConvert(requestedBackend.error().message()));
+        return MakeUnexpected(Failure{});
+    }
+    if(*requestedBackend){
+        if(**requestedBackend == s_X11BackendRequest){
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
 #if defined(NWB_WITH_WAYLAND)
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
@@ -74,18 +86,32 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_Lin
         }
 
 #if defined(NWB_WITH_WAYLAND)
-        if(*requestedBackend == s_WaylandBackendRequest){
+        if(**requestedBackend == s_WaylandBackendRequest){
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
             return count;
         }
 #endif
 
-        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Ignoring unsupported NWB_LINUX_BACKEND='{}'."), StringConvert(*requestedBackend));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Unsupported NWB_LINUX_BACKEND='{}'."), StringConvert(**requestedBackend));
+        return MakeUnexpected(Failure{});
     }
 
 #if defined(NWB_WITH_WAYLAND)
-    const bool preferWayland = EnvironmentVariableEquals(arena, s_XdgSessionTypeEnvName, s_WaylandBackendRequest) || HasEnvironmentValue(arena, s_WaylandDisplayEnvName);
+    const auto sessionIsWayland = EnvironmentVariableEquals(scratchArena, s_XdgSessionTypeEnvName, s_WaylandBackendRequest);
+    if(!sessionIsWayland){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read session environment: {}"), StringConvert(sessionIsWayland.error().message()));
+        return MakeUnexpected(Failure{});
+    }
+    bool preferWayland = *sessionIsWayland;
+    if(!preferWayland){
+        const auto hasWaylandDisplay = HasEnvironmentValue(scratchArena, s_WaylandDisplayEnvName);
+        if(!hasWaylandDisplay){
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Wayland display environment: {}"), StringConvert(hasWaylandDisplay.error().message()));
+            return MakeUnexpected(Failure{});
+        }
+        preferWayland = *hasWaylandDisplay;
+    }
     if(preferWayland){
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
@@ -117,7 +143,8 @@ static bool TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend
 static bool ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
     switch(backend){
     case Common::LinuxFrameBackend::Enum::X11:
-        return ShowX11Frame(frame);
+        ShowX11Frame(frame);
+        return true;
 #if defined(NWB_WITH_WAYLAND)
     case Common::LinuxFrameBackend::Enum::Wayland:
         return ShowWaylandFrame(frame);
@@ -174,8 +201,12 @@ bool Frame::init(){
     auto& frameData = data<Common::LinuxFrame>();
 
     Common::LinuxFrameBackend::Enum backendOrder[FrameDetail::s_LinuxBackendOrderCapacity];
-    const usize backendCount = FrameDetail::BuildBackendOrder(backendOrder);
-    for(usize i = 0u; i < backendCount; ++i){
+    Alloc::ScratchArena scratchArena(FrameArenaScope::s_LinuxEnvironmentArena);
+    const auto backendCount = FrameDetail::BuildBackendOrder(backendOrder, scratchArena);
+    if(!backendCount)
+        return false;
+
+    for(usize i = 0u; i < *backendCount; ++i){
         const Common::LinuxFrameBackend::Enum backend = backendOrder[i];
         if(FrameDetail::TryInitBackend(*this, backend)){
             frameData.setBackend(backend);
@@ -200,7 +231,7 @@ bool Frame::mainLoop(){
     return FrameDetail::RunBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
 
-GlobalUniquePtr<IClipboardService> Frame::createPlatformClipboardService(){
+Expected<GlobalUniquePtr<IClipboardService>> Frame::createPlatformClipboardService(){
     switch(data<Common::LinuxFrame>().backend()){
     case Common::LinuxFrameBackend::X11:
         return FrameDetail::CreateX11FrameClipboard(*this);
@@ -210,11 +241,11 @@ GlobalUniquePtr<IClipboardService> Frame::createPlatformClipboardService(){
 #endif
     case Common::LinuxFrameBackend::None:
     default:
-        return {};
+        return MakeUnexpected(Failure{});
     }
 }
 
-GlobalUniquePtr<ITextInputService> Frame::createPlatformTextInputService(){
+Expected<GlobalUniquePtr<ITextInputService>> Frame::createPlatformTextInputService(){
     switch(data<Common::LinuxFrame>().backend()){
     case Common::LinuxFrameBackend::X11:
         return FrameDetail::CreateX11FrameTextInput(*this);
@@ -224,11 +255,11 @@ GlobalUniquePtr<ITextInputService> Frame::createPlatformTextInputService(){
 #endif
     case Common::LinuxFrameBackend::None:
     default:
-        return {};
+        return MakeUnexpected(Failure{});
     }
 }
 
-void Frame::setupPlatform(void* inst){
+void Frame::setupPlatform(void* inst)noexcept{
     static_cast<void>(inst);
 
     auto& frameData = data<Common::LinuxFrame>();

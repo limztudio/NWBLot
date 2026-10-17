@@ -8,6 +8,9 @@
 #include "report_json.h"
 #include "memory_report.h"
 
+#include <core/alloc/scratch.h>
+
+#include <global/bit.h>
 #include <global/hash_utils.h>
 #include <global/type_properties.h>
 
@@ -79,8 +82,13 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr u64 s_TimingSecondsExponentMask = 0x7FF0000000000000ull;
 static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
 static constexpr usize s_PerfCsvBytesPerEvent = 128u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
     const usize index = static_cast<usize>(kind);
@@ -124,17 +132,30 @@ void AppendPerfCsvRow(AString<TelemetryArena>& out, const Telemetry::PerfTimingS
 }
 
 void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPayload& payload)noexcept{
+#pragma STDC FENV_ACCESS ON
     if(payload.source == Telemetry::PerfTimingSource::Cpu){
         ++summary.cpuTimingEventCount;
         summary.cpuTimingSampleCount += payload.stats.sampleCount;
-        summary.cpuTimingSeconds += payload.stats.seconds;
+        if(summary.cpuTimingSecondsValid){
+            const f64 total = summary.cpuTimingSeconds + payload.stats.seconds;
+            if((BitCast<u64>(total) & s_TimingSecondsExponentMask) != s_TimingSecondsExponentMask)
+                summary.cpuTimingSeconds = total;
+            else
+                summary.cpuTimingSecondsValid = false;
+        }
         if(payload.stats.seconds > summary.maxCpuTimingSeconds)
             summary.maxCpuTimingSeconds = payload.stats.seconds;
     }
     else if(payload.source == Telemetry::PerfTimingSource::Gpu){
         ++summary.gpuTimingEventCount;
         summary.gpuTimingSampleCount += payload.stats.sampleCount;
-        summary.gpuTimingSeconds += payload.stats.seconds;
+        if(summary.gpuTimingSecondsValid){
+            const f64 total = summary.gpuTimingSeconds + payload.stats.seconds;
+            if((BitCast<u64>(total) & s_TimingSecondsExponentMask) != s_TimingSecondsExponentMask)
+                summary.gpuTimingSeconds = total;
+            else
+                summary.gpuTimingSecondsValid = false;
+        }
         if(payload.stats.seconds > summary.maxGpuTimingSeconds)
             summary.maxGpuTimingSeconds = payload.stats.seconds;
     }
@@ -264,7 +285,7 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
         case Telemetry::EventKind::FrameGraphFrame: {
             TelemetryReportDetail::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
             record.streamId = event->header.streamId;
-            auto payload = Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size());
+            auto payload = Telemetry::ParseFrameGraphPayload(arena, scratchArena, event->payload.data(), event->payload.size());
             if(!payload){
                 frameGraphs.pop_back();
                 ++report.summary.parseFailureCount;
@@ -279,7 +300,7 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
         }
     }
 
-    TelemetryReportDetail::BuildTimedGraphsDot(arena, frameGraphs, timingByFrameAndScope, report.graph);
+    TelemetryReportDetail::BuildTimedGraphsDot(scratchArena, frameGraphs, timingByFrameAndScope, report.graph);
     TelemetryReportDetail::BuildJson(report.summary, frameGraphs, memoryRecords, report.json);
     return report;
 }

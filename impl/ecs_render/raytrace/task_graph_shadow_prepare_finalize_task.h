@@ -30,6 +30,8 @@ struct ShadowPrepareAccelStructFinalizeGraphTask{
 
     struct Payload{};
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
 };
 

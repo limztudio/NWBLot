@@ -36,6 +36,9 @@ using TestArena = ::NWB::Tests::TestArena<struct TaskGraphStorageTestsTag>;
 inline constexpr Name s_StorageScratchArena("tests/task/gpu/storage_scratch");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
     constexpr usize s_TaskCount = 4096u;
     TestArena testArena;
@@ -44,20 +47,26 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
     identities.reserve(s_TaskCount);
     for(usize index = 0u; index < s_TaskCount; ++index){
         char indexText[32u] = {};
-        identities.push_back(DeriveName(Name("tests/graph_storage/task/"), FormatDecimal(index, indexText)));
+        const auto derivedNameAt50Col29 = DeriveName(Name("tests/graph_storage/task/"), FormatDecimal(index, indexText));
+        ASSERT_TRUE(derivedNameAt50Col29);
+        identities.push_back(*derivedNameAt50Col29);
     }
 
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskId previousGenerationTask;
     for(usize pass = 0u; pass < 2u; ++pass){
-        const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}
+        const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}
             .setIdentity(Name("tests/graph_storage/input"))
             .setMarkerLabel("Storage Input")
             .setType(Core::GpuGraphResourceType::Buffer)
             .setInitialState(Core::ResourceStates::ShaderResource)
         );
+        ASSERT_TRUE(resourceResult);
+        const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        const Core::GpuExternalCompletionId completion = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/graph_storage/completion")).setMarkerLabel("Storage Completion"));
+        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/graph_storage/completion")).setMarkerLabel("Storage Completion"));
+        ASSERT_TRUE(completionResult);
+        const Core::GpuExternalCompletionId completion = *completionResult;
         ASSERT_TRUE(completion.valid());
         const Core::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
         Core::GpuTaskId previousTask;
@@ -66,7 +75,9 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         for(usize index = 0u; index < s_TaskCount; ++index){
             Core::GpuTaskDesc desc;
             desc.setIdentity(identities[index]).setMarkerLabel("Storage Chain Task").setDependencies(&previousTask, index == 0u ? 0u : 1u).setExternalDependencies(&completion, 1u).setResourceUses(&use, 1u);
-            previousTask = graph.addTask(desc);
+            const auto gpuAdmissionAt72 = graph.addTask(desc);
+            ASSERT_TRUE(gpuAdmissionAt72);
+            previousTask = *gpuAdmissionAt72;
             accepted = accepted && previousTask.valid();
         }
         const ArenaMemoryStats memoryAfter = testArena.arena.memoryStats();
@@ -109,19 +120,31 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
     identities.reserve(s_RecordCount);
     for(usize index = 0u; index < s_RecordCount; ++index){
         char indexText[32u] = {};
-        identities.push_back(DeriveName(Name("tests/graph_storage/record/"), FormatDecimal(index, indexText)));
+        const auto derivedNameAt121Col29 = DeriveName(Name("tests/graph_storage/record/"), FormatDecimal(index, indexText));
+        ASSERT_TRUE(derivedNameAt121Col29);
+        identities.push_back(*derivedNameAt121Col29);
     }
     Core::GpuTaskGraph graph(testArena.arena);
     Vector<Core::GpuUploadBlobId, Core::Alloc::ScratchArena> uploads(scratchArena);
     uploads.reserve(s_RecordCount);
     bool accepted = true;
     for(usize index = 0u; index < s_RecordCount; ++index){
-        const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource").setType(Core::GpuGraphResourceType::Buffer));
-        const Core::GpuGraphResourceSetId resourceSet = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource Set").setMembers(&resource, 1u));
-        const Core::GpuGraphPipelineId pipeline = graph.importPipeline(Core::GpuGraphPipelineDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Pipeline").setType(Core::GpuGraphPipelineType::Compute));
-        const Core::GpuExternalCompletionId completion = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Completion"));
+        const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource").setType(Core::GpuGraphResourceType::Buffer));
+        ASSERT_TRUE(resourceResult);
+        const Core::GpuGraphResourceId resource = *resourceResult;
+        const auto resourceSetResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource Set").setMembers(&resource, 1u));
+        ASSERT_TRUE(resourceSetResult);
+        const Core::GpuGraphResourceSetId resourceSet = *resourceSetResult;
+        const auto pipelineResult = graph.importPipeline(Core::GpuGraphPipelineDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Pipeline").setType(Core::GpuGraphPipelineType::Compute));
+        ASSERT_TRUE(pipelineResult);
+        const Core::GpuGraphPipelineId pipeline = *pipelineResult;
+        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Completion"));
+        ASSERT_TRUE(completionResult);
+        const Core::GpuExternalCompletionId completion = *completionResult;
         const u64 bytes[] = { static_cast<u64>(index), ~static_cast<u64>(index) };
-        const Core::GpuUploadBlobId upload = graph.copyUploadData(bytes, sizeof(bytes), alignof(u64));
+        const auto uploadResult = graph.copyUploadData(bytes, sizeof(bytes), alignof(u64));
+        ASSERT_TRUE(uploadResult);
+        const Core::GpuUploadBlobId upload = *uploadResult;
         uploads.push_back(upload);
         accepted = accepted && resource.valid() && resourceSet.valid() && pipeline.valid() && completion.valid() && upload.valid();
     }

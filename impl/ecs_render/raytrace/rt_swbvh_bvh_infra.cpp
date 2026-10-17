@@ -43,8 +43,12 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         // Push-only layout; sort resources use the global heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
 
-        m_rayTracingState.m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_bvhSortBindingLayout){
+        auto bvhSortBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(bvhSortBindingLayoutResult)
+            m_rayTracingState.m_bvhSortBindingLayout = Move(*bvhSortBindingLayoutResult);
+        else
+            m_rayTracingState.m_bvhSortBindingLayout.reset();
+        if(!bvhSortBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
             m_rayTracingState.m_bvhSortPipelineFailed = true;
             return false;
@@ -58,8 +62,12 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_rayTracingState.m_bvhSortShader).addBindingLayout(m_rayTracingState.m_bvhSortBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    m_rayTracingState.m_bvhSortPipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_bvhSortPipeline){
+    auto bvhSortPipelineResult = device.createComputePipeline(pipelineDesc);
+    if(bvhSortPipelineResult)
+        m_rayTracingState.m_bvhSortPipeline = Move(*bvhSortPipelineResult);
+    else
+        m_rayTracingState.m_bvhSortPipeline.reset();
+    if(!bvhSortPipelineResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
         m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
@@ -123,11 +131,12 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         .setDebugName(Name("bvh_sort_keys"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle keysBuffer = m_graphics.createBuffer(keysBufferDesc);
-    if(!keysBuffer){
+    auto keysBufferResult = m_graphics.createBuffer(keysBufferDesc);
+    if(!keysBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
         return false;
     }
+    Core::BufferHandle keysBuffer = Move(*keysBufferResult);
 
     Core::BufferDesc payloadBufferDesc;
     payloadBufferDesc
@@ -138,11 +147,12 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         .setDebugName(Name("bvh_sort_payload"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle payloadBuffer = m_graphics.createBuffer(payloadBufferDesc);
-    if(!payloadBuffer){
+    auto payloadBufferResult = m_graphics.createBuffer(payloadBufferDesc);
+    if(!payloadBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
         return false;
     }
+    Core::BufferHandle payloadBuffer = Move(*payloadBufferResult);
 
     Core::GpuDescriptorHandle keysHeapHandle;
     Core::GpuDescriptorHandle payloadHeapHandle;
@@ -264,15 +274,19 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         // Push-only layout; build resources use the global heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
 
-        m_rayTracingState.m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_bvhBuildBindingLayout){
+        auto bvhBuildBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(bvhBuildBindingLayoutResult)
+            m_rayTracingState.m_bvhBuildBindingLayout = Move(*bvhBuildBindingLayoutResult);
+        else
+            m_rayTracingState.m_bvhBuildBindingLayout.reset();
+        if(!bvhBuildBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding layout"));
             m_rayTracingState.m_bvhBuildPipelineFailed = true;
             return false;
         }
     }
 
-    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const AStringView debugLabel)->bool{
+    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const NameText<char> debugLabel)->bool{
         if(pipeline)
             return true;
         if(!m_shaderSystem.loadShader<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
@@ -280,8 +294,12 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
 
         Core::ComputePipelineDesc pipelineDesc;
         pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_bvhBuildBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        pipeline = device.createComputePipeline(pipelineDesc);
-        return pipeline != nullptr;
+        auto pipelineResult = device.createComputePipeline(pipelineDesc);
+        if(pipelineResult)
+            pipeline = Move(*pipelineResult);
+        else
+            pipeline.reset();
+        return static_cast<bool>(pipelineResult);
     };
 
     if(
@@ -329,11 +347,12 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         .setDebugName(Name("bvh_visit_counter"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle counterBuffer = m_graphics.createBuffer(counterBufferDesc);
-    if(!counterBuffer){
+    auto counterBufferResult = m_graphics.createBuffer(counterBufferDesc);
+    if(!counterBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH visit counter buffer"));
         return false;
     }
+    Core::BufferHandle counterBuffer = Move(*counterBufferResult);
 
     const auto counterHeapHandle = RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *counterBuffer.get());
     if(!counterHeapHandle){
@@ -404,11 +423,12 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
         .setDebugName(Name("bvh_mesh_nodes"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle newNodeBuffer = m_graphics.createBuffer(nodeBufferDesc);
-    if(!newNodeBuffer){
+    auto newNodeBufferResult = m_graphics.createBuffer(nodeBufferDesc);
+    if(!newNodeBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH node buffer"));
         return false;
     }
+    Core::BufferHandle newNodeBuffer = Move(*newNodeBufferResult);
 
     Core::BufferDesc parentBufferDesc;
     parentBufferDesc
@@ -419,11 +439,12 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
         .setDebugName(Name("bvh_mesh_parent"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle newParentBuffer = m_graphics.createBuffer(parentBufferDesc);
-    if(!newParentBuffer){
+    auto newParentBufferResult = m_graphics.createBuffer(parentBufferDesc);
+    if(!newParentBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH parent buffer"));
         return false;
     }
+    Core::BufferHandle newParentBuffer = Move(*newParentBufferResult);
 
     Core::GpuDescriptorHandle newNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle newParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
@@ -635,11 +656,12 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             .setDebugName(Name("scene_bvh_nodes"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        Core::BufferHandle nodeBuffer = m_graphics.createBuffer(nodeBufferDesc);
-        if(!nodeBuffer){
+        auto nodeBufferResult = m_graphics.createBuffer(nodeBufferDesc);
+        if(!nodeBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH node buffer"));
             return false;
         }
+        Core::BufferHandle nodeBuffer = Move(*nodeBufferResult);
         // Register the new view before replacing ownership to keep the old pair retryable.
         if(!replaceRayTraceMaterialContextHeapHandle(*nodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle))
             return false;
@@ -658,21 +680,24 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             .setDebugName(Name("scene_bvh_instances"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
-        if(!instanceBuffer){
+        auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
+        if(!instanceBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH instance buffer"));
             return false;
         }
+        Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
         if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle))
             return false;
         m_rayTracingState.m_sceneInstanceBuffer = Move(instanceBuffer);
         m_rayTracingState.m_sceneInstanceCapacity = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)"), static_cast<u64>(capacity));
     }
-    return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle) && ensureRayTraceMaterialContextHeapHandle(
+    return
+        ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle) && ensureRayTraceMaterialContextHeapHandle(
         *m_rayTracingState.m_sceneInstanceBuffer.get(),
         m_rayTracingState.m_sceneInstanceHeapHandle
-    );
+    )
+    ;
 }
 
 

@@ -22,6 +22,8 @@ public:
     using value_type = CharT;
     using view_type = BasicStringView<value_type>;
 
+
+public:
     static constexpr usize s_StorageBytes = 256;
     static constexpr usize s_LengthBytes = sizeof(u8);
     static constexpr usize s_UsableBytes = s_StorageBytes - s_LengthBytes;
@@ -30,6 +32,8 @@ public:
     static constexpr usize s_MaxLength = s_BufferLength - 1;
     static constexpr usize s_NPos = Limit<usize>::s_Max;
 
+
+public:
     static_assert(s_BufferLength > 0, "BasicCompactString requires storage for at least one null terminator");
 
 
@@ -38,8 +42,7 @@ public:
         : m_storage{}
         , m_size(0)
     {}
-
-    BasicCompactString(const value_type* text)
+    BasicCompactString(const value_type* text)noexcept(IsArithmetic_V<value_type>)
         : m_storage{}
         , m_size(0)
     {
@@ -48,7 +51,7 @@ public:
             clear();
         }
     }
-    explicit BasicCompactString(const view_type text)
+    explicit BasicCompactString(const view_type text)noexcept(IsArithmetic_V<value_type>)
         : m_storage{}
         , m_size(0)
     {
@@ -58,7 +61,7 @@ public:
         }
     }
     template<typename ArenaT>
-    explicit BasicCompactString(const BasicString<value_type, ArenaT>& text)
+    explicit BasicCompactString(const BasicString<value_type, ArenaT>& text)noexcept(IsArithmetic_V<value_type>)
         : m_storage{}
         , m_size(0)
     {
@@ -66,6 +69,52 @@ public:
             NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
             clear();
         }
+    }
+
+
+public:
+    [[nodiscard]] explicit operator bool()const noexcept{
+        return !empty();
+    }
+
+    [[nodiscard]] operator view_type()const noexcept{
+        return view();
+    }
+
+    BasicCompactString& operator+=(const value_type* text)noexcept(noexcept(append(text))){
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
+        return *this;
+    }
+
+    BasicCompactString& operator+=(const view_type text)noexcept(noexcept(append(text))){
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
+        return *this;
+    }
+
+    template<typename ArenaT>
+    BasicCompactString& operator+=(const BasicString<value_type, ArenaT>& text)noexcept(noexcept(append(text))){
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
+        return *this;
+    }
+
+    BasicCompactString& operator+=(const BasicCompactString& text)noexcept(noexcept(append(text))){
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
+        return *this;
+    }
+
+    BasicCompactString& operator+=(const value_type ch)noexcept(noexcept(pushBack(ch))){
+        if(!pushBack(ch)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
+        return *this;
     }
 
 
@@ -156,10 +205,8 @@ public:
         return m_size == 0;
     }
 
-    [[nodiscard]] explicit operator bool()const noexcept{
-        return !empty();
-    }
 
+public:
     [[nodiscard]] usize size()const noexcept{
         return m_size;
     }
@@ -180,10 +227,8 @@ public:
         return view_type(m_storage, m_size);
     }
 
-    [[nodiscard]] operator view_type()const noexcept{
-        return view();
-    }
 
+public:
     [[nodiscard]] const value_type* c_str()const noexcept{
         return m_storage;
     }
@@ -210,43 +255,9 @@ public:
         return result;
     }
 
-    BasicCompactString& operator+=(const value_type* text){
-        if(!append(text)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        }
-        return *this;
-    }
 
-    BasicCompactString& operator+=(const view_type text){
-        if(!append(text)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        }
-        return *this;
-    }
-
-    template<typename ArenaT>
-    BasicCompactString& operator+=(const BasicString<value_type, ArenaT>& text){
-        if(!append(text)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        }
-        return *this;
-    }
-
-    BasicCompactString& operator+=(const BasicCompactString& text){
-        if(!append(text)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        }
-        return *this;
-    }
-
-    BasicCompactString& operator+=(const value_type ch){
-        if(!pushBack(ch)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        }
-        return *this;
-    }
-
-    void push_back(const value_type ch){
+public:
+    void push_back(const value_type ch)noexcept(noexcept(*this += ch)){
         *this += ch;
     }
 
@@ -287,27 +298,27 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const CharT* rhs){
+[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const CharT* rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }
 template<typename CharT>
-[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicStringView<CharT> rhs){
+[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicStringView<CharT> rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicString<CharT, ArenaT>& rhs){
+[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicString<CharT, ArenaT>& rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }
 template<typename CharT>
-[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicCompactString<CharT>& rhs){
+[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }
 template<typename CharT>
-[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const CharT rhs){
+[[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const CharT rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }

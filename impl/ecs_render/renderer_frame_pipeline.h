@@ -121,6 +121,7 @@ class RendererFramePipeline final : NoCopy{
     friend class GraphicsPrefixTimingResolver;
     friend class ShadowVisibilityMergeValidator;
 
+
 private:
     // Transition reports observe accepted-history lifecycle decisions without owning them.
     enum class LaggedLightingReport : u8{
@@ -130,6 +131,7 @@ private:
         ActiveHistoryAccepted,
         CurrentFrameAccepted,
     };
+
 
 public:
     using ShaderPathResolveCallback = RendererShaderPathResolveCallback;
@@ -154,26 +156,26 @@ public:
     void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
     }
-    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings){
+    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
         return m_raytracingSystem.setCausticQualitySettings(settings);
     }
 
-    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings){
+    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
         if(!ValidateSurfelGiQualitySettings(settings))
             return false;
         m_surfelGiQualitySettings = settings;
         return true;
     }
 
-    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings){
+    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
         return m_raytracingSystem.setSoftwareShadowSettings(settings);
     }
-    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings){
+    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
         return m_raytracingSystem.setShadowQualitySettings(settings);
     }
-    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
+    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings)noexcept;
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
-    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
+    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings)noexcept;
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
@@ -204,7 +206,7 @@ private:
     void resetDeferredTaskGraphRuntime();
     void resetFrameTaskState();
     void resetDeferredCausticsTaskState()noexcept;
-    void resetSharedDeferredFrameTaskState();
+    void resetSharedDeferredFrameTaskState()noexcept;
     void resetGraphicsPrefixTaskState()noexcept;
     // Accepted cross-frame scratch and producer-return state survives ordinary recording attempts. Reset it only when the imported target/resource generation changes.
     void resetTargetGenerationStateHandoffs()noexcept;
@@ -214,6 +216,7 @@ private:
     void resetLaggedLightingHistoryReadTracking()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
     [[nodiscard]] bool declareDeferredShadowPrepareTask(
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -227,6 +230,7 @@ private:
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] Expected<u64> declareDeferredGraphicsPrefixTasks(
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         ObjectGeometryCacheGraph& objectGeometry,
         Core::GpuTaskId shadowPrepareTask,
@@ -278,6 +282,7 @@ private:
         const bool* asyncPrefixTimingSpansOnePacket
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
@@ -309,6 +314,7 @@ private:
         u32& opaqueFrameIndex
     );
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
+        Core::Alloc::ScratchArena& scratchArena,
         bool hardwareCaustics,
         DeferredFrameTargets& deferredTargets,
         const DeferredLightingGraphResources& deferredLightingResources,
@@ -329,6 +335,7 @@ private:
         Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -456,8 +463,7 @@ private:
     // Pairwise-distinct opaque regular compute-emulation outputs dispatch before G-buffer rasterization. This producer must share G-buffer's existing primary-Graphics packet for the graph-owned UAV-to-vertex/index handoff to remain inside the semantic prefix range.
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet.
-    // Retain every phase ID runtime validation can prove the strict D(A) -> R(A) -> ...
-    // packet order, rather than merely proving that the two endpoint callbacks coalesced.
+    // Retain every phase ID so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving that the two endpoint callbacks coalesced.
     // The active prefix holds four, six, eight, or ten phases for two through five draws.
     Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount] = {};
     usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;

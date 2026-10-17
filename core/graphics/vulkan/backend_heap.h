@@ -34,7 +34,7 @@ private:
 
 
 public:
-    Heap(const VulkanContext& context, VulkanAllocator& allocator);
+    Heap(const VulkanContext& context, VulkanAllocator& allocator)noexcept;
     ~Heap();
 
 

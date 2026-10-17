@@ -80,7 +80,7 @@ protected:
         return layout && m_view.adoptLayout(Move(*layout));
     }
 
-    [[nodiscard]] bool place(f32 width = 100.0f, f32 scroll = 0.0f){
+    [[nodiscard]] bool place(f32 width = 100.0f, f32 scroll = 0.0f)noexcept{
         const auto placement = m_view.arrange({ 10.0f, 20.0f, width, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, { scroll, 0.0f });
         if(!placement)
             return false;
@@ -88,7 +88,7 @@ protected:
         return true;
     }
 
-    [[nodiscard]] Expected<Rect> rangeRect(const EditBoxRange range)const{
+    [[nodiscard]] Expected<Rect> rangeRect(const EditBoxRange range)const noexcept{
         auto rect = m_view.caretGeometry().rangeOnLine(range, 0u, m_placement.caret.width);
         if(!rect)
             return MakeUnexpected(Failure{});
@@ -350,6 +350,7 @@ TEST_F(EditBoxLayoutTests, EmptySelectionRejectsInvalidCaretWidthsAndRestoresCli
 }
 
 TEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestoresClipping){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     Font font(m_arena, Name("tests/ui/edit_box/font"));
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
     auto bytes = Tests::ReadBundledFontBytes(path, m_arena);
@@ -358,7 +359,7 @@ TEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestor
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);
     const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/edit_box/font"), font, 1u };
-    ASSERT_TRUE(service.setFonts(&source, 1u));
+    ASSERT_TRUE(service.setFonts(fontScratchArena, &source, 1u));
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("IME", 3u, 3u));
     ASSERT_TRUE(m_view.snapshot(m_model));
@@ -388,6 +389,7 @@ TEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestor
 }
 
 TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     Font font(m_arena, Name("tests/ui/edit_box/font"));
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
     Core::Assets::AssetBytes bytes(m_arena);
@@ -398,7 +400,7 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);
     const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/edit_box/font"), font, 1u };
-    ASSERT_TRUE(service.setFonts(&source, 1u));
+    ASSERT_TRUE(service.setFonts(fontScratchArena, &source, 1u));
     ASSERT_TRUE(m_model.setText("ffi"));
     ASSERT_TRUE(m_model.setSelection(1u, 2u));
     ASSERT_TRUE(m_view.snapshot(m_model));

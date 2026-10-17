@@ -35,22 +35,22 @@ public:
     }
 
     template<typename T>
-    void removeComponent(){
+    void removeComponent()noexcept(noexcept(DeclVal<ComponentPool<T>&>().remove(DeclVal<EntityID>()))){
         m_world.removeComponent<T>(m_entity);
     }
 
     template<typename T>
-    T& getComponent(){
+    T& getComponent()noexcept{
         return m_world.getComponent<T>(m_entity);
     }
 
     template<typename T>
-    const T& getComponent()const{
+    const T& getComponent()const noexcept{
         return m_world.getComponent<T>(m_entity);
     }
 
     template<typename T>
-    bool hasComponent()const{
+    bool hasComponent()const noexcept{
         return m_world.hasComponent<T>(m_entity);
     }
 

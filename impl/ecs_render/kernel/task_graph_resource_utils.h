@@ -60,15 +60,19 @@ template<typename Plan>
             const Name bufferIdentity = buffer->getCreationDescription().debugName;
             if(!bufferIdentity)
                 return MakeUnexpected(Failure{});
-            resource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
+            const auto importedResource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
+            if(!importedResource)
+                return MakeUnexpected(Failure{});
+            resource = *importedResource;
         }
         if(!resource.valid())
             return MakeUnexpected(Failure{});
         members.push_back(resource);
     }
-    const Core::GpuGraphResourceSetId result = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
-    if(!result.valid())
+    const auto resultResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
+    if(!resultResult)
         return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceSetId result = *resultResult;
     return result;
 }
 

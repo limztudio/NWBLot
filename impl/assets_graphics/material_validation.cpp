@@ -66,7 +66,17 @@ bool ValidateMaterials(ShaderCook& shaderCook, const PreparedShaderVector& prepa
     HashMap<ShaderStageKey, const PreparedShaderEntry*, ScratchArena, ShaderStageKeyHasher, EqualTo<ShaderStageKey>> preparedShaderLookup(0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena);
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
-        const ShaderStageKey shaderKey{ ToName(preparedEntry.entry.name), ToName(preparedEntry.entry.archiveStage.view()) };
+        const auto shaderName = ToName(preparedEntry.entry.name);
+        const auto stageName = ToName(preparedEntry.entry.archiveStage.view());
+        if(!shaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader name has invalid text (failure {})"), static_cast<u32>(shaderName.error()));
+            return false;
+        }
+        if(!stageName){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader stage has invalid text for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(stageName.error()));
+            return false;
+        }
+        const ShaderStageKey shaderKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
         if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate prepared shader key '{}' stage '{}'"), StringConvert(preparedEntry.entry.name), StringConvert(preparedEntry.entry.archiveStage.view()));
             return false;
@@ -103,7 +113,12 @@ bool ValidateMaterials(ShaderCook& shaderCook, const PreparedShaderVector& prepa
                     );
                     return false;
                 }
-                if(shaderMaterialInterface != Name(AStringView(materialEntry.materialInterface))){
+                const auto materialInterface = Name::FromText(AStringView(materialEntry.materialInterface));
+                if(!materialInterface){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' interface has invalid text (failure {})"), StringConvert(AStringView(materialEntry.virtualPath)), static_cast<u32>(materialInterface.error()));
+                    return false;
+                }
+                if(shaderMaterialInterface != *materialInterface){
                     NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' " "includes generated material bind interface '{}'")
                         , StringConvert(AStringView(materialEntry.virtualPath))
                         , StringConvert(AStringView(materialEntry.materialInterface))

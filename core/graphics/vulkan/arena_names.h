@@ -44,8 +44,6 @@ inline constexpr AStringView s_AbandonedPresentationSignalIdleContext = "abandon
 inline constexpr AStringView s_UnconsumedPresentationSignalIdleContext = "unconsumed presentation signal idle";
 inline constexpr AStringView s_PresentContext = "present";
 inline constexpr Name s_QueueFamilyQueryArena("core/graphics/backend_queue_family_query");
-inline constexpr Name s_PhysicalDeviceSelectArena("core/graphics/backend_physical_device_select");
-inline constexpr Name s_DeviceCreateArena("core/graphics/backend_device_create");
 inline constexpr Name s_SwapChainPresentModeArena("core/graphics/backend_swap_chain_present_mode");
 inline constexpr Name s_DeviceExtensionSetupArena("core/graphics/backend_device_extension_setup");
 inline constexpr Name s_AdapterEnumerateArena("core/graphics/backend_adapter_enumerate");
@@ -53,7 +51,6 @@ inline constexpr Name s_AdapterEnumerateArena("core/graphics/backend_adapter_enu
 inline constexpr Name s_ComputePipelineArena("core/graphics/compute_pipeline");
 
 inline constexpr Name s_PipelineCacheSaveArena("core/graphics/device_pipeline_cache_save");
-inline constexpr Name s_CommandListExecuteArena("core/graphics/device_command_list_execute");
 inline constexpr Name s_StateHandoffArena("core/graphics/command_list_state_handoff");
 inline constexpr Name s_CooperativeVectorQueryArena("core/graphics/device_cooperative_vector_query");
 

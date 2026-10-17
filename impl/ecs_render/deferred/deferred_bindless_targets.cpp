@@ -678,9 +678,14 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         .setDebugName("ECSRender_DeferredBindlessResourceSlots")
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         // Selector spans packets; retain descriptor-visible state at every native close.
-        .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
-    bindless.slotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
-    if(!bindless.slotsBuffer){
+        .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer)
+    ;
+    auto slotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
+    if(slotsBufferResult)
+        bindless.slotsBuffer = Move(*slotsBufferResult);
+    else
+        bindless.slotsBuffer.reset();
+    if(!slotsBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred bindless slot buffer"));
         resetDeferredBindlessFrameResources(targets);
         return false;

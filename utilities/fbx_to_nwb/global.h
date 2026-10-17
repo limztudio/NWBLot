@@ -18,6 +18,7 @@
 #include <global/limit.h>
 #include <global/simdmath.h>
 #include <global/simd/type.h>
+#include <global/span.h>
 #include <global/simplemath.h>
 #include <global/text_utils.h>
 #include <global/type.h>
@@ -48,9 +49,11 @@ namespace UtilityDetail{
 
 
 inline constexpr Name s_UtilityArena("utilities/fbx_to_nwb/utility");
-inline constexpr Name s_MeshBuildScratch("utilities/fbx_to_nwb/mesh_build");
-inline constexpr Name s_MeshRefreshScratch("utilities/fbx_to_nwb/mesh_refresh");
-inline constexpr Name s_AssetWriteScratch("utilities/fbx_to_nwb/asset_write");
+inline constexpr Name s_UtilityScratch("utilities/fbx_to_nwb/utility_scratch");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 inline Core::Alloc::GlobalArena& Arena(){
     static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
@@ -68,7 +71,9 @@ inline Core::Alloc::GlobalArena& Arena(){
 
 
 using AString = DefaultAString<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
-using AStringStream = DefaultAStringStream<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+using ScratchString = ::AString<Core::Alloc::ScratchArena>;
+using ScratchStringStream = ::AStringStream<Core::Alloc::ScratchArena>;
 
 template<
     typename K,

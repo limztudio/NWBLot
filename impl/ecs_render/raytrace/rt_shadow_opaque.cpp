@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -55,7 +55,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWaveletTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWaveletTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -92,7 +92,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,

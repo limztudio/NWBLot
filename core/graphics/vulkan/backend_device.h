@@ -7,6 +7,9 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -15,7 +18,6 @@
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
-#include <core/task/cpu/scheduler.h>
 #include <core/common/log.h>
 
 
@@ -29,7 +31,7 @@ NWB_VULKAN_BEGIN
 
 
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
-    friend DeviceHandle CreateDevice(const DeviceDesc& desc);
+    friend Expected<DeviceHandle> CreateDevice(const DeviceDesc& desc);
     friend class ::NWB::Core::GpuTaskScheduler;
     friend class BackendContext;
     friend class Buffer;
@@ -58,8 +60,8 @@ private:
     class SubmissionOperationLease final : NoCopy{
     private:
         [[nodiscard]] static const SubmissionOperationLease*& ActiveLease()noexcept{
-            static thread_local const SubmissionOperationLease* s_Value = nullptr;
-            return s_Value;
+            static thread_local const SubmissionOperationLease* s_ActiveLease = nullptr;
+            return s_ActiveLease;
         }
 
 
@@ -107,6 +109,8 @@ private:
             usize slotRecordCount = 0u;
             usize nextSerialCount = 0u;
 
+
+        public:
             Metadata(const Name& allocationLog, const usize arenaBytes, const usize newSlotRecordCount, const usize newNextSerialCount)
                 : arena(allocationLog, arenaBytes)
                 , slotRecords(MakePersistentUnique<AmdBreadcrumbSlotRecord[]>(arena, newSlotRecordCount))
@@ -124,6 +128,8 @@ private:
         Futex slotMutex;
         Optional<Metadata> metadata;
 
+
+    public:
         // The caller supplies a validated, non-empty ring layout.
         // Both arrays allocate once and retain their fixed device-lifetime backing, so their exact allocation spans are sufficient for the private persistent arena.
         [[nodiscard]] bool initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog){
@@ -172,22 +178,23 @@ public:
 
 
 public:
-    [[nodiscard]] HeapHandle createHeap(const HeapDesc& d);
-    [[nodiscard]] TextureHandle createTexture(const TextureDesc& d);
-    [[nodiscard]] MemoryRequirements getTextureMemoryRequirements(Texture& texture);
+    // Success owns a nonnull wrapper in its original creation state; virtual resources can still require memory binding.
+    [[nodiscard]] Expected<HeapHandle> createHeap(const HeapDesc& d);
+    [[nodiscard]] Expected<TextureHandle> createTexture(const TextureDesc& d);
+    [[nodiscard]] Expected<MemoryRequirements> getTextureMemoryRequirements(Texture& texture);
     bool bindTextureMemory(Texture& texture, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     [[nodiscard]] bool isTextureReadyForGpuUse(Texture* texture, VkImageUsageFlags requiredUsage = 0u)const noexcept;
     // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
     // Only one live Texture wrapper may name a VkImage per Device.
-    [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance);
-    [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
+    [[nodiscard]] Expected<TextureHandle> createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance);
+    [[nodiscard]] Expected<StagingTextureHandle> createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     Expected<StagingTextureMapping> mapStagingTexture(StagingTexture& tex, const TextureSlice& slice, CpuAccessMode::Enum);
     void unmapStagingTexture(StagingTexture& tex);
-    [[nodiscard]] BufferHandle createBuffer(const BufferDesc& d);
+    [[nodiscard]] Expected<BufferHandle> createBuffer(const BufferDesc& d);
     void* mapBuffer(Buffer& buffer, CpuAccessMode::Enum);
     void unmapBuffer(Buffer& buffer);
-    [[nodiscard]] MemoryRequirements getBufferMemoryRequirements(Buffer& buffer);
+    [[nodiscard]] Expected<MemoryRequirements> getBufferMemoryRequirements(Buffer& buffer);
     bool bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     // Native wrappers trust caller-managed binding.
@@ -196,36 +203,36 @@ public:
     [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
     // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
     // Only one live Buffer wrapper may name a VkBuffer per Device.
-    [[nodiscard]] BufferHandle createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance);
-    [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
-    [[nodiscard]] ShaderHandle createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants);
-    [[nodiscard]] ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize);
-    [[nodiscard]] SamplerHandle createSampler(const SamplerDesc& d);
-    [[nodiscard]] InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*);
-    [[nodiscard]] EventQueryHandle createEventQuery();
+    [[nodiscard]] Expected<BufferHandle> createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance);
+    [[nodiscard]] Expected<ShaderHandle> createShader(const ShaderDesc& d, const void* binary, usize binarySize);
+    [[nodiscard]] Expected<ShaderHandle> createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants);
+    [[nodiscard]] Expected<ShaderLibraryHandle> createShaderLibrary(const void* binary, usize binarySize);
+    [[nodiscard]] Expected<SamplerHandle> createSampler(const SamplerDesc& d);
+    [[nodiscard]] Expected<InputLayoutHandle> createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*);
+    [[nodiscard]] Expected<EventQueryHandle> createEventQuery();
     [[nodiscard]] bool setEventQuery(EventQuery& query, CommandQueue::Enum queue);
-    [[nodiscard]] bool pollEventQuery(EventQuery& query);
+    [[nodiscard]] Expected<bool> pollEventQuery(EventQuery& query);
     [[nodiscard]] bool waitEventQuery(EventQuery& query);
-    [[nodiscard]] TimerQueryHandle createTimerQuery();
-    bool pollTimerQuery(TimerQuery& query);
+    [[nodiscard]] Expected<TimerQueryHandle> createTimerQuery();
+    [[nodiscard]] Expected<bool> pollTimerQuery(TimerQuery& query);
     [[nodiscard]] Expected<TimerQueryResult> getTimerQueryResult(TimerQuery& query);
-    f32 getTimerQueryTime(TimerQuery& query);
+    Expected<f32> getTimerQueryTime(TimerQuery& query);
     bool resetTimerQuery(TimerQuery& query);
-    [[nodiscard]] FramebufferHandle createFramebuffer(const FramebufferDesc& desc);
-    [[nodiscard]] GraphicsPipelineHandle createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo);
-    [[nodiscard]] ComputePipelineHandle createComputePipeline(const ComputePipelineDesc& desc);
-    [[nodiscard]] MeshletPipelineHandle createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo);
-    [[nodiscard]] RayTracingPipelineHandle createRayTracingPipeline(const RayTracingPipelineDesc& desc);
-    [[nodiscard]] BindingLayoutHandle createBindingLayout(const BindingLayoutDesc& desc);
-    [[nodiscard]] BindingLayoutHandle createBindlessLayout(const BindlessLayoutDesc& desc);
-    [[nodiscard]] RayTracingOpacityMicromapHandle createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc);
-    [[nodiscard]] RayTracingAccelStructHandle createAccelStruct(const RayTracingAccelStructDesc& desc);
-    [[nodiscard]] MemoryRequirements getAccelStructMemoryRequirements(RayTracingAccelStruct& as);
+    [[nodiscard]] Expected<FramebufferHandle> createFramebuffer(const FramebufferDesc& desc);
+    [[nodiscard]] Expected<GraphicsPipelineHandle> createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo);
+    [[nodiscard]] Expected<ComputePipelineHandle> createComputePipeline(const ComputePipelineDesc& desc);
+    [[nodiscard]] Expected<MeshletPipelineHandle> createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo);
+    [[nodiscard]] Expected<RayTracingPipelineHandle> createRayTracingPipeline(const RayTracingPipelineDesc& desc);
+    [[nodiscard]] Expected<BindingLayoutHandle> createBindingLayout(const BindingLayoutDesc& desc);
+    [[nodiscard]] Expected<BindingLayoutHandle> createBindlessLayout(const BindlessLayoutDesc& desc);
+    [[nodiscard]] Expected<RayTracingOpacityMicromapHandle> createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc);
+    [[nodiscard]] Expected<RayTracingAccelStructHandle> createAccelStruct(const RayTracingAccelStructDesc& desc);
+    [[nodiscard]] Expected<MemoryRequirements> getAccelStructMemoryRequirements(RayTracingAccelStruct& as);
     [[nodiscard]] RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
     bool bindAccelStructMemory(RayTracingAccelStruct& as, Heap& heap, u64 offset);
     // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
     [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* as)const noexcept;
-    [[nodiscard]] CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters());
+    [[nodiscard]] Expected<CommandListHandle> createCommandList(const CommandListParameters& params = CommandListParameters());
     // Cross-queue dependencies are immutable submission-local token edges.
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* pCommandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
@@ -254,7 +261,7 @@ public:
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] GpuQueueTimelineSnapshot getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue);
+    [[nodiscard]] Expected<GpuQueueTimelineSnapshot> getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue);
     [[nodiscard]] bool supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
     // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
     // Partial-width timestamps remain valid for modular ordinary durations only.
@@ -280,7 +287,7 @@ public:
     void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
     [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const{
+    [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const noexcept{
         return UsesConcurrentQueueSharing(sharing, m_context);
     }
     bool waitForIdle();
@@ -289,9 +296,9 @@ public:
     [[nodiscard]] WaveLaneCountRange getWaveLaneCounts()const noexcept;
     // Maximum byte range represented by one storage-buffer descriptor; independent of allocation/VRAM budgets.
     [[nodiscard]] u64 getMaxStorageBufferRange()const noexcept;
-    [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format);
-    [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures();
-    usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
+    [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format)noexcept;
+    [[nodiscard]] Expected<CooperativeVectorDeviceFeatures> queryCoopVecFeatures();
+    [[nodiscard]] Expected<usize> getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
     // Borrowed interoperability identity only.
     // External queue operations remain the caller's responsibility and must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
@@ -311,7 +318,6 @@ public:
     [[nodiscard]] u64 queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
 
-
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)noexcept;
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue)noexcept;
@@ -323,7 +329,7 @@ private:
     [[nodiscard]] VkResult waitForNativeIdle()noexcept;
     [[nodiscard]] bool waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
     [[nodiscard]] bool setEventQueryInternal(EventQuery& query, CommandQueue::Enum queue, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
-    [[nodiscard]] bool pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
+    [[nodiscard]] Expected<bool> pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
     [[nodiscard]] bool waitEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
     void prepareForDestructionAfterIdleOrLoss();
     [[nodiscard]] bool beginSubmissionOperation()noexcept;
@@ -339,17 +345,17 @@ private:
     [[nodiscard]] bool submissionsBlocked()const noexcept{
         return requiresRecreation() || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u;
     }
-    [[nodiscard]] QueueSubmissionToken consumeAcquiredImageSemaphore(VkSemaphore semaphore);
+    [[nodiscard]] Expected<QueueSubmissionToken> consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] Expected<VkResult> presentNativeQueue(u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo);
     [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue);
     void configureQueueSharingContext();
     void releaseOwnedResources()noexcept;
     // Probed once at device initialization so compressed texture selection does not rely on a later optimistic format-property query.
     void probeCompressedTextureFormats();
-    [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const;
+    [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const noexcept;
     [[nodiscard]] bool canCreateSampledTextureFormat(Format::Enum format)const;
     [[nodiscard]] Expected<GraphicsBytes> loadPipelineCacheData();
-    void savePipelineCacheData();
+    void savePipelineCacheData(Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<CreatedPipelineLayout> createPipelineLayoutForBindingLayouts(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] Expected<VulkanDetail::HeapBindingRange> validateHeapMemoryBinding(
         const Heap& heap,

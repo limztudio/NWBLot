@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
+Expected<CooperativeVectorDeviceFeatures> Device::queryCoopVecFeatures(){
     VkResult res = VK_SUCCESS;
 
     CooperativeVectorDeviceFeatures output(m_context.objectArena);
@@ -27,7 +27,11 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 
     uint32_t propertyCount = 0;
     res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
-    if(res != VK_SUCCESS || propertyCount == 0)
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query cooperative vector property count: {}"), ResultToString(res));
+        return MakeUnexpected(Failure{});
+    }
+    if(propertyCount == 0)
         return output;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
@@ -38,8 +42,10 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     }
 
     res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
-    if(res != VK_SUCCESS)
-        return output;
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query cooperative vector properties: {}"), ResultToString(res));
+        return MakeUnexpected(Failure{});
+    }
 
     output.matMulFormats.resize(propertyCount);
     auto fillMatMulFormat = [&](usize i){
@@ -53,8 +59,13 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         combo.transposeSupported = prop.transpose != VK_FALSE;
     };
 
-    if(taskScheduler().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
-        taskScheduler().parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
+    if(taskScheduler().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold){
+        const auto parallelWork = taskScheduler().parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
+        if(!parallelWork){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: cooperative vector feature preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            return MakeUnexpected(Failure{});
+        }
+    }
     else{
         for(usize i = 0u; i < propertyCount; ++i)
             fillMatMulFormat(i);
@@ -66,22 +77,22 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     return output;
 }
 
-usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
+Expected<usize> Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
     VkResult res = VK_SUCCESS;
 
     if(type > CooperativeVectorDataType::Float64 || layout > CooperativeVectorMatrixLayout::TrainingOptimal || type == CooperativeVectorDataType::UInt8Packed || type == CooperativeVectorDataType::SInt8Packed || rows <= 0 || columns <= 0)
-        return 0;
+        return MakeUnexpected(Failure{});
     if((type == CooperativeVectorDataType::FloatE4M3 || type == CooperativeVectorDataType::FloatE5M2) && (layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor))
-        return 0;
+        return MakeUnexpected(Failure{});
     if(!m_context.extensions.nvCooperativeVector || m_context.coopVecFeatures.cooperativeVector != VK_TRUE || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV)
-        return 0;
+        return MakeUnexpected(Failure{});
 
     const VkComponentTypeKHR componentType = VulkanDetail::ConvertCoopVecDataType(type);
     if(componentType != VK_COMPONENT_TYPE_FLOAT32_KHR){
         uint32_t propertyCount = 0u;
         res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
         if(res != VK_SUCCESS || propertyCount == 0u)
-            return 0;
+            return MakeUnexpected(Failure{});
 
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
         Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
@@ -92,7 +103,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
 
         res = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
         if(res != VK_SUCCESS)
-            return 0;
+            return MakeUnexpected(Failure{});
 
         bool matrixInterpretationSupported = false;
         for(u32 i = 0u; i < propertyCount; ++i){
@@ -102,7 +113,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
             }
         }
         if(!matrixInterpretationSupported)
-            return 0;
+            return MakeUnexpected(Failure{});
     }
 
     usize dstSize = 0;
@@ -111,22 +122,22 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     const usize columnCount = static_cast<usize>(columns);
     const auto rowByteSize = TryMultiply<usize>(columnCount, dataTypeSize);
     if(!rowByteSize)
-        return 0;
+        return MakeUnexpected(Failure{});
 
-    const usize srcStride = GetCooperativeVectorOptimalMatrixStride(type, CooperativeVectorMatrixLayout::RowMajor, static_cast<u32>(rows), static_cast<u32>(columns));
-    if(srcStride == 0u)
-        return 0;
+    const auto srcStride = GetCooperativeVectorOptimalMatrixStride(type, CooperativeVectorMatrixLayout::RowMajor, static_cast<u32>(rows), static_cast<u32>(columns));
+    if(!srcStride || *srcStride == 0u)
+        return MakeUnexpected(Failure{});
 
-    const auto precedingRowsByteSize = TryMultiply<usize>(rowCount - 1u, srcStride);
+    const auto precedingRowsByteSize = TryMultiply<usize>(rowCount - 1u, *srcStride);
     if(!precedingRowsByteSize)
-        return 0;
+        return MakeUnexpected(Failure{});
     if(AddOverflows<usize>(*precedingRowsByteSize, *rowByteSize))
-        return 0;
+        return MakeUnexpected(Failure{});
     const usize srcSize = *precedingRowsByteSize + *rowByteSize;
 
-    const usize dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, static_cast<u32>(rows), static_cast<u32>(columns));
-    if((layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor) && dstStride == 0u)
-        return 0;
+    const auto dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, static_cast<u32>(rows), static_cast<u32>(columns));
+    if(!dstStride || ((layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor) && *dstStride == 0u))
+        return MakeUnexpected(Failure{});
 
     auto convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
     convertInfo.srcSize = srcSize;
@@ -138,15 +149,15 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     convertInfo.numRows = static_cast<u32>(rows);
     convertInfo.numColumns = static_cast<u32>(columns);
     convertInfo.srcLayout = VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
-    convertInfo.srcStride = srcStride;
+    convertInfo.srcStride = *srcStride;
     convertInfo.dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(layout);
-    convertInfo.dstStride = dstStride;
+    convertInfo.dstStride = *dstStride;
 
     res = m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
     if(res == VK_SUCCESS)
         return dstSize;
 
-    return 0;
+    return MakeUnexpected(Failure{});
 }
 
 

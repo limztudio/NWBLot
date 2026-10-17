@@ -60,8 +60,7 @@ namespace __hidden_telemetry_codec{
     return header;
 }
 
-template<typename Container>
-[[nodiscard]] static bool AppendEncodedEvent(Container& outBytes, const EventHeader& header, const void* const payload, const usize payloadBytes){
+[[nodiscard]] static bool AppendEncodedEvent(TelemetryBytes& outBytes, const EventHeader& header, const void* const payload, const usize payloadBytes){
     if(!ValidateEventPayload(header, payload, payloadBytes))
         return false;
     if(payloadBytes > Limit<usize>::s_Max - sizeof(EncodedEventHeader))
@@ -95,39 +94,24 @@ bool EncodeEvent(const EventHeader& header, const void* payload, const usize pay
     if(!AddBinaryReserveBytes(encodedBytes, payloadBytes))
         return false;
 
+    const EncodedEventHeader encodedHeader = __hidden_telemetry_codec::EncodeHeader(header);
+    const auto aliasOffset = ContainerDetail::SourceAliasesDestination(outBytes, static_cast<const u8*>(payload), payloadBytes);
+    if(aliasOffset){
+        if(payloadBytes > outBytes.size() - *aliasOffset)
+            return false;
+        AssignTriviallyCopyableVector(outBytes, BinaryByteView{ outBytes.data() + *aliasOffset, payloadBytes });
+        outBytes.reserve(encodedBytes);
+        const auto* const headerBytes = reinterpret_cast<const u8*>(&encodedHeader);
+        const auto firstHeaderByte = outBytes.insert(outBytes.begin(), headerBytes, headerBytes + sizeof(encodedHeader));
+        return firstHeaderByte == outBytes.begin() && outBytes.size() == encodedBytes;
+    }
+
     outBytes.clear();
     outBytes.reserve(encodedBytes);
-    if(!__hidden_telemetry_codec::AppendEncodedEvent(outBytes, header, payload, payloadBytes))
-        return false;
-
+    AppendPOD(outBytes, encodedHeader);
+    if(payloadBytes != 0u)
+        BinaryDetail::AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
     return outBytes.size() == encodedBytes;
-}
-
-Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const void* const bytes, const usize byteCount){
-    if(byteCount < sizeof(EncodedEventHeader) || !bytes)
-        return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });
-
-    const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };
-    usize cursor = 0u;
-    const auto encodedHeader = ReadPOD<EncodedEventHeader>(encoded, cursor);
-    if(!encodedHeader)
-        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedHeader });
-
-    EventRecord event(arena);
-    event.header = __hidden_telemetry_codec::DecodeHeader(*encodedHeader);
-    if(!event.header.valid())
-        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
-    if(event.header.payloadBytes > static_cast<u64>(Limit<usize>::s_Max))
-        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::PayloadSizeOverflow });
-
-    const usize payloadBytes = static_cast<usize>(event.header.payloadBytes);
-    if(byteCount - cursor < payloadBytes)
-        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedPayload });
-    if(payloadBytes != 0u){
-        event.payload.resize(payloadBytes);
-        NWB_MEMCPY(event.payload.data(), event.payload.size(), encoded.data() + cursor, payloadBytes);
-    }
-    return DecodedEvent{ .event = Move(event), .bytesRead = cursor + payloadBytes };
 }
 
 bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
@@ -167,6 +151,33 @@ bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     }
 
     return outBytes.size() == encodedBytes;
+}
+
+Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const void* const bytes, const usize byteCount){
+    if(byteCount < sizeof(EncodedEventHeader) || !bytes)
+        return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });
+
+    const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };
+    usize cursor = 0u;
+    const auto encodedHeader = ReadPOD<EncodedEventHeader>(encoded, cursor);
+    if(!encodedHeader)
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedHeader });
+
+    EventRecord event(arena);
+    event.header = __hidden_telemetry_codec::DecodeHeader(*encodedHeader);
+    if(!event.header.valid())
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
+    if(event.header.payloadBytes > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::PayloadSizeOverflow });
+
+    const usize payloadBytes = static_cast<usize>(event.header.payloadBytes);
+    if(byteCount - cursor < payloadBytes)
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedPayload });
+    if(payloadBytes != 0u){
+        event.payload.resize(payloadBytes);
+        NWB_MEMCPY(event.payload.data(), event.payload.size(), encoded.data() + cursor, payloadBytes);
+    }
+    return DecodedEvent{ .event = Move(event), .bytesRead = cursor + payloadBytes };
 }
 
 Expected<usize, DecodeResult> DecodeEventStream(TelemetryArena& arena, const void* const bytes, const usize byteCount, Recorder& inOutRecorder){

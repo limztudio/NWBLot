@@ -40,7 +40,6 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
 
     // Fresh accumulators reseed the temporal EMA.
     m_rayTracingState.m_causticAccumulatorInitialized = false;
-    m_rayTracingState.m_causticTemporalReuseFrameCount = 0u;
 
     const u32 halfWidth = (targets.width + 1u) / 2u;
     const u32 halfHeight = (targets.height + 1u) / 2u;
@@ -52,9 +51,14 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setFormat(targets.causticIrradianceFormat)
         .setInUAV(true)
         // Graphics/async production and the graph-owned lagged-history transfer copy share this target concurrently.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/caustic/irradiance");
-    targets.causticIrradiance = m_graphics.createTexture(irradianceDesc);
-    if(!targets.causticIrradiance){
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/caustic/irradiance")
+    ;
+    auto causticIrradianceResult = m_graphics.createTexture(irradianceDesc);
+    if(causticIrradianceResult)
+        targets.causticIrradiance = Move(*causticIrradianceResult);
+    else
+        targets.causticIrradiance.reset();
+    if(!causticIrradianceResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic irradiance target"));
         return false;
     }
@@ -70,24 +74,36 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/accumulator")
     ;
-    targets.causticAccumulator = m_graphics.createTexture(accumulatorDesc);
-    if(!targets.causticAccumulator){
+    auto causticAccumulatorResult = m_graphics.createTexture(accumulatorDesc);
+    if(causticAccumulatorResult)
+        targets.causticAccumulator = Move(*causticAccumulatorResult);
+    else
+        targets.causticAccumulator.reset();
+    if(!causticAccumulatorResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator target"));
         return false;
     }
 
     Core::TextureDesc historyDesc;
     historyDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_a");
-    targets.causticHistory = m_graphics.createTexture(historyDesc);
-    if(!targets.causticHistory){
+    auto causticHistoryResult = m_graphics.createTexture(historyDesc);
+    if(causticHistoryResult)
+        targets.causticHistory = Move(*causticHistoryResult);
+    else
+        targets.causticHistory.reset();
+    if(!causticHistoryResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-A target"));
         return false;
     }
 
     Core::TextureDesc halfBDesc;
     halfBDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_b");
-    targets.causticResolveHalf = m_graphics.createTexture(halfBDesc);
-    if(!targets.causticResolveHalf){
+    auto causticResolveHalfResult = m_graphics.createTexture(halfBDesc);
+    if(causticResolveHalfResult)
+        targets.causticResolveHalf = Move(*causticResolveHalfResult);
+    else
+        targets.causticResolveHalf.reset();
+    if(!causticResolveHalfResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-B target"));
         return false;
     }
@@ -95,8 +111,12 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     // Half-resolution geometry cache for edge-aware resolve.
     Core::TextureDesc geometryDesc;
     geometryDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/resolve_geometry");
-    targets.causticResolveGeometry = m_graphics.createTexture(geometryDesc);
-    if(!targets.causticResolveGeometry){
+    auto causticResolveGeometryResult = m_graphics.createTexture(geometryDesc);
+    if(causticResolveGeometryResult)
+        targets.causticResolveGeometry = Move(*causticResolveGeometryResult);
+    else
+        targets.causticResolveGeometry.reset();
+    if(!causticResolveGeometryResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));
         return false;
     }
@@ -105,13 +125,12 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     return true;
 }
 
-Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const{
-    Core::GpuUploadBlobId blob;
+Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const{
     const u32 targetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
     if(targetCount == 0u){
         if(!m_preparedCausticEmissionTargetBytes.empty())
             return MakeUnexpected(Failure{});
-        return blob;
+        return Optional<Core::GpuUploadBlobId>{};
     }
 
     const usize targetByteCount = static_cast<usize>(targetCount) * sizeof(NwbCausticEmissionTargetGpu);
@@ -126,10 +145,10 @@ Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCausticE
         return MakeUnexpected(Failure{});
     }
 
-    blob = graph.copyUploadData(m_preparedCausticEmissionTargetBytes.data(), targetByteCount, alignof(NwbCausticEmissionTargetGpu));
-    if(!(blob.valid()))
+    const auto blob = graph.copyUploadData(m_preparedCausticEmissionTargetBytes.data(), targetByteCount, alignof(NwbCausticEmissionTargetGpu));
+    if(!blob)
         return MakeUnexpected(Failure{});
-    return blob;
+    return Optional<Core::GpuUploadBlobId>{*blob};
 }
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){

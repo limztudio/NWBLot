@@ -146,6 +146,129 @@ public:
     }
 };
 
+class NullAllocatedBucket final : public ICookEntryBucket{
+public:
+    static void* operator new(usize)noexcept{ return nullptr; }
+    static void operator delete(void* pointer)noexcept{ ::operator delete(pointer); }
+
+
+public:
+    explicit NullAllocatedBucket(CookArena&)noexcept{}
+
+
+public:
+    [[nodiscard]] virtual usize size()const noexcept override{ return 0u; }
+    virtual bool parseDocument(const NWB::Path&, AStringView, const NWB::Path&, const Metascript::Document&, CookEntryParseContext&)noexcept override{ return false; }
+    virtual bool parseValue(Name, const NWB::Path&, const Metascript::Value&, CookEntryParseContext&)noexcept override{ return false; }
+    virtual bool writeCookedAssets(CookEntryWriteContext&)noexcept override{ return false; }
+};
+
+class NullAllocatedAsset final : public TypedAsset<NullAllocatedAsset>{
+public:
+    inline static u32 s_ConstructorCalls = 0u;
+    inline static bool s_LoadCalled = false;
+    [[nodiscard]] static const Name& AssetTypeName()noexcept{
+        static constexpr Name s_Type("tests/metadata_registry/null_allocation");
+        return s_Type;
+    }
+    static void* operator new(usize)noexcept{ return nullptr; }
+    static void operator delete(void* pointer)noexcept{ ::operator delete(pointer); }
+
+
+public:
+    NullAllocatedAsset(AssetArena&, const Name& virtualPath)noexcept
+        : TypedAsset(virtualPath)
+    {
+        ++s_ConstructorCalls;
+    }
+
+
+public:
+    bool loadBinary(const AssetBytes&)noexcept{
+        s_LoadCalled = true;
+        return true;
+    }
+};
+
+class NullAllocatedCodec final : public AssetCodec<NullAllocatedAsset>{
+public:
+    NullAllocatedCodec()noexcept = default;
+
+
+public:
+    virtual bool serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
+};
+
+struct ThrowingImplicitAssetName{
+    explicit operator Name() & noexcept{ return s_NameNone; }
+    operator const Name&()const&{ throw 197u; }
+};
+
+class ImplicitNameAsset final : public TypedAsset<ImplicitNameAsset>{
+public:
+    [[nodiscard]] static ThrowingImplicitAssetName& AssetTypeName()noexcept{
+        static ThrowingImplicitAssetName s_Value;
+        return s_Value;
+    }
+
+
+public:
+    ImplicitNameAsset() = default;
+    explicit ImplicitNameAsset(const Name& virtualPath)
+        : TypedAsset(virtualPath)
+    {}
+    ImplicitNameAsset(AssetArena&, const Name& virtualPath)
+        : TypedAsset(virtualPath)
+    {}
+
+
+public:
+    bool loadBinary(const AssetBytes&)noexcept{ return true; }
+};
+
+class ImplicitNameCodec final : public AssetCodec<ImplicitNameAsset>{
+public:
+    ImplicitNameCodec() = default;
+
+
+public:
+    virtual bool serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
+};
+
+class ImplicitNameShader final : public Impl::TypedShader<ImplicitNameShader>{
+public:
+    static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ComputeStage;
+    [[nodiscard]] static ThrowingImplicitAssetName& AssetTypeName()noexcept{
+        static ThrowingImplicitAssetName s_Value;
+        return s_Value;
+    }
+
+
+public:
+    using Impl::TypedShader<ImplicitNameShader>::TypedShader;
+};
+
+
+struct ThrowingComparisonAnswer{
+    explicit operator bool()const{ throw 199u; }
+};
+
+struct AssetComparisonTag{};
+
+[[nodiscard]] inline ThrowingComparisonAnswer operator!=(const Name&, const AssetComparisonTag&)noexcept{ return {}; }
+
+class ContextualComparisonAsset final : public IAsset{
+public:
+    [[nodiscard]] static AssetComparisonTag AssetTypeName()noexcept{ return {}; }
+
+
+public:
+    ContextualComparisonAsset()noexcept
+        : IAsset(Name("tests/asset_constructor/contextual_comparison"))
+    {}
+};
+
+
 static_assert(!IsConstructible_V<ParsedMetadataExtension, const ParsedMetadataExtension&>);
 static_assert(IsNothrowMoveConstructible_V<ParsedMetadataExtension>);
 static_assert(IsNothrowDestructible_V<ParsedMetadataExtension>);
@@ -192,7 +315,10 @@ TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadO
         AlignedExtension* const first = &RequireParsedMetadataExtension<AlignedExtension>(metadata, firstName, arena, state);
         for(usize index = 0u; index < 80u; ++index){
             const AssetString nameText = StringFormat(arena, "tests/metadata_extension/growth_{}", index);
-            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, ToName(nameText), arena, state);
+            const auto nameResult = ToName(nameText);
+            ASSERT_TRUE(nameResult);
+            ASSERT_TRUE(*nameResult);
+            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, **nameResult, arena, state);
             EXPECT_EQ(created.identity, index + s_ExpectedDualCount);
         }
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, firstName), first);
@@ -276,7 +402,8 @@ TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedM
         const u64 baseline = arena.memoryStats().usedBytes;
         EXPECT_THROW({
             EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state, true).identity, 1u);
-        }, ConstructionFailure);
+        }, ConstructionFailure
+        );
         EXPECT_TRUE(metadata.extensions.empty());
         EXPECT_EQ(state.constructions, 1u);
         EXPECT_EQ(state.destructions, 0u);
@@ -294,7 +421,8 @@ TEST(MetadataExtensionOwnership, CallerUnwindDestroysPublishedExtensions){
         const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, Name("tests/metadata_extension/caller_unwind"), arena, state);
         EXPECT_EQ(created.identity, 1u);
         throw CallerFailure{};
-    }, CallerFailure);
+    }, CallerFailure
+    );
     EXPECT_EQ(state.destructions, 1u);
     EXPECT_EQ(state.memberDestructions, 1u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
@@ -331,7 +459,8 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
         EXPECT_THROW({
             ParsedMetadataExtension pending = MakeParsedMetadataExtension<AlignedExtension>(ownerArena, ownerArena, state);
             EXPECT_TRUE(values.try_emplace(Name("tests/metadata_extension/insertion_unwind"), Move(pending)).second);
-        }, InsertionFailure);
+        }, InsertionFailure
+        );
         fail = false;
         EXPECT_TRUE(values.empty());
         EXPECT_EQ(state.destructions, 1u);
@@ -344,11 +473,12 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
 
 TEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorrow){
     AssetArena arena(Name("tests/metadata_extension/registry_lifetime"));
+    Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/registry_lifetime_scratch"));
     usize observedBucketCount = 0u;
     usize expectedBucketCount = 0u;
     {
         ParsedAssetMetadata metadata(arena);
-        ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry));
+        ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
         expectedBucketCount = metadata.entryRegistry.bucketCount();
         ASSERT_GE(expectedBucketCount, 7u);
         const RegistryBorrowingExtension& created = RequireParsedMetadataExtension<RegistryBorrowingExtension>(metadata, Name("tests/metadata_extension/registry_lifetime"), metadata.entryRegistry, observedBucketCount);
@@ -420,7 +550,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         {
             Alloc::ScratchArena scratchArena(Name("tests/metadata_registry/scratch"));
             ParsedAssetMetadata metadata(parseArena);
-            ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry));
+            ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
             auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
             auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
             EXPECT_EQ(ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena), !rejectDuplicate);
@@ -433,7 +563,10 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
             for(usize index = 0u; index < s_SamplerCount; ++index){
                 const usize identity = (index * 37u) % s_SamplerCount;
                 const AssetString virtualPath = StringFormat(fixtureArena, "project/sampler_{:03}", identity);
-                EXPECT_EQ(samplers[index].virtualPath, ToName(virtualPath));
+                const auto expectedPath = ToName(virtualPath);
+                ASSERT_TRUE(expectedPath);
+                ASSERT_TRUE(*expectedPath);
+                EXPECT_EQ(samplers[index].virtualPath, **expectedPath);
                 EXPECT_EQ(&samplers[index].arena, &parseArena);
                 EXPECT_FLOAT_EQ(samplers[index].description.mipBias, static_cast<f32>(identity));
             }
@@ -444,6 +577,86 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         else
             EXPECT_EQ(logger.errorCount(), 0u);
     }
+}
+
+
+TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmission){
+#if defined(NWB_PLATFORM_WINDOWS)
+    GTEST_SKIP() << "The current Windows host identity folds physical path case";
+#else
+    AssetArena arena(Name("tests/metadata_discovery/case_identity"));
+    Alloc::ScratchArena scratchArena(Name("tests/metadata_discovery/case_identity_scratch"));
+    const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / "__build_obj" / "metadata_discovery_case_identity";
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
+    const NWB::Path upperPath = root / "Case.nwb";
+    const NWB::Path lowerPath = root / "case.nwb";
+    ASSERT_TRUE(::WriteTextFile(upperPath, "upper native input"));
+    ASSERT_TRUE(::WriteTextFile(lowerPath, "lower native input"));
+    ScratchString upperContents(scratchArena);
+    ASSERT_TRUE(::ReadTextFile(upperPath, upperContents));
+    if(upperContents != "upper native input")
+        GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
+
+    CookVector<ResolvedAssetRoot> roots(arena);
+    roots.emplace_back(NWB::Path(arena, root), ACompactString("project"));
+    roots.emplace_back(NWB::Path(arena, root), ACompactString("project"));
+    const auto files = DiscoverFilesWithExtension(arena, roots, s_NwbExtension, scratchArena);
+    ASSERT_TRUE(files);
+    ASSERT_EQ(files->size(), 2u);
+    EXPECT_NE((*files)[0].filePath, (*files)[1].filePath);
+    EXPECT_EQ((*files)[0].normalizedPathText, (*files)[1].normalizedPathText);
+#endif
+}
+
+
+TEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket){
+    AssetArena arena(Name("tests/metadata_registry/null_allocation"));
+    Tests::CapturingLogger logger;
+    Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
+    CookEntryRegistry registry(arena);
+    const Name type("tests/metadata_registry/null_bucket");
+    EXPECT_FALSE(registry.registerCustomType<NullAllocatedBucket>(type));
+    EXPECT_EQ(registry.bucketCount(), 0u);
+    EXPECT_EQ(registry.find(type), nullptr);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("bucket allocation returned null")));
+}
+
+TEST(AssetCodecAdmission, NullClassAllocationDoesNotCallAssetLoad){
+    AssetArena arena(Name("tests/asset_codec/null_allocation"));
+    NullAllocatedAsset::s_ConstructorCalls = 0u;
+    NullAllocatedAsset::s_LoadCalled = false;
+    NullAllocatedCodec codec;
+    AssetBytes bytes(arena);
+    const auto result = codec.deserialize(arena, Name("project/tests/null_asset"), bytes);
+    EXPECT_FALSE(result);
+    EXPECT_EQ(NullAllocatedAsset::s_ConstructorCalls, 0u);
+    EXPECT_FALSE(NullAllocatedAsset::s_LoadCalled);
+}
+
+TEST(AssetConstructorContracts, ImplicitNameBindingCanThrowDespiteNothrowExplicitConversion){
+    static_assert(noexcept(Name(ImplicitNameAsset::AssetTypeName())));
+    static_assert(!noexcept(DeclVal<void(*)(const Name&)noexcept>()(ImplicitNameAsset::AssetTypeName())));
+    static_assert(!IsNothrowConstructible_V<ImplicitNameAsset>);
+    static_assert(!IsNothrowConstructible_V<ImplicitNameCodec>);
+    static_assert(!IsNothrowConstructible_V<ImplicitNameShader, AssetArena&>);
+    static_assert(!IsNothrowConstructible_V<ImplicitNameShader, AssetArena&, const Name&>);
+    static_assert(!IsNothrowConstructible_V<Impl::ShaderAssetCodec<ImplicitNameShader>>);
+    EXPECT_THROW(ImplicitNameAsset{}, u32);
+    EXPECT_THROW(ImplicitNameAsset{Name("project/tests/name_conversion")}, u32);
+    EXPECT_THROW(ImplicitNameCodec{}, u32);
+    AssetArena arena(Name("tests/asset_constructor/implicit_name"));
+    EXPECT_THROW(ImplicitNameShader{arena}, u32);
+    EXPECT_THROW((ImplicitNameShader{arena, Name("project/tests/shader_name_conversion")}), u32);
+    EXPECT_THROW((Impl::ShaderAssetCodec<ImplicitNameShader>{}), u32);
+}
+
+
+TEST(AssetConstructorContracts, CastIncludesTheCompleteContextualComparisonConversion){
+    static_assert(noexcept(DeclVal<const IAsset&>().assetType() != ContextualComparisonAsset::AssetTypeName()));
+    static_assert(!noexcept(CastAsset<ContextualComparisonAsset>(DeclVal<const IAsset*>())));
+    ContextualComparisonAsset asset;
+    EXPECT_THROW({ EXPECT_EQ(CastAsset<ContextualComparisonAsset>(&asset), &asset); }, u32);
+    EXPECT_EQ(CastAsset<ContextualComparisonAsset>(nullptr), nullptr);
 }
 
 

@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/software_caustics_resolve_chain.h>
+#include "software_caustics_resolve_chain.h"
+
 #include <impl/ecs_render/raytrace/caustics_resolve_chain.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 
@@ -18,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)
+SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
     : m_graph(graph)
     , m_raytracingSystem(raytracingSystem){
 }

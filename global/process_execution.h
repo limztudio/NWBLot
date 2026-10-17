@@ -8,6 +8,9 @@
 #include "containers.h"
 #include "filesystem.h"
 #include "expected.h"
+#include "error_code.h"
+#include "limit.h"
+#include "overflow.h"
 #include "span.h"
 #include "scope_exit.h"
 #include "platform.h"
@@ -77,6 +80,36 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ProcessCaptureFailureKind{
+    enum Enum : u8{
+        InvalidArguments,
+        PipeFailed,
+        SpawnFailed,
+        ClockFailed,
+        PipeFlagsFailed,
+        PollFailed,
+        ReadFailed,
+        TimedOut,
+        OutputTruncated,
+        ChildWaitFailed,
+        ChildExitedUnsuccessfully,
+        ChildTerminated,
+    };
+};
+
+struct ProcessCaptureFailure{
+    ProcessCaptureFailureKind::Enum kind = ProcessCaptureFailureKind::InvalidArguments;
+    ErrorCondition nativeError{};
+    ErrorCondition completionError{};
+    i32 exitCode = -1;
+    i32 terminationSignal = 0;
+    bool outputTruncated = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ProcessExecutionDetail{
 
 
@@ -100,7 +133,9 @@ struct NativeProcessArguments{
     Vector<const char*, ArenaT> argv;
     ArenaT& arena;
 
-    explicit NativeProcessArguments(ArenaT& owner)
+
+public:
+    explicit NativeProcessArguments(ArenaT& owner)noexcept(noexcept(decltype(text)(owner)) && noexcept(decltype(argv)(owner)))
         : text(owner)
         , argv(owner)
         , arena(owner)
@@ -204,6 +239,10 @@ inline constexpr int s_ProcessSignalExitCodeBase = 128;
 inline constexpr int s_ExecFailureExitCode = 127;
 inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline int WaitForProcessExitCode(const pid_t childPid)noexcept{
     int status = 0;
     pid_t waitedPid = -1;
@@ -243,6 +282,10 @@ inline constexpr int s_ProcessPollSleepMilliseconds = 1;
 inline constexpr usize s_DefaultCaptureOutputMaxBytes = 8192u;
 inline constexpr usize s_CaptureReadBufferBytes = 256u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline void CloseFileDescriptor(int& fd)noexcept{
     if(fd < 0)
         return;
@@ -253,27 +296,38 @@ inline void CloseFileDescriptor(int& fd)noexcept{
         return;
 }
 
-[[nodiscard]] inline u64 MonotonicMilliseconds()noexcept{
+// ErrorCondition retains native POSIX errno without allocation or category initialization in crash-handler callers.
+[[nodiscard]] inline Expected<u64, ErrorCondition> MonotonicMilliseconds()noexcept{
     timespec time = {};
     if(::clock_gettime(CLOCK_MONOTONIC, &time) != 0)
-        return 0u;
+        return MakeUnexpected(static_cast<ErrorCondition>(errno));
 
-    return static_cast<u64>(time.tv_sec) * s_MillisecondsPerSecond + static_cast<u64>(time.tv_nsec / s_NanosecondsPerMillisecond);
+    const u64 fractionalMilliseconds = static_cast<u64>(time.tv_nsec / s_NanosecondsPerMillisecond);
+    if(static_cast<u64>(time.tv_sec) > (Limit<u64>::s_Max - fractionalMilliseconds) / s_MillisecondsPerSecond)
+        return MakeUnexpected(ErrorCondition::value_too_large);
+    return static_cast<u64>(time.tv_sec) * s_MillisecondsPerSecond + fractionalMilliseconds;
 }
 
-[[nodiscard]] inline bool TimeoutExpired(const u64 deadlineMilliseconds)noexcept{
-    return deadlineMilliseconds != 0u && MonotonicMilliseconds() >= deadlineMilliseconds;
+[[nodiscard]] inline Expected<bool, ErrorCondition> TimeoutExpired(const u64 deadlineMilliseconds)noexcept{
+    if(deadlineMilliseconds == 0u)
+        return false;
+    const auto now = MonotonicMilliseconds();
+    if(!now)
+        return MakeUnexpected(now.error());
+    return *now >= deadlineMilliseconds;
 }
 
-[[nodiscard]] inline int RemainingTimeoutMilliseconds(const u64 deadlineMilliseconds)noexcept{
+[[nodiscard]] inline Expected<int, ErrorCondition> RemainingTimeoutMilliseconds(const u64 deadlineMilliseconds)noexcept{
     if(deadlineMilliseconds == 0u)
         return -1;
 
-    const u64 now = MonotonicMilliseconds();
-    if(now >= deadlineMilliseconds)
+    const auto now = MonotonicMilliseconds();
+    if(!now)
+        return MakeUnexpected(now.error());
+    if(*now >= deadlineMilliseconds)
         return 0;
 
-    const u64 remaining = deadlineMilliseconds - now;
+    const u64 remaining = deadlineMilliseconds - *now;
     return remaining > static_cast<u64>(INT_MAX) ? INT_MAX : static_cast<int>(remaining);
 }
 
@@ -290,23 +344,37 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
     }
 }
 
-[[nodiscard]] inline bool WaitForProcessSuccess(const pid_t childPid, const u64 deadlineMilliseconds)noexcept{
+[[nodiscard]] inline Expected<void, ProcessCaptureFailure> WaitForProcessSuccess(const pid_t childPid, const u64 deadlineMilliseconds)noexcept{
     int status = 0;
     for(;;){
         const pid_t waitedPid = ::waitpid(childPid, &status, WNOHANG);
-        if(waitedPid == childPid)
-            return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        if(waitedPid == childPid){
+            if(WIFEXITED(status)){
+                const i32 exitCode = WEXITSTATUS(status);
+                if(exitCode == 0)
+                    return {};
+                return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ChildExitedUnsuccessfully, .exitCode = exitCode, });
+            }
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ChildTerminated, .terminationSignal = WIFSIGNALED(status) ? WTERMSIG(status) : 0, });
+        }
         if(waitedPid < 0 && errno != EINTR)
-            return false;
-        if(TimeoutExpired(deadlineMilliseconds)){
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ChildWaitFailed, .nativeError = static_cast<ErrorCondition>(errno), });
+        const auto expired = TimeoutExpired(deadlineMilliseconds);
+        if(!expired){
+            const ErrorCondition error = expired.error();
             KillAndReapProcess(childPid);
-            return false;
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .nativeError = error, });
+        }
+        if(*expired){
+            KillAndReapProcess(childPid);
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::TimedOut, .nativeError = ErrorCondition::timed_out, });
         }
 
         const int pollResult = ::poll(nullptr, 0, s_ProcessPollSleepMilliseconds);
         if(pollResult < 0 && errno != EINTR){
+            const ErrorCondition error = static_cast<ErrorCondition>(errno);
             KillAndReapProcess(childPid);
-            return false;
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::PollFailed, .nativeError = error, });
         }
     }
 }
@@ -328,7 +396,7 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
 
 
 template<typename ArenaT>
-[[nodiscard]] inline bool ExecutableAvailableInPath(ArenaT& arena, const AStringView searchPath, const AStringView executableName){
+[[nodiscard]] inline Expected<bool, ErrorCode> ExecutableAvailableInPath(ArenaT& arena, const AStringView searchPath, const AStringView executableName){
     const char separator =
 #if defined(NWB_PLATFORM_WINDOWS)
         ';'
@@ -353,12 +421,18 @@ template<typename ArenaT>
         candidate /= executableName;
 
 #if defined(NWB_PLATFORM_WINDOWS)
-        if(PathIsRegularFile(candidate))
+        const auto regularCandidate = IsRegularFile(candidate);
+        if(!regularCandidate)
+            return MakeUnexpected(regularCandidate.error());
+        if(*regularCandidate)
             return true;
 #else
         const AString<ArenaT> candidateText = PathToString<char>(arena, candidate);
         if(::access(candidateText.c_str(), X_OK) == 0)
             return true;
+        const int accessError = errno;
+        if(accessError != ENOENT && accessError != ENOTDIR && accessError != EACCES)
+            return MakeUnexpected(ErrorCode(accessError, std::generic_category()));
 #endif
 
         if(cursor >= searchPath.size())
@@ -420,17 +494,19 @@ template<typename ArenaT>
 
     PROCESS_INFORMATION processInfo = {};
     const BOOL created = CreateProcessA(nativeExecutable.c_str(), commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo);
-    CloseHandle(outputHandle);
+    const BOOL outputClosed = CloseHandle(outputHandle);
     if(!created)
-        return MakeUnexpected(ProcessExecutionFailure::CreateFailed);
+        return MakeUnexpected(outputClosed ? ProcessExecutionFailure::CreateFailed : ProcessExecutionFailure::CloseFailed);
 
     const DWORD waitResult = WaitForSingleObject(processInfo.hProcess, INFINITE);
     DWORD exitCode = 1u;
     const bool queriedExitCode = waitResult == WAIT_OBJECT_0 && GetExitCodeProcess(processInfo.hProcess, &exitCode);
-    CloseHandle(processInfo.hThread);
-    CloseHandle(processInfo.hProcess);
+    const BOOL threadClosed = CloseHandle(processInfo.hThread);
+    const BOOL processClosed = CloseHandle(processInfo.hProcess);
     if(!queriedExitCode)
         return MakeUnexpected(ProcessExecutionFailure::ExitQueryFailed);
+    if(!outputClosed || !threadClosed || !processClosed)
+        return MakeUnexpected(ProcessExecutionFailure::CloseFailed);
     return static_cast<int>(exitCode);
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
     static_cast<void>(arena);
@@ -482,7 +558,7 @@ template<typename ArenaT>
 
 
 template<typename ArenaT, typename StringT>
-[[nodiscard]] inline bool CaptureProcessOutput(
+[[nodiscard]] inline Expected<void, ProcessCaptureFailure> CaptureProcessOutput(
     ArenaT& arena,
     StringT& outOutput,
     const Span<const AStringView> arguments,
@@ -494,20 +570,21 @@ template<typename ArenaT, typename StringT>
     const bool validArguments = nativeArguments.build(arguments);
     outOutput.clear();
     if(!validArguments || readBufferBytes == 0u)
-        return false;
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::InvalidArguments, .nativeError = ErrorCondition::invalid_argument, });
     const auto& argv = nativeArguments.argv;
 
     int pipeFds[2] = { -1, -1 };
     if(::pipe(pipeFds) != 0)
-        return false;
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::PipeFailed, .nativeError = static_cast<ErrorCondition>(errno), });
     ScopeExit closePipe([&]()noexcept{
         ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
         ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
-    });
+    }
+    );
 
     const pid_t childPid = ::fork();
     if(childPid < 0)
-        return false;
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::SpawnFailed, .nativeError = static_cast<ErrorCondition>(errno), });
 
     if(childPid == 0){
         if(::close(pipeFds[0]) != 0)
@@ -534,20 +611,28 @@ template<typename ArenaT, typename StringT>
     ScopeExit reapChild([&]()noexcept{ ProcessExecutionDetail::KillAndReapProcess(childPid); });
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
-    const u64 timeoutStartMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
-    const u64 deadlineMilliseconds = timeoutMilliseconds == 0u || timeoutStartMilliseconds == 0u ? 0u : timeoutStartMilliseconds + static_cast<u64>(timeoutMilliseconds);
+    const auto timeoutStartMilliseconds = timeoutMilliseconds == 0u ? Expected<u64, ErrorCondition>(0u) : ProcessExecutionDetail::MonotonicMilliseconds();
+    if(!timeoutStartMilliseconds)
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .nativeError = timeoutStartMilliseconds.error(), });
+    if(static_cast<u64>(timeoutMilliseconds) > Limit<u64>::s_Max - *timeoutStartMilliseconds)
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::InvalidArguments, .nativeError = ErrorCondition::value_too_large, });
+    const u64 deadlineMilliseconds = timeoutMilliseconds == 0u ? 0u : *timeoutStartMilliseconds + static_cast<u64>(timeoutMilliseconds);
 
     const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
     if(flags < 0 || ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK) < 0)
-        return false;
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::PipeFlagsFailed, .nativeError = static_cast<ErrorCondition>(errno), });
 
     char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes];
     const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer) ? readBufferBytes : sizeof(buffer);
     bool readSucceeded = true;
+    ProcessCaptureFailure readFailure;
     bool outputTruncated = false;
     bool timedOut = false;
     for(;;){
-        if(ProcessExecutionDetail::TimeoutExpired(deadlineMilliseconds)){
+        const auto expired = ProcessExecutionDetail::TimeoutExpired(deadlineMilliseconds);
+        if(!expired)
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .nativeError = expired.error(), .outputTruncated = outputTruncated, });
+        if(*expired){
             timedOut = true;
             break;
         }
@@ -556,7 +641,10 @@ template<typename ArenaT, typename StringT>
         pipePoll.fd = pipeFds[0];
         pipePoll.events = POLLIN | POLLHUP | POLLERR;
 
-        const int pollResult = ::poll(&pipePoll, 1, ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadlineMilliseconds));
+        const auto remainingTimeout = ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadlineMilliseconds);
+        if(!remainingTimeout)
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .nativeError = remainingTimeout.error(), .outputTruncated = outputTruncated, });
+        const int pollResult = ::poll(&pipePoll, 1, *remainingTimeout);
         if(pollResult == 0){
             timedOut = true;
             break;
@@ -565,6 +653,7 @@ template<typename ArenaT, typename StringT>
             if(errno == EINTR)
                 continue;
             readSucceeded = false;
+            readFailure = ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::PollFailed, .nativeError = static_cast<ErrorCondition>(errno), };
             break;
         }
 
@@ -594,16 +683,33 @@ template<typename ArenaT, typename StringT>
         }
 
         readSucceeded = false;
+        readFailure = ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ReadFailed, .nativeError = static_cast<ErrorCondition>(errno), };
         break;
     }
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
     if(timedOut)
-        return false;
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::TimedOut, .nativeError = ErrorCondition::timed_out, .outputTruncated = outputTruncated, });
 
     reapChild.release();
-    const bool processSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds);
-    return readSucceeded && !outputTruncated && processSucceeded && !outOutput.empty();
+    const auto processSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds);
+    if(!readSucceeded){
+        readFailure.outputTruncated = outputTruncated;
+        if(!processSucceeded){
+            readFailure.completionError = processSucceeded.error().nativeError;
+            readFailure.exitCode = processSucceeded.error().exitCode;
+            readFailure.terminationSignal = processSucceeded.error().terminationSignal;
+        }
+        return MakeUnexpected(readFailure);
+    }
+    if(!processSucceeded){
+        ProcessCaptureFailure failure = processSucceeded.error();
+        failure.outputTruncated = outputTruncated;
+        return MakeUnexpected(failure);
+    }
+    if(outputTruncated)
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::OutputTruncated, .nativeError = ErrorCondition::value_too_large, .outputTruncated = true, });
+    return {};
 }
 
 

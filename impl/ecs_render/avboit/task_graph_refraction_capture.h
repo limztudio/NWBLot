@@ -57,7 +57,8 @@ namespace RendererTaskGraphDetail{
 
 
 // Runs after CSG intervals, before first AVBOIT upload; disabled capture still clears selection.
-[[nodiscard]] Core::GpuTaskId DeclareAvboitRefractionCapture(
+[[nodiscard]] Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
+    Core::Alloc::ScratchArena& scratchArena,
     Core::GpuTaskGraph& graph,
     Core::Alloc::GlobalArena& arena,
     RendererMaterialSystem& materialSystem,

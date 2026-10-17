@@ -52,7 +52,9 @@ struct AvboitAccumulationRecordInputs : public AvboitRecordInputsBase{
     Core::GpuTimingSubmissionTicket* accumulationTimingTicket = nullptr;
     Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
 
-    explicit AvboitAccumulationRecordInputs(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit AvboitAccumulationRecordInputs(Core::Alloc::GlobalArena& arena)noexcept
         : AvboitRecordInputsBase(arena){
     }
 };
@@ -69,11 +71,12 @@ struct AvboitAccumulationRecordResult{
 
 class AvboitAccumulationRecordBuilder final : NoCopy{
 public:
-    AvboitAccumulationRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem);
+    AvboitAccumulationRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept;
 
 
 public:
     [[nodiscard]] Expected<AvboitAccumulationRecordResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         ObjectGeometryCacheGraph& objectGeometry,

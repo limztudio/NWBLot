@@ -4,6 +4,8 @@
 
 #include <impl/assets_mesh/cook.h>
 #include <impl/assets_mesh/binary_payload.h>
+#include <impl/assets_mesh/cook_meshlets.h>
+#include <impl/assets_mesh/meshlet_triangle_visit.h>
 
 #include <core/assets/binary_payload_io.h>
 
@@ -35,6 +37,74 @@ namespace __hidden_mesh_solid_codec_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// These interfaces deliberately model throwing supplied operations; no runtime implementation is invoked.
+struct ThrowingPositionStreamGeometry : Impl::MeshGeometryPayload{
+    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const;
+};
+
+struct NoThrowCornerVisitor{
+    [[nodiscard]] bool operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const noexcept;
+};
+
+struct ThrowingCornerVisitor{
+    [[nodiscard]] bool operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const;
+};
+
+struct ThrowingU32Conversion{
+    operator u32()const;
+};
+
+struct ThrowingPrimitiveConversion{
+    [[nodiscard]] usize size()const noexcept;
+    [[nodiscard]] ThrowingU32Conversion operator[](const usize&)const noexcept;
+};
+
+struct ThrowingPrimitiveSize{
+    [[nodiscard]] usize size()const;
+    [[nodiscard]] const u8& operator[](const usize&)const noexcept;
+};
+
+struct ThrowingIncrementIterator{
+    [[nodiscard]] const u32& operator*()const noexcept;
+    ThrowingIncrementIterator& operator++();
+    [[nodiscard]] bool operator!=(const ThrowingIncrementIterator&)const noexcept;
+};
+
+struct ThrowingIncrementRange{
+    [[nodiscard]] ThrowingIncrementIterator begin()const noexcept;
+    [[nodiscard]] ThrowingIncrementIterator end()const noexcept;
+};
+
+struct NoThrowTriangleNormal{
+    [[nodiscard]] SIMDVectorSingle operator()(const u32&)const noexcept;
+};
+
+struct ThrowingTriangleNormal{
+    [[nodiscard]] SIMDVectorSingle operator()(const u32&)const;
+};
+
+using OneMeshlet = Array<Impl::MeshletDesc, 1u>;
+using OneLocalVertex = Array<Impl::MeshletLocalVertexRef, 1u>;
+using OnePrimitive = Array<u8, 1u>;
+using OneTriangle = Array<u32, 1u>;
+
+static_assert(noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<usize&>(), DeclVal<const Impl::Mesh&>())));
+static_assert(!noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<usize&>(), DeclVal<const ThrowingPositionStreamGeometry&>())));
+static_assert(noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<NoThrowCornerVisitor&>())));
+static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<ThrowingCornerVisitor&>())));
+static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const ThrowingPrimitiveSize&>(), DeclVal<NoThrowCornerVisitor&>())));
+static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const ThrowingPrimitiveConversion&>(), DeclVal<NoThrowCornerVisitor&>())));
+static_assert(noexcept(Impl::MeshCookMeshlets::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshCookMeshlets::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const ThrowingTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshCookMeshlets::ComputeMeshletScoreConeCutoff(DeclVal<const ThrowingIncrementRange&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
+static_assert(noexcept(Impl::MeshCookMeshlets::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshCookMeshlets::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const ThrowingTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshCookMeshlets::PredictMeshletScoreConeWidening(DeclVal<const ThrowingIncrementRange&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr Name s_MeshName("tests/mesh/solid_codec");
 inline constexpr AStringView s_MeshSource = R"(mesh fixture;
 fixture.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -46,6 +116,10 @@ fixture.vertex_refs = [[0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [2, 0, 0, 0, 0], [3, 0,
 fixture.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
 )";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static Expected<Core::Assets::AssetBytes> CookMeshBinary(Core::Assets::AssetArena& arena){
     Core::Metascript::Document document(arena);
     if(!document.parse(s_MeshSource))
@@ -56,7 +130,7 @@ fixture.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
     auto entry = Impl::ParseMeshCookMetadata(s_MeshName, sourcePath, document.asset(), arena, scheduler, scratch);
     if(!entry)
         return MakeUnexpected(Failure{});
-    auto mesh = Impl::BuildMeshAsset(*entry, arena);
+    auto mesh = Impl::BuildMeshAsset(*entry, arena, scratch);
     if(!mesh)
         return MakeUnexpected(Failure{});
     Core::Assets::AssetBytes binary(arena);
@@ -99,6 +173,33 @@ TEST(MeshSolidCodec, MissingTruncatedOrExtraMembershipWordsAreRejected){
     AppendPOD(extraWord, u32(0u));
     EXPECT_FALSE(rejected.loadBinary(extraWord));
     EXPECT_GT(logger.errorCount(), 0u);
+}
+
+TEST(MeshSolidCodec, UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreservesLoadedMesh){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/unaddressable_bounds"));
+    const auto cooked = CookMeshBinary(arena);
+    ASSERT_TRUE(cooked);
+    Impl::Mesh loaded(arena, s_MeshName);
+    ASSERT_TRUE(loaded.loadBinary(*cooked));
+    const usize retainedMeshletCount = loaded.meshlets().size();
+    const usize retainedPositionCount = loaded.positionStream().size();
+    ASSERT_EQ(loaded.solidTriangleWords().size(), 1u);
+    const u32 retainedSolidWord = loaded.solidTriangleWords()[0];
+
+    Core::Assets::AssetBytes malformed(*cooked);
+    constexpr u64 s_UnaddressableBoundsCount = static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE) + 1u;
+    static_assert((s_UnaddressableBoundsCount - 1u) * NWB_MESHLET_BOUNDS_STRIDE <= Limit<u32>::s_Max);
+    static_assert(s_UnaddressableBoundsCount * NWB_MESHLET_BOUNDS_STRIDE > Limit<u32>::s_Max);
+    NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryPayload::MeshHeaderBinary, meshletCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
+    NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryPayload::MeshHeaderBinary, meshletBoundCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
+    EXPECT_FALSE(loaded.loadBinary(malformed));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("mesh payload is incomplete")));
+    EXPECT_EQ(loaded.meshlets().size(), retainedMeshletCount);
+    EXPECT_EQ(loaded.positionStream().size(), retainedPositionCount);
+    ASSERT_EQ(loaded.solidTriangleWords().size(), 1u);
+    EXPECT_EQ(loaded.solidTriangleWords()[0], retainedSolidWord);
 }
 
 TEST(MeshSolidCodec, TailPaddingAndInconsistentPrimitiveCountsAreRejected){

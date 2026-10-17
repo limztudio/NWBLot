@@ -61,11 +61,11 @@ class EditCaretGeometry final{
 public:
     explicit EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept;
     EditCaretGeometry(EditCaretGeometry&&)noexcept = default;
-    EditCaretGeometry& operator=(EditCaretGeometry&&)noexcept = default;
+    EditCaretGeometry(const EditCaretGeometry&) = delete;
 
 
 public:
-    EditCaretGeometry(const EditCaretGeometry&) = delete;
+    EditCaretGeometry& operator=(EditCaretGeometry&&)noexcept = default;
     EditCaretGeometry& operator=(const EditCaretGeometry&) = delete;
 
 
@@ -79,12 +79,14 @@ public:
     // A valid nonintersecting range yields an empty rectangle. Selected LF bytes use the supplied trailing cap.
     [[nodiscard]] Expected<Rect> rangeOnLine(EditBoxRange range, u32 lineIndex, f32 breakWidth)const noexcept;
 
-
-public:
     [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
+
     [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const noexcept{ return m_stops; }
+
     [[nodiscard]] const PaintVector<EditCaretLine>& lines()const noexcept{ return m_lines; }
+
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_mode; }
+
     [[nodiscard]] bool ready()const noexcept{ return m_ready; }
 
 

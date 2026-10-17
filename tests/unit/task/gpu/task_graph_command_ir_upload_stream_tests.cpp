@@ -42,8 +42,10 @@ inline constexpr usize s_TextureByteCount = 96u;
 [[nodiscard]] bool CaptureTwoUploads(Graphics::GpuCommandIrCapture& capture, const BinaryByteView bufferBytes, const BinaryByteView textureBytes){
     Graphics::TextureSlice slice;
     slice.setOrigin(0u, 0u, 0u).setSize(4u, 3u, 2u).setMipLevel(1u).setArraySlice(2u);
-    return capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination, 32u, bufferBytes, Graphics::ResourceStates::ShaderResource) &&
-        capture.captureUploadTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_TextureBlob, s_CommandIrDestination, slice, 16u, 48u, Graphics::TextureUploadAspect::Color, textureBytes, Graphics::ResourceStates::ShaderResource);
+    return
+        capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_BufferBlob, s_CommandIrDestination, 32u, bufferBytes, Graphics::ResourceStates::ShaderResource) &&
+        capture.captureUploadTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_TextureBlob, s_CommandIrDestination, slice, 16u, 48u, Graphics::TextureUploadAspect::Color, textureBytes, Graphics::ResourceStates::ShaderResource)
+    ;
 }
 
 

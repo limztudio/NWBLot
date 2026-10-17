@@ -8,8 +8,6 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>
 
-#include <global/scope_exit.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,8 +66,12 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_hardware_transparent_shadow::PushConstants)));
-        state.m_bindingLayout = device.createBindingLayout(layoutDesc);
-        if(!state.m_bindingLayout){
+        auto bindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(bindingLayoutResult)
+            state.m_bindingLayout = Move(*bindingLayoutResult);
+        else
+            state.m_bindingLayout.reset();
+        if(!bindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
             state.m_pipelineFailed = true;
             return false;
@@ -85,8 +87,12 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         }
         Core::ComputePipelineDesc pipelineDesc;
         pipelineDesc.setComputeShader(state.m_shaders[i]).addBindingLayout(state.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
-        state.m_pipelines[i] = device.createComputePipeline(pipelineDesc);
-        if(!state.m_pipelines[i]){
+        auto pipelinesResult = device.createComputePipeline(pipelineDesc);
+        if(pipelinesResult)
+            state.m_pipelines[i] = Move(*pipelinesResult);
+        else
+            state.m_pipelines[i].reset();
+        if(!pipelinesResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
             state.m_pipelineFailed = true;
             return false;
@@ -105,10 +111,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         const Name names[] = { Name("hardware_shadow_crossings"), Name("hardware_shadow_overflow_list"), Name("hardware_shadow_overflow_args"), };
         Core::BufferHandle buffers[3];
         Core::GpuDescriptorHandle descriptors[3]{};
-        ScopeExit retireUnpublished([&]()noexcept{
-            for(auto& handle : descriptors)
-                RayTracingDetail::RetireHeapHandle(heap, handle);
-        });
+        Core::GpuDescriptorRetirementGuard retireUnpublished(heap, Span<const Core::GpuDescriptorHandle>(descriptors));
         for(u32 i = 0u; i < LengthOf(buffers); ++i){
             Core::BufferDesc desc;
             desc
@@ -120,8 +123,12 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
                 .setDebugName(names[i])
                 .enableAutomaticStateTracking(Core::ResourceStates::UnorderedAccess)
             ;
-            buffers[i] = m_graphics.createBuffer(desc);
-            if(!buffers[i]){
+            auto buffersResult = m_graphics.createBuffer(desc);
+            if(buffersResult)
+                buffers[i] = Move(*buffersResult);
+            else
+                buffers[i].reset();
+            if(!buffersResult){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
                 return false;
             }

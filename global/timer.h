@@ -143,7 +143,7 @@ namespace TimerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Timer s_VeryBegining = TimerNow();
+inline Timer g_VeryBegining = TimerNow();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,25 +175,25 @@ inline Timer s_VeryBegining = TimerNow();
 
 
 template<typename T>
-inline T DurationInSeconds(const Timer& current, const Timer& late = TimerDetail::s_VeryBegining)noexcept{
+inline T DurationInSeconds(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
 }
 template<typename T>
-inline T ConsumeTimerDeltaSeconds(Timer& previous)noexcept{
+inline T ConsumeTimerDeltaSeconds(Timer& previous)noexcept(IsArithmetic_V<T>){
     const Timer current = TimerNow();
     const T delta = DurationInSeconds<T>(current, previous);
     previous = current;
     return delta;
 }
 template<typename T>
-inline T DurationInMS(const Timer& current, const Timer& late = TimerDetail::s_VeryBegining)noexcept{
+inline T DurationInMS(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
     return std::chrono::duration_cast<std::chrono::duration<T, std::milli>>(current - late).count();
 }
 template<typename T>
-inline T DurationInNS(const Timer& current, const Timer& late = TimerDetail::s_VeryBegining)noexcept{
+inline T DurationInNS(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
     return std::chrono::duration_cast<std::chrono::duration<T, std::nano>>(current - late).count();
 }
-inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = TimerDetail::s_VeryBegining)noexcept{
+inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept{
     if(current < late)
         return TimerDelta(0);
 

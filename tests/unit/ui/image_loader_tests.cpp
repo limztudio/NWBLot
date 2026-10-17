@@ -156,7 +156,9 @@ protected:
 
 
 TEST_F(ImageLoaderTests, RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone){
-    const SharedImageSource image = LoadImageSource(m_arena, m_assets, m_identity);
+    auto imageResult = LoadImageSource(m_arena, m_assets, m_identity);
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     const Texture& texture = image->texture();
     const usize payloadOffset = sizeof(TextureBinaryPayload::HeaderBinary) + 2u * sizeof(TextureBinaryPayload::MipLevelBinary);
@@ -220,8 +222,12 @@ TEST_F(ImageLoaderTests, CodecReturningAValidTextureAtAnotherIdentityIsRejected)
 }
 
 TEST_F(ImageLoaderTests, RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersions){
-    const SharedImageSource first = LoadImageSource(m_arena, m_assets, m_identity);
-    const SharedImageSource second = LoadImageSource(m_arena, m_assets, m_identity);
+    auto firstResult = LoadImageSource(m_arena, m_assets, m_identity);
+    ASSERT_TRUE(firstResult);
+    const SharedImageSource first = Move(*firstResult);
+    auto secondResult = LoadImageSource(m_arena, m_assets, m_identity);
+    ASSERT_TRUE(secondResult);
+    const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first);
     ASSERT_TRUE(second);
     EXPECT_EQ(first->identity(), second->identity());
@@ -235,16 +241,18 @@ TEST_F(ImageLoaderTests, RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersions){
 }
 
 TEST_F(ImageLoaderTests, FailedReplacementPreservesRetainedSourceAndLaterSuccessPublishesAFreshVersion){
-    SharedImageSource current = LoadImageSource(m_arena, m_assets, m_identity);
+    auto currentResult = LoadImageSource(m_arena, m_assets, m_identity);
+    ASSERT_TRUE(currentResult);
+    SharedImageSource current = Move(*currentResult);
     ASSERT_TRUE(current);
     const SharedImageSource retained = current;
     const u64 oldGeneration = retained->generation();
 
     m_source.m_binary.pop_back();
-    SharedImageSource replacement = LoadImageSource(m_arena, m_assets, m_identity);
+    auto replacement = LoadImageSource(m_arena, m_assets, m_identity);
     EXPECT_FALSE(replacement);
     if(replacement)
-        current = Move(replacement);
+        current = Move(*replacement);
     EXPECT_EQ(current.get(), retained.get());
     EXPECT_EQ(current->generation(), oldGeneration);
     ExpectPayload(current->texture(), 3u);
@@ -252,7 +260,7 @@ TEST_F(ImageLoaderTests, FailedReplacementPreservesRetainedSourceAndLaterSuccess
     m_source.m_binary = MakeTextureBinary(m_arena, 67u);
     replacement = LoadImageSource(m_arena, m_assets, m_identity);
     ASSERT_TRUE(replacement);
-    current = Move(replacement);
+    current = Move(*replacement);
     EXPECT_EQ(current->identity(), retained->identity());
     EXPECT_NE(current.get(), retained.get());
     EXPECT_NE(current->generation(), oldGeneration);

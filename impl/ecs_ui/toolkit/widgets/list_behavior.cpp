@@ -87,14 +87,12 @@ struct KeyResolution{
     SIMDVectorDouble candidateValue = VectorDoubleMin(current, maximum);
     if(VectorDoubleGetX(delta) > 0.0){
         const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(candidateValue, step));
-        candidateValue = VectorDoubleGetX(delta) >= distanceInSteps ? VectorDoubleZero()
-            : VectorDoubleSubtract(candidateValue, VectorDoubleMultiply(delta, step));
+        candidateValue = VectorDoubleGetX(delta) >= distanceInSteps ? VectorDoubleZero() : VectorDoubleSubtract(candidateValue, VectorDoubleMultiply(delta, step));
     }
     else if(VectorDoubleGetX(delta) < 0.0){
         const SIMDVectorDouble reverseDelta = VectorDoubleNegate(delta);
         const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(maximum, candidateValue), step));
-        candidateValue = VectorDoubleGetX(reverseDelta) >= distanceInSteps ? maximum
-            : VectorDoubleAdd(candidateValue, VectorDoubleMultiply(reverseDelta, step));
+        candidateValue = VectorDoubleGetX(reverseDelta) >= distanceInSteps ? maximum : VectorDoubleAdd(candidateValue, VectorDoubleMultiply(reverseDelta, step));
     }
     const f64 candidate = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())));
     if(!IsFinite(candidate))

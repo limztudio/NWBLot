@@ -23,8 +23,8 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<UniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeContext& context);
-void DestroyUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world);
+[[nodiscard]] Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeContext& context);
+void ClearUiLayerSmokeWorld(ProjectRuntimeContext& context, Core::ECS::World& world);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

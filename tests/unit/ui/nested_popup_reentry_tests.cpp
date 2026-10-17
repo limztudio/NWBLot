@@ -212,8 +212,6 @@ protected:
         m_siblingList.select(2u);
     }
 
-
-
     [[nodiscard]] bool acceptBase(){
         if(!begin(1u) || !m_builder.beginPanel("base", { 0.0f, 0.0f, 180.0f, 100.0f }))
             return false;

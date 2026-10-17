@@ -24,6 +24,10 @@ namespace BinaryDetail{
 template<typename>
 inline constexpr bool s_DependentFalse = false;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename Container>
 inline void RequireByteContainer()noexcept{
     using ByteType = typename Container::value_type;
@@ -114,13 +118,21 @@ template<typename ValueContainer>
 struct BinaryByteView{
     using value_type = u8;
 
+
+public:
     const u8* bytes = nullptr;
     usize byteCount = 0u;
 
+
+public:
+    [[nodiscard]] u8 operator[](const usize index)const noexcept{ return bytes[index]; }
+
+
+public:
     [[nodiscard]] bool empty()const noexcept{ return byteCount == 0u; }
     [[nodiscard]] usize size()const noexcept{ return byteCount; }
     [[nodiscard]] const u8* data()const noexcept{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const noexcept{ return bytes[index]; }
+
 };
 
 
@@ -136,7 +148,7 @@ inline void AppendPOD(Container& outBinary, const PodType& value){
 }
 
 template<typename PodType, typename Container>
-[[nodiscard]] inline Expected<PodType> ReadPOD(const Container& binary, usize& inOutOffset)noexcept(noexcept(PodType{}) && IsNothrowMoveConstructible_V<PodType> && noexcept(BinaryDetail::ReadBytes(binary, inOutOffset, DeclVal<void*>(), sizeof(PodType)))){
+[[nodiscard]] inline Expected<PodType> ReadPOD(const Container& binary, usize& inOutOffset)noexcept(noexcept(PodType{}) && IsNothrowMoveConstructible_V<PodType> && noexcept(BinaryDetail::ReadBytes(binary, inOutOffset, &DeclVal<PodType&>(), sizeof(PodType)))){
     static_assert(IsTriviallyCopyable_V<PodType>, "binary POD reads require trivially-copyable values");
     PodType value = {};
     if(!BinaryDetail::ReadBytes(binary, inOutOffset, &value, sizeof(PodType)))

@@ -48,6 +48,8 @@ static_assert(IsTriviallyCopyable_V<SkinnedCsgMeshComponent>, "SkinnedCsgMeshCom
 struct CsgCutterComponent{
     using ParameterByteVector = Vector<u8, Core::Alloc::GlobalArena>;
 
+
+public:
     Name receiverGroup = s_NameNone;
 
     Name shapeType = s_NameNone;
@@ -59,7 +61,9 @@ struct CsgCutterComponent{
 
     bool active = true;
 
-    explicit CsgCutterComponent(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit CsgCutterComponent(Core::Alloc::GlobalArena& arena)noexcept
         : worldToShape(::MatrixIdentity<Float34>())
         , shapeToWorld(::MatrixIdentity<Float34>())
         , parameterBytes(arena)

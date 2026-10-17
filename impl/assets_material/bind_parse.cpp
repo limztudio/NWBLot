@@ -26,9 +26,9 @@ namespace MaterialBindDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena){
+Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, ScratchArena& scratchArena){
     Metascript::Document doc(arena);
-    CookString bindText{arena};
+    ScratchString bindText{scratchArena};
     if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, "Material bind", bindText, doc, [&](const AStringView text){ return doc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }))
         return MakeUnexpected(Failure{});
     return doc;
@@ -67,7 +67,7 @@ static bool IsMaterialBindIdentifier(const AStringView text)noexcept{
 
 
 Expected<MaterialParameterType> ParseMaterialParameterTypeText(const AStringView typeText)noexcept{
-    static constexpr NamedEnumCase<MaterialParameterValueType::Enum> s_Types[] = {
+    static constexpr ::NamedEnumCase<MaterialParameterValueType::Enum> s_Types[] = {
         { "bool", MaterialParameterValueType::Bool },
         { "char", MaterialParameterValueType::Char },
         { "uchar", MaterialParameterValueType::UChar },
@@ -362,7 +362,8 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
 
     Sort(structs.begin(), structs.end(), [](const MaterialBindStruct& lhs, const MaterialBindStruct& rhs)noexcept{
         return lhs.name < rhs.name;
-    });
+    }
+    );
     return structs;
 }
 
@@ -429,17 +430,17 @@ Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, co
     if(!Core::Assets::CheckPairedSourceExtension(bindFilePath, entry.source, MaterialBindNames::SourceExtensionText(), "Material bind", scratchArena))
         return MakeUnexpected(Failure{});
 
-    const Metascript::Value* assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, "Material bind");
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, "Material bind");
     if(!assetValue)
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, *assetValue, "Material bind", { "structs", "instances" }))
+        return MakeUnexpected(assetValue.error());
+    if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, **assetValue, "Material bind", { "structs", "instances" }))
         return MakeUnexpected(Failure{});
 
-    auto structs = ParseMaterialBindStructs(bindFilePath, *assetValue, arena);
+    auto structs = ParseMaterialBindStructs(bindFilePath, **assetValue, arena);
     if(!structs)
         return MakeUnexpected(Failure{});
     entry.structs = Move(*structs);
-    if(!ParseMaterialBindInstances(bindFilePath, *assetValue, arena, entry))
+    if(!ParseMaterialBindInstances(bindFilePath, **assetValue, arena, entry))
         return MakeUnexpected(Failure{});
 
     return entry;

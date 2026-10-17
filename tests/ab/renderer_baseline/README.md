@@ -40,7 +40,9 @@ bodies. After at least 360 successful presentations, it waits at least 30 steady
 The runtime log records the warmup start/end graphics frames, presentation progress, elapsed interval, and authoritative completed readback source frame.
 The runner rejects missing, short, fully idle, or mismatched readback evidence and stores the admitted interval in the capture manifest.
 This protocol requires presentation progress; its endpoint counters do not prove uninterrupted rendering or lighting convergence.
-Startup and frame warmup do not count toward this live interval. Complex captures use the `settled-readback` mode and do not use `--settle-seconds`; control the post-warmup interval through `NWB_GI_SMOKE_MIN_SETTLE_SECONDS`. To request 100 live seconds after frame warmup, set the profile's environment override and increase the ready-marker timeout:
+Startup and frame warmup do not count toward this live interval. Complex captures use the `settled-readback` mode
+and do not use `--settle-seconds`; control the post-warmup interval through `NWB_GI_SMOKE_MIN_SETTLE_SECONDS`.
+To request 100 live seconds after frame warmup, set the profile's environment override and increase the ready-marker timeout:
 
 ```powershell
 $env:NWB_GI_SMOKE_MIN_SETTLE_SECONDS = "100"

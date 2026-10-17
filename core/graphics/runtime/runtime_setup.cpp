@@ -30,6 +30,9 @@ inline constexpr Name s_SetupTextureResourceIdentity("graphics.setup_texture.res
 inline constexpr Name s_SetupTextureUploadIdentity("graphics.setup_texture.upload");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static Expected<usize> ComputeTextureUploadByteSize(const GraphicsRuntime::TextureSetupDesc& desc){
     const TextureDesc& textureDesc = desc.textureDesc;
     if(textureDesc.width == 0 || textureDesc.height == 0 || textureDesc.depth == 0 || textureDesc.mipLevels == 0 || textureDesc.arraySize == 0)
@@ -87,9 +90,9 @@ struct BufferSetupSubmissionData{
     GpuPhysicalQueueId directConsumerQueue;
 };
 
-[[nodiscard]] static GpuTaskId DeclareBufferSetupUpload(void* const userData, GpuTaskGraph& graph){
+[[nodiscard]] static Expected<GpuTaskId> DeclareBufferSetupUpload(void* const userData, GpuTaskGraph& graph){
     auto& submissionData = *static_cast<BufferSetupSubmissionData*>(userData);
-    const GpuGraphResourceId destination = graph.importBuffer(
+    const auto destinationResult = graph.importBuffer(
         submissionData.buffer,
         GpuGraphResourceDesc{}
             .setIdentity(s_SetupBufferResourceIdentity)
@@ -99,9 +102,11 @@ struct BufferSetupSubmissionData{
             .setQueueSharing(submissionData.uploadDesc.queueSharing)
             .setDirectConsumerQueue(submissionData.directConsumerQueue)
     );
-    const GpuUploadBlobId source = graph.copyUploadData(submissionData.setupDesc.data, submissionData.setupDesc.dataSize, alignof(u32));
-    if(!destination.valid() || !source.valid())
-        return {};
+    const auto sourceResult = graph.copyUploadData(submissionData.setupDesc.data, submissionData.setupDesc.dataSize, alignof(u32));
+    if(!destinationResult || !sourceResult)
+        return MakeUnexpected(Failure{});
+    const GpuGraphResourceId destination = *destinationResult;
+    const GpuUploadBlobId source = *sourceResult;
 
     GpuTaskDesc uploadTaskDesc;
     uploadTaskDesc
@@ -109,7 +114,7 @@ struct BufferSetupSubmissionData{
         .setMarkerLabel("Setup Buffer Upload")
         .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(submissionData.setupDesc.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
     ;
-    return graph.addUploadBufferTask(
+    const auto taskResult = graph.addUploadBufferTask(
         uploadTaskDesc,
         GpuUploadBufferTaskDesc{
             .source = source,
@@ -119,6 +124,10 @@ struct BufferSetupSubmissionData{
             .acceptedToken = &submissionData.uploadToken,
         }
     );
+    if(!taskResult)
+        return MakeUnexpected(Failure{});
+    const GpuTaskId task = *taskResult;
+    return task;
 }
 
 
@@ -131,9 +140,9 @@ struct TextureSetupSubmissionData{
     GpuPhysicalQueueId directConsumerQueue;
 };
 
-[[nodiscard]] static GpuTaskId DeclareTextureSetupUpload(void* const userData, GpuTaskGraph& graph){
+[[nodiscard]] static Expected<GpuTaskId> DeclareTextureSetupUpload(void* const userData, GpuTaskGraph& graph){
     auto& submissionData = *static_cast<TextureSetupSubmissionData*>(userData);
-    const GpuGraphResourceId destination = graph.importTexture(
+    const auto destinationResult = graph.importTexture(
         submissionData.texture,
         GpuGraphResourceDesc{}
             .setIdentity(s_SetupTextureResourceIdentity)
@@ -141,10 +150,13 @@ struct TextureSetupSubmissionData{
             .setType(GpuGraphResourceType::Texture)
             // Vulkan creates this texture in UNDEFINED layout.
             // The upload task owns its first concrete transition; the task's finalState still publishes the caller-requested logical state.
-            .setInitialState(ResourceStates::Unknown).setQueueSharing(submissionData.uploadDesc.queueSharing).setDirectConsumerQueue(submissionData.directConsumerQueue));
-    const GpuUploadBlobId source = graph.copyUploadData(submissionData.setupDesc.data, submissionData.setupDesc.uploadDataSize, alignof(u32));
-    if(!destination.valid() || !source.valid())
-        return {};
+            .setInitialState(ResourceStates::Unknown).setQueueSharing(submissionData.uploadDesc.queueSharing).setDirectConsumerQueue(submissionData.directConsumerQueue)
+    );
+    const auto sourceResult = graph.copyUploadData(submissionData.setupDesc.data, submissionData.setupDesc.uploadDataSize, alignof(u32));
+    if(!destinationResult || !sourceResult)
+        return MakeUnexpected(Failure{});
+    const GpuGraphResourceId destination = *destinationResult;
+    const GpuUploadBlobId source = *sourceResult;
 
     GpuTaskDesc uploadTaskDesc;
     uploadTaskDesc
@@ -152,7 +164,7 @@ struct TextureSetupSubmissionData{
         .setMarkerLabel("Setup Texture Upload")
         .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(submissionData.setupDesc.uploadDataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
     ;
-    return graph.addUploadTextureTask(
+    const auto taskResult = graph.addUploadTextureTask(
         uploadTaskDesc,
         GpuUploadTextureTaskDesc{
             .source = source,
@@ -166,6 +178,10 @@ struct TextureSetupSubmissionData{
             .acceptedToken = &submissionData.uploadToken,
         }
     );
+    if(!taskResult)
+        return MakeUnexpected(Failure{});
+    const GpuTaskId task = *taskResult;
+    return task;
 }
 
 
@@ -294,26 +310,31 @@ bool ValidateMeshSetupDesc(const GraphicsRuntime::MeshSetupDesc& desc){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
+Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
     auto& device = getDevice();
     if(desc.acceptedToken)
         *desc.acceptedToken = {};
     if(!GraphicsModuleDetail::ValidateBufferSetupUpload(desc))
-        return {};
+        return MakeUnexpected(Failure{});
 
-    if(!desc.data || desc.dataSize == 0)
-        return device.createBuffer(desc.bufferDesc);
+    if(!desc.data || desc.dataSize == 0){
+        auto buffer = device.createBuffer(desc.bufferDesc);
+        if(!buffer)
+            return MakeUnexpected(Failure{});
+        return buffer;
+    }
 
     const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(device, desc.queue, desc.dataSize, desc.bufferDesc.initialState != ResourceStates::Unknown);
     const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.dataSize);
     BufferDesc uploadDesc = desc.bufferDesc;
     uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
-    BufferHandle buffer = device.createBuffer(uploadDesc);
-    if(!buffer){
+    auto bufferResult = device.createBuffer(uploadDesc);
+    if(!bufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
+    BufferHandle buffer = Move(*bufferResult);
     QueueSubmissionToken uploadToken;
     __hidden_graphics_setup::BufferSetupSubmissionData submissionData{
         .buffer = buffer,
@@ -335,7 +356,7 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
     );
     if(!submitted){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     if(desc.acceptedToken)
         *desc.acceptedToken = uploadToken;
@@ -343,18 +364,22 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
     return buffer;
 }
 
-TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
+Expected<TextureHandle> GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
     auto& device = getDevice();
     if(desc.acceptedToken)
         *desc.acceptedToken = {};
     if(!GraphicsModuleDetail::ValidateTextureSetupUpload(desc))
-        return {};
+        return MakeUnexpected(Failure{});
 
-    if(!desc.data || desc.uploadDataSize == 0)
-        return device.createTexture(desc.textureDesc);
+    if(!desc.data || desc.uploadDataSize == 0){
+        auto texture = device.createTexture(desc.textureDesc);
+        if(!texture)
+            return MakeUnexpected(Failure{});
+        return texture;
+    }
     if(desc.textureDesc.keepInitialState && (desc.textureDesc.arraySize != 1u || desc.textureDesc.mipLevels != 1u)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': a fresh retained setup upload must cover every mip and array slice; use uploadTextureBatch"), StringConvert(desc.textureDesc.name.resolvedText()));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
@@ -363,12 +388,13 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
     const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.uploadDataSize);
     TextureDesc uploadDesc = desc.textureDesc;
     uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
-    TextureHandle texture = device.createTexture(uploadDesc);
-    if(!texture){
+    auto textureResult = device.createTexture(uploadDesc);
+    if(!textureResult){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.resolvedText()));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
+    TextureHandle texture = Move(*textureResult);
     QueueSubmissionToken uploadToken;
     __hidden_graphics_setup::TextureSetupSubmissionData submissionData{
         .texture = texture,
@@ -390,7 +416,7 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
     );
     if(!submitted){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.resolvedText()));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     if(desc.acceptedToken)
         *desc.acceptedToken = uploadToken;
@@ -398,9 +424,9 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
     return texture;
 }
 
-GraphicsRuntime::MeshResource GraphicsRuntime::setupMesh(const MeshSetupDesc& desc)const{
+Expected<GraphicsRuntime::MeshResource> GraphicsRuntime::setupMesh(const MeshSetupDesc& desc)const{
     if(!GraphicsModuleDetail::ValidateMeshSetupDesc(desc))
-        return {};
+        return MakeUnexpected(Failure{});
 
     MeshResource output;
     output.vertexStride = desc.vertexStride;
@@ -418,11 +444,12 @@ GraphicsRuntime::MeshResource GraphicsRuntime::setupMesh(const MeshSetupDesc& de
         vertexSetup.dataSize = desc.vertexDataSize;
         vertexSetup.queue = desc.queue;
 
-        output.vertexBuffer = setupBuffer(vertexSetup);
-        if(!output.vertexBuffer){
+        auto vertexBufferResult = setupBuffer(vertexSetup);
+        if(!vertexBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up mesh vertex buffer '{}'"), StringConvert(desc.vertexBufferName.resolvedText()));
-            return MeshResource{};
+            return MakeUnexpected(Failure{});
         }
+        output.vertexBuffer = Move(*vertexBufferResult);
     }
 
     if(desc.indexData && desc.indexDataSize > 0){
@@ -438,11 +465,12 @@ GraphicsRuntime::MeshResource GraphicsRuntime::setupMesh(const MeshSetupDesc& de
         indexSetup.dataSize = desc.indexDataSize;
         indexSetup.queue = desc.queue;
 
-        output.indexBuffer = setupBuffer(indexSetup);
-        if(!output.indexBuffer){
+        auto indexBufferResult = setupBuffer(indexSetup);
+        if(!indexBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up mesh index buffer '{}'"), StringConvert(desc.indexBufferName.resolvedText()));
-            return MeshResource{};
+            return MakeUnexpected(Failure{});
         }
+        output.indexBuffer = Move(*indexBufferResult);
     }
 
     if(output.vertexStride > 0 && desc.vertexDataSize > 0)

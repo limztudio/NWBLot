@@ -60,10 +60,10 @@ class SliderState final : NoCopy{
 
 public:
     SliderState()noexcept;
+    SliderState(SliderState&&) = delete;
 
 
 public:
-    SliderState(SliderState&&) = delete;
     SliderState& operator=(SliderState&&) = delete;
 
 

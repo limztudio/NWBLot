@@ -183,7 +183,10 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
         const auto document = read(index, scratchArena);
         if(!document)
             return MakeUnexpected(Failure{});
-        if(Name(document->assetType()) != assetType)
+        const auto documentAssetType = Name::FromText(document->assetType());
+        if(!documentAssetType)
+            return MakeUnexpected(Failure{});
+        if(*documentAssetType != assetType)
             continue;
         if(document->declarations().size() != 1u){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), StringConvert(virtualPath));

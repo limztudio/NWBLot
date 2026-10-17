@@ -29,7 +29,7 @@ namespace ECSRenderDetail{
 // Declaration-only ownership of one complete generated group; never carry this state across graph/frame resets.
 class AvboitGeneratedGeometryReuse final : NoCopy{
 public:
-    explicit AvboitGeneratedGeometryReuse(Core::Alloc::ScratchArena& arena);
+    explicit AvboitGeneratedGeometryReuse(Core::Alloc::ScratchArena& arena)noexcept;
 
 
 public:

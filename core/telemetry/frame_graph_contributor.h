@@ -22,6 +22,8 @@ inline constexpr u32 s_InvalidFrameGraphNodeIndex = ~0u;
 struct FrameGraphNodeHandle{
     u32 index = s_InvalidFrameGraphNodeIndex;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return index != s_InvalidFrameGraphNodeIndex; }
 };
 
@@ -47,9 +49,17 @@ struct FrameGraphPassMetadata{
 class FrameGraphBuilder final : NoCopy{
 public:
     // Statistics tables may be prepopulated, but must only be changed through this builder during its lifetime.
-    FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex = 0u);
-    FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, const u64 frameIndex = 0u);
+    FrameGraphBuilder(Alloc::ScratchArena& scratchArena, FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex = 0u);
     FrameGraphBuilder(
+        Alloc::ScratchArena& scratchArena,
+        FrameGraphNodeDescs& nodes,
+        FrameGraphEdgeDescs& edges,
+        FrameGraphPendingNameEdges& pendingNameEdges,
+        FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+        const u64 frameIndex = 0u
+    );
+    FrameGraphBuilder(
+        Alloc::ScratchArena& scratchArena,
         FrameGraphNodeDescs& nodes,
         FrameGraphEdgeDescs& edges,
         FrameGraphPendingNameEdges& pendingNameEdges,
@@ -61,6 +71,7 @@ public:
 
 public:
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
+    [[nodiscard]] Alloc::ScratchArena& scratchArena()noexcept{ return m_scratchArena; }
     [[nodiscard]] bool addPhysicalQueueRuntimeStatistics(FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics);
     [[nodiscard]] bool addPacketSubmissionStatistics(FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics);
 
@@ -89,13 +100,14 @@ private:
 
 
 private:
+    Alloc::ScratchArena& m_scratchArena;
     FrameGraphNodeDescs& m_nodes;
     FrameGraphEdgeDescs& m_edges;
     FrameGraphPendingNameEdges& m_pendingNameEdges;
     FrameGraphPhysicalQueueRuntimeStatisticsRecords* m_physicalQueueRuntimeStatistics = nullptr;
     FrameGraphPacketSubmissionStatisticsRecords* m_packetSubmissionStatistics = nullptr;
-    HashSet<u64, TelemetryArena> m_physicalQueueIdentities;
-    HashSet<u64, TelemetryArena> m_packetIdentities;
+    HashSet<u64, Alloc::ScratchArena> m_physicalQueueIdentities;
+    HashSet<u64, Alloc::ScratchArena> m_packetIdentities;
     u64 m_frameIndex = 0u;
 };
 

@@ -40,6 +40,9 @@ TextureSlice TextureSlice::resolve(const u32 mipWidth, const u32 mipHeight, cons
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const noexcept{
     TextureSubresourceSet ret;
     ret.baseMipLevel = baseMipLevel;
@@ -96,6 +99,9 @@ bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const noexce
 
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 BufferRange BufferRange::resolve(const BufferDesc& desc)const noexcept{

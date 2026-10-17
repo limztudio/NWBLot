@@ -7,6 +7,9 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -15,7 +18,6 @@
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
-#include <core/task/cpu/scheduler.h>
 #include <core/common/log.h>
 
 
@@ -119,6 +121,7 @@ struct VulkanContext{
     bool transferQueueEnabled = false;
 
 
+public:
     explicit VulkanContext(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)noexcept
         : objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
@@ -156,13 +159,15 @@ struct QueueFamilySharingInfo{
     Array<u32, 6u> familyIndices = {};
     u32 familyIndexCount = 0u;
 
+
+public:
     [[nodiscard]] const u32* data()const noexcept{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
 };
 
-inline QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context){
+inline QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
     QueueFamilySharingInfo result;
     const u8 sharingBits = static_cast<u8>(sharing);
-    const auto appendFamily = [&result](const i32 familyIndex){
+    const auto appendFamily = [&result](const i32 familyIndex)noexcept{
         if(familyIndex == s_InvalidQueueFamilyIndex)
             return;
         for(u32 index = 0u; index < result.familyIndexCount; ++index){
@@ -196,7 +201,7 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueShari
     return result;
 }
 
-inline bool UsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context){
+inline bool UsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
     return ResolveQueueFamilySharing(sharing, context).mode == VK_SHARING_MODE_CONCURRENT;
 }
 

@@ -418,11 +418,13 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         transformBufferDesc.isAccelStructBuildInput = true;
         transformBufferDesc.debugName = "BLAS_TransformBuffer";
 
-        transformBuffer = m_device.createBuffer(transformBufferDesc);
-        if(!transformBuffer){
+        auto transformBufferResult = m_device.createBuffer(transformBufferDesc);
+        if(!transformBufferResult){
+            invalidateCommandRecording();
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate BLAS transform buffer"));
             return;
         }
+        transformBuffer = Move(*transformBufferResult);
         if(!isBufferReadyForCommandQueue(transformBuffer.get(), s_BuildInputUsage)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: BLAS transform buffer is not ready for device-address access"));
             return;
@@ -501,8 +503,14 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         blasScratch.rangeInfos[i] = rangeInfo;
     };
 
-    if(taskScheduler().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)
-        taskScheduler().parallelFor(static_cast<usize>(0), numGeometries, s_GeometryGrainSize, buildGeometry);
+    if(taskScheduler().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold){
+        const auto parallelWork = taskScheduler().parallelFor(static_cast<usize>(0), numGeometries, s_GeometryGrainSize, buildGeometry);
+        if(!parallelWork){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: acceleration-structure preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            m_commandRecordingFailed = true;
+            return;
+        }
+    }
     else{
         for(usize i = 0u; i < numGeometries; ++i)
             buildGeometry(i);
@@ -602,16 +610,17 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
 }
 
-
 Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 buildScratchSize, const u64 scratchAlignment, TStringView operationName){
     if(buildScratchSize == 0u)
         return VkDeviceAddress{0u};
     if(!m_currentCmdBuf || m_nativeRecordingID == 0u || scratchAlignment == 0u){
+        invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch recording identity or alignment is invalid"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 scratchPadding = scratchAlignment - 1u;
     if(buildScratchSize > Limit<u64>::s_Max - scratchPadding){
+        invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch allocation size overflows"), operationName);
         return MakeUnexpected(Failure{});
     }
@@ -621,10 +630,12 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     const u64 completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
     const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion, 1u);
     if(!allocation){
+        invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
         return MakeUnexpected(Failure{});
     }
     if(!isBufferReadyForCommandQueue(allocation->buffer, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
+        invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch buffer is not ready for device-address access"), operationName);
         return MakeUnexpected(Failure{});
     }
@@ -632,11 +643,13 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(allocation->buffer, allocation->offset);
     const auto alignedScratchAddress = AlignUpChecked(scratchBaseAddress, scratchAlignment);
     if(scratchBaseAddress == 0u || !alignedScratchAddress){
+        invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch device address is null or cannot be aligned"), operationName);
         return MakeUnexpected(Failure{});
     }
     const u64 scratchOffset = *alignedScratchAddress - scratchBaseAddress;
     if(scratchOffset > scratchAllocationSize || buildScratchSize > scratchAllocationSize - scratchOffset){
+        invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: aligned scratch range is outside the buffer"), operationName);
         return MakeUnexpected(Failure{});
     }
@@ -701,6 +714,9 @@ Expected<bool> CommandList::validateAccelStructBuildSignature(
         return MakeUnexpected(Failure{});
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

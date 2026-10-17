@@ -107,23 +107,31 @@ class DrawSnapshot final{
 public:
     explicit DrawSnapshot(Core::Alloc::GlobalArena& arena)noexcept;
     DrawSnapshot(DrawSnapshot&&)noexcept = default;
-    DrawSnapshot& operator=(DrawSnapshot&&)noexcept = default;
+    DrawSnapshot(const DrawSnapshot&) = delete;
 
 
 public:
-    DrawSnapshot(const DrawSnapshot&) = delete;
+    DrawSnapshot& operator=(DrawSnapshot&&)noexcept = default;
     DrawSnapshot& operator=(const DrawSnapshot&) = delete;
 
 
 public:
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_displayMetrics; }
+
     [[nodiscard]] const SkinBinding& skinBinding()const noexcept{ return m_skinBinding; }
+
     [[nodiscard]] const PaintVector<Vertex>& vertices()const noexcept{ return m_vertices; }
+
     [[nodiscard]] const PaintVector<u32>& indices()const noexcept{ return m_indices; }
+
     [[nodiscard]] const PaintVector<DrawCommand>& commands()const noexcept{ return m_commands; }
+
     [[nodiscard]] const PaintVector<SharedGlyphPage>& glyphPages()const noexcept{ return m_glyphPages; }
+
     [[nodiscard]] const PaintVector<SharedSdfAtlasPage>& sdfPages()const noexcept{ return m_sdfPages; }
+
     [[nodiscard]] const PaintVector<SharedImageSource>& textureImages()const noexcept{ return m_textureImages; }
 
 
@@ -144,6 +152,13 @@ private:
 
 
 class PaintBuilder final : NoCopy{
+private:
+    struct OverlayFrame{
+        usize clipDepth = 0u;
+        u32 layer = 0u;
+    };
+
+
 public:
     explicit PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept;
 
@@ -176,13 +191,6 @@ public:
 private:
     void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material, u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u, u32 textureImageIndex = Limit<u32>::s_Max);
     void emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint);
-
-
-private:
-    struct OverlayFrame{
-        usize clipDepth = 0u;
-        u32 layer = 0u;
-    };
 
 
 private:

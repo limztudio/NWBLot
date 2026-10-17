@@ -29,7 +29,7 @@ struct CausticPhotonBudget{
 };
 
 [[nodiscard]] bool ValidateCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
-// Callers supply validated settings, a supported base grid, and the existing 1/2/4 temporal phase count.
+// Callers supply validated settings, a supported base grid, and the current 1/2 temporal phase count.
 [[nodiscard]] CausticPhotonBudget MakeCausticPhotonBudget(const CausticQualitySettings& settings, u32 baseGridSide, u32 temporalPhaseCount);
 
 

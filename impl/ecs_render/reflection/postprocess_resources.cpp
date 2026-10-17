@@ -42,7 +42,7 @@ static_assert(LengthOf(s_SpatialVariants) == NWB_REFLECTION_SPATIAL_MAX_RADIUS);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererReflectionPostprocess::RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)
+RendererReflectionPostprocess::RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
     : m_arena(arena)
     , m_graphics(graphics)
     , m_shaders(shaders)
@@ -137,16 +137,24 @@ bool RendererReflectionPostprocess::preparePipeline(Core::ComputePipelineHandle&
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
         desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES));
-        m_layout = device.createBindingLayout(desc);
-        if(!m_layout)
+        auto layoutResult = device.createBindingLayout(desc);
+        if(layoutResult)
+            m_layout = Move(*layoutResult);
+        else
+            m_layout.reset();
+        if(!layoutResult)
             return false;
     }
     if(!m_shaders.loadShader<ComputeShader>(shader, name, variant, name))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(shader).addBindingLayout(m_layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    pipeline = device.createComputePipeline(desc);
-    return static_cast<bool>(pipeline);
+    auto pipelineResult = device.createComputePipeline(desc);
+    if(pipelineResult)
+        pipeline = Move(*pipelineResult);
+    else
+        pipeline.reset();
+    return static_cast<bool>(pipelineResult);
 }
 
 bool RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& image, const u32 descriptorIndex, const Name name){
@@ -154,9 +162,10 @@ bool RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& imag
         return true;
     Core::TextureDesc desc;
     desc.setWidth(m_width).setHeight(m_height).setFormat(Core::Format::RGBA16_FLOAT).setInUAV(true).setName(name).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
-    Core::TextureHandle texture = m_graphics.createTexture(desc);
-    if(!texture)
+    auto textureResult = m_graphics.createTexture(desc);
+    if(!textureResult)
         return false;
+    Core::TextureHandle texture = Move(*textureResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     Core::GpuDescriptorHandle sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     Core::GpuDescriptorHandle storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);

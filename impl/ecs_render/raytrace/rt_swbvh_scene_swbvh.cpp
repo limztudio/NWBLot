@@ -51,6 +51,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     Vector<PreparedSceneSwBvhMesh, Core::Alloc::ScratchArena> preparedMeshes{ scratchArena };
+    ECSRenderDetail::MaterialTypedConstantRangeMap shadowConstantTypedRanges(0, ECSRenderDetail::MaterialTypedConstantRangeMap::hasher(), ECSRenderDetail::MaterialTypedConstantRangeMap::key_equal(), scratchArena);
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
     instances.reserve(candidateCount);
     sceneRefitInputs.reserve(candidateCount);
@@ -60,6 +61,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
     preparedMeshes.reserve(candidateCount);
+    shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
     MeshBufferSlotLookup meshSlotLookup(0, Hasher<const Core::Buffer*>(), EqualTo<const Core::Buffer*>(), scratchArena);
     meshSlotLookup.reserve(candidateCount);
@@ -125,13 +127,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             const Core::GpuDescriptorHandle nodeHandle = meshResult->meshResources.swBvhNodeHeapHandle;
             const Core::GpuDescriptorHandle positionHandle = meshResult->meshResources.swBvhPositionHeapHandle;
             const Core::GpuDescriptorHandle indexHandle = meshResult->meshResources.swBvhTriangleIndexHeapHandle;
-            if(
-                !positionHandle.valid()
-                || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-                || !indexHandle.valid()
-                || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-
-            ){
+            if(!positionHandle.valid() || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer || !indexHandle.valid() || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
                 SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
                 return false;
@@ -166,7 +162,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
                 .attributeByteSize = attributeDesc.byteSize,
                 .primitiveCount = meshResult->meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
                 .runtimeMesh = meshResult->meshResources.runtimeMesh,
-            });
+            }
+            );
 
             meshSlot = m_rayTracingState.m_swShadowMeshCount;
             m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
@@ -177,7 +174,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             m_rayTracingState.m_swShadowMeshPositionHandles.push_back(positionHandle);
             m_rayTracingState.m_swShadowMeshIndexHandles.push_back(indexHandle);
             m_rayTracingState.m_swShadowMeshAttributeHandles.push_back(*attributeHandle);
-            meshSlotLookup.emplace(meshNodeBuffer, meshSlot);
+            if(!meshSlotLookup.emplace(meshNodeBuffer, meshSlot).second){
+                NWB_ASSERT(false);
+                SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
+                return false;
+            }
             ++m_rayTracingState.m_swShadowMeshCount;
         }
 
@@ -212,7 +213,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the hardware path. Freeze its sampled textures alongside the scene-BVH material context.
             if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
                 return false;
-            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, objectTransformPtr, shadowMaterialTypedBytes, shadowMutableTypedRanges);
+            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, objectTransformPtr, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges);
             if(!materialContext)
                 return false;
             shadowInstance = materialContext->instance;
@@ -248,7 +249,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             bvhPrimitive.transparentOccluder && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
             && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
         ;
-        Float34U opticalWorld{};
+        Float34 opticalWorld{};
         StoreFloat(objectToWorld, opticalWorld);
         if(runtimeOpticalBounds)
             opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
@@ -300,7 +301,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             .meshletCount = meshResult->meshResources.meshletCount,
             .meshletDescSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletDescHeapHandle.slot() : 0u,
             .meshletBoundsSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletLocalBoundsHeapHandle.slot() : 0u,
-        });
+        }
+        );
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
@@ -404,9 +406,12 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     }
 
     if(!staticScene){
-        m_preparedSceneSwBvhRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs.data(), sceneRefitRoots.data(), sceneRefitInputs.size(), m_preparedSceneBvhNodeBuffer, m_preparedSceneBvhNodeHeapHandle, static_cast<u32>(requiredNodeCount), m_shaderSystem);
-        if(!m_preparedSceneSwBvhRefit)
+        auto preparedRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs.data(), sceneRefitRoots.data(), sceneRefitInputs.size(), m_preparedSceneBvhNodeBuffer, m_preparedSceneBvhNodeHeapHandle, static_cast<u32>(requiredNodeCount), m_shaderSystem);
+        if(!preparedRefit){
+            m_preparedSceneSwBvhRefit.reset();
             return false;
+        }
+        m_preparedSceneSwBvhRefit = Move(*preparedRefit);
     }
 
     // Preserve a valid typed buffer and refresh SW node-slot context independently.

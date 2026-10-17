@@ -47,6 +47,8 @@ struct ReflectionStatisticsReservationKey{
     u64 generation = 0u;
     u32 slot = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return sequence != 0u && generation != 0u; }
 };
 
@@ -65,10 +67,13 @@ private:
         bool inFlight = false;
     };
 
+
 public:
     static constexpr u32 s_SlotCount = 3u;
 
-    explicit ReflectionStatisticsState(u16 deviceGeneration);
+
+public:
+    explicit ReflectionStatisticsState(u16 deviceGeneration)noexcept;
 
 
 public:
@@ -83,6 +88,7 @@ public:
 
 private:
     [[nodiscard]] Slot* matchingSlot(const ReflectionStatisticsReservationKey& key)noexcept;
+
 
 private:
     Slot m_slots[s_SlotCount];
@@ -104,6 +110,9 @@ public:
     ReflectionStatisticsReservation(ReflectionStatisticsControlHandle control, const ReflectionStatistics& metadata);
     ReflectionStatisticsReservation(ReflectionStatisticsReservation&& other)noexcept;
     ~ReflectionStatisticsReservation()noexcept;
+
+
+public:
     ReflectionStatisticsReservation& operator=(ReflectionStatisticsReservation&& other)noexcept;
 
 
@@ -112,6 +121,7 @@ public:
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
     void discard()noexcept;
+
 
 private:
     ReflectionStatisticsControlHandle m_control;
@@ -126,7 +136,7 @@ struct ReflectionStatisticsReadbackSnapshot{
 
 class ReflectionStatisticsReadback final : NoCopy{
 public:
-    ReflectionStatisticsReadback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+    ReflectionStatisticsReadback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
 
 
 public:
@@ -135,6 +145,7 @@ public:
     void pollCompleted();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const noexcept;
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

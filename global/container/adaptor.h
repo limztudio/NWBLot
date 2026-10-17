@@ -54,7 +54,7 @@ struct ArenaAllocatorTraits{
     using is_always_equal = FalseType;
 };
 
-usize CachelineSize();
+usize CachelineSize()noexcept;
 [[nodiscard]] usize CacheAlignedAlignment(usize valueAlignment)noexcept;
 
 template<typename T>
@@ -109,6 +109,9 @@ public:
         : m_arena(other.m_arena)
     {}
     constexpr ~ArenaAllocator()noexcept = default;
+
+
+public:
     constexpr ArenaAllocator& operator=(const ArenaAllocator&)noexcept = default;
 
 
@@ -191,7 +194,7 @@ public:
 
 
 public:
-    DefaultArenaAllocator()noexcept
+    DefaultArenaAllocator()noexcept(noexcept(Base(DefaultArena())))
         : Base(DefaultArena())
     {}
     constexpr DefaultArenaAllocator(ArenaT& arena)noexcept
@@ -203,6 +206,9 @@ public:
         : Base(static_cast<const ArenaAllocator<U, ArenaT>&>(other))
     {}
     constexpr ~DefaultArenaAllocator()noexcept = default;
+
+
+public:
     constexpr DefaultArenaAllocator& operator=(const DefaultArenaAllocator&)noexcept = default;
 };
 
@@ -259,6 +265,9 @@ public:
         : m_arena(other.m_arena)
     {}
     constexpr ~ArenaCacheAlignedAllocator()noexcept = default;
+
+
+public:
     constexpr ArenaCacheAlignedAllocator& operator=(const ArenaCacheAlignedAllocator&)noexcept = default;
 
 

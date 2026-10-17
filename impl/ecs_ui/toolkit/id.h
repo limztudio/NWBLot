@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,6 +22,8 @@ NWB_IMPL_UI_BEGIN
 struct WidgetId{
     u64 value = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
 };
 
@@ -35,10 +39,10 @@ struct WidgetRoot{
     return lhs.value == rhs.value && lhs.generation == rhs.generation;
 }
 
-[[nodiscard]] WidgetId MakeRootId(const WidgetRoot& root)noexcept;
-[[nodiscard]] WidgetId MakeWidgetId(WidgetId parent, AStringView stableKey)noexcept;
+[[nodiscard]] Expected<WidgetId> MakeRootId(const WidgetRoot& root)noexcept;
+[[nodiscard]] Expected<WidgetId> MakeWidgetId(WidgetId parent, AStringView stableKey)noexcept;
 // Numeric parts occupy a separate identity domain from nonempty textual declarations.
-[[nodiscard]] WidgetId MakeWidgetPartId(WidgetId parent, u64 stableKey)noexcept;
+[[nodiscard]] Expected<WidgetId> MakeWidgetPartId(WidgetId parent, u64 stableKey)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

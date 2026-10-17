@@ -297,11 +297,15 @@ TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
     ASSERT_TRUE(control);
     Core::GpuTaskGraph graph(arena);
     const auto rejected = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
-    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionFeedbackReservation(control, rejected)}).valid());
+    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionFeedbackReservation(control, rejected)}).has_value());
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("tests.feedback.lease")).setMarkerLabel("Feedback Lease");
     const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount);
-    ASSERT_TRUE(graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionFeedbackReservation(control, pending)}).valid());
+    {
+        const auto gpuAdmissionAt301 = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionFeedbackReservation(control, pending)});
+        ASSERT_TRUE(gpuAdmissionAt301);
+        ASSERT_TRUE(gpuAdmissionAt301->valid());
+    }
     graph.reset();
     const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 3u);
     ASSERT_TRUE(control->reserve(retry));

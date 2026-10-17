@@ -6,6 +6,8 @@
 #include "world.h"
 #include "../framebuffer_capture.h"
 
+#include <impl/ecs_ui/layer_system.h>
+
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 
@@ -25,8 +27,9 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiLayerSmokeProject::UiLayerSmokeProject(ProjectRuntimeContext& context)
+UiLayerSmokeProject::UiLayerSmokeProject(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World> world)noexcept
     : m_context(context)
+    , m_world(Move(world))
 {}
 
 UiLayerSmokeProject::~UiLayerSmokeProject(){
@@ -34,10 +37,9 @@ UiLayerSmokeProject::~UiLayerSmokeProject(){
 }
 
 bool UiLayerSmokeProject::onStartup(){
-    auto world = CreateUiLayerSmokeWorld(m_context);
-    if(!world)
-        return false;
-    m_world = Move(*world);
+    auto* const layer = m_world->getSystem<Impl::UiLayerSystem>();
+    NWB_ASSERT(layer);
+    m_context.graphics.addRenderPassToBack(*layer);
     FramebufferCaptureOptions captureOptions;
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RESIZE_CAPTURE")){
         captureOptions.requiredWidth = 800u;
@@ -60,8 +62,11 @@ void UiLayerSmokeProject::onShutdown(){
 bool UiLayerSmokeProject::onUpdate(const f32 delta){
     if(m_framebufferCapture)
         m_framebufferCapture->update();
-    if(m_world)
-        m_world->tick(delta);
+    const auto updated = m_world->tick(delta);
+    if(!updated){
+        NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        return false;
+    }
     return true;
 }
 
@@ -70,7 +75,7 @@ void UiLayerSmokeProject::destroyRuntime(){
         m_framebufferCapture->stop();
         m_framebufferCapture.reset();
     }
-    DestroyUiLayerSmokeWorld(m_context, m_world);
+    ClearUiLayerSmokeWorld(m_context, *m_world);
 }
 
 

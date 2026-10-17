@@ -42,7 +42,7 @@ public:
 
 public:
     [[nodiscard]] static bool PrepareHistoryCopyFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
-    [[nodiscard]] static bool AcceptHistoryCopyFinalState(void* rawContext, const Core::QueueSubmissionToken& token);
+    [[nodiscard]] static bool AcceptHistoryCopyFinalState(void* rawContext, const Core::QueueSubmissionToken& token)noexcept;
 
 
 public:

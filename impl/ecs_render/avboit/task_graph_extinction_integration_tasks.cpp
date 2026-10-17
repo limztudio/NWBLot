@@ -35,19 +35,34 @@ namespace RendererTaskGraphDetail{
 
     static_cast<void>(context);
     const AvboitComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
-    return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &payload.extinctionTiming, trait);
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.extinctionTiming, trait);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &payload.extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] bool AvboitExtinctionGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
     return RecordAvboitRasterPassFromPayload(
+        scratchArena,
         payload,
         commandList,
         context,
@@ -59,7 +74,7 @@ namespace RendererTaskGraphDetail{
         [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitExtinctionPass(
                 dispatchCommandList,
-                                payload.targets,
+                payload.targets,
                 dispatchDrawItems,
                 dispatchCsgFrameData,
                 payload.csgResources,
@@ -77,10 +92,19 @@ namespace RendererTaskGraphDetail{
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool AvboitIntegrationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     bool timingRecorded = false;
-    payload.timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
+    const auto timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
+    if(!timingAttribution){
+        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+        return false;
+    }
+    payload.timingAttribution = *timingAttribution;
     payload.avboitSystem.dispatchAvboitIntegration(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
     if(!timingRecorded && payload.timingFeedback){
         payload.timingFeedback->discardRecording(payload.timingAttribution);

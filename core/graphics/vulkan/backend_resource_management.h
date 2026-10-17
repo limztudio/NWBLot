@@ -7,6 +7,10 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/graphics/rhi/resource_state_handoff_key.h>
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -14,9 +18,6 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
-
-#include <core/graphics/rhi/resource_state_handoff_key.h>
-#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +42,6 @@ public:
 public:
     [[nodiscard]] const BindingLayoutDesc* getDescription()const noexcept{ return m_isBindless ? nullptr : &m_desc; }
     [[nodiscard]] const BindlessLayoutDesc* getBindlessDesc()const noexcept{ return m_isBindless ? &m_bindlessDesc : nullptr; }
-
 
 public:
     // Descriptor-buffer metadata; layouts must be pure resource or sampler sets.
@@ -129,7 +129,7 @@ class OpacityMicromap final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    OpacityMicromap(const VulkanContext& context);
+    OpacityMicromap(const VulkanContext& context)noexcept;
     ~OpacityMicromap();
 
 
@@ -174,8 +174,12 @@ private:
         ResourceStates::Mask state = ResourceStates::Unknown;
     };
 
+
+private:
     using BufferRangeStates = Vector<BufferRangeState, Alloc::GlobalArena>;
 
+
+private:
     struct BufferUavBarrierPolicyValue{
         BufferHandle buffer;
         bool enableBarriers = true;
@@ -186,6 +190,8 @@ private:
         bool enableBarriers = true;
     };
 
+
+private:
     using PermanentTextureStateMap = HashMap<Texture*, PermanentTextureStateValue, Alloc::GlobalArena, Hasher<Texture*>, EqualTo<Texture*>>;
     using PermanentBufferStateMap = HashMap<Buffer*, PermanentBufferStateValue, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>>;
     using BufferUavBarrierPolicyMap = HashMap<Buffer*, BufferUavBarrierPolicyValue, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>>;

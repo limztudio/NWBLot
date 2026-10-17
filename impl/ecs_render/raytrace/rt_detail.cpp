@@ -5,8 +5,6 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
-#include <global/scope_exit.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,7 +47,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     if(!handle.valid())
         return MakeUnexpected(Failure{});
 
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
         ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
@@ -77,9 +75,11 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
     if(!acquired)
         return false;
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, *acquired);
     if(inOutHandle.valid())
         heap.free(inOutHandle);
     inOutHandle = *acquired;
+    retireUnpublished.release();
     return true;
 }
 
@@ -201,11 +201,7 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
             const SIMDVectorSingle leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
             const SIMDVectorSingle rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
             // SAH cost on lanes: parent*s_Traversal + left*leftCost + right*rightCost via multiply-add chains.
-            const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(
-                leftArea,
-                VectorReplicate(leftCost),
-                VectorMultiplyAdd(rightArea, VectorReplicate(suffixCost[k]), VectorMultiply(parentArea, VectorReplicate(s_SceneBvhSahTraversalCost)))
-            );
+            const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(leftArea, VectorReplicate(leftCost), VectorMultiplyAdd(rightArea, VectorReplicate(suffixCost[k]), VectorMultiply(parentArea, VectorReplicate(s_SceneBvhSahTraversalCost))));
             const f32 cost = VectorGetX(sahCostLanes);
             if(cost < bestCost){
                 bestCost = cost;

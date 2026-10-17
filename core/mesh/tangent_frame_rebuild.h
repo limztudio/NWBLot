@@ -126,6 +126,10 @@ template<typename ScratchArenaT>
     if(!vertices || !indices || vertexCount == 0u || indexCount == 0u || (indexCount % TangentFrameRebuildDetail::s_IndicesPerTriangle) != 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return MakeUnexpected(Failure{});
 
+    const usize triangleCount = indexCount / TangentFrameRebuildDetail::s_IndicesPerTriangle;
+    if(triangleCount > static_cast<usize>(Limit<u32>::s_Max))
+        return MakeUnexpected(Failure{});
+
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         if(!TangentFrameRebuildDetail::ValidInputVertex(LoadFloat(vertices[vertexIndex].position), LoadFloat(vertices[vertexIndex].uv0)))
             return MakeUnexpected(Failure{});
@@ -134,7 +138,6 @@ template<typename ScratchArenaT>
     Vector<TangentFrameRebuildDetail::TangentFrameAccumulator, ScratchArenaT> accumulators(vertexCount, TangentFrameRebuildDetail::TangentFrameAccumulator{}, scratchArena);
 
     TangentFrameRebuildResult result;
-    const usize triangleCount = indexCount / TangentFrameRebuildDetail::s_IndicesPerTriangle;
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
         const usize indexBase = triangle * TangentFrameRebuildDetail::s_IndicesPerTriangle;
         const u32 i0 = indices[indexBase + 0u];

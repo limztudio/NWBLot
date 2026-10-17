@@ -55,8 +55,13 @@ Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
         adapters[i] = Move(adapterInfo);
     };
 
-    if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
-        m_cpuScheduler.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
+    if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold){
+        const auto parallelWork = m_cpuScheduler.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
+        if(!parallelWork){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: adapter enumeration rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+            return MakeUnexpected(Failure{});
+        }
+    }
     else{
         for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
             fillAdapterInfo(i);
@@ -78,7 +83,7 @@ Expected<AdapterInfo> BackendContext::getSelectedAdapterInfo()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::pickPhysicalDevice(){
+bool BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
     const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice && VulkanDetail::ConvertFormat(requestedSdrFormat) == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested SDR swapchain format is unsupported"));
@@ -100,8 +105,6 @@ bool BackendContext::pickPhysicalDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No devices were found. Install a compatible hardware driver or software Vulkan ICD; software fallback requires an installed driver."));
         return false;
     }
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PhysicalDeviceSelectArena, s_DeviceSetupScratchArenaBytes);
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
@@ -213,7 +216,7 @@ bool BackendContext::pickPhysicalDevice(){
                 deviceIsGood = false;
             }
         }
-        if(!findQueueFamilies(dev)){
+        if(!findQueueFamilies(scratchArena, dev)){
             errorStream << "\n  - does not support the necessary queue types";
             deviceIsGood = false;
         }
@@ -306,12 +309,9 @@ bool BackendContext::pickPhysicalDevice(){
     return false;
 }
 
-
-bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
+bool BackendContext::findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueFamilyQueryArena);
 
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> props(queueFamilyCount, scratchArena);
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());

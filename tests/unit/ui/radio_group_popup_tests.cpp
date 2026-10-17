@@ -3,6 +3,7 @@
 
 
 #include "radio_group_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,14 +22,14 @@ using namespace NWB::UiRadioGroupTests;
 
 class UiRadioGroupPopupTests : public RadioGroupFixture{
 protected:
-    [[nodiscard]] static PopupOptions ParentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions()noexcept{
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 300.0f, 280.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions ChildOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
         PopupOptions options;
         options.anchor = { 320.0f, 64.0f, 8.0f, 24.0f };
         options.side = PopupPlacementSide::Right;
@@ -47,12 +48,8 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId parentHost()const noexcept{
-        return MakeWidgetId(MakeWidgetId(MakeRootId(m_root), "parent"), "radio");
-    }
-
-    [[nodiscard]] WidgetId childHost()const noexcept{
-        return MakeWidgetId(MakeWidgetId(MakeWidgetId(MakeRootId(m_root), "parent"), "child"), "radio");
+    [[nodiscard]] WidgetId parentHost()const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent")), "radio"));
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){

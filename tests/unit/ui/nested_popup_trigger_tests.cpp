@@ -3,6 +3,7 @@
 
 
 #include "popup_tools_fixture.h"
+#include "widget_id_assertion.h"
 #include "combo_fixture.h"
 
 
@@ -26,7 +27,7 @@ using namespace NWB::UiComboTests;
 
 class UiNestedPopupTriggerTests : public ComboFixture{
 protected:
-    [[nodiscard]] static WidgetOptions Control(){
+    [[nodiscard]] static WidgetOptions Control()noexcept{
         WidgetOptions options;
         options.width = { LayoutSizePolicy::Fixed, 220.0f };
         options.height = { LayoutSizePolicy::Fixed, 32.0f };
@@ -43,16 +44,20 @@ protected:
         m_child.open();
     }
 
+    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent")); }
 
-    [[nodiscard]] WidgetId parentId()const noexcept{ return MakeWidgetId(MakeRootId(m_root), "parent"); }
-    [[nodiscard]] WidgetId childId()const noexcept{ return MakeWidgetId(parentId(), "child"); }
-    [[nodiscard]] WidgetId fieldId()const noexcept{ return MakeWidgetId(childId(), "combo"); }
-    [[nodiscard]] WidgetId rowsId()const noexcept{ return MakeWidgetId(fieldId(), "rows"); }
-    [[nodiscard]] WidgetId anchorId()const noexcept{ return MakeWidgetId(childId(), "anchor"); }
-    [[nodiscard]] WidgetId menuRows()const noexcept{ return MakeWidgetId(MakeWidgetId(childId(), "menu"), "rows"); }
+    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "child")); }
 
-    [[nodiscard]] WidgetId comboRow(const u64 key)const noexcept{
-        return MakeWidgetPartId(MakeWidgetId(rowsId(), "rows"), key);
+    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "combo")); }
+
+    [[nodiscard]] WidgetId rowsId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), "rows")); }
+
+    [[nodiscard]] WidgetId anchorId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "anchor")); }
+
+    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "menu")), "rows")); }
+
+    [[nodiscard]] WidgetId comboRow(const u64 key)const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(rowsId(), "rows")), key));
     }
 
     [[nodiscard]] bool beginChild(const u64 generation){
@@ -93,8 +98,8 @@ protected:
         ASSERT_NE(target(childId()), nullptr);
         EXPECT_EQ(target(parentId())->layer, 1u);
         EXPECT_EQ(target(childId())->layer, 2u);
-        EXPECT_NE(target(MakeWidgetId(parentId(), "after")), nullptr);
-        EXPECT_NE(target(MakeWidgetId(childId(), "after")), nullptr);
+        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "after"))), nullptr);
+        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "after"))), nullptr);
     }
 
 

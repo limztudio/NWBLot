@@ -65,7 +65,7 @@ public:
             Core::GpuTaskSchedulingHint scheduling;
             scheduling.mergeWithPrevious = previous.valid();
             scheduling.forceSubmissionBoundary = index == splitStage;
-            stages[index] = graph.addTask(
+            const auto stageResult = graph.addTask(
                 Core::GpuTaskDesc{}
                     .setIdentity(identities[index])
                     .setMarkerLabel(s_Labels[index])
@@ -73,10 +73,11 @@ public:
                     .setDependencies(previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u),
                 Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics }
             );
-            if(!stages[index].valid()){
+            if(!stageResult){
                 ADD_FAILURE() << "stage declaration=" << index;
                 return false;
             }
+            stages[index] = *stageResult;
             previous = stages[index];
         }
         tasks = {

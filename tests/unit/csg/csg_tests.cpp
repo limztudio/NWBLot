@@ -47,13 +47,11 @@ inline constexpr Name s_ScratchArena("tests/csg/scratch");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB::Impl::CsgFrameState BuildTestCsgFrameState(TestWorld& testWorld, const NWB::Impl::CsgFrameBuildDesc& desc = NWB::Impl::CsgFrameBuildDesc{}){
-    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+static NWB::Impl::CsgFrameState BuildTestCsgFrameState(NWB::Core::Alloc::ScratchArena& scratchArena, TestWorld& testWorld, const NWB::Impl::CsgFrameBuildDesc& desc = NWB::Impl::CsgFrameBuildDesc{}){
     return NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
 }
 
-static Expected<NWB::Impl::CsgReceiverDrawState> ResolveTestCsgReceiverDrawState(TestWorld& testWorld, const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverPass::Enum receiverPass){
-    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+static Expected<NWB::Impl::CsgReceiverDrawState> ResolveTestCsgReceiverDrawState(NWB::Core::Alloc::ScratchArena& scratchArena, TestWorld& testWorld, const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverPass::Enum receiverPass){
     const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
     return receiverLookup.resolveReceiverDrawState(entity, receiverPass);
 }
@@ -62,7 +60,7 @@ struct TestCsgVisibilityFilter{
     NWB::Core::ECS::EntityID hiddenEntity = NWB::Core::ECS::s_InvalidEntityId;
 };
 
-static bool TestCsgReceiverVisible(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverKind::Enum receiverKind, const NWB::Impl::CsgReceiverComponent& receiver, void* userData){
+static bool TestCsgReceiverVisible(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverKind::Enum receiverKind, const NWB::Impl::CsgReceiverComponent& receiver, void* userData)noexcept{
     static_cast<void>(world);
     static_cast<void>(receiverKind);
     static_cast<void>(receiver);
@@ -72,10 +70,11 @@ static bool TestCsgReceiverVisible(NWB::Core::ECS::World& world, const NWB::Core
 }
 
 TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     {
         TestWorld testWorld;
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
+        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -92,7 +91,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
+        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -108,7 +107,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
+        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -139,7 +138,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         EXPECT_TRUE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
+        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -171,7 +170,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         desc.receiverVisible = &TestCsgReceiverVisible;
         desc.receiverVisibleUserData = &filter;
 
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld, desc);
+        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld, desc);
 
         EXPECT_FALSE(state.empty());
         EXPECT_EQ(state.receiverCount, 1u);
@@ -194,7 +193,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         NWB::Impl::CsgFrameBuildDesc desc;
         desc.includeOpaquePass = false;
 
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld, desc);
+        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld, desc);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -204,6 +203,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
 }
 
 TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     {
         TestWorld testWorld;
 
@@ -211,7 +211,7 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
         receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
-        const auto drawStateResult1 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
+        const auto drawStateResult1 = ResolveTestCsgReceiverDrawState(scratchArena, testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
         EXPECT_FALSE(drawStateResult1);
     }
 
@@ -247,14 +247,13 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         otherGroupCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_B);
         otherGroupCutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
-        const auto opaqueDrawStateResult2 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
+        const auto opaqueDrawStateResult2 = ResolveTestCsgReceiverDrawState(scratchArena, testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
         ASSERT_TRUE(opaqueDrawStateResult2);
         const auto& opaqueDrawState = *opaqueDrawStateResult2;
         EXPECT_EQ(opaqueDrawState.cutterCount, s_ExpectedDualCount);
 
         usize resolvedCutterCount = 0u;
         {
-            NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
             const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
             const auto resolvedDrawStateResult1 = receiverLookup.resolveReceiverDrawState(receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
             ASSERT_TRUE(resolvedDrawStateResult1);
@@ -282,10 +281,10 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
-        const auto opaqueDrawStateResult3 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
+        const auto opaqueDrawStateResult3 = ResolveTestCsgReceiverDrawState(scratchArena, testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
         ASSERT_TRUE(opaqueDrawStateResult3);
 
-        const auto transparentDrawStateResult4 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent);
+        const auto transparentDrawStateResult4 = ResolveTestCsgReceiverDrawState(scratchArena, testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent);
         EXPECT_FALSE(transparentDrawStateResult4);
     }
 
@@ -302,10 +301,10 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         cutter.shapeType = Name(s_ENGINE_CSG_CAPSULE);
 
-        const auto opaqueDrawStateResult5 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
+        const auto opaqueDrawStateResult5 = ResolveTestCsgReceiverDrawState(scratchArena, testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Opaque);
         EXPECT_FALSE(opaqueDrawStateResult5);
 
-        const auto transparentDrawStateResult6 = ResolveTestCsgReceiverDrawState(testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent);
+        const auto transparentDrawStateResult6 = ResolveTestCsgReceiverDrawState(scratchArena, testWorld, receiverEntity.id(), NWB::Impl::CsgReceiverPass::Transparent);
         ASSERT_TRUE(transparentDrawStateResult6);
         const auto& transparentDrawState = *transparentDrawStateResult6;
         EXPECT_EQ(transparentDrawState.cutterCount, 1u);

@@ -5,6 +5,11 @@
 #include "frame_graph_registry.h"
 
 #include "session.h"
+#include "arena_names.h"
+
+#include <core/alloc/scratch.h>
+
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,16 +27,22 @@ namespace __hidden_frame_graph_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using FrameGraphNodeIndexLookup = HashMap<Name, u32, TelemetryArena, Hasher<Name>, EqualTo<Name>>;
+using FrameGraphNodeIndexLookup = HashMap<Name, u32, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
-static void ResolvePendingNameEdges(TelemetryArena& arena, const FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, const FrameGraphPendingNameEdges& pendingNameEdges){
+static void ResolvePendingNameEdges(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, const FrameGraphPendingNameEdges& pendingNameEdges){
     if(nodes.empty() || pendingNameEdges.empty())
         return;
 
-    FrameGraphNodeIndexLookup nodeIndices(arena);
+    FrameGraphNodeIndexLookup nodeIndices(scratchArena);
     nodeIndices.reserve(nodes.size());
-    for(u32 i = 0u; i < static_cast<u32>(nodes.size()); ++i)
-        nodeIndices.emplace(nodes[i].name, i);
+    for(u32 i = 0u; i < static_cast<u32>(nodes.size()); ++i){
+        if(nodeIndices.contains(nodes[i].name))
+            continue;
+        if(!nodeIndices.emplace(nodes[i].name, i).second){
+            NWB_ASSERT(false);
+            return;
+        }
+    }
 
     edges.reserve(edges.size() + pendingNameEdges.size());
     for(const auto& pending : pendingNameEdges){
@@ -53,34 +64,53 @@ static void ResolvePendingNameEdges(TelemetryArena& arena, const FrameGraphNodeD
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+FrameGraphRegistry::FrameGraphRegistry(Alloc::GlobalArena& arena)
+    : m_contributors(arena)
+    , m_nodes(arena)
+    , m_edges(arena)
+    , m_pendingNameEdges(arena)
+    , m_physicalQueueRuntimeStatistics(arena)
+    , m_packetSubmissionStatistics(arena)
+{}
+
 void FrameGraphRegistry::registerContributor(IFrameGraphContributor& contributor){
-    for(auto* existing : m_contributors){
-        if(existing == &contributor)
+    for(const auto existing : m_contributors){
+        if(existing.get() == &contributor)
             return;
     }
-    m_contributors.push_back(&contributor);
+    m_contributors.push_back(NotNull(&contributor));
 }
 
-void FrameGraphRegistry::unregisterContributor(IFrameGraphContributor& contributor){
-    m_contributors.remove(&contributor);
+void FrameGraphRegistry::unregisterContributor(IFrameGraphContributor& contributor)noexcept{
+    for(auto iterator = m_contributors.begin(); iterator != m_contributors.end();){
+        if(iterator->get() == &contributor)
+            iterator = m_contributors.erase(iterator);
+        else
+            ++iterator;
+    }
 }
 
 bool FrameGraphRegistry::record(CaptureSession& session){
     if(!session.captureOptions().frameGraphEnabled())
         return false;
-    if(m_contributors.empty())
+    if(m_recording || m_contributors.empty())
         return false;
 
-    TelemetryArena& arena = session.recorder().arena();
-    FrameGraphNodeDescs nodes(arena);
-    FrameGraphEdgeDescs edges(arena);
-    FrameGraphPendingNameEdges pendingNameEdges(arena);
-    FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(arena);
-    FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(arena);
+    Alloc::ScratchArena scratchArena(TelemetryArenaScope::s_FrameGraphScratch);
+    m_recording = true;
+    ScopeExit clearDescriptors([this]()noexcept{
+        m_packetSubmissionStatistics.clear();
+        m_physicalQueueRuntimeStatistics.clear();
+        m_pendingNameEdges.clear();
+        m_edges.clear();
+        m_nodes.clear();
+        m_recording = false;
+    }
+    );
 
-    FrameGraphBuilder builder(nodes, edges, pendingNameEdges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, session.frameIndex());
+    FrameGraphBuilder builder(scratchArena, m_nodes, m_edges, m_pendingNameEdges, m_physicalQueueRuntimeStatistics, m_packetSubmissionStatistics, session.frameIndex());
     bool hasGraph = false;
-    for(auto* contributor : m_contributors){
+    for(const auto contributor : m_contributors){
         if(contributor->appendFrameGraph(builder))
             hasGraph = true;
     }
@@ -88,9 +118,9 @@ bool FrameGraphRegistry::record(CaptureSession& session){
     if(!hasGraph)
         return false;
 
-    __hidden_frame_graph_registry::ResolvePendingNameEdges(arena, nodes, edges, pendingNameEdges);
+    __hidden_frame_graph_registry::ResolvePendingNameEdges(scratchArena, m_nodes, m_edges, m_pendingNameEdges);
 
-    return session.recordFrameGraph(nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    return session.recordFrameGraph(scratchArena, m_nodes, m_edges, m_physicalQueueRuntimeStatistics, m_packetSubmissionStatistics);
 }
 
 

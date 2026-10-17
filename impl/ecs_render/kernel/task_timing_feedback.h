@@ -71,7 +71,7 @@ private:
 
 
 public:
-    explicit RendererTaskTimingFeedbackState(Core::Alloc::GlobalArena& arena)
+    explicit RendererTaskTimingFeedbackState(Core::Alloc::GlobalArena& arena)noexcept
         : m_pendingSamples(arena)
     {}
 
@@ -110,7 +110,7 @@ public:
     void activate();
     void deactivate()noexcept;
     [[nodiscard]] bool setPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
-    [[nodiscard]] Core::GpuTimingSampleAttribution beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, bool recordsNonCommittingTimingSample);
+    [[nodiscard]] Expected<Core::GpuTimingSampleAttribution> beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, bool recordsNonCommittingTimingSample);
     void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept;
     void discardRecording(Core::GpuTimingSampleAttribution attribution)noexcept;
     void configureCompileOptions(Core::GpuTaskGraphCompileOptions& options, u64 frameIndex);
@@ -138,7 +138,7 @@ private:
 namespace ECSRenderDetail{
 
 // Callers own the recording scope and clear attribution when dispatch records nothing.
-[[nodiscard]] Core::GpuTimingSampleAttribution BeginTaskTimingSample(RendererTaskTimingFeedback* timingFeedback, const Core::GpuTimingScopeDefinition* timingScope, const Core::GpuTaskRecordContext& context);
+[[nodiscard]] Expected<Core::GpuTimingSampleAttribution> BeginTaskTimingSample(RendererTaskTimingFeedback* timingFeedback, const Core::GpuTimingScopeDefinition* timingScope, const Core::GpuTaskRecordContext& context);
 
 };
 

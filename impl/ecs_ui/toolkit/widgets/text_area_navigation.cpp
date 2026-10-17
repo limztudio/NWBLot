@@ -126,7 +126,7 @@ TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena&
     , m_language(language.data(), language.size(), arena)
 {}
 
-EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight){
+Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight){
     const bool page = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
     if(
         !current() || model.textMode() != EditTextMode::Multiline || model.composition().active
@@ -134,24 +134,26 @@ EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model,
         || !IsFinite(viewportHeight) || viewportHeight < 0.0f || (page && viewportHeight == 0.0f)
         || !IsFinite(preferred.preferredX) || !m_state.navigation().matches(preferred)
     )
-        return {};
+        return MakeUnexpected(Failure{});
     const __hidden_ui_text_area_navigation::ModelStamp expected(model);
     EditBoxView view(m_arena);
     const ShapeRequest request{ {}, m_fontSize, TextDirection::LeftToRight, m_scriptTag, StringView(m_language.data(), m_language.size()) };
     if(!view.snapshot(model) || view.shape(m_text, request) != TextLayoutStatus::Success)
-        return {};
+        return MakeUnexpected(Failure{});
     if(!current() || !expected.matches(model) || !m_state.navigation().matches(preferred))
-        return {};
+        return MakeUnexpected(Failure{});
     const EditCaretGeometry& geometry = view.caretGeometry();
     const auto caret = geometry.caretRect(view.displayCaret());
     if(!caret)
-        return {};
+        return MakeUnexpected(Failure{});
     const f32 preferredX = preferred.valid ? preferred.preferredX : caret->x;
     if(!IsFinite(preferredX))
-        return {};
+        return MakeUnexpected(Failure{});
     const bool down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
     const auto resolved = page ? __hidden_ui_text_area_navigation::PageTarget(geometry, model.caret(), *caret, down, preferredX, viewportHeight) : geometry.verticalTarget(view.displayCaret(), down, preferredX);
-    return resolved ? EditNavigationResult{ *resolved, preferredX, true } : EditNavigationResult{};
+    if(!resolved)
+        return MakeUnexpected(resolved.error());
+    return EditNavigationResult{ *resolved, preferredX };
 }
 
 bool TextAreaNavigationResolver::current()const noexcept{

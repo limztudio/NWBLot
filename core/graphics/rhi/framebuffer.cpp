@@ -67,6 +67,10 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)
     : FramebufferInfo(desc)
 {

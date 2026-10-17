@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/graphics_prefix_timing_resolver.h>
+#include "graphics_prefix_timing_resolver.h"
+
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
@@ -15,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GraphicsPrefixTimingResolver::GraphicsPrefixTimingResolver(NotNull<RendererFramePipeline*> pipeline)
+GraphicsPrefixTimingResolver::GraphicsPrefixTimingResolver(NotNull<RendererFramePipeline*> pipeline)noexcept
     : m_pipeline(pipeline){
 }
 

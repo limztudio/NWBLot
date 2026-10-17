@@ -73,8 +73,6 @@ public:
 
 public:
     [[nodiscard]] Token next()noexcept;
-    [[nodiscard]] u32 currentLine()const noexcept{ return m_line; }
-    [[nodiscard]] u32 currentColumn()const noexcept{ return m_column; }
 
 
 private:

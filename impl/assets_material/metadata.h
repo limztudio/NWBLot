@@ -42,6 +42,10 @@ static constexpr AStringView s_BxdfField = "bxdf";
 
 static constexpr AStringView s_AllowedAssetFields[] = { s_InterfaceField, s_SurfaceField, s_ShadersField, s_ShaderVariantField, s_ParametersField, s_TransparentField, s_TwoSidedField, s_RefractiveField, s_BxdfField, };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool IsAllowedAssetField(const AStringView fieldName)noexcept{
     for(const AStringView allowedField : s_AllowedAssetFields){
         if(fieldName == allowedField)

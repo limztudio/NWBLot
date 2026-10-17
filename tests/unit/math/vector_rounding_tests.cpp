@@ -34,12 +34,12 @@ NWB_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, 
     return first * second + addend;
 }
 
-NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(const f32 first, const f32 second, const f32 addend)noexcept{
-    return addend - first * second;
-}
-
 NWB_NOINLINE f64 LegacyDoubleMultiplyAddExpression(const f64 first, const f64 second, const f64 addend)noexcept{
     return first * second + addend;
+}
+
+NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(const f32 first, const f32 second, const f32 addend)noexcept{
+    return addend - first * second;
 }
 
 NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(const f64 first, const f64 second, const f64 addend)noexcept{
@@ -122,7 +122,8 @@ TEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvali
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     volatile u32 runtimeBits[]{ 0u, 0x80000000u, 0x7f800000u, 2u };
     const SIMDVectorSingle input = VectorSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
@@ -236,7 +237,8 @@ TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbie
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     const i32 modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     volatile f32 runtimeInputs[][4]{
@@ -301,7 +303,8 @@ TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndS
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     const i32 roundingModes[]{ FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     volatile f64 runtimeInputs[][4]{

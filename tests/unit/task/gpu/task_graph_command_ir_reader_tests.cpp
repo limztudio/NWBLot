@@ -99,36 +99,46 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedHeadersBeforeReadingRecords){
 
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, magic), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidMagic);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidMagic
+    );
     for(u16 version = 0u; version < Graphics::s_GpuCommandIrStreamVersion; ++version){
         expectHeaderError([version](Graphics::GraphicsBytes& bytes){
             WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), version);
-        }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);
+        }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion
+        );
     }
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), static_cast<u16>(Graphics::s_GpuCommandIrStreamVersion + 1u));
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);
+    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion
+    );
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), Limit<u16>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);
+    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion
+    );
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, reserved), static_cast<u16>(1u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidHeaderReserved);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidHeaderReserved
+    );
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size()));
-    }, Graphics::GpuCommandIrStreamValidationError::PayloadSizeMismatch);
+    }, Graphics::GpuCommandIrStreamValidationError::PayloadSizeMismatch
+    );
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, graphGeneration), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidGraphGeneration);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidGraphGeneration
+    );
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, planGeneration), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidPlanGeneration);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidPlanGeneration
+    );
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidGraphGeneration);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidGraphGeneration
+    );
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 64u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordCount);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordCount
+    );
 }
 
 TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutProducingPartialValues){
@@ -164,61 +174,79 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutProducingPartialVal
 
     expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, byteSize), static_cast<u16>(3u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordSize);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordSize
+    );
     expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, byteSize), Limit<u16>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordSize);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordSize
+    );
     expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, opcode), Graphics::GpuCommandIrWireOpcode::SetGraphicsState);
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedOpcode);
+    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedOpcode
+    );
     expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, opcode), Graphics::GpuCommandIrWireOpcode::kCount);
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedOpcode);
+    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedOpcode
+    );
     expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, dataSizeBytes), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, sourceResourceIndex), Limit<u32>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, context) + offsetof(Graphics::GpuCommandIrRecordContext, queueDeviceGeneration), static_cast<u16>(0u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrCopyTextureRecord, destinationResourceIndex), Limit<u32>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(s_ExpectedDualCount, s_CommandIrClearBufferOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrClearBufferOffset + offsetof(Graphics::GpuCommandIrClearBufferRecord, destinationResourceIndex), Limit<u32>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, destinationSubresources) + offsetof(Graphics::GpuCommandIrTextureSubresourceSet, numMipLevels), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Graphics::GpuClearTextureTaskValueType::kCount));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), static_cast<Graphics::GpuCommandIrClearTextureFlag::Mask>(4u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), Graphics::GpuCommandIrClearTextureFlag::None);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Graphics::GpuClearTextureTaskValueType::Float));
         WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), Graphics::GpuCommandIrClearTextureFlag::ClearDepth);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, reserved), static_cast<u8>(1u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    );
     expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 3u);
-    }, Graphics::GpuCommandIrStreamValidationError::TrailingPayload);
+    }, Graphics::GpuCommandIrStreamValidationError::TrailingPayload
+    );
     expectRecordError(4u, validBytes.size(), [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 5u);
-    }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord
+    );
     expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){
         bytes.resize(s_CommandIrCopyTextureOffset + sizeof(Graphics::GpuCommandIrHeader));
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), s_ExpectedDualCount);
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size() - sizeof(Graphics::GpuCommandIrStreamHeader)));
-    }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord);
+    }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord
+    );
 }
 
 

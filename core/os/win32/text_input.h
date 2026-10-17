@@ -30,9 +30,9 @@ NWB_CORE_BEGIN
 // Scene character decoding borrows the same per-service UTF-16 state.
 // Session begin/end clear it before ownership changes.
 // Returns a complete non-NUL scalar from a focused, inactive Win32 service.
-[[nodiscard]] Expected<u32> DecodeWin32FallbackCharInput(ITextInputService& service, u32 unit);
+[[nodiscard]] Expected<u32> DecodeWin32FallbackCharInput(ITextInputService& service, u32 unit)noexcept;
 // Frame calls this on every native focus transition, including transitions with no active editing session.
-[[nodiscard]] bool ResetWin32FallbackCharInput(ITextInputService& service);
+[[nodiscard]] bool ResetWin32FallbackCharInput(ITextInputService& service)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

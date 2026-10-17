@@ -28,7 +28,7 @@ using namespace Impl;
 using namespace Impl::Ui;
 
 
-static UiSkinRegion NineSlice(){
+static UiSkinRegion NineSlice()noexcept{
     UiSkinRegion region;
     region.name = Name("progress.test");
     region.rectangle = { 0u, 0u, 24u, 24u };

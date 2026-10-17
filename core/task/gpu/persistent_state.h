@@ -29,7 +29,7 @@ public:
 
 
     public:
-        explicit Candidate(const GpuPersistentResourceStateCache& owner)
+        explicit Candidate(const GpuPersistentResourceStateCache& owner)noexcept
             : m_owner(owner)
             , m_states(owner.m_arena)
             , m_textures(owner.m_arena)
@@ -58,7 +58,7 @@ public:
 
 
 public:
-    explicit GpuPersistentResourceStateCache(GraphicsArena& arena)
+    explicit GpuPersistentResourceStateCache(GraphicsArena& arena)noexcept
         : m_arena(arena)
         , m_states(arena)
         , m_textures(arena)

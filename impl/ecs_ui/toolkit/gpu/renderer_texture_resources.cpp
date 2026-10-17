@@ -110,36 +110,37 @@ bool GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexce
     return true;
 }
 
-GpuVersion<GpuTextureImageVersion> GpuRendererState::prepareTextureImage(const SharedImageSource& source){
+Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureImage(const SharedImageSource& source){
     if(!__hidden_ui_gpu_texture_images::ValidSource(source))
-        return {};
+        return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_textureCache.size(); ++index){
         const auto& existing = m_textureCache[index];
         if(existing->m_source->generation() != source->generation())
             continue;
         if(existing->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_images::ValidVersion(*existing))
-            return {};
+            return MakeUnexpected(Failure{});
         GpuVersion<GpuTextureImageVersion> reused = existing;
         m_textureCache.erase(m_textureCache.begin() + static_cast<isize>(index));
         m_textureCache.push_back(reused);
-        return reused;
+        return Move(reused);
     }
     // The source factory owns structural payload validation; immutable cache insertion keeps a debug-only invariant.
     NWB_ASSERT(source->texture().validatePayload());
-    auto version = MakeGpuVersion<GpuTextureImageVersion>(m_arena, m_graphics, source);
-    if(!version)
-        return {};
+    auto versionResult = MakeGpuVersion<GpuTextureImageVersion>(m_arena, m_graphics, source);
+    if(!versionResult)
+        return MakeUnexpected(versionResult.error());
+    GpuVersion<GpuTextureImageVersion> version = Move(*versionResult);
     if(!TextureAssetLoader::Create(version->m_texture, source->texture(), source->identity().name(), m_graphics, NWB_TEXT("UI Texture Image")))
-        return {};
+        return MakeUnexpected(Failure{});
     if(!__hidden_ui_gpu_texture_images::ValidVersion(*version)){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());
-        return {};
+        return MakeUnexpected(Failure{});
     }
     if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() == s_PaintMaxImages)
         evictImageCacheEntry();
     // Retain each successful immutable upload before a later image or frame preparation can fail.
     m_textureCache.push_back(version);
-    return version;
+    return Move(version);
 }
 
 bool GpuRendererState::prepareTextureImages(GpuFrameData& frame){
@@ -149,7 +150,7 @@ bool GpuRendererState::prepareTextureImages(GpuFrameData& frame){
         auto version = prepareTextureImage(images[frame.m_textureImages.size()]);
         if(!version)
             return false;
-        frame.m_textureImages.push_back(Move(version));
+        frame.m_textureImages.push_back(Move(*version));
     }
     return true;
 }
@@ -167,24 +168,28 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::
             return MakeUnexpected(Failure{});
         char identityText[32u];
         const AStringView suffix = FormatDecimal(index, identityText);
-        const Name readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
-        const Name textureIdentity = DeriveName(Name("ui.texture_image/"), suffix);
+        const auto readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
+        const auto textureIdentity = DeriveName(Name("ui.texture_image/"), suffix);
+        if(!readyIdentity || !textureIdentity)
+            return MakeUnexpected(Failure{});
         const Core::QueueSubmissionToken& readiness = image->m_texture.readinessToken;
-        const Core::GpuExternalCompletionId ready = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(readyIdentity).setMarkerLabel("UI Texture Image Upload Completion").setToken(readiness));
-        if(!ready.valid()){
+        const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(*readyIdentity).setMarkerLabel("UI Texture Image Upload Completion").setToken(readiness));
+        if(!readyResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture {} completion import failed (queue={}, generation={}, value={})"), index, readiness.physicalQueueIndex, readiness.deviceGeneration, readiness.value);
             return MakeUnexpected(Failure{});
         }
-        const Core::GpuGraphResourceId texture = graph.importTexture(
+        const Core::GpuExternalCompletionId ready = *readyResult;
+        const auto textureResult = graph.importTexture(
             image->m_texture.texture,
-            Core::GpuGraphResourceDesc().setIdentity(textureIdentity).setMarkerLabel("UI Texture Image")
+            Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel("UI Texture Image")
                 .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );
-        if(!texture.valid()){
+        if(!textureResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})"), index, source->generation());
             return MakeUnexpected(Failure{});
         }
+        const Core::GpuGraphResourceId texture = *textureResult;
         resources->push_back(texture);
         uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     }

@@ -23,7 +23,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Core::GpuTaskId DeclareReflectionPostprocessTasks(
+[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,

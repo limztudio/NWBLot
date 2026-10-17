@@ -165,6 +165,8 @@ struct SceneCameraView{
     CameraComponent* camera = nullptr;
     CameraProjection projection;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return entity.valid() && transform != nullptr && camera != nullptr && CameraProjectionStorageValid(projection);
     }

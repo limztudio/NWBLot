@@ -493,7 +493,8 @@ static Expected<ScratchVector<const MaterialBindInstance*>> BuildSortedMaterialB
         instances.push_back(&instance);
     Sort(instances.begin(), instances.end(), [](const MaterialBindInstance* lhs, const MaterialBindInstance* rhs)noexcept{
         return lhs->name < rhs->name;
-    });
+    }
+    );
     if(instances.size() > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' exceeds supported block count for '{}'"), StringConvert(bindEntry.virtualPath), StringConvert(contextName.resolvedText()));
         return MakeUnexpected(Failure{});
@@ -563,7 +564,12 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contex
             return false;
         }
 
-        const auto blockIt = inOutLayout.blockLookup.find(Name(AStringView(instance.name)));
+        const auto instanceName = Name::FromText(AStringView(instance.name));
+        if(!instanceName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' instance '{}' has no block for '{}'"), StringConvert(bindEntry.virtualPath), StringConvert(instance.name), StringConvert(contextLabel));
+            return false;
+        }
+        const auto blockIt = inOutLayout.blockLookup.find(*instanceName);
         if(blockIt == inOutLayout.blockLookup.end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' instance '{}' has no block for '{}'"), StringConvert(bindEntry.virtualPath), StringConvert(instance.name), StringConvert(contextLabel));
             return false;
@@ -590,7 +596,8 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contex
 
             const MaterialBindField& bindField = bindStruct->fields[fieldOffset];
             const MaterialTypedLayoutField& field = inOutLayout.typedLayoutFields[fieldIndex];
-            if(field.fieldName != Name(AStringView(bindField.name))){
+            const auto fieldName = Name::FromText(AStringView(bindField.name));
+            if(!fieldName || field.fieldName != *fieldName){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' " "metadata mismatch for '{}'")
                     , StringConvert(bindEntry.virtualPath)
                     , StringConvert(bindStruct->name)
@@ -703,8 +710,8 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     if(IsMaterialLayoutResourceFieldType(field.fieldType)){
         const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(field.fieldType);
         const AStringView resourcePath = TrimView(AStringView(parameterValue));
-        const Name resourceName(resourcePath);
-        if(!parameterEntry.blockName || !field.fieldName || !resourceName || !IsSupportedMaterialResourceReference(resourceKind, resourcePath)){
+        const auto resourceName = Name::FromText(resourcePath);
+        if(!parameterEntry.blockName || !field.fieldName || !resourceName || !*resourceName || !IsSupportedMaterialResourceReference(resourceKind, resourcePath)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource parameter '{}' for '{}' must be an engine or project asset path"), StringConvert(parameterName.view()), StringConvert(materialName.resolvedText()));
             return false;
         }
@@ -714,7 +721,7 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
         resourceReference.fieldName = field.fieldName;
         resourceReference.resourceKind = resourceKind;
         resourceReference.constantByteOffset = parameterEntry.constantByteOffset;
-        if(!AssignMaterialResourceReferenceAsset(resourceReference, resourceKind, resourceName))
+        if(!AssignMaterialResourceReferenceAsset(resourceReference, resourceKind, *resourceName))
             return false;
         outResourceReferences.push_back(resourceReference);
         return true;
@@ -774,7 +781,12 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
         const usize blockByteBegin = layout.typedBlockBytes.size();
 
         MaterialTypedLayoutBlock block;
-        block.blockName = Name(AStringView(instance->name));
+        const auto blockName = Name::FromText(AStringView(instance->name));
+        if(!blockName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has invalid block '{}' for '{}'"), StringConvert(bindEntry.virtualPath), StringConvert(instance->name), StringConvert(contextName.resolvedText()));
+            return MakeUnexpected(Failure{});
+        }
+        block.blockName = *blockName;
         block.blockClass = blockClass;
         block.fieldBegin = static_cast<u32>(layout.typedLayoutFields.size());
         block.fieldCount = static_cast<u32>(bindStruct->fields.size());
@@ -811,7 +823,17 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
             }
 
             MaterialTypedLayoutField field;
-            field.fieldName = Name(AStringView(bindField.name));
+            const auto fieldName = Name::FromText(AStringView(bindField.name));
+            if(!fieldName){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has invalid field '{}.{}' for '{}'")
+                    , StringConvert(bindEntry.virtualPath)
+                    , StringConvert(instance->name)
+                    , StringConvert(bindField.name)
+                    , StringConvert(contextName.resolvedText())
+                );
+                return MakeUnexpected(Failure{});
+            }
+            field.fieldName = *fieldName;
             field.fieldType = fieldType;
             field.offset = *fieldOffset;
             if(!field.fieldName){

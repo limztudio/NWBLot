@@ -69,8 +69,10 @@ namespace __hidden_material_pipeline{
 
 struct MaterialPipelineAvboitPixelShaderSelection{
     const Core::Assets::AssetRef<PixelShader>* materialShader = nullptr;
-    AStringView debugName = "ECSRender_InvalidAvboitPixelShader";
+    NameText<char> debugName = "ECSRender_InvalidAvboitPixelShader";
 
+
+public:
     [[nodiscard]] bool materialDriven()const noexcept{ return materialShader != nullptr && materialShader->valid(); }
     [[nodiscard]] Name shaderName()const noexcept{ return materialDriven() ? materialShader->name() : s_NameNone; }
 };
@@ -214,7 +216,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     const bool hasMeshShader = materialInfo.meshShader.valid();
     Core::ShaderHandle passPixelShader;
     Name passPixelShaderName = s_NameNone;
-    AStringView passPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
+    NameText<char> passPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
     __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
     if(MaterialPipelinePassUsesRendererAvboit(pass)){
         avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(pass, materialInfo);
@@ -285,8 +287,12 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
         // Keep both fixed heap layouts in every mesh pipeline; samplers are frozen surface.
         pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
-        resources.meshletPipeline = device.createMeshletPipeline(pipelineDesc, framebuffer.getFramebufferInfo());
-        if(!resources.meshletPipeline){
+        auto meshletPipelineResult = device.createMeshletPipeline(pipelineDesc, framebuffer.getFramebufferInfo());
+        if(meshletPipelineResult)
+            resources.meshletPipeline = Move(*meshletPipelineResult);
+        else
+            resources.meshletPipeline.reset();
+        if(!meshletPipelineResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
             return false;
         }
@@ -310,8 +316,12 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
         ;
-        resources.indexedPipeline = device.createGraphicsPipeline(desc, framebuffer.getFramebufferInfo());
-        if(!resources.indexedPipeline){
+        auto indexedPipelineResult = device.createGraphicsPipeline(desc, framebuffer.getFramebufferInfo());
+        if(indexedPipelineResult)
+            resources.indexedPipeline = Move(*indexedPipelineResult);
+        else
+            resources.indexedPipeline.reset();
+        if(!indexedPipelineResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
             return false;
         }
@@ -335,8 +345,12 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
         computeDesc.addBindingLayout(m_materialState.m_computeBindingLayout);
         // The compute-emulation mesh stage shares the same heap-backed source-stream runtime as the mesh-shader path, so it needs the persistent tables before its dispatch as well.
         computeDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        resources.computePipeline = device.createComputePipeline(computeDesc);
-        if(!resources.computePipeline){
+        auto computePipelineResult = device.createComputePipeline(computeDesc);
+        if(computePipelineResult)
+            resources.computePipeline = Move(*computePipelineResult);
+        else
+            resources.computePipeline.reset();
+        if(!computePipelineResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
             return false;
         }
@@ -348,8 +362,12 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
         emulationDesc.setRenderState(renderState);
         emulationDesc.addBindingLayout(*materialPassBindingLayout);
         emulationDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        resources.emulationPipeline = device.createGraphicsPipeline(emulationDesc, framebuffer.getFramebufferInfo());
-        if(!resources.emulationPipeline){
+        auto emulationPipelineResult = device.createGraphicsPipeline(emulationDesc, framebuffer.getFramebufferInfo());
+        if(emulationPipelineResult)
+            resources.emulationPipeline = Move(*emulationPipelineResult);
+        else
+            resources.emulationPipeline.reset();
+        if(!emulationPipelineResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
             resources.computePipeline.reset();
             return false;
@@ -451,9 +469,8 @@ void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialK
     }
     case RenderPath::ComputeEmulation:{
         if(!meshSupported){
-            NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because native mesh shaders are unavailable in the current graphics configuration"),
-                StringConvert(materialKey.resolvedText())
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because native mesh shaders are unavailable in the current graphics configuration")
+                , StringConvert(materialKey.resolvedText())
             );
         }
         else{

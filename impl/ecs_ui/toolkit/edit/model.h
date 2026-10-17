@@ -56,7 +56,9 @@ private:
         usize afterAnchor = 0u;
         usize afterCaret = 0u;
 
-        explicit HistoryRecord(Core::Alloc::GlobalArena& arena)
+
+    public:
+        explicit HistoryRecord(Core::Alloc::GlobalArena& arena)noexcept
             : before(arena)
             , after(arena)
         {}

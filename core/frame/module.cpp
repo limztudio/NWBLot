@@ -39,7 +39,7 @@ inline constexpr Name s_ProjectUpdateCpuTimingScope("frame.project_update");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
+void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY)noexcept{
     auto* frame = static_cast<Frame*>(userData);
     NWB_ASSERT(frame);
     frame->m_input.setMousePositionScale(scaleX, scaleY);
@@ -55,6 +55,7 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     , m_appliedWindowTitle(m_graphicsObjectArena)
     , m_graphicsAllocator(m_graphicsObjectArena)
     , m_projectObjectArena(FrameArenaScope::s_ProjectObjectArena)
+    , m_platformCleanup(*this)
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
     , m_frameGraphRegistry(m_projectObjectArena)
@@ -66,7 +67,6 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     frameData.height() = height;
     setupPlatform(inst);
     m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
-    m_projectUpdateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
 }
 Frame::~Frame()noexcept(false){
     // Teardown can invoke throwing callbacks; during unwind quiesce only, keep the original exception.
@@ -74,7 +74,6 @@ Frame::~Frame()noexcept(false){
         m_cpuTasks.drain();
         m_textInput.reset();
         m_clipboard.reset();
-        cleanupPlatform();
         return;
     }
 
@@ -82,33 +81,42 @@ Frame::~Frame()noexcept(false){
         m_cpuTasks.drain();
         m_textInput.reset();
         m_clipboard.reset();
-        cleanupPlatform();
-    });
+    }
+    );
 
     m_cpuTasks.wait();
     cleanup();
     m_cpuTasks.drain();
     m_textInput.reset();
     m_clipboard.reset();
-    cleanupPlatform();
     drainOnFailure.release();
 }
+
+
 void Frame::requestQuit()noexcept{
     m_quitRequested = true;
 }
-
-
 bool Frame::startup(){
-    m_clipboard = createPlatformClipboardService();
-    if(!m_clipboard){
+    const auto updateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
+    if(!updateTimingScope){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: project-update CPU timing scope registration failed"));
+        return false;
+    }
+    m_projectUpdateTimingScope = *updateTimingScope;
+    auto clipboardResult = createPlatformClipboardService();
+    if(!clipboardResult){
+        m_clipboard.reset();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: native clipboard initialization failed"));
         return false;
     }
-    m_textInput = createPlatformTextInputService();
-    if(!m_textInput){
+    m_clipboard = Move(*clipboardResult);
+    auto textInputResult = createPlatformTextInputService();
+    if(!textInputResult){
+        m_textInput.reset();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: native text-input initialization failed"));
         return false;
     }
+    m_textInput = Move(*textInputResult);
     if(!m_graphics.init(data<Common::FrameData>())){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Frame: graphics initialization failed"));
         return false;
@@ -135,9 +143,6 @@ bool Frame::update(f32 delta){
     }
 
     return updateFrame(delta);
-}
-bool Frame::render()noexcept{
-    return true;
 }
 void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     m_telemetrySession.setCaptureOptions(options);
@@ -168,17 +173,13 @@ void Frame::setPerfCapture(const Perf::CaptureOptions& options){
     m_perfSession.setCaptureOptions(options);
     m_cpuTasks.setProfiling(options.cpuTimingActive(), m_perfSession.frameIndex());
     m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
-    // Keep the cached update scope aligned with the sink without touching the per-frame update path.
-    if(options.cpuTimingActive())
-        m_projectUpdateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
 }
-
-IClipboardService& Frame::clipboard(){
+IClipboardService& Frame::clipboard()noexcept{
     NWB_FATAL_ASSERT_MSG(m_clipboard, NWB_TEXT("Frame clipboard service requires completed startup"));
     return *m_clipboard;
 }
 
-ITextInputService& Frame::textInput(){
+ITextInputService& Frame::textInput()noexcept{
     NWB_FATAL_ASSERT_MSG(m_textInput, NWB_TEXT("Frame text-input service requires completed startup"));
     return *m_textInput;
 }
@@ -199,6 +200,7 @@ Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, bool
     m_appliedWindowTitle = title;
     return TStringView(m_appliedWindowTitle);
 }
+
 bool Frame::updateFrame(f32 delta){
     ScopeExit discardUnpublishedProfile([this]()noexcept{ m_cpuTasks.setProfiling(false, m_perfSession.frameIndex()); });
 

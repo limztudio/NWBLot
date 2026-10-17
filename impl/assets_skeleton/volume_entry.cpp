@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -37,8 +36,7 @@ static Expected<SkeletonCookEntry> ParseSkeletonValue(const Name virtualPath, co
     return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
-static Expected<Skeleton> BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Core::Assets::AssetArena& arena){
-    Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_BuildAssetArena);
+static Expected<Skeleton> BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return BuildSkeletonAsset(entry, arena, scratchArena);
 }
 

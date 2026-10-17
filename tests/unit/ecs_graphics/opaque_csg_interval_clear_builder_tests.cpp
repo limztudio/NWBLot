@@ -33,7 +33,9 @@ TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear)
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskDesc dependencyDesc;
     dependencyDesc.setIdentity(Name("tests/opaque_csg_interval_clear/dependency")).setMarkerLabel("Incoming CSG Dependency");
-    const Core::GpuTaskId dependency = graph.addTask(dependencyDesc);
+    const auto dependencyResult = graph.addTask(dependencyDesc);
+    ASSERT_TRUE(dependencyResult);
+    const Core::GpuTaskId dependency = *dependencyResult;
     ASSERT_TRUE(dependency.valid());
 
     usize initialTaskCount = 0u;

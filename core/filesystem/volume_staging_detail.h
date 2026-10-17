@@ -25,9 +25,23 @@ namespace FilesystemVolumeStagingDetail{
 
 inline constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
-StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, AStringView volumeName);
-bool PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount);
-bool RemoveExistingVolumeSegments(const Path& outputDirectory, AStringView volumeName);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A synchronous no-throw owner publication occurs after all segment moves, before fallible cleanup observers.
+struct VolumePublicationObserver{
+    void* context = nullptr;
+    void(*commit)(void*)noexcept = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
+bool PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena, VolumePublicationObserver observer = {});
+bool RemoveExistingVolumeSegments(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

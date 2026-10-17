@@ -35,6 +35,8 @@ private:
         u64 instanceGeneration = 0u;
         WidgetKind::Enum kind = WidgetKind::Panel;
 
+
+    public:
         [[nodiscard]] bool operator==(const StateClaim&)const noexcept = default;
     };
 
@@ -42,6 +44,8 @@ private:
         [[nodiscard]] usize operator()(const StateClaim& claim)const noexcept;
     };
 
+
+private:
     using StateClaims = HashSet<StateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<StateClaim>>;
 
 
@@ -61,9 +65,9 @@ public:
     [[nodiscard]] bool endRoot()noexcept;
     [[nodiscard]] bool pushScope(AStringView stableKey);
     [[nodiscard]] bool popScope()noexcept;
-    [[nodiscard]] WidgetState* declare(AStringView stableKey, WidgetKind::Enum kind);
+    [[nodiscard]] Expected<NotNull<WidgetState*>> declare(AStringView stableKey, WidgetKind::Enum kind);
     // Compound controls declare internal scopes from their owning widget instead of borrowing the current layout scope.
-    [[nodiscard]] WidgetState* declarePart(const WidgetState& owner, AStringView stableKey, WidgetKind::Enum kind);
+    [[nodiscard]] Expected<NotNull<WidgetState*>> declarePart(const WidgetState& owner, AStringView stableKey, WidgetKind::Enum kind);
     // A state instance may own only one control of a given kind in a frame, even across balanced roots/scopes.
     [[nodiscard]] bool claimState(const WidgetState& owner, u64 instanceGeneration);
     [[nodiscard]] bool addTarget(const WidgetState& state, HitTarget target);
@@ -103,7 +107,7 @@ public:
 
 
 private:
-    [[nodiscard]] WidgetState* declareId(WidgetId id, WidgetKind::Enum kind);
+    [[nodiscard]] Expected<NotNull<WidgetState*>> declareId(WidgetId id, WidgetKind::Enum kind);
     [[nodiscard]] bool currentDeclaration(const WidgetState& state)const;
     void retireUnseenStates();
 

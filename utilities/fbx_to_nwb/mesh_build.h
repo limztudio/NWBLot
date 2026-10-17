@@ -63,7 +63,8 @@ public:
         FbxSkinDetail::ExportContext& inOutSkinContext,
         bool& inOutSawVertexColors,
         bool& inOutSawVertexUvs,
-        bool& inOutUsedDefaultUvs
+        bool& inOutUsedDefaultUvs,
+        Core::Alloc::ScratchArena& scratchArena
     );
     static Expected<usize> EstimateSelectedTriangleCorners(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection);
 

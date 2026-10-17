@@ -20,7 +20,6 @@ class NotNull{
 public:
     NotNull() = delete;
     NotNull(std::nullptr_t) = delete;
-
     constexpr explicit NotNull(T ptr)noexcept
         : m_ptr(ptr)
     {
@@ -32,20 +31,23 @@ public:
     {
         NWB_ASSERT_MSG(m_ptr, "NotNull requires non-null pointer.");
     }
-
     constexpr NotNull(const NotNull&)noexcept = default;
     constexpr NotNull(NotNull&&)noexcept = default;
-    constexpr NotNull& operator=(const NotNull&)noexcept = default;
-    constexpr NotNull& operator=(NotNull&&)noexcept = default;
-    NotNull& operator=(std::nullptr_t) = delete;
 
 
 public:
+    constexpr NotNull& operator=(const NotNull&)noexcept = default;
+
+    constexpr NotNull& operator=(NotNull&&)noexcept = default;
+
+    NotNull& operator=(std::nullptr_t) = delete;
+
     constexpr NotNull& operator=(T ptr)noexcept{
         NWB_ASSERT_MSG(ptr, "NotNull requires non-null pointer.");
         m_ptr = ptr;
         return *this;
     }
+
     template<typename U, typename = EnableIf_T<IsConvertible_V<U, T>>>
     constexpr NotNull& operator=(U ptr)noexcept(noexcept(static_cast<T>(DeclVal<U&>())) && IsNothrowDestructible_V<U>){
         const T casted = static_cast<T>(ptr);
@@ -56,12 +58,13 @@ public:
 
     constexpr bool operator==(const NotNull&)const noexcept = default;
 
+    [[nodiscard]] constexpr T operator->()const noexcept{ return m_ptr; }
+
+    [[nodiscard]] constexpr decltype(auto) operator*()const noexcept{ return *m_ptr; }
+
 
 public:
     [[nodiscard]] constexpr T get()const noexcept{ return m_ptr; }
-
-    [[nodiscard]] constexpr T operator->()const noexcept{ return m_ptr; }
-    [[nodiscard]] constexpr decltype(auto) operator*()const noexcept{ return *m_ptr; }
 
 
 private:

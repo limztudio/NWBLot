@@ -37,11 +37,11 @@ Framebuffer* GraphicsRuntime::getFramebuffer(u32 index)const noexcept{
     return nullptr;
 }
 
-BufferHandle GraphicsRuntime::createBuffer(const BufferDesc& desc)const{
+Expected<BufferHandle> GraphicsRuntime::createBuffer(const BufferDesc& desc)const{
     return getDevice().createBuffer(desc);
 }
 
-TextureHandle GraphicsRuntime::createTexture(const TextureDesc& desc)const{
+Expected<TextureHandle> GraphicsRuntime::createTexture(const TextureDesc& desc)const{
     return getDevice().createTexture(desc);
 }
 
@@ -70,14 +70,14 @@ bool GraphicsRuntime::backBufferResized(){
     m_swapChainFramebuffers.clear();
     m_swapChainFramebuffers.reserve(backBufferCount);
     for(u32 index = 0u; index < backBufferCount; ++index){
-        FramebufferHandle framebuffer = getDevice().createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
-        if(!framebuffer){
+        auto framebufferResult = getDevice().createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
+        if(!framebufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to rebuild swap-chain framebuffer {}"), index);
             m_swapChainFramebuffers.clear();
             invalidateRenderPassResources();
             return false;
         }
-        m_swapChainFramebuffers.push_back(Move(framebuffer));
+        m_swapChainFramebuffers.push_back(Move(*framebufferResult));
     }
 
     if(!validateRenderPassResources()){
@@ -89,7 +89,6 @@ bool GraphicsRuntime::backBufferResized(){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
     return true;
 }
-
 
 void GraphicsRuntime::displayScaleChanged(){
     notifyPointerScaleChanged();

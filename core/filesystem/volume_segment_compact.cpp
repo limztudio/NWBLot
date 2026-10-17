@@ -29,7 +29,7 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCount){
+static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCount)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
@@ -58,88 +58,9 @@ static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCoun
 #endif
 }
 
-bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 sourceOffset, const u64 byteCount, Alloc::ScratchArena& scratchArena){
-    if(byteCount == 0 || destinationOffset == sourceOffset)
-        return true;
-    if(m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
-        return false;
-    }
 
-    u64 sourceEndOffset = 0;
-    const auto sourceEndOffsetResult = ::AddNoOverflow(sourceOffset, byteCount);
-    if(!sourceEndOffsetResult){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "source range overflow");
-        return false;
-    }
-    sourceEndOffset = *sourceEndOffsetResult;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    const auto capacity = computeLogicalCapacityLocked();
-    if(!capacity){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "capacity overflow");
-        return false;
-    }
-    const u64 capacityBytes = *capacity;
-    if(sourceEndOffset > capacityBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}"), StringConvert(m_volumeName), sourceOffset, sourceEndOffset, capacityBytes);
-        return false;
-    }
-
-    u64 destinationEndOffset = 0;
-    const auto destinationEndOffsetResult = ::AddNoOverflow(destinationOffset, byteCount);
-    if(!destinationEndOffsetResult){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "destination range overflow");
-        return false;
-    }
-    destinationEndOffset = *destinationEndOffsetResult;
-    if(!ensureCapacityLocked(destinationEndOffset)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "failed to ensure destination capacity");
-        return false;
-    }
-
-    const u64 moveChunkBytes = Min(FilesystemVolumeDetail::s_VolumeMoveChunkBytes, m_segmentSize);
-    if(moveChunkBytes == 0 || moveChunkBytes > static_cast<u64>(Limit<usize>::s_Max)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "invalid move chunk size");
-        return false;
-    }
-
-    Vector<u8, Core::Alloc::ScratchArena> moveBuffer(static_cast<usize>(moveChunkBytes), 0, scratchArena);
-
-    if(destinationOffset < sourceOffset){
-        u64 movedBytes = 0;
-        while(movedBytes < byteCount){
-            const u64 pendingBytes = byteCount - movedBytes;
-            const u64 copyBytes = Min(pendingBytes, moveChunkBytes);
-
-            const u64 readOffset = sourceOffset + movedBytes;
-            const u64 writeOffset = destinationOffset + movedBytes;
-            if(!readBytesLocked(readOffset, moveBuffer.data(), copyBytes))
-                return false;
-            if(!writeBytesLocked(writeOffset, moveBuffer.data(), copyBytes))
-                return false;
-
-            movedBytes += copyBytes;
-        }
-        return true;
-    }
-
-    u64 remainingBytes = byteCount;
-    while(remainingBytes > 0){
-        const u64 copyBytes = Min(remainingBytes, moveChunkBytes);
-        const u64 chunkBegin = remainingBytes - copyBytes;
-
-        const u64 readOffset = sourceOffset + chunkBegin;
-        const u64 writeOffset = destinationOffset + chunkBegin;
-        if(!readBytesLocked(readOffset, moveBuffer.data(), copyBytes))
-            return false;
-        if(!writeBytesLocked(writeOffset, moveBuffer.data(), copyBytes))
-            return false;
-
-        remainingBytes -= copyBytes;
-    }
-
-    return true;
-}
 
 bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
 
@@ -166,7 +87,7 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
     }
 
     while(m_segmentPaths.size() > static_cast<usize>(requiredSegments)){
-        const Path removePath = m_segmentPaths.back();
+        const Path& removePath = m_segmentPaths.back();
         const auto removed = RemoveFile(removePath);
         if(!removed || !*removed){
             if(!removed){

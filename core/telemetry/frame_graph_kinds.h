@@ -20,6 +20,10 @@ NWB_TELEMETRY_BEGIN
 inline constexpr u16 s_FrameGraphPayloadVersion = 10u;
 inline constexpr u32 s_FrameGraphPayloadMagic = 0x4E574647u; // NWFG
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace FrameGraphNodeKind{
     enum Enum : u8{
         Unknown,
@@ -124,6 +128,8 @@ struct FrameGraphPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return index != Limit<u16>::s_Max && deviceGeneration != 0u;
     }

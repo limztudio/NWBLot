@@ -113,7 +113,7 @@ namespace __hidden_generated_geometry_reuse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitGeneratedGeometryReuse::AvboitGeneratedGeometryReuse(Core::Alloc::ScratchArena& arena)
+AvboitGeneratedGeometryReuse::AvboitGeneratedGeometryReuse(Core::Alloc::ScratchArena& arena)noexcept
     : m_arena(arena)
     , m_draws(arena)
     , m_instances(arena)

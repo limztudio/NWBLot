@@ -65,7 +65,7 @@ def memory_snapshot(frame, count):
 
 
 def rows(workload=LIT_SHARED, mode=LIT_TIMING):
-    configuration = dict(bench.FROZEN_SETTINGS, type="configuration", schema=1, workload=workload, mode=mode, successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0,
+    configuration = dict(bench.FROZEN_SETTINGS, type="configuration", schema=2, workload=workload, mode=mode, successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0,
         transparent_renderers=0 if workload == LIT_OPAQUE else 32 if workload == "hybrid" else 64)
     result = [configuration]
     if mode == LIT_MEMORY:
@@ -172,7 +172,7 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
 
     def test_unavailable_optional_arena_is_null_not_zero_savings(self):
         values = rows(mode=LIT_MEMORY)
-        optional = "impl/ecs_render/avboit_transparent_csg"
+        optional = "impl/ecs_render/render"
         for row in values:
             if LIT_ARENAS in row:
                 row[LIT_ARENAS][optional][LIT_PRESENT] = False
@@ -180,6 +180,19 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
         self.assertIsNone(result[LIT_ALLOCATION_DELTAS])
         self.assertFalse(result[LIT_COMPLETE])
         self.assertEqual(result[LIT_AVAILABLE_FRAMES], 0)
+
+    def test_memory_acquisition_accepts_current_caller_owners_without_retired_helper_arenas(self):
+        values = rows(mode=LIT_MEMORY)
+        current_owners = ("impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph")
+        for row in values:
+            if LIT_ARENAS in row:
+                row[LIT_ARENAS] = {owner: row[LIT_ARENAS][owner] for owner in current_owners}
+        result = bench.summarize_rows(values, LIT_SHARED, LIT_MEMORY)
+        self.assertEqual(set(result[LIT_MEMORY]), set(current_owners))
+        self.assertEqual(result[LIT_MEMORY][current_owners[0]][LIT_ALLOCATION_DELTAS], 3.)
+        values[0]["schema"] = 1
+        with self.assertRaisesRegex(bench.SmokeFailure, "fixture identity"):
+            bench.summarize_rows(values, LIT_SHARED, LIT_MEMORY)
 
     def test_required_scratch_owner_must_exist(self):
         values = rows(mode=LIT_MEMORY)

@@ -30,12 +30,12 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-[[nodiscard]] static Name IndexedName(const Name& prefix, const usize index)noexcept{
+[[nodiscard]] static Expected<Name> IndexedName(const Name& prefix, const usize index){
     char text[32u];
     return DeriveName(prefix, FormatDecimal(index, text));
 }
 
-[[nodiscard]] static Graphics::GpuTaskResourceUse BufferUse(const Graphics::GpuGraphResourceId resource, const u64 offset, const u64 size, const Graphics::GpuTaskResourceAccess::Enum access){
+[[nodiscard]] static Graphics::GpuTaskResourceUse BufferUse(const Graphics::GpuGraphResourceId resource, const u64 offset, const u64 size, const Graphics::GpuTaskResourceAccess::Enum access)noexcept{
     return Graphics::GpuTaskResourceUse{
         .resource = resource,
         .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(offset, size) },
@@ -49,10 +49,16 @@ using TaskGraphTestUtils::TestArena;
 
 
 TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto bufferA = AddBufferMetadata(graph, Name("tests/hazard_tracking/a"), "A");
-    const auto bufferB = AddBufferMetadata(graph, Name("tests/hazard_tracking/b"), "B");
+    const auto bufferAResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/a"), "A");
+    ASSERT_TRUE(bufferAResult);
+    const auto bufferA = *bufferAResult;
+    const auto bufferBResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/b"), "B");
+    ASSERT_TRUE(bufferBResult);
+    const auto bufferB = *bufferBResult;
     ASSERT_TRUE(bufferA.valid());
     ASSERT_TRUE(bufferB.valid());
     const Graphics::GpuTaskResourceUse uses[] = {
@@ -70,7 +76,11 @@ TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
     };
     Graphics::GpuTaskId tasks[LengthOf(uses)];
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        tasks[index] = AddTask(graph, IndexedName(Name("tests/hazard_tracking/task"), index), "Task", nullptr, 0u, &uses[index], 1u);
+        const auto derivedNameAt77Col53 = IndexedName(Name("tests/hazard_tracking/task"), index);
+        ASSERT_TRUE(derivedNameAt77Col53);
+        const auto gpuAdmissionAt73 = AddTask(graph, *derivedNameAt77Col53, "Task", nullptr, 0u, &uses[index], 1u);
+        ASSERT_TRUE(gpuAdmissionAt73);
+        tasks[index] = *gpuAdmissionAt73;
         ASSERT_TRUE(tasks[index].valid());
     }
     struct ExpectedHazard{
@@ -95,7 +105,7 @@ TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
         { 9u, 10u, Graphics::GpuTaskHazardType::ReadAfterWrite },
     };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.inferredEdges().size(), LengthOf(expected));
     for(usize index = 0u; index < LengthOf(expected); ++index){
         const auto& edge = analysis.inferredEdges()[index];
@@ -107,9 +117,13 @@ TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
 }
 
 TEST(GpuTaskGraph, HazardTrackingRetiresOnlyCoveredReadersAndPreservesAppendOrder){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto buffer = AddBufferMetadata(graph, Name("tests/hazard_tracking/readers"), "Readers");
+    const auto bufferResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/readers"), "Readers");
+    ASSERT_TRUE(bufferResult);
+    const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
     const Graphics::GpuTaskResourceUse uses[] = {
         BufferUse(buffer, 0u, 16u, Graphics::GpuTaskResourceAccess::Read),
@@ -123,12 +137,16 @@ TEST(GpuTaskGraph, HazardTrackingRetiresOnlyCoveredReadersAndPreservesAppendOrde
     };
     Graphics::GpuTaskId tasks[LengthOf(uses)];
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        tasks[index] = AddTask(graph, IndexedName(Name("tests/hazard_tracking/read_task"), index), "Read Task", nullptr, 0u, &uses[index], 1u);
+        const auto derivedNameAt134Col54 = IndexedName(Name("tests/hazard_tracking/read_task"), index);
+        ASSERT_TRUE(derivedNameAt134Col54);
+        const auto gpuAdmissionAt126 = AddTask(graph, *derivedNameAt134Col54, "Read Task", nullptr, 0u, &uses[index], 1u);
+        ASSERT_TRUE(gpuAdmissionAt126);
+        tasks[index] = *gpuAdmissionAt126;
         ASSERT_TRUE(tasks[index].valid());
     }
     const usize expectedPairs[][2u] = { { 1u, 3u }, { 3u, 5u }, { 0u, 5u }, { 2u, 5u }, { 4u, 5u }, { 5u, 6u }, { 5u, 7u }, { 6u, 7u }, };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.inferredEdges().size(), LengthOf(expectedPairs));
     for(usize index = 0u; index < LengthOf(expectedPairs); ++index){
         EXPECT_EQ(analysis.inferredEdges()[index].producer, tasks[expectedPairs[index][0u]]);
@@ -137,26 +155,36 @@ TEST(GpuTaskGraph, HazardTrackingRetiresOnlyCoveredReadersAndPreservesAppendOrde
 }
 
 TEST(GpuTaskGraph, HazardTrackingPreservesSameTaskAccessAndResetSemantics){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     for(usize iteration = 0u; iteration < 2u; ++iteration){
-        const auto buffer = AddBufferMetadata(graph, Name("tests/hazard_tracking/same_task"), "Same Task");
+        const auto bufferResult = AddBufferMetadata(graph, Name("tests/hazard_tracking/same_task"), "Same Task");
+        ASSERT_TRUE(bufferResult);
+        const auto buffer = *bufferResult;
         ASSERT_TRUE(buffer.valid());
         const Graphics::GpuTaskResourceUse firstUses[] = {
             BufferUse(buffer, 0u, 32u, Graphics::GpuTaskResourceAccess::Write),
             BufferUse(buffer, 0u, 16u, Graphics::GpuTaskResourceAccess::Read),
             BufferUse(buffer, 32u, 16u, Graphics::GpuTaskResourceAccess::Read),
         };
-        const auto first = AddTask(graph, Name("tests/hazard_tracking/first"), "First", nullptr, 0u, firstUses, LengthOf(firstUses));
+        const auto firstResult = AddTask(graph, Name("tests/hazard_tracking/first"), "First", nullptr, 0u, firstUses, LengthOf(firstUses));
+        ASSERT_TRUE(firstResult);
+        const auto first = *firstResult;
         const auto secondUse = BufferUse(buffer, 0u, 48u, Graphics::GpuTaskResourceAccess::Write);
-        const auto second = AddTask(graph, Name("tests/hazard_tracking/second"), "Second", nullptr, 0u, &secondUse, 1u);
+        const auto secondResult = AddTask(graph, Name("tests/hazard_tracking/second"), "Second", nullptr, 0u, &secondUse, 1u);
+        ASSERT_TRUE(secondResult);
+        const auto second = *secondResult;
         const auto thirdUse = BufferUse(buffer, 0u, 48u, Graphics::GpuTaskResourceAccess::ReadWrite);
-        const auto third = AddTask(graph, Name("tests/hazard_tracking/third"), "Third", nullptr, 0u, &thirdUse, 1u);
+        const auto thirdResult = AddTask(graph, Name("tests/hazard_tracking/third"), "Third", nullptr, 0u, &thirdUse, 1u);
+        ASSERT_TRUE(thirdResult);
+        const auto third = *thirdResult;
         ASSERT_TRUE(first.valid());
         ASSERT_TRUE(second.valid());
         ASSERT_TRUE(third.valid());
-        ASSERT_TRUE(Analyze(graph, analysis));
+        ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
         ASSERT_EQ(analysis.inferredEdges().size(), 4u);
         EXPECT_TRUE(HasInferredHazard(analysis, first, second, buffer, Graphics::GpuTaskHazardType::WriteAfterWrite));
         EXPECT_TRUE(HasInferredHazard(analysis, first, second, buffer, Graphics::GpuTaskHazardType::WriteAfterRead));

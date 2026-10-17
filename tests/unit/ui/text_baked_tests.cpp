@@ -46,7 +46,7 @@ protected:
     virtual void SetUp()override{
         ASSERT_TRUE(Tests::LoadBundledFont(m_font, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
-        ASSERT_TRUE(m_text.setFonts(&source, 1u));
+        ASSERT_TRUE(m_text.setFonts(m_scratchArena, &source, 1u));
         {
             auto layoutResult = m_text.layout({ .text = "A ", .fontSize = 24.f });
             ASSERT_TRUE(layoutResult);
@@ -91,7 +91,7 @@ protected:
 
     [[nodiscard]] bool installAtlas(){
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u, &m_atlas };
-        return m_text.setFonts(&source, 1u);
+        return m_text.setFonts(m_scratchArena, &source, 1u);
     }
 
     [[nodiscard]] DrawSnapshot paint(f32 scale = 1.f){
@@ -166,7 +166,7 @@ TEST_F(TextBakedTests, OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndA
     const DrawSnapshot first = paint();
     ASSERT_EQ(first.sdfPages().size(), 1u);
     const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 2u };
-    ASSERT_TRUE(m_text.setFonts(&source, 1u));
+    ASSERT_TRUE(m_text.setFonts(m_scratchArena, &source, 1u));
     m_atlas.setPayload(FontAtlasPayload(m_arena));
     const DrawSnapshot second = paint();
     ASSERT_EQ(second.sdfPages().size(), 1u);

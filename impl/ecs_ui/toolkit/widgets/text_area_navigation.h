@@ -26,7 +26,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual EditNavigationResult resolve(const EditModel& model, EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, f32 viewportHeight)override;
+    [[nodiscard]] virtual Expected<EditNavigationResult> resolve(const EditModel& model, EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, f32 viewportHeight)override;
 
 
 private:

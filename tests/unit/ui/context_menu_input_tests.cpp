@@ -21,7 +21,7 @@ namespace __hidden_ui_context_menu_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-[[nodiscard]] static HitTarget Target(const u64 id = 1u, const Rect& rectangle = { 10.0f, 10.0f, 40.0f, 20.0f }){
+[[nodiscard]] static HitTarget Target(const u64 id = 1u, const Rect& rectangle = { 10.0f, 10.0f, 40.0f, 20.0f })noexcept{
     HitTarget target;
     target.id = { id };
     target.declarationGeneration = 3u;
@@ -34,14 +34,14 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] static InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f }){
+[[nodiscard]] static InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f })noexcept{
     InputEvent event;
     event.type = type;
     event.position = position;
     return event;
 }
 
-[[nodiscard]] static InputEvent Key(const Core::Key::Enum key, const bool shift = false, const bool control = false, const bool alt = false, const bool repeat = false){
+[[nodiscard]] static InputEvent Key(const Core::Key::Enum key, const bool shift = false, const bool control = false, const bool alt = false, const bool repeat = false)noexcept{
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = key;
@@ -52,7 +52,7 @@ using namespace NWB::Impl::Ui;
     return event;
 }
 
-[[nodiscard]] static PopupScope Scope(const u64 openGeneration = 1u){
+[[nodiscard]] static PopupScope Scope(const u64 openGeneration = 1u)noexcept{
     PopupScope scope;
     scope.token = { { 100u }, 11u, 12u, openGeneration };
     scope.bounds = { 40.0f, 40.0f, 100.0f, 100.0f };
@@ -61,7 +61,7 @@ using namespace NWB::Impl::Ui;
     return scope;
 }
 
-[[nodiscard]] static Array<HitTarget, 3u> PopupTargets(const PopupScope& scope){
+[[nodiscard]] static Array<HitTarget, 3u> PopupTargets(const PopupScope& scope)noexcept{
     HitTarget barrier;
     barrier.id = scope.token.widget;
     barrier.declarationGeneration = scope.token.declarationGeneration;

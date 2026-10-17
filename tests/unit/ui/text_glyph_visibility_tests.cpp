@@ -47,10 +47,11 @@ public:
 
 protected:
     virtual void SetUp()override{
+        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
         ASSERT_TRUE(loadFont(m_latin, "latin.font"));
         ASSERT_TRUE(loadFont(m_korean, "korean.font"));
-        m_face = MakeFontFace(m_arena, { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u });
-        m_koreanFace = MakeFontFace(m_arena, { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u });
+        m_face = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u });
+        m_koreanFace = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u });
         ASSERT_TRUE(m_face);
         ASSERT_TRUE(m_koreanFace);
         ASSERT_TRUE(m_face->coverageInkReliable());
@@ -113,7 +114,9 @@ protected:
         m_asset.setPayload(Move(payload));
         Core::Alloc::ScratchArena scratchArena(Name("tests/ui/text/glyph_visibility/validation_scratch"));
         ASSERT_TRUE(m_asset.validatePayload(scratchArena));
-        m_atlas = CreateBakedFontAtlas(m_arena, m_asset, 1u);
+        auto atlasResult = CreateBakedFontAtlas(m_arena, m_asset, 1u);
+        ASSERT_TRUE(atlasResult);
+        m_atlas = Move(*atlasResult);
         ASSERT_TRUE(m_atlas);
     }
 

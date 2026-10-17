@@ -36,38 +36,44 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 }
 
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddHazardDomain(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label){
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddHazardDomain(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label){
     Graphics::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Graphics::GpuGraphResourceType::HazardDomain);
     return graph.importHazardDomain(desc);
 }
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddTextureMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState, const Graphics::ResourceQueueSharing::Mask queueSharing){
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddTextureMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState, const Graphics::ResourceQueueSharing::Mask queueSharing){
     Graphics::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Graphics::GpuGraphResourceType::Texture).setInitialState(initialState).setQueueSharing(queueSharing);
     return graph.importResource(desc);
 }
 
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddBufferMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState, const Graphics::ResourceQueueSharing::Mask queueSharing){
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddBufferMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState, const Graphics::ResourceQueueSharing::Mask queueSharing){
     Graphics::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Graphics::GpuGraphResourceType::Buffer).setInitialState(initialState).setQueueSharing(queueSharing);
     return graph.importResource(desc);
 }
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddAccelStructMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState, const Graphics::ResourceQueueSharing::Mask queueSharing){
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddAccelStructMetadata(
+    Graphics::GpuTaskGraph& graph,
+    const Name& identity,
+    const AStringView label,
+    const Graphics::ResourceStates::Mask initialState,
+    const Graphics::ResourceQueueSharing::Mask queueSharing
+){
     Graphics::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Graphics::GpuGraphResourceType::AccelStruct).setInitialState(initialState).setQueueSharing(queueSharing);
     return graph.importResource(desc);
 }
 
-[[nodiscard]] Graphics::GpuGraphPipelineId AddPipelineMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::GpuGraphPipelineType::Enum type){
+[[nodiscard]] Expected<Graphics::GpuGraphPipelineId> AddPipelineMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::GpuGraphPipelineType::Enum type){
     Graphics::GpuGraphPipelineDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(type);
     return graph.importPipeline(desc);
 }
 
-[[nodiscard]] Graphics::GpuTaskId AddTask(
+[[nodiscard]] Expected<Graphics::GpuTaskId> AddTask(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
@@ -83,7 +89,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return graph.addTask(desc);
 }
 
-[[nodiscard]] Graphics::GpuTaskId AddTaskWithCommands(
+[[nodiscard]] Expected<Graphics::GpuTaskId> AddTaskWithCommands(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
@@ -98,27 +104,27 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return graph.addTask(desc, commands);
 }
 
-[[nodiscard]] bool Analyze(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+[[nodiscard]] bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     return compiler.analyze(declarations, analysis, scratchArena);
 }
 
 [[nodiscard]] bool Assign(
+    Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options
 ){
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     return compiler.assignQueues(declarations, analysis, topology, assignments, scratchArena, options);
 }
 
 [[nodiscard]] bool Compile(
+    Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
@@ -126,7 +132,6 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options
 ){
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
     Graphics::GpuTaskGraphCompileOptions metadataOptions = options;
     // Unit packetization fixtures intentionally use metadata-only task nodes to isolate compiler structure from backend recording.
@@ -137,6 +142,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 }
 
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
+    Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
@@ -144,7 +150,6 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options
 ){
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     Vector<Graphics::GpuTaskDiagnosticQueueOverride, Core::Alloc::ScratchArena> overrides{ scratchArena };
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -173,11 +178,16 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::GpuTaskGraphCompileOptions routedOptions = options;
     routedOptions.queueAssignmentOptions.diagnosticQueueOverrides = overrides.data();
     routedOptions.queueAssignmentOptions.diagnosticQueueOverrideCount = overrides.size();
-    return Compile(graph, analysis, topology, assignments, compiledGraph, routedOptions);
+    return Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph, routedOptions);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
-    : singleQueue(GraphicsQueue())
+    : scratchArena(s_TaskGraphScratchArena)
+    , singleQueue(GraphicsQueue())
     , topology{.queues = &singleQueue, .queueCount = 1u}
     , analysis(testArena.arena)
     , assignments(testArena.arena)
@@ -185,11 +195,16 @@ SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
 }
 
 [[nodiscard]] bool SingleQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
-    return Compile(graph, analysis, topology, assignments, compiledGraph, options);
+    return Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TwoQueueCompile::TwoQueueCompile(TestArena& testArena)
-    : graphicsQueue(GraphicsQueue())
+    : scratchArena(s_TaskGraphScratchArena)
+    , graphicsQueue(GraphicsQueue())
     , computeQueue(DedicatedComputeQueue())
     , topology{.queues = queueStorage, .queueCount = 2u}
     , analysis(testArena.arena)
@@ -200,11 +215,16 @@ TwoQueueCompile::TwoQueueCompile(TestArena& testArena)
 }
 
 [[nodiscard]] bool TwoQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
-    return CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph, options);
+    return CompileWithSeparatedCommandQueues(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
-    : graphicsQueue(GraphicsQueue())
+    : scratchArena(s_TaskGraphScratchArena)
+    , graphicsQueue(GraphicsQueue())
     , computeQueue(DedicatedComputeQueue())
     , transferQueue(DedicatedTransferQueue())
     , topology{.queues = queueStorage, .queueCount = 3u}
@@ -217,8 +237,12 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
 }
 
 [[nodiscard]] bool ThreeQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
-    return CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph, options);
+    return CompileWithSeparatedCommandQueues(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(const u16 index, const Graphics::GpuQueueCapability::Mask capabilities)noexcept{
     return Graphics::GpuPhysicalQueueInfo{ .familyIndex = 0u, .queueIndex = 0u, .id = Graphics::GpuPhysicalQueueId{ .index = index, .deviceGeneration = 1u }, .queueClass = Graphics::CommandQueue::Graphics, .capabilities = capabilities, .dedicated = false, };
@@ -246,10 +270,12 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     };
 }
 
-[[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(Graphics::GpuTaskGraph& graph, const Graphics::ResourceQueueSharing::Mask queueSharing){
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/transfer_ownership_texture"), "Transfer Ownership Texture", Graphics::ResourceStates::Common, queueSharing);
-    if(!texture.valid())
-        return {};
+[[nodiscard]] Expected<TransferOwnershipPair> AddTransferOwnershipPair(Graphics::GpuTaskGraph& graph, const Graphics::ResourceQueueSharing::Mask queueSharing){
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/transfer_ownership_texture"), "Transfer Ownership Texture", Graphics::ResourceStates::Common, queueSharing);
+    if(!textureResult)
+        return MakeUnexpected(Failure{});
+
+    const Graphics::GpuGraphResourceId texture = *textureResult;
 
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Medium;
@@ -262,11 +288,11 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc.setIdentity(Name("tests/task_graph/transfer_ownership_consumer")).setMarkerLabel("Transfer Ownership Consumer").setScheduling(scheduling).setResourceUses(consumerUses, LengthOf(consumerUses));
 
-    return TransferOwnershipPair{
-        .texture = texture,
-        .producer = graph.addTask(producerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics }),
-        .consumer = graph.addTask(consumerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer }),
-    };
+    const auto producer = graph.addTask(producerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
+    const auto consumer = graph.addTask(consumerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer });
+    if(!producer || !consumer)
+        return MakeUnexpected(Failure{});
+    return TransferOwnershipPair{ .texture = texture, .producer = *producer, .consumer = *consumer, };
 }
 
 [[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer)noexcept{
@@ -277,7 +303,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     return nullptr;
 }
 
-[[nodiscard]] ExternalFinalReadPair AddExternalFinalReadPair(
+[[nodiscard]] Expected<ExternalFinalReadPair> AddExternalFinalReadPair(
     Graphics::GpuTaskGraph& graph,
     const Graphics::GpuGraphResourceType::Enum resourceType,
     const Graphics::GpuTaskResourceRange& earlierRange,
@@ -299,9 +325,11 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
         .setExternalFinalReleaseDestinationQueue(externalFinalReleaseDestinationQueue)
         .setQueueSharing(queueSharing)
     ;
-    const Graphics::GpuGraphResourceId resource = graph.importResource(resourceDesc);
-    if(!resource.valid())
-        return {};
+    const auto resourceResult = graph.importResource(resourceDesc);
+    if(!resourceResult)
+        return MakeUnexpected(Failure{});
+
+    const Graphics::GpuGraphResourceId resource = *resourceResult;
 
     const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
@@ -314,9 +342,11 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     const Graphics::GpuTaskResourceUse earlierUse{ .resource = resource, .range = earlierRange, .requiredState = readState, .access = Graphics::GpuTaskResourceAccess::Read, };
     Graphics::GpuTaskDesc earlierDesc;
     earlierDesc.setIdentity(Name("tests/task_graph/external_final_earlier_reader")).setMarkerLabel("External Final Earlier Reader").setScheduling(earlierScheduling).setResourceUses(&earlierUse, 1u);
-    const Graphics::GpuTaskId earlierReader = graph.addTask(earlierDesc, graphicsCommands);
-    if(!earlierReader.valid())
-        return {};
+    const auto earlierReaderResult = graph.addTask(earlierDesc, graphicsCommands);
+    if(!earlierReaderResult)
+        return MakeUnexpected(Failure{});
+
+    const Graphics::GpuTaskId earlierReader = *earlierReaderResult;
 
     const Graphics::GpuTaskResourceUse finalizingUse{ .resource = resource, .range = finalizingRange, .requiredState = readState, .access = Graphics::GpuTaskResourceAccess::Read, .hasIndependentStateSource = !samePacket, };
     Graphics::GpuTaskDesc finalizingDesc;
@@ -327,7 +357,10 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
         .setDependencies(finalizerDependsOnEarlier ? &earlierReader : nullptr, finalizerDependsOnEarlier ? 1u : 0u)
         .setResourceUses(&finalizingUse, 1u)
     ;
-    return ExternalFinalReadPair{ .resource = resource, .earlierReader = earlierReader, .finalizingReader = graph.addTask(finalizingDesc, samePacket ? graphicsCommands : computeCommands), };
+    const auto finalizingReader = graph.addTask(finalizingDesc, samePacket ? graphicsCommands : computeCommands);
+    if(!finalizingReader)
+        return MakeUnexpected(Failure{});
+    return ExternalFinalReadPair{ .resource = resource, .earlierReader = earlierReader, .finalizingReader = *finalizingReader, };
 }
 
 [[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept{

@@ -95,7 +95,8 @@ TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHisto
                 }
             }
             completed.fetch_add(1u, MemoryOrder::release);
-        });
+        }
+        );
     }
 
     firstAllocationsReady.wait();
@@ -164,7 +165,8 @@ TEST(AllocationOwnerConcurrency, CrossThreadRawReallocationAndFreeKeepSettledBac
         }
         produced.store(true, MemoryOrder::release);
         WaitForFlag(releaseWorkers);
-    });
+    }
+    );
     Thread consumer([&](){
         void* const warmup = CoreAlloc(1u);
         CoreFree(warmup);
@@ -185,7 +187,8 @@ TEST(AllocationOwnerConcurrency, CrossThreadRawReallocationAndFreeKeepSettledBac
         }
         consumed.store(true, MemoryOrder::release);
         WaitForFlag(releaseWorkers);
-    });
+    }
+    );
 
     // Initialize each shard before baseline capture and keep both thread closures alive until final capture.
     // The interval contains only the planned raw allocation/reallocation/free operations, with no test assertions.

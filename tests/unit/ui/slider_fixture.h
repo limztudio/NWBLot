@@ -41,13 +41,13 @@ namespace SliderCallbackMutation{
 // A later deferred list label can mutate an earlier slider loan or try to reenter its finalizing Builder.
 class SliderCallbackSource final : public UiComboTests::ComboSource{
 public:
-    SliderCallbackSource();
+    SliderCallbackSource()noexcept;
 
 
 public:
     [[nodiscard]] virtual StringView text(u64 index)const override;
-    void arm(SliderCallbackMutation::Enum mutation, SliderState* state = nullptr, Builder* builder = nullptr, PopupState* popup = nullptr);
-    void clearCounters()const;
+    void arm(SliderCallbackMutation::Enum mutation, SliderState* state = nullptr, Builder* builder = nullptr, PopupState* popup = nullptr)noexcept;
+    void clearCounters()const noexcept;
 
 
 public:
@@ -83,8 +83,8 @@ protected:
 
 
 protected:
-    [[nodiscard]] static SliderOptions Options();
-    [[nodiscard]] static ListOptions SiblingOptions();
+    [[nodiscard]] static SliderOptions Options()noexcept;
+    [[nodiscard]] static ListOptions SiblingOptions()noexcept;
 
 
 protected:
@@ -94,12 +94,12 @@ protected:
     [[nodiscard]] bool prepare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
     [[nodiscard]] bool accept(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
     [[nodiscard]] bool sibling(AStringView key = "later");
-    [[nodiscard]] WidgetId host()const noexcept;
-    [[nodiscard]] WidgetId track()const noexcept;
-    [[nodiscard]] WidgetId thumb()const noexcept;
+    [[nodiscard]] WidgetId host()const;
+    [[nodiscard]] WidgetId track()const;
+    [[nodiscard]] WidgetId thumb()const;
     [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const noexcept;
     [[nodiscard]] Point thumbPoint()const noexcept;
-    [[nodiscard]] SliderAcceptedFrame accepted()const;
+    [[nodiscard]] SliderAcceptedFrame accepted()const noexcept;
     void expectAccepted(const SliderAcceptedFrame& saved, bool popupFocus = true)const;
 
 

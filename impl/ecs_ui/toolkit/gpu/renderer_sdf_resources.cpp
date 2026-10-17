@@ -6,6 +6,7 @@
 #include "renderer_internal.h"
 
 #include <core/common/log.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/alloc/scratch.h>
 
 #include <global/text_utils.h>
@@ -48,11 +49,11 @@ namespace __hidden_ui_gpu_sdf{
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(!descriptor.valid())
         return false;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, version.m_texture.get(), version.m_texture->getDescription().format, Core::s_AllSubresources, Core::TextureDimension::Texture2D))){
-        heap.free(descriptor);
+    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, version.m_texture.get(), version.m_texture->getDescription().format, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
         return false;
-    }
     version.m_sampledImage = descriptor;
+    descriptorGuard.release();
     return true;
 }
 
@@ -99,46 +100,50 @@ bool GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     return true;
 }
 
-GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfAtlasPage& page){
+Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page){
     for(usize index = 0u; index < m_sdfCache.size(); ++index){
         const auto& existing = m_sdfCache[index];
         if(!SameSdfAtlasPageKey(existing->m_page->binding(), page->binding()))
             continue;
         if(!(existing->m_page->binding() == page->binding()))
-            return {};
+            return MakeUnexpected(Failure{});
         GpuVersion<GpuSdfAtlasVersion> reused = existing;
         m_sdfCache.erase(m_sdfCache.begin() + static_cast<isize>(index));
         m_sdfCache.push_back(reused);
         if(!__hidden_ui_gpu_sdf::PrepareDescriptor(*reused))
-            return {};
-        return reused;
+            return MakeUnexpected(Failure{});
+        return Move(reused);
     }
     Core::Device& device = m_graphics.getDevice();
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
     const SdfAtlasPageBinding& binding = page->binding();
-    constexpr Core::Format::Enum formats[]{ Core::Format::R8_UNORM, Core::Format::RG8_UNORM, Core::Format::RGB8_UNORM, Core::Format::RGBA8_UNORM };
-    Core::Format::Enum format = formats[binding.channelCount - 1u];
+    constexpr Core::Format::Enum s_Formats[]{ Core::Format::R8_UNORM, Core::Format::RG8_UNORM, Core::Format::RGB8_UNORM, Core::Format::RGBA8_UNORM };
+    Core::Format::Enum format = s_Formats[binding.channelCount - 1u];
     u32 uploadChannels = binding.channelCount;
-    if(binding.channelCount == 3u && (device.queryFormatSupport(format) & requiredSupport) != requiredSupport){
+    if(binding.channelCount == 3u && (device.queryFormatSupport(format) & s_RequiredSupport) != s_RequiredSupport){
         format = Core::Format::RGBA8_UNORM;
         uploadChannels = 4u;
     }
-    if((device.queryFormatSupport(format) & requiredSupport) != requiredSupport)
-        return {};
-    auto version = MakeGpuVersion<GpuSdfAtlasVersion>(m_arena, m_graphics, page);
-    if(!version)
-        return {};
+    if((device.queryFormatSupport(format) & s_RequiredSupport) != s_RequiredSupport)
+        return MakeUnexpected(Failure{});
+    auto versionResult = MakeGpuVersion<GpuSdfAtlasVersion>(m_arena, m_graphics, page);
+    if(!versionResult)
+        return MakeUnexpected(versionResult.error());
+    GpuVersion<GpuSdfAtlasVersion> version = Move(*versionResult);
     Core::TextureDesc description;
     description
         .setName(Name("ui.sdf_page")).setWidth(binding.width).setHeight(binding.height)
         .setFormat(format).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
-    version->m_texture = device.createTexture(description);
-    if(!version->m_texture)
-        return {};
-    Core::Alloc::ScratchArena scratch(Name("impl/ecs_ui/gpu/sdf_upload"));
-    Vector<u8, Core::Alloc::ScratchArena> expanded(scratch);
+    auto textureResult = device.createTexture(description);
+    if(textureResult)
+        version->m_texture = Move(*textureResult);
+    else
+        version->m_texture.reset();
+    if(!textureResult)
+        return MakeUnexpected(Failure{});
+    Vector<u8, Core::Alloc::ScratchArena> expanded(scratchArena);
     const u8* uploadData = page->pixels().data();
     usize uploadBytes = page->pixels().size();
     if(uploadChannels != binding.channelCount){
@@ -158,10 +163,11 @@ GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfA
         .finalState = Core::ResourceStates::ShaderResource,
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
-    }))
-        return {};
+    }
+    ))
+        return MakeUnexpected(Failure{});
     if(!version->m_readinessToken.valid() || !version->m_readinessToken.hasPhysicalQueueIdentity())
-        return {};
+        return MakeUnexpected(Failure{});
     // Native accepted upload commands retain their destination image until the physical queue completes.
     // Frame owners retain sampled descriptors; cache eviction therefore releases neither a live image nor a live draw view.
     if(m_sdfCache.size() + m_glyphCache.size() + m_textureCache.size() == s_PaintMaxImages)
@@ -169,18 +175,19 @@ GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfA
     m_sdfCache.push_back(version);
     // Preserve every accepted upload before descriptor publication; retrying a failed descriptor never uploads again.
     if(!__hidden_ui_gpu_sdf::PrepareDescriptor(*version))
-        return {};
-    return version;
+        return MakeUnexpected(Failure{});
+    return Move(version);
 }
 
 bool GpuRendererState::prepareSdfPages(GpuFrameData& frame){
     const auto& pages = frame.m_snapshot.sdfPages();
     frame.m_sdfPages.reserve(pages.size());
+    Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/gpu/sdf_upload"));
     while(frame.m_sdfPages.size() < pages.size()){
-        auto version = prepareSdfPage(pages[frame.m_sdfPages.size()]);
+        auto version = prepareSdfPage(scratchArena, pages[frame.m_sdfPages.size()]);
         if(!version)
             return false;
-        frame.m_sdfPages.push_back(Move(version));
+        frame.m_sdfPages.push_back(Move(*version));
     }
     return true;
 }
@@ -195,23 +202,27 @@ Expected<GpuSdfGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGr
         const auto& page = frame->m_sdfPages[index];
         char identityText[32u];
         const AStringView suffix = FormatDecimal(index, identityText);
-        const Name readyIdentity = DeriveName(Name("ui.sdf_page_ready/"), suffix);
-        const Name textureIdentity = DeriveName(Name("ui.sdf_page/"), suffix);
-        const Core::GpuExternalCompletionId ready = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(readyIdentity).setMarkerLabel("UI SDF Page Upload Completion").setToken(page->m_readinessToken));
-        if(!ready.valid()){
+        const auto readyIdentity = DeriveName(Name("ui.sdf_page_ready/"), suffix);
+        const auto textureIdentity = DeriveName(Name("ui.sdf_page/"), suffix);
+        if(!readyIdentity || !textureIdentity)
+            return MakeUnexpected(Failure{});
+        const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(*readyIdentity).setMarkerLabel("UI SDF Page Upload Completion").setToken(page->m_readinessToken));
+        if(!readyResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: SDF page {} upload completion import failed (queue={}, generation={}, value={})"), index, page->m_readinessToken.physicalQueueIndex, page->m_readinessToken.deviceGeneration, page->m_readinessToken.value);
             return MakeUnexpected(Failure{});
         }
-        const Core::GpuGraphResourceId texture = graph.importTexture(
+        const Core::GpuExternalCompletionId ready = *readyResult;
+        const auto textureResult = graph.importTexture(
             page->m_texture,
-            Core::GpuGraphResourceDesc().setIdentity(textureIdentity).setMarkerLabel("UI Linear SDF Page")
+            Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel("UI Linear SDF Page")
                 .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );
-        if(!texture.valid()){
+        if(!textureResult){
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})"), index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation);
             return MakeUnexpected(Failure{});
         }
+        const Core::GpuGraphResourceId texture = *textureResult;
         resources->push_back(texture);
         uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     }

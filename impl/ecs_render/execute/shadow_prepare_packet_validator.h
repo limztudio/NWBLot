@@ -45,7 +45,7 @@ struct ShadowPreparePacketValidationResult{
 
 class ShadowPreparePacketValidator final : NoCopy{
 public:
-    explicit ShadowPreparePacketValidator(NotNull<RendererFramePipeline*> pipeline);
+    explicit ShadowPreparePacketValidator(NotNull<RendererFramePipeline*> pipeline)noexcept;
 
 
 public:

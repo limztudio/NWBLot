@@ -118,9 +118,9 @@ bool UiTextAreaSmokeScene::seedClipboard(){
         return false;
     m_clipboardToken = {};
     const auto request = m_clipboard.requestWriteText(Core::ClipboardChannel::Clipboard, "ab\r\ncdef\r\nxy");
-    if(request.admission != Core::ClipboardAdmission::Accepted || !request.token.valid())
+    if(!request || !request->valid())
         return false;
-    m_clipboardToken = request.token;
+    m_clipboardToken = *request;
     return true;
 }
 

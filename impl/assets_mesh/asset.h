@@ -8,6 +8,7 @@
 #include "../global.h"
 #include "geometry_payload.h"
 
+#include <core/alloc/scratch.h>
 #include <core/assets/module.h>
 #include <core/mesh/classification.h>
 
@@ -38,7 +39,7 @@ public:
 
 public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
-    [[nodiscard]] bool validatePayload()const;
+    [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
 
 public:
     template<typename... GeometryPayloadArgT>

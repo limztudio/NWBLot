@@ -31,7 +31,7 @@ private:
 
 
 public:
-    explicit CommandBufferResourceReferences(Alloc::GlobalArena& arena);
+    explicit CommandBufferResourceReferences(Alloc::GlobalArena& arena)noexcept;
     ~CommandBufferResourceReferences() = default;
 
 

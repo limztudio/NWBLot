@@ -39,6 +39,8 @@ struct MeshSkinningRuntimeInstance{
     using MeshletPrimitiveIndexVector = Vector<u8, Core::Alloc::GlobalArena>;
     using AttributeSkinVector = Vector<u32, Core::Alloc::GlobalArena>;
 
+
+public:
     RuntimeMeshHandle handle;
     Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
     u32 meshClass = Core::Mesh::MeshClass::Skinned;
@@ -86,7 +88,9 @@ struct MeshSkinningRuntimeInstance{
     u32 editRevision = 0;
     RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
 
-    explicit MeshSkinningRuntimeInstance(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit MeshSkinningRuntimeInstance(Core::Alloc::GlobalArena& arena)noexcept
         : restPositions(arena)
         , restNormals(arena)
         , restTangents(arena)
@@ -106,7 +110,7 @@ struct MeshSkinningRuntimeInstance{
 
 
 public:
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return
             entity.valid()
             && handle.valid()

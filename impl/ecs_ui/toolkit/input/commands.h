@@ -34,9 +34,12 @@ struct InputSource{
     friend bool operator==(const InputSource& lhs, const InputSource& rhs)noexcept = default;
 
 
+public:
     u64 device = 0u;
     u64 control = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return control != 0u; }
 };
 

@@ -21,7 +21,7 @@ namespace __hidden_ui_command_owner_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-[[nodiscard]] static HitTarget Editor(){
+[[nodiscard]] static HitTarget Editor()noexcept{
     HitTarget target;
     target.id = { 1u };
     target.declarationGeneration = 7u;
@@ -33,7 +33,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] static HitTarget List(const u64 id = 2u, const f32 x = 0.0f){
+[[nodiscard]] static HitTarget List(const u64 id = 2u, const f32 x = 0.0f)noexcept{
     HitTarget target;
     target.id = { id };
     target.declarationGeneration = 11u;
@@ -46,7 +46,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] static InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const bool repeat = false){
+[[nodiscard]] static InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const bool repeat = false)noexcept{
     InputEvent event;
     event.type = type;
     event.key = key;
@@ -108,7 +108,7 @@ protected:
         return m_router.consumeControlAction(target.id, target.declarationGeneration, target.control);
     }
 
-    [[nodiscard]] PopupScope popup(){
+    [[nodiscard]] PopupScope popup()noexcept{
         PopupScope scope;
         scope.token = { { 10u }, 12u, 13u, 14u };
         scope.bounds = { 0.0f, 0.0f, 300.0f, 200.0f };

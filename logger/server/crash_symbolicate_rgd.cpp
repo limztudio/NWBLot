@@ -35,14 +35,21 @@ inline constexpr AStringView s_ReportDetailPrefix = "detail=";
 
 
 // Expected decode failures retain the ingest report; unexpected exceptions remain terminal.
-void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     static_cast<void>(config);
 
-    const Path rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
-    if(!PathIsRegularFile(rgdCapture))
-        return; // no Radeon GPU Detective capture in this package: nothing to decode (silent skip).
+    const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
+    const auto regularCapture = IsRegularFile(rgdCapture);
+    if(!regularCapture){
+        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), StringConvert(regularCapture.error().message()));
+        outReport += s_GpuDetectiveSectionHeader;
+        outReport += "status=inspect_failed\n";
+        return;
+    }
+    if(!*regularCapture)
+        return; // An absent capture has no decode work.
 
-    const AString<LogArena> capturePath = PathToString<char>(arena, rgdCapture);
+    const AString<Core::Alloc::ScratchArena> capturePath = PathToString<char>(arena, rgdCapture);
 
     const auto decoded = Rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()));
     if(!decoded){

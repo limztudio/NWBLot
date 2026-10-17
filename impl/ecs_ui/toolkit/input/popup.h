@@ -24,6 +24,8 @@ struct PopupToken{
     u64 instanceGeneration = 0u;
     u64 openGeneration = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return widget.valid() && declarationGeneration != 0u && instanceGeneration != 0u && openGeneration != 0u;
     }

@@ -44,22 +44,23 @@ protected:
         return m_context.beginFrame(generation) && m_context.beginRoot({ 1401u, 1u });
     }
 
-    [[nodiscard]] PopupDeclaration reserve(const AStringView key, const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }){
+    [[nodiscard]] Expected<PopupDeclaration> reserve(const AStringView key, const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }){
         PopupDeclaration result;
-        const WidgetState* owner = m_context.declare(key, WidgetKind::Popup);
-        EXPECT_NE(owner, nullptr);
+        const auto owner = m_context.declare(key, WidgetKind::Popup);
+        EXPECT_TRUE(owner);
         if(!owner)
-            return result;
-        result.owner = *owner;
-        result.scope.token = { owner->id, owner->declarationGeneration, 900u, 1u };
+            return MakeUnexpected(owner.error());
+        result.owner = **owner;
+        result.scope.token = { (*owner)->id, (*owner)->declarationGeneration, 900u, 1u };
         result.scope.bounds = bounds;
         result.scope.viewport = { 0.0f, 0.0f, 400.0f, 300.0f };
         result.scope.parent = m_context.popupToken();
         EXPECT_TRUE(m_context.registerPopupScope(result.owner, result.scope));
-        const WidgetState* action = m_context.declarePart(result.owner, "action", WidgetKind::Button);
-        EXPECT_NE(action, nullptr);
-        if(action)
-            result.action = *action;
+        const auto action = m_context.declarePart(result.owner, "action", WidgetKind::Button);
+        EXPECT_TRUE(action);
+        if(!action)
+            return MakeUnexpected(action.error());
+        result.action = **action;
         return result;
     }
 
@@ -98,11 +99,15 @@ protected:
 
 TEST_F(UiNestedPopupContextTests, NestedActivationRestoresExactParentScopeAndLayer){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     EXPECT_FALSE(m_context.popupToken().valid());
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
     ASSERT_TRUE(publish(parent));
-    const PopupDeclaration child = reserve("child", { 180.0f, 120.0f, 100.0f, 70.0f });
+    const auto childResult = reserve("child", { 180.0f, 120.0f, 100.0f, 70.0f });
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     EXPECT_EQ(child.scope.parent, parent.scope.token);
     EXPECT_EQ(m_context.popupToken(), parent.scope.token);
     EXPECT_EQ(m_context.popupLayer(), 1u);
@@ -126,10 +131,16 @@ TEST_F(UiNestedPopupContextTests, NestedActivationRestoresExactParentScopeAndLay
 
 TEST_F(UiNestedPopupContextTests, ReservationOrderControlsLayersAcrossReactivationAndReversePaintOrder){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent", { 30.0f, 30.0f, 150.0f, 110.0f });
+    const auto parentResult = reserve("parent", { 30.0f, 30.0f, 150.0f, 110.0f });
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
-    PopupDeclaration first = reserve("first", { 1.0f, 1.0f, 1.0f, 1.0f });
-    PopupDeclaration second = reserve("second", { 1.0f, 1.0f, 1.0f, 1.0f });
+    const auto firstResult = reserve("first", { 1.0f, 1.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(firstResult);
+    PopupDeclaration first = *firstResult;
+    const auto secondResult = reserve("second", { 1.0f, 1.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(secondResult);
+    PopupDeclaration second = *secondResult;
     EXPECT_EQ(m_context.popupLayer(first.scope.token), 2u);
     EXPECT_EQ(m_context.popupLayer(second.scope.token), 3u);
     ASSERT_TRUE(m_context.endPopupScope(true));
@@ -160,13 +171,19 @@ TEST_F(UiNestedPopupContextTests, ReservationOrderControlsLayersAcrossReactivati
 
 TEST_F(UiNestedPopupContextTests, HiddenAncestorDropsReservedDescendantsAndTheirPublishedTargets){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
     ASSERT_TRUE(publish(parent));
-    const PopupDeclaration child = reserve("child");
+    const auto childResult = reserve("child");
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
     ASSERT_TRUE(publish(child));
-    const PopupDeclaration deferred = reserve("deferred");
+    const auto deferredResult = reserve("deferred");
+    ASSERT_TRUE(deferredResult);
+    const PopupDeclaration deferred = *deferredResult;
     ASSERT_TRUE(m_context.endPopupScope(true));
     ASSERT_TRUE(m_context.endPopupScope(false));
     EXPECT_FALSE(m_context.hasPopupScope(parent.scope.token));
@@ -181,15 +198,21 @@ TEST_F(UiNestedPopupContextTests, HiddenAncestorDropsReservedDescendantsAndTheir
 
 TEST_F(UiNestedPopupContextTests, DiscardingInactiveFamilyPreservesAnUnrelatedTopLevelScopeAndItsLayer){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
     ASSERT_TRUE(publish(parent));
-    const PopupDeclaration child = reserve("child");
+    const auto childResult = reserve("child");
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
     ASSERT_TRUE(publish(child));
     ASSERT_TRUE(m_context.endPopupScope(true));
     ASSERT_TRUE(m_context.endPopupScope(true));
-    const PopupDeclaration unrelated = reserve("unrelated", { 240.0f, 170.0f, 100.0f, 70.0f });
+    const auto unrelatedResult = reserve("unrelated", { 240.0f, 170.0f, 100.0f, 70.0f });
+    ASSERT_TRUE(unrelatedResult);
+    const PopupDeclaration unrelated = *unrelatedResult;
     ASSERT_TRUE(m_context.activatePopupScope(unrelated.scope.token));
     ASSERT_TRUE(publish(unrelated));
     ASSERT_TRUE(m_context.endPopupScope(true));
@@ -209,9 +232,13 @@ TEST_F(UiNestedPopupContextTests, DiscardingInactiveFamilyPreservesAnUnrelatedTo
 
 TEST_F(UiNestedPopupContextTests, DiscardingInactiveChildKeepsItsActiveParentBalanced){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
-    const PopupDeclaration child = reserve("child");
+    const auto childResult = reserve("child");
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     m_context.discardPopupScope(child.scope.token);
     EXPECT_FALSE(m_context.failed());
     EXPECT_EQ(m_context.popupToken(), parent.scope.token);
@@ -226,9 +253,13 @@ TEST_F(UiNestedPopupContextTests, DiscardingInactiveChildKeepsItsActiveParentBal
 
 TEST_F(UiNestedPopupContextTests, DiscardingAnActiveAncestorFailsWithoutRemovingItsActivation){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
-    const PopupDeclaration child = reserve("child");
+    const auto childResult = reserve("child");
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
     m_context.discardPopupScope(parent.scope.token);
     EXPECT_TRUE(m_context.failed());
@@ -241,9 +272,13 @@ TEST_F(UiNestedPopupContextTests, DiscardingAnActiveAncestorFailsWithoutRemoving
 
 TEST_F(UiNestedPopupContextTests, ChildCannotActivateWithoutItsExactCurrentParent){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
-    const PopupDeclaration child = reserve("child");
+    const auto childResult = reserve("child");
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     ASSERT_TRUE(m_context.endPopupScope(true));
     EXPECT_FALSE(m_context.activatePopupScope(child.scope.token));
     EXPECT_TRUE(m_context.failed());
@@ -253,11 +288,13 @@ TEST_F(UiNestedPopupContextTests, ChildCannotActivateWithoutItsExactCurrentParen
 
 TEST_F(UiNestedPopupContextTests, RegistrationRejectsAnAncestorTokenFromAnotherOpenEpoch){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
-    const WidgetState* declared = m_context.declare("child", WidgetKind::Popup);
-    ASSERT_NE(declared, nullptr);
-    const WidgetState child = *declared;
+    const auto declared = m_context.declare("child", WidgetKind::Popup);
+    ASSERT_TRUE(declared);
+    const WidgetState child = **declared;
     PopupScope invalid = parent.scope;
     invalid.token = { child.id, child.declarationGeneration, 901u, 1u };
     invalid.parent = parent.scope.token;
@@ -270,9 +307,13 @@ TEST_F(UiNestedPopupContextTests, RegistrationRejectsAnAncestorTokenFromAnotherO
 
 TEST_F(UiNestedPopupContextTests, FinalGeometryCannotRebindParentTokenOrReservedLayer){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
-    const PopupDeclaration child = reserve("child");
+    const auto childResult = reserve("child");
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     PopupScope invalid = child.scope;
     invalid.layer = 1u;
     EXPECT_FALSE(m_context.updatePopupScope(child.scope.token, invalid));
@@ -280,9 +321,13 @@ TEST_F(UiNestedPopupContextTests, FinalGeometryCannotRebindParentTokenOrReserved
     EXPECT_EQ(m_context.popupLayer(child.scope.token), 2u);
     m_context.abandonFrame();
     ASSERT_TRUE(begin(2u));
-    const PopupDeclaration nextParent = reserve("parent");
+    const auto nextParentResult = reserve("parent");
+    ASSERT_TRUE(nextParentResult);
+    const PopupDeclaration nextParent = *nextParentResult;
     ASSERT_TRUE(m_context.activatePopupScope(nextParent.scope.token));
-    const PopupDeclaration nextChild = reserve("child");
+    const auto nextChildResult = reserve("child");
+    ASSERT_TRUE(nextChildResult);
+    const PopupDeclaration nextChild = *nextChildResult;
     invalid = nextChild.scope;
     invalid.parent = {};
     EXPECT_FALSE(m_context.updatePopupScope(nextChild.scope.token, invalid));
@@ -292,7 +337,9 @@ TEST_F(UiNestedPopupContextTests, FinalGeometryCannotRebindParentTokenOrReserved
 
 TEST_F(UiNestedPopupContextTests, InvalidFinalGeometryCannotPublishThePreparedFamily){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     PopupScope invalid = parent.scope;
     invalid.bounds.width = 0.0f;
     EXPECT_FALSE(m_context.updatePopupScope(parent.scope.token, invalid));
@@ -305,10 +352,14 @@ TEST_F(UiNestedPopupContextTests, InvalidFinalGeometryCannotPublishThePreparedFa
 
 TEST_F(UiNestedPopupContextTests, AcceptedChildActionCanOnlyBeConsumedDuringThatChildActivation){
     ASSERT_TRUE(begin(1u));
-    const PopupDeclaration parent = reserve("parent");
+    const auto parentResult = reserve("parent");
+    ASSERT_TRUE(parentResult);
+    const PopupDeclaration parent = *parentResult;
     ASSERT_TRUE(m_context.activatePopupScope(parent.scope.token));
     ASSERT_TRUE(publish(parent));
-    const PopupDeclaration child = reserve("child", { 180.0f, 120.0f, 100.0f, 70.0f });
+    const auto childResult = reserve("child", { 180.0f, 120.0f, 100.0f, 70.0f });
+    ASSERT_TRUE(childResult);
+    const PopupDeclaration child = *childResult;
     ASSERT_TRUE(m_context.activatePopupScope(child.scope.token));
     ASSERT_TRUE(publish(child));
     ASSERT_TRUE(m_context.endPopupScope(true));
@@ -319,9 +370,13 @@ TEST_F(UiNestedPopupContextTests, AcceptedChildActionCanOnlyBeConsumedDuringThat
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 185.0f, 125.0f } }).pointerConsumed);
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     ASSERT_TRUE(begin(2u));
-    const PopupDeclaration nextParent = reserve("parent");
+    const auto nextParentResult = reserve("parent");
+    ASSERT_TRUE(nextParentResult);
+    const PopupDeclaration nextParent = *nextParentResult;
     ASSERT_TRUE(m_context.activatePopupScope(nextParent.scope.token));
-    const PopupDeclaration nextChild = reserve("child", child.scope.bounds);
+    const auto nextChildResult = reserve("child", child.scope.bounds);
+    ASSERT_TRUE(nextChildResult);
+    const PopupDeclaration nextChild = *nextChildResult;
     EXPECT_EQ(nextChild.action.id, child.action.id);
     EXPECT_FALSE(m_context.takeActivation(nextChild.action, true));
     ASSERT_EQ(m_context.input().actions().size(), 1u);
@@ -334,14 +389,16 @@ TEST_F(UiNestedPopupContextTests, EighthNestedActivationIsBoundedAndNinthReserva
     ASSERT_TRUE(begin(1u));
     const AStringView keys[]{ "popup0", "popup1", "popup2", "popup3", "popup4", "popup5", "popup6", "popup7" };
     for(usize index = 0u; index < s_InputMaxPopups; ++index){
-        const PopupDeclaration popup = reserve(keys[index]);
+        const auto popupResult = reserve(keys[index]);
+        ASSERT_TRUE(popupResult);
+        const PopupDeclaration popup = *popupResult;
         ASSERT_TRUE(m_context.activatePopupScope(popup.scope.token));
         ASSERT_TRUE(publish(popup));
         EXPECT_EQ(m_context.popupLayer(), static_cast<u32>(index + 1u));
     }
-    const WidgetState* declared = m_context.declare("overflow", WidgetKind::Popup);
-    ASSERT_NE(declared, nullptr);
-    const WidgetState overflow = *declared;
+    const auto declared = m_context.declare("overflow", WidgetKind::Popup);
+    ASSERT_TRUE(declared);
+    const WidgetState overflow = **declared;
     PopupScope scope;
     scope.token = { overflow.id, overflow.declarationGeneration, 901u, 1u };
     scope.parent = m_context.popupToken();

@@ -32,6 +32,8 @@ struct ShapedRun{
     PaintVector<ShapedGlyph> glyphs;
     FontMetrics metrics;
 
+
+public:
     explicit ShapedRun(Core::Alloc::GlobalArena& arena)noexcept
         : glyphs(arena)
     {}
@@ -62,12 +64,12 @@ private:
 
 
 public:
-    explicit TextShaper(Core::Alloc::GlobalArena& arena);
+    explicit TextShaper(Core::Alloc::GlobalArena& arena)noexcept;
     virtual ~TextShaper()noexcept override = default;
 
 
 public:
-    [[nodiscard]] bool setFonts(const FontSource* sources, usize count);
+    [[nodiscard]] bool setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count);
     [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
 
 

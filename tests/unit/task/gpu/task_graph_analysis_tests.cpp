@@ -39,7 +39,10 @@ namespace Graphics = Core;
 inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
 
 
-[[nodiscard]] static Graphics::GpuTaskId AddTask(
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<Graphics::GpuTaskId> AddTask(
     Graphics::GpuTaskGraph& graph,
     const usize taskIndex,
     const Graphics::GpuTaskId* const dependencies = nullptr,
@@ -49,7 +52,10 @@ inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
 ){
     char taskIndexBuffer[32u] = {};
     Graphics::GpuTaskDesc desc;
-    desc.setIdentity(DeriveName(Name("tests/task_graph_analysis/task_"), FormatDecimal(taskIndex, taskIndexBuffer))).setMarkerLabel("Analysis Test Task").setDependencies(dependencies, dependencyCount).setResourceUses(resourceUses, resourceUseCount);
+    const auto derivedNameAt55Col21 = DeriveName(Name("tests/task_graph_analysis/task_"), FormatDecimal(taskIndex, taskIndexBuffer));
+    if(!derivedNameAt55Col21)
+        return MakeUnexpected(Failure{});
+    desc.setIdentity(*derivedNameAt55Col21).setMarkerLabel("Analysis Test Task").setDependencies(dependencies, dependencyCount).setResourceUses(resourceUses, resourceUseCount);
     return graph.addTask(desc);
 }
 
@@ -181,7 +187,11 @@ static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize task
             const usize sourceIndex = chainIndex - offset - 1u;
             dependencies[offset] = { .generation = generation, .index = static_cast<u32>(reversed ? taskCount - sourceIndex - 1u : sourceIndex), };
         }
-        ASSERT_TRUE(AddTask(graph, declarationIndex, dependencies, dependencyCount).valid());
+        {
+            const auto gpuAdmissionAt187 = AddTask(graph, declarationIndex, dependencies, dependencyCount);
+            ASSERT_TRUE(gpuAdmissionAt187);
+            ASSERT_TRUE(gpuAdmissionAt187->valid());
+        }
     }
 }
 
@@ -215,7 +225,11 @@ static void DeclareReadyOrderGraph(Graphics::GpuTaskGraph& graph, const usize ta
         const bool hasDependency = shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u < taskCount : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex < half : taskIndex >= half;
         const usize producerIndex = !hasDependency ? 0u : shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex + half : taskIndex - half;
         const Graphics::GpuTaskId dependency{ .generation = generation, .index = static_cast<u32>(producerIndex) };
-        ASSERT_TRUE(AddTask(graph, taskIndex, hasDependency ? &dependency : nullptr, hasDependency ? 1u : 0u).valid());
+        {
+            const auto gpuAdmissionAt221 = AddTask(graph, taskIndex, hasDependency ? &dependency : nullptr, hasDependency ? 1u : 0u);
+            ASSERT_TRUE(gpuAdmissionAt221);
+            ASSERT_TRUE(gpuAdmissionAt221->valid());
+        }
     }
 }
 
@@ -259,8 +273,16 @@ TEST(GpuTaskGraphAnalysis, RetainsCycleDiagnosticsAfterBackwardReleasePrefixExha
     }
     const Graphics::GpuTaskId first{ .generation = generation, .index = s_PrefixCount };
     const Graphics::GpuTaskId second{ .generation = generation, .index = s_PrefixCount + 1u };
-    ASSERT_EQ(AddTask(graph, s_PrefixCount, &second, 1u), first);
-    ASSERT_EQ(AddTask(graph, s_PrefixCount + 1u, &first, 1u), second);
+    {
+        const auto gpuAdmissionAt265 = AddTask(graph, s_PrefixCount, &second, 1u);
+        ASSERT_TRUE(gpuAdmissionAt265);
+        ASSERT_EQ(*gpuAdmissionAt265, first);
+    }
+    {
+        const auto gpuAdmissionAt266 = AddTask(graph, s_PrefixCount + 1u, &first, 1u);
+        ASSERT_TRUE(gpuAdmissionAt266);
+        ASSERT_EQ(*gpuAdmissionAt266, second);
+    }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
     Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
@@ -337,9 +359,12 @@ TEST(GpuTaskGraphAnalysis, MatchesIndependentReferenceForPermutedDagsAndDuplicat
                         .resource = {},
                         .resourceVersion = {},
                         .hazard = Graphics::GpuTaskHazardType::Explicit,
-                    });
+                    }
+                    );
                 }
-                const Graphics::GpuTaskId task = AddTask(graph, consumerIndex, dependencies.data(), dependencies.size());
+                const auto taskResult = AddTask(graph, consumerIndex, dependencies.data(), dependencies.size());
+                ASSERT_TRUE(taskResult);
+                const Graphics::GpuTaskId task = *taskResult;
                 ASSERT_TRUE(task.valid());
                 EXPECT_EQ(task.index, consumerIndex);
                 EXPECT_EQ(task.generation, generation);
@@ -361,12 +386,16 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
     Graphics::GpuGraphResourceId resources[3u] = {};
     for(usize resourceIndex = 0u; resourceIndex < LengthOf(resources); ++resourceIndex){
         char resourceIndexBuffer[32u] = {};
-        resources[resourceIndex] = graph.importHazardDomain(
+        const auto derivedNameAt388Col29 = DeriveName(Name("tests/task_graph_analysis/resource_"), FormatDecimal(resourceIndex, resourceIndexBuffer));
+        ASSERT_TRUE(derivedNameAt388Col29);
+        const auto gpuAdmissionAt368 = graph.importHazardDomain(
             Graphics::GpuGraphResourceDesc{}
-                .setIdentity(DeriveName(Name("tests/task_graph_analysis/resource_"), FormatDecimal(resourceIndex, resourceIndexBuffer)))
+                .setIdentity(*derivedNameAt388Col29)
                 .setMarkerLabel("Analysis Hazard Domain")
                 .setType(Graphics::GpuGraphResourceType::HazardDomain)
         );
+        ASSERT_TRUE(gpuAdmissionAt368);
+        resources[resourceIndex] = *gpuAdmissionAt368;
         ASSERT_TRUE(resources[resourceIndex].valid());
     }
 
@@ -384,7 +413,9 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
             uses[resourceIndex * 2u + 1u] = uses[resourceIndex * 2u];
         }
         const Graphics::GpuTaskId dependencies[] = { tasks[0u], tasks[0u] };
-        tasks[taskIndex] = AddTask(graph, taskIndex, dependencies, taskIndex == 1u ? 2u : 0u, uses, resourceCount * 2u);
+        const auto gpuAdmissionAt391 = AddTask(graph, taskIndex, dependencies, taskIndex == 1u ? 2u : 0u, uses, resourceCount * 2u);
+        ASSERT_TRUE(gpuAdmissionAt391);
+        tasks[taskIndex] = *gpuAdmissionAt391;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
 
@@ -421,7 +452,9 @@ TEST(GpuTaskGraphAnalysis, EmptySchedulingReachabilityAvoidsStorageAndResetsAcro
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskId tasks[s_TaskCount] = {};
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        tasks[taskIndex] = AddTask(graph, taskIndex);
+        const auto gpuAdmissionAt428 = AddTask(graph, taskIndex);
+        ASSERT_TRUE(gpuAdmissionAt428);
+        tasks[taskIndex] = *gpuAdmissionAt428;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -469,9 +502,15 @@ TEST(GpuTaskGraphAnalysis, EmptySchedulingReachabilityAvoidsStorageAndResetsAcro
     }
 
     Graphics::GpuTaskGraph dependentGraph(testArena.arena);
-    const Graphics::GpuTaskId producer = AddTask(dependentGraph, 0u);
-    const Graphics::GpuTaskId consumer = AddTask(dependentGraph, 1u, &producer, 1u);
-    const Graphics::GpuTaskId independent = AddTask(dependentGraph, 2u);
+    const auto producerResult = AddTask(dependentGraph, 0u);
+    ASSERT_TRUE(producerResult);
+    const Graphics::GpuTaskId producer = *producerResult;
+    const auto consumerResult = AddTask(dependentGraph, 1u, &producer, 1u);
+    ASSERT_TRUE(consumerResult);
+    const Graphics::GpuTaskId consumer = *consumerResult;
+    const auto independentResult = AddTask(dependentGraph, 2u);
+    ASSERT_TRUE(independentResult);
+    const Graphics::GpuTaskId independent = *independentResult;
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
     ASSERT_TRUE(independent.valid());

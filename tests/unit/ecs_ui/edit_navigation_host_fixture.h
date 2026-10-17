@@ -24,7 +24,7 @@ using namespace UiEditBoxTestSupport;
 struct NavigationCall{
     AString<Alloc::GlobalArena> text;
     Ui::EditNavigationSnapshot navigation;
-    Ui::EditNavigationResult result;
+    Expected<Ui::EditNavigationResult> result = MakeUnexpected(Failure{});
     u64 selectionGeneration = 0u;
     usize caret = 0u;
     f32 viewportHeight = 0.0f;
@@ -45,7 +45,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Ui::EditNavigationResult resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight)override{
+    [[nodiscard]] virtual Expected<Ui::EditNavigationResult> resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight)override{
         records.emplace_back(m_arena);
         NavigationCall& record = records.back();
         record.text.assign(model.text().data(), model.text().size());
@@ -54,7 +54,7 @@ public:
         record.caret = model.caret();
         record.viewportHeight = viewportHeight;
 
-        Ui::EditNavigationResult result;
+        Expected<Ui::EditNavigationResult> result = MakeUnexpected(Failure{});
         Ui::EditBoxView view(m_arena);
         Expected<Ui::TextLayout, Ui::TextLayoutStatus::Enum> layout = MakeUnexpected(Ui::TextLayoutStatus::InvalidParameters);
         if(view.snapshot(model))
@@ -62,18 +62,16 @@ public:
         if(layout && view.adoptLayout(Move(*layout))){
             const auto caret = view.caretGeometry().caretRect(view.displayCaret());
             if(caret){
-                result.preferredX = navigation.valid ? navigation.preferredX : caret->x;
+                const f32 preferredX = navigation.valid ? navigation.preferredX : caret->x;
                 Expected<usize> target = MakeUnexpected(Failure{});
                 if(direction == Ui::EditNavigationDirection::Up || direction == Ui::EditNavigationDirection::Down)
-                    target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == Ui::EditNavigationDirection::Down, result.preferredX);
+                    target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == Ui::EditNavigationDirection::Down, preferredX);
                 else{
                     const f32 distance = direction == Ui::EditNavigationDirection::PageDown ? viewportHeight : -viewportHeight;
-                    target = view.caretGeometry().hitTest({ result.preferredX, caret->y + caret->height * 0.5f + distance });
+                    target = view.caretGeometry().hitTest({ preferredX, caret->y + caret->height * 0.5f + distance });
                 }
-                if(target){
-                    result.resolved = true;
-                    result.committedByte = *target;
-                }
+                if(target)
+                    result = Ui::EditNavigationResult{ *target, preferredX };
             }
         }
         if(forceResult)
@@ -91,7 +89,7 @@ public:
 public:
     Vector<NavigationCall, Alloc::GlobalArena> records;
     Function<void()> hook;
-    Ui::EditNavigationResult forcedResult;
+    Expected<Ui::EditNavigationResult> forcedResult = MakeUnexpected(Failure{});
     bool forceResult = false;
 
 
@@ -126,7 +124,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] usize count(const Ui::EditAction::Enum action)const{
+    [[nodiscard]] usize count(const Ui::EditAction::Enum action)const noexcept{
         usize result = 0u;
         for(const auto& record : records)
             result += record.action == action ? 1u : 0u;
@@ -170,10 +168,10 @@ protected:
             return false;
         if(!publishEdit(model, options, bounds, previousScroll))
             return false;
-        const Ui::WidgetState* button = m_context.declare("other", Ui::WidgetKind::Button);
+        const auto button = m_context.declare("other", Ui::WidgetKind::Button);
         if(!button)
             return false;
-        m_otherWidget = *button;
+        m_otherWidget = **button;
         Ui::HitTarget other;
         other.rectangle = { 230.0f, 20.0f, 100.0f, 30.0f };
         other.clip = { 0.0f, 0.0f, 500.0f, 200.0f };

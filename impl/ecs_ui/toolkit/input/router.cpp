@@ -3,7 +3,6 @@
 
 
 #include "router.h"
-
 #include "../rect_math.h"
 
 #include <global/simplemath.h>
@@ -149,7 +148,8 @@ bool InputRouter::commitTargets(const HitTarget* targets, const usize count, con
     }
     Sort(m_stagedLookup.begin(), m_stagedLookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
         return lhs.value < rhs.value;
-    });
+    }
+    );
     for(usize index = 1u; index < m_stagedLookup.size(); ++index){
         if(m_stagedLookup[index - 1u].value == m_stagedLookup[index].value)
             return false;
@@ -310,7 +310,8 @@ void InputRouter::rebuildLookup(){
         m_lookup.push_back({ m_targets[index].id.value, static_cast<u32>(index) });
     Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
         return lhs.value < rhs.value;
-    });
+    }
+    );
 }
 
 void InputRouter::reconcileTargets()noexcept{
@@ -405,7 +406,8 @@ void InputRouter::appendActivation(const HitTarget& target, const InputActionSou
     }
     m_actions.push_back({
         { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence }, origin, target.popup, target.control, inputSource
-    });
+    }
+    );
     ++m_nextActionSequence;
 }
 

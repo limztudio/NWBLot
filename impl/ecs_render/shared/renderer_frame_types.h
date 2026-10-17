@@ -67,6 +67,9 @@ struct AvboitFrameTargets{
     Core::BufferHandle controlBuffer;
     Core::BufferHandle extinctionBuffer;
     Core::BufferHandle extinctionOverflowBuffer;
+
+
+public:
     [[nodiscard]] bool valid()const noexcept{
 #if defined(NWB_DEBUG)
         return
@@ -144,6 +147,8 @@ struct DeferredLightingGraphResources{
     Core::BufferHandle sceneShadingBuffer;
     Core::BufferHandle lightBuffer;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
 };
 
@@ -311,6 +316,8 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle csgRemovedIntervalCount = Core::GpuDescriptorHandle::Invalid();
     bool slotsUploaded = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return
             slotsBuffer != nullptr
@@ -404,6 +411,8 @@ struct DeferredLaggedLightingHistoryResources{
     u64 generation = 0u;
     bool slotsUploaded = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return
             shadowVisibility != nullptr
@@ -510,6 +519,8 @@ struct DeferredFrameTargets{
     DeferredLaggedLightingHistoryResources laggedLightingHistory;
     AvboitFrameTargets avboit;
 
+
+public:
     [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{
         return
             csgCapNormalFormat != Core::Format::UNKNOWN

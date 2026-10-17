@@ -29,6 +29,10 @@ WaylandClipboardService::Offer::~Offer(){
         wl_data_offer_destroy(static_cast<wl_data_offer*>(handle));
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 WaylandClipboardService::Source::~Source(){
     if(!handle)
         return;
@@ -242,11 +246,11 @@ void WaylandClipboardService::sendSource(Source& source, const int fd){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<IClipboardService> CreateWaylandClipboardService(Alloc::GlobalArena& arena, wl_display& display){
+Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandClipboardService(Alloc::GlobalArena& arena, wl_display& display){
     auto service = MakeGlobalUnique<WaylandClipboardService>(arena, arena, display);
-    if(!service->initialize()){
+    if(!service || !service->initialize()){
         NWB_LOGGER_ERROR(NWB_TEXT("Wayland clipboard initialization failed"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     return service;
 }

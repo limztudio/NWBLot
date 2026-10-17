@@ -215,6 +215,7 @@ struct RtShadowState{
     bool m_swShadowDispatchLogged = false;
 
 
+public:
     // Arena-backed tables and caches must be constructed with the renderer arena.
     explicit RtShadowState(Core::Alloc::GlobalArena& arena)
         : m_csgTraceContextReadSubmissionTokens(arena)
@@ -306,8 +307,6 @@ struct RtCausticState{
     u32 m_causticLightCount = 0u;
     // Splat-space EMA avoids image-space reprojection ghosts; resolve normalizes steady-state brightness.
     f32 m_causticTemporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
-    // Accepted updates select bootstrap then converged phases; rollback restores this counter.
-    u32 m_causticTemporalReuseFrameCount = 0u;
 
     bool m_causticEmissionGateLogged = false;
     bool m_causticGeometryDownsamplePipelineFailed = false;

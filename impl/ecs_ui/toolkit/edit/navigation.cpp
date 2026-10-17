@@ -26,9 +26,11 @@ namespace RunClass{
 };
 
 static bool IsWhitespace(const u32 scalar)noexcept{
-    return (scalar >= 0x9u && scalar <= 0xDu) || scalar == 0x20u || scalar == 0x85u || scalar == 0xA0u
+    return
+        (scalar >= 0x9u && scalar <= 0xDu) || scalar == 0x20u || scalar == 0x85u || scalar == 0xA0u
         || scalar == 0x1680u || (scalar >= 0x2000u && scalar <= 0x200Au) || scalar == 0x2028u
-        || scalar == 0x2029u || scalar == 0x202Fu || scalar == 0x205Fu || scalar == 0x3000u;
+        || scalar == 0x2029u || scalar == 0x202Fu || scalar == 0x205Fu || scalar == 0x3000u
+    ;
 }
 
 static RunClass::Enum Classify(const AStringView text, const usize offset)noexcept{

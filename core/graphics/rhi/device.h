@@ -7,9 +7,11 @@
 
 #include "coopvec.h"
 #include "hardware_ray_tracing_policy.h"
-#include "gpu_descriptor_heap.h"
 
 #include <core/task/cpu/scheduler.h>
+
+#include "gpu_descriptor_heap.h"
+
 #include <core/filesystem/factory.h>
 
 
@@ -54,6 +56,8 @@ struct QueueSubmissionNativeSignal{
     Object semaphore = Object(u64{0u});
     u64 value = 0u;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return semaphore.integer != 0u; }
 };
 
@@ -64,16 +68,17 @@ using QueueSubmissionPreSubmitCallback = Expected<QueueSubmissionNativeSignal>(*
 using QueueSubmissionResolvedCallback = bool(*) (void* context, u64 identity, const QueueSubmissionToken& submissionToken)noexcept;
 
 struct QueueSubmissionPreSubmitHook{
-private:
-    [[nodiscard]] static bool IgnoreResolution(void*, u64, const QueueSubmissionToken&)noexcept{ return true; }
-
-
-public:
     void* context = nullptr;
     u64 identity = 0u;
     QueueSubmissionPreSubmitCallback invoke = nullptr;
     QueueSubmissionResolvedCallback resolved = &QueueSubmissionPreSubmitHook::IgnoreResolution;
 
+
+private:
+    [[nodiscard]] static bool IgnoreResolution(void*, u64, const QueueSubmissionToken&)noexcept{ return true; }
+
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
@@ -85,6 +90,8 @@ struct QueueSubmissionDesc{
     // Error-recovery paths may require an exact queue timeline submission even after earlier work consumed every pending wait. Normal empty submissions retain their no-op behavior unless this is explicit.
     bool forceNativeSubmission = false;
 
+
+public:
     constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count)noexcept{
         waitTokens = value;
         waitTokenCount = count;
@@ -124,6 +131,8 @@ struct CommandListParameters{
     u32 recordingWorkerIndex = 0u;
     // NOTE: u32 kept last; append new fields above the domain pair. queueType stays first (reset in setQueueType).
 
+
+public:
     constexpr CommandListParameters& setQueueType(CommandQueue::Enum value)noexcept{
         queueType = value;
         physicalQueue = {};
@@ -165,7 +174,7 @@ class GpuCrashTracker;
 // One GpuCrashMarkerTracker per API-level command list; 64-bit payload via device-lifetime history.
 class GpuCrashMarkerTracker : NoCopy{
 public:
-    GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsArena& arena);
+    GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsArena& arena)noexcept;
 
 
 public:
@@ -191,7 +200,7 @@ class GpuCrashTracker : NoCopy{
 
 
 public:
-    explicit GpuCrashTracker(GraphicsArena& arena);
+    explicit GpuCrashTracker(GraphicsArena& arena)noexcept;
 
 
 public:
@@ -225,7 +234,9 @@ struct GpuCrashReport{
     // Optional vendor-neutral binary GPU crash dump (e.g. an NVIDIA Aftermath '.nv-gpudmp'), captured alongside the text 'details'. Non-owning view into the capturer's buffer; valid only for the duration of the synchronous DispatchGpuCrash call.
     GpuCrashDumpKind::Enum binaryDumpKind = GpuCrashDumpKind::None;
 
-    explicit GpuCrashReport(Alloc::PersistentArena& arena)
+
+public:
+    explicit GpuCrashReport(Alloc::PersistentArena& arena)noexcept
         : context(arena)
         , details(arena)
     {}
@@ -252,9 +263,13 @@ struct AdapterInfo{
     static constexpr usize s_UuidByteCount = 16u;
     static constexpr usize s_LuidByteCount = 8u;
 
+
+public:
     typedef Array<u8, s_UuidByteCount> UUID;
     typedef Array<u8, s_LuidByteCount> LUID;
 
+
+public:
     GraphicsString name;
     u64 dedicatedVideoMemory = 0;
     UUID uuid = {};
@@ -264,7 +279,9 @@ struct AdapterInfo{
     bool hasUUID = false;
     bool hasLUID = false;
 
-    explicit AdapterInfo(GraphicsArena& arena)
+
+public:
+    explicit AdapterInfo(GraphicsArena& arena)noexcept
         : name(arena)
     {}
 };
@@ -286,7 +303,9 @@ struct InstanceParameters{
     bool logBufferLifetime = false;
     bool enablePerMonitorDPI = false;
 
-    explicit InstanceParameters(GraphicsArena& arena)
+
+public:
+    explicit InstanceParameters(GraphicsArena& arena)noexcept
         : backendLibraryName(arena)
         , requiredBackendInstanceExtensions(arena)
         , requiredBackendLayers(arena)
@@ -352,7 +371,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     Path pipelineCacheDirectory;
     Filesystem::FilesystemFactory filesystemFactory;
 
-    explicit DeviceCreationParameters(GraphicsArena& arena)
+
+public:
+    explicit DeviceCreationParameters(GraphicsArena& arena)noexcept
         : InstanceParameters(arena)
         , requiredBackendDeviceExtensions(arena)
         , optionalBackendDeviceExtensions(arena)

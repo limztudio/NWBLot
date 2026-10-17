@@ -24,6 +24,8 @@ struct AcquiredBackBuffer{
     ResourceStates::Mask nativeInitialState = ResourceStates::Unknown;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return texture && availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity() && index != Limit<u32>::s_Max && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present);
     }
@@ -33,6 +35,8 @@ struct AcquiredPresentationFrame{
     AcquiredBackBuffer backBuffer;
     FramebufferHandle framebuffer;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return backBuffer.valid() && framebuffer; }
 };
 
@@ -51,6 +55,8 @@ struct PresentationReceipt{
     u32 index = Limit<u32>::s_Max;
     bool accepted = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity() && index != Limit<u32>::s_Max && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present);
     }
@@ -98,6 +104,8 @@ struct BeginFrameResult{
     u32 suggestedHeight = 0u;
     BeginFrameStatus::Enum status = BeginFrameStatus::Failed;
 
+
+public:
     [[nodiscard]] bool acquired()const noexcept{
         return status == BeginFrameStatus::Acquired && backBuffer.valid();
     }
@@ -117,6 +125,8 @@ struct SwapChainTransitionTicket{
     u64 epoch = 0u;
     SwapChainTransitionKind::Enum kind = SwapChainTransitionKind::kCount;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return owner != nullptr && epoch != 0u && kind < SwapChainTransitionKind::kCount;
     }

@@ -35,7 +35,6 @@ inline constexpr AStringView s_VolumeOpCompact = "compact";
 inline constexpr AStringView s_VolumeOpWriteFile = "writeFile";
 inline constexpr AStringView s_VolumeOpReadFile = "readFile";
 inline constexpr AStringView s_VolumeOpRemoveFile = "removeFile";
-inline constexpr AStringView s_VolumeOpMoveBytes = "moveBytes";
 inline constexpr AStringView s_VolumeOpWriteBytes = "writeBytes";
 inline constexpr AStringView s_VolumeOpReadBytes = "readBytes";
 inline constexpr AStringView s_VolumeOpEnsureCapacity = "ensureCapacity";
@@ -99,10 +98,10 @@ static_assert(sizeof(VolumeIndexEntryDisk) == s_VolumeIndexEntryDiskBytes, "Volu
     return output;
 }
 
-ACompactString LastErrnoMessage();
-void LogFailure(AStringView volumeName, AStringView operation, AStringView detail);
-void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail);
-void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode);
+ACompactString LastErrnoMessage()noexcept;
+void LogFailure(AStringView volumeName, AStringView operation, AStringView detail)noexcept(!NWB_OCCUR_WARNING);
+void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail)noexcept(!NWB_OCCUR_WARNING);
+void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode)noexcept(!NWB_OCCUR_WARNING);
 [[nodiscard]] Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(AStringView volumeName, const Path& segmentPath);
 
 

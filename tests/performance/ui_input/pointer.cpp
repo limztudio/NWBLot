@@ -111,7 +111,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] u64 checksum()const{
+    [[nodiscard]] u64 checksum()const noexcept{
         u64 checksum = MixChecksum(m_setupChecksum, m_router.targets().size());
         checksum = MixChecksum(checksum, m_router.hover().value);
         checksum = MixChecksum(checksum, m_router.focus().value);
@@ -152,6 +152,7 @@ private:
         }
         return !result.activationOverflow && !result.gestureOverflow;
     }
+
 
 private:
     Core::Alloc::GlobalArena m_arena;

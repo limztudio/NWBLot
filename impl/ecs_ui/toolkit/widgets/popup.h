@@ -50,10 +50,10 @@ class PopupState final : NoCopy{
 
 public:
     PopupState()noexcept;
+    PopupState(PopupState&&) = delete;
 
 
 public:
-    PopupState(PopupState&&) = delete;
     PopupState& operator=(PopupState&&) = delete;
 
 

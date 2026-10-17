@@ -40,10 +40,10 @@ public:
 
 protected:
     void begin(const u64 generation);
-    [[nodiscard]] SharedGlyphPage makeCoverage(const u64 atlasIdentity = 11u, const u64 generation = 1u);
-    [[nodiscard]] SharedGlyphPage makeGlyphPage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u);
-    [[nodiscard]] SharedSdfAtlasPage makeDistance();
-    [[nodiscard]] SharedSdfAtlasPage makeSdfPage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u);
+    [[nodiscard]] Expected<SharedGlyphPage> makeCoverage(const u64 atlasIdentity = 11u, const u64 generation = 1u);
+    [[nodiscard]] Expected<SharedGlyphPage> makeGlyphPage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u);
+    [[nodiscard]] Expected<SharedSdfAtlasPage> makeDistance();
+    [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdfPage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u);
 
 
 protected:

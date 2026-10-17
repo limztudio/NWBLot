@@ -27,6 +27,10 @@ namespace __hidden_telemetry_diagnostic{
 
 inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool AddTextBytes(usize& inOutPayloadBytes, const AStringView text)noexcept{
     return FitsU32(text.size()) && AddBinaryReserveBytes(inOutPayloadBytes, text.size());
 }
@@ -45,13 +49,45 @@ inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
     return text;
 }
 
+[[nodiscard]] static EncodedDiagnosticPayloadHeader MakePayloadHeader(const DiagnosticEventRecord& record)noexcept{
+    EncodedDiagnosticPayloadHeader header;
+    header.flags = record.terminatesProcess ? DiagnosticPayloadFlag::TerminatesProcess : DiagnosticPayloadFlag::None;
+    header.instructionPointer = record.instructionPointer;
+    header.line = record.line;
+    header.eventBytes = static_cast<u32>(record.event.size());
+    header.categoryBytes = static_cast<u32>(record.category.size());
+    header.expressionBytes = static_cast<u32>(record.expression.size());
+    header.messageBytes = static_cast<u32>(record.message.size());
+    header.fileBytes = static_cast<u32>(record.file.size());
+    return header;
+}
+
+[[nodiscard]] static Expected<usize> BuildCapturedPayload(const DiagnosticEventRecord& record, u8 (&payload)[s_DiagnosticCapturePayloadCapacity])noexcept{
+    const Array<AStringView, 5u> fields{ record.event, record.category, record.expression, record.message, record.file };
+    usize payloadBytes = sizeof(EncodedDiagnosticPayloadHeader);
+    for(const AStringView text : fields){
+        if(text.size() > sizeof(payload) - payloadBytes)
+            return MakeUnexpected(Failure{});
+        payloadBytes += text.size();
+    }
+
+    const EncodedDiagnosticPayloadHeader header = MakePayloadHeader(record);
+    NWB_MEMCPY(payload, sizeof(payload), &header, sizeof(header));
+    usize cursor = sizeof(header);
+    for(const AStringView text : fields){
+        if(!text.empty())
+            NWB_MEMCPY(payload + cursor, sizeof(payload) - cursor, text.data(), text.size());
+        cursor += text.size();
+    }
+    return payloadBytes;
+}
+
 static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
     DiagnosticCaptureGuard* const guard = g_CaptureGuard.load(MemoryOrder::acquire);
     if(!guard)
         return;
 
-    if(!guard->capture(record))
-        NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic event record dropped"));
+    guard->capture(record);
 }
 
 
@@ -83,15 +119,7 @@ bool BuildDiagnosticPayload(TelemetryArena&, const DiagnosticEventRecord& record
     )
         return false;
 
-    EncodedDiagnosticPayloadHeader header;
-    header.flags = record.terminatesProcess ? DiagnosticPayloadFlag::TerminatesProcess : DiagnosticPayloadFlag::None;
-    header.instructionPointer = record.instructionPointer;
-    header.line = record.line;
-    header.eventBytes = static_cast<u32>(event.size());
-    header.categoryBytes = static_cast<u32>(category.size());
-    header.expressionBytes = static_cast<u32>(expression.size());
-    header.messageBytes = static_cast<u32>(message.size());
-    header.fileBytes = static_cast<u32>(file.size());
+    const EncodedDiagnosticPayloadHeader header = __hidden_telemetry_diagnostic::MakePayloadHeader(record);
 
     outPayload.reserve(payloadBytes);
     AppendPOD(outPayload, header);
@@ -126,14 +154,14 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const 
 
     struct TextField{
         u32 byteCount;
-        AString<TelemetryArena>* destination;
+        NotNull<AString<TelemetryArena>*> destination;
     };
     const Array<TextField, 5u> textFields{{
-        { header.eventBytes, &parsedPayload.event },
-        { header.categoryBytes, &parsedPayload.category },
-        { header.expressionBytes, &parsedPayload.expression },
-        { header.messageBytes, &parsedPayload.message },
-        { header.fileBytes, &parsedPayload.file },
+        { header.eventBytes, NotNull(&parsedPayload.event) },
+        { header.categoryBytes, NotNull(&parsedPayload.category) },
+        { header.expressionBytes, NotNull(&parsedPayload.expression) },
+        { header.messageBytes, NotNull(&parsedPayload.message) },
+        { header.fileBytes, NotNull(&parsedPayload.file) },
     }};
     for(const TextField& field : textFields){
         const auto text = __hidden_telemetry_diagnostic::ReadText(encoded, cursor, field.byteCount);
@@ -177,7 +205,7 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
     }
 }
 
-DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
+DiagnosticCaptureGuard::~DiagnosticCaptureGuard()noexcept{
     if(!m_installed)
         return;
 
@@ -186,23 +214,34 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
     }
 
     DiagnosticEventCallback expectedCallback = __hidden_telemetry_diagnostic::CaptureCallback;
-    if(!::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, nullptr, MemoryOrder::acq_rel)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic callback ownership changed before capture guard destruction"));
+    const bool callbackOwnershipChanged = !::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, nullptr, MemoryOrder::acq_rel);
+    if(callbackOwnershipChanged)
         NWB_ASSERT(false);
-    }
 
     DiagnosticCaptureGuard* expected = this;
-    if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic capture guard ownership changed before destruction"));
+    const bool guardOwnershipChanged = !__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
+    if(guardOwnershipChanged)
         NWB_ASSERT(false);
-    }
 
     ::DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
     ::DiagnosticDetail::g_EventActive.notifyAll();
+    if(callbackOwnershipChanged)
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "telemetry_diagnostic_lifecycle", .message = "Telemetry: diagnostic callback ownership changed before capture guard destruction", .file = __FILE__, .line = __LINE__, });
+    if(guardOwnershipChanged)
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "telemetry_diagnostic_lifecycle", .message = "Telemetry: diagnostic capture guard ownership changed before destruction", .file = __FILE__, .line = __LINE__, });
 }
 
-bool DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record){
-    return RecordDiagnostic(m_recorder, record, m_frameIndex, m_streamId);
+void DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record)noexcept{
+    if(!m_recorder.m_diagnosticCaptureEnabled.load(MemoryOrder::acquire))
+        return;
+
+    u8 payload[s_DiagnosticCapturePayloadCapacity];
+    const auto payloadBytes = __hidden_telemetry_diagnostic::BuildCapturedPayload(record, payload);
+    if(!payloadBytes){
+        m_recorder.dropDiagnosticCapture();
+        return;
+    }
+    m_recorder.recordCapturedDiagnostic(frameIndex(), NotNull<const u8*>(payload), *payloadBytes, streamId());
 }
 
 

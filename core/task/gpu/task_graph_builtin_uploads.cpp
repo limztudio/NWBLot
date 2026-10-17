@@ -124,20 +124,20 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuUploadBlobId GpuTaskGraph::copyUploadData(const void* const data, const usize byteSize, const usize alignment){
+Expected<GpuUploadBlobId> GpuTaskGraph::copyUploadData(const void* const data, const usize byteSize, const usize alignment){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!data || byteSize == 0u || alignment == 0u || (alignment & (alignment - 1u)) != 0u || m_uploadBlobs.size() >= Limit<u32>::s_Max)
-        return {};
+        return MakeUnexpected(Failure{});
 
     GpuUploadBlobNode blob(m_arena);
     const u8* const sourceBytes = static_cast<const u8*>(data);
     blob.bytes.reserve(byteSize);
     blob.bytes.assign(sourceBytes, sourceBytes + byteSize);
     if(blob.bytes.size() != byteSize)
-        return {};
+        return MakeUnexpected(Failure{});
 
     const u32 index = static_cast<u32>(m_uploadBlobs.size());
     m_uploadBlobs.push_back(Move(blob));
@@ -145,21 +145,21 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(const void* const data, const usize
     return GpuUploadBlobId{ .generation = m_generation, .index = index };
 }
 
-GpuTaskId GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc){
+Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc){
     if(uploadDesc.acceptedToken)
         *uploadDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validUploadBlob(uploadDesc.source) || !validResource(uploadDesc.destination) || uploadDesc.finalState == ResourceStates::Unknown)
-        return {};
+        return MakeUnexpected(Failure{});
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
     if(!source || source->bytes.empty() || destinationResource.type != GpuGraphResourceType::Buffer || !destinationResource.buffer)
-        return {};
+        return MakeUnexpected(Failure{});
 
     const BufferDesc& destinationDesc = destinationResource.buffer->getCreationDescription();
     if(
@@ -173,12 +173,12 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, const GpuUp
         // A retained descriptor restores its descriptor state at packet close, so the primitive's graph-visible final state must match that restore.
         || (destinationDesc.keepInitialState && uploadDesc.finalState != destinationDesc.initialState)
     )
-        return {};
+        return MakeUnexpected(Failure{});
 
     using UploadTask = __hidden_gpu_task_graph_builtin_uploads::UploadBufferTask;
     UploadTask::Payload* const payloadObject = NewArenaObject<UploadTask::Payload>(m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
     payload->source = uploadDesc.source;
     payload->destinationResource = uploadDesc.destination;
@@ -207,40 +207,40 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, const GpuUp
     return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation);
 }
 
-GpuTaskId GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc){
+Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc){
     if(uploadDesc.acceptedToken)
         *uploadDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validUploadBlob(uploadDesc.source) || !validResource(uploadDesc.destination) || uploadDesc.finalState == ResourceStates::Unknown)
-        return {};
+        return MakeUnexpected(Failure{});
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
     if(!source || source->bytes.empty() || destinationResource.type != GpuGraphResourceType::Texture || !destinationResource.texture)
-        return {};
+        return MakeUnexpected(Failure{});
 
     Expected<usize> requiredBytes = MakeUnexpected(Failure{});
     const TextureDesc& destinationDesc = destinationResource.texture->getCreationDescription();
     const FormatInfo& destinationFormatInfo = GetFormatInfo(destinationDesc.format);
     const auto resolvedAspect = ResolveTextureUploadAspect(destinationFormatInfo, uploadDesc.aspect);
     if(!resolvedAspect)
-        return {};
+        return MakeUnexpected(Failure{});
     if(
         !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState, uploadDesc.finalState)
         ||
         !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(destinationDesc, uploadDesc.arraySlice, uploadDesc.mipLevel, uploadDesc.rowPitch, uploadDesc.depthPitch, uploadDesc.aspect))
         || source->bytes.size() < *requiredBytes
     )
-        return {};
+        return MakeUnexpected(Failure{});
 
     using UploadTask = __hidden_gpu_task_graph_builtin_uploads::UploadTextureTask;
     UploadTask::Payload* const payloadObject = NewArenaObject<UploadTask::Payload>(m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
     payload->source = uploadDesc.source;
     payload->destinationResource = uploadDesc.destination;

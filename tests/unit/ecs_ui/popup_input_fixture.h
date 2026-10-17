@@ -127,10 +127,10 @@ protected:
 
 
     [[nodiscard]] Expected<DeclaredEdit> declareEdit(const AStringView key, Ui::EditModel& model, const Ui::Rect& bounds){
-        const Ui::WidgetState* widget = m_context.declare(key, Ui::WidgetKind::EditBox);
+        const auto widget = m_context.declare(key, Ui::WidgetKind::EditBox);
         if(!widget)
             return MakeUnexpected(Failure{});
-        const Ui::WidgetState retained = *widget;
+        const Ui::WidgetState retained = **widget;
         const Ui::EditBoxOptions options;
         const Ui::EditBoxResult result = m_host.edit(retained, model, options);
         Ui::EditBoxView view(m_arena);
@@ -179,10 +179,10 @@ protected:
     [[nodiscard]] bool prepare(){
         if(!beginBaseFrame())
             return false;
-        const Ui::WidgetState* popup = m_context.declare("popup", Ui::WidgetKind::Popup);
+        const auto popup = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!popup)
             return false;
-        const Ui::WidgetState owner = *popup;
+        const Ui::WidgetState owner = **popup;
         m_token = { owner.id, owner.declarationGeneration, m_popupState.instanceGeneration(), m_popupState.openGeneration() };
         m_context.input().fencePopup(m_token);
         if(m_context.input().consumePopupDismissal(m_token))
@@ -215,17 +215,17 @@ protected:
     [[nodiscard]] bool prepareDeferred(){
         if(!beginPreparedFrame())
             return false;
-        const Ui::WidgetState* declared = m_context.declare("popup", Ui::WidgetKind::Popup);
+        auto declared = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!declared)
             return false;
-        const Ui::WidgetState popup = *declared;
+        const Ui::WidgetState popup = **declared;
         m_token = { popup.id, popup.declarationGeneration, m_popupState.instanceGeneration(), m_popupState.openGeneration() };
         m_context.input().fencePopup(m_token);
         if(m_popupState.isOpen()){
             declared = m_context.declarePart(popup, "edit", Ui::WidgetKind::EditBox);
             if(!declared)
                 return false;
-            m_popupWidget = *declared;
+            m_popupWidget = **declared;
             m_popupResult = m_host.editInPopup(m_popupWidget, m_popupModel, {}, m_token);
             if(!m_popupResult.valid || m_context.popupToken().valid())
                 return false;
@@ -262,10 +262,10 @@ protected:
     [[nodiscard]] bool prepareNested(){
         if(!beginBaseFrame())
             return false;
-        const Ui::WidgetState* declared = m_context.declare("popup", Ui::WidgetKind::Popup);
+        auto declared = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!declared)
             return false;
-        const Ui::WidgetState parent = *declared;
+        const Ui::WidgetState parent = **declared;
         m_token = { parent.id, parent.declarationGeneration, m_popupState.instanceGeneration(), m_popupState.openGeneration() };
         m_context.input().fencePopup(m_token);
         if(m_context.input().consumePopupDismissal(m_token))
@@ -293,7 +293,7 @@ protected:
             declared = m_context.declare("child", Ui::WidgetKind::Popup);
             if(!declared)
                 return false;
-            const Ui::WidgetState child = *declared;
+            const Ui::WidgetState child = **declared;
             m_childToken = { child.id, child.declarationGeneration, m_childState.instanceGeneration(), m_childState.openGeneration() };
             m_context.input().fencePopup(m_childToken);
             if(m_context.input().consumePopupDismissal(m_childToken))

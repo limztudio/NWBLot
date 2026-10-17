@@ -35,7 +35,7 @@ public:
     static constexpr u32 s_DrainFrames = 32u;
     static constexpr u32 s_CpuScopeCount = 8u;
     static constexpr u32 s_GpuScopeCount = 18u;
-    static constexpr u32 s_ArenaScopeCount = 9u;
+    static constexpr u32 s_ArenaScopeCount = 3u;
     static constexpr StringView s_CpuNames[s_CpuScopeCount] = { "graphics.frame", "graphics.frame_preamble", "graphics.prepare_resources", "graphics.render_passes", "graphics.render", "frame.project_update", "graphics.present", "graphics.begin_frame", };
     static constexpr StringView s_GpuNames[s_GpuScopeCount] = {
         "render.frame", "render.opaque_regular", "render.shadow_visibility", "render.deferred_lighting",
@@ -44,12 +44,7 @@ public:
         "render.reflection_classify", "render.reflection_build_args", "render.reflection_hardware",
         "render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial",
     };
-    static constexpr StringView s_ArenaNames[s_ArenaScopeCount] = {
-        "impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph",
-        "impl/ecs_render/avboit_transparent_csg", "impl/ecs_render/material_pass_prepare",
-        "impl/ecs_render/material_pass_render", "impl/ecs_render/material_instance_mutable",
-        "impl/ecs_render/ray_tracing_build", "impl/ecs_render/ray_tracing_attribute",
-    };
+    static constexpr StringView s_ArenaNames[s_ArenaScopeCount] = { "impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph", };
 
 
 private:
@@ -65,8 +60,6 @@ private:
     };
 
 
-
-
 private:
     static void WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots);
 
@@ -79,6 +72,7 @@ public:
     [[nodiscard]] bool poll(const Core::Perf::SessionReport& report, bool memoryEnabled);
 
     [[nodiscard]] bool finished()const noexcept{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
+
     [[nodiscard]] u32 successfulFrames()const noexcept{ return m_successfulFrames; }
 
     [[nodiscard]] bool write(AStringView path, AStringView workload, bool memoryEnabled, u32 renderers, u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;

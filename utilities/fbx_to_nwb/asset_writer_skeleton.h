@@ -48,7 +48,7 @@ struct PositionAlignedSkinnedMesh{
 [[nodiscard]] bool ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh);
 [[nodiscard]] bool ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context);
 [[nodiscard]] bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context);
-[[nodiscard]] AString NodeName(const ufbx_node* node, const usize fallbackIndex);
+[[nodiscard]] ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -151,7 +151,8 @@ void ExpectRejectedCopy(void* destination, usize capacity, const void* source, u
             _exit(s_HandlerFailureExitCode);
         SIMDMemoryCopy(destination, capacity, source, count);
         _exit(s_ReturnedExitCode);
-    }, testing::ExitedWithCode(s_AbortExitCode), "");
+    }, testing::ExitedWithCode(s_AbortExitCode), ""
+    );
 }
 #endif
 

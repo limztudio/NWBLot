@@ -5,6 +5,7 @@
 #include "frame_graph.h"
 
 #include "frame_graph_queue_codec_internal.h"
+#include "frame_graph_statistics_codec_internal.h"
 
 #include <core/alloc/scratch.h>
 
@@ -33,16 +34,13 @@ namespace __hidden_telemetry_frame_graph{
     u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     const FrameGraphPacketSubmissionStatisticsRecords* packetSubmissionStatistics,
     TelemetryBytes& outPayload
 );
 
-static constexpr f64 s_DoublePrecisionEpsilon = 2.2204460492503130808472633361816e-16;
-static constexpr f64 s_SubmissionRoundingLimit = 0.5;
-static constexpr f64 s_SubmissionRoundingScale = 2.0;
-inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStatisticsValidation");
-inline constexpr Name s_FrameGraphPayloadScratch("core/telemetry/frame_graph/payload_scratch");
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] static bool IsValidStringTableText(const AStringView text)noexcept{
@@ -56,7 +54,8 @@ inline constexpr Name s_FrameGraphPayloadScratch("core/telemetry/frame_graph/pay
 
 
 [[nodiscard]] static bool ValidateNodeInput(const FrameGraphNodeDesc& node)noexcept{
-    return static_cast<bool>(node.name)
+    return
+        static_cast<bool>(node.name)
         && IsValidFrameGraphNodeKind(node.kind)
         && IsValidStringTableText(node.label)
         && (!node.queueAssignment.present || (node.kind == FrameGraphNodeKind::Pass && IsValidFrameGraphQueueAssignment(node.queueAssignment)))
@@ -77,13 +76,6 @@ inline constexpr Name s_FrameGraphPayloadScratch("core/telemetry/frame_graph/pay
     return edge.reserved == 0u && IsValidFrameGraphEdgeKind(static_cast<FrameGraphEdgeKind::Enum>(edge.kind)) && static_cast<usize>(edge.fromNodeIndex) < nodeCount && static_cast<usize>(edge.toNodeIndex) < nodeCount;
 }
 
-[[nodiscard]] static EncodedFrameGraphPhysicalQueueId EncodeQueue(const FrameGraphPhysicalQueueId& queue)noexcept{
-    return EncodedFrameGraphPhysicalQueueId{ .index = queue.index, .deviceGeneration = queue.deviceGeneration, };
-}
-
-[[nodiscard]] static FrameGraphPhysicalQueueId DecodeQueue(const EncodedFrameGraphPhysicalQueueId& queue)noexcept{
-    return FrameGraphPhysicalQueueId{ .index = queue.index, .deviceGeneration = queue.deviceGeneration, };
-}
 
 [[nodiscard]] static EncodedFrameGraphCompiledTask EncodeCompiledTask(const u32 nodeIndex, const FrameGraphCompiledTask& compiledTask)noexcept{
     EncodedFrameGraphCompiledTask encoded;
@@ -109,7 +101,54 @@ inline constexpr Name s_FrameGraphPayloadScratch("core/telemetry/frame_graph/pay
 }
 
 template<typename OutputT, typename InputT>
-[[nodiscard]] static OutputT ConvertCompileRuntimeStatistics(const InputT& statistics)noexcept{
+[[nodiscard]] static OutputT ConvertCompileRuntimeStatistics(const InputT& statistics)noexcept(
+    noexcept(OutputT{})
+    && noexcept(DeclVal<void(*)(OutputT)noexcept>()(DeclVal<OutputT&&>()))
+    && noexcept(DeclVal<OutputT&>().taskCount = DeclVal<const InputT&>().taskCount)
+    && noexcept(DeclVal<OutputT&>().resourceCount = DeclVal<const InputT&>().resourceCount)
+    && noexcept(DeclVal<OutputT&>().resourceUseCount = DeclVal<const InputT&>().resourceUseCount)
+    && noexcept(DeclVal<OutputT&>().explicitDependencyCount = DeclVal<const InputT&>().explicitDependencyCount)
+    && noexcept(DeclVal<OutputT&>().inferredDependencyCount = DeclVal<const InputT&>().inferredDependencyCount)
+    && noexcept(DeclVal<OutputT&>().packetCount = DeclVal<const InputT&>().packetCount)
+    && noexcept(DeclVal<OutputT&>().packetDependencyCount = DeclVal<const InputT&>().packetDependencyCount)
+    && noexcept(DeclVal<OutputT&>().mergedTaskCount = DeclVal<const InputT&>().mergedTaskCount)
+    && noexcept(DeclVal<OutputT&>().transitionBarrierCount = DeclVal<const InputT&>().transitionBarrierCount)
+    && noexcept(DeclVal<OutputT&>().uavBarrierCount = DeclVal<const InputT&>().uavBarrierCount)
+    && noexcept(DeclVal<OutputT&>().ownershipReleaseBarrierCount = DeclVal<const InputT&>().ownershipReleaseBarrierCount)
+    && noexcept(DeclVal<OutputT&>().ownershipAcquireBarrierCount = DeclVal<const InputT&>().ownershipAcquireBarrierCount)
+    && noexcept(DeclVal<OutputT&>().stateExportBarrierCount = DeclVal<const InputT&>().stateExportBarrierCount)
+    && noexcept(DeclVal<OutputT&>().logicalOwnershipTransferCount = DeclVal<const InputT&>().logicalOwnershipTransferCount)
+    && noexcept(DeclVal<OutputT&>().logicalOwnershipTransferSignatureCount = DeclVal<const InputT&>().logicalOwnershipTransferSignatureCount)
+    && noexcept(DeclVal<OutputT&>().repeatedOwnershipTransferSignatureCount = DeclVal<const InputT&>().repeatedOwnershipTransferSignatureCount)
+    && noexcept(DeclVal<OutputT&>().concurrentSharingCouldAvoidTransferCount = DeclVal<const InputT&>().concurrentSharingCouldAvoidTransferCount)
+    && noexcept(DeclVal<OutputT&>().concurrentSharingAdviceResourceCount = DeclVal<const InputT&>().concurrentSharingAdviceResourceCount)
+    && noexcept(DeclVal<OutputT&>().logicalOwnershipTransferInternalCount = DeclVal<const InputT&>().logicalOwnershipTransferInternalCount)
+    && noexcept(DeclVal<OutputT&>().logicalOwnershipTransferExternalImportCount = DeclVal<const InputT&>().logicalOwnershipTransferExternalImportCount)
+    && noexcept(DeclVal<OutputT&>().logicalOwnershipTransferExternalExportCount = DeclVal<const InputT&>().logicalOwnershipTransferExternalExportCount)
+    && noexcept(DeclVal<OutputT&>().resourceSetCount = DeclVal<const InputT&>().resourceSetCount)
+    && noexcept(DeclVal<OutputT&>().resourceSetMemberCount = DeclVal<const InputT&>().resourceSetMemberCount)
+    && noexcept(DeclVal<OutputT&>().directResourceUseCount = DeclVal<const InputT&>().directResourceUseCount)
+    && noexcept(DeclVal<OutputT&>().declaredResourceSetUseCount = DeclVal<const InputT&>().declaredResourceSetUseCount)
+    && noexcept(DeclVal<OutputT&>().expandedResourceSetMemberUseCount = DeclVal<const InputT&>().expandedResourceSetMemberUseCount)
+    && noexcept(DeclVal<OutputT&>().payloadObjectCount = DeclVal<const InputT&>().payloadObjectCount)
+    && noexcept(DeclVal<OutputT&>().payloadObjectBytes = DeclVal<const InputT&>().payloadObjectBytes)
+    && noexcept(DeclVal<OutputT&>().uploadBlobCount = DeclVal<const InputT&>().uploadBlobCount)
+    && noexcept(DeclVal<OutputT&>().uploadBlobBytes = DeclVal<const InputT&>().uploadBlobBytes)
+    && noexcept(DeclVal<OutputT&>().declarationSeconds = DeclVal<const InputT&>().declarationSeconds)
+    && noexcept(DeclVal<OutputT&>().analysisSeconds = DeclVal<const InputT&>().analysisSeconds)
+    && noexcept(DeclVal<OutputT&>().validationSeconds = DeclVal<const InputT&>().validationSeconds)
+    && noexcept(DeclVal<OutputT&>().dependencyAnalysisSeconds = DeclVal<const InputT&>().dependencyAnalysisSeconds)
+    && noexcept(DeclVal<OutputT&>().hazardAnalysisSeconds = DeclVal<const InputT&>().hazardAnalysisSeconds)
+    && noexcept(DeclVal<OutputT&>().topologicalOrderSeconds = DeclVal<const InputT&>().topologicalOrderSeconds)
+    && noexcept(DeclVal<OutputT&>().queueAssignmentSeconds = DeclVal<const InputT&>().queueAssignmentSeconds)
+    && noexcept(DeclVal<OutputT&>().planningSeconds = DeclVal<const InputT&>().planningSeconds)
+    && noexcept(DeclVal<OutputT&>().packetizationSeconds = DeclVal<const InputT&>().packetizationSeconds)
+    && noexcept(DeclVal<OutputT&>().resourceStatePlanningSeconds = DeclVal<const InputT&>().resourceStatePlanningSeconds)
+    && noexcept(DeclVal<OutputT&>().packetDependencyPlanningSeconds = DeclVal<const InputT&>().packetDependencyPlanningSeconds)
+    && noexcept(DeclVal<OutputT&>().totalSeconds = DeclVal<const InputT&>().totalSeconds)
+    && noexcept(DeclVal<OutputT&>().resourceVersionCount = DeclVal<const InputT&>().resourceVersionCount)
+    && noexcept(DeclVal<OutputT&>().resourceVersionEdgeCount = DeclVal<const InputT&>().resourceVersionEdgeCount)
+){
     OutputT converted;
     converted.taskCount = statistics.taskCount;
     converted.resourceCount = statistics.resourceCount;
@@ -159,7 +198,24 @@ template<typename OutputT, typename InputT>
 }
 
 template<typename OutputT, typename InputT>
-[[nodiscard]] static OutputT ConvertRecordingRuntimeStatistics(const InputT& statistics)noexcept{
+[[nodiscard]] static OutputT ConvertRecordingRuntimeStatistics(const InputT& statistics)noexcept(
+    noexcept(OutputT{})
+    && noexcept(DeclVal<void(*)(OutputT)noexcept>()(DeclVal<OutputT&&>()))
+    && noexcept(DeclVal<OutputT&>().packetCount = DeclVal<const InputT&>().packetCount)
+    && noexcept(DeclVal<OutputT&>().taskCount = DeclVal<const InputT&>().taskCount)
+    && noexcept(DeclVal<OutputT&>().commandListCount = DeclVal<const InputT&>().commandListCount)
+    && noexcept(DeclVal<OutputT&>().barrierCount = DeclVal<const InputT&>().barrierCount)
+    && noexcept(DeclVal<OutputT&>().workerRoutedPacketCount = DeclVal<const InputT&>().workerRoutedPacketCount)
+    && noexcept(DeclVal<OutputT&>().parallelPacketCount = DeclVal<const InputT&>().parallelPacketCount)
+    && noexcept(DeclVal<OutputT&>().commandListAcquisitionSeconds = DeclVal<const InputT&>().commandListAcquisitionSeconds)
+    && noexcept(DeclVal<OutputT&>().graphBarrierRecordingSeconds = DeclVal<const InputT&>().graphBarrierRecordingSeconds)
+    && noexcept(DeclVal<OutputT&>().taskRecordSeconds = DeclVal<const InputT&>().taskRecordSeconds)
+    && noexcept(DeclVal<OutputT&>().recordingSeconds = DeclVal<const InputT&>().recordingSeconds)
+    && noexcept(DeclVal<OutputT&>().recordingElapsedSeconds = DeclVal<const InputT&>().recordingElapsedSeconds)
+    && noexcept(DeclVal<OutputT&>().readyFrontierElapsedSeconds = DeclVal<const InputT&>().readyFrontierElapsedSeconds)
+    && noexcept(DeclVal<OutputT&>().readyFrontierWorkerBusySeconds = DeclVal<const InputT&>().readyFrontierWorkerBusySeconds)
+    && noexcept(DeclVal<OutputT&>().readyFrontierWorkerCapacitySeconds = DeclVal<const InputT&>().readyFrontierWorkerCapacitySeconds)
+){
     OutputT converted;
     converted.packetCount = statistics.packetCount;
     converted.taskCount = statistics.taskCount;
@@ -178,26 +234,6 @@ template<typename OutputT, typename InputT>
     return converted;
 }
 
-template<typename OutputT, typename InputT>
-[[nodiscard]] static OutputT ConvertSubmissionRuntimeStatistics(const InputT& statistics)noexcept{
-    OutputT converted;
-    converted.acceptedPacketCount = statistics.acceptedPacketCount;
-    converted.acceptedTaskCount = statistics.acceptedTaskCount;
-    converted.rejectedPacketCount = statistics.rejectedPacketCount;
-    converted.rejectedTaskCount = statistics.rejectedTaskCount;
-    converted.nativeSubmissionCount = statistics.nativeSubmissionCount;
-    converted.rejectedSubmissionCount = statistics.rejectedSubmissionCount;
-    converted.nativeCommandListCount = statistics.nativeCommandListCount;
-    converted.plannedWaitTokenCount = statistics.plannedWaitTokenCount;
-    converted.sameQueueWaitElisionCount = statistics.sameQueueWaitElisionCount;
-    converted.timelineWaitCount = statistics.timelineWaitCount;
-    converted.mergedTimelineWaitCount = statistics.mergedTimelineWaitCount;
-    converted.inheritedTimelineWaitElisionCount = statistics.inheritedTimelineWaitElisionCount;
-    converted.acceptedFrontierSubmissionCount = statistics.acceptedFrontierSubmissionCount;
-    converted.submissionSeconds = statistics.submissionSeconds;
-    converted.recoverySubmissionCount = statistics.recoverySubmissionCount;
-    return converted;
-}
 
 [[nodiscard]] static EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(const u32 nodeIndex, const FrameGraphRuntimeStatistics& statistics)noexcept{
     EncodedFrameGraphRuntimeStatistics encoded;
@@ -208,7 +244,7 @@ template<typename OutputT, typename InputT>
     encoded.recordingAttemptGeneration = statistics.recordingAttemptGeneration;
     encoded.compile = ConvertCompileRuntimeStatistics<EncodedFrameGraphCompileRuntimeStatistics>(statistics.compile);
     encoded.recording = ConvertRecordingRuntimeStatistics<EncodedFrameGraphRecordingRuntimeStatistics>(statistics.recording);
-    encoded.submission = ConvertSubmissionRuntimeStatistics<EncodedFrameGraphSubmissionRuntimeStatistics>(statistics.submission);
+    encoded.submission = FrameGraphStatisticsCodecDetail::ConvertSubmissionRuntimeStatistics<EncodedFrameGraphSubmissionRuntimeStatistics>(statistics.submission);
     return encoded;
 }
 
@@ -223,7 +259,7 @@ template<typename OutputT, typename InputT>
         .recordingAttemptGeneration = encoded.recordingAttemptGeneration,
         .compile = ConvertCompileRuntimeStatistics<FrameGraphCompileRuntimeStatistics>(encoded.compile),
         .recording = ConvertRecordingRuntimeStatistics<FrameGraphRecordingRuntimeStatistics>(encoded.recording),
-        .submission = ConvertSubmissionRuntimeStatistics<FrameGraphSubmissionRuntimeStatistics>(encoded.submission),
+        .submission = FrameGraphStatisticsCodecDetail::ConvertSubmissionRuntimeStatistics<FrameGraphSubmissionRuntimeStatistics>(encoded.submission),
         .deviceGeneration = encoded.deviceGeneration,
         .present = true,
     };
@@ -246,12 +282,6 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     FrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
 };
 
-[[nodiscard]] static bool AccumulateBoundedCount(const u64 value, const u64 maximum, u64& total)noexcept{
-    if(total > maximum || value > maximum - total)
-        return false;
-    total += value;
-    return true;
-}
 
 [[nodiscard]] static bool AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics, FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept{
     const auto barrierCount = FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerStatistics.compile);
@@ -262,31 +292,31 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
     const FrameGraphCompileRuntimeStatistics& ownerCompile = ownerStatistics.compile;
     if(
-        !AccumulateBoundedCount(compile.taskCount, ownerCompile.taskCount, total.compile.taskCount)
-        || !AccumulateBoundedCount(compile.packetCount, ownerCompile.packetCount, total.compile.packetCount)
-        || !AccumulateBoundedCount(compile.mergedTaskCount, ownerCompile.mergedTaskCount, total.compile.mergedTaskCount)
-        || !AccumulateBoundedCount(compile.prologueBarrierCount, ownerBarrierCount, total.compile.prologueBarrierCount)
-        || !AccumulateBoundedCount(compile.epilogueBarrierCount, ownerBarrierCount, total.compile.prologueBarrierCount)
-        || !AccumulateBoundedCount(compile.ownershipReleaseBarrierCount, ownerCompile.ownershipReleaseBarrierCount, total.compile.ownershipReleaseBarrierCount)
-        || !AccumulateBoundedCount(compile.ownershipAcquireBarrierCount, ownerCompile.ownershipAcquireBarrierCount, total.compile.ownershipAcquireBarrierCount)
-        || !AccumulateBoundedCount(compile.incomingLogicalOwnershipTransferCount, ownerCompile.logicalOwnershipTransferCount, total.compile.incomingLogicalOwnershipTransferCount)
-        || !AccumulateBoundedCount(compile.outgoingLogicalOwnershipTransferCount, ownerCompile.logicalOwnershipTransferCount, total.compile.outgoingLogicalOwnershipTransferCount)
-        || !AccumulateBoundedCount(compile.incomingLogicalOwnershipTransferSignatureCount, ownerCompile.logicalOwnershipTransferSignatureCount, total.compile.incomingLogicalOwnershipTransferSignatureCount)
-        || !AccumulateBoundedCount(compile.outgoingLogicalOwnershipTransferSignatureCount, ownerCompile.logicalOwnershipTransferSignatureCount, total.compile.outgoingLogicalOwnershipTransferSignatureCount)
-        || !AccumulateBoundedCount(compile.incomingRepeatedOwnershipTransferSignatureCount, ownerCompile.repeatedOwnershipTransferSignatureCount, total.compile.incomingRepeatedOwnershipTransferSignatureCount)
-        || !AccumulateBoundedCount(compile.outgoingRepeatedOwnershipTransferSignatureCount, ownerCompile.repeatedOwnershipTransferSignatureCount, total.compile.outgoingRepeatedOwnershipTransferSignatureCount)
+        !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.taskCount, ownerCompile.taskCount, total.compile.taskCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.packetCount, ownerCompile.packetCount, total.compile.packetCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.mergedTaskCount, ownerCompile.mergedTaskCount, total.compile.mergedTaskCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.prologueBarrierCount, ownerBarrierCount, total.compile.prologueBarrierCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.epilogueBarrierCount, ownerBarrierCount, total.compile.prologueBarrierCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.ownershipReleaseBarrierCount, ownerCompile.ownershipReleaseBarrierCount, total.compile.ownershipReleaseBarrierCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.ownershipAcquireBarrierCount, ownerCompile.ownershipAcquireBarrierCount, total.compile.ownershipAcquireBarrierCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.incomingLogicalOwnershipTransferCount, ownerCompile.logicalOwnershipTransferCount, total.compile.incomingLogicalOwnershipTransferCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.outgoingLogicalOwnershipTransferCount, ownerCompile.logicalOwnershipTransferCount, total.compile.outgoingLogicalOwnershipTransferCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.incomingLogicalOwnershipTransferSignatureCount, ownerCompile.logicalOwnershipTransferSignatureCount, total.compile.incomingLogicalOwnershipTransferSignatureCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.outgoingLogicalOwnershipTransferSignatureCount, ownerCompile.logicalOwnershipTransferSignatureCount, total.compile.outgoingLogicalOwnershipTransferSignatureCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.incomingRepeatedOwnershipTransferSignatureCount, ownerCompile.repeatedOwnershipTransferSignatureCount, total.compile.incomingRepeatedOwnershipTransferSignatureCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(compile.outgoingRepeatedOwnershipTransferSignatureCount, ownerCompile.repeatedOwnershipTransferSignatureCount, total.compile.outgoingRepeatedOwnershipTransferSignatureCount)
     )
         return false;
 
     const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
     const FrameGraphRecordingRuntimeStatistics& ownerRecording = ownerStatistics.recording;
     if(
-        !AccumulateBoundedCount(recording.packetCount, ownerRecording.packetCount, total.recording.packetCount)
-        || !AccumulateBoundedCount(recording.taskCount, ownerRecording.taskCount, total.recording.taskCount)
-        || !AccumulateBoundedCount(recording.commandListCount, ownerRecording.commandListCount, total.recording.commandListCount)
-        || !AccumulateBoundedCount(recording.barrierCount, ownerRecording.barrierCount, total.recording.barrierCount)
-        || !AccumulateBoundedCount(recording.workerRoutedPacketCount, ownerRecording.workerRoutedPacketCount, total.recording.workerRoutedPacketCount)
-        || !AccumulateBoundedCount(recording.parallelPacketCount, ownerRecording.parallelPacketCount, total.recording.parallelPacketCount)
+        !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(recording.packetCount, ownerRecording.packetCount, total.recording.packetCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(recording.taskCount, ownerRecording.taskCount, total.recording.taskCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(recording.commandListCount, ownerRecording.commandListCount, total.recording.commandListCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(recording.barrierCount, ownerRecording.barrierCount, total.recording.barrierCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(recording.workerRoutedPacketCount, ownerRecording.workerRoutedPacketCount, total.recording.workerRoutedPacketCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(recording.parallelPacketCount, ownerRecording.parallelPacketCount, total.recording.parallelPacketCount)
     )
         return false;
     if(total.recording.taskCount - total.recording.packetCount > ownerRecording.taskCount - ownerRecording.packetCount || total.recording.commandListCount - total.recording.packetCount > ownerRecording.commandListCount - ownerRecording.packetCount)
@@ -295,20 +325,20 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
     const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
     if(
-        !AccumulateBoundedCount(submission.acceptedPacketCount, ownerSubmission.acceptedPacketCount, total.submission.acceptedPacketCount)
-        || !AccumulateBoundedCount(submission.acceptedTaskCount, ownerSubmission.acceptedTaskCount, total.submission.acceptedTaskCount)
-        || !AccumulateBoundedCount(submission.rejectedPacketCount, ownerSubmission.rejectedPacketCount, total.submission.rejectedPacketCount)
-        || !AccumulateBoundedCount(submission.rejectedTaskCount, ownerSubmission.rejectedTaskCount, total.submission.rejectedTaskCount)
-        || !AccumulateBoundedCount(submission.nativeSubmissionCount, ownerSubmission.nativeSubmissionCount, total.submission.nativeSubmissionCount)
-        || !AccumulateBoundedCount(submission.rejectedSubmissionCount, ownerSubmission.rejectedSubmissionCount, total.submission.rejectedSubmissionCount)
-        || !AccumulateBoundedCount(submission.nativeCommandListCount, ownerSubmission.nativeCommandListCount, total.submission.nativeCommandListCount)
-        || !AccumulateBoundedCount(submission.plannedWaitTokenCount, ownerSubmission.plannedWaitTokenCount, total.submission.plannedWaitTokenCount)
-        || !AccumulateBoundedCount(submission.sameQueueWaitElisionCount, ownerSubmission.sameQueueWaitElisionCount, total.submission.sameQueueWaitElisionCount)
-        || !AccumulateBoundedCount(submission.timelineWaitCount, ownerSubmission.timelineWaitCount, total.submission.timelineWaitCount)
-        || !AccumulateBoundedCount(submission.mergedTimelineWaitCount, ownerSubmission.mergedTimelineWaitCount, total.submission.mergedTimelineWaitCount)
-        || !AccumulateBoundedCount(submission.inheritedTimelineWaitElisionCount, ownerSubmission.inheritedTimelineWaitElisionCount, total.submission.inheritedTimelineWaitElisionCount)
-        || !AccumulateBoundedCount(submission.acceptedFrontierSubmissionCount, ownerSubmission.acceptedFrontierSubmissionCount, total.submission.acceptedFrontierSubmissionCount)
-        || !AccumulateBoundedCount(submission.recoverySubmissionCount, ownerSubmission.recoverySubmissionCount, total.submission.recoverySubmissionCount)
+        !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.acceptedPacketCount, ownerSubmission.acceptedPacketCount, total.submission.acceptedPacketCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.acceptedTaskCount, ownerSubmission.acceptedTaskCount, total.submission.acceptedTaskCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.rejectedPacketCount, ownerSubmission.rejectedPacketCount, total.submission.rejectedPacketCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.rejectedTaskCount, ownerSubmission.rejectedTaskCount, total.submission.rejectedTaskCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.nativeSubmissionCount, ownerSubmission.nativeSubmissionCount, total.submission.nativeSubmissionCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.rejectedSubmissionCount, ownerSubmission.rejectedSubmissionCount, total.submission.rejectedSubmissionCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.nativeCommandListCount, ownerSubmission.nativeCommandListCount, total.submission.nativeCommandListCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.plannedWaitTokenCount, ownerSubmission.plannedWaitTokenCount, total.submission.plannedWaitTokenCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.sameQueueWaitElisionCount, ownerSubmission.sameQueueWaitElisionCount, total.submission.sameQueueWaitElisionCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.timelineWaitCount, ownerSubmission.timelineWaitCount, total.submission.timelineWaitCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.mergedTimelineWaitCount, ownerSubmission.mergedTimelineWaitCount, total.submission.mergedTimelineWaitCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.inheritedTimelineWaitElisionCount, ownerSubmission.inheritedTimelineWaitElisionCount, total.submission.inheritedTimelineWaitElisionCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.acceptedFrontierSubmissionCount, ownerSubmission.acceptedFrontierSubmissionCount, total.submission.acceptedFrontierSubmissionCount)
+        || !FrameGraphStatisticsCodecDetail::AccumulateBoundedCount(submission.recoverySubmissionCount, ownerSubmission.recoverySubmissionCount, total.submission.recoverySubmissionCount)
     )
         return false;
 
@@ -326,296 +356,33 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     return static_cast<usize>(record.ownerNodeIndex) < nodeCount && ownerKind == FrameGraphNodeKind::Pass && IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(record.statistics, ownerStatistics);
 }
 
-template<typename OutputT, typename InputT>
-[[nodiscard]] static OutputT ConvertPhysicalQueueCompileRuntimeStatistics(const InputT& statistics)noexcept{
-    OutputT converted;
-    converted.taskCount = statistics.taskCount;
-    converted.packetCount = statistics.packetCount;
-    converted.mergedTaskCount = statistics.mergedTaskCount;
-    converted.prologueBarrierCount = statistics.prologueBarrierCount;
-    converted.epilogueBarrierCount = statistics.epilogueBarrierCount;
-    converted.ownershipReleaseBarrierCount = statistics.ownershipReleaseBarrierCount;
-    converted.ownershipAcquireBarrierCount = statistics.ownershipAcquireBarrierCount;
-    converted.incomingLogicalOwnershipTransferCount = statistics.incomingLogicalOwnershipTransferCount;
-    converted.outgoingLogicalOwnershipTransferCount = statistics.outgoingLogicalOwnershipTransferCount;
-    converted.incomingLogicalOwnershipTransferSignatureCount = statistics.incomingLogicalOwnershipTransferSignatureCount;
-    converted.outgoingLogicalOwnershipTransferSignatureCount = statistics.outgoingLogicalOwnershipTransferSignatureCount;
-    converted.incomingRepeatedOwnershipTransferSignatureCount = statistics.incomingRepeatedOwnershipTransferSignatureCount;
-    converted.outgoingRepeatedOwnershipTransferSignatureCount = statistics.outgoingRepeatedOwnershipTransferSignatureCount;
-    converted.concurrentSharingAdviceResourceCount = statistics.concurrentSharingAdviceResourceCount;
-    return converted;
-}
 
-template<typename OutputT, typename InputT>
-[[nodiscard]] static OutputT ConvertPhysicalQueueRecordingRuntimeStatistics(const InputT& statistics)noexcept{
-    OutputT converted;
-    converted.packetCount = statistics.packetCount;
-    converted.taskCount = statistics.taskCount;
-    converted.commandListCount = statistics.commandListCount;
-    converted.barrierCount = statistics.barrierCount;
-    converted.workerRoutedPacketCount = statistics.workerRoutedPacketCount;
-    converted.parallelPacketCount = statistics.parallelPacketCount;
-    converted.commandListAcquisitionSeconds = statistics.commandListAcquisitionSeconds;
-    converted.graphBarrierRecordingSeconds = statistics.graphBarrierRecordingSeconds;
-    converted.taskRecordSeconds = statistics.taskRecordSeconds;
-    converted.recordingSeconds = statistics.recordingSeconds;
-    return converted;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-[[nodiscard]] static EncodedFrameGraphPhysicalQueueRuntimeStatistics EncodePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record)noexcept{
-    const FrameGraphPhysicalQueueRuntimeStatistics& statistics = record.statistics;
-    EncodedFrameGraphPhysicalQueueRuntimeStatistics encoded;
-    encoded.ownerNodeIndex = record.ownerNodeIndex;
-    encoded.queue = EncodeQueue(statistics.queue);
-    encoded.queueClass = statistics.queueClass;
-    encoded.compile = ConvertPhysicalQueueCompileRuntimeStatistics<EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics>(statistics.compile);
-    encoded.recording = ConvertPhysicalQueueRecordingRuntimeStatistics<EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics>(statistics.recording);
-    encoded.submission = ConvertSubmissionRuntimeStatistics<EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics>(statistics.submission);
-    return encoded;
-}
 
-[[nodiscard]] static Expected<FrameGraphPhysicalQueueRuntimeStatisticsRecord> DecodePhysicalQueueRuntimeStatistics(const EncodedFrameGraphPhysicalQueueRuntimeStatistics& encoded, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-    FrameGraphPhysicalQueueRuntimeStatisticsRecord decoded;
-    if(encoded.reserved[0u] != 0u || encoded.reserved[1u] != 0u || encoded.reserved[2u] != 0u || encoded.reserved[3u] != 0u || encoded.reserved[4u] != 0u || encoded.reserved[5u] != 0u || encoded.reserved[6u] != 0u)
-        return MakeUnexpected(Failure{});
-
-    decoded = {
-        .ownerNodeIndex = encoded.ownerNodeIndex,
-        .statistics = {
-            .graphGeneration = ownerStatistics.graphGeneration,
-            .planGeneration = ownerStatistics.planGeneration,
-            .recordingAttemptGeneration = ownerStatistics.recordingAttemptGeneration,
-            .queue = DecodeQueue(encoded.queue),
-            .deviceGeneration = ownerStatistics.deviceGeneration,
-            .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
-            .compile = ConvertPhysicalQueueCompileRuntimeStatistics<FrameGraphPhysicalQueueCompileRuntimeStatistics>(encoded.compile),
-            .recording = ConvertPhysicalQueueRecordingRuntimeStatistics<FrameGraphPhysicalQueueRecordingRuntimeStatistics>(encoded.recording),
-            .submission = ConvertSubmissionRuntimeStatistics<FrameGraphPhysicalQueueSubmissionRuntimeStatistics>(encoded.submission),
-        },
-    };
-    if(!IsValidFrameGraphPhysicalQueueRuntimeStatistics(decoded.statistics))
-        return MakeUnexpected(Failure{});
-    return decoded;
-}
-
-[[nodiscard]] static bool PacketSubmissionStatisticsRecordLess(const FrameGraphPacketSubmissionStatisticsRecord& lhs, const FrameGraphPacketSubmissionStatisticsRecord& rhs)noexcept{
-    if(lhs.ownerNodeIndex != rhs.ownerNodeIndex)
-        return lhs.ownerNodeIndex < rhs.ownerNodeIndex;
-    return lhs.packetIndex < rhs.packetIndex;
-}
-
-[[nodiscard]] static EncodedFrameGraphPacketSubmissionStatistics EncodePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
-    return EncodedFrameGraphPacketSubmissionStatistics{
-        .ownerNodeIndex = statistics.ownerNodeIndex,
-        .packetIndex = statistics.packetIndex,
-        .packetGeneration = statistics.packetGeneration,
-        .queue = EncodeQueue(statistics.queue),
-        .queueClass = statistics.queueClass,
-        .joinsAcceptedQueueFrontier = static_cast<u8>(statistics.joinsAcceptedQueueFrontier ? 1u : 0u),
-        .recoverySubmission = static_cast<u8>(statistics.recoverySubmission ? 1u : 0u),
-        .taskCount = statistics.taskCount,
-        .commandListCount = statistics.commandListCount,
-        .plannedWaitTokenCount = statistics.plannedWaitTokenCount,
-        .sameQueueWaitElisionCount = statistics.sameQueueWaitElisionCount,
-        .timelineWaitCount = statistics.timelineWaitCount,
-        .mergedTimelineWaitCount = statistics.mergedTimelineWaitCount,
-        .inheritedTimelineWaitElisionCount = statistics.inheritedTimelineWaitElisionCount,
-        .submissionSeconds = statistics.submissionSeconds,
-    };
-}
-
-[[nodiscard]] static Expected<FrameGraphPacketSubmissionStatisticsRecord> DecodePacketSubmissionStatistics(const EncodedFrameGraphPacketSubmissionStatistics& encoded)noexcept{
-    FrameGraphPacketSubmissionStatisticsRecord decoded;
-    if(encoded.joinsAcceptedQueueFrontier > 1u || encoded.recoverySubmission > 1u || encoded.reserved != 0u)
-        return MakeUnexpected(Failure{});
-
-    decoded = {
-        .packetGeneration = encoded.packetGeneration,
-        .taskCount = encoded.taskCount,
-        .commandListCount = encoded.commandListCount,
-        .ownerNodeIndex = encoded.ownerNodeIndex,
-        .packetIndex = encoded.packetIndex,
-        .queue = DecodeQueue(encoded.queue),
-        .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
-        .joinsAcceptedQueueFrontier = encoded.joinsAcceptedQueueFrontier != 0u,
-        .recoverySubmission = encoded.recoverySubmission != 0u,
-        .plannedWaitTokenCount = encoded.plannedWaitTokenCount,
-        .sameQueueWaitElisionCount = encoded.sameQueueWaitElisionCount,
-        .timelineWaitCount = encoded.timelineWaitCount,
-        .mergedTimelineWaitCount = encoded.mergedTimelineWaitCount,
-        .inheritedTimelineWaitElisionCount = encoded.inheritedTimelineWaitElisionCount,
-        .submissionSeconds = encoded.submissionSeconds,
-    };
-    if(!IsValidFrameGraphPacketSubmissionStatistics(decoded))
-        return MakeUnexpected(Failure{});
-    return decoded;
-}
-
-struct FrameGraphPacketSubmissionStatisticsAccumulator{
-    u64 nativeSubmissionCount = 0u;
-    u64 taskCount = 0u;
-    u64 commandListCount = 0u;
-    u64 plannedWaitTokenCount = 0u;
-    u64 sameQueueWaitElisionCount = 0u;
-    u64 timelineWaitCount = 0u;
-    u64 mergedTimelineWaitCount = 0u;
-    u64 inheritedTimelineWaitElisionCount = 0u;
-    u64 acceptedFrontierSubmissionCount = 0u;
-    u64 recoverySubmissionCount = 0u;
-    f64 submissionSeconds = 0.0;
 };
 
-[[nodiscard]] static bool ValidatePacketSubmissionStatisticsOwner(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-    return IsValidFrameGraphRuntimeStatistics(ownerStatistics)
-        && statistics.packetGeneration == ownerStatistics.planGeneration
-        && static_cast<u64>(statistics.packetIndex) < ownerStatistics.compile.packetCount
-        && statistics.queue.deviceGeneration == ownerStatistics.deviceGeneration
-        && statistics.taskCount <= ownerStatistics.compile.taskCount
-        && statistics.commandListCount <= ownerStatistics.recording.commandListCount
-    ;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, const u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, TelemetryBytes& outPayload){
+    return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord>{}, nullptr, outPayload);
 }
 
-[[nodiscard]] static bool AccumulatePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphSubmissionRuntimeStatistics& ownerStatistics, FrameGraphPacketSubmissionStatisticsAccumulator& total)noexcept{
-    if(!(
-        AccumulateBoundedCount(1u, ownerStatistics.nativeSubmissionCount, total.nativeSubmissionCount)
-        && AccumulateBoundedCount(statistics.taskCount, ownerStatistics.acceptedTaskCount, total.taskCount)
-        && AccumulateBoundedCount(statistics.commandListCount, ownerStatistics.nativeCommandListCount, total.commandListCount)
-        && AccumulateBoundedCount(statistics.plannedWaitTokenCount, ownerStatistics.plannedWaitTokenCount, total.plannedWaitTokenCount)
-        && AccumulateBoundedCount(statistics.sameQueueWaitElisionCount, ownerStatistics.sameQueueWaitElisionCount, total.sameQueueWaitElisionCount)
-        && AccumulateBoundedCount(statistics.timelineWaitCount, ownerStatistics.timelineWaitCount, total.timelineWaitCount)
-        && AccumulateBoundedCount(statistics.mergedTimelineWaitCount, ownerStatistics.mergedTimelineWaitCount, total.mergedTimelineWaitCount)
-        && AccumulateBoundedCount(statistics.inheritedTimelineWaitElisionCount, ownerStatistics.inheritedTimelineWaitElisionCount, total.inheritedTimelineWaitElisionCount)
-        && AccumulateBoundedCount(statistics.joinsAcceptedQueueFrontier ? 1u : 0u, ownerStatistics.acceptedFrontierSubmissionCount, total.acceptedFrontierSubmissionCount)
-        && AccumulateBoundedCount(statistics.recoverySubmission ? 1u : 0u, ownerStatistics.recoverySubmissionCount, total.recoverySubmissionCount)
-    ))
-        return false;
-
-    total.submissionSeconds += statistics.submissionSeconds;
-    return IsFinite(total.submissionSeconds);
-}
-
-[[nodiscard]] static bool PacketSubmissionDurationSumsMatch(const f64 lhs, const f64 rhs, const u64 submissionCount)noexcept{
-    if(lhs == rhs)
-        return true;
-    if(submissionCount == 0u)
-        return false;
-
-    const f64 roundingFactor = static_cast<f64>(submissionCount) * s_DoublePrecisionEpsilon;
-    if(roundingFactor >= s_SubmissionRoundingLimit)
-        return false;
-    const f64 magnitude = lhs > rhs ? lhs : rhs;
-    const f64 difference = lhs > rhs ? lhs - rhs : rhs - lhs;
-    return difference / magnitude <= (s_SubmissionRoundingScale * roundingFactor) / (1.0 - roundingFactor);
-}
-
-template<typename SubmissionStatistics>
-[[nodiscard]] static bool PacketSubmissionStatisticsAccumulatorMatches(const FrameGraphPacketSubmissionStatisticsAccumulator& total, const SubmissionStatistics& statistics)noexcept{
-    if(
-        total.nativeSubmissionCount != statistics.nativeSubmissionCount
-        || total.commandListCount != statistics.nativeCommandListCount
-        || total.plannedWaitTokenCount != statistics.plannedWaitTokenCount
-        || total.sameQueueWaitElisionCount != statistics.sameQueueWaitElisionCount
-        || total.timelineWaitCount != statistics.timelineWaitCount
-        || total.mergedTimelineWaitCount != statistics.mergedTimelineWaitCount
-        || total.inheritedTimelineWaitElisionCount != statistics.inheritedTimelineWaitElisionCount
-        || total.acceptedFrontierSubmissionCount != statistics.acceptedFrontierSubmissionCount
-        || total.recoverySubmissionCount != statistics.recoverySubmissionCount
-        || total.taskCount > statistics.acceptedTaskCount
-        || !PacketSubmissionDurationSumsMatch(total.submissionSeconds, statistics.submissionSeconds, total.nativeSubmissionCount)
-    )
-        return false;
-
-    const u64 manualAcceptedPacketCount = statistics.acceptedPacketCount - statistics.nativeSubmissionCount;
-    return manualAcceptedPacketCount <= statistics.acceptedTaskCount - total.taskCount;
-}
-
-template<typename NodeContainer>
-[[nodiscard]] static bool ValidatePacketSubmissionStatisticsTable(
+bool BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
-    const NodeContainer& nodes,
-    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
-    const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics
+    const u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    TelemetryBytes& outPayload
 ){
-    for(usize statisticsIndex = 0u; statisticsIndex < packetSubmissionStatistics.size(); ++statisticsIndex){
-        const FrameGraphPacketSubmissionStatisticsRecord& statistics = packetSubmissionStatistics[statisticsIndex];
-        if(
-            statistics.ownerNodeIndex >= nodes.size()
-            || nodes[statistics.ownerNodeIndex].kind != FrameGraphNodeKind::Pass
-            || !ValidatePacketSubmissionStatisticsOwner(statistics, nodes[statistics.ownerNodeIndex].runtimeStatistics)
-            || (statisticsIndex != 0u && !PacketSubmissionStatisticsRecordLess(packetSubmissionStatistics[statisticsIndex - 1u], statistics))
-        )
-            return false;
-    }
-
-    Vector<FrameGraphPacketSubmissionStatisticsAccumulator, Alloc::ScratchArena> queueTotals(scratchArena);
-    queueTotals.resize(physicalQueueRuntimeStatistics.size());
-    usize statisticsIndex = 0u;
-    usize queueBegin = 0u;
-    for(usize nodeIndex = 0u; nodeIndex < nodes.size(); ++nodeIndex){
-        usize queueEnd = queueBegin;
-        while(queueEnd < physicalQueueRuntimeStatistics.size() && physicalQueueRuntimeStatistics[queueEnd].ownerNodeIndex == nodeIndex)
-            ++queueEnd;
-
-        FrameGraphPacketSubmissionStatisticsAccumulator total;
-        while(statisticsIndex < packetSubmissionStatistics.size() && packetSubmissionStatistics[statisticsIndex].ownerNodeIndex == nodeIndex){
-            const auto& statistics = packetSubmissionStatistics[statisticsIndex];
-            const auto& ownerSubmission = nodes[nodeIndex].runtimeStatistics.submission;
-            if(!AccumulatePacketSubmissionStatistics(statistics, ownerSubmission, total))
-                return false;
-
-            usize first = queueBegin;
-            usize last = queueEnd;
-            while(first < last){
-                const usize middle = first + (last - first) / 2u;
-                const auto queue = physicalQueueRuntimeStatistics[middle].statistics.queue;
-                if(queue.index < statistics.queue.index || (queue.index == statistics.queue.index && queue.deviceGeneration < statistics.queue.deviceGeneration))
-                    first = middle + 1u;
-                else
-                    last = middle;
-            }
-            if(first < queueEnd && physicalQueueRuntimeStatistics[first].statistics.queue == statistics.queue){
-                if(physicalQueueRuntimeStatistics[first].statistics.queueClass != statistics.queueClass || !AccumulatePacketSubmissionStatistics(statistics, ownerSubmission, queueTotals[first]))
-                    return false;
-            }
-            ++statisticsIndex;
-        }
-        if(nodes[nodeIndex].runtimeStatistics.present && !PacketSubmissionStatisticsAccumulatorMatches(total, nodes[nodeIndex].runtimeStatistics.submission))
-            return false;
-        queueBegin = queueEnd;
-    }
-    if(statisticsIndex != packetSubmissionStatistics.size())
-        return false;
-
-    for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
-        if(!PacketSubmissionStatisticsAccumulatorMatches(queueTotals[queueIndex], physicalQueueRuntimeStatistics[queueIndex].statistics.submission))
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool BuildFrameGraphPayload(TelemetryArena& arena, const u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, TelemetryBytes& outPayload){
-    FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(arena);
-    return BuildFrameGraphPayload(arena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, outPayload);
-}
-
-bool BuildFrameGraphPayload(TelemetryArena& arena, const u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, TelemetryBytes& outPayload){
-    static_cast<void>(arena);
-    Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_FrameGraphPayloadScratch);
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, nullptr, outPayload);
 }
 
 bool BuildFrameGraphPayload(
-    TelemetryArena& arena,
+    Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
@@ -623,8 +390,6 @@ bool BuildFrameGraphPayload(
     const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     TelemetryBytes& outPayload
 ){
-    static_cast<void>(arena);
-    Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_FrameGraphPayloadScratch);
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, &packetSubmissionStatistics, outPayload);
 }
 
@@ -643,7 +408,7 @@ bool BuildFrameGraphPayloadImpl(
     const u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     const FrameGraphPacketSubmissionStatisticsRecords* const packetSubmissionStatistics,
     TelemetryBytes& outPayload
 ){
@@ -663,7 +428,7 @@ bool BuildFrameGraphPayloadImpl(
         orderedPacketSubmissionStatistics.reserve(packetSubmissionStatistics->size());
         for(const FrameGraphPacketSubmissionStatisticsRecord& record : *packetSubmissionStatistics)
             orderedPacketSubmissionStatistics.push_back(record);
-        Sort(orderedPacketSubmissionStatistics.begin(), orderedPacketSubmissionStatistics.end(), __hidden_telemetry_frame_graph::PacketSubmissionStatisticsRecordLess);
+        Sort(orderedPacketSubmissionStatistics.begin(), orderedPacketSubmissionStatistics.end(), FrameGraphStatisticsCodecDetail::PacketSubmissionStatisticsRecordLess);
     }
 
     usize stringTableBytes = 0u;
@@ -710,7 +475,7 @@ bool BuildFrameGraphPayloadImpl(
 
     const bool hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
     if(hasPacketSubmissionStatistics){
-        if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(scratchArena, nodes, orderedPhysicalQueueRuntimeStatistics, orderedPacketSubmissionStatistics))
+        if(!FrameGraphStatisticsCodecDetail::ValidatePacketSubmissionStatisticsTable(scratchArena, nodes, orderedPhysicalQueueRuntimeStatistics, orderedPacketSubmissionStatistics))
             return false;
     }
 
@@ -781,10 +546,10 @@ bool BuildFrameGraphPayloadImpl(
             AppendPOD(outPayload, __hidden_telemetry_frame_graph::EncodeRuntimeStatistics(nodeIndex, nodes[nodeIndex].runtimeStatistics));
     }
     for(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : orderedPhysicalQueueRuntimeStatistics){
-        AppendPOD(outPayload, __hidden_telemetry_frame_graph::EncodePhysicalQueueRuntimeStatistics(record));
+        AppendPOD(outPayload, FrameGraphStatisticsCodecDetail::EncodePhysicalQueueRuntimeStatistics(record));
     }
     for(const FrameGraphPacketSubmissionStatisticsRecord& statistics : orderedPacketSubmissionStatistics)
-        AppendPOD(outPayload, __hidden_telemetry_frame_graph::EncodePacketSubmissionStatistics(statistics));
+        AppendPOD(outPayload, FrameGraphStatisticsCodecDetail::EncodePacketSubmissionStatistics(statistics));
     if(!stringTable.empty())
         BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, stringTable.data(), stringTable.size());
 
@@ -801,7 +566,7 @@ bool BuildFrameGraphPayloadImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
+Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc::ScratchArena& scratchArena, const void* const payload, const usize payloadBytes){
     FrameGraphPayload parsedPayload(arena);
 
     if(payloadBytes < sizeof(EncodedFrameGraphPayloadHeader) || !payload)
@@ -973,7 +738,7 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, const 
         const EncodedFrameGraphPhysicalQueueRuntimeStatistics& encodedStatistics = *decodedEncodedStatistics;
         if(encodedStatistics.ownerNodeIndex >= parsedPayload.nodes.size())
             return MakeUnexpected(Failure{});
-        const auto decodedStatistics = __hidden_telemetry_frame_graph::DecodePhysicalQueueRuntimeStatistics(encodedStatistics, parsedPayload.nodes[encodedStatistics.ownerNodeIndex].runtimeStatistics);
+        const auto decodedStatistics = FrameGraphStatisticsCodecDetail::DecodePhysicalQueueRuntimeStatistics(encodedStatistics, parsedPayload.nodes[encodedStatistics.ownerNodeIndex].runtimeStatistics);
         if(!decodedStatistics)
             return MakeUnexpected(Failure{});
         const FrameGraphPhysicalQueueRuntimeStatisticsRecord& statistics = *decodedStatistics;
@@ -997,14 +762,13 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, const 
             return MakeUnexpected(Failure{});
         const EncodedFrameGraphPacketSubmissionStatistics& encodedStatistics = *decodedEncodedStatistics;
 
-        const auto statistics = __hidden_telemetry_frame_graph::DecodePacketSubmissionStatistics(encodedStatistics);
+        const auto statistics = FrameGraphStatisticsCodecDetail::DecodePacketSubmissionStatistics(encodedStatistics);
         if(!statistics)
             return MakeUnexpected(Failure{});
         parsedPayload.packetSubmissionStatistics.push_back(*statistics);
     }
     if(parsedPayload.packetSubmissionStatisticsPresent){
-        Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_PacketStatisticsValidationScratch);
-        if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(scratchArena, parsedPayload.nodes, parsedPayload.physicalQueueRuntimeStatistics, parsedPayload.packetSubmissionStatistics))
+        if(!FrameGraphStatisticsCodecDetail::ValidatePacketSubmissionStatisticsTable(scratchArena, parsedPayload.nodes, parsedPayload.physicalQueueRuntimeStatistics, parsedPayload.packetSubmissionStatistics))
             return MakeUnexpected(Failure{});
     }
 

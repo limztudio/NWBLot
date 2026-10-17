@@ -66,7 +66,9 @@ struct RayTracingOpacityMicromapDesc{
     Buffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
 
-    explicit RayTracingOpacityMicromapDesc(GraphicsArena& arena)
+
+public:
+    explicit RayTracingOpacityMicromapDesc(GraphicsArena& arena)noexcept
         : counts(arena)
     {}
 
@@ -133,8 +135,9 @@ struct RayTracingGeometryAABB{
 };
 
 struct RayTracingGeometryTriangles{
-    Buffer* indexBuffer = nullptr;   // make sure the first 2 fields in all Geometry
-    Buffer* vertexBuffer = nullptr;  // structs are Buffer* for easier debugging
+    // Keep the first two fields of every geometry descriptor as Buffer* for easier debugging.
+    Buffer* indexBuffer = nullptr;
+    Buffer* vertexBuffer = nullptr;
     u64 indexOffset = 0;
     u64 vertexOffset = 0;
 
@@ -151,6 +154,8 @@ struct RayTracingGeometryTriangles{
     Format::Enum vertexFormat = Format::UNKNOWN;
     Format::Enum ommIndexFormat = Format::UNKNOWN;
 
+
+public:
     constexpr RayTracingGeometryTriangles& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
     constexpr RayTracingGeometryTriangles& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
     constexpr RayTracingGeometryTriangles& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
@@ -175,6 +180,8 @@ struct RayTracingGeometryAABBs{
     u32 count = 0;
     u32 stride = 0;
 
+
+public:
     constexpr RayTracingGeometryAABBs& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
     constexpr RayTracingGeometryAABBs& setOffset(u64 value)noexcept{ offset = value; return *this; }
     constexpr RayTracingGeometryAABBs& setCount(u32 value)noexcept{ count = value; return *this; }
@@ -197,6 +204,8 @@ struct RayTracingGeometrySpheres{
     Format::Enum vertexPositionFormat = Format::UNKNOWN;
     Format::Enum vertexRadiusFormat = Format::UNKNOWN;
 
+
+public:
     constexpr RayTracingGeometrySpheres& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
     constexpr RayTracingGeometrySpheres& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
     constexpr RayTracingGeometrySpheres& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
@@ -247,6 +256,8 @@ struct RayTracingGeometryLss{
     RayTracingGeometryLssPrimitiveFormat::Enum primitiveFormat = RayTracingGeometryLssPrimitiveFormat::List;
     RayTracingGeometryLssEndcapMode::Enum endcapMode = RayTracingGeometryLssEndcapMode::None;
 
+
+public:
     constexpr RayTracingGeometryLss& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
     constexpr RayTracingGeometryLss& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
     constexpr RayTracingGeometryLss& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
@@ -279,7 +290,9 @@ struct RayTracingGeometryDesc{
     RayTracingGeometryType::Enum geometryType = RayTracingGeometryType::Triangles;
     bool useTransform = false;
 
-    RayTracingGeometryDesc()
+
+public:
+    RayTracingGeometryDesc()noexcept
         : geometryData{}
     {}
 
@@ -322,6 +335,8 @@ struct RayTracingInstanceDesc{
         u64 blasDeviceAddress; // for buildTopLevelAccelStructFromBuffer - use RayTracingAccelStruct::getDeviceAddress()
     };
 
+
+public:
     RayTracingInstanceDesc()
         : instanceID(0)
         , instanceMask(0)
@@ -373,7 +388,9 @@ struct RayTracingAccelStructDesc{
     bool isTopLevel = false;
     bool isVirtual = false;
 
-    explicit RayTracingAccelStructDesc(GraphicsArena& arena)
+
+public:
+    explicit RayTracingAccelStructDesc(GraphicsArena& arena)noexcept
         : bottomLevelGeometries(arena)
     {}
 

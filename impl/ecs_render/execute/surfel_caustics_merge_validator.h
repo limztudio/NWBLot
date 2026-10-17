@@ -60,7 +60,7 @@ struct SurfelCausticsMergeValidationResult{
 
 class SurfelCausticsMergeValidator final : NoCopy{
 public:
-    explicit SurfelCausticsMergeValidator(NotNull<RendererFramePipeline*> pipeline);
+    explicit SurfelCausticsMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept;
 
 
 public:

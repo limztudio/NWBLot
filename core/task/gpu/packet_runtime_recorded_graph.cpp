@@ -136,7 +136,8 @@ struct GpuRecordedGraph::ArtifactStorage final : NoCopy{
     bool valid = false;
 
 
-    explicit ArtifactStorage(GraphicsArena& arena)
+public:
+    explicit ArtifactStorage(GraphicsArena& arena)noexcept
         : packets(arena)
         , packetRecordingOverlaps(arena)
         , packetTimingTickets(arena)
@@ -211,13 +212,13 @@ void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)no
     storage.deviceGeneration = 0u;
     storage.valid = false;
 }
-
-
-GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)
+GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
     : m_arena(arena)
     , m_activeStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
     , m_candidateStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
 {}
+
+
 GpuRecordedGraph::~GpuRecordedGraph()noexcept{
     if(ArtifactOperation::ActiveFor(*this)){
         NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph destruction requires active artifact operations to finish first");
@@ -295,7 +296,6 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt");
     TerminateInvariant();
 }
-
 
 void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactStorage& storage)noexcept{
     const usize packetCount = Min(storage.packetCount, storage.packets.size());
@@ -432,7 +432,8 @@ void GpuRecordedGraph::publishStorageCandidate(const GpuTaskGraph* const graphId
 
 bool GpuRecordedGraph::validForWithinArtifactOperation(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const ArtifactOperation& artifactAccess)const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();
-    return planAccess.validFor(compiledGraph)
+    return
+        planAccess.validFor(compiledGraph)
         && artifactAccess.validFor(*this)
         && storage
         && storage->valid
@@ -458,7 +459,8 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(
     const ArtifactOperation& artifactAccess
 )const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();
-    return declarationAccess.validFor(graph)
+    return
+        declarationAccess.validFor(graph)
         && planAccess.validFor(declarationAccess)
         && validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess)
         && storage->graphIdentity == &graph
@@ -690,7 +692,6 @@ void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(const GpuSubmissio
     *recordedPacket = {};
     stateSeed->reset();
 }
-
 
 const GpuRecordedPacket* GpuRecordedGraph::findWithinArtifactOperation(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();

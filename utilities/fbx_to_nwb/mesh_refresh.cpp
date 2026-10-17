@@ -5,6 +5,7 @@
 #include "module.h"
 #include "mesh_refresh_parse.h"
 #include "mesh_refresh_text.h"
+#include "text_write.h"
 
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
@@ -55,44 +56,36 @@ struct StreamSortEntry{
     return FloatingHashBits(lhs) == FloatingHashBits(rhs);
 }
 
-[[nodiscard]] bool SameF32Bits(const f32 lhs, const f32 rhs)noexcept{
-    return NWB_MEMCMP(&lhs, &rhs, sizeof(lhs)) == 0;
+[[nodiscard]] bool LessEmittedF32(const f32 lhs, const f32 rhs)noexcept{
+    return FloatingHashBits(TextWrite::CleanFloat(lhs)) < FloatingHashBits(TextWrite::CleanFloat(rhs));
+}
+
+[[nodiscard]] bool SameEmittedF32(const f32 lhs, const f32 rhs)noexcept{
+    return FloatingHashBits(TextWrite::CleanFloat(lhs)) == FloatingHashBits(TextWrite::CleanFloat(rhs));
 }
 
 [[nodiscard]] bool LessValue(const Vec2& lhs, const Vec2& rhs)noexcept{
-    if(!SameF32(lhs.x, rhs.x))
-        return LessF32(lhs.x, rhs.x);
-    return LessF32(lhs.y, rhs.y);
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    return LessEmittedF32(lhs.y, rhs.y);
 }
 
 [[nodiscard]] bool LessValue(const Vec3& lhs, const Vec3& rhs)noexcept{
-    if(!SameF32(lhs.x, rhs.x))
-        return LessF32(lhs.x, rhs.x);
-    if(!SameF32(lhs.y, rhs.y))
-        return LessF32(lhs.y, rhs.y);
-    return LessF32(lhs.z, rhs.z);
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    return LessEmittedF32(lhs.z, rhs.z);
 }
 
 [[nodiscard]] bool LessValue(const Vec4& lhs, const Vec4& rhs)noexcept{
-    if(!SameF32(lhs.x, rhs.x))
-        return LessF32(lhs.x, rhs.x);
-    if(!SameF32(lhs.y, rhs.y))
-        return LessF32(lhs.y, rhs.y);
-    if(!SameF32(lhs.z, rhs.z))
-        return LessF32(lhs.z, rhs.z);
-    return LessF32(lhs.w, rhs.w);
-}
-
-[[nodiscard]] bool SameValue(const Vec2& lhs, const Vec2& rhs)noexcept{
-    return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y);
-}
-
-[[nodiscard]] bool SameValue(const Vec3& lhs, const Vec3& rhs)noexcept{
-    return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y) && SameF32Bits(lhs.z, rhs.z);
-}
-
-[[nodiscard]] bool SameValue(const Vec4& lhs, const Vec4& rhs)noexcept{
-    return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y) && SameF32Bits(lhs.z, rhs.z) && SameF32Bits(lhs.w, rhs.w);
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    if(!SameEmittedF32(lhs.z, rhs.z))
+        return LessEmittedF32(lhs.z, rhs.z);
+    return LessEmittedF32(lhs.w, rhs.w);
 }
 
 [[nodiscard]] bool LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
@@ -106,6 +99,19 @@ struct StreamSortEntry{
     }
     return false;
 }
+
+[[nodiscard]] bool SameValue(const Vec2& lhs, const Vec2& rhs)noexcept{
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y);
+}
+
+[[nodiscard]] bool SameValue(const Vec3& lhs, const Vec3& rhs)noexcept{
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z);
+}
+
+[[nodiscard]] bool SameValue(const Vec4& lhs, const Vec4& rhs)noexcept{
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
+}
+
 
 [[nodiscard]] bool SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
     MeshSkinInfluenceEqual equal;
@@ -124,13 +130,17 @@ template<typename Value>
     UtilityScratchVector<StreamSortEntry<Value>> sortedEntries(scratchArena);
     sortedEntries.resize(stream.size());
 
-    auto fillEntry = [&](const usize index){
+    auto fillEntry = [&](const usize index)noexcept(noexcept(DeclVal<Value&>() = DeclVal<const Value&>())){
         sortedEntries[index].value = stream[index];
         sortedEntries[index].sourceIndex = index;
     };
-    cpuScheduler.parallelFor(static_cast<usize>(0), stream.size(), s_DeduplicateParallelGrainSize, fillEntry);
+    const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0), stream.size(), s_DeduplicateParallelGrainSize, fillEntry);
+    if(!parallelWork){
+        NWB_LOGGER_ERROR(NWB_TEXT("FBX: stream deduplication preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+        return MakeUnexpected(Failure{});
+    }
 
-    Sort(sortedEntries.begin(), sortedEntries.end(), [](const StreamSortEntry<Value>& lhs, const StreamSortEntry<Value>& rhs){
+    Sort(sortedEntries.begin(), sortedEntries.end(), [](const StreamSortEntry<Value>& lhs, const StreamSortEntry<Value>& rhs)noexcept(noexcept(LessValue(lhs.value, rhs.value))){
             if(LessValue(lhs.value, rhs.value))
                 return true;
             if(LessValue(rhs.value, lhs.value))
@@ -194,15 +204,7 @@ template<typename Value>
     return RemapRequiredIndex(inOutIndex, remap, streamName);
 }
 
-[[nodiscard]] bool RemapComponentRefs(
-    SourceMeshStreams& mesh,
-    const Span<const u32> positions,
-    const Span<const u32> normals,
-    const Span<const u32> tangents,
-    const Span<const u32> uv0,
-    const Span<const u32> colors,
-    const Span<const u32> skin
-){
+[[nodiscard]] bool RemapComponentRefs(SourceMeshStreams& mesh, const Span<const u32> positions, const Span<const u32> normals, const Span<const u32> tangents, const Span<const u32> uv0, const Span<const u32> colors, const Span<const u32> skin){
     for(SourceVertexRef& ref : mesh.vertexRefs){
         if(!RemapRequiredIndex(ref.position, positions, s_PositionStreamLabel))
             return false;
@@ -260,18 +262,17 @@ template<typename Value>
 }
 
 
-[[nodiscard]] Expected<AString> ReadMetascriptSource(const Path& nwbFilePath){
-    AString outText;
-    if(!ReadTextFile(nwbFilePath, outText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}'"), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
+[[nodiscard]] Expected<ScratchString, ErrorCode> ReadMetascriptSource(const ScratchPath& nwbFilePath, Core::Alloc::ScratchArena& scratchArena){
+    ScratchString outText(scratchArena);
+    const auto read = ReadTextFile(nwbFilePath, outText);
+    if(!read)
+        return MakeUnexpected(read.error());
 
     StripUtf8Bom(outText);
     return outText;
 }
 
-[[nodiscard]] Expected<Core::Metascript::Document> ParseMetascriptDocument(const Path& nwbFilePath, const AStringView text, Core::Metascript::MetaArena& arena){
+[[nodiscard]] Expected<Core::Metascript::Document> ParseMetascriptDocument(const ScratchPath& nwbFilePath, const AStringView text, Core::Metascript::MetaArena& arena){
     Core::Metascript::Document outDoc(arena);
     if(outDoc.parse(text))
         return outDoc;
@@ -356,14 +357,15 @@ Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshS
     return report;
 }
 
-Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler){
-    Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_MeshRefreshScratch);
+Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
     SourceMeshCanonicalizeReport outReport;
 
-    auto sourceResult = __hidden_mesh_refresh::ReadMetascriptSource(inputPath);
-    if(!sourceResult)
+    auto sourceResult = __hidden_mesh_refresh::ReadMetascriptSource(inputPath, scratchArena);
+    if(!sourceResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}': {}"), PathToString<tchar>(inputPath), StringConvert(sourceResult.error().message()));
         return MakeUnexpected(Failure{});
-    AString& source = *sourceResult;
+    }
+    ScratchString& source = *sourceResult;
     const bool useCrlf = HasCrlfLineEndings(AStringView(source.data(), source.size()));
 
     Core::Metascript::MetaArena metaArena(UtilityDetail::s_UtilityArena);
@@ -372,7 +374,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
         return MakeUnexpected(Failure{});
     const Core::Metascript::Document& doc = *docResult;
 
-    UtilityScratchVector<MeshRefreshTextDetail::TextReplacement> replacements(scratchArena);
+    MeshRefreshTextDetail::TextReplacements replacements(scratchArena);
     const auto replacementCapacity = TryMultiply<usize>(doc.declarations().size(), __hidden_mesh_refresh::s_MaxMeshReplacementCount);
     if(!replacementCapacity){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: replacement capacity overflows"));
@@ -396,7 +398,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
             return MakeUnexpected(Failure{});
         }
 
-        auto meshResult = MeshRefreshParseDetail::ParseMeshValue(inputPath, meshVariableName, *meshValue);
+        auto meshResult = MeshRefreshParseDetail::ParseMeshValue(inputPath, meshVariableName, *meshValue, scratchArena);
         if(!meshResult)
             return MakeUnexpected(Failure{});
         SourceMeshStreams& mesh = *meshResult;
@@ -409,7 +411,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
         const AStringView skinVariableName = skinReference->variableName;
         const Core::Metascript::Value* skinValue = skinReference->value;
         if(skinValue){
-            auto influences = MeshRefreshParseDetail::ParseSkinInfluences(inputPath, *skinValue, skinVariableName);
+            auto influences = MeshRefreshParseDetail::ParseSkinInfluences(inputPath, *skinValue, skinVariableName, scratchArena);
             if(!influences)
                 return MakeUnexpected(Failure{});
             UtilityVector<MeshSkinInfluence>& skinInfluences = *influences;
@@ -417,18 +419,15 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;
-            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh))
+            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh, scratchArena))
                 return MakeUnexpected(Failure{});
-            if(itemReport.before.skin != itemReport.after.skin && !MeshRefreshTextDetail::AddReplacement(replacements, source, skinVariableName, "influences", MeshRefreshTextDetail::WriteSkinInfluenceList(skinInfluences))){
-                return MakeUnexpected(Failure{});
-            }
         }
         else{
             const auto canonicalized = CanonicalizeSourceMeshStreams(mesh, cpuScheduler, scratchArena);
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;
-            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh))
+            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh, scratchArena))
                 return MakeUnexpected(Failure{});
         }
 
@@ -446,8 +445,11 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath
     }
     NormalizeLineEndingsInPlace(source, useCrlf);
 
-    if(!WriteTextFile(outputPath, AStringView(source.data(), source.size())))
+    const auto written = WriteTextFile(outputPath, AStringView(source.data(), source.size()));
+    if(!written){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to write output file '{}'"), PathToString<tchar>(outputPath));
         return MakeUnexpected(Failure{});
+    }
     return outReport;
 }
 

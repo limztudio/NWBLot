@@ -117,26 +117,26 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
     const f32 y = VectorGetY(contentOrigin);
     switch(selected){
     case Section::Controls:
-        paintControls(context, x, y);
+        paintControls(context, scratchArena, x, y);
         m_popups.paint(context, x, y);
         break;
     case Section::Edit: m_edits.paint(context, x, y); break;
-    case Section::List: m_lists.paint(context, x, y); break;
-    case Section::Combo: m_combos.paint(context, x, y); break;
-    case Section::SearchCombo: m_searchCombos.paint(context, x, y); break;
-    case Section::PopupTools: m_popupTools.paint(context, x, y); break;
+    case Section::List: m_lists.paint(context, scratchArena, x, y); break;
+    case Section::Combo: m_combos.paint(context, scratchArena, x, y); break;
+    case Section::SearchCombo: m_searchCombos.paint(context, scratchArena, x, y); break;
+    case Section::PopupTools: m_popupTools.paint(context, scratchArena, x, y); break;
     case Section::NestedPopup: m_nestedPopups.paint(context, x, y); break;
-    case Section::NumericEdit: m_numericEdits.paint(context, x, y); break;
+    case Section::NumericEdit: m_numericEdits.paint(context, scratchArena, x, y); break;
     case Section::TextArea: m_textAreas.paint(context, x, y); break;
     case Section::RadioGroup: m_radioGroups.paint(context, x, y); break;
     case Section::Slider: m_sliders.paint(context, x, y); break;
-    case Section::Progress: m_progress.paint(context, x, y); break;
+    case Section::Progress: m_progress.paint(context, scratchArena, x, y); break;
     case Section::Image: m_images.paint(context, x, y); break;
     default: break;
     }
 }
 
-void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("interactive_gallery", { x, y, 280.0f, 180.0f }))
@@ -157,7 +157,6 @@ void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, const f3
         m_count = 0u;
     m_popups.trigger(ui);
     valid = ui.endContainer() && valid;
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/widget_caption"));
     const auto caption = StringFormat(scratchArena, "Count: {}", m_count);
     valid = ui.label("count", { caption.data(), caption.size() }) && valid;
     valid = ui.label("keyboard_hint", "Tab / Shift+Tab, Enter / Space") && valid;

@@ -10,6 +10,8 @@
 
 #include <loader/project_entry.h>
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,7 +35,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize(AStringView caseName);
+    [[nodiscard]] bool initialize(AStringView caseName, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool update();
     void finish();
 

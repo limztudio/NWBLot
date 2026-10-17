@@ -6,7 +6,9 @@
 
 #include <core/crash/package_names.h>
 
+#include <global/diagnostics.h>
 #include <global/limit.h>
+#include <global/not_null.h>
 #include <global/scope_exit.h>
 
 #include <dbghelp.h>
@@ -43,13 +45,15 @@ inline constexpr u64 s_HexRadixBits = 4u;
 struct DumpMemoryRange{
     u64 begin = 0u;
     u64 size = 0u;
-    const u8* bytes = nullptr;
+    NotNull<const u8*> bytes;
 };
 
 struct DumpImage{
     const u8* bytes = nullptr;
     usize byteCount = 0u;
 
+
+public:
     [[nodiscard]] const u8* rva(const u64 offset, const u64 size)const noexcept{
         if(!bytes || offset > static_cast<u64>(byteCount) || size > static_cast<u64>(byteCount) - offset)
             return nullptr;
@@ -70,14 +74,16 @@ struct DumpImage{
 
 template<typename T>
 struct MinidumpRecords{
-    const u8* bytes = nullptr;
+    NotNull<const u8*> bytes;
     usize count = 0u;
 
+
+public:
     [[nodiscard]] T record(const usize index)const noexcept{
         static_assert(IsTriviallyCopyable_V<T> && IsNothrowConstructible_V<T> && IsNothrowMoveConstructible_V<T>);
         NWB_ASSERT(index < count);
         T value;
-        NWB_MEMCPY(&value, sizeof(value), bytes + index * sizeof(T), sizeof(value));
+        NWB_MEMCPY(&value, sizeof(value), bytes.get() + index * sizeof(T), sizeof(value));
         return value;
     }
 };
@@ -85,8 +91,10 @@ struct MinidumpRecords{
 struct DumpMemoryReader{
     Vector<DumpMemoryRange, Core::Alloc::ScratchArena> ranges;
 
-    explicit DumpMemoryReader(Core::Alloc::ScratchArena& arena)
-        : ranges(arena)
+
+public:
+    explicit DumpMemoryReader(Core::Alloc::ScratchArena& scratchArena)noexcept
+        : ranges(scratchArena)
     {}
 };
 
@@ -96,7 +104,7 @@ static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<WString<LogArena>> ReadDumpString(LogArena& arena, const DumpImage& dumpImage, const RVA rvaValue){
+[[nodiscard]] static Expected<WString<Core::Alloc::ScratchArena>> ReadDumpString(Core::Alloc::ScratchArena& scratchArena, const DumpImage& dumpImage, const RVA rvaValue){
     const auto byteCount = dumpImage.read<ULONG32>(rvaValue);
     if(!byteCount || (*byteCount % sizeof(wchar)) != 0u)
         return MakeUnexpected(Failure{});
@@ -107,7 +115,7 @@ static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
     const auto terminator = dumpImage.read<wchar>(textOffset + *byteCount);
     if(!terminator || *terminator != 0)
         return MakeUnexpected(Failure{});
-    WString<LogArena> text(arena);
+    WString<Core::Alloc::ScratchArena> text(scratchArena);
     text.resize(static_cast<usize>(*byteCount / sizeof(wchar)));
     if(*byteCount != 0u)
         NWB_MEMCPY(text.data(), *byteCount, bytes, *byteCount);
@@ -139,9 +147,9 @@ static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
 
 template<typename T>
 [[nodiscard]] static Expected<MinidumpRecords<T>> ReadMinidumpRecords(const DumpImage& stream, const usize recordsOffset, const u64 count)noexcept{
-    if(recordsOffset > stream.byteCount || count > static_cast<u64>((stream.byteCount - recordsOffset) / sizeof(T)))
+    if(!stream.bytes || recordsOffset > stream.byteCount || count > static_cast<u64>((stream.byteCount - recordsOffset) / sizeof(T)))
         return MakeUnexpected(Failure{});
-    return MinidumpRecords<T>{ stream.bytes + recordsOffset, static_cast<usize>(count) };
+    return MinidumpRecords<T>{ MakeNotNull(stream.bytes + recordsOffset), static_cast<usize>(count) };
 }
 
 [[nodiscard]] static Expected<void> AddMemoryRange(DumpMemoryReader& reader, const u64 begin, const u64 size, const u8* const bytes){
@@ -149,7 +157,7 @@ template<typename T>
         return {};
     if(!bytes || size > Limit<u64>::s_Max - begin)
         return MakeUnexpected(Failure{});
-    reader.ranges.push_back(DumpMemoryRange{ begin, size, bytes });
+    reader.ranges.push_back(DumpMemoryRange{ begin, size, MakeNotNull(bytes) });
     return {};
 }
 
@@ -157,10 +165,9 @@ template<typename T>
     return AddMemoryRange(reader, begin, location.DataSize, dumpImage.rva(location.Rva, location.DataSize));
 }
 
-[[nodiscard]] static Expected<void> BuildDumpMemoryReader(const DumpImage& dumpImage, DumpMemoryReader& outReader){
-    usize rangeCapacity = 0u;
-    const MINIDUMP_STREAM_TYPE streamTypes[] = { ThreadListStream, MemoryListStream, Memory64ListStream };
-    for(const MINIDUMP_STREAM_TYPE streamType : streamTypes){
+[[nodiscard]] static Expected<usize> CountDumpMemoryRanges(const DumpImage& dumpImage)noexcept{
+    usize total = 0u;
+    for(const auto streamType : Array<MINIDUMP_STREAM_TYPE, 3u>{ ThreadListStream, MemoryListStream, Memory64ListStream }){
         const auto selected = ReadMinidumpStream(dumpImage, streamType);
         if(!selected)
             return MakeUnexpected(Failure{});
@@ -169,25 +176,36 @@ template<typename T>
         const DumpImage& stream = **selected;
         u64 count = 0u;
         if(streamType == Memory64ListStream){
-            const auto decoded = stream.read<ULONG64>(0u);
-            if(!decoded)
+            const auto records = stream.read<ULONG64>(0u);
+            if(!records || !ReadMinidumpRecords<MINIDUMP_MEMORY_DESCRIPTOR64>(stream, offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), *records))
                 return MakeUnexpected(Failure{});
-            count = *decoded;
+            count = *records;
         }
         else{
-            const auto decoded = stream.read<ULONG32>(0u);
-            if(!decoded)
+            const auto records = stream.read<ULONG32>(0u);
+            if(!records)
                 return MakeUnexpected(Failure{});
-            count = *decoded;
+            if(streamType == ThreadListStream){
+                if(!ReadMinidumpRecords<MINIDUMP_THREAD>(stream, offsetof(MINIDUMP_THREAD_LIST, Threads), *records))
+                    return MakeUnexpected(Failure{});
+            }
+            else if(!ReadMinidumpRecords<MINIDUMP_MEMORY_DESCRIPTOR>(stream, offsetof(MINIDUMP_MEMORY_LIST, MemoryRanges), *records))
+                return MakeUnexpected(Failure{});
+            count = *records;
         }
-        const usize recordsOffset = streamType == ThreadListStream ? offsetof(MINIDUMP_THREAD_LIST, Threads) : streamType == MemoryListStream ? offsetof(MINIDUMP_MEMORY_LIST, MemoryRanges) : offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges);
-        const usize recordStride = streamType == ThreadListStream ? sizeof(MINIDUMP_THREAD) : streamType == MemoryListStream ? sizeof(MINIDUMP_MEMORY_DESCRIPTOR) : sizeof(MINIDUMP_MEMORY_DESCRIPTOR64);
-        if(recordsOffset > stream.byteCount || count > static_cast<u64>((stream.byteCount - recordsOffset) / recordStride) || count > static_cast<u64>(Limit<usize>::s_Max - rangeCapacity))
+        if(count > static_cast<u64>(Limit<usize>::s_Max - total))
             return MakeUnexpected(Failure{});
-        rangeCapacity += static_cast<usize>(count);
+        total += static_cast<usize>(count);
     }
-    outReader.ranges.reserve(rangeCapacity);
+    return total;
+}
 
+[[nodiscard]] static Expected<DumpMemoryReader> BuildDumpMemoryReader(Core::Alloc::ScratchArena& scratchArena, const DumpImage& dumpImage){
+    const auto rangeCapacity = CountDumpMemoryRanges(dumpImage);
+    if(!rangeCapacity)
+        return MakeUnexpected(Failure{});
+    DumpMemoryReader reader(scratchArena);
+    reader.ranges.reserve(*rangeCapacity);
     const auto threadStream = ReadMinidumpStream(dumpImage, ThreadListStream);
     if(!threadStream)
         return MakeUnexpected(Failure{});
@@ -201,7 +219,7 @@ template<typename T>
             return MakeUnexpected(Failure{});
         for(usize index = 0u; index < threads->count; ++index){
             const MINIDUMP_THREAD thread = threads->record(index);
-            if(!AddLocationMemoryRange(dumpImage, outReader, thread.Stack.StartOfMemoryRange, thread.Stack.Memory))
+            if(!AddLocationMemoryRange(dumpImage, reader, thread.Stack.StartOfMemoryRange, thread.Stack.Memory))
                 return MakeUnexpected(Failure{});
         }
     }
@@ -219,7 +237,7 @@ template<typename T>
             return MakeUnexpected(Failure{});
         for(usize index = 0u; index < ranges->count; ++index){
             const MINIDUMP_MEMORY_DESCRIPTOR descriptor = ranges->record(index);
-            if(!AddLocationMemoryRange(dumpImage, outReader, descriptor.StartOfMemoryRange, descriptor.Memory))
+            if(!AddLocationMemoryRange(dumpImage, reader, descriptor.StartOfMemoryRange, descriptor.Memory))
                 return MakeUnexpected(Failure{});
         }
     }
@@ -240,13 +258,13 @@ template<typename T>
         for(usize index = 0u; index < ranges->count; ++index){
             const MINIDUMP_MEMORY_DESCRIPTOR64 descriptor = ranges->record(index);
             const u8* const bytes = dumpImage.rva(cursor, descriptor.DataSize);
-            if(!bytes || !AddMemoryRange(outReader, descriptor.StartOfMemoryRange, descriptor.DataSize, bytes))
+            if(!bytes || !AddMemoryRange(reader, descriptor.StartOfMemoryRange, descriptor.DataSize, bytes))
                 return MakeUnexpected(Failure{});
             // The admitted payload ends within byteCount, so the cumulative RVA remains representable.
             cursor += descriptor.DataSize;
         }
     }
-    return {};
+    return reader;
 }
 
 static BOOL CALLBACK ReadProcessMemoryFromDump(HANDLE process, DWORD64 baseAddress, PVOID buffer, DWORD size, LPDWORD bytesRead)noexcept{
@@ -266,7 +284,7 @@ static BOOL CALLBACK ReadProcessMemoryFromDump(HANDLE process, DWORD64 baseAddre
         if(static_cast<u64>(size) > range.size - offset)
             return FALSE;
 
-        NWB_MEMCPY(buffer, static_cast<usize>(size), range.bytes + static_cast<usize>(offset), static_cast<usize>(size));
+        NWB_MEMCPY(buffer, static_cast<usize>(size), range.bytes.get() + static_cast<usize>(offset), static_cast<usize>(size));
         if(bytesRead)
             *bytesRead = size;
         return TRUE;
@@ -355,15 +373,17 @@ static void InitializeStackFrameFromContext(STACKFRAME64& outFrame, const CONTEX
     outFrame.AddrStack.Mode = AddrModeFlat;
 }
 
-[[nodiscard]] static WString<LogArena> BuildSymbolSearchPath(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config){
-    WString<LogArena> path{arena};
+[[nodiscard]] static WString<Core::Alloc::ScratchArena> BuildSymbolSearchPath(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config){
+    WString<Core::Alloc::ScratchArena> path{scratchArena};
+    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(scratchArena, config);
+    path.reserve(AddSize(AddSize(packageDirectory.native().size(), 1u), symbolStoreDirectory.native().size()));
     path += packageDirectory.native();
     path += L";";
-    path += EffectiveSymbolStoreDirectory(arena, config).native();
+    path += symbolStoreDirectory.native();
     return path;
 }
 
-static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const DumpImage& dumpImage, CrashReportText& outReport){
+static void LoadDumpModules(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, const DumpImage& dumpImage, CrashReportText& outReport){
     const auto moduleStream = ReadMinidumpStream(dumpImage, ModuleListStream);
     if(!moduleStream){
         outReport += "module_load=invalid_module_list\n";
@@ -388,7 +408,7 @@ static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const D
     u32 loadedCount = 0u;
     for(usize index = 0u; index < modules->count; ++index){
         const MINIDUMP_MODULE module = modules->record(index);
-        const auto moduleNameText = ReadDumpString(arena, dumpImage, module.ModuleNameRva);
+        const auto moduleNameText = ReadDumpString(scratchArena, dumpImage, module.ModuleNameRva);
         if(!moduleNameText){
             outReport += "module_load=invalid_module_list\n";
             return;
@@ -405,12 +425,13 @@ static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const D
     outReport += "\n";
 }
 
-static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
+static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
     outReport += "#";
     char frameBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(frameIndex), frameBuffer);
     outReport += " ";
-    AppendHexAddress(arena, outReport, address);
+    outReport += s_HexAddressPrefix;
+    outReport += FormatHex64A(scratchArena, address);
 
     alignas(SYMBOL_INFOW) u8 symbolBuffer[sizeof(SYMBOL_INFOW) + (MAX_SYM_NAME * sizeof(wchar))] = {};
     auto* symbol = reinterpret_cast<SYMBOL_INFOW*>(symbolBuffer);
@@ -419,12 +440,12 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
 
     DWORD64 displacement = 0u;
     if(SymFromAddrW(symbolProcess, address, &displacement, symbol)){
-        const AString<LogArena> name = BasicStringDetail::WideToUtf8(arena, WStringView(symbol->Name, symbol->NameLen));
+        const AString<Core::Alloc::ScratchArena> name = BasicStringDetail::WideToUtf8(scratchArena, WStringView(symbol->Name, symbol->NameLen));
         outReport += " ";
         outReport += name;
         if(displacement != 0u){
             outReport += "+0x";
-            outReport += FormatHex64A(arena, displacement);
+            outReport += FormatHex64A(scratchArena, displacement);
         }
     }
     else
@@ -434,7 +455,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     line.SizeOfStruct = sizeof(line);
     DWORD lineDisplacement = 0u;
     if(SymGetLineFromAddrW64(symbolProcess, address, &lineDisplacement, &line)){
-        const AString<LogArena> file = BasicStringDetail::WideToUtf8(arena, WStringView(line.FileName));
+        const AString<Core::Alloc::ScratchArena> file = BasicStringDetail::WideToUtf8(scratchArena, WStringView(line.FileName));
         outReport += " at ";
         outReport += file;
         outReport += ":";
@@ -463,9 +484,15 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
 }
 
 // Prefer client-captured frames; fall back to server StackWalk64 when none were shipped.
-[[nodiscard]] static bool AppendClientCallstack(LogArena& arena, const HANDLE symbolProcess, const Path& packageDirectory, CrashReportText& outReport){
-    AString<LogArena> callstackText{arena};
-    if(!ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, callstackText) || callstackText.empty())
+[[nodiscard]] static Expected<bool, ErrorCode> AppendClientCallstack(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
+    AString<Core::Alloc::ScratchArena> callstackText{scratchArena};
+    const auto read = ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, callstackText);
+    if(!read){
+        if(read.error() == ErrorCondition::no_such_file_or_directory)
+            return false;
+        return MakeUnexpected(read.error());
+    }
+    if(callstackText.empty())
         return false;
 
     const AStringView text(callstackText.data(), callstackText.size());
@@ -482,7 +509,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
         if(hexStart != AStringView::npos){
             const u64 address = ParseHexAddressText(line.substr(hexStart + 2u));
             if(address != 0u){
-                AppendResolvedSymbol(arena, symbolProcess, outReport, frameIndex, static_cast<DWORD64>(address));
+                AppendResolvedSymbol(scratchArena, symbolProcess, outReport, frameIndex, static_cast<DWORD64>(address));
                 ++frameIndex;
                 decodedAnyFrame = true;
             }
@@ -492,13 +519,16 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     return decodedAnyFrame;
 }
 
-bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport, Core::Alloc::ScratchArena& scratchArena){
-    const Path dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
+Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+    const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
     CrashBytes dumpBytes{scratchArena};
-    if(!ReadBinaryFile(dumpPath, dumpBytes) || dumpBytes.empty()){
+    const auto read = ReadBinaryFile(dumpPath, dumpBytes);
+    if(!read || dumpBytes.empty()){
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=";
         outReport += CrashNames::s_ProcessDumpFileName;
         outReport += " is missing or unreadable\n";
+        if(!read)
+            return MakeUnexpected(CrashSymbolicationFailure{ .operation = "read_windows_minidump", .code = read.error(), });
         return false;
     }
 
@@ -509,38 +539,45 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
         return false;
     }
 
-    DumpMemoryReader memoryReader(scratchArena);
-    if(!BuildDumpMemoryReader(dumpImage, memoryReader)){
+    auto memoryReader = BuildDumpMemoryReader(scratchArena, dumpImage);
+    if(!memoryReader){
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=minidump contains invalid memory ranges\n";
         return false;
     }
 
     const HANDLE symbolProcess = GetCurrentProcess();
-    const WString<LogArena> symbolPath = BuildSymbolSearchPath(arena, packageDirectory, config);
+    const WString<Core::Alloc::ScratchArena> symbolPath = BuildSymbolSearchPath(scratchArena, packageDirectory, config);
     SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
     if(!SymInitializeW(symbolProcess, symbolPath.c_str(), FALSE)){
+        const ErrorCode error = GlobalFilesystemDetail::LastSystemError();
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=SymInitializeW failed\n";
-        return false;
+        return MakeUnexpected(CrashSymbolicationFailure{ .operation = "initialize_windows_symbols", .code = error, });
     }
 
     ScopeExit cleanupSymbols([&]()noexcept{
-        if(!SymCleanup(symbolProcess))
-            NWB_ASSERT_MSG(false, NWB_TEXT("Windows symbol session cleanup failed"));
-    });
-    s_CurrentDumpMemoryReader = &memoryReader;
+        if(!SymCleanup(symbolProcess)){
+            const DiagnosticEventText detail = MakeDiagnosticEventText("Windows symbol session cleanup failed: native_category=system native_code={}", GetLastError());
+            CaptureDiagnosticEvent("logger_windows_symbols", detail.view(), __FILE__, __LINE__);
+        }
+    }
+    );
+    s_CurrentDumpMemoryReader = &*memoryReader;
     ScopeExit clearMemoryReader([]()noexcept{ s_CurrentDumpMemoryReader = nullptr; });
 
     outReport += "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";
-    outReport += BasicStringDetail::WideToUtf8(arena, WStringView(symbolPath));
+    outReport += BasicStringDetail::WideToUtf8(scratchArena, WStringView(symbolPath));
     outReport += "\nthread_id=";
     char threadBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(crashContext->threadId), threadBuffer);
     outReport += "\n";
-    LoadDumpModules(arena, symbolProcess, dumpImage, outReport);
+    LoadDumpModules(scratchArena, symbolProcess, dumpImage, outReport);
     outReport += "\n[callstack]\n";
 
     // Resolve client frames against the dump's module map; unwind server-side only when no frames were supplied.
-    if(AppendClientCallstack(arena, symbolProcess, packageDirectory, outReport))
+    const auto clientFrames = AppendClientCallstack(scratchArena, symbolProcess, packageDirectory, outReport);
+    if(!clientFrames)
+        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_client_callstack", .code = clientFrames.error(), });
+    else if(*clientFrames)
         return true;
 
     CONTEXT walkContext = crashContext->context;
@@ -553,7 +590,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
         if(frame.AddrPC.Offset == 0u)
             break;
 
-        AppendResolvedSymbol(arena, symbolProcess, outReport, frameIndex, frame.AddrPC.Offset);
+        AppendResolvedSymbol(scratchArena, symbolProcess, outReport, frameIndex, frame.AddrPC.Offset);
         decodedAnyFrame = true;
 
         if(!StackWalk64(machineType, symbolProcess, nullptr, &frame, &walkContext, ReadProcessMemoryFromDump, SymFunctionTableAccess64, SymGetModuleBase64, nullptr))

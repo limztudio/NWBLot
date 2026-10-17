@@ -52,7 +52,7 @@ private:
 
             // Header and aligned payload share one backing allocation.
             // Logical capacity excludes the header so cache sizing and arena telemetry keep their contract.
-            return new(backing) Chunk(payloadSize, static_cast<u8*>(backing) + payloadOffset);
+            return new(backing) Chunk(payloadSize, MakeNotNull(static_cast<u8*>(backing) + payloadOffset));
         }
         static inline void Destroy(Chunk& chunk)noexcept{
             chunk.~Chunk();
@@ -61,28 +61,26 @@ private:
 
 
     public:
-        inline Chunk(usize size, void* buffer)noexcept
+        inline Chunk(usize size, NotNull<u8*> buffer)noexcept
             : m_size(size)
             , m_remaining(m_size)
             , m_next(nullptr)
             , m_buffer(buffer)
             , m_available(m_buffer)
         {}
-
-
     private:
-        ~Chunk() = default;
+        ~Chunk()noexcept = default;
 
 
     public:
-        inline void* allocate(usize size)noexcept{
-            auto* ret = m_available;
-            m_available = reinterpret_cast<u8*>(m_available) + static_cast<isize>(size);
+        inline NotNull<u8*> allocate(usize size)noexcept{
+            const auto ret = m_available;
+            m_available = MakeNotNull(m_available.get() + static_cast<isize>(size));
             m_remaining -= size;
             return ret;
         }
         inline bool tryPopLifo(void* p, usize size)noexcept{
-            const usize available = reinterpret_cast<usize>(m_available);
+            const usize available = reinterpret_cast<usize>(m_available.get());
             const usize allocationBegin = reinterpret_cast<usize>(p);
             if(AddOverflows<usize>(allocationBegin, size))
                 return false;
@@ -91,26 +89,26 @@ private:
             if(allocationEnd != available)
                 return false;
 
-            const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
+            const usize bufferBegin = reinterpret_cast<usize>(m_buffer.get());
             const bool isValidRequest = allocationBegin >= bufferBegin && allocationEnd <= available && size <= (m_size - m_remaining);
             if(!isValidRequest)
                 return false;
 
-            m_available = reinterpret_cast<void*>(allocationBegin);
+            m_available = MakeNotNull(reinterpret_cast<u8*>(allocationBegin));
             m_remaining += size;
             return true;
         }
         inline usize lifoTopSpan(void* p)const noexcept{
-            const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
+            const usize bufferBegin = reinterpret_cast<usize>(m_buffer.get());
             const usize allocationBegin = reinterpret_cast<usize>(p);
-            const usize available = reinterpret_cast<usize>(m_available);
+            const usize available = reinterpret_cast<usize>(m_available.get());
             if(allocationBegin < bufferBegin || allocationBegin > available)
                 return 0;
             return available - allocationBegin;
         }
-        inline bool tryResizeLifoTop(void* p, usize newSize)noexcept{
-            const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
-            const usize allocationBegin = reinterpret_cast<usize>(p);
+        inline bool tryResizeLifoTop(NotNull<void*> p, usize newSize)noexcept{
+            const usize bufferBegin = reinterpret_cast<usize>(m_buffer.get());
+            const usize allocationBegin = reinterpret_cast<usize>(p.get());
             if(AddOverflows<usize>(allocationBegin, newSize))
                 return false;
 
@@ -118,7 +116,7 @@ private:
             if(newEnd > bufferBegin + m_size)
                 return false;
 
-            m_available = reinterpret_cast<void*>(newEnd);
+            m_available = MakeNotNull(reinterpret_cast<u8*>(newEnd));
             m_remaining = m_size - (newEnd - bufferBegin);
             return true;
         }
@@ -129,8 +127,8 @@ private:
         usize m_remaining;
         Chunk* m_next;
 
-        void* m_buffer;
-        void* m_available;
+        NotNull<u8*> m_buffer;
+        NotNull<u8*> m_available;
     };
     struct ChunkWrapper{
         Chunk* active;
@@ -138,6 +136,8 @@ private:
         usize size;
     };
 
+
+private:
     [[nodiscard]] static constexpr bool IsValidAlignment(usize align)noexcept{
         return align != 0u && align <= s_MaxAlignSize && (align & (align - 1u)) == 0u;
     }
@@ -163,7 +163,7 @@ public:
             bucket.size = AlignedSize(static_cast<usize>(1) << i, initSize);
         }
     }
-    ~ScratchArena(){
+    ~ScratchArena()noexcept{
         for(auto& bucket : m_bucket){
             for(auto* chunk : { bucket.active, bucket.cached }){
                 while(chunk){
@@ -193,9 +193,8 @@ public:
         }
 
         // A raw zero-byte allocation may leave one empty active chunk; it owns no tracked bytes.
-        void* p = bucket.active->allocate(size);
-        if(p)
-            m_memoryStats.recordAllocation(size);
+        void* p = bucket.active->allocate(size).get();
+        m_memoryStats.recordAllocation(size);
         return p;
     }
 
@@ -221,7 +220,7 @@ public:
         if(oldSize == 0)
             return nullptr;
 
-        if(chunk->tryResizeLifoTop(p, size)){
+        if(chunk->tryResizeLifoTop(MakeNotNull(p), size)){
             m_memoryStats.recordReallocation(oldSize, size);
             if(chunk->m_remaining == chunk->m_size)
                 cacheEmptyChunk(bucket, *chunk, nullptr);

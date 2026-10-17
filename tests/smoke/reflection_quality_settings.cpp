@@ -6,6 +6,7 @@
 
 #include "smoke_environment.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 #include <global/limit.h>
@@ -20,7 +21,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyReflectionQualitySmokeSettings(Impl::RendererSystem& renderer, const Impl::ReflectionSettings& baseSettings, Core::Alloc::GlobalArena& arena){
+bool ApplyReflectionQualitySmokeSettings(Impl::RendererSystem& renderer, const Impl::ReflectionSettings& baseSettings, Core::Alloc::ScratchArena& arena){
     Impl::ReflectionSettings settings = baseSettings;
     const auto value = ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SCREEN_STEPS");
     if(value){

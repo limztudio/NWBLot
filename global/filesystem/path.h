@@ -9,6 +9,7 @@
 #include <iterator>
 #include <string>
 
+#include "../allocation_size.h"
 #include "../basic_string.h"
 #include "../generic.h"
 #include "../type.h"
@@ -31,7 +32,7 @@ template<typename SourceT>
 concept PathSourceLike = BasicStringDetail::CanMakeCharView<SourceT> || BasicStringDetail::CanMakeWCharView<SourceT>;
 
 template<typename CharT>
-[[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept{
+[[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == static_cast<CharT>('/')
 #if defined(NWB_PLATFORM_WINDOWS)
         || ch == static_cast<CharT>('\\')
@@ -40,7 +41,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline CharT PreferredSeparator()noexcept{
+[[nodiscard]] inline CharT PreferredSeparator()noexcept(IsArithmetic_V<CharT>){
 #if defined(NWB_PLATFORM_WINDOWS)
     return static_cast<CharT>('\\');
 #else
@@ -49,7 +50,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline usize RootNameLength(const BasicStringView<CharT> text)noexcept{
+[[nodiscard]] inline usize RootNameLength(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
 #if defined(NWB_PLATFORM_WINDOWS)
     if(text.size() >= 2u && text[1] == static_cast<CharT>(':'))
         return 2u;
@@ -60,7 +61,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline usize RootDirectoryLength(const BasicStringView<CharT> text)noexcept{
+[[nodiscard]] inline usize RootDirectoryLength(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     const usize rootNameLength = RootNameLength(text);
     if(rootNameLength < text.size() && IsSeparator(text[rootNameLength]))
         return rootNameLength + 1u;
@@ -70,12 +71,12 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsDot(const BasicStringView<CharT> text)noexcept{
+[[nodiscard]] inline bool IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text.size() == 1u && text[0] == static_cast<CharT>('.');
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept{
+[[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text.size() == 2u && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
 }
 
@@ -145,6 +146,9 @@ public:
         [[nodiscard]] bool operator!=(const Iterator& rhs)const noexcept{ return !(*this == rhs); }
 
         // Requires a non-end iterator. The view borrows the source path and survives iterator advancement; mutating or destroying the source path invalidates it.
+
+
+    public:
         [[nodiscard]] native_string_view nativeComponent()const noexcept{
             NWB_ASSERT(m_path != nullptr && !m_atEnd);
             return native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin);
@@ -226,12 +230,15 @@ public:
         usize m_end = 0u;
         bool m_atEnd = true;
     };
+
+
+public:
     using iterator = Iterator;
     using const_iterator = Iterator;
 
 
 public:
-    explicit Path(ArenaT& arena)
+    explicit Path(ArenaT& arena)noexcept(noexcept(string_type(arena)))
         : m_text(arena)
     {}
     Path(const Path&) = default;
@@ -260,6 +267,7 @@ public:
 
 public:
     Path& operator=(const Path&) = default;
+
     Path& operator=(Path&&)noexcept = default;
 
     template<typename OtherArenaT>
@@ -274,6 +282,28 @@ public:
         return *this;
     }
 
+    [[nodiscard]] operator const value_type*()const noexcept{ return c_str(); }
+
+    template<typename SourceT>
+    Path& operator+=(const SourceT& rhs){
+        const Path rhsPath(arena(), rhs);
+        m_text.append(rhsPath.native().data(), rhsPath.native().size());
+        return *this;
+    }
+
+    template<typename SourceT>
+    Path& operator/=(const SourceT& rhs){
+        Path rhsPath(arena(), rhs);
+        if(rhsPath.empty())
+            return *this;
+        if(rhsPath.isAbsolute()){
+            m_text = rhsPath.m_text;
+            return *this;
+        }
+        appendComponent(rhsPath.native());
+        return *this;
+    }
+
 
 public:
     [[nodiscard]] ArenaT& arena()const noexcept{ return m_text.get_allocator().arena(); }
@@ -282,8 +312,9 @@ public:
     [[nodiscard]] const value_type* c_str()const noexcept{ return m_text.c_str(); }
     [[nodiscard]] const value_type* data()const noexcept{ return m_text.data(); }
     [[nodiscard]] native_string_view native()const noexcept{ return native_string_view(m_text.data(), m_text.size()); }
-    [[nodiscard]] operator const value_type*()const noexcept{ return c_str(); }
 
+
+public:
     [[nodiscard]] std::string string()const{ return toStdString<char>(false); }
     [[nodiscard]] std::string genericString()const{ return toStdString<char>(true); }
     template<typename OutCharT>
@@ -351,52 +382,55 @@ public:
     }
 
     [[nodiscard]] Path stem()const{
-        Path fileName = filename();
-        const usize extensionBegin = fileName.extensionBegin();
-        if(extensionBegin == fileName.m_text.size())
-            return fileName;
-        return Path(arena(), native_string_view(fileName.m_text.data(), extensionBegin));
+        const native_string_view fileName = trimmedFilename();
+        const usize extensionBegin = fileName.rfind(static_cast<value_type>('.'));
+        const usize stemSize = extensionBegin == native_string_view::npos || extensionBegin == 0u ? fileName.size() : extensionBegin;
+        return Path(arena(), fileName.substr(0u, stemSize));
     }
 
     [[nodiscard]] Path extension()const{
-        const Path fileName = filename();
-        const usize extensionBegin = fileName.extensionBegin();
-        if(extensionBegin == fileName.m_text.size())
+        const native_string_view fileName = trimmedFilename();
+        const usize extensionBegin = fileName.rfind(static_cast<value_type>('.'));
+        if(extensionBegin == native_string_view::npos || extensionBegin == 0u)
             return Path(arena());
-        return Path(arena(), native_string_view(fileName.m_text.data() + extensionBegin, fileName.m_text.size() - extensionBegin));
+        return Path(arena(), fileName.substr(extensionBegin));
     }
 
     [[nodiscard]] Path lexicallyNormal()const{
         Path output(arena());
+        output.m_text.reserve(AddSize(m_text.size(), 1u));
         appendNormalizedTo(output);
         return output;
     }
 
     [[nodiscard]] Path lexicallyRelative(const Path& base)const{
-        const Path normalizedPath = lexicallyNormal();
-        const Path normalizedBase = base.lexicallyNormal();
-        if(normalizedPath.isAbsolute() != normalizedBase.isAbsolute())
+        if(isAbsolute() != base.isAbsolute())
             return Path(arena());
 
         Path output(arena());
-        Iterator pathIt = normalizedPath.begin();
-        Iterator baseIt = normalizedBase.begin();
-        const Iterator pathEnd = normalizedPath.end();
-        const Iterator baseEnd = normalizedBase.end();
+        output.m_text.reserve(AddSize(AddSize(m_text.size(), SizeOf<3u>(base.m_text.empty() ? 1u : base.m_text.size())), 1u));
+        {
+            const Path normalizedPath = lexicallyNormal();
+            const Path normalizedBase = base.lexicallyNormal();
+            Iterator pathIt = normalizedPath.begin();
+            Iterator baseIt = normalizedBase.begin();
+            const Iterator pathEnd = normalizedPath.end();
+            const Iterator baseEnd = normalizedBase.end();
 
-        while(pathIt != pathEnd && baseIt != baseEnd && pathIt.nativeComponent() == baseIt.nativeComponent()){
-            ++pathIt;
-            ++baseIt;
-        }
+            while(pathIt != pathEnd && baseIt != baseEnd && pathIt.nativeComponent() == baseIt.nativeComponent()){
+                ++pathIt;
+                ++baseIt;
+            }
 
-        for(; baseIt != baseEnd; ++baseIt){
-            const native_string_view component = baseIt.nativeComponent();
-            if(component == native_string_view(NWB_TEXT("/"), 1u))
-                continue;
-            output.appendComponent(native_string_view(NWB_TEXT(".."), 2u));
+            for(; baseIt != baseEnd; ++baseIt){
+                const native_string_view component = baseIt.nativeComponent();
+                if(component == native_string_view(NWB_TEXT("/"), 1u))
+                    continue;
+                output.appendComponent(native_string_view(NWB_TEXT(".."), 2u));
+            }
+            for(; pathIt != pathEnd; ++pathIt)
+                output.appendComponent(pathIt.nativeComponent());
         }
-        for(; pathIt != pathEnd; ++pathIt)
-            output.appendComponent(pathIt.nativeComponent());
 
         if(output.empty())
             output.assignSource(native_string_view(NWB_TEXT("."), 1u));
@@ -413,14 +447,9 @@ public:
     template<typename SourceT>
     Path& append(const SourceT& rhs){ return (*this /= rhs); }
 
-    template<typename SourceT>
-    Path& operator+=(const SourceT& rhs){
-        const Path rhsPath(arena(), rhs);
-        m_text.append(rhsPath.native().data(), rhsPath.native().size());
-        return *this;
-    }
 
-    Path& replaceExtension(){
+public:
+    Path& replaceExtension()noexcept{
         const usize extensionBegin = extensionBeginInText();
         if(extensionBegin < m_text.size())
             m_text.erase(extensionBegin);
@@ -436,19 +465,6 @@ public:
         if(replacementPath.m_text.front() != static_cast<value_type>('.'))
             m_text += static_cast<value_type>('.');
         m_text += replacementPath.m_text;
-        return *this;
-    }
-
-    template<typename SourceT>
-    Path& operator/=(const SourceT& rhs){
-        Path rhsPath(arena(), rhs);
-        if(rhsPath.empty())
-            return *this;
-        if(rhsPath.isAbsolute()){
-            m_text = rhsPath.m_text;
-            return *this;
-        }
-        appendComponent(rhsPath.native());
         return *this;
     }
 
@@ -494,8 +510,6 @@ private:
         return end;
     }
 
-    [[nodiscard]] usize extensionBegin()const noexcept{ return extensionBeginInText(); }
-
     [[nodiscard]] usize extensionBeginInText()const noexcept{
         if(m_text.empty())
             return m_text.size();
@@ -509,6 +523,17 @@ private:
             }
         }
         return m_text.size();
+    }
+
+    [[nodiscard]] native_string_view trimmedFilename()const noexcept{
+        const usize rootNameLength = rootNameLengthInText();
+        const usize rootDirectoryLength = rootDirectoryLengthInText();
+        const usize boundary = rootDirectoryLength != 0u ? rootDirectoryLength : rootNameLength;
+        const usize end = trimTrailingSeparators(m_text.size());
+        usize begin = end;
+        while(begin > boundary && !GlobalFilesystemPathDetail::IsSeparator(m_text[begin - 1u]))
+            --begin;
+        return native_string_view(m_text.data() + begin, end - begin);
     }
 
     [[nodiscard]] usize filenameBeginInText()const noexcept{
@@ -543,8 +568,14 @@ private:
             if(text.size() == 1u && GlobalFilesystemPathDetail::IsSeparator(text[0]))
                 continue;
             if(GlobalFilesystemPathDetail::IsDotDot(text)){
-                if(!output.empty() && !output.filename().empty() && !GlobalFilesystemPathDetail::IsDotDot(output.filename().native())){
-                    output = output.parentPath();
+                const native_string_view fileName = output.trimmedFilename();
+                if(!fileName.empty() && !GlobalFilesystemPathDetail::IsDotDot(fileName)){
+                    const usize outputRootLength = output.rootDirectoryLengthInText();
+                    usize separator = output.trimTrailingSeparators(output.m_text.size());
+                    while(separator > outputRootLength && !GlobalFilesystemPathDetail::IsSeparator(output.m_text[separator - 1u]))
+                        --separator;
+                    const usize parentEnd = separator == 0u ? 0u : (outputRootLength != 0u && separator <= outputRootLength ? outputRootLength : output.trimTrailingSeparators(separator - 1u));
+                    output.m_text.resize(parentEnd);
                     continue;
                 }
                 if(!absolute)

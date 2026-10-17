@@ -36,7 +36,9 @@ struct FrameGraphSoftwareBvhBuildStateResult{
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> buildStateResources;
     bool declared = false;
 
-    explicit FrameGraphSoftwareBvhBuildStateResult(Core::Alloc::ScratchArena& scratchArena);
+
+public:
+    explicit FrameGraphSoftwareBvhBuildStateResult(Core::Alloc::ScratchArena& scratchArena)noexcept;
 };
 
 
@@ -45,7 +47,7 @@ struct FrameGraphSoftwareBvhBuildStateResult{
 
 class FrameGraphSoftwareBvhBuildStateImporter final : NoCopy{
 public:
-    FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem);
+    FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem)noexcept;
 
 
 public:

@@ -20,6 +20,8 @@ NWB_CORE_BEGIN
 struct Color{
     f32 r, g, b, a;
 
+
+public:
     constexpr Color()noexcept
         : r(0)
         , g(0)
@@ -47,6 +49,8 @@ inline bool operator!=(const Color& lhs, const Color& rhs)noexcept{ return !(lhs
 struct UIntColor{
     u32 r, g, b, a;
 
+
+public:
     constexpr UIntColor()noexcept
         : r(0)
         , g(0)
@@ -74,6 +78,8 @@ inline bool operator!=(const UIntColor& lhs, const UIntColor& rhs)noexcept{ retu
 struct IntColor{
     i32 r, g, b, a;
 
+
+public:
     constexpr IntColor()noexcept
         : r(0)
         , g(0)
@@ -104,6 +110,8 @@ struct Viewport{
     f32 minY, maxY;
     f32 minZ, maxZ;
 
+
+public:
     constexpr Viewport()noexcept
         : minX(0)
         , maxX(0)
@@ -180,6 +188,7 @@ public:
 
 public:
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
+
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
 };
 inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
@@ -192,6 +201,8 @@ struct Box{
     i32 minY, maxY;
     i32 minZ, maxZ;
 
+
+public:
     constexpr Box()noexcept
         : minX(0)
         , maxX(0)

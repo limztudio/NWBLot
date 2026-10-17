@@ -32,9 +32,9 @@ inline constexpr f32 s_UastcHdrMaximum = 65216.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<basisu::imagef> LoadImage(const Path& path){
+[[nodiscard]] static Expected<basisu::imagef> LoadImage(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena){
     basisu::imagef image;
-    const AString pathText = PathToGenericString<AString>(path);
+    const auto pathText = PathToGenericString(scratchArena, path);
     if(!basisu::load_image_hdr(pathText.c_str(), image, false)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode input image '{}'."), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
@@ -96,14 +96,10 @@ inline constexpr f32 s_UastcHdrMaximum = 65216.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PreparedTexture> PrepareTexture(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource){
+Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
     if(inputPaths.empty() || inputPaths.size() > Limit<u32>::s_Max)
         return MakeUnexpected(Failure{});
-    if(
-        !IsValidTextureDimension(dimension)
-        || (dimension == TextureDimension::Texture2D && inputPaths.size() != 1u)
-        || (dimension == TextureDimension::TextureCube && inputPaths.size() != TextureFormat::s_TextureCubeFaceCount)
-    ){
+    if(!IsValidTextureDimension(dimension) || (dimension == TextureDimension::Texture2D && inputPaths.size() != 1u) || (dimension == TextureDimension::TextureCube && inputPaths.size() != TextureFormat::s_TextureCubeFaceCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture dimension and input image count do not match."));
         return MakeUnexpected(Failure{});
     }
@@ -113,7 +109,7 @@ Expected<PreparedTexture> PrepareTexture(Core::Alloc::ScratchArena& scratchArena
     }
 
     const bool hdr = IsHdrInputPath(inputPaths.front());
-    for(const Path& path : inputPaths){
+    for(const ScratchPath& path : inputPaths){
         if(IsHdrInputPath(path) != hdr){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
             return MakeUnexpected(Failure{});
@@ -127,14 +123,14 @@ Expected<PreparedTexture> PrepareTexture(Core::Alloc::ScratchArena& scratchArena
     input.planes.reserve(inputPaths.size());
     basisu::imagef alphaMask;
     if(alphaSource.mode == AlphaSourceMode::Image){
-        auto decoded = __hidden_encode::LoadImage(alphaSource.path);
+        auto decoded = __hidden_encode::LoadImage(alphaSource.path, scratchArena);
         if(!decoded)
             return MakeUnexpected(Failure{});
         alphaMask = Move(*decoded);
     }
 
-    for(const Path& path : inputPaths){
-        auto plane = __hidden_encode::LoadImage(path);
+    for(const ScratchPath& path : inputPaths){
+        auto plane = __hidden_encode::LoadImage(path, scratchArena);
         if(!plane)
             return MakeUnexpected(Failure{});
         if(input.planes.empty()){

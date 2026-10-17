@@ -44,7 +44,8 @@ PROFILES: Mapping[str, BaselineProfile] = { "opaque-texture": BaselineProfile(ta
         # current-renderer-v1 pins the original open-box scene; the complex scene has its own profile.
         frozen_environment={}, description="Surfel-GI trace and resolve baseline.", capture_freeze_frame=360, capture_ready_log="GiTestSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), "surfel-gi-complex": BaselineProfile(
         target="nwb_gi_test_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title="NWB GI Test", settle_seconds=0.0, frozen_environment={ "NWB_GI_SMOKE_COMPLEX_SCENE": "1", "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "30",
-        }, description="Closed, 20-body skylight scene for surfel-GI A/B readbacks after post-presentation warmup.", capture_freeze_frame=360, capture_ready_log="GiTestSmokeProject: complex GI capture source_frame=", fixed_delta_seconds=1.0 / 60.0, formal_corpus=False,),
+        }, description="Closed, 20-body skylight scene for surfel-GI A/B readbacks after post-presentation warmup.", capture_freeze_frame=360,
+        capture_ready_log="GiTestSmokeProject: complex GI capture source_frame=", fixed_delta_seconds=1.0 / 60.0, formal_corpus=False,),
     "stress": BaselineProfile(target="nwb_stress_test_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title="NWB Stress Test Smoke", settle_seconds=0.75, frozen_environment={"NWB_STRESS_TEST_SPIN_ANGLE": LIT_N_0_6},
         description="Skinned opaque/transparent stress-scene baseline.", capture_freeze_frame=96, capture_ready_log="StressTestSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), }
 

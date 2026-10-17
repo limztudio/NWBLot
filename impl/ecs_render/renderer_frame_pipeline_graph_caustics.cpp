@@ -27,6 +27,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
+    Core::Alloc::ScratchArena& scratchArena,
     const bool hardwareCaustics,
     DeferredFrameTargets& deferredTargets,
     const DeferredLightingGraphResources& deferredLightingResources,
@@ -72,17 +73,21 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const Core::GpuGraphResourceId causticAccumulator = importTexture(deferredTargets.causticAccumulator, Name("render.software_caustics.accumulator"), "Caustic Accumulator");
-    const Core::GpuGraphResourceId causticHistory = importTexture(deferredTargets.causticHistory, Name("render.software_caustics.history"), "Caustic History");
-    const Core::GpuGraphResourceId causticResolveHalf = importTexture(deferredTargets.causticResolveHalf, Name("render.software_caustics.resolve_half"), "Caustic Resolve Half");
-    const Core::GpuGraphResourceId causticResolveGeometry = importTexture(deferredTargets.causticResolveGeometry, Name("render.software_caustics.resolve_geometry"), "Caustic Resolve Geometry");
-    const Core::GpuGraphResourceId sceneGeometryDomain = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.software_caustics.scene_geometry"), "Software BVH Scene Geometry"));
-    if(!worldPosition.valid() || !depth.valid() || !causticAccumulator.valid() || !causticHistory.valid() || !causticResolveHalf.valid() || !causticResolveGeometry.valid() || !sceneGeometryDomain.valid()){
+    const auto causticAccumulatorResult = importTexture(deferredTargets.causticAccumulator, Name("render.software_caustics.accumulator"), "Caustic Accumulator");
+    const auto causticHistoryResult = importTexture(deferredTargets.causticHistory, Name("render.software_caustics.history"), "Caustic History");
+    const auto causticResolveHalfResult = importTexture(deferredTargets.causticResolveHalf, Name("render.software_caustics.resolve_half"), "Caustic Resolve Half");
+    const auto causticResolveGeometryResult = importTexture(deferredTargets.causticResolveGeometry, Name("render.software_caustics.resolve_geometry"), "Caustic Resolve Geometry");
+    const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.software_caustics.scene_geometry"), "Software BVH Scene Geometry"));
+    if(!worldPosition.valid() || !depth.valid() || !causticAccumulatorResult || !causticHistoryResult || !causticResolveHalfResult || !causticResolveGeometryResult || !sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred software-caustics graph resources"));
         return false;
     }
+    const Core::GpuGraphResourceId causticAccumulator = *causticAccumulatorResult;
+    const Core::GpuGraphResourceId causticHistory = *causticHistoryResult;
+    const Core::GpuGraphResourceId causticResolveHalf = *causticResolveHalfResult;
+    const Core::GpuGraphResourceId causticResolveGeometry = *causticResolveGeometryResult;
+    const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> photonResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> geometryResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolvePrepareResourceUses{ scratchArena };
@@ -161,9 +166,10 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
             return true;
-        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importBuffer(buffer, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         photonResourceUses.push_back(ReadUse(resource, state));
         return true;
     };
@@ -222,7 +228,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const Core::GpuTaskId shadowVisibilityDependency[] = { m_deferredShadowVisibilityTask };
 
 
-// Black is the no-producer result; merge the producer into this packet.
+    // Black is the no-producer result; merge the producer into this packet.
     Core::GpuTaskSchedulingHint irradianceClearScheduling;
     irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     irradianceClearScheduling.allowPacketMerge = true;
@@ -242,11 +248,12 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     irradianceClear.subresources = ECSRenderDetail::s_FramebufferSubresources;
     irradianceClear.valueType = Core::GpuClearTextureTaskValueType::Float;
     irradianceClear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
-    const Core::GpuTaskId irradianceClearTask = m_deferredLightingTaskGraph.addClearTextureTask(irradianceClearDesc, irradianceClear);
-    if(!irradianceClearTask.valid()){
+    const auto irradianceClearTaskResult = m_deferredLightingTaskGraph.addClearTextureTask(irradianceClearDesc, irradianceClear);
+    if(!irradianceClearTaskResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics irradiance clear"));
         return false;
     }
+    const Core::GpuTaskId irradianceClearTask = *irradianceClearTaskResult;
     m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
     Core::GpuTaskId causticsDependency = irradianceClearTask;
@@ -270,11 +277,12 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         accumulatorNonTemporalClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
         accumulatorNonTemporalClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
         accumulatorNonTemporalClear.uintValue = Core::UIntColor(0u);
-        const Core::GpuTaskId accumulatorNonTemporalClearTask = m_deferredLightingTaskGraph.addClearTextureTask(accumulatorNonTemporalClearDesc, accumulatorNonTemporalClear);
-        if(!accumulatorNonTemporalClearTask.valid()){
+        const auto accumulatorNonTemporalClearTaskResult = m_deferredLightingTaskGraph.addClearTextureTask(accumulatorNonTemporalClearDesc, accumulatorNonTemporalClear);
+        if(!accumulatorNonTemporalClearTaskResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics non-temporal accumulator clear"));
             return false;
         }
+        const Core::GpuTaskId accumulatorNonTemporalClearTask = *accumulatorNonTemporalClearTaskResult;
         m_deferredCausticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
         causticsDependency = accumulatorNonTemporalClearTask;
     }
@@ -301,11 +309,12 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         accumulatorBootstrapClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
         accumulatorBootstrapClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
         accumulatorBootstrapClear.uintValue = Core::UIntColor(0u);
-        const Core::GpuTaskId accumulatorBootstrapClearTask = m_deferredLightingTaskGraph.addClearTextureTask(accumulatorBootstrapClearDesc, accumulatorBootstrapClear);
-        if(!accumulatorBootstrapClearTask.valid()){
+        const auto accumulatorBootstrapClearTaskResult = m_deferredLightingTaskGraph.addClearTextureTask(accumulatorBootstrapClearDesc, accumulatorBootstrapClear);
+        if(!accumulatorBootstrapClearTaskResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator bootstrap clear"));
             return false;
         }
+        const Core::GpuTaskId accumulatorBootstrapClearTask = *accumulatorBootstrapClearTaskResult;
         m_deferredCausticAccumulatorBootstrapClearTask = accumulatorBootstrapClearTask;
         causticsDependency = accumulatorBootstrapClearTask;
     }
@@ -330,7 +339,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
             .setResourceUses(accumulatorDecayUses, LengthOf(accumulatorDecayUses))
         ;
-        const Core::GpuTaskId accumulatorDecayTask = m_raytracingSystem.declareCausticAccumulatorDecayTask(
+        const auto accumulatorDecayTaskResult = m_raytracingSystem.declareCausticAccumulatorDecayTask(
             m_deferredLightingTaskGraph,
             accumulatorDecayDesc,
             deferredTargets,
@@ -341,10 +350,11 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             timingTicket,
             causticPhotonTiming
         );
-        if(!accumulatorDecayTask.valid()){
+        if(!accumulatorDecayTaskResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator decay"));
             return false;
         }
+        const Core::GpuTaskId accumulatorDecayTask = *accumulatorDecayTaskResult;
         m_deferredCausticAccumulatorDecayTask = accumulatorDecayTask;
         causticsDependency = accumulatorDecayTask;
     }
@@ -364,7 +374,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         .setResourceUses(photonResourceUses.data(), photonResourceUses.size())
         .setResourceSetUses(photonResourceSetUseCount != 0u ? photonResourceSetUses : nullptr, photonResourceSetUseCount)
     ;
-    m_deferredCausticPhotonTask = m_raytracingSystem.declareSoftwareCausticsTask(
+    const auto mDeferredCausticPhotonTaskResult = m_raytracingSystem.declareSoftwareCausticsTask(
         m_deferredLightingTaskGraph,
         photonDesc,
         deferredTargets,
@@ -377,10 +387,12 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         graphOwnsAccumulatorBootstrapClear,
         graphOwnsNonTemporalAccumulatorClear
     );
-    if(!m_deferredCausticPhotonTask.valid()){
+    if(!mDeferredCausticPhotonTaskResult){
+        m_deferredCausticPhotonTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics photon graph task"));
         return false;
     }
+    m_deferredCausticPhotonTask = *mDeferredCausticPhotonTaskResult;
 
     Core::GpuTaskSchedulingHint geometryScheduling = causticsScheduling;
     geometryScheduling.mergeWithPrevious = true;
@@ -393,11 +405,13 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
         .setResourceUses(geometryResourceUses.data(), geometryResourceUses.size())
     ;
-    m_deferredCausticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_deferredLightingTaskGraph, geometryDesc, deferredTargets, timingTicket, m_deferredCausticProducerDispatched, causticResolveTiming);
-    if(!m_deferredCausticGeometryTask.valid()){
+    const auto mDeferredCausticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_deferredLightingTaskGraph, geometryDesc, deferredTargets, timingTicket, m_deferredCausticProducerDispatched, causticResolveTiming);
+    if(!mDeferredCausticGeometryTaskResult){
+        m_deferredCausticGeometryTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task"));
         return false;
     }
+    m_deferredCausticGeometryTask = *mDeferredCausticGeometryTaskResult;
 
     SoftwareCausticsResolveChainBuilder resolveChainBuilder(m_deferredLightingTaskGraph, m_raytracingSystem);
     SoftwareCausticsResolveChainInputs resolveChainInputs;

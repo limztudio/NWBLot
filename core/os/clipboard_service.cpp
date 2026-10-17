@@ -56,11 +56,11 @@ QueuedClipboardService::~QueuedClipboardService(){
     NWB_ASSERT(isOwnerThread());
 }
 
-ClipboardRequestResult QueuedClipboardService::requestReadText(const ClipboardChannel::Enum channel){
+Expected<ClipboardRequestToken, ClipboardAdmission::Enum> QueuedClipboardService::requestReadText(const ClipboardChannel::Enum channel){
     return enqueue(channel, ClipboardOperation::ReadText, {});
 }
 
-ClipboardRequestResult QueuedClipboardService::requestWriteText(const ClipboardChannel::Enum channel, const AStringView text){
+Expected<ClipboardRequestToken, ClipboardAdmission::Enum> QueuedClipboardService::requestWriteText(const ClipboardChannel::Enum channel, const AStringView text){
     return enqueue(channel, ClipboardOperation::WriteText, text);
 }
 
@@ -97,7 +97,8 @@ bool QueuedClipboardService::cancel(const ClipboardRequestToken token){
         request->executing = wasExecuting;
         if(!wasExecuting)
             request->text.clear();
-    });
+    }
+    );
     if(cancelNative)
         cancelNativeRequest(token);
     return true;
@@ -163,9 +164,9 @@ bool QueuedClipboardService::completeNativeRequest(const ClipboardRequestToken t
     return true;
 }
 
-ClipboardRequestResult QueuedClipboardService::enqueue(const ClipboardChannel::Enum channel, const ClipboardOperation::Enum operation, const AStringView text){
+Expected<ClipboardRequestToken, ClipboardAdmission::Enum> QueuedClipboardService::enqueue(const ClipboardChannel::Enum channel, const ClipboardOperation::Enum operation, const AStringView text){
     if(!isOwnerThread())
-        return { .token = {}, .admission = ClipboardAdmission::WrongThread };
+        return MakeUnexpected(ClipboardAdmission::WrongThread);
 
     Request* available = nullptr;
     for(Request& request : m_requests){
@@ -176,7 +177,7 @@ ClipboardRequestResult QueuedClipboardService::enqueue(const ClipboardChannel::E
     }
     if(!available){
         if(m_requests.size() == s_ClipboardMaxOutstandingRequests)
-            return { .token = {}, .admission = ClipboardAdmission::QueueFull };
+            return MakeUnexpected(ClipboardAdmission::QueueFull);
         available = &m_requests.emplace_back(m_arena);
     }
     if(m_nextGeneration == Limit<u64>::s_Max)
@@ -197,7 +198,7 @@ ClipboardRequestResult QueuedClipboardService::enqueue(const ClipboardChannel::E
     }
     else if(!text.empty())
         available->text.assign(text.data(), text.size());
-    return { .token = available->token, .admission = ClipboardAdmission::Accepted };
+    return available->token;
 }
 
 QueuedClipboardService::Request* QueuedClipboardService::findRequest(const ClipboardRequestToken token)noexcept{

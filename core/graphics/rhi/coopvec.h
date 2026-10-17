@@ -63,7 +63,9 @@ struct CooperativeVectorDeviceFeatures{
 
     bool trainingFloat32 = false;
 
-    explicit CooperativeVectorDeviceFeatures(GraphicsArena& arena)
+
+public:
+    explicit CooperativeVectorDeviceFeatures(GraphicsArena& arena)noexcept
         : matMulFormats(arena)
     {}
 };
@@ -94,10 +96,10 @@ struct CooperativeVectorConvertMatrixLayoutDesc{
 };
 
 // Size in bytes.
-usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type);
+usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type)noexcept;
 
-// Row/column byte stride; zero for InferencingOptimal and TrainingOptimal.
-usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns);
+// Row/column byte stride; successful zero for InferencingOptimal and TrainingOptimal, failure for invalid dimensions/type/layout or overflow.
+[[nodiscard]] Expected<usize> GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

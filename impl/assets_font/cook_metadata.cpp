@@ -44,7 +44,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font meta";
 
 Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;

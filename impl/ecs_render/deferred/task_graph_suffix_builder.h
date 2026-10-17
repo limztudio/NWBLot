@@ -79,7 +79,7 @@ public:
         Core::GraphicsRuntime& graphics,
         Core::IGpuTaskGraphPresentationContributor* presentationContributor,
         Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
-    );
+    )noexcept;
 
 
 public:

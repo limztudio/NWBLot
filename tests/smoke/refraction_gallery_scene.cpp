@@ -118,12 +118,12 @@ public:
         return {};
     }
 
-    Expected<Core::ECS::EntityID> csgSlab(const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const AStringView surfaceInterface){
+    Expected<Core::ECS::EntityID> csgSlab(const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const NameText<char> surfaceInterface){
         const bool reference = caseName == "csg_reference";
         const bool middle = caseName == "csg_middle";
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
-            m_preview ? s_Preview : material, m_preview ? s_Interface : surfaceInterface, tint,
+            m_preview ? s_Preview : material, m_preview ? NameText<char>{s_Interface} : surfaceInterface, tint,
             Float4(0.f, 1.4f, reference || middle ? 0.5f : 0.f, 0.f), Float4(2.6f, 2.6f, reference ? 1.f : (middle ? 3.f : 2.f), 0.f)
         );
         if(!entity.valid())
@@ -154,7 +154,7 @@ public:
             constexpr f32 s_ForeignExit = 0.25f;
             const auto foreign = CreateTintedStaticMeshEntity(
                 m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
-                m_preview ? s_Preview : s_OpticalVolume, m_preview ? s_Interface : s_OpticalInterface,
+                m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
                 Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f),
                 Float4(0.f, 1.4f, (s_ForeignExit + s_IdentityForeignFront) * 0.5f, 0.f),
                 Float4(2.6f, 2.6f, s_ForeignExit - s_IdentityForeignFront, 0.f)
@@ -215,7 +215,7 @@ public:
     bool nearAirSlab(const bool csg){
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
-            m_preview ? s_Preview : s_OpticalVolume, m_preview ? s_Interface : s_OpticalInterface,
+            m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
             Float4(1.f, 1.f, 1.f, m_preview ? 0.48f : 0.f),
             Float4(0.f, 1.4f, 1.25f, 0.f), Float4(2.6f, 2.6f, 3.f, 0.f)
         );

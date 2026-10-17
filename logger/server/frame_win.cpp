@@ -3,9 +3,13 @@
 
 
 #include "frame.h"
+#include "clipboard_text_internal.h"
 
 #include <core/alloc/standalone_runtime.h>
 
+#include <global/diagnostics.h>
+#include <global/expected.h>
+#include <global/scope_exit.h>
 #include <global/unique_ptr.h>
 
 
@@ -38,17 +42,9 @@ namespace FrameDetail{
 
 inline constexpr SHORT s_ControlKeyDownMask = 0x8000;
 inline constexpr WPARAM s_CopyControlKey = static_cast<WPARAM>('C');
+inline constexpr UINT s_SynchronizeMessageRows = WM_APP + 1u;
 inline constexpr COLORREF s_DefaultLogRowTextColor = RGB(0, 0, 0);
 inline constexpr COLORREF s_DefaultLogRowBackgroundColor = RGB(230, 230, 230);
-
-class WinFrame : public FrameData{
-public:
-    inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
-    inline void setInstance(HINSTANCE value)noexcept{ m_data.ptr[0] = value; }
-
-    inline HWND hwnd()const noexcept{ return static_cast<HWND>(m_data.ptr[1]); }
-    inline void setHwnd(HWND value)noexcept{ m_data.ptr[1] = value; }
-};
 
 struct LogRowColors{
     COLORREF text = s_DefaultLogRowTextColor;
@@ -72,13 +68,6 @@ inline constexpr LogRowColors s_FatalOddLogRowColors{ RGB(255, 255, 0), RGB(250,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MessageItem = Pair<LogString, Core::Common::LogType::Enum>;
-using MessageDeque = Deque<MessageItem, LogArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 inline constexpr Name s_MessageArenaName("logger/server/frame/messages");
 
 
@@ -90,6 +79,8 @@ struct MessageStore{
     LogArena arena;
     MessageDeque messages;
 
+
+public:
     MessageStore()
         : arena(s_MessageArenaName)
         , messages(arena)
@@ -107,6 +98,38 @@ static UniquePtr<MessageStore> s_Store;
 static Futex s_ListMutex;
 
 static WNDPROC s_OrigListProc = nullptr;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void ReleaseLogFont()noexcept{
+    if(!s_Font)
+        return;
+    if(!DeleteObject(s_Font))
+        CaptureDiagnosticEvent("logger_window_lifecycle", "Log server: failed to delete its font", __FILE__, __LINE__);
+    s_Font = nullptr;
+}
+
+// This runs on the UI thread; native row queries and additions cannot interleave with a resize rebuild.
+[[nodiscard]] static Expected<void> SynchronizeMessageRows(const HWND listHwnd)noexcept{
+    usize messageCount = 0u;
+    {
+        NothrowScopedLock lock(s_ListMutex);
+        messageCount = s_Store ? s_Store->messages.size() : 0u;
+    }
+    const LRESULT existingCount = SendMessage(listHwnd, LB_GETCOUNT, 0, 0);
+    if(existingCount == LB_ERR || static_cast<usize>(existingCount) > messageCount)
+        return MakeUnexpected(Failure{});
+    for(usize index = static_cast<usize>(existingCount); index < messageCount; ++index){
+        const LRESULT added = SendMessage(listHwnd, LB_ADDSTRING, 0, 0);
+        if(added == LB_ERR || added == LB_ERRSPACE)
+            return MakeUnexpected(Failure{});
+    }
+    if(messageCount != 0u && SendMessage(listHwnd, LB_SETCURSEL, messageCount - 1u, 0) == LB_ERR)
+        return MakeUnexpected(Failure{});
+    return {};
+}
 
 // Callers must already hold s_ListMutex; validates the item index against the live store.
 static bool IsMessageIndexValid(UINT itemID)noexcept{
@@ -137,7 +160,65 @@ static LogRowColors ResolveLogRowColors(const Core::Common::LogType::Enum type, 
     }
 }
 
+static void CopyMessagesToClipboard(const HWND hwnd)noexcept{
+    Optional<ClipboardText> memory;
+    Optional<ClipboardTextFailure> buildFailure;
+    {
+        NothrowScopedLock lock(s_ListMutex);
+        if(!s_Store || s_Store->messages.empty())
+            return;
+        auto built = BuildClipboardText(s_Store->messages);
+        if(!built)
+            buildFailure.emplace(Move(built.error()));
+        else
+            memory.emplace(Move(*built));
+    }
+    if(buildFailure){
+        ClipboardTextFailure& failure = *buildFailure;
+        Expected<void, ErrorCode> cleanup;
+        if(failure.memory)
+            cleanup = failure.memory->close();
+        const DiagnosticEventText detail = cleanup
+            ? MakeDiagnosticEventText("{}: native_category={} native_code={}", failure.operation, failure.code.category().name(), failure.code.value())
+            : MakeDiagnosticEventText("{}: native_category={} native_code={}; cleanup_category={} cleanup_code={}", failure.operation, failure.code.category().name(), failure.code.value(), cleanup.error().category().name(), cleanup.error().value());
+        CaptureDiagnosticEvent("logger_clipboard", detail.view(), __FILE__, __LINE__);
+        return;
+    }
+
+    if(!OpenClipboard(hwnd)){
+        CaptureDiagnosticEvent("logger_clipboard", "Failed to open clipboard", __FILE__, __LINE__);
+        return;
+    }
+    ScopeExit closeClipboard([]()noexcept{
+        if(!CloseClipboard())
+            CaptureDiagnosticEvent("logger_clipboard", "Failed to close clipboard", __FILE__, __LINE__);
+    }
+    );
+    if(!EmptyClipboard()){
+        CaptureDiagnosticEvent("logger_clipboard", "Failed to empty clipboard", __FILE__, __LINE__);
+        return;
+    }
+#if defined(UNICODE) || defined(_UNICODE)
+    const HANDLE transferred = SetClipboardData(CF_UNICODETEXT, memory->native());
+#else
+    const HANDLE transferred = SetClipboardData(CF_TEXT, memory->native());
+#endif
+    if(!transferred){
+        CaptureDiagnosticEvent("logger_clipboard", "Failed to publish clipboard text", __FILE__, __LINE__);
+        return;
+    }
+    memory->release();
+}
+
 static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
+    if(uMsg == s_SynchronizeMessageRows){
+        const auto synchronized = SynchronizeMessageRows(hwnd);
+        if(!synchronized){
+            CaptureDiagnosticEvent("logger_window_messages", "Log server: failed to synchronize its displayed log rows", __FILE__, __LINE__);
+            return FALSE;
+        }
+        return TRUE;
+    }
     if(uMsg == WM_KEYDOWN && wParam == s_CopyControlKey && (GetKeyState(VK_CONTROL) & s_ControlKeyDownMask)){
         SendMessage(GetParent(hwnd), uMsg, wParam, lParam);
         return 0;
@@ -150,11 +231,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         switch(uMsg){
         case WM_DESTROY:
         {
-            if(s_Font){
-                if(!DeleteObject(s_Font))
-                    NWB_TCERR << NWB_TEXT("Log server: failed to delete its font.\n");
-                s_Font = nullptr;
-            }
+            ReleaseLogFont();
             {
                 ScopedLock lock(s_ListMutex);
                 s_ListHwnd = nullptr;
@@ -166,46 +243,70 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_CLOSE:
             if(!DestroyWindow(hwnd))
-                NWB_TCERR << NWB_TEXT("Log server: failed to destroy its window.\n");
+                CaptureDiagnosticEvent("logger_window_lifecycle", "Log server: failed to destroy its window", __FILE__, __LINE__);
             return 0;
 
         case WM_CREATE:
         {
             s_Font = CreateFont(s_LogFontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, NWB_TEXT("Terminal"));
+            if(!s_Font)
+                CaptureDiagnosticEvent("logger_window_lifecycle", "Log server: failed to create its font; using the system font", __FILE__, __LINE__);
 
-            s_ListHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<WinFrame>().instance(), nullptr);
-            if(!s_ListHwnd)
-                PostQuitMessage(0);
-            else{
-                SendMessage(s_ListHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(s_Font), TRUE);
-                s_OrigListProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(s_ListHwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ListProc)));
+            const HWND listHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<WinFrame>().instance(), nullptr);
+            if(!listHwnd){
+                CaptureDiagnosticEvent("logger_window_lifecycle", "Log server: failed to create its message list", __FILE__, __LINE__);
+                return -1;
+            }
+            SendMessage(listHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(s_Font), TRUE);
+            const LONG_PTR originalProc = SetWindowLongPtr(listHwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ListProc));
+            if(originalProc == 0){
+                CaptureDiagnosticEvent("logger_window_lifecycle", "Log server: failed to subclass its message list", __FILE__, __LINE__);
+                return -1;
+            }
+            s_OrigListProc = reinterpret_cast<WNDPROC>(originalProc);
+            {
+                ScopedLock lock(s_ListMutex);
+                s_ListHwnd = listHwnd;
+            }
+            const auto synchronized = SynchronizeMessageRows(listHwnd);
+            if(!synchronized){
+                CaptureDiagnosticEvent("logger_window_messages", "Log server: failed to initialize its displayed log rows", __FILE__, __LINE__);
+                return -1;
             }
         }
         return 0;
 
         case WM_SIZE:
         {
-            RECT clientRect;
-            GetClientRect(hwnd, &clientRect);
-            MoveWindow(s_ListHwnd, clientRect.left, clientRect.top, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, TRUE);
+            if(!s_ListHwnd)
+                return 0;
+            RECT clientRect = {};
+            if(!GetClientRect(hwnd, &clientRect)){
+                CaptureDiagnosticEvent("logger_window_layout", "Log server: failed to query its client rectangle", __FILE__, __LINE__);
+                return 0;
+            }
+            if(!MoveWindow(s_ListHwnd, clientRect.left, clientRect.top, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, TRUE))
+                CaptureDiagnosticEvent("logger_window_layout", "Log server: failed to resize its message list", __FILE__, __LINE__);
         }
         return 0;
 
         case WM_EXITSIZEMOVE:
         {
-            usize count = 0u;
-            {
-                ScopedLock lock(s_ListMutex);
-                count = s_Store ? s_Store->messages.size() : 0u;
+            const HWND listHwnd = s_ListHwnd;
+            if(!listHwnd)
+                return 0;
+            SendMessage(listHwnd, WM_SETREDRAW, FALSE, 0);
+            ScopeExit restoreRedraw([listHwnd]()noexcept{
+                SendMessage(listHwnd, WM_SETREDRAW, TRUE, 0);
+                if(!InvalidateRect(listHwnd, nullptr, TRUE))
+                    CaptureDiagnosticEvent("logger_window_layout", "Log server: failed to invalidate its message list", __FILE__, __LINE__);
             }
-            // Re-add outside s_ListMutex: LB_ADDSTRING re-enters WM_MEASUREITEM, which takes the same non-recursive lock.
-            // Handlers read the store by itemID; empty item data only triggers remeasurement.
-            SendMessage(s_ListHwnd, WM_SETREDRAW, FALSE, 0);
-            SendMessage(s_ListHwnd, LB_RESETCONTENT, 0, 0);
-            for(usize i = 0u; i < count; ++i)
-                SendMessage(s_ListHwnd, LB_ADDSTRING, 0, 0);
-            SendMessage(s_ListHwnd, WM_SETREDRAW, TRUE, 0);
-            InvalidateRect(s_ListHwnd, nullptr, TRUE);
+            );
+
+            SendMessage(listHwnd, LB_RESETCONTENT, 0, 0);
+            const auto synchronized = SynchronizeMessageRows(listHwnd);
+            if(!synchronized)
+                CaptureDiagnosticEvent("logger_window_messages", "Log server: failed to rebuild its displayed log rows", __FILE__, __LINE__);
         }
         return 0;
 
@@ -216,77 +317,58 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             if(IsMessageIndexValid(mis->itemID)){
                 const auto& curStr = s_Store->messages[static_cast<usize>(mis->itemID)];
 
-                RECT rect;
-                GetClientRect(hwnd, &rect);
+                mis->itemHeight = static_cast<UINT>(s_LogFontHeight);
+                RECT rect = {};
+                if(!GetClientRect(hwnd, &rect)){
+                    CaptureDiagnosticEvent("logger_window_layout", "Log server: failed to query its text measurement rectangle", __FILE__, __LINE__);
+                    return TRUE;
+                }
                 rect.right -= rect.left;
                 rect.left = rect.top = rect.bottom = 0;
 
-                HDC hdc = GetDC(s_ListHwnd);
-                auto* hFont = reinterpret_cast<HFONT>(SendMessage(s_ListHwnd, WM_GETFONT, 0, 0));
-                auto* hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
+                const HDC hdc = GetDC(s_ListHwnd);
+                if(!hdc){
+                    CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to acquire its text measurement device context", __FILE__, __LINE__);
+                    return TRUE;
+                }
+                ScopeExit releaseDc([&]()noexcept{
+                    if(!ReleaseDC(s_ListHwnd, hdc))
+                        CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to release its text measurement device context", __FILE__, __LINE__);
+                }
+                );
 
-                DrawText(hdc, curStr.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT);
+                const HFONT font = reinterpret_cast<HFONT>(SendMessage(s_ListHwnd, WM_GETFONT, 0, 0));
+                HGDIOBJ oldFont = nullptr;
+                if(font){
+                    oldFont = SelectObject(hdc, font);
+                    if(!oldFont || oldFont == HGDI_ERROR){
+                        CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to select its text measurement font", __FILE__, __LINE__);
+                        return TRUE;
+                    }
+                }
+                ScopeExit restoreFont([&]()noexcept{
+                    if(oldFont){
+                        const HGDIOBJ restored = SelectObject(hdc, oldFont);
+                        if(!restored || restored == HGDI_ERROR)
+                            CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to restore its text measurement font", __FILE__, __LINE__);
+                    }
+                }
+                );
 
-                mis->itemHeight = rect.bottom - rect.top;
-
-                SelectObject(hdc, hOldFont);
-                ReleaseDC(s_ListHwnd, hdc);
+                if(!curStr.first().empty()){
+                    if(DrawText(hdc, curStr.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT) == 0)
+                        CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to measure its log text", __FILE__, __LINE__);
+                    else
+                        mis->itemHeight = static_cast<UINT>(rect.bottom - rect.top);
+                }
             }
         }
         return TRUE;
 
         case WM_KEYDOWN:
-        {
-            if(wParam == s_CopyControlKey && (GetKeyState(VK_CONTROL) & s_ControlKeyDownMask)){
-                ScopedLock lock(s_ListMutex);
-                if(s_Store && !s_Store->messages.empty()){
-                    usize combinedSize = 0u;
-                    for(const auto& msg : s_Store->messages){
-                        const usize messageSize = msg.first().size();
-                        if(messageSize > Limit<usize>::s_Max - combinedSize)
-                            return 0;
-                        combinedSize += messageSize;
-                        if(combinedSize > Limit<usize>::s_Max - 2u)
-                            return 0;
-                        combinedSize += 2u;
-                    }
-                    if(combinedSize > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
-                        return 0;
-
-                    LogString combined{s_Store->arena};
-                    combined.reserve(combinedSize);
-                    for(const auto& msg : s_Store->messages){
-                        combined += msg.first();
-                        combined += NWB_TEXT("\r\n");
-                    }
-                    if(combined.size() > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
-                        return 0;
-
-                    const usize byteSize = (combined.size() + 1) * sizeof(tchar);
-                    if(OpenClipboard(hwnd)){
-                        EmptyClipboard();
-                        HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, byteSize);
-                        if(hMem){
-                            void* lockedMemory = GlobalLock(hMem);
-                            if(lockedMemory){
-                                NWB_MEMCPY(lockedMemory, byteSize, combined.data(), byteSize);
-                                GlobalUnlock(hMem);
-#if defined(UNICODE) || defined(_UNICODE)
-                                if(!SetClipboardData(CF_UNICODETEXT, hMem))
-#else
-                                if(!SetClipboardData(CF_TEXT, hMem))
-#endif
-                                    GlobalFree(hMem);
-                            }
-                            else
-                                GlobalFree(hMem);
-                        }
-                        CloseClipboard();
-                    }
-                }
-            }
-        }
-        return 0;
+            if(wParam == s_CopyControlKey && (GetKeyState(VK_CONTROL) & s_ControlKeyDownMask))
+                CopyMessagesToClipboard(hwnd);
+            return 0;
 
         case WM_DRAWITEM:
         {
@@ -299,13 +381,43 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 RECT rect = dis->rcItem;
 
                 const LogRowColors colors = ResolveLogRowColors(curData.second(), (dis->itemID & 1) != 0);
-                HBRUSH hBrush = CreateSolidBrush(colors.background);
-                FillRect(hdc, &rect, hBrush);
-                DeleteObject(hBrush);
+                const HBRUSH brush = CreateSolidBrush(colors.background);
+                if(!brush){
+                    CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to create its row background brush", __FILE__, __LINE__);
+                    return TRUE;
+                }
+                ScopeExit releaseBrush([&]()noexcept{
+                    if(!DeleteObject(brush))
+                        CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to delete its row background brush", __FILE__, __LINE__);
+                }
+                );
 
-                SetTextColor(hdc, colors.text);
-                SetBkMode(hdc, TRANSPARENT);
-                DrawText(hdc, curData.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT);
+                if(!FillRect(hdc, &rect, brush))
+                    CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to fill its row background", __FILE__, __LINE__);
+                const COLORREF oldTextColor = SetTextColor(hdc, colors.text);
+                if(oldTextColor == CLR_INVALID){
+                    CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to set its log text color", __FILE__, __LINE__);
+                    return TRUE;
+                }
+                ScopeExit restoreTextColor([&]()noexcept{
+                    if(SetTextColor(hdc, oldTextColor) == CLR_INVALID)
+                        CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to restore its log text color", __FILE__, __LINE__);
+                }
+                );
+
+                const int oldBackgroundMode = SetBkMode(hdc, TRANSPARENT);
+                if(oldBackgroundMode == 0){
+                    CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to set its log text background mode", __FILE__, __LINE__);
+                    return TRUE;
+                }
+                ScopeExit restoreBackgroundMode([&]()noexcept{
+                    if(!SetBkMode(hdc, oldBackgroundMode))
+                        CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to restore its log text background mode", __FILE__, __LINE__);
+                }
+                );
+
+                if(!curData.first().empty() && DrawText(hdc, curData.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT) == 0)
+                    CaptureDiagnosticEvent("logger_window_paint", "Log server: failed to draw its log text", __FILE__, __LINE__);
             }
         }
         return TRUE;
@@ -326,7 +438,6 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
     HWND listHwnd = nullptr;
-    TStringView itemText;
     {
         ScopedLock lock(FrameDetail::s_ListMutex);
 
@@ -335,7 +446,6 @@ void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
             return;
 
         FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
-        itemText = TStringView(FrameDetail::s_Store->messages.back().first());
         listHwnd = FrameDetail::s_ListHwnd;
     }
 
@@ -344,13 +454,12 @@ void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
     if(!listHwnd)
         return;
 
-    SendMessage(listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText.data()));
-
-    const auto numItem = SendMessage(listHwnd, LB_GETCOUNT, 0, 0);
-    if(numItem > 0)
-        SendMessage(listHwnd, LB_SETCURSEL, numItem - 1, 0);
+    if(!SendMessage(listHwnd, FrameDetail::s_SynchronizeMessageRows, 0, 0)){
+        ScopedLock lock(FrameDetail::s_ListMutex);
+        if(FrameDetail::s_ListHwnd == listHwnd)
+            CaptureDiagnosticEvent("logger_window_messages", "Log server: failed to publish its displayed log rows", __FILE__, __LINE__);
+    }
 }
-
 
 Frame::Frame(void* inst){
     {
@@ -361,10 +470,13 @@ Frame::Frame(void* inst){
 
     data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
+
 Frame::~Frame(){
     const HWND hwnd = data<FrameDetail::WinFrame>().hwnd();
     if(hwnd && !DestroyWindow(hwnd))
-        NWB_TCERR << NWB_TEXT("Log server: failed to destroy its window during shutdown.\n");
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "logger_window_lifecycle", .message = "Log server: failed to destroy its window during shutdown", .file = __FILE__, .line = __LINE__, });
+
+    FrameDetail::ReleaseLogFont();
 
     ScopedLock lock(FrameDetail::s_ListMutex);
     FrameDetail::s_Frame = nullptr;
@@ -399,9 +511,11 @@ bool Frame::init(){
 
     return true;
 }
+
 void Frame::showFrame(){
     ShowWindow(data<FrameDetail::WinFrame>().hwnd(), SW_SHOW);
 }
+
 bool Frame::mainLoop(){
     MSG message = {};
     for(;;){

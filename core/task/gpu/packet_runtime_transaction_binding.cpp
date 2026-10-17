@@ -57,7 +57,8 @@ bool GpuGraphSubmissionTransaction::matchesRecordingAttemptBinding(const GpuTask
     if(!planAccess.valid())
         return false;
     NothrowScopedLock lock(m_mutex);
-    return recordingAttemptGeneration != 0u
+    return
+        recordingAttemptGeneration != 0u
         && validForLocked(planAccess)
         && m_recordingAttemptGeneration == recordingAttemptGeneration
         && m_activeSubmissionBinding == submissionBinding

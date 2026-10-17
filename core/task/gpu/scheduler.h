@@ -114,7 +114,8 @@ public:
 
 
 public:
-    // Freezes queue assignment at execution admission using a current physical-queue pressure snapshot, then initializes the caller-owned runtime artifacts for the resulting immutable plan. Explicit queue loads in compileOptions override automatic timeline sampling for deterministic tooling and tests.
+    // Freezes queue assignment at execution admission using a current physical-queue pressure snapshot, then initializes the caller-owned runtime artifacts for the resulting immutable plan.
+    // Explicit queue loads in compileOptions override automatic timeline sampling for deterministic tooling and tests.
     [[nodiscard]] bool scheduleGraph(
         const GpuTaskGraph& graph,
         GpuTaskGraphAnalysis& analysis,
@@ -184,7 +185,8 @@ private:
         Alloc::ScratchArena& scratchArena,
         const GpuTaskGraphCompileOptions& compileOptions
     )const;
-    // Records then submits the descriptor-selected ordinary compiler prefix. Without a semantic terminal task, accepted-frontier packets must form one terminal suffix. The executor rejects a frontier inside its selected prefix before recording and never discards or submits later caller-owned work on the caller's behalf.
+    // Records then submits the descriptor-selected ordinary compiler prefix. Without a semantic terminal task, accepted-frontier packets must form one terminal suffix.
+    // The executor rejects a frontier inside its selected prefix before recording and never discards or submits later caller-owned work on the caller's behalf.
     [[nodiscard]] bool submitGraph(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

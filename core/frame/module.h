@@ -29,17 +29,37 @@ NWB_CORE_BEGIN
 
 
 class Frame{
+private:
+    using FrameString = TString<Alloc::GlobalArena>;
+#if defined(NWB_PLATFORM_WINDOWS)
+    using NativeFrameData = Common::WinFrame;
+#elif defined(NWB_PLATFORM_LINUX)
+    using NativeFrameData = Common::LinuxFrame;
+#else
+    using NativeFrameData = Common::FrameData;
+#endif
+
+
+    class PlatformCleanup final : NoCopy{
+    public:
+        explicit PlatformCleanup(Frame& frame)noexcept
+            : m_frame(frame)
+        {}
+        ~PlatformCleanup()noexcept{ m_frame.cleanupPlatform(); }
+
+
+    private:
+        Frame& m_frame;
+    };
+
+
 public:
     using ProjectUpdateCallback = bool(*)(void* userData, f32 delta);
     using TelemetryUploadCallback = bool(*)(void* userData, const void* bytes, usize byteCount);
 
 
 private:
-    using FrameString = TString<Alloc::GlobalArena>;
-
-
-private:
-    static void ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY);
+    static void ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY)noexcept;
 
 
 public:
@@ -53,69 +73,71 @@ public:
     bool mainLoop();
     void requestQuit()noexcept;
 
-
-public:
     template<typename T>
     inline T& data()noexcept{ return static_cast<T&>(m_data); }
 
-
-public:
     bool startup();
     void cleanup();
     bool update(f32 delta);
-    bool render()noexcept;
 
-
-public:
     inline void setProjectUpdateCallback(ProjectUpdateCallback callback, void* userData)noexcept{
         m_projectUpdateCallback = callback;
         m_projectUpdateUserData = userData;
     }
 
     [[nodiscard]] inline GraphicsRuntime& graphics()noexcept{ return m_graphics; }
+
     [[nodiscard]] inline const GraphicsRuntime& graphics()const noexcept{ return m_graphics; }
 
     [[nodiscard]] inline InputDispatcher& input()noexcept{ return m_input; }
+
     [[nodiscard]] inline const InputDispatcher& input()const noexcept{ return m_input; }
 
     [[nodiscard]] inline Alloc::GlobalArena& projectObjectArena()noexcept{ return m_projectObjectArena; }
+
     [[nodiscard]] inline const Alloc::GlobalArena& projectObjectArena()const noexcept{ return m_projectObjectArena; }
 
     [[nodiscard]] inline CpuTaskScheduler& cpuTasks()noexcept{ return m_cpuTasks; }
+
     [[nodiscard]] inline GpuTaskScheduler& gpuTasks()noexcept{ return m_gpuTasks; }
 
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData)noexcept;
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
-
     // Toggle perf capture without telemetry; flips both halves of the GPU-timing gate.
     void setPerfCapture(const Perf::CaptureOptions& options);
-
     // Available after startup; the native window and its OS service outlive project borrowers.
-    [[nodiscard]] IClipboardService& clipboard();
+    [[nodiscard]] IClipboardService& clipboard()noexcept;
+
     // Native startup/teardown callbacks may arrive while the platform service is not attached.
     [[nodiscard]] inline IClipboardService* tryClipboard()noexcept{ return m_clipboard.get(); }
-    [[nodiscard]] ITextInputService& textInput();
+
+    [[nodiscard]] ITextInputService& textInput()noexcept;
+
     [[nodiscard]] inline ITextInputService* tryTextInput()noexcept{ return m_textInput.get(); }
 
     // Read-only captured timing data; Session owns the per-scope stats.
     [[nodiscard]] inline const Perf::Session& perfSession()const noexcept{ return m_perfSession; }
 
     [[nodiscard]] inline Telemetry::FrameGraphRegistry& frameGraphRegistry()noexcept{ return m_frameGraphRegistry; }
+
     [[nodiscard]] inline const Telemetry::FrameGraphRegistry& frameGraphRegistry()const noexcept{ return m_frameGraphRegistry; }
 
     [[nodiscard]] inline FrameString& appliedWindowTitle()noexcept{ return m_appliedWindowTitle; }
+
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const noexcept{ return m_appliedWindowTitle; }
 
     [[nodiscard]] TStringView windowTitleOrDefault()const noexcept;
+
     [[nodiscard]] inline bool quitRequested()const noexcept{ return m_quitRequested; }
+
     [[nodiscard]] Optional<TStringView> syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 
 
 private:
-    [[nodiscard]] GlobalUniquePtr<IClipboardService> createPlatformClipboardService();
-    [[nodiscard]] GlobalUniquePtr<ITextInputService> createPlatformTextInputService();
-    void setupPlatform(void* inst);
+    [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> createPlatformClipboardService();
+    [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> createPlatformTextInputService();
+    void setupPlatform(void* inst)noexcept;
     void cleanupPlatform()noexcept;
     bool updateFrame(f32 delta);
 
@@ -123,29 +145,26 @@ private:
 private:
     CpuTaskScheduler m_cpuTasks;
     GpuTaskScheduler m_gpuTasks;
-    Common::FrameData m_data;
-
+    NativeFrameData m_data;
     Alloc::GlobalArena m_graphicsObjectArena;
     FrameString m_appliedWindowTitle;
     GraphicsAllocator m_graphicsAllocator;
     InputDispatcher m_input;
-
     Alloc::GlobalArena m_projectObjectArena;
+    PlatformCleanup m_platformCleanup;
     GlobalUniquePtr<IClipboardService> m_clipboard;
     GlobalUniquePtr<ITextInputService> m_textInput;
     Perf::Session m_perfSession;
     Telemetry::CaptureSession m_telemetrySession;
     Telemetry::FrameGraphRegistry m_frameGraphRegistry;
     Telemetry::TelemetryBytes m_telemetryUploadBytes;
-
     GraphicsRuntime m_graphics;
-
     ProjectUpdateCallback m_projectUpdateCallback = nullptr;
     void* m_projectUpdateUserData = nullptr;
     TelemetryUploadCallback m_telemetryUploadCallback = nullptr;
     void* m_telemetryUploadUserData = nullptr;
     bool m_quitRequested = false;
-    // Timing scope registered once in the constructor/capture setup, not per frame in updateFrame().
+    // Timing scope registered during startup and retained across capture enable/clear, never per frame in updateFrame().
     Perf::TimingScopeId m_projectUpdateTimingScope;
 };
 

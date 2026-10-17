@@ -129,7 +129,7 @@ VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpacityMicromap::OpacityMicromap(const VulkanContext& context)
+OpacityMicromap::OpacityMicromap(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_context(context)
@@ -142,21 +142,25 @@ OpacityMicromap::~OpacityMicromap(){
     m_dataBuffer.reset();
 }
 
-RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
     VkResult res = VK_SUCCESS;
 
     if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Enabled opacity micromap feature support is required to create opacity micromaps."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.counts.size() > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: usage-count count exceeds Vulkan limit"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     const auto buildFlags = VulkanDetail::ConvertOpacityMicromapBuildFlags(desc.flags, NWB_TEXT("create opacity micromap"));
     if(!buildFlags)
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto opacityMicromapProperties = VulkanDetail::MakeVkStruct<VkPhysicalDeviceOpacityMicromapPropertiesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_PROPERTIES_EXT);
     auto physicalDeviceProperties = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
@@ -166,7 +170,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
     const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, opacityMicromapProperties.maxOpacity2StateSubdivisionLevel, opacityMicromapProperties.maxOpacity4StateSubdivisionLevel, scratchArena, NWB_TEXT("create opacity micromap"));
     if(!usageCounts)
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
@@ -180,7 +184,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 
     RayTracingOpacityMicromapHandle om(NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context), RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!om)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     om->m_desc = desc;
     om->m_maxOpacity2StateSubdivisionLevel = opacityMicromapProperties.maxOpacity2StateSubdivisionLevel;
     om->m_maxOpacity4StateSubdivisionLevel = opacityMicromapProperties.maxOpacity4StateSubdivisionLevel;
@@ -193,16 +197,17 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = desc.debugName;
 
-    om->m_dataBuffer = createBuffer(bufferDesc);
-    if(!om->m_dataBuffer){
+    auto bufferResult = createBuffer(bufferDesc);
+    if(!bufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap storage buffer"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
+    om->m_dataBuffer = Move(*bufferResult);
 
     auto* buffer = om->m_dataBuffer.get();
     if(!isBufferReadyForGpuUse(buffer, VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: storage buffer is not ready for device-address access"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     auto createInfo = VulkanDetail::MakeVkStruct<VkMicromapCreateInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT);
@@ -213,11 +218,15 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     res = m_context.deviceDispatch.vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: {}"), ResultToString(res));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     return om;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build opacity micromap")))

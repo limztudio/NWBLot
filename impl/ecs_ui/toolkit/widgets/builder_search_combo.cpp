@@ -37,10 +37,10 @@ bool Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
         snapshotComboQuery(frame);
         return comboMatches(frame);
     }
-    WidgetState* declared = m_context.declarePart(field, "query", WidgetKind::EditBox);
+    const auto declared = m_context.declarePart(field, "query", WidgetKind::EditBox);
     if(!declared)
         return false;
-    const WidgetState editor = *declared;
+    const WidgetState editor = **declared;
     if(!m_context.claimState(editor, query.instanceGeneration()))
         return false;
     Item item(m_arena);

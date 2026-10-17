@@ -21,8 +21,6 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
-using ProgressPaintSample = SkinPaintSample;
-
 class UiProgressBuilderTests : public WidgetFixture{
 protected:
     [[nodiscard]] static ProgressOptions MakeOptions()noexcept{
@@ -68,9 +66,6 @@ protected:
         return begin(generation) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
     }
 
-    [[nodiscard]] Expected<ProgressPaintSample> sample(const DrawSnapshot& snapshot, const Name& name)const noexcept{
-        return sampleSkinPaint(snapshot, name);
-    }
 };
 
 
@@ -93,9 +88,9 @@ TEST_F(UiProgressBuilderTests, CallerMutationCannotChangeDeferredProgressGeometr
     style.fillTint = {};
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto track = sample(snapshot, Name("progress.track"));
+    const auto track = sampleSkinPaint(snapshot, Name("progress.track"));
     ASSERT_TRUE(track);
-    const auto fill = sample(snapshot, Name("progress.fill"));
+    const auto fill = sampleSkinPaint(snapshot, Name("progress.fill"));
     ASSERT_TRUE(fill);
     EXPECT_FLOAT_EQ(track->bounds.width, 240.0f);
     EXPECT_FLOAT_EQ(track->bounds.height, 32.0f);
@@ -114,9 +109,9 @@ TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint
     m_builder.progressStyle().fillFallback = Name("missing.fill");
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto track = sample(snapshot, Name("scrollbar.track"));
+    const auto track = sampleSkinPaint(snapshot, Name("scrollbar.track"));
     ASSERT_TRUE(track);
-    const auto fill = sample(snapshot, Name("scrollbar.thumb.normal"));
+    const auto fill = sampleSkinPaint(snapshot, Name("scrollbar.thumb.normal"));
     ASSERT_TRUE(fill);
 }
 
@@ -127,9 +122,9 @@ TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){
         ASSERT_TRUE(m_builder.progress("amount", fractions[index], MakeOptions()));
         ASSERT_TRUE(finishPanel());
         const DrawSnapshot snapshot = m_paint.freeze();
-        const auto track = sample(snapshot, Name("progress.track"));
+        const auto track = sampleSkinPaint(snapshot, Name("progress.track"));
         ASSERT_TRUE(track);
-        const auto fill = sample(snapshot, Name("progress.fill"));
+        const auto fill = sampleSkinPaint(snapshot, Name("progress.fill"));
         EXPECT_EQ(fill.has_value(), index >= 2u);
         if(index >= 2u){
             ASSERT_TRUE(fill);
@@ -146,9 +141,9 @@ TEST_F(UiProgressBuilderTests, TinyFillClipsNaturalBorderTexelsWithoutCompressin
     ASSERT_TRUE(m_builder.progress("amount", 0.01, MakeOptions()));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto track = sample(snapshot, Name("progress.track"));
+    const auto track = sampleSkinPaint(snapshot, Name("progress.track"));
     ASSERT_TRUE(track);
-    const auto fill = sample(snapshot, Name("progress.fill"));
+    const auto fill = sampleSkinPaint(snapshot, Name("progress.fill"));
     ASSERT_TRUE(fill);
     EXPECT_NEAR(fill->bounds.width, (track->bounds.width - 8.0f) * 0.01f, 0.000001f);
     EXPECT_LT(fill->maximumU, 134.0f / 256.0f);
@@ -161,8 +156,8 @@ TEST_F(UiProgressBuilderTests, SubresolutionPositiveFractionRemainsAValidEmptyFi
     ASSERT_TRUE(m_builder.progress("amount", BitCast<f64>(1ull), MakeOptions()));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(sample(snapshot, Name("progress.track")));
-    EXPECT_FALSE(sample(snapshot, Name("progress.fill")));
+    EXPECT_TRUE(sampleSkinPaint(snapshot, Name("progress.track")));
+    EXPECT_FALSE(sampleSkinPaint(snapshot, Name("progress.fill")));
 }
 
 TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreRestored){
@@ -173,7 +168,7 @@ TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreR
     ASSERT_TRUE(m_paint.popClip());
     m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto fill = sample(snapshot, Name("progress.fill"));
+    const auto fill = sampleSkinPaint(snapshot, Name("progress.fill"));
     ASSERT_TRUE(fill);
     EXPECT_FLOAT_EQ(fill->bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(fill->bounds.width, 20.0f);

@@ -34,6 +34,9 @@ class TextAreaState final : NoCopy{
 public:
     TextAreaState()noexcept = default;
     TextAreaState(TextAreaState&&) = delete;
+
+
+public:
     TextAreaState& operator=(TextAreaState&&) = delete;
 
 

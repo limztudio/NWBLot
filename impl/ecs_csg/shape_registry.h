@@ -47,6 +47,8 @@ using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& sha
 struct CsgShapeTypeDesc{
     using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>;
 
+
+public:
     Name name = s_NameNone;
     Name shaderModule = s_NameNone;
     AString<Core::Alloc::GlobalArena> shaderModuleInclude;
@@ -55,6 +57,8 @@ struct CsgShapeTypeDesc{
     DefaultParameterByteVector defaultParameterBytes;
     CsgShapeBoundsCallback boundsCallback = nullptr;
 
+
+public:
     explicit CsgShapeTypeDesc(Core::Alloc::GlobalArena& arena)noexcept
         : shaderModuleInclude(arena)
     {}
@@ -64,6 +68,8 @@ struct CsgShapeTypeInfo{
     CsgShapeTypeId id = s_InvalidCsgShapeTypeId;
     CsgShapeTypeDesc desc;
 
+
+public:
     explicit CsgShapeTypeInfo(Core::Alloc::GlobalArena& arena)noexcept
         : desc(arena)
     {}

@@ -81,11 +81,14 @@ Expected<PreparedShadowMaterialContextUploads> RendererRayTracingSystem::retainP
         return MakeUnexpected(Failure{});
     }
 
-    result.instanceMaterial = graph.copyUploadData(m_preparedShadowInstanceMaterialBytes.data(), m_preparedShadowInstanceMaterialBytes.size(), alignof(NwbRtInstanceMaterialGpu));
-    result.instance = graph.copyUploadData(m_preparedShadowInstanceBytes.data(), m_preparedShadowInstanceBytes.size(), alignof(InstanceGpuData));
-    result.materialTyped = graph.copyUploadData(m_preparedShadowMaterialTypedBytes.data(), m_preparedShadowMaterialTypedBytes.size(), alignof(u32));
-    if(!(result.instanceMaterial.valid() && result.instance.valid() && result.materialTyped.valid()))
+    const auto instanceMaterialResult = graph.copyUploadData(m_preparedShadowInstanceMaterialBytes.data(), m_preparedShadowInstanceMaterialBytes.size(), alignof(NwbRtInstanceMaterialGpu));
+    const auto instanceResult = graph.copyUploadData(m_preparedShadowInstanceBytes.data(), m_preparedShadowInstanceBytes.size(), alignof(InstanceGpuData));
+    const auto materialTypedResult = graph.copyUploadData(m_preparedShadowMaterialTypedBytes.data(), m_preparedShadowMaterialTypedBytes.size(), alignof(u32));
+    if(!(instanceMaterialResult && instanceResult && materialTypedResult))
         return MakeUnexpected(Failure{});
+    result.instanceMaterial = *instanceMaterialResult;
+    result.instance = *instanceResult;
+    result.materialTyped = *materialTypedResult;
     return result;
 }
 
@@ -183,7 +186,7 @@ void RendererRayTracingSystem::capturePreparedShadowMaterialContextStorage(const
     m_preparedShadowMaterialContextHash = hash;
 }
 
-bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount){
+bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
     clearPreparedShadowMaterialContext();
     if(instanceMaterialCount == 0u || instanceCount == 0u || materialTypedByteCount == 0u)
         return false;

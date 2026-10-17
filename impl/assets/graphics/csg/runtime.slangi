@@ -60,6 +60,10 @@ struct NwbCsgSample{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbHeapCsgCutterBuffers[];
 #pragma warning(pop)
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> nwbHeapCsgReceiverRanges(const uint slot){
     return g_NwbHeapCsgReceiverRangeBuffers[slot];
 }
@@ -80,6 +84,10 @@ struct NwbCsgMeshPushConstants{
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 [[vk::push_constant]] ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 uint nwbCsgMeshInstanceIndex(){
 #if defined(NWB_CSG_MESH_INSTANCE_INDEX)

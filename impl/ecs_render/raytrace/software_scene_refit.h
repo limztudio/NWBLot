@@ -47,10 +47,11 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 
 struct SoftwareSceneRefitInstanceGpu{
-    Float34U objectToWorld = {};
+    Float34 objectToWorld = {};
     u32 meshNodeSlot = Limit<u32>::s_Max;
     u32 reserved[3] = {};
 };
+static_assert(alignof(SoftwareSceneRefitInstanceGpu) >= 16u);
 static_assert(sizeof(SoftwareSceneRefitInstanceGpu) == NWB_SCENE_BVH_REFIT_INSTANCE_BYTES);
 static_assert(offsetof(SoftwareSceneRefitInstanceGpu, meshNodeSlot) == NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET);
 
@@ -67,19 +68,21 @@ struct SoftwareSceneRefitSnapshot{
     Core::GpuPhysicalQueueId queue;
     u32 nodeCount = 0u;
 
-    SoftwareSceneRefitSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+
+public:
+    SoftwareSceneRefitSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
 };
 using SoftwareSceneRefitControl = RefCounter<SoftwareSceneRefitSnapshot>;
 using SoftwareSceneRefitHandle = RefCountPtr<SoftwareSceneRefitControl, ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>>;
 
 class SoftwareSceneRefitResources final : NoCopy{
 public:
-    SoftwareSceneRefitResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+    SoftwareSceneRefitResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
 
 
 public:
     void invalidate();
-    [[nodiscard]] SoftwareSceneRefitHandle prepare(
+    [[nodiscard]] Expected<SoftwareSceneRefitHandle> prepare(
         const SoftwareSceneRefitInstanceGpu* inputs, const Core::BufferHandle* meshNodes, usize instanceCount,
         const Core::BufferHandle& sceneNodes, Core::GpuDescriptorHandle sceneDescriptor, u32 nodeCount,
         RendererShaderSystem& shaderSystem
@@ -87,6 +90,7 @@ public:
 
 private:
     [[nodiscard]] bool ensurePipeline(RendererShaderSystem& shaderSystem);
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

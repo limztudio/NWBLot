@@ -140,6 +140,7 @@ public:
         handler(s_MeshletLocalVertexRefBindingSlot, false);
         handler(s_MeshletPrimitiveIndexBindingSlot, true);
     }
+
     [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot)noexcept{
         switch(bindingSlot){
         case s_MeshPositionBindingSlot: return mesh.positionBuffer;
@@ -158,21 +159,23 @@ public:
             return mesh.positionBuffer;
         }
     }
+
     template<typename BufferHandler>
     static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(s_MeshPositionBindingSlot, MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), false))){
         ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
             handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
-        });
+        }
+        );
     }
 
 
 public:
-    RendererMeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererMeshState& meshState);
+    RendererMeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererMeshState& meshState)noexcept;
 
 
 public:
     void invalidateResources();
-    [[nodiscard]] Expected<MeshResources*> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset);
+    [[nodiscard]] Expected<MeshResources*> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<MeshResources*> findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset);
     // Graph declaration resolves prepared keys without touching assets or mesh state.
     [[nodiscard]] Expected<MeshResources*> findMeshResources(const Name& meshKey);
@@ -207,15 +210,11 @@ public:
 
 private:
     void releaseMeshFrameHeapHandles();
-
-
-private:
     // Mesh descriptors are established at creation; draw paths only consume ready handles.
     [[nodiscard]] bool createMeshRenderBindings(MeshResources& mesh);
     [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
     [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
-
     void releaseAllMeshGeometryHeapHandles();
 
 

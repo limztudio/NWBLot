@@ -31,8 +31,12 @@ bool RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
     }
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(resolve.m_combinedUpsample.m_shader).addBindingLayout(resolve.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    resolve.m_combinedUpsample.m_pipeline = device.createComputePipeline(desc);
-    resolve.m_combinedUpsampleFailed = !resolve.m_combinedUpsample.m_pipeline;
+    auto pipelineResult = device.createComputePipeline(desc);
+    if(pipelineResult)
+        resolve.m_combinedUpsample.m_pipeline = Move(*pipelineResult);
+    else
+        resolve.m_combinedUpsample.m_pipeline.reset();
+    resolve.m_combinedUpsampleFailed = !pipelineResult;
     return !resolve.m_combinedUpsampleFailed;
 }
 

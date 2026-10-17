@@ -277,7 +277,8 @@ namespace GpuTaskGraphCompilerDetail{
                 .joinsAcceptedQueueFrontier = task.scheduling.joinsAcceptedQueueFrontier,
                 .isRecoverySubmission = task.scheduling.isRecoverySubmission,
                 .recordsTiming = taskRecordsTiming,
-            });
+            }
+            );
             __hidden_gpu_task_graph_compiler_packetization::InitializePacketMergeSummary(task, assignment->queue, analysis, assignments, trackConsumerFrontiers, precedingPacketSummary);
         }
         else{
@@ -291,7 +292,8 @@ namespace GpuTaskGraphCompilerDetail{
             .packetizationDecision = packetizationDecision,
             .timingPolicy = task.timing.policy,
             .recordsNonCommittingTimingSample = static_cast<bool>(assignment->modifiers & (GpuTaskQueueAssignmentModifier::TimingCalibration | GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride)),
-        });
+        }
+        );
         compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;
     }
     if(compiledPlan.tasks.size() != compiledPlan.compiledTaskIndexByTask.size())

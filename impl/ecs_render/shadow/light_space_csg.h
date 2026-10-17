@@ -60,7 +60,7 @@ struct LightSpaceCsgState{
 
 
 public:
-    explicit LightSpaceCsgState(Core::Alloc::GlobalArena& arena)
+    explicit LightSpaceCsgState(Core::Alloc::GlobalArena& arena)noexcept
         : snapshot(arena)
         , receivers(arena)
         , instances(arena)

@@ -23,6 +23,10 @@ bool BlendState::RenderTarget::usesConstantColor()const noexcept{
         ;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool BlendState::usesConstantColor(u32 numTargets)const{
     NWB_ASSERT(numTargets <= s_MaxRenderTargets);
     for(u32 rt = 0u; rt < numTargets; ++rt){

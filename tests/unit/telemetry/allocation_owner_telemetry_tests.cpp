@@ -42,6 +42,9 @@ namespace Log = NWB::Log;
 static Atomic<u64> s_OwnerSequence{ 0u };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct OwnedAllocation{
     Core::Alloc::GlobalArena& arena;
     void* pointer = nullptr;
@@ -200,7 +203,9 @@ TEST(AllocationOwnerTelemetry, SeparatesRecorderSourcesAndKeepsPreviousFrameDuri
     Perf::MemoryScopeId scopes[LengthOf(sources)];
     Perf::MemorySnapshot previous[LengthOf(sources)];
     for(usize sourceIndex = 0u; sourceIndex < LengthOf(sources); ++sourceIndex){
-        scopes[sourceIndex] = recorder.registerScope(owner, sources[sourceIndex]);
+        const auto scopeResult = recorder.registerScope(owner, sources[sourceIndex]);
+        ASSERT_TRUE(scopeResult);
+        scopes[sourceIndex] = *scopeResult;
         ASSERT_TRUE(scopes[sourceIndex].valid());
         for(usize earlier = 0u; earlier < sourceIndex; ++earlier)
             EXPECT_NE(scopes[earlier].index, scopes[sourceIndex].index);
@@ -245,8 +250,12 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     TestArena testArena;
     char sequenceText[32u] = {};
     const AStringView sequence = FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText);
-    const Name ownerName = DeriveName(Name("tests/telemetry/automatic_owner/"), sequence);
-    const Name scratchName = DeriveName(Name("tests/telemetry/retired_scratch/"), sequence);
+    const auto derivedNameAt249Col27 = DeriveName(Name("tests/telemetry/automatic_owner/"), sequence);
+    ASSERT_TRUE(derivedNameAt249Col27);
+    const Name ownerName = *derivedNameAt249Col27;
+    const auto derivedNameAt250Col29 = DeriveName(Name("tests/telemetry/retired_scratch/"), sequence);
+    ASSERT_TRUE(derivedNameAt250Col29);
+    const Name scratchName = *derivedNameAt250Col29;
     Core::Alloc::GlobalArena owner(ownerName);
     OwnedAllocation allocation(owner, 53u);
     ASSERT_NE(allocation.pointer, nullptr);
@@ -273,7 +282,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
 
     perfSession.setCaptureOptions(Perf::CaptureOptions{ .enabled = true, .memory = true });
     perfSession.beginFrame(41u);
-    perfSession.recordMemorySnapshot(ownerName, owner);
+    ASSERT_TRUE(perfSession.recordMemorySnapshot(ownerName, owner));
     perfSession.publishFrame();
     const Perf::MemorySnapshot first = perfSession.memoryView().snapshot(ownerName, Perf::MemorySource::Arena);
     ASSERT_TRUE(first.valid());
@@ -395,7 +404,9 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
 TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndividualArenaPeak){
     TestArena testArena;
     char sequenceText[32u] = {};
-    const Name ownerName = DeriveName(Name("tests/telemetry/shared_arena_peak/"), FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText));
+    const auto derivedNameAt399Col27 = DeriveName(Name("tests/telemetry/shared_arena_peak/"), FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText));
+    ASSERT_TRUE(derivedNameAt399Col27);
+    const Name ownerName = *derivedNameAt399Col27;
     Perf::Session perfSession(testArena.arena);
     perfSession.setCaptureOptions(Perf::CaptureOptions{ .enabled = true, .memory = true });
     Core::Alloc::GlobalArena firstArena(ownerName);

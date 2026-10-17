@@ -14,6 +14,7 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
@@ -62,8 +63,8 @@ private:
 
 
 private:
-    bool configureFramebufferCapture(){
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("RefractionSmokeProject"), 16u);
+    bool configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("RefractionSmokeProject"), 16u);
         if(!capture)
             return false;
         m_framebufferCapture = Move(*capture);
@@ -79,19 +80,20 @@ private:
         return entity;
     }
 
+
 public:
     explicit RefractionSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context), m_world(CreateWorldOrDie(context)){}
-
     virtual ~RefractionSmokeProject()override{ DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture); }
 
 
 public:
     virtual bool onStartup()override{
-        if(!configureFramebufferCapture())
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+        if(!configureFramebufferCapture(scratchArena))
             return false;
 
-        const auto galleryCase = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFRACTION_SMOKE_CASE");
+        const auto galleryCase = ReadSmokeEnvironmentText(scratchArena, "NWB_REFRACTION_SMOKE_CASE");
         if(galleryCase)
             return CreateRefractionGalleryScene(m_context, *m_world, AStringView(galleryCase->data(), galleryCase->size()), ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY"));
 
@@ -128,9 +130,14 @@ public:
         if(m_framebufferCapture)
             m_framebufferCapture->update();
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
+        const auto updated = m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         return true;
     }
+
 
 private:
     NWB::ProjectRuntimeContext& m_context;

@@ -209,9 +209,9 @@ def read_raw_pair(path: pathlib.Path) -> dict:
     resolution = values["resolution"]
     if not isinstance(resolution, list) or len(resolution) != (3 if dimension == 2 else 2) or any(type(value) is not int or value <= 0 for value in resolution):
         raise AssertionError(f"invalid texture resolution: {metadata_path}")
-    count = max(resolution).bit_length()
     width, height = resolution[:2]
     depth = resolution[2] if dimension == 2 else 1
+    count = max(width, height, depth).bit_length()
     if dimension == 1 and width != height:
         raise AssertionError(f"cube texture faces must be square: {metadata_path}")
     if (alpha_mode == 2) != ("alpha_constant_unorm8" in values):

@@ -28,7 +28,7 @@ using namespace Impl;
 using namespace Impl::Ui;
 
 
-static UiSkinRegion Sprite(){
+static UiSkinRegion Sprite()noexcept{
     UiSkinRegion region;
     region.name = Name("image.test");
     region.rectangle = { 10u, 20u, 200u, 100u };

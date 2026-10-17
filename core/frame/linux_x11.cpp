@@ -28,6 +28,7 @@
 #include <core/os/linux/x11/text_input.h>
 #include <core/os/linux/x11/text_input_key_history.h>
 
+#include <global/scope_exit.h>
 #include <global/thread.h>
 
 
@@ -73,6 +74,9 @@ static constexpr int s_X11CardinalPropertyFormatBits = 32;
 static bool s_DetectableAutoRepeat = false;
 static bool s_KeyStates[s_KeyStateCount] = {};
 static X11FilteredKeyHistory s_FilteredKeyHistory;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static ::Display* GetX11Display(const Common::LinuxFrame& frameData)noexcept{
@@ -149,31 +153,25 @@ static i32 TranslateMouseButton(u32 button)noexcept{
     }
 }
 
-static bool TranslateScroll(u32 button, f64& xoffset, f64& yoffset){
-    xoffset = 0.0;
-    yoffset = 0.0;
+struct ScrollOffset{
+    f64 x = 0.0;
+    f64 y = 0.0;
+};
 
+[[nodiscard]] static Optional<ScrollOffset> TranslateScroll(const u32 button)noexcept{
     switch(button){
-    case s_X11ScrollUpButton:
-        yoffset = s_ScrollUnit;
-        return true;
-    case s_X11ScrollDownButton:
-        yoffset = -s_ScrollUnit;
-        return true;
-    case s_X11ScrollLeftButton:
-        xoffset = -s_ScrollUnit;
-        return true;
-    case s_X11ScrollRightButton:
-        xoffset = s_ScrollUnit;
-        return true;
+    case s_X11ScrollUpButton: return ScrollOffset{ .y = s_ScrollUnit, };
+    case s_X11ScrollDownButton: return ScrollOffset{ .y = -s_ScrollUnit, };
+    case s_X11ScrollLeftButton: return ScrollOffset{ .x = -s_ScrollUnit, };
+    case s_X11ScrollRightButton: return ScrollOffset{ .x = s_ScrollUnit, };
     default:
-        return false;
+        return {};
     }
 }
 
 NWB_DECLARE_LINUX_KEY_SYMBOLS(X11KeySymbols, KeySym, XK);
 
-static i32 TranslateKey(KeySym keySym){
+static i32 TranslateKey(KeySym keySym)noexcept{
     return TranslateLinuxKeySymbol<X11KeySymbols>(keySym);
 }
 
@@ -312,11 +310,9 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         break;
 
     case ButtonPress: {
-        f64 xoffset;
-        f64 yoffset;
-        if(TranslateScroll(event.xbutton.button, xoffset, yoffset)){
+        if(const auto scroll = TranslateScroll(event.xbutton.button)){
             frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
-            frame.input().mouseScrollUpdate(xoffset, yoffset);
+            frame.input().mouseScrollUpdate(scroll->x, scroll->y);
             break;
         }
 
@@ -329,9 +325,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     break;
 
     case ButtonRelease: {
-        f64 xoffset;
-        f64 yoffset;
-        if(TranslateScroll(event.xbutton.button, xoffset, yoffset))
+        if(TranslateScroll(event.xbutton.button))
             break;
 
         const i32 button = TranslateMouseButton(event.xbutton.button);
@@ -364,21 +358,29 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     return true;
 }
 
-static bool QueryWindowState(Frame& frame, u32& width, u32& height, bool& windowVisible, bool& windowIsInFocus){
+struct X11WindowState final{
+    u32 width;
+    u32 height;
+    bool windowVisible;
+    bool windowIsInFocus;
+};
+
+static Expected<X11WindowState> QueryWindowState(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
 
     XWindowAttributes attributes = {};
     if(XGetWindowAttributes(GetX11Display(frameData), GetX11Window(frameData), &attributes) == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame window attribute query failed"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    windowVisible = attributes.map_state == IsViewable && attributes.width > 0 && attributes.height > 0;
-    width = windowVisible ? static_cast<u32>(attributes.width) : 0;
-    height = windowVisible ? static_cast<u32>(attributes.height) : 0;
-    windowIsInFocus = frameData.isActive();
-
-    return true;
+    const bool windowVisible = attributes.map_state == IsViewable && attributes.width > 0 && attributes.height > 0;
+    return X11WindowState{
+        .width = windowVisible ? static_cast<u32>(attributes.width) : 0u,
+        .height = windowVisible ? static_cast<u32>(attributes.height) : 0u,
+        .windowVisible = windowVisible,
+        .windowIsInFocus = frameData.isActive()
+    };
 }
 
 static void ResetFrameData(Common::LinuxFrame& frameData)noexcept{
@@ -401,9 +403,12 @@ bool InitX11Frame(Frame& frame){
 
     auto& frameData = frame.data<Common::LinuxFrame>();
     ResetFrameData(frameData);
+    ScopeExit cleanupOnFailure([&frame]()noexcept{ CleanupX11Frame(frame); });
 
     SetX11Display(frameData, XOpenDisplay(nullptr));
     if(!GetX11Display(frameData)){
+        CleanupX11Frame(frame);
+        cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 display connection failed"));
         return false;
     }
@@ -416,8 +421,9 @@ bool InitX11Frame(Frame& frame){
     const u16 windowWidth = ClampInitialWindowDimension(requestedWidth, displayWidth);
     const u16 windowHeight = ClampInitialWindowDimension(requestedHeight, displayHeight);
     if(windowWidth == 0u || windowHeight == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 display dimensions are invalid: {}x{}"), displayWidth, displayHeight);
         CleanupX11Frame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 display dimensions are invalid: {}x{}"), displayWidth, displayHeight);
         return false;
     }
     if(windowWidth != requestedWidth || windowHeight != requestedHeight){
@@ -433,8 +439,9 @@ bool InitX11Frame(Frame& frame){
 
     SetX11Window(frameData, XCreateSimpleWindow(GetX11Display(frameData), RootWindow(GetX11Display(frameData), screen), x, y, windowWidth, windowHeight, 0, BlackPixel(GetX11Display(frameData), screen), WhitePixel(GetX11Display(frameData), screen)));
     if(GetX11Window(frameData) == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window creation failed"));
         CleanupX11Frame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window creation failed"));
         return false;
     }
 
@@ -456,25 +463,27 @@ bool InitX11Frame(Frame& frame){
     SetDeleteWindowMessage(frameData, XInternAtom(GetX11Display(frameData), "WM_DELETE_WINDOW", False));
     if(GetDeleteWindowMessage(frameData) == None){
         CleanupX11Frame(frame);
+        cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window close protocol registration failed"));
         return false;
     }
     Atom deleteWindowMessage = GetDeleteWindowMessage(frameData);
     if(XSetWMProtocols(GetX11Display(frameData), GetX11Window(frameData), &deleteWindowMessage, 1) == 0){
         CleanupX11Frame(frame);
+        cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window close protocol installation failed"));
         return false;
     }
 
+    cleanupOnFailure.release();
     return true;
 }
 
-bool ShowX11Frame(Frame& frame){
+void ShowX11Frame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
 
     XMapRaised(GetX11Display(frameData), GetX11Window(frameData));
     XFlush(GetX11Display(frameData));
-    return true;
 }
 
 bool RunX11Frame(Frame& frame){
@@ -521,14 +530,11 @@ bool RunX11Frame(Frame& frame){
                 return true;
         }
 
-        u32 width;
-        u32 height;
-        bool windowVisible;
-        bool windowIsInFocus;
-        if(!QueryWindowState(frame, width, height, windowVisible, windowIsInFocus))
+        const auto windowState = QueryWindowState(frame);
+        if(!windowState)
             return false;
 
-        if(const Optional<TStringView> title = frame.syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
+        if(const Optional<TStringView> title = frame.syncGraphicsWindowState(windowState->width, windowState->height, windowState->windowVisible, windowState->windowIsInFocus)){
             XStoreName(GetX11Display(frameData), GetX11Window(frameData), title->data());
             XFlush(GetX11Display(frameData));
         }
@@ -542,25 +548,25 @@ bool RunX11Frame(Frame& frame){
         if(frame.quitRequested())
             return true;
 
-        if(!windowVisible || !windowIsInFocus)
+        if(!windowState->windowVisible || !windowState->windowIsInFocus)
             SleepMS(FrameDetail::s_InactivePollSleepMs);
     }
 
     return false;
 }
 
-GlobalUniquePtr<IClipboardService> CreateX11FrameClipboard(Frame& frame){
+Expected<GlobalUniquePtr<IClipboardService>> CreateX11FrameClipboard(Frame& frame){
     Display* const display = GetX11Display(frame.data<Common::LinuxFrame>());
     NWB_FATAL_ASSERT(display);
     return CreateX11ClipboardService(frame.projectObjectArena(), *display);
 }
 
-GlobalUniquePtr<ITextInputService> CreateX11FrameTextInput(Frame& frame){
+Expected<GlobalUniquePtr<ITextInputService>> CreateX11FrameTextInput(Frame& frame){
     const auto& frameData = frame.data<Common::LinuxFrame>();
     Display* const display = GetX11Display(frameData);
     NWB_FATAL_ASSERT(display && GetX11Window(frameData));
     auto service = CreateX11TextInputService(frame.projectObjectArena(), *display, frameData.nativeWindowHandle());
-    if(service && !service->setFocused(frameData.isActive()))
+    if(service && !(*service)->setFocused(frameData.isActive()))
         NWB_FATAL_ASSERT(false);
     return service;
 }

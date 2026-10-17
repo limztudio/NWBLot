@@ -49,26 +49,32 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
         m_claimed = true;
         return layer;
     }
-    const Core::GpuExternalCompletionId targetReady = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.layer_ready")).setMarkerLabel("UI Layer Initialization Completion").setToken(frame->m_target->m_readinessToken));
-    if(!targetReady.valid())
+    const auto targetReadyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.layer_ready")).setMarkerLabel("UI Layer Initialization Completion").setToken(frame->m_target->m_readinessToken));
+    if(!targetReadyResult)
         return MakeUnexpected(Failure{});
-    const Core::GpuGraphResourceId color = graph.importTexture(
+    const Core::GpuExternalCompletionId targetReady = *targetReadyResult;
+    const auto colorResult = graph.importTexture(
         frame->m_target->m_color,
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.layer")).setMarkerLabel("UI Linear Layer").setType(Core::GpuGraphResourceType::Texture)
             .setInitialAvailabilityCompletion(targetReady).setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
-    const Core::GpuExternalCompletionId skinReady = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.atlas_ready")).setMarkerLabel("UI Atlas Upload Completion").setToken(frame->m_skin->m_texture.readinessToken));
-    if(!color.valid() || !skinReady.valid())
+    const auto skinReadyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.atlas_ready")).setMarkerLabel("UI Atlas Upload Completion").setToken(frame->m_skin->m_texture.readinessToken));
+    if(!colorResult || !skinReadyResult)
         return MakeUnexpected(Failure{});
-    const Core::GpuGraphResourceId skin = graph.importTexture(
+    const Core::GpuExternalCompletionId skinReady = *skinReadyResult;
+    const Core::GpuGraphResourceId color = *colorResult;
+    const auto skinResult = graph.importTexture(
         frame->m_skin->m_texture.texture,
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.atlas")).setMarkerLabel("UI Atlas").setType(Core::GpuGraphResourceType::Texture)
             .setInitialAvailabilityCompletion(skinReady).setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
-    const Core::GpuGraphResourceVersionId version = graph.declareResourceVersion(Core::GpuGraphResourceVersionDesc().setResource(color).setOrigin(Core::GpuGraphResourceVersionOrigin::TaskProduced));
-    const Core::GpuGraphPipelineId pipeline = graph.importGraphicsPipeline(frame->m_resources->m_pipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.raster_pipeline")).setMarkerLabel("UI Raster Pipeline").setType(Core::GpuGraphPipelineType::Graphics));
-    if(!skin.valid() || !version.valid() || !pipeline.valid())
+    const auto versionResult = graph.declareResourceVersion(Core::GpuGraphResourceVersionDesc().setResource(color).setOrigin(Core::GpuGraphResourceVersionOrigin::TaskProduced));
+    const auto pipelineResult = graph.importGraphicsPipeline(frame->m_resources->m_pipeline, Core::GpuGraphPipelineDesc().setIdentity(Name("ui.raster_pipeline")).setMarkerLabel("UI Raster Pipeline").setType(Core::GpuGraphPipelineType::Graphics));
+    if(!skinResult || !versionResult || !pipelineResult)
         return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceVersionId version = *versionResult;
+    const Core::GpuGraphPipelineId pipeline = *pipelineResult;
+    const Core::GpuGraphResourceId skin = *skinResult;
     Core::GpuTaskSchedulingHint uploadScheduling;
     uploadScheduling.cost = Core::GpuTaskCostHint::Small;
     uploadScheduling.allowParallelRecording = true;
@@ -90,35 +96,54 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     if(!textureImages)
         return MakeUnexpected(Failure{});
     if(!frame->m_snapshot.vertices().empty()){
-        vertices = graph.importBuffer(frame->m_vertices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common));
-        indices = graph.importBuffer(frame->m_indices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.indices")).setMarkerLabel("UI Indices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common));
-        if(!vertices.valid() || !indices.valid())
+        const auto verticesResult = graph.importBuffer(
+            frame->m_vertices,
+            Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common)
+        );
+        const auto indicesResult = graph.importBuffer(frame->m_indices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.indices")).setMarkerLabel("UI Indices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common));
+        if(!verticesResult || !indicesResult){
+            if(verticesResult)
+                vertices = *verticesResult;
+            else
+                vertices = {};
+            if(indicesResult)
+                indices = *indicesResult;
+            else
+                indices = {};
             return MakeUnexpected(Failure{});
-        const Core::GpuUploadBlobId vertexBytes = graph.copyUploadData(frame->m_snapshot.vertices().data(), frame->m_snapshot.vertices().size() * sizeof(Vertex), alignof(Vertex));
-        const Core::GpuUploadBlobId indexBytes = graph.copyUploadData(frame->m_snapshot.indices().data(), frame->m_snapshot.indices().size() * sizeof(u32), alignof(u32));
-        if(!vertexBytes.valid() || !indexBytes.valid())
+        }
+        vertices = *verticesResult;
+        indices = *indicesResult;
+        const auto vertexBytesResult = graph.copyUploadData(frame->m_snapshot.vertices().data(), frame->m_snapshot.vertices().size() * sizeof(Vertex), alignof(Vertex));
+        const auto indexBytesResult = graph.copyUploadData(frame->m_snapshot.indices().data(), frame->m_snapshot.indices().size() * sizeof(u32), alignof(u32));
+        if(!vertexBytesResult || !indexBytesResult)
             return MakeUnexpected(Failure{});
-        const Core::GpuTaskId vertexUpload = graph.addUploadBufferTask(
+        const Core::GpuUploadBlobId vertexBytes = *vertexBytesResult;
+        const Core::GpuUploadBlobId indexBytes = *indexBytesResult;
+        const auto vertexUploadResult = graph.addUploadBufferTask(
             Core::GpuTaskDesc().setIdentity(Name("ui.vertex_upload")).setMarkerLabel("UI Vertex Upload").setScheduling(uploadScheduling),
             Core::GpuUploadBufferTaskDesc{ .source = vertexBytes, .destination = vertices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_vertexUpload, }
         );
-        const Core::GpuTaskId indexUpload = graph.addUploadBufferTask(
+        const auto indexUploadResult = graph.addUploadBufferTask(
             Core::GpuTaskDesc().setIdentity(Name("ui.index_upload")).setMarkerLabel("UI Index Upload").setScheduling(uploadScheduling),
             Core::GpuUploadBufferTaskDesc{ .source = indexBytes, .destination = indices, .finalState = Core::ResourceStates::Common, .acceptedToken = &frame->m_indexUpload, }
         );
-        if(!vertexUpload.valid() || !indexUpload.valid())
+        if(!vertexUploadResult || !indexUploadResult)
             return MakeUnexpected(Failure{});
+        const Core::GpuTaskId vertexUpload = *vertexUploadResult;
+        const Core::GpuTaskId indexUpload = *indexUploadResult;
         dependencies.push_back(vertexUpload);
         dependencies.push_back(indexUpload);
         uses.push_back({ vertices, {}, Core::ResourceStates::VertexBuffer, Core::GpuTaskResourceAccess::Read });
         uses.push_back({ indices, {}, Core::ResourceStates::IndexBuffer, Core::GpuTaskResourceAccess::Read });
     }
-    const Core::GpuTaskId clear = graph.addClearTextureTask(
+    const auto clearResult = graph.addClearTextureTask(
         Core::GpuTaskDesc().setIdentity(Name("ui.clear")).setMarkerLabel("UI Transparent Clear").setScheduling(uploadScheduling),
         Core::GpuClearTextureTaskDesc{ .acceptedToken = &frame->m_clear, .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
     );
-    if(!clear.valid())
+    if(!clearResult)
         return MakeUnexpected(Failure{});
+    const Core::GpuTaskId clear = *clearResult;
     dependencies.push_back(clear);
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Small;
@@ -126,15 +151,16 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     scheduling.allowSameClassQueueRouting = true;
     scheduling.preferNonPrimarySameClassQueue = true;
     const Core::GpuTaskResourceVersionUse produce{ version, Core::GpuTaskResourceVersionRole::Produce };
-    const Core::GpuTaskId raster = graph.addTask<GpuRasterTask>(
+    const auto rasterResult = graph.addTask<GpuRasterTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.raster")).setMarkerLabel("UI Raster").setScheduling(scheduling)
             .setDependencies(dependencies.data(), dependencies.size()).setResourceUses(uses.data(), uses.size())
             .setResourceVersionUses(&produce, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
         GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(*glyphPages), Move(*sdfPages), Move(*textureImages) }
     );
-    if(!raster.valid())
+    if(!rasterResult)
         return MakeUnexpected(Failure{});
+    const Core::GpuTaskId raster = *rasterResult;
     layer = { raster, color, version, frame->m_target->m_sampledImage, frame->m_snapshot.generation() };
     m_declaredLayer = layer;
     m_declaredGraph = &graph;

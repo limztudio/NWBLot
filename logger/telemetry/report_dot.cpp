@@ -121,7 +121,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Telemetry::FrameGraphNodePayload& node, char (&identityText)[NameDetail::s_DebugHashTextLength + 1u])noexcept{
+[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Telemetry::FrameGraphNodePayload& node, char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]){
     NameDetail::HashToDebugString(node.name.hash(), identityText, sizeof(identityText));
     return AStringView(identityText, NameDetail::s_DebugHashTextLength);
 }
@@ -334,14 +334,14 @@ void AppendFrameGraphRuntimeStatisticsDot(
 
 // Join timing by exact frame and scope Name; retain every graph, stable identity, and opaque producer flag.
 // Timing and graph streams may differ.
-void AppendTimedGraphDot(TelemetryArena& arena, const FrameGraphReportRecord& record, const usize graphIndex, const GraphTimingMap& timing, AString<TelemetryArena>& out){
+void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGraphReportRecord& record, const usize graphIndex, const GraphTimingMap& timing, AString<TelemetryArena>& out){
     const Telemetry::FrameGraphPayload& graph = record.payload;
     StringAppendFormat(out, "digraph frame_graph_{}_{}_{} {{\n", graph.frameIndex, record.streamId, graphIndex);
     StringAppendFormat(out, "  graph [label=\"Frame {} stream {}\"];\n", graph.frameIndex, record.streamId);
     out += "  rankdir=LR;\n";
     out += "  node [shape=box, fontname=\"monospace\"];\n";
 
-    AString<TelemetryArena> timedLabel(arena);
+    AString<Core::Alloc::ScratchArena> timedLabel(scratchArena);
     FrameGraphOwnerStatisticsRange ownerRange;
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
@@ -386,11 +386,11 @@ void AppendTimedGraphDot(TelemetryArena& arena, const FrameGraphReportRecord& re
     out += "}\n";
 }
 
-void BuildTimedGraphsDot(TelemetryArena& arena, const FrameGraphReportRecords& graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out){
+void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, const FrameGraphReportRecords& graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out){
     out.clear();
     out.reserve(EstimateTimedGraphsDotReserve(graphs));
     for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex){
-        AppendTimedGraphDot(arena, graphs[graphIndex], graphIndex, timing, out);
+        AppendTimedGraphDot(scratchArena, graphs[graphIndex], graphIndex, timing, out);
         if(graphIndex + 1u != graphs.size())
             out += '\n';
     }

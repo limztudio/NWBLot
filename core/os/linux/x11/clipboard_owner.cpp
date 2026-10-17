@@ -4,6 +4,8 @@
 
 #include "clipboard_service.h"
 
+#include <core/common/log.h>
+
 #include <X11/Xatom.h>
 
 
@@ -20,11 +22,14 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     OwnedSelection* const selection = ownedSelection(event.selection);
     const Atom destination = event.property ? event.property : event.target;
     bool converted = false;
+    Optional<X11PropertyFailure> propertyFailure;
     const bool currentOwner = selection && selection->owned && XGetSelectionOwner(&m_display, event.selection) == m_ownerWindow;
     const bool validTime = selection && (event.time == CurrentTime || static_cast<i32>(static_cast<u32>(event.time) - static_cast<u32>(selection->timestamp)) >= 0);
     if(currentOwner && validTime && destination){
         if(event.target == m_multipleAtom && event.property){
             const auto property = ReadX11Property(m_display, event.requestor, event.property, false, 256u * 4u);
+            if(!property)
+                propertyFailure = property.error();
             if(property.has_value() && (property->type == m_atomPairAtom || property->type == XA_ATOM) && property->format == 32 && property->count <= 256u && (property->count % 2u) == 0u && property->remaining == 0u){
                 Array<Atom, 256u> pairs;
                 if(property->count)
@@ -64,6 +69,8 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
         }
     }
     XFlush(&m_display);
+    if(propertyFailure)
+        NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: MULTIPLE property read failed; native_domain=X11 native_status={} error_code={}"), propertyFailure->nativeStatus, propertyFailure->errorCode);
 }
 
 bool X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, const Atom target, const Atom property, OwnedSelection& selection){

@@ -63,7 +63,7 @@ class RendererMeshSystem;
 
 class RendererCsgSystem final : NoCopy{
 public:
-    RendererCsgSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, CsgShapeRegistry& csgShapeRegistry, RendererCsgState& csgState, RendererShaderSystem& shaderSystem, RendererMeshSystem& meshSystem);
+    RendererCsgSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, CsgShapeRegistry& csgShapeRegistry, RendererCsgState& csgState, RendererShaderSystem& shaderSystem, RendererMeshSystem& meshSystem)noexcept;
 
 
 public:

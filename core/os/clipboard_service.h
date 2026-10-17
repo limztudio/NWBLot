@@ -32,7 +32,9 @@ private:
         bool executing = false;
         bool started = false;
 
-        explicit Request(Alloc::GlobalArena& arena)
+
+    public:
+        explicit Request(Alloc::GlobalArena& arena)noexcept
             : text(arena)
         {}
     };
@@ -45,8 +47,8 @@ public:
 
 public:
     [[nodiscard]] virtual bool isOwnerThread()const noexcept override final{ return QueryCurrentThreadId() == m_ownerThread; }
-    [[nodiscard]] virtual ClipboardRequestResult requestReadText(ClipboardChannel::Enum channel)override final;
-    [[nodiscard]] virtual ClipboardRequestResult requestWriteText(ClipboardChannel::Enum channel, AStringView text)override final;
+    [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestReadText(ClipboardChannel::Enum channel)override final;
+    [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWriteText(ClipboardChannel::Enum channel, AStringView text)override final;
     [[nodiscard]] virtual ClipboardPollResult::Enum poll(ClipboardRequestToken token, ClipboardCompletion& completion)override final;
     [[nodiscard]] virtual bool cancel(ClipboardRequestToken token)override final;
     [[nodiscard]] virtual bool pump()override final;
@@ -61,7 +63,7 @@ protected:
 
 
 private:
-    [[nodiscard]] ClipboardRequestResult enqueue(ClipboardChannel::Enum channel, ClipboardOperation::Enum operation, AStringView text);
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> enqueue(ClipboardChannel::Enum channel, ClipboardOperation::Enum operation, AStringView text);
     [[nodiscard]] Request* findRequest(ClipboardRequestToken token)noexcept;
 
 

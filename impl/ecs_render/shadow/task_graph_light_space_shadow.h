@@ -70,15 +70,17 @@ struct LightSpaceShadowGraph{
     Core::GpuTaskId shade;
     Core::GpuTaskId ready;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return counts.valid() && events.valid() && views.valid() && depth.valid() && ready.valid();
     }
 };
 
-[[nodiscard]] Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Core::GpuGraphResourceId context);
+[[nodiscard]] Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Core::GpuGraphResourceId context);
 
 // Capture and reuse import the same map generation; accepted state sources and frame ordering preserve availability.
-[[nodiscard]] LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs);
+[[nodiscard]] Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

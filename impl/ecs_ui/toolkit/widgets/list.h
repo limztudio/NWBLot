@@ -62,9 +62,32 @@ class ListState final : NoCopy{
     friend class ListBehavior;
 
 
+private:
+    struct MeasureKey{
+        u64 sourceGeneration = 0u;
+        u64 sourceRevision = 0u;
+        u64 rowCount = 0u;
+        u64 textIdentity = 0u;
+        u64 textGeneration = 0u;
+        f32 fontSize = 0.0f;
+        f32 pixelScaleX = 0.0f;
+        f32 pixelScaleY = 0.0f;
+        Array<f32, 6u> rowMetrics{};
+        Array<char, 64u> language{};
+        u32 scriptTag = 0u;
+
+
+    public:
+        [[nodiscard]] bool operator==(const MeasureKey&)const noexcept = default;
+    };
+
+
 public:
     ListState()noexcept;
     ListState(ListState&&) = delete;
+
+
+public:
     ListState& operator=(ListState&&) = delete;
 
 
@@ -81,21 +104,7 @@ public:
 
 
 private:
-    struct MeasureKey{
-        u64 sourceGeneration = 0u;
-        u64 sourceRevision = 0u;
-        u64 rowCount = 0u;
-        u64 textIdentity = 0u;
-        u64 textGeneration = 0u;
-        f32 fontSize = 0.0f;
-        f32 pixelScaleX = 0.0f;
-        f32 pixelScaleY = 0.0f;
-        Array<f32, 6u> rowMetrics{};
-        Array<char, 64u> language{};
-        u32 scriptTag = 0u;
 
-        [[nodiscard]] bool operator==(const MeasureKey&)const noexcept = default;
-    };
 
     MeasureKey m_measureKey;
     f32 m_rowHeight = 0.0f;

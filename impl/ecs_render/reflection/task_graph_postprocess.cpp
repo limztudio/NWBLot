@@ -48,11 +48,11 @@ struct SpatialParameters{
 };
 static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES);
 
-[[nodiscard]] Core::GpuGraphResourceId ImportImage(Core::GpuTaskGraph& graph, const Core::TextureHandle& texture, const bool firstWrite){
+[[nodiscard]] Expected<Core::GpuGraphResourceId> ImportImage(Core::GpuTaskGraph& graph, const Core::TextureHandle& texture, const bool firstWrite){
     {
         const Core::GpuTaskGraph::DeclarationReadView view(graph);
         if(!view.valid())
-            return {};
+            return MakeUnexpected(Failure{});
         const Core::GpuGraphResourceId existing = view.findImportedTexture(texture);
         if(existing.valid())
             return existing;
@@ -84,6 +84,8 @@ struct TemporalTask{
         bool hardwareEnabled = false;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.snapshot.history.eligible)
             return true;
@@ -128,6 +130,8 @@ struct SpatialTask{
         SpatialParameters parameters;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
         Core::ComputeState state;
@@ -152,7 +156,7 @@ struct SpatialTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId DeclareReflectionPostprocessTasks(
+Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
@@ -165,16 +169,17 @@ Core::GpuTaskId DeclareReflectionPostprocessTasks(
     const ReflectionPostprocessSnapshot& snapshot = resources.postprocess;
     ReflectionHistoryReservation reservation(snapshot.control, snapshot.history);
     if(!reservation.valid() || (snapshot.history.eligible && !snapshot.temporalPipeline))
-        return {};
+        return MakeUnexpected(Failure{});
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
     uses.reserve(inputs.surfaceReadCount + 2u);
     if(snapshot.history.eligible){
         uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
         uses.push_back(ReadWriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess));
         if(snapshot.history.reused){
-            const Core::GpuGraphResourceId previous = ImportImage(graph, snapshot.previous.texture, false);
-            if(!previous.valid())
-                return {};
+            const auto previousResult = ImportImage(graph, snapshot.previous.texture, false);
+            if(!previousResult)
+                return MakeUnexpected(Failure{});
+            const Core::GpuGraphResourceId previous = *previousResult;
             uses.push_back(ReadUse(previous));
         }
     }
@@ -182,21 +187,28 @@ Core::GpuTaskId DeclareReflectionPostprocessTasks(
     desc.setResourceUses(uses.data(), uses.size());
     if(snapshot.history.eligible)
         desc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
-    dependency = graph.addTask<TemporalTask>(desc, TemporalTask::Payload{ graphics, snapshot, Move(reservation), resources.parameters.width, resources.parameters.height, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u, });
-    if(!dependency.valid() || !snapshot.spatialEnabled)
+    const auto temporalTask = graph.addTask<TemporalTask>(
+        desc,
+        TemporalTask::Payload{ graphics, snapshot, Move(reservation), resources.parameters.width, resources.parameters.height, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u, }
+    );
+    if(!temporalTask)
+        return MakeUnexpected(temporalTask.error());
+    dependency = *temporalTask;
+    if(!snapshot.spatialEnabled)
         return dependency;
     if(!snapshot.spatialPipeline || !snapshot.spatial.texture)
-        return {};
-    const Core::GpuGraphResourceId spatial = ImportImage(graph, snapshot.spatial.texture, true);
-    if(!spatial.valid())
-        return {};
+        return MakeUnexpected(Failure{});
+    const auto spatialResult = ImportImage(graph, snapshot.spatial.texture, true);
+    if(!spatialResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceId spatial = *spatialResult;
     uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
     uses.push_back(ReadUse(result.opaqueRadiance));
     uses.push_back(WriteUse(spatial, Core::ResourceStates::UnorderedAccess));
     desc = TaskDesc(Name("render.reflection.spatial"), "Reflection Spatial Filter", dependency);
     desc.setResourceUses(uses.data(), uses.size());
     desc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
-    dependency = graph.addTask<SpatialTask>(
+    const auto spatialTask = graph.addTask<SpatialTask>(
         desc,
         SpatialTask::Payload{
             graphics, snapshot.spatialPipeline,
@@ -206,8 +218,10 @@ Core::GpuTaskId DeclareReflectionPostprocessTasks(
             },
         }
     );
-    if(dependency.valid())
-        result.opaqueRadiance = spatial;
+    if(!spatialTask)
+        return MakeUnexpected(spatialTask.error());
+    dependency = *spatialTask;
+    result.opaqueRadiance = spatial;
     return dependency;
 }
 

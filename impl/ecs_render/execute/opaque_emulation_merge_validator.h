@@ -42,7 +42,7 @@ struct OpaqueEmulationMergeValidationResult{
 
 class OpaqueEmulationMergeValidator final : NoCopy{
 public:
-    explicit OpaqueEmulationMergeValidator(NotNull<RendererFramePipeline*> pipeline);
+    explicit OpaqueEmulationMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept;
 
 
 public:

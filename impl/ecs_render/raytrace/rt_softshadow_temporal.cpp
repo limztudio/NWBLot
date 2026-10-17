@@ -31,8 +31,12 @@ bool RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
         Core::BindingLayoutDesc layout(m_arena);
         layout.setVisibility(Core::ShaderType::Compute);
         layout.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(ShadowCombinedTemporalPushConstants)));
-        resolve.m_combinedTemporalBindingLayout = device.createBindingLayout(layout);
-        if(!resolve.m_combinedTemporalBindingLayout){
+        auto combinedTemporalBindingLayoutResult = device.createBindingLayout(layout);
+        if(combinedTemporalBindingLayoutResult)
+            resolve.m_combinedTemporalBindingLayout = Move(*combinedTemporalBindingLayoutResult);
+        else
+            resolve.m_combinedTemporalBindingLayout.reset();
+        if(!combinedTemporalBindingLayoutResult){
             resolve.m_combinedTemporalFailed = true;
             return false;
         }
@@ -43,8 +47,12 @@ bool RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
     }
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(resolve.m_combinedTemporal.m_shader).addBindingLayout(resolve.m_combinedTemporalBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    resolve.m_combinedTemporal.m_pipeline = device.createComputePipeline(desc);
-    resolve.m_combinedTemporalFailed = !resolve.m_combinedTemporal.m_pipeline;
+    auto pipelineResult = device.createComputePipeline(desc);
+    if(pipelineResult)
+        resolve.m_combinedTemporal.m_pipeline = Move(*pipelineResult);
+    else
+        resolve.m_combinedTemporal.m_pipeline.reset();
+    resolve.m_combinedTemporalFailed = !pipelineResult;
     return !resolve.m_combinedTemporalFailed;
 }
 

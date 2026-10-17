@@ -25,6 +25,9 @@ using NWB::Core::Alloc::PersistentArena;
 inline constexpr usize s_PersistentArenaHighAlignment = 4096u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void ExpectSameStats(const ArenaMemoryStats& actual, const ArenaMemoryStats& expected){
     EXPECT_EQ(actual.reservedBytes, expected.reservedBytes);
     EXPECT_EQ(actual.usedBytes, expected.usedBytes);

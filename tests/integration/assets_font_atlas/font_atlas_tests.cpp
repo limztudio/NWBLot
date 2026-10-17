@@ -5,6 +5,7 @@
 #include <impl/assets_font/source_directory.h>
 #include <impl/assets_font_atlas/asset.h>
 #include <impl/assets_font_atlas/binary_payload.h>
+#include <impl/assets_font_atlas/cook.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
@@ -137,6 +138,37 @@ TEST(AssetsFontAtlas, EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfte
     EXPECT_EQ(loaded.glyph(4u)->drawable, 0u);
     EXPECT_FLOAT_EQ(loaded.glyph(4u)->advanceUnits, 404.f);
     EXPECT_EQ(loaded.glyph(5u), nullptr);
+}
+
+TEST(AssetsFontAtlas, BuildOwnsGlyphsGroupsAndPositioningInCallerArena){
+    using namespace __hidden_font_atlas_tests;
+    AtlasTestArena testArena;
+    Core::Assets::AssetArena resultArena(Name("tests/font_atlas/built_result"));
+    FontAtlasCookEntry entry(testArena.arena);
+    entry.payload = MakePayload(testArena);
+    entry.virtualPath = Name("project/fonts/body_atlas");
+    const auto expected = SerializeFontAtlasPayload(entry.payload, resultArena, testArena.scratchArena);
+    ASSERT_TRUE(expected);
+
+    const auto built = BuildFontAtlasAsset(entry, resultArena, testArena.scratchArena);
+    ASSERT_TRUE(built);
+    EXPECT_EQ(built->virtualPath(), entry.virtualPath);
+    const FontAtlasPayload& payload = built->payload();
+    EXPECT_EQ(&payload.glyphs.get_allocator().arena(), &resultArena);
+    EXPECT_EQ(&payload.groups.get_allocator().arena(), &resultArena);
+    EXPECT_EQ(&payload.positioningTables.get_allocator().arena(), &resultArena);
+    ASSERT_EQ(payload.groups.size(), 1u);
+    ASSERT_EQ(payload.positioningTables.size(), 1u);
+    EXPECT_EQ(&payload.groups[0u].pixels.get_allocator().arena(), &resultArena);
+    EXPECT_EQ(&payload.positioningTables[0u].bytes.get_allocator().arena(), &resultArena);
+
+    entry.payload.glyphs[0u].advanceUnits += 1.f;
+    entry.payload.groups[0u].pixels[0u] ^= 1u;
+    entry.payload.positioningTables[0u].bytes.back() ^= 1u;
+    ASSERT_TRUE(built->validatePayload(testArena.scratchArena));
+    const auto actual = SerializeFontAtlasPayload(payload, resultArena, testArena.scratchArena);
+    ASSERT_TRUE(actual);
+    EXPECT_EQ(*actual, *expected);
 }
 
 TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){

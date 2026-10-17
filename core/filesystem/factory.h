@@ -18,9 +18,9 @@ NWB_FILESYSTEM_BEGIN
 
 
 // Called once per mount; a null factory selects the volume backend.
-using FilesystemFactory = Function<UniquePtr<IFilesystem>(Alloc::GlobalArena& arena, const VolumeMountDesc& desc)>;
+using FilesystemFactory = Function<Expected<UniquePtr<IFilesystem>>(Alloc::GlobalArena& arena, const VolumeMountDesc& desc)>;
 
-UniquePtr<IFilesystem> CreateFilesystem(Alloc::GlobalArena& arena, const VolumeMountDesc& desc, const FilesystemFactory& factory = {});
+[[nodiscard]] Expected<UniquePtr<IFilesystem>> CreateFilesystem(Alloc::GlobalArena& arena, const VolumeMountDesc& desc, const FilesystemFactory& factory = {});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

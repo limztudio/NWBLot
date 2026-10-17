@@ -61,10 +61,14 @@ NWB_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVector
 template<Reduction::Enum Kind>
 NWB_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
-    if constexpr(Kind == Reduction::Dot2) return VectorDouble2Dot(lhs, rhs);
-    else if constexpr(Kind == Reduction::Dot3) return VectorDouble3Dot(lhs, rhs);
-    else if constexpr(Kind == Reduction::Dot4) return VectorDouble4Dot(lhs, rhs);
-    else return VectorDoubleSum(lhs);
+    if constexpr(Kind == Reduction::Dot2)
+        return VectorDouble2Dot(lhs, rhs);
+    else if constexpr(Kind == Reduction::Dot3)
+        return VectorDouble3Dot(lhs, rhs);
+    else if constexpr(Kind == Reduction::Dot4)
+        return VectorDouble4Dot(lhs, rhs);
+    else
+        return VectorDoubleSum(lhs);
 }
 
 template<Reduction::Enum Kind>
@@ -88,10 +92,11 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     // Scalar-lane reductions can commute multiple NaN payloads or accidentally evaluate an unused signaling lane.
-    constexpr u64 inputBits[][8]{
+    constexpr u64 s_InputBits[][8]{
         { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff8000000000125ull, 0xfff8000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
         { 0x4000000000000000ull, 0x4008000000000000ull, 0x7ff0000000000125ull, 0xfff0000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
         { 0x4000000000000000ull, 0x4008000000000000ull, 0x4010000000000000ull, 0xfff0000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
@@ -101,12 +106,12 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
         { 0x7ff8000000000123ull, 0xfff0000000000124ull, 0x7ff8000000000125ull, 0xfff0000000000126ull, 0xfff8000000000233ull, 0x7ff0000000000234ull, 0xfff0000000000235ull, 0x7ff8000000000236ull },
         { 0x7ff0000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0xfff0000000000233ull, 0x7ff8000000000234ull, 0u, 0x7ff0000000000000ull }
     };
-    constexpr i32 roundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    for(const i32 roundingMode : roundingModes){
+    constexpr i32 s_RoundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    for(const i32 roundingMode : s_RoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
-        for(usize index = 0u; index < LengthOf(inputBits); ++index){
-            const SIMDVectorDouble input = VectorDoubleSetInt(inputBits[index][0], inputBits[index][1], inputBits[index][2], inputBits[index][3]);
-            const SIMDVectorDouble multiplier = VectorDoubleSetInt(inputBits[index][4], inputBits[index][5], inputBits[index][6], inputBits[index][7]);
+        for(usize index = 0u; index < LengthOf(s_InputBits); ++index){
+            const SIMDVectorDouble input = VectorDoubleSetInt(s_InputBits[index][0], s_InputBits[index][1], s_InputBits[index][2], s_InputBits[index][3]);
+            const SIMDVectorDouble multiplier = VectorDoubleSetInt(s_InputBits[index][4], s_InputBits[index][5], s_InputBits[index][6], s_InputBits[index][7]);
             CheckReductionEdge<Reduction::Dot2>(input, multiplier, roundingMode, index);
             CheckReductionEdge<Reduction::Dot3>(input, multiplier, roundingMode, index);
             CheckReductionEdge<Reduction::Dot4>(input, multiplier, roundingMode, index);
@@ -118,25 +123,34 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
 template<u32 Dimension>
 NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
-    if constexpr(Dimension == 2u) return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
-    else if constexpr(Dimension == 3u) return VectorDoubleReciprocalSqrt(VectorDouble3LengthSq(value));
-    else return VectorDoubleReciprocalSqrt(VectorDouble4LengthSq(value));
+    if constexpr(Dimension == 2u)
+        return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
+    else if constexpr(Dimension == 3u)
+        return VectorDoubleReciprocalSqrt(VectorDouble3LengthSq(value));
+    else
+        return VectorDoubleReciprocalSqrt(VectorDouble4LengthSq(value));
 }
 
 template<u32 Dimension, bool Estimate>
 NWB_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Dimension == 2u){
-        if constexpr(Estimate) return VectorDouble2ReciprocalLengthEst(value);
-        else return VectorDouble2ReciprocalLength(value);
+        if constexpr(Estimate)
+            return VectorDouble2ReciprocalLengthEst(value);
+        else
+            return VectorDouble2ReciprocalLength(value);
     }
     else if constexpr(Dimension == 3u){
-        if constexpr(Estimate) return VectorDouble3ReciprocalLengthEst(value);
-        else return VectorDouble3ReciprocalLength(value);
+        if constexpr(Estimate)
+            return VectorDouble3ReciprocalLengthEst(value);
+        else
+            return VectorDouble3ReciprocalLength(value);
     }
     else{
-        if constexpr(Estimate) return VectorDouble4ReciprocalLengthEst(value);
-        else return VectorDouble4ReciprocalLength(value);
+        if constexpr(Estimate)
+            return VectorDouble4ReciprocalLengthEst(value);
+        else
+            return VectorDouble4ReciprocalLength(value);
     }
 }
 
@@ -167,8 +181,9 @@ TEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresA
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
-    constexpr u64 cases[][4]{
+    }
+    );
+    constexpr u64 s_Cases[][4]{
         { 0u, 0x8000000000000000ull, 0u, 0x8000000000000000ull },
         { 0x1e60000000000000ull, 0u, 0u, 0u },
         { 0x7ff0000000000000ull, 0u, 0u, 0u },
@@ -176,10 +191,10 @@ TEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresA
         { 0x4000000000000000ull, 0x4008000000000000ull, 0x4010000000000000ull, 0xfff0000000000124ull },
         { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull }
     };
-    constexpr i32 roundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    for(const i32 roundingMode : roundingModes){
+    constexpr i32 s_RoundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    for(const i32 roundingMode : s_RoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
-        for(const auto& bits : cases){
+        for(const auto& bits : s_Cases){
             const SIMDVectorDouble input = VectorDoubleSetInt(bits[0], bits[1], bits[2], bits[3]);
             CheckReciprocalLengthEdge<2u>(input);
             CheckReciprocalLengthEdge<3u>(input);

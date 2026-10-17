@@ -58,9 +58,12 @@ AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolu
     ::RegisterAutoFactory(__hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(), function);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){
-    Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_RegisterPreparersArena);
-    Vector<AssetVolumePrepareFunction, Core::Alloc::ScratchArena> functions{scratchArena};
+    Vector<AssetVolumePrepareFunction, Core::Alloc::ScratchArena> functions{context.scratchArena};
     return RunAutoCollectedFunctions(__hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(), context, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: collected null volume prepare function")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to run auto-collected volume prepare step")); }
     );

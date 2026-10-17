@@ -28,20 +28,28 @@ namespace TaskGraphResourceVersionTestUtils{
 
 TEST(GpuTaskGraphResourceVersion, RequiresWholeResourceRangesForAccelStructAndHazardDomain){
     const auto analyzeVersion = [](const Graphics::GpuGraphResourceType::Enum type, const Name& identity, const Graphics::GpuTaskResourceRange& range)->Expected<void, Graphics::GpuTaskGraphAnalysisStatus::Enum>{
+        Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
+
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
         Graphics::GpuGraphResourceDesc resourceDesc;
         resourceDesc.setIdentity(identity).setMarkerLabel("Whole Resource Version").setType(type);
         if(type == Graphics::GpuGraphResourceType::AccelStruct)
             resourceDesc.setInitialState(Graphics::ResourceStates::Common);
-        const Graphics::GpuGraphResourceId resource = graph.importResource(resourceDesc);
+        const auto resourceResult = graph.importResource(resourceDesc);
+        if(!resourceResult)
+            return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         if(!resource.valid())
             return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
-        const Graphics::GpuGraphResourceVersionId version = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot, range);
+        const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot, range);
+        if(!versionResult)
+            return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
+        const Graphics::GpuGraphResourceVersionId version = *versionResult;
         if(!version.valid())
             return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        if(!Analyze(graph, analysis))
+        if(!Analyze(operationScratchArena, graph, analysis))
             return MakeUnexpected(analysis.diagnostic().status);
         return {};
     };

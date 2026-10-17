@@ -34,6 +34,10 @@ static half4 outGBufferNormal;
 static half4 outGBufferWorldPosition;
 static half4 outGBufferSpecularRoughness;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
     NwbMeshGBufferOutput output;
     output.baseColor = outGBufferBaseColor;
@@ -93,6 +97,11 @@ struct NwbMeshGBufferDrawConstants{
     uint4 frameHeapSlots;
 };
 [[vk::push_constant]] ConstantBuffer<NwbMeshGBufferDrawConstants> g_NwbMeshGBufferDrawConstants;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }

@@ -26,6 +26,10 @@ struct NwbReflectionScreenRay{
     float parameterEpsilon;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool nwbReflectionClipScreenHalfspace(const float origin, const float direction, inout float first, inout float last){
     if(abs(direction) < 1e-20)
         return origin >= 0.0;

@@ -43,6 +43,10 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
     { "skinned", MeshClass::Skinned, true },
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline const MeshClassInfo* FindMeshClassInfo(const u32 meshClass)noexcept{
     for(const MeshClassInfo& info : s_MeshClassInfos){
         if(info.meshClass == meshClass)
@@ -70,6 +74,10 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
 
 inline constexpr AStringView s_InvalidMeshClassName = "invalid";
 inline constexpr AStringView s_UnknownMeshClassName = "unknown";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline AStringView MeshClassText(const u32 meshClass)noexcept{
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);

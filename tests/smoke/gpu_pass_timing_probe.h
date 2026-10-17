@@ -7,6 +7,7 @@
 
 #include "smoke_environment.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/perf/timing.h>
 
@@ -54,13 +55,14 @@ private:
 
 
 private:
-    static void OpenTimingFile(OutputFileStream& timingFile){
-        Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
-        const auto timingPath = ReadSmokeEnvironmentText(arena, "NWB_GPU_TIMING_FILE");
+    static void OpenTimingFile(OutputFileStream& timingFile, Core::Alloc::ScratchArena& scratchArena){
+        const auto timingPath = ReadSmokeEnvironmentText(scratchArena, "NWB_GPU_TIMING_FILE");
         if(!timingPath)
             return;
 
         timingFile.open(timingPath->c_str(), s_FileOpenAppend);
+        if(!timingFile.is_open())
+            NWB_LOGGER_ERROR(NWB_TEXT("GpuPassTimingProbe: failed to open requested timing output"));
     }
 
 
@@ -131,8 +133,9 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: gpu per-pass timing over {} frames / {}s"), m_label, m_intervalFrames, m_intervalSeconds);
 
         // GUI logging is not scrapeable; the optional file sink exposes per-pass A/B timings.
+        Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
         OutputFileStream timingFile;
-        OpenTimingFile(timingFile);
+        OpenTimingFile(timingFile, scratchArena);
         if(timingFile.is_open()){
             timingFile.setf(s_FileFormatFixed, s_FileFormatFloatField);
             timingFile.precision(s_TimingFilePrecision);
@@ -162,6 +165,11 @@ private:
                     << '\n'
                 ;
             }
+        }
+        if(timingFile.is_open()){
+            timingFile.close();
+            if(!timingFile.good())
+                NWB_LOGGER_ERROR(NWB_TEXT("GpuPassTimingProbe: timing output write or close failed"));
         }
     }
 

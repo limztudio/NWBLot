@@ -61,6 +61,9 @@ void ClassifyPlacements(InteropVector<CpuWorkerPlacement>& placements)noexcept{
 static constexpr u32 s_QueryRetryCount = 4u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] Expected<InteropVector<CpuWorkerPlacement>> QueryWindowsPlacements(){
     InteropVector<CpuWorkerPlacement> placements;
     const HANDLE process = GetCurrentProcess();
@@ -170,6 +173,9 @@ static constexpr u32 s_QueryRetryCount = 4u;
 
 static constexpr usize s_SysfsCapacityPathCapacity = 128u;
 static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] Expected<InteropVector<usize>> QueryLinuxAffinity(){

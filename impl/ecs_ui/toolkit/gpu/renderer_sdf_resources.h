@@ -28,6 +28,7 @@ struct GpuSdfAtlasVersion : NoCopy{
     Core::QueueSubmissionToken m_readinessToken;
 
 
+public:
     GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSdfAtlasPage page)noexcept;
     ~GpuSdfAtlasVersion()noexcept;
 };

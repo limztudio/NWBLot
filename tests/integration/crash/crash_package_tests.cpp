@@ -10,14 +10,21 @@
 #include <core/crash/package_internal.h>
 
 #include <global/filesystem/operations.h>
+#include <global/filesystem/directory_iterator.h>
 #include <global/thread.h>
+#include <global/diagnostics.h>
+#include <global/exception.h>
+#include <global/scope_exit.h>
+#include <global/termination.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
+#include <dbghelp.h>
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <errno.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -47,6 +54,7 @@ using NWB::Tests::TextFileContains;
 using NWB::Tests::WaitForDirectory;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 
+inline constexpr Name s_OperationScratch("tests/integration/crash/operation_scratch");
 inline constexpr Name s_InstallArena("tests/integration/crash/install");
 inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_child_install");
 
@@ -138,6 +146,226 @@ static void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+static u32 g_NativeLifecycleDiagnostics = 0u;
+static u32 g_UnlockedLifecycleDiagnostics = 0u;
+static char g_LastLifecycleDiagnostic[192u] = {};
+static char g_LastLifecycleOperation[32u] = {};
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+static void ObserveNativeLifecycle(const DiagnosticEventRecord& record)noexcept{
+    if(record.category != AStringView("crash_native_lifecycle"))
+        return;
+    ++g_NativeLifecycleDiagnostics;
+    CopyFixedBuffer(g_LastLifecycleDiagnostic, record.message);
+    CopyFixedBuffer(g_LastLifecycleOperation, record.expression);
+    if(NWB::Core::Crash::Detail::g_State.mutex.try_lock()){
+        ++g_UnlockedLifecycleDiagnostics;
+        NWB::Core::Crash::Detail::g_State.mutex.unlock();
+    }
+}
+
+TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("crash_failed_spool_admission");
+    RemoveTestArtifacts(arena, s_Group);
+    ASSERT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group)));
+    const CrashTestPath blocked = TestCaseDirectory(arena, s_Group) / "blocked";
+    ASSERT_TRUE(WriteTextFile(blocked, AStringView("This file cannot be a parent directory.\n")));
+    const CrashTestPath spoolDirectory = blocked / "spool";
+    const auto expectedFailure = EnsureDirectories(spoolDirectory / CrashNames::s_PendingDirectoryName);
+    ASSERT_FALSE(expectedFailure);
+    char expectedCategory[64u] = {};
+    CopyFixedBuffer(expectedCategory, "category=");
+    AppendFixedBuffer(expectedCategory, AStringView(expectedFailure.error().category().name()));
+    char expectedCode[32u] = {};
+    CopyFixedBuffer(expectedCode, "code=");
+    const i64 nativeCode = expectedFailure.error().value();
+    if(nativeCode < 0)
+        AppendFixedBuffer(expectedCode, "-");
+    AppendUnsignedToFixedBuffer(expectedCode, static_cast<u64>(nativeCode < 0 ? -nativeCode : nativeCode));
+    NWB::Core::Crash::UninstallCrashHandler();
+    const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
+    ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
+    g_NativeLifecycleDiagnostics = 0u;
+    g_UnlockedLifecycleDiagnostics = 0u;
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
+    NWB::Core::Crash::CrashConfig config(installArena);
+    config.applicationName = "bad-spool-admission";
+    config.spoolDirectory = spoolDirectory;
+    EXPECT_FALSE(NWB::Core::Crash::InstallCrashHandler(config));
+    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.installed);
+    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.handlerStarted);
+    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+    EXPECT_EQ(g_NativeLifecycleDiagnostics, 1u);
+    EXPECT_EQ(g_UnlockedLifecycleDiagnostics, 1u);
+    EXPECT_EQ(AStringView(g_LastLifecycleOperation), AStringView("prepare_spool"));
+    EXPECT_NE(AStringView(g_LastLifecycleDiagnostic).find(AStringView(expectedCategory)), AStringView::npos);
+    EXPECT_NE(AStringView(g_LastLifecycleDiagnostic).find(AStringView(expectedCode)), AStringView::npos);
+    NWB::Core::Crash::UninstallCrashHandler();
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("crash_bad_executable_admission");
+    RemoveTestArtifacts(arena, s_Group);
+    ASSERT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group)));
+    const CrashTestPath invalidExecutable = TestCaseDirectory(arena, s_Group) / "invalid_handler";
+    ASSERT_TRUE(WriteTextFile(invalidExecutable, AStringView("This is not an executable image.\n")));
+#if defined(NWB_PLATFORM_LINUX)
+    ASSERT_EQ(chmod(invalidExecutable.c_str(), 0700), 0);
+#endif
+    NWB::Core::Crash::UninstallCrashHandler();
+    const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
+    ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
+    g_NativeLifecycleDiagnostics = 0u;
+    g_UnlockedLifecycleDiagnostics = 0u;
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
+    const auto executableText = PathToString<char>(arena, invalidExecutable);
+    NWB::Core::Crash::CrashConfig config(installArena);
+    config.applicationName = "bad-executable-admission";
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
+    config.handlerExecutablePath = AStringView(executableText);
+    EXPECT_FALSE(NWB::Core::Crash::InstallCrashHandler(config));
+#if defined(NWB_PLATFORM_WINDOWS)
+    DWORD before = 0u;
+    ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &before));
+#else
+    const auto before = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(CrashTestPath(arena, "/proc/self/fd"));
+    ASSERT_TRUE(before);
+    const auto beforeCount = static_cast<usize>(before->end() - before->begin());
+#endif
+    for(u32 attempt = 0u; attempt < 4u; ++attempt){
+        EXPECT_FALSE(NWB::Core::Crash::InstallCrashHandler(config));
+        EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.installed);
+        EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.handlerStarted);
+        EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+    }
+#if defined(NWB_PLATFORM_WINDOWS)
+    DWORD after = 0u;
+    ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &after));
+    EXPECT_EQ(after, before);
+#else
+    const auto after = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(CrashTestPath(arena, "/proc/self/fd"));
+    ASSERT_TRUE(after);
+    EXPECT_EQ(static_cast<usize>(after->end() - after->begin()), beforeCount);
+#endif
+    EXPECT_EQ(g_NativeLifecycleDiagnostics, 5u);
+    EXPECT_EQ(g_UnlockedLifecycleDiagnostics, g_NativeLifecycleDiagnostics);
+    EXPECT_NE(AStringView(g_LastLifecycleDiagnostic).find("code="), AStringView::npos);
+    NWB::Core::Crash::UninstallCrashHandler();
+    RemoveTestArtifacts(arena, s_Group);
+}
+#endif
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+alignas(MaxAlign) static u8 g_ForeignSignalStack[256u * 1024u] = {};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void OriginalSignalOwner(const int signalNumber)noexcept{ static_cast<void>(signalNumber); }
+static void ForeignSignalOwner(const int signalNumber)noexcept{ static_cast<void>(signalNumber); }
+[[noreturn]] static void OriginalTerminateOwner()noexcept{ _exit(123); }
+[[noreturn]] static void ForeignTerminateOwner()noexcept{ _exit(124); }
+
+TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("crash_restore_native_hooks");
+    RemoveTestArtifacts(arena, s_Group);
+    NWB::Core::Crash::UninstallCrashHandler();
+    stack_t originalStack = {};
+    struct sigaction originalAction = {};
+    ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
+    ASSERT_EQ(sigaction(SIGILL, nullptr, &originalAction), 0);
+    const auto originalTerminate = QueryTerminateHandler();
+    ScopeExit restore([&]()noexcept{
+        NWB::Core::Crash::UninstallCrashHandler();
+        if(sigaction(SIGILL, &originalAction, nullptr) != 0 || sigaltstack(&originalStack, nullptr) != 0)
+            TerminateInvariant();
+        ExchangeTerminateHandler(originalTerminate);
+    }
+    );
+    stack_t disabled = {};
+    disabled.ss_flags = SS_DISABLE;
+    ASSERT_EQ(sigaltstack(&disabled, nullptr), 0);
+    struct sigaction desired = {};
+    desired.sa_handler = OriginalSignalOwner;
+    ASSERT_EQ(sigemptyset(&desired.sa_mask), 0);
+    ASSERT_EQ(sigaction(SIGILL, &desired, nullptr), 0);
+    ExchangeTerminateHandler(OriginalTerminateOwner);
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
+    NWB::Core::Crash::CrashConfig config(installArena);
+    config.applicationName = "restore-native-hooks";
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
+    ASSERT_TRUE(NWB::Core::Crash::InstallCrashHandler(config));
+    NWB::Core::Crash::UninstallCrashHandler();
+    stack_t restoredStack = {};
+    struct sigaction restoredAction = {};
+    ASSERT_EQ(sigaltstack(nullptr, &restoredStack), 0);
+    ASSERT_EQ(sigaction(SIGILL, nullptr, &restoredAction), 0);
+    EXPECT_NE(restoredStack.ss_flags & SS_DISABLE, 0);
+    EXPECT_EQ(restoredAction.sa_handler, OriginalSignalOwner);
+    EXPECT_EQ(QueryTerminateHandler(), OriginalTerminateOwner);
+    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("crash_preserve_foreign_hooks");
+    RemoveTestArtifacts(arena, s_Group);
+    NWB::Core::Crash::UninstallCrashHandler();
+    stack_t originalStack = {};
+    struct sigaction originalAction = {};
+    ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
+    ASSERT_EQ(sigaction(SIGILL, nullptr, &originalAction), 0);
+    const auto originalTerminate = QueryTerminateHandler();
+    ScopeExit restore([&]()noexcept{
+        NWB::Core::Crash::UninstallCrashHandler();
+        if(sigaction(SIGILL, &originalAction, nullptr) != 0 || sigaltstack(&originalStack, nullptr) != 0)
+            TerminateInvariant();
+        ExchangeTerminateHandler(originalTerminate);
+    }
+    );
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
+    NWB::Core::Crash::CrashConfig config(installArena);
+    config.applicationName = "preserve-foreign-hooks";
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
+    ASSERT_TRUE(NWB::Core::Crash::InstallCrashHandler(config));
+    struct sigaction foreignAction = {};
+    foreignAction.sa_handler = ForeignSignalOwner;
+    ASSERT_EQ(sigemptyset(&foreignAction.sa_mask), 0);
+    ASSERT_EQ(sigaction(SIGILL, &foreignAction, nullptr), 0);
+    stack_t foreignStack = {};
+    foreignStack.ss_sp = g_ForeignSignalStack;
+    foreignStack.ss_size = sizeof(g_ForeignSignalStack);
+    ASSERT_EQ(sigaltstack(&foreignStack, nullptr), 0);
+    ExchangeTerminateHandler(ForeignTerminateOwner);
+    NWB::Core::Crash::UninstallCrashHandler();
+    stack_t retainedStack = {};
+    struct sigaction retainedAction = {};
+    ASSERT_EQ(sigaltstack(nullptr, &retainedStack), 0);
+    ASSERT_EQ(sigaction(SIGILL, nullptr, &retainedAction), 0);
+    EXPECT_EQ(retainedStack.ss_sp, g_ForeignSignalStack);
+    EXPECT_EQ(retainedAction.sa_handler, ForeignSignalOwner);
+    EXPECT_EQ(QueryTerminateHandler(), ForeignTerminateOwner);
+    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+    RemoveTestArtifacts(arena, s_Group);
+}
+#endif
+
 TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -177,18 +405,59 @@ TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
     retention.maxUploadedPackages = 1u;
     retention.maxFailedPackages = 1u;
     retention.maxUploadingPackages = 1u;
-    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_OperationScratch);
+    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention));
 
-    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name")));
-    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_001)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_002)));
-    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_001)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_002)));
-    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_001)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_002)));
+    {
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name"));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_001));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_002));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_001));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_002));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_001));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_002));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -207,10 +476,19 @@ TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_OperationScratch);
+    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention));
 
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002)));
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -230,11 +508,24 @@ TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention, AStringView("crash-001")));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_OperationScratch);
+    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention, AStringView("crash-001")));
 
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001)));
-    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002)));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003)));
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -254,14 +545,141 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 
     EXPECT_FALSE(NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
-    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
-    EXPECT_TRUE(PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName)));
+    {
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
     EXPECT_TRUE(TextFileContains(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId) / CrashNames::s_UploadAttemptFileName, AStringView(CrashNames::s_UploadAttemptRetryInterruptedState)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
 #if defined(NWB_PLATFORM_WINDOWS)
+TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceStorageExpires){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_OperationScratch);
+    NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
+    constexpr AStringView s_Group("crash_manual_owned_context_test");
+    RemoveTestArtifacts(arena, s_Group);
+    NWB::Core::Crash::CrashConfig config(installArena);
+    config.applicationName = AStringView(s_CRASH_TESTS);
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
+    ASSERT_TRUE(NWB::Core::Crash::InstallCrashHandler(config));
+    ScopeExit uninstall([]()noexcept{ NWB::Core::Crash::UninstallCrashHandler(); });
+
+    NWB::Core::Crash::Detail::CrashRequest request;
+    u32 capturedContextFlags = 0u;
+    u64 capturedInstructionPointer = 0u;
+    {
+        NWB::Core::Crash::Detail::ManualDumpContextStorage storage;
+        NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
+        NWB::Core::Crash::Detail::CaptureManualDumpContext(options, storage);
+        capturedContextFlags = storage.context.ContextFlags & ~NWB::Core::Crash::Detail::s_WindowsExtendedContextFlag;
+        capturedInstructionPointer = options.instructionPointer;
+        auto sourceRequest = NWB::Core::Crash::Detail::BuildCrashDumpRequest(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, options);
+        NWB_MEMCPY(&request, sizeof(request), &sourceRequest, sizeof(sourceRequest));
+        sourceRequest = NWB::Core::Crash::Detail::CrashRequest{};
+        storage.context = CONTEXT{};
+        storage.exceptionRecord = EXCEPTION_RECORD{};
+        storage.exceptionPointers = EXCEPTION_POINTERS{};
+    }
+    ASSERT_TRUE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    EXPECT_EQ(request.exceptionPointers, 0u);
+    EXPECT_EQ(request.manualContext.ContextFlags, capturedContextFlags);
+    EXPECT_NE(capturedContextFlags, 0u);
+    NWB::Core::Crash::Detail::ManualDumpContextStorage handlerStorage(request);
+    EXPECT_EQ(handlerStorage.exceptionPointers.ContextRecord, &handlerStorage.context);
+    EXPECT_EQ(handlerStorage.exceptionPointers.ExceptionRecord, &handlerStorage.exceptionRecord);
+    EXPECT_EQ(handlerStorage.exceptionRecord.ExceptionRecord, nullptr);
+    EXPECT_EQ(handlerStorage.exceptionRecord.ExceptionAddress, reinterpret_cast<void*>(static_cast<usize>(capturedInstructionPointer)));
+
+    const HANDLE handlerThread = NWB::Core::Crash::Detail::g_State.handlerProcessInfo.hThread;
+    ASSERT_NE(handlerThread, nullptr);
+    const DWORD previousSuspendCount = SuspendThread(handlerThread);
+    ASSERT_NE(previousSuspendCount, static_cast<DWORD>(-1));
+    ScopeExit resume([handlerThread]()noexcept{
+        if(ResumeThread(handlerThread) == static_cast<DWORD>(-1))
+            TerminateInvariant();
+    }
+    );
+    ASSERT_EQ(previousSuspendCount, 0u);
+    const auto transport = NWB::Core::Crash::Detail::RequestCrashHandler(request, 1u);
+    EXPECT_EQ(transport, NWB::Core::Crash::Detail::CrashDumpTransportStatus::TimedOut);
+    ASSERT_NE(ResumeThread(handlerThread), static_cast<DWORD>(-1));
+    resume.release();
+    ASSERT_EQ(WaitForSingleObject(NWB::Core::Crash::Detail::g_State.crashHandledEvent, NWB::Core::Crash::Detail::s_ManualCrashDumpWaitMilliseconds), WAIT_OBJECT_0);
+
+    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(request.crashId));
+    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_SymbolicationFileName, AStringView("minidump captured;")));
+    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"has_exception_context\": true")));
+    Vector<u8, NWB::Core::Alloc::ScratchArena> dumpBytes(scratchArena);
+    const auto read = ReadBinaryFile(packageDirectory / CrashNames::s_ProcessDumpFileName, dumpBytes);
+    ASSERT_TRUE(read);
+    MINIDUMP_DIRECTORY* directory = nullptr;
+    void* streamData = nullptr;
+    ULONG streamSize = 0u;
+    ASSERT_TRUE(MiniDumpReadDumpStream(dumpBytes.data(), ExceptionStream, &directory, &streamData, &streamSize));
+    ASSERT_NE(streamData, nullptr);
+    ASSERT_GE(streamSize, sizeof(MINIDUMP_EXCEPTION_STREAM));
+    const usize dumpBegin = reinterpret_cast<usize>(dumpBytes.data());
+    const usize streamAddress = reinterpret_cast<usize>(streamData);
+    ASSERT_GE(streamAddress, dumpBegin);
+    const usize streamOffset = streamAddress - dumpBegin;
+    ASSERT_LE(streamOffset, dumpBytes.size());
+    ASSERT_LE(sizeof(MINIDUMP_EXCEPTION_STREAM), dumpBytes.size() - streamOffset);
+    MINIDUMP_EXCEPTION_STREAM exceptionStream = {};
+    NWB_MEMCPY(&exceptionStream, sizeof(exceptionStream), dumpBytes.data() + streamOffset, sizeof(exceptionStream));
+    EXPECT_EQ(exceptionStream.ThreadId, request.threadId);
+    EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionCode, NWB::Core::Crash::Detail::s_ManualDumpExceptionCode);
+    EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionAddress, capturedInstructionPointer);
+    ASSERT_GE(exceptionStream.ThreadContext.DataSize, sizeof(CONTEXT));
+    ASSERT_LE(static_cast<u64>(exceptionStream.ThreadContext.Rva) + sizeof(CONTEXT), dumpBytes.size());
+    CONTEXT dumpedContext = {};
+    NWB_MEMCPY(&dumpedContext, sizeof(dumpedContext), dumpBytes.data() + exceptionStream.ThreadContext.Rva, sizeof(dumpedContext));
+#if defined(_M_X64) || defined(__x86_64__)
+    EXPECT_EQ(dumpedContext.Rip, capturedInstructionPointer);
+#elif defined(_M_IX86) || defined(__i386__)
+    EXPECT_EQ(dumpedContext.Eip, capturedInstructionPointer);
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    EXPECT_EQ(dumpedContext.Pc, capturedInstructionPointer);
+#endif
+    EXPECT_TRUE(NWB::Core::Crash::CaptureCrashDump(AStringView("after_timeout"), AStringView("handler remains reusable")).packageWritten());
+    NWB::Core::Crash::UninstallCrashHandler();
+    uninstall.release();
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+TEST(Crash, ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLinkedRecords){
+    NWB::Core::Crash::Detail::ManualDumpContextStorage storage;
+    NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
+    NWB::Core::Crash::Detail::CaptureManualDumpContext(options, storage);
+    auto request = NWB::Core::Crash::Detail::BuildCrashDumpRequest(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, options);
+    ASSERT_TRUE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    request.version = 1u;
+    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    request.version = NWB::Core::Crash::Detail::s_RequestVersion + 1u;
+    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    request.version = NWB::Core::Crash::Detail::s_RequestVersion;
+    --request.manualContextSize;
+    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    request.manualContextSize = sizeof(CONTEXT);
+    request.manualContextArchitecture ^= 0x00010000u;
+    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    request.manualContextArchitecture = NWB::Core::Crash::Detail::s_WindowsContextArchitecture;
+    request.manualExceptionRecord.ExceptionRecord = &storage.exceptionRecord;
+    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    request.manualExceptionRecord.ExceptionRecord = nullptr;
+    request.manualContext.ContextFlags |= NWB::Core::Crash::Detail::s_WindowsExtendedContextFlag;
+    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+}
+
 TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -285,7 +703,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     config.buildId = AStringView("handle-inheritance-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
     EXPECT_TRUE(installed);
     EXPECT_TRUE(CloseHandle(sentinelHandle));
     EXPECT_TRUE(DeleteFileW(sentinelPath.c_str()));
@@ -316,7 +734,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
         NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
     }
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
     ASSERT_TRUE(installed);
 
     NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
@@ -333,8 +751,16 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-    EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+    {
+        const auto directoryReady = WaitForDirectory(packageDirectory, 3000u);
+        ASSERT_TRUE(directoryReady);
+        EXPECT_TRUE(*directoryReady);
+    }
+    {
+        const auto pathQuery = IsRegularFile(packageDirectory / CrashNames::s_CallstackFileName);
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
     // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so this guards that .eh_frame-based capture keeps producing a full callstack.
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
     NWB::Core::Crash::UninstallCrashHandler();
@@ -361,7 +787,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
         NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
     }
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
     ASSERT_TRUE(installed);
 
     NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
@@ -378,10 +804,26 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
     BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-    EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_GpuCrashReportFileName));
-    EXPECT_TRUE(PathIsMissing(packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName));
-    EXPECT_TRUE(PathIsMissing(packageDirectory / CrashNames::s_AftermathGpuDumpFileName));
+    {
+        const auto directoryReady = WaitForDirectory(packageDirectory, 3000u);
+        ASSERT_TRUE(directoryReady);
+        EXPECT_TRUE(*directoryReady);
+    }
+    {
+        const auto pathQuery = IsRegularFile(packageDirectory / CrashNames::s_GpuCrashReportFileName);
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName);
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(packageDirectory / CrashNames::s_AftermathGpuDumpFileName);
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_GpuCrashReportFileName, AStringView("minimal GPU crash report")));
     NWB::Core::Crash::UninstallCrashHandler();
 
@@ -412,7 +854,7 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
             NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
         }
 
-        if(!NWB::Core::Crash::InstallCrashHandler(installArena, config))
+        if(!NWB::Core::Crash::InstallCrashHandler(config))
             _exit(111);
 
         raise(SIGSEGV);
@@ -434,12 +876,28 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
         BuildCrashIdForProcess(crashId, static_cast<u32>(childPid), 1u);
 
         const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-        EXPECT_TRUE(WaitForDirectory(packageDirectory, 1000u));
-        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
-        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+        {
+            const auto directoryReady = WaitForDirectory(packageDirectory, 1000u);
+            ASSERT_TRUE(directoryReady);
+            EXPECT_TRUE(*directoryReady);
+        }
+        {
+            const auto pathQuery = IsRegularFile(packageDirectory / CrashNames::s_ManifestFileName);
+            ASSERT_TRUE(pathQuery);
+            EXPECT_TRUE(*pathQuery);
+        }
+        {
+            const auto pathQuery = IsRegularFile(packageDirectory / CrashNames::s_CallstackFileName);
+            ASSERT_TRUE(pathQuery);
+            EXPECT_TRUE(*pathQuery);
+        }
         // The faulting callstack must reach past the leaf frame even with the frame pointer omitted (final builds).
         EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
-        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName));
+        {
+            const auto pathQuery = IsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName);
+            ASSERT_TRUE(pathQuery);
+            EXPECT_TRUE(*pathQuery);
+        }
         EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\"")));
     }
 

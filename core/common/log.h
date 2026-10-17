@@ -82,6 +82,10 @@ inline constexpr StringView s_DiagnosticEventCategoryAssert = "logger_Assert";
 inline constexpr StringView s_DiagnosticEventCategoryError = "logger_Error";
 inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline constexpr bool ShouldBreak(const LoggerBreakPolicy::Enum breakPolicy, const LogType::Enum type)noexcept{
     switch(breakPolicy){
     case LoggerBreakPolicy::ReportOnly:
@@ -159,7 +163,7 @@ inline void EnqueuePreparedMessageAndCapture(ILogger& logger, const LogType::Enu
     logger.enqueue(message, type);
 }
 
-inline void CaptureMessageDiagnostic(const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const DiagnosticEventText& diagnosticMessage){
+inline void CaptureMessageDiagnostic(const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const DiagnosticEventText& diagnosticMessage)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventNameFromLogType(type), .category = diagnosticCategory, .message = diagnosticMessage.view(), .file = file, .line = line, });
 }
 

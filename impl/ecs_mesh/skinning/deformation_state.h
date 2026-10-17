@@ -34,13 +34,13 @@ struct MeshSkinningDeformationInputs{
 // Accepted object-space output is reusable only for the same resolved GPU palette and resource generation.
 class MeshSkinningDeformationState final{
 public:
-    explicit MeshSkinningDeformationState(Core::Alloc::GlobalArena& arena);
+    explicit MeshSkinningDeformationState(Core::Alloc::GlobalArena& arena)noexcept;
 
 
 public:
     void invalidateCurrent()noexcept;
     void refreshCurrent(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* joints, usize jointCount, bool inputDirty)noexcept;
-    [[nodiscard]] u64 stage(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* joints, usize jointCount);
+    [[nodiscard]] Expected<u64> stage(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* joints, usize jointCount);
     [[nodiscard]] bool accept(u64 candidate)noexcept;
     // Zero also covers a changed pose awaiting this frame's graph submission.
     [[nodiscard]] u64 contentRevision()const noexcept{ return m_current ? m_acceptedRevision : 0u; }

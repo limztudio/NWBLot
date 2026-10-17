@@ -26,7 +26,7 @@ bool Builder::progress(const AStringView stableKey, const f64 fraction, const Pr
         return true;
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::Progress);
+    const auto widget = m_context.declare(stableKey, WidgetKind::Progress);
     if(!widget)
         return false;
     ProgressFrame frame;
@@ -48,7 +48,7 @@ bool Builder::progress(const AStringView stableKey, const f64 fraction, const Pr
     frame.style.track = track->name;
     frame.style.fill = fill->name;
     Item item(m_arena);
-    item.state = *widget;
+    item.state = **widget;
     item.progress = static_cast<u32>(m_scope->m_progress.size());
     LayoutNodeDesc description;
     description.width = frame.options.width;

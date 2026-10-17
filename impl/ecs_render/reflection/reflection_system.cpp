@@ -42,7 +42,7 @@ namespace __hidden_reflection_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererReflectionSystem::RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)
+RendererReflectionSystem::RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
     : m_arena(arena)
     , m_graphics(graphics)
     , m_shaders(shaders)
@@ -140,20 +140,49 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         ;
         return m_graphics.createBuffer(desc);
     };
-    m_resources.opaqueRadiance = createOutput(Name("engine/reflection/opaque_radiance"));
-    m_resources.glassRadiance = createOutput(Name("engine/reflection/glass_radiance"));
-    m_resources.queue = createBuffer(Name("engine/reflection/ray_queue"), static_cast<u64>(capacity) * sizeof(u32), false, false);
-    m_resources.counters = createBuffer(Name("engine/reflection/counters"), NWB_REFLECTION_COUNTER_SIZE, false, false);
+    auto opaqueRadianceResult = createOutput(Name("engine/reflection/opaque_radiance"));
+    if(opaqueRadianceResult)
+        m_resources.opaqueRadiance = Move(*opaqueRadianceResult);
+    else
+        m_resources.opaqueRadiance.reset();
+    auto glassRadianceResult = createOutput(Name("engine/reflection/glass_radiance"));
+    if(glassRadianceResult)
+        m_resources.glassRadiance = Move(*glassRadianceResult);
+    else
+        m_resources.glassRadiance.reset();
+    auto queueResult = createBuffer(Name("engine/reflection/ray_queue"), static_cast<u64>(capacity) * sizeof(u32), false, false);
+    if(queueResult)
+        m_resources.queue = Move(*queueResult);
+    else
+        m_resources.queue.reset();
+    auto countersResult = createBuffer(Name("engine/reflection/counters"), NWB_REFLECTION_COUNTER_SIZE, false, false);
+    if(countersResult)
+        m_resources.counters = Move(*countersResult);
+    else
+        m_resources.counters.reset();
     const u32 argumentCount = csgHardwareWork && m_csgBuildArgsPipeline ? (capacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
-    m_resources.indirectArgs = createBuffer(Name("engine/reflection/indirect_args"), static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES, false, true);
-    m_resources.frameParameters = createBuffer(Name("engine/reflection/frame_parameters"), sizeof(ReflectionFrameParameters), true, false);
+    auto indirectArgsResult = createBuffer(Name("engine/reflection/indirect_args"), static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES, false, true);
+    if(indirectArgsResult)
+        m_resources.indirectArgs = Move(*indirectArgsResult);
+    else
+        m_resources.indirectArgs.reset();
+    auto frameParametersResult = createBuffer(Name("engine/reflection/frame_parameters"), sizeof(ReflectionFrameParameters), true, false);
+    if(frameParametersResult)
+        m_resources.frameParameters = Move(*frameParametersResult);
+    else
+        m_resources.frameParameters.reset();
     ReflectionDepthPyramidSnapshot& depthPyramid = m_resources.depthPyramid;
     u32 mipWidth = width;
     u32 mipHeight = height;
     do{
         ReflectionDepthPyramidMip& mip = depthPyramid.mips[depthPyramid.mipCount++];
         const auto taskIdentity = StringFormat(m_arena, "render.reflection.depth_reduce_{}", depthPyramid.mipCount - 1u);
-        mip.taskIdentity = ToName(taskIdentity);
+        const auto taskName = ToName(taskIdentity);
+        if(!taskName || !*taskName){
+            releaseTargets();
+            return false;
+        }
+        mip.taskIdentity = **taskName;
         mip.width = mipWidth;
         mip.height = mipHeight;
         if(mipWidth == 1u && mipHeight == 1u)
@@ -161,11 +190,11 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         mipWidth = Max(mipWidth / 2u, 1u);
         mipHeight = Max(mipHeight / 2u, 1u);
     }while(depthPyramid.mipCount < ReflectionDepthPyramidSnapshot::s_MaxMipCount);
-    constexpr Core::FormatSupport::Mask depthSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
+    constexpr Core::FormatSupport::Mask s_DepthSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
     Core::Format::Enum depthFormat = Core::Format::RG32_FLOAT;
-    if((device.queryFormatSupport(depthFormat) & depthSupport) != depthSupport)
+    if((device.queryFormatSupport(depthFormat) & s_DepthSupport) != s_DepthSupport)
         depthFormat = Core::Format::RGBA32_FLOAT;
-    if((device.queryFormatSupport(depthFormat) & depthSupport) != depthSupport){
+    if((device.queryFormatSupport(depthFormat) & s_DepthSupport) != s_DepthSupport){
         releaseTargets();
         return false;
     }
@@ -181,8 +210,12 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         .setInitialState(Core::ResourceStates::Common)
         .setKeepInitialState(true)
     ;
-    depthPyramid.texture = m_graphics.createTexture(depthDesc);
-    if(!m_resources.opaqueRadiance || !m_resources.glassRadiance || !m_resources.queue || !m_resources.counters || !m_resources.indirectArgs || !m_resources.frameParameters || !depthPyramid.texture){
+    auto textureResult = m_graphics.createTexture(depthDesc);
+    if(textureResult)
+        depthPyramid.texture = Move(*textureResult);
+    else
+        depthPyramid.texture.reset();
+    if(!opaqueRadianceResult || !glassRadianceResult || !queueResult || !countersResult || !indirectArgsResult || !frameParametersResult || !textureResult){
         releaseTargets();
         return false;
     }
@@ -237,10 +270,13 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings) && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled);
 }
 
-ReflectionCsgDispatchHandle RendererReflectionSystem::createCsgDispatchState(const ReflectionFrameSnapshot& resources)const{
+Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::createCsgDispatchState(const ReflectionFrameSnapshot& resources)const{
     if(!resources.hasHardwareWork() || !resources.scene.csgTraceContextBuffer)
-        return {};
-    return ReflectionCsgDispatchHandle(NewArenaObject<ReflectionCsgDispatchControl>(m_arena, resources, m_graphics.gpuTiming()), ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
+        return ReflectionCsgDispatchHandle{};
+    auto* const control = NewArenaObject<ReflectionCsgDispatchControl>(m_arena, resources, m_graphics.gpuTiming());
+    if(!control)
+        return MakeUnexpected(Failure{});
+    return ReflectionCsgDispatchHandle(control, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
 }
 
 void RendererReflectionSystem::pollStatistics(){
@@ -407,9 +443,10 @@ bool RendererReflectionSystem::prepareQueue(const u32 capacity){
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle queue = m_graphics.createBuffer(desc);
-    if(!queue)
+    auto queueResult = m_graphics.createBuffer(desc);
+    if(!queueResult)
         return false;
+    Core::BufferHandle queue = Move(*queueResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!descriptor.valid())
@@ -444,9 +481,10 @@ bool RendererReflectionSystem::prepareArguments(const u32 capacity, const bool s
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle arguments = m_graphics.createBuffer(desc);
-    if(!arguments)
+    auto argumentsResult = m_graphics.createBuffer(desc);
+    if(!argumentsResult)
         return false;
+    Core::BufferHandle arguments = Move(*argumentsResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!descriptor.valid())
@@ -470,16 +508,24 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
         desc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(u32)));
-        m_bindingLayout = device.createBindingLayout(desc);
-        if(!m_bindingLayout)
+        auto bindingLayoutResult = device.createBindingLayout(desc);
+        if(bindingLayoutResult)
+            m_bindingLayout = Move(*bindingLayoutResult);
+        else
+            m_bindingLayout.reset();
+        if(!bindingLayoutResult)
             return false;
     }
     if(!m_depthBindingLayout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
         desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES));
-        m_depthBindingLayout = device.createBindingLayout(desc);
-        if(!m_depthBindingLayout)
+        auto depthBindingLayoutResult = device.createBindingLayout(desc);
+        if(depthBindingLayoutResult)
+            m_depthBindingLayout = Move(*depthBindingLayoutResult);
+        else
+            m_depthBindingLayout.reset();
+        if(!depthBindingLayoutResult)
             return false;
     }
     const auto preparePipeline = [&](
@@ -499,8 +545,12 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
         desc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         if(hardware)
             desc.addBindingLayout(heap.getAccelStructLayout());
-        pipeline = device.createComputePipeline(desc);
-        return static_cast<bool>(pipeline);
+        auto pipelineResult = device.createComputePipeline(desc);
+        if(pipelineResult)
+            pipeline = Move(*pipelineResult);
+        else
+            pipeline.reset();
+        return static_cast<bool>(pipelineResult);
     };
     if(
         !preparePipeline(m_resources.classifyPipeline, m_classifyShader, Name("engine/graphics/reflection/classify_cs"), Name("ECSRender_ReflectionClassify"), false, m_bindingLayout)
@@ -522,8 +572,12 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
         desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES));
-        m_csgBindingLayout = device.createBindingLayout(desc);
-        if(!m_csgBindingLayout)
+        auto csgBindingLayoutResult = device.createBindingLayout(desc);
+        if(csgBindingLayoutResult)
+            m_csgBindingLayout = Move(*csgBindingLayoutResult);
+        else
+            m_csgBindingLayout.reset();
+        if(!csgBindingLayoutResult)
             return false;
     }
     if(

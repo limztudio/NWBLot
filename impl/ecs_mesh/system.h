@@ -46,14 +46,15 @@ public:
 
 
 public:
-    virtual void update(Core::ECS::World& world, f32 delta)noexcept override;
+    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
 
 public:
-    [[nodiscard]] MeshComponent* findMesh(Core::ECS::EntityID entity);
-    [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const;
+    [[nodiscard]] MeshComponent* findMesh(Core::ECS::EntityID entity)noexcept;
+    [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const noexcept;
     [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(Core::ECS::EntityID entity)const;
     // Distinguish non-rendering owners from temporarily unavailable meshes.
     [[nodiscard]] Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> resolveRenderableMeshStatus(Core::ECS::EntityID entity)const;
+    [[nodiscard]] bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const;
     void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const;
 
 public:

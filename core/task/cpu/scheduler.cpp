@@ -39,7 +39,7 @@ inline constexpr u64 s_NormalAdmissionTick = 7u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CpuTaskScheduler::TaskNode::TaskNode(Alloc::GlobalArena& arena)
+CpuTaskScheduler::TaskNode::TaskNode(Alloc::GlobalArena& arena)noexcept(noexcept(TaskFunction{}) && noexcept(Vector<TaskHandle, Alloc::GlobalArena>(arena)) && noexcept(Vector<u32, Alloc::GlobalArena>(arena)))
     : dependents(arena)
     , olderCanceledGenerations(arena)
 {}
@@ -108,7 +108,8 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     InteropVector<CpuWorkerPlacement> topology = placementResult ? Move(*placementResult) : InteropVector<CpuWorkerPlacement>{};
     Sort(topology.begin(), topology.end(), [](const CpuWorkerPlacement& lhs, const CpuWorkerPlacement& rhs)noexcept{
         return lhs.performanceClass > rhs.performanceClass;
-    });
+    }
+    );
     const u32 available = topology.empty() ? Max(QueryCpuCoreCount(CpuAffinity::Any), 1u) : static_cast<u32>(topology.size());
     const u32 reserved = Min(config.reservedThreadCount, available);
     m_workerCount = config.workerCount == CpuTaskSchedulerConfig::s_AutomaticWorkerCount ? available - reserved : config.workerCount;
@@ -140,7 +141,8 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     for(u32 worker = 0u; worker < m_workerCount; ++worker){
         m_workers.emplace_back([this, index = static_cast<usize>(worker) + 1u](const StopToken& stop){
             workerLoop(stop, index);
-        });
+        }
+        );
     }
 }
 CpuTaskScheduler::~CpuTaskScheduler()noexcept(false){
@@ -161,15 +163,15 @@ void CpuTaskScheduler::pumpMainThread(){
     while(executeOne(false)){}
 }
 
-bool CpuTaskScheduler::isComplete(const TaskHandle handle)const{
+bool CpuTaskScheduler::isComplete(const TaskHandle handle)const noexcept{
     if(!handle.valid())
         return true;
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
     return !resolveLocked(handle);
 }
 
-CpuTaskSchedulerStatistics CpuTaskScheduler::statistics()const{
-    ScopedLock lock(m_mutex);
+CpuTaskSchedulerStatistics CpuTaskScheduler::statistics()const noexcept{
+    NothrowScopedLock lock(m_mutex);
     CpuTaskSchedulerStatistics result = m_statistics;
     result.outstandingTasks = m_outstanding;
     result.profileEnabled = m_profileEnabled.load(MemoryOrder::relaxed);
@@ -180,11 +182,11 @@ CpuTaskSchedulerStatistics CpuTaskScheduler::statistics()const{
 }
 
 
-CpuTaskScheduler::TaskHandle CpuTaskScheduler::reserveTaskLocked(){
+Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskScheduler::reserveTaskLocked(){
     u32 index = m_freeNode;
     if(index == TaskHandle::s_InvalidIndex){
         if(m_nodes.size() >= TaskHandle::s_InvalidIndex)
-            return {};
+            return MakeUnexpected(CpuTaskAdmissionError::CapacityExhausted);
         index = static_cast<u32>(m_nodes.size());
         ContainerDetail::ReserveGrowingCapacity(m_searchStack, m_nodes.size() + 1u);
         m_searchVisits.resize(m_nodes.size() + 1u, 0u);
@@ -198,12 +200,16 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::reserveTaskLocked(){
     TaskNode& node = m_nodes[index];
     node.state = TaskState::Preparing;
     node.next = TaskHandle::s_InvalidIndex;
-    return { m_domainIdentity, index, node.generation };
+    return TaskHandle{ m_domainIdentity, index, node.generation };
 }
 
-CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(TaskFunction&& function, CpuTaskScope* const scope, const CpuTaskOptions options, const TaskHandle* const dependencies, const usize dependencyCount){
-    if(!function || (dependencyCount != 0u && !dependencies) || options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
-        return {};
+Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskScheduler::submitTask(TaskFunction&& function, CpuTaskScope* const scope, const CpuTaskOptions options, const TaskHandle* const dependencies, const usize dependencyCount){
+    if(!function)
+        return MakeUnexpected(CpuTaskAdmissionError::InvalidFunction);
+    if(dependencyCount != 0u && !dependencies)
+        return MakeUnexpected(CpuTaskAdmissionError::InvalidDependencies);
+    if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
+        return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
 
     TaskHandle handle;
     TaskNode* node;
@@ -211,15 +217,18 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(TaskFunction&& functio
     bool wakeJoiners;
     {
         ScopedLock lock(m_mutex);
-        if(m_aborting || (scope && scope->m_canceled))
-            return {};
+        if(m_aborting)
+            return MakeUnexpected(CpuTaskAdmissionError::Aborting);
+        if(scope && scope->m_canceled)
+            return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
         for(usize index = 0u; index < dependencyCount; ++index){
             if(dependencies[index].valid() && dependencies[index].domainIdentity != m_domainIdentity)
-                return {};
+                return MakeUnexpected(CpuTaskAdmissionError::ForeignDependency);
         }
-        handle = reserveTaskLocked();
-        if(!handle.valid())
-            return {};
+        const auto reserved = reserveTaskLocked();
+        if(!reserved)
+            return MakeUnexpected(reserved.error());
+        handle = *reserved;
         node = &m_nodes[handle.index];
     }
     ScopeExit release([&]()noexcept{ releaseReservation(handle); });
@@ -227,15 +236,17 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(TaskFunction&& functio
     node->function = Move(function);
     {
         ScopedLock lock(m_mutex);
-        if(m_aborting || (scope && scope->m_canceled))
-            return {};
+        if(m_aborting)
+            return MakeUnexpected(CpuTaskAdmissionError::Aborting);
+        if(scope && scope->m_canceled)
+            return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
         if(node->latestCanceledGeneration != 0u)
             ContainerDetail::ReserveGrowingCapacity(node->olderCanceledGenerations, AddSize(node->olderCanceledGenerations.size(), 1u));
         u64 dependencySearchGeneration = 0u;
         if(dependencyCount != 0u && s_Execution && &s_Execution->scheduler == this && s_Execution->task.valid()){
             beginLockedSearch();
             dependencySearchGeneration = m_searchGeneration;
-            const auto visit = [this](const TaskHandle candidate){
+            const auto visit = [this](const TaskHandle candidate)noexcept{
                 if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
                     m_searchVisits[candidate.index] = m_searchGeneration;
                     m_searchStack.push_back(candidate.index);
@@ -257,7 +268,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(TaskFunction&& functio
             if(resolveLocked(dependencies[index])){
                 const u32 dependencyIndex = dependencies[index].index;
                 if(dependencySearchGeneration != 0u && m_searchVisits[dependencyIndex] == dependencySearchGeneration)
-                    return {};
+                    return MakeUnexpected(CpuTaskAdmissionError::DependencyCycle);
                 m_searchStack.push_back(dependencyIndex);
             }
         }
@@ -500,7 +511,8 @@ void CpuTaskScheduler::execute(const TaskHandle handle, const usize workerIndex,
         }
         if(readyToRetire)
             retire(handle, *node);
-    });
+    }
+    );
     {
         Execution execution(*this, handle, workerIndex, affinity);
         if(profile)
@@ -608,7 +620,8 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
                 }
                 const bool ready = m_workerChanged[affinity].wait(lock, stop, [this, affinity]()noexcept{
                     return hasReadyLocked(affinity, false, false);
-                });
+                }
+                );
                 if(idle)
                     finishProfileLocked(*idle, TimerNow());
                 if(!ready)

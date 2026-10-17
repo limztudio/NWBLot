@@ -31,6 +31,10 @@ namespace __hidden_vulkan_descriptor_heap{
     // Reserve TLAS blocks across in-flight generation replacement.
     inline constexpr u32 s_AccelStructCapacity = s_MaxFramesInFlight + 2u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
     bool IsBindlessHeapAbiValid(const GpuDescriptorHeapAbi& abi)noexcept{
         if(!abi.valid())
             return false;
@@ -89,7 +93,7 @@ GpuDescriptorHeap::PendingRecordingLease::~PendingRecordingLease()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuDescriptorHeap::GpuDescriptorHeap(Device& device)
+GpuDescriptorHeap::GpuDescriptorHeap(Device& device)noexcept
     : m_device(device)
     , m_context(device.m_context)
     , m_heapUses(device.m_context.objectArena)
@@ -218,8 +222,12 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .addRegisterSpace(BindingLayoutItem::TextureSrv(getRegisterSlot(GpuDescriptorClass::SampledImageCube), resourceCapacity))
     ;
 
-    m_resourceLayout = m_device.createBindlessLayout(resourceLayoutDesc);
-    if(!m_resourceLayout){
+    auto resourceLayout = m_device.createBindlessLayout(resourceLayoutDesc);
+    if(resourceLayout)
+        m_resourceLayout = Move(*resourceLayout);
+    else
+        m_resourceLayout.reset();
+    if(!resourceLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create resource bindless layout."));
         return failInitialization();
     }
@@ -237,8 +245,12 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .addRegisterSpace(BindingLayoutItem::Sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
     ;
 
-    m_samplerLayout = m_device.createBindlessLayout(samplerLayoutDesc);
-    if(!m_samplerLayout){
+    auto samplerLayout = m_device.createBindlessLayout(samplerLayoutDesc);
+    if(samplerLayout)
+        m_samplerLayout = Move(*samplerLayout);
+    else
+        m_samplerLayout.reset();
+    if(!samplerLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create sampler bindless layout."));
         return failInitialization();
     }
@@ -256,8 +268,12 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
             .setDescriptorSetIndex(m_desc.bindlessHeapAbi.accelStructSetIndex)
             .addRegisterSpace(BindingLayoutItem::RayTracingAccelStruct(getRegisterSlot(GpuDescriptorClass::AccelStruct), 1u))
         ;
-        m_accelStructLayout = m_device.createBindlessLayout(accelStructLayoutDesc);
-        if(!m_accelStructLayout || !m_accelStructLayout->isDescriptorBufferCompatible()){
+        auto accelStructLayout = m_device.createBindlessLayout(accelStructLayoutDesc);
+        if(accelStructLayout)
+            m_accelStructLayout = Move(*accelStructLayout);
+        else
+            m_accelStructLayout.reset();
+        if(!accelStructLayout || !m_accelStructLayout->isDescriptorBufferCompatible()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create the TLAS descriptor-buffer layout."));
             return failInitialization();
         }
@@ -325,7 +341,6 @@ void GpuDescriptorHeap::shutdown(){
     shutdownLocked();
 }
 
-
 GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()const{
     ScopedLock lock(m_mutex);
 
@@ -360,8 +375,16 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
     return statistics;
 }
 
-
 GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum descriptorClass){
+    bool hasRetiredSlots = false;
+    {
+        ScopedLock lock(m_mutex);
+        hasRetiredSlots = m_initialized && descriptorClass < GpuDescriptorClass::kCount && (descriptorClass != GpuDescriptorClass::AccelStruct || m_accelStructLayout) && m_retiredCount != 0u;
+    }
+    // Reclaim deferred slots on this ordinary allocation path before choosing a slot; owner destruction only journals retirement.
+    if(hasRetiredSlots)
+        collectRetired();
+
     ScopedLock lock(m_mutex);
 
     if(!m_initialized){
@@ -455,10 +478,7 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
             ++m_retiredCount;
         }
     }
-
-    collectRetired();
 }
-
 
 u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass)const noexcept{
     const GpuDescriptorHeapAbi& abi = m_desc.bindlessHeapAbi;

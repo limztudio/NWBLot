@@ -88,15 +88,18 @@ class ProfileSessionController:
         if args.dry_run:
             return _facade.ProfileSession(log_port, logserver_executable, None)
 
-        process = subprocess.Popen(command, cwd=working_directory, env=env)
-        print(MSG_LAUNCHED_LOGSERVER.format(logserver_executable=logserver_executable, process=process, log_port=log_port), flush=True)
+        process: Optional[subprocess.Popen] = None
+        published = False
         try:
+            process = subprocess.Popen(command, cwd=working_directory, env=env)
+            print(MSG_LAUNCHED_LOGSERVER.format(logserver_executable=logserver_executable, process=process, log_port=log_port), flush=True)
             _facade.wait_for_tcp_port(log_port, args.profile_logserver_timeout, process)
-        except BaseException:
-            _facade.terminate_process(process, LOGSERVER_LABEL)
-            raise
-
-        return _facade.ProfileSession(log_port, logserver_executable, process)
+            session = _facade.ProfileSession(log_port, logserver_executable, process)
+            published = True
+            return session
+        finally:
+            if process is not None and not published:
+                _facade.terminate_process(process, LOGSERVER_LABEL)
 
 
 choose_free_tcp_port = ProfileSessionController.choose_free_tcp_port

@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRecordedGraph::buildPacketInitialStateSeed(
+Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketInitialStateSeed(
     PacketRecordingScratch& scratch,
     Alloc::ScratchArena& stateFanInScratchArena,
     const GpuTaskGraph& graph,
@@ -26,12 +26,10 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const ArtifactOperation& artifactAccess,
-    const GpuSubmissionPacketId& packetID,
-    const CommandListResourceStateHandoff*& outInitialStates
+    const GpuSubmissionPacketId& packetID
 ){
-    outInitialStates = nullptr;
     if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess) || !validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess) || !planAccess.validPacket(packetID))
-        return false;
+        return MakeUnexpected(Failure{});
 
     scratch.initialStateSeed.reset();
     scratch.stateSubsetScratch.reset();
@@ -72,7 +70,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
 
     const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packetID);
     if(!packetView.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
 
@@ -186,7 +184,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
         const GpuCompiledBarrier* const barriers = compiledTaskView.prologueBarriers;
         for(u32 barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
@@ -194,7 +192,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             if(!barrier.isInitialOwnerHandoff || (barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire))
                 continue;
             if(!appendInitialOwnerStateSource(barrier))
-                return false;
+                return MakeUnexpected(Failure{});
         }
     }
 
@@ -203,27 +201,27 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
         if(task.externalStateSourceCount != 0u && !task.externalStateSources)
-            return false;
+            return MakeUnexpected(Failure{});
         if(task.externalStateSourceCount == 0u)
             continue;
 
         const GpuPhysicalQueueInfo* const taskQueue = planAccess.queueInfoForTask(tasks[taskIndex]);
         if(!taskQueue || taskQueue->queueClass >= CommandQueue::kCount)
-            return false;
+            return MakeUnexpected(Failure{});
         for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
             const GpuTaskExternalStateSource& source = task.externalStateSources[sourceIndex];
             if(source.applicableConsumerQueueClass > CommandQueue::kCount)
-                return false;
+                return MakeUnexpected(Failure{});
             if(source.applicableConsumerQueueClass != CommandQueue::kCount && source.applicableConsumerQueueClass != taskQueue->queueClass)
                 continue;
             if(!appendStateSource(source.states, tasks + taskIndex, 1u))
-                return false;
+                return MakeUnexpected(Failure{});
         }
     }
 
     scratch.initialStateSeed.reset();
     if(scratch.externalMergedStateSeed.valid() && !scratch.initialStateSeed.copyFrom(scratch.externalMergedStateSeed))
-        return false;
+        return MakeUnexpected(Failure{});
     scratch.stateMergeScratch.reset();
 
     const auto appendInitialStateSubset = [&]{
@@ -268,14 +266,14 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
         const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
         for(u32 seedIndex = 0u; seedIndex < compiledTask.prologueStateSeedCount;){
             const GpuPacketStateSeed& firstSeed = stateSeeds[seedIndex];
             const CommandListResourceStateHandoff* const sourceStates = packetStateSeed(firstSeed.sourcePacket, artifactAccess);
             if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()))
-                return false;
+                return MakeUnexpected(Failure{});
             usize batchCount = 1u;
             while(batchCount < s_MaxSeedSubsetBatch && batchCount < compiledTask.prologueStateSeedCount - seedIndex && stateSeeds[seedIndex + batchCount].sourcePacket == firstSeed.sourcePacket)
                 ++batchCount;
@@ -284,7 +282,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             if(batchCount == 1u || scratch.initialStateSeed.hasPendingBufferReleases() || sourceStates->hasPendingBufferReleases()){
                 for(usize offset = 0u; offset < batchCount; ++offset){
                     if(!buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, scratch.stateSubsetScratch) || !appendInitialStateSubset())
-                        return false;
+                        return MakeUnexpected(Failure{});
                 }
                 seedIndex += static_cast<u32>(batchCount);
                 continue;
@@ -299,25 +297,24 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 CommandListResourceStateHandoff& subset = seedSubsetBatch[offset];
                 // Every original range still passes its own exact selection and nonempty validation.
                 if(!buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, subset))
-                    return false;
+                    return MakeUnexpected(Failure{});
                 branches[offset] = &subset;
             }
             usize firstBranch = 0u;
             if(!scratch.initialStateSeed.valid()){
                 if(!scratch.initialStateSeed.copyFrom(*branches[0u]))
-                    return false;
+                    return MakeUnexpected(Failure{});
                 firstBranch = 1u;
             }
             if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches.data() + firstBranch, batchCount - firstBranch, stateFanInScratchArena))
-                return false;
+                return MakeUnexpected(Failure{});
             if(!scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch))
-                return false;
+                return MakeUnexpected(Failure{});
             seedIndex += static_cast<u32>(batchCount);
         }
     }
 
-    outInitialStates = scratch.initialStateSeed.valid() ? &scratch.initialStateSeed : nullptr;
-    return true;
+    return scratch.initialStateSeed.valid() ? &scratch.initialStateSeed : nullptr;
 }
 
 

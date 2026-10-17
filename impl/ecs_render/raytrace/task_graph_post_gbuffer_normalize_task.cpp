@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
+#include "task_graph_post_gbuffer_normalize_task.h"
+
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 
@@ -39,7 +40,7 @@ bool PostGbufferNormalizeGraphTask::Record(const Payload& payload, Core::Command
 }
 
 
-void PostGbufferNormalizeGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void PostGbufferNormalizeGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     payload.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
 }

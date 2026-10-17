@@ -256,8 +256,12 @@ TEST_F(UiPaintOverlayTests, LayerDescentAfterMergedOverlayPaintOrdersTheComplete
 }
 
 TEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges){
-    const SharedGlyphPage coverage = makeCoverage();
-    const SharedSdfAtlasPage distance = makeDistance();
+    auto coverageCreationResult = makeCoverage();
+    ASSERT_TRUE(coverageCreationResult);
+    const SharedGlyphPage coverage = Move(*coverageCreationResult);
+    auto distanceCreationResult = makeDistance();
+    ASSERT_TRUE(distanceCreationResult);
+    const SharedSdfAtlasPage distance = Move(*distanceCreationResult);
     ASSERT_TRUE(coverage && distance);
     const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
     const Rect uv{ 0.0f, 0.0f, 0.5f, 0.5f };

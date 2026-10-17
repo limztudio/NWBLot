@@ -31,6 +31,8 @@ using TaskGraphTestUtils::TestArena;
 
 
 TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
@@ -50,14 +52,18 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = addBuffer(graph, Name("tests/task_graph/initial_owner_graphics"), "Initial Owner Graphics", queues[0u].id);
+        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_graphics"), "Initial Owner Graphics", queues[0u].id);
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        const Graphics::GpuTaskId task = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_graphics_use"), "Initial Owner Graphics Use", graphicsCommands);
+        const auto taskResult = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_graphics_use"), "Initial Owner Graphics Use", graphicsCommands);
+        ASSERT_TRUE(taskResult);
+        const Graphics::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
 
@@ -68,13 +74,19 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = addBuffer(graph, Name("tests/task_graph/initial_owner_cross_queue"), "Initial Owner Cross Queue", queues[0u].id);
+        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_cross_queue"), "Initial Owner Cross Queue", queues[0u].id);
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        ASSERT_TRUE(addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_compute_use"), "Initial Owner Compute Use", computeCommands).valid());
+        {
+            const auto gpuAdmissionAt73 = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_compute_use"), "Initial Owner Compute Use", computeCommands);
+            ASSERT_TRUE(gpuAdmissionAt73);
+            ASSERT_TRUE(gpuAdmissionAt73->valid());
+        }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -83,18 +95,24 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = addBuffer(
+        const auto resourceResult = addBuffer(
             graph,
             Name("tests/task_graph/initial_owner_stale"),
             "Initial Owner Stale",
             Graphics::GpuPhysicalQueueId{ .index = queues[0u].id.index, .deviceGeneration = static_cast<u16>(queues[0u].id.deviceGeneration + 1u) }
         );
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        ASSERT_TRUE(addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_stale_use"), "Initial Owner Stale Use", graphicsCommands).valid());
+        {
+            const auto gpuAdmissionAt93 = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_stale_use"), "Initial Owner Stale Use", graphicsCommands);
+            ASSERT_TRUE(gpuAdmissionAt93);
+            ASSERT_TRUE(gpuAdmissionAt93->valid());
+        }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -103,13 +121,19 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = addBuffer(graph, Name("tests/task_graph/initial_owner_concurrent"), "Initial Owner Concurrent", queues[0u].id, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_concurrent"), "Initial Owner Concurrent", queues[0u].id, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        ASSERT_TRUE(addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_concurrent_use"), "Initial Owner Concurrent Use", graphicsCommands).valid());
+        {
+            const auto gpuAdmissionAt108 = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_concurrent_use"), "Initial Owner Concurrent Use", graphicsCommands);
+            ASSERT_TRUE(gpuAdmissionAt108);
+            ASSERT_TRUE(gpuAdmissionAt108->valid());
+        }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -121,7 +145,9 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffAtDeclaration){
     const Graphics::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_initial_owner_completion")).setMarkerLabel("Invalid Initial Owner Completion"));
+    const auto completionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_initial_owner_completion")).setMarkerLabel("Invalid Initial Owner Completion"));
+    ASSERT_TRUE(completionResult);
+    const Graphics::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
     const Graphics::QueueSubmissionToken minimumCompletionToken{ .value = 7u, .physicalQueueIndex = sourceQueue.id.index, .deviceGeneration = sourceQueue.id.deviceGeneration, .queue = Graphics::CommandQueue::Graphics, };
     Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
@@ -143,7 +169,8 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffAtDeclaration){
             .setType(Graphics::GpuGraphResourceType::Buffer)
             .setInitialState(Graphics::ResourceStates::Common)
             .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-    ).valid());
+    ).has_value()
+    );
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
     EXPECT_EQ(declarations.resourceCount(), resourceCount);
@@ -170,11 +197,13 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAcc
     };
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+    const auto completionResult = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/invalid_typed_initial_owner_completion"))
             .setMarkerLabel("Invalid Typed Initial Owner Completion")
     );
+    ASSERT_TRUE(completionResult);
+    const Graphics::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
     const Graphics::QueueSubmissionToken minimumCompletionToken{ .value = 7u, .physicalQueueIndex = sourceQueue.id.index, .deviceGeneration = sourceQueue.id.deviceGeneration, .queue = Graphics::CommandQueue::Graphics, };
     Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
@@ -191,7 +220,8 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAcc
                 .setType(resourceCase.type)
                 .setInitialState(resourceCase.initialState)
                 .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-        ).valid());
+        ).has_value()
+        );
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
         EXPECT_EQ(declarations.resourceCount(), 0u);
@@ -203,7 +233,9 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
     const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId sharedCompletion = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/multi_owner_shared_completion")).setMarkerLabel("Multi Owner Shared Completion"));
+    const auto sharedCompletionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/multi_owner_shared_completion")).setMarkerLabel("Multi Owner Shared Completion"));
+    ASSERT_TRUE(sharedCompletionResult);
+    const Graphics::GpuExternalCompletionId sharedCompletion = *sharedCompletionResult;
     ASSERT_TRUE(sharedCompletion.valid());
     Graphics::CommandListResourceStateHandoff graphicsState(testArena.arena);
     Graphics::CommandListResourceStateHandoff computeState(testArena.arena);
@@ -232,7 +264,8 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
             .setType(Graphics::GpuGraphResourceType::Texture)
             .setInitialState(Graphics::ResourceStates::ShaderResource)
             .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-    ).valid());
+    ).has_value()
+    );
 
     EXPECT_FALSE(graph.importResource(
         Graphics::GpuGraphResourceDesc{}
@@ -243,7 +276,8 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
             .setExternalFinalReleaseDestinationQueue(graphicsQueue.id)
             .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
-    ).valid());
+    ).has_value()
+    );
 }
 
 TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken){
@@ -252,12 +286,14 @@ TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken
     const Graphics::QueueSubmissionToken completionToken{ .value = 7u, .physicalQueueIndex = sourceQueue.id.index, .deviceGeneration = sourceQueue.id.deviceGeneration, .queue = Graphics::CommandQueue::Graphics, };
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+    const auto completionResult = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/bound_invalid_initial_owner_completion"))
             .setMarkerLabel("Bound Invalid Initial Owner Completion")
             .setToken(completionToken)
     );
+    ASSERT_TRUE(completionResult);
+    const Graphics::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
     Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
     ASSERT_FALSE(stateSource.valid());
@@ -272,7 +308,8 @@ TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken
             .setType(Graphics::GpuGraphResourceType::Buffer)
             .setInitialState(Graphics::ResourceStates::Common)
             .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-    ).valid());
+    ).has_value()
+    );
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
     EXPECT_EQ(declarations.resourceCount(), 0u);
@@ -284,16 +321,20 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
     const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId graphicsCompletion = graph.importExternalCompletion(
+    const auto graphicsCompletionResult = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/invalid_multi_owner_graphics_completion"))
             .setMarkerLabel("Invalid Multi Owner Graphics Completion")
     );
-    const Graphics::GpuExternalCompletionId computeCompletion = graph.importExternalCompletion(
+    ASSERT_TRUE(graphicsCompletionResult);
+    const Graphics::GpuExternalCompletionId graphicsCompletion = *graphicsCompletionResult;
+    const auto computeCompletionResult = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/invalid_multi_owner_compute_completion"))
             .setMarkerLabel("Invalid Multi Owner Compute Completion")
     );
+    ASSERT_TRUE(computeCompletionResult);
+    const Graphics::GpuExternalCompletionId computeCompletion = *computeCompletionResult;
     ASSERT_TRUE(graphicsCompletion.valid());
     ASSERT_TRUE(computeCompletion.valid());
 
@@ -327,7 +368,8 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
             .setType(Graphics::GpuGraphResourceType::Texture)
             .setInitialState(Graphics::ResourceStates::ShaderResource)
             .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-    ).valid());
+    ).has_value()
+    );
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
     EXPECT_EQ(declarations.resourceCount(), 0u);

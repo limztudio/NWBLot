@@ -90,6 +90,10 @@ inline constexpr u32 s_BlasMinRefitsBeforeRebuild = 4u;
 inline constexpr u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
 inline constexpr u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Cube-root-scaled refit budget.
 [[nodiscard]] inline constexpr u32 AdaptiveRefitsBeforeRebuild(const u32 primitiveCount)noexcept{
     u32 log2 = 0u;
@@ -450,17 +454,19 @@ inline constexpr u32 s_CausticSwPhotonGridSide = 512u;
 inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;
 #endif
 
-// Two bootstrap phases, then four converged phases with normalized flux.
-inline constexpr u32 s_CausticTemporalBootstrapPhaseCount = NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT;
-inline constexpr u32 s_CausticTemporalConvergedPhaseCount = NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT;
-inline constexpr u32 s_CausticTemporalWarmupFrameCount = NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT;
-static_assert(s_CausticTemporalBootstrapPhaseCount > NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT);
-static_assert(s_CausticTemporalConvergedPhaseCount > s_CausticTemporalBootstrapPhaseCount);
-static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalConvergedPhaseCount) == 0u);
-static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalConvergedPhaseCount) == 0u);
+// Frame-parity reuse retains the same two-phase checkerboard for both photon producers.
+inline constexpr u32 s_CausticTemporalPhaseCount = NWB_CAUSTIC_TEMPORAL_PHASE_COUNT;
+static_assert(s_CausticTemporalPhaseCount == 2u);
+static_assert(s_CausticTemporalPhaseCount > NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT);
+static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
+static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
 
 // Resolve exposure; photon-count changes preserve brightness.
 inline constexpr f32 s_CausticIntensity = 2.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // Resolve exposure on SIMD lanes; photon-count changes preserve brightness.
 // Decay path is VectorNegativeMultiplySubtract(decay, intensity, intensity) = intensity * (1 - decay); the temporal gate is a lane select, so both candidates stay on lanes and no scalar branch computes the surviving candidate.

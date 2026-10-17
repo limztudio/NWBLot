@@ -62,7 +62,7 @@ struct DeferredLightingStageResult{
 
 class DeferredLightingStageBuilder final : NoCopy{
 public:
-    DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem);
+    DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem)noexcept;
 
 
 public:

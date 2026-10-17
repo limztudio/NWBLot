@@ -64,6 +64,8 @@ public:
         return at(pos);
     }
 
+
+public:
     constexpr reference at(size_type pos){
         NWB_ASSERT(pos < m_currentSize);
         if(pos >= m_currentSize)
@@ -158,17 +160,17 @@ public:
         --m_currentSize;
     }
 
-    constexpr void resize(size_type new_size){
-        NWB_ASSERT(new_size <= s_MaxElements);
-        if(new_size > s_MaxElements)
+    constexpr void resize(size_type newSize){
+        NWB_ASSERT(newSize <= s_MaxElements);
+        if(newSize > s_MaxElements)
             throw RuntimeException("FixedVector size exceeds capacity");
 
-        const size_type lo = m_currentSize < new_size ? m_currentSize : new_size;
-        const size_type hi = m_currentSize < new_size ? new_size : m_currentSize;
+        const size_type lo = m_currentSize < newSize ? m_currentSize : newSize;
+        const size_type hi = m_currentSize < newSize ? newSize : m_currentSize;
         for(size_type i = lo; i < hi; ++i)
             *(data() + i) = T{};
 
-        m_currentSize = new_size;
+        m_currentSize = newSize;
     }
 
     template<typename... Args>

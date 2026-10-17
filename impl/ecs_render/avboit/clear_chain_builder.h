@@ -51,7 +51,7 @@ struct AvboitClearChainResult{
 
 class AvboitClearChainBuilder final : NoCopy{
 public:
-    AvboitClearChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem);
+    AvboitClearChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept;
 
 
 public:

@@ -140,9 +140,9 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     Core::Telemetry::FrameGraphPassMetadata rendererFrameMetadata;
     rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics(deferredRuntimeStatistics, builder.frameIndex(), m_frameGraphSourceFrameIndex);
     const Core::GpuPhysicalQueueTopology runtimeQueueTopology = deferredCompiledPlan.queueTopology();
-    Core::Alloc::ScratchArena physicalQueueRuntimeStatisticsScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector< Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics, Core::Alloc::ScratchArena > physicalQueueRuntimeStatistics(physicalQueueRuntimeStatisticsScratch);
-    Vector< Core::GpuTaskGraphPacketSubmissionStatistics, Core::Alloc::ScratchArena > packetSubmissionStatistics(physicalQueueRuntimeStatisticsScratch);
+    Core::Alloc::ScratchArena& scratchArena = builder.scratchArena();
+    Vector< Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics, Core::Alloc::ScratchArena > physicalQueueRuntimeStatistics(scratchArena);
+    Vector< Core::GpuTaskGraphPacketSubmissionStatistics, Core::Alloc::ScratchArena > packetSubmissionStatistics(scratchArena);
     if(rendererFrameMetadata.runtimeStatistics.present && (!runtimeQueueTopology.queues || runtimeQueueTopology.queueCount == 0u))
         rendererFrameMetadata.runtimeStatistics = {};
     if(rendererFrameMetadata.runtimeStatistics.present){
@@ -644,7 +644,6 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 
     if(m_deferredLightingTaskGraphScheduled){
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(deferredTaskGraphView, m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, m_deferredLightingSubmissionTransaction, scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
         }

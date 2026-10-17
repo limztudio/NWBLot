@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Name identity)
+RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Name identity)noexcept
     : m_arena(arena)
     , m_graphics(graphics)
     , m_identity(identity)
@@ -62,11 +62,12 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     if(!m_resources.buffer || !m_resources.uploadState || m_capacity < byteCount){
         Core::BufferDesc desc;
         desc.setByteSize(byteCount).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(m_identity).enableAutomaticStateTracking(Core::ResourceStates::Common);
-        Core::BufferHandle buffer = m_graphics.createBuffer(desc);
-        if(!buffer){
+        auto bufferResult = m_graphics.createBuffer(desc);
+        if(!bufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to create {}-byte metadata buffer"), byteCount);
             return false;
         }
+        Core::BufferHandle buffer = Move(*bufferResult);
         const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()))){
             if(descriptor.valid())
@@ -74,8 +75,8 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to register metadata buffer"));
             return false;
         }
-        RayTracingOpticalUploadControlHandle uploadState = CreateRayTracingOpticalUploadControl(m_arena, buffer, device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics));
-        if(!uploadState){
+        auto uploadStateResult = CreateRayTracingOpticalUploadControl(m_arena, buffer, device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics));
+        if(!uploadStateResult){
             heap.free(descriptor);
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to create accepted upload control"));
             return false;
@@ -85,7 +86,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         if(m_resources.descriptor.valid())
             heap.free(m_resources.descriptor);
         m_resources.buffer = Move(buffer);
-        m_resources.uploadState = Move(uploadState);
+        m_resources.uploadState = Move(*uploadStateResult);
         m_resources.descriptor = descriptor;
         m_capacity = byteCount;
     }
@@ -115,7 +116,12 @@ bool RayTracingOpticalSceneResources::prepareRuntimeBounds(const RayTracingOptic
     }
     if(gather.runtimeBounds.empty())
         return true;
-    m_runtimeBoundsSnapshot = m_runtimeBounds.prepare(gather, m_resources.descriptor, shaderSystem);
+    auto prepared = m_runtimeBounds.prepare(gather, m_resources.descriptor, shaderSystem);
+    if(!prepared){
+        m_prepared = false;
+        return false;
+    }
+    m_runtimeBoundsSnapshot = Move(*prepared);
     m_prepared = static_cast<bool>(m_runtimeBoundsSnapshot);
     return m_prepared;
 }

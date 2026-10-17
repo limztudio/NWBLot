@@ -62,7 +62,9 @@ struct DiagnosticPayload{
     u32 line = 0u;
     bool terminatesProcess = false;
 
-    explicit DiagnosticPayload(TelemetryArena& arena)
+
+public:
+    explicit DiagnosticPayload(TelemetryArena& arena)noexcept
         : event(arena)
         , category(arena)
         , expression(arena)
@@ -83,24 +85,24 @@ class DiagnosticCaptureGuard final : NoCopy{
 public:
     explicit DiagnosticCaptureGuard(Recorder& recorder);
     DiagnosticCaptureGuard(DiagnosticCaptureGuard&&) = delete;
-    ~DiagnosticCaptureGuard();
+    ~DiagnosticCaptureGuard()noexcept;
 
 
 public:
-    void setFrameIndex(u64 frameIndex)noexcept{ m_frameIndex = frameIndex; }
-    void setStreamId(u32 streamId)noexcept{ m_streamId = streamId; }
+    void setFrameIndex(u64 frameIndex)noexcept{ m_frameIndex.store(frameIndex, MemoryOrder::relaxed); }
+    void setStreamId(u32 streamId)noexcept{ m_streamId.store(streamId, MemoryOrder::relaxed); }
 
-    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
-    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
+    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex.load(MemoryOrder::relaxed); }
+    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId.load(MemoryOrder::relaxed); }
     [[nodiscard]] bool installed()const noexcept{ return m_installed; }
 
-    [[nodiscard]] bool capture(const DiagnosticEventRecord& record);
+    void capture(const DiagnosticEventRecord& record)noexcept;
 
 
 private:
     Recorder& m_recorder;
-    u64 m_frameIndex = 0u;
-    u32 m_streamId = 0u;
+    Atomic<u64> m_frameIndex{ 0u };
+    Atomic<u32> m_streamId{ 0u };
     bool m_installed = false;
 };
 

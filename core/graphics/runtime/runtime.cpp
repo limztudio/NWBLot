@@ -56,6 +56,9 @@ inline constexpr Name s_GraphicsGarbageCollectCpuTimingScope("graphics.garbage_c
 inline constexpr usize s_MaxBeginFrameResizeAttempts = 3u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
     if(src.enableDebugRuntime && !CanEnableDebugRuntime())
         return false;
@@ -107,8 +110,14 @@ public:
 
         PhaseTiming& phase = m_phases[m_phaseCount];
         phase.scopeName = scopeName;
-        if(timing && scopeName)
-            phase.scope = timing->registerScope(scopeName);
+        if(timing && scopeName){
+            const auto scope = timing->registerScope(scopeName);
+            if(!scope){
+                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: CPU phase timing scope registration failed"));
+                return;
+            }
+            phase.scope = *scope;
+        }
         phase.seconds = seconds;
         ++m_phaseCount;
     }
@@ -119,8 +128,16 @@ public:
 
         for(u32 phaseIndex = 0u; phaseIndex < m_phaseCount; ++phaseIndex){
             const PhaseTiming& phase = m_phases[phaseIndex];
-            const Perf::TimingScopeId scope = phase.scope.valid() ? phase.scope : timing.registerScope(phase.scopeName);
-            timing.recordSample(scope, phase.seconds, sampleFrameIndex);
+            if(phase.scope.valid()){
+                timing.recordSample(phase.scope, phase.seconds, sampleFrameIndex);
+                continue;
+            }
+            const auto scope = timing.registerScope(phase.scopeName);
+            if(!scope){
+                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: CPU phase timing scope registration failed"));
+                continue;
+            }
+            timing.recordSample(*scope, phase.seconds, sampleFrameIndex);
         }
     }
 };
@@ -148,8 +165,6 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
 {
     m_deviceCreationParams.hardwareRayTracingPolicy = HardwareRayTracingPolicy::Automatic;
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
-    if(m_cpuTiming)
-        m_frameTimingScope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
 }
 GraphicsRuntime::~GraphicsRuntime()noexcept(false){
     // An active unwind is already terminal.
@@ -172,6 +187,15 @@ GraphicsRuntime::~GraphicsRuntime()noexcept(false){
 }
 
 bool GraphicsRuntime::init(const Common::FrameData& data){
+    if(m_cpuTiming && !m_frameTimingScope.valid()){
+        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
+        if(!scope){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU frame timing scope registration failed"));
+            return false;
+        }
+        m_frameTimingScope = *scope;
+    }
+
     m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = false;
@@ -216,6 +240,15 @@ bool GraphicsRuntime::init(const Common::FrameData& data){
 }
 
 bool GraphicsRuntime::createHeadlessDevice(){
+    if(m_cpuTiming && !m_frameTimingScope.valid()){
+        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
+        if(!scope){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU frame timing scope registration failed"));
+            return false;
+        }
+        m_frameTimingScope = *scope;
+    }
+
     m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = true;
@@ -367,7 +400,6 @@ bool GraphicsRuntime::destroy(){
     m_deviceRecreationRequested = false;
     return true;
 }
-
 bool GraphicsRuntime::waitForIdle(){
     if(auto* device = m_backend->getDevice()){
         if(m_gpuTasks.isAttachedTo(*device))
@@ -377,6 +409,7 @@ bool GraphicsRuntime::waitForIdle(){
     }
     return true;
 }
+
 bool GraphicsRuntime::isDeviceLost()const noexcept{
     if(const auto* device = m_backend->getDevice())
         return device->isDeviceLost();
@@ -405,10 +438,10 @@ bool GraphicsRuntime::confirmFramePresentationSignal(const QueueSubmissionPreSub
     return m_backend->confirmFramePresentationSignal(claim, token);
 }
 
+
 bool GraphicsRuntime::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
     return m_backend->cancelFramePresentationSignal(claim);
 }
-
 
 TStringView GraphicsRuntime::getRendererString()const noexcept{
     return m_backend->getRendererString();
@@ -475,16 +508,16 @@ bool GraphicsRuntime::prepareFramePreamble(){
     return true;
 }
 
-void GraphicsRuntime::render(){
-    renderWithPhaseTiming(nullptr);
+Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::render(){
+    return renderWithPhaseTiming(nullptr);
 }
 
-void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTiming){
+Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTiming){
     Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();
     auto& device = getDevice();
     if(device.requiresRecreation()){
         requestDeviceRecreation();
-        return;
+        return {};
     }
 
     // Each task pairs preparation with rendering.
@@ -493,7 +526,7 @@ void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTimi
     const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
     CpuTaskHandle previous;
     for(auto* renderPass : m_renderPasses){
-        previous = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
+        const auto admitted = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
             if(m_deviceRecreationRequested || device.requiresRecreation()){
                 if(device.requiresRecreation())
                     requestDeviceRecreation();
@@ -520,11 +553,16 @@ void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTimi
             // Later task callbacks observe this request before touching the invalidated device generation.
             if(device.requiresRecreation())
                 requestDeviceRecreation();
-        }, options, previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u);
-        if(!previous.valid())
-            throw RuntimeException("CPU task scheduler rejected a render pass");
+        }, options, previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u
+        );
+        if(!admitted){
+            frameTasks.wait();
+            return MakeUnexpected(admitted.error());
+        }
+        previous = *admitted;
     }
     frameTasks.wait();
+    return {};
 }
 
 void GraphicsRuntime::notifyPointerScaleChanged()const{
@@ -639,7 +677,15 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             Timer renderBegin;
             if(phaseTiming)
                 renderBegin = TimerNow();
-            renderWithPhaseTiming(phaseTiming);
+            const auto rendered = renderWithPhaseTiming(phaseTiming);
+            if(!rendered){
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: render pass CPU task admission failed: {}"), static_cast<u32>(rendered.error()));
+                if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame()){
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the acquired frame after CPU task rejection"));
+                    requestDeviceRecreation();
+                }
+                return false;
+            }
             if(phaseTiming)
                 phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderCpuTimingScope, renderBegin, m_cpuTiming);
 

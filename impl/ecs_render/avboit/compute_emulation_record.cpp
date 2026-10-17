@@ -2,10 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/compute_emulation_record.h>
+#include "compute_emulation_record.h"
+
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
+[[nodiscard]] bool RecordAvboitComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
     if(
         !inputs.graphics
         || !inputs.materialSystem
@@ -48,7 +48,6 @@ NWB_IMPL_BEGIN
     if(!(csgComputeEmulation ? inputs.csgPlan->matches() : inputs.plan->matches()) || !inputs.materialDrawBuffersUploaded || !inputs.frameBindings->frameReady(inputs.instanceCount, inputs.materialTypedByteCount))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     if(csgComputeEmulation)
@@ -89,7 +88,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
+[[nodiscard]] bool RecordAvboitSharedComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
     const bool generatePhase = inputs.phase == AvboitSharedComputeEmulationPhase::Generate;
     if(
         !inputs.graphics
@@ -113,7 +112,6 @@ NWB_IMPL_BEGIN
     if(!inputs.plan->matches(inputs.drawIndex) || !inputs.materialDrawBuffersUploaded || !inputs.frameBindings->frameReady(inputs.instanceCount, inputs.materialTypedByteCount))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     inputs.plan->materialize(inputs.drawIndex, drawItems);
     if(!materialSystem.materialPassDrawResourcesReady(drawItems, *inputs.frameBindings))

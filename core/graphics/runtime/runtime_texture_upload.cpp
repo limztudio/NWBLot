@@ -135,9 +135,9 @@ struct TextureUploadBatchSubmissionData{
     GpuPhysicalQueueId directConsumerQueue;
 };
 
-[[nodiscard]] static GpuTaskId DeclareTextureUploadBatch(void* const userData, GpuTaskGraph& graph){
+[[nodiscard]] static Expected<GpuTaskId> DeclareTextureUploadBatch(void* const userData, GpuTaskGraph& graph){
     auto& submissionData = *static_cast<TextureUploadBatchSubmissionData*>(userData);
-    const GpuGraphResourceId destination = graph.importTexture(
+    const auto destinationResult = graph.importTexture(
         submissionData.setupDesc.destination,
         GpuGraphResourceDesc{}
             .setIdentity(s_UploadTextureBatchResourceIdentity)
@@ -147,15 +147,17 @@ struct TextureUploadBatchSubmissionData{
             .setQueueSharing(submissionData.textureDesc.queueSharing)
             .setDirectConsumerQueue(submissionData.directConsumerQueue)
     );
-    if(!destination.valid())
-        return {};
+    if(!destinationResult)
+        return MakeUnexpected(Failure{});
+    const GpuGraphResourceId destination = *destinationResult;
 
     GpuTaskId previousTask;
     for(usize regionIndex = 0u; regionIndex < submissionData.setupDesc.regionCount; ++regionIndex){
         const GraphicsRuntime::TextureUploadRegion& region = submissionData.setupDesc.regions[regionIndex];
-        const GpuUploadBlobId source = graph.copyUploadData(region.data, region.dataSize, alignof(u32));
-        if(!source.valid())
-            return {};
+        const auto sourceResult = graph.copyUploadData(region.data, region.dataSize, alignof(u32));
+        if(!sourceResult)
+            return MakeUnexpected(Failure{});
+        const GpuUploadBlobId source = *sourceResult;
 
         GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraphScheduling(region.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily);
         scheduling.forceSubmissionBoundary = false;
@@ -167,7 +169,7 @@ struct TextureUploadBatchSubmissionData{
         if(previousTask.valid())
             uploadTaskDesc.setDependencies(&previousTask, 1u);
 
-        const GpuTaskId uploadTask = graph.addUploadTextureTask(
+        const auto uploadTaskResult = graph.addUploadTextureTask(
             uploadTaskDesc,
             GpuUploadTextureTaskDesc{
                 .source = source,
@@ -181,10 +183,13 @@ struct TextureUploadBatchSubmissionData{
                 .acceptedToken = regionIndex + 1u == submissionData.setupDesc.regionCount ? &submissionData.uploadToken : nullptr,
             }
         );
-        if(!uploadTask.valid())
-            return {};
+        if(!uploadTaskResult)
+            return MakeUnexpected(Failure{});
+        const GpuTaskId uploadTask = *uploadTaskResult;
         previousTask = uploadTask;
     }
+    if(!previousTask.valid())
+        return MakeUnexpected(Failure{});
     return previousTask;
 }
 

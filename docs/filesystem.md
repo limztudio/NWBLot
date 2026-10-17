@@ -28,7 +28,7 @@ static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
         return false;
 
     context.filesystemFactory = [](NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Filesystem::VolumeMountDesc& desc)
-        -> UniquePtr<NWB::Core::Filesystem::IFilesystem>{
+        -> Expected<UniquePtr<NWB::Core::Filesystem::IFilesystem>>{
         if(desc.volumeName.view() == AStringView("graphics"))
             return MakeUnique<ProjectPatchFilesystem>(arena);
         return MakeUnique<NWB::Core::Filesystem::VolumeFileSystem>(arena);
@@ -53,8 +53,9 @@ services must remain valid until graphics shutdown. Do not capture startup-local
 
 The factory receives the mount description to distinguish the read-only `graphics` asset namespace from the
 backend's writable pipeline cache namespaces. It returns a fresh, unmounted filesystem for each invocation.
-`CreateFilesystem(arena, desc, factory)` owns creation and mounting, and returns an empty `UniquePtr` if either
-step fails. A custom factory's failure is propagated. It does not silently fall back to local files.
+`CreateFilesystem(arena, desc, factory)` owns creation and mounting and returns `Expected<UniquePtr<IFilesystem>>`.
+Check success before moving the admitted owner; failed creation or mounting returns an unexpected failure.
+The factory uses that same expected owning-result contract, and a null candidate is rejected. A custom factory's failure is propagated without falling back to local files.
 
 `ProjectRuntimeContext::filesystem` exposes the mounted asset filesystem to project runtime code. The loader
 keeps it alive until project callbacks, asset loading, and the project world have shut down.
@@ -74,9 +75,12 @@ empty directory and only publishes it after successful finalization.
 and use a null pointer with zero bytes. `writeFileDeferred` has the same payload-copy contract, but can defer
 metadata publication until `flush` or `unmount`. Callers may reuse their buffer immediately after either
 write returns. `flush` persists pending writes; the volume backend also compacts and trims its segments.
-`unmount` persists pending metadata before releasing the mount and reports failure. The volume backend
-also flushes pending metadata before a remount and attempts to flush in its destructor. Callers that need to
-act on persistence failures must explicitly call `flush` or `unmount` before destroying the object.
+`unmount` persists pending metadata before releasing the mount and reports failure; a failed unmount keeps
+the mounted state and pending metadata available for an explicit retry. The volume backend also flushes
+pending metadata before a remount. Writable owners must check `flush` or `unmount` before reporting success
+and destroying the object. Destruction only releases owned resources: it performs no persistence, allocation,
+or logger callbacks, including during exception unwinding. Uncommitted deferred metadata is not published
+by destruction.
 
 Paths are canonical engine `Name` keys, including in optimized builds where exact source strings may be absent.
 A remote backend should use its own mapping from these keys to download URLs, preserving the asset identities

@@ -25,6 +25,8 @@ struct CaptureOptions{
     bool gpuTiming = false;
     bool memory = false;
 
+
+public:
     [[nodiscard]] static constexpr CaptureOptions Disabled()noexcept{
         return {};
     }

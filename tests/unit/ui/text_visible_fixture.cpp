@@ -91,18 +91,19 @@ bool TextVisibleFixture::loadFont(Font& font, const StringView filename){
 }
 
 bool TextVisibleFixture::installCoverageFonts(){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     const FontSource sources[]{
         { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u },
         { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
     };
-    return m_text.setFonts(sources, 2u);
+    return m_text.setFonts(fontScratchArena, sources, 2u);
 }
 
 void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& display){
     m_paint.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
 }
 
-SharedGlyphPage TextVisibleFixture::makePage(const u64 atlasIdentity){
+Expected<SharedGlyphPage> TextVisibleFixture::makePage(const u64 atlasIdentity){
     GlyphPage::Pixels pixels(m_arena);
     pixels.resize(64u, 128u);
     const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/independent_font"), .fontGeneration = 1u, .atlasIdentity = atlasIdentity, .generation = 1u, .index = 0u, .width = 8u, .height = 8u, };

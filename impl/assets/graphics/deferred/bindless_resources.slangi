@@ -33,6 +33,10 @@ struct NwbDeferredBindlessResources{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbHeapDeferredBindlessResources[];
 #pragma warning(pop)
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> nwbHeapDeferredBindlessResources(const uint slot){
     return g_NwbHeapDeferredBindlessResources[slot];
 }

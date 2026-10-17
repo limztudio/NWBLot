@@ -74,6 +74,8 @@ struct MaterialBindAttribute{
     MaterialCookString name;
     MaterialCookVector<MaterialCookString> arguments;
 
+
+public:
     explicit MaterialBindAttribute(MaterialCookArena& memoryArena)noexcept
         : name(memoryArena)
         , arguments(memoryArena)
@@ -85,6 +87,8 @@ struct MaterialBindField{
     MaterialCookString name;
     MaterialCookVector<MaterialBindAttribute> attributes;
 
+
+public:
     explicit MaterialBindField(MaterialCookArena& memoryArena)noexcept
         : type(memoryArena)
         , name(memoryArena)
@@ -102,6 +106,8 @@ struct MaterialBindStruct{
     MaterialCookVector<MaterialBindAttribute> attributes;
     MaterialCookVector<MaterialBindField> fields;
 
+
+public:
     explicit MaterialBindStruct(MaterialCookArena& memoryArena)noexcept
         : name(memoryArena)
         , attributes(memoryArena)
@@ -118,6 +124,8 @@ struct MaterialBindInstance{
     MaterialCookString type;
     MaterialCookString name;
 
+
+public:
     explicit MaterialBindInstance(MaterialCookArena& memoryArena)noexcept
         : type(memoryArena)
         , name(memoryArena)
@@ -130,6 +138,8 @@ struct MaterialBindEntry{
     MaterialCookVector<MaterialBindStruct> structs;
     MaterialCookVector<MaterialBindInstance> instances;
 
+
+public:
     explicit MaterialBindEntry(MaterialCookArena& memoryArena)noexcept
         : source(memoryArena)
         , virtualPath(memoryArena)
@@ -181,6 +191,8 @@ struct MaterialBindTypedLayout{
     MaterialBindTypedLayoutBlockLookup blockLookup;
     MaterialBindTypedLayoutParameterLookup parameterLookup;
 
+
+public:
     explicit MaterialBindTypedLayout(MaterialCookArena& memoryArena)
         : typedLayoutBlocks(memoryArena)
         , typedLayoutFields(memoryArena)
@@ -198,6 +210,8 @@ struct MaterialBindTypedLayoutCache{
     MaterialCookVector<MaterialBindTypedLayout> entries;
     MaterialCookMap<Name, usize> lookup;
 
+
+public:
     explicit MaterialBindTypedLayoutCache(MaterialCookArena& memoryArena)
         : entries(memoryArena)
         , lookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)

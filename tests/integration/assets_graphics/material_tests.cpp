@@ -440,6 +440,30 @@ TEST(AssetsGraphics, MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboi
 }
 
 
+TEST(AssetsGraphics, DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutation){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
+    NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
+    for(usize index = 0u; index < 2u; ++index){
+        auto& bind = bindEntries.emplace_back(testArena.arena);
+        bind.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+    }
+    NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
+    auto& material = materialEntries.emplace_back(testArena.arena);
+    material.materialInterface = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+    material.typedLayoutHash = 0xF091u;
+    material.typedBlockBytes.push_back(0x2Au);
+
+    EXPECT_FALSE(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("Material bind interface 'project/material_interfaces/test_surface' is duplicated")));
+    EXPECT_EQ(material.typedLayoutHash, 0xF091u);
+    ASSERT_EQ(material.typedBlockBytes.size(), 1u);
+    EXPECT_EQ(material.typedBlockBytes[0u], 0x2Au);
+}
+
+
 TEST(AssetsGraphics, MaterialBindSchemaValidation){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -784,7 +808,7 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
     auto duplicateIncludeCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_duplicate_include_path");
     ASSERT_TRUE(duplicateIncludeCookCase);
     Path& duplicateIncludeRoot = duplicateIncludeCookCase->root;
-    EXPECT_FALSE(AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(testArena, *duplicateIncludeCookCase));
+    EXPECT_FALSE(AssetsGraphicsFixture::EmitDuplicateGeneratedMaterialBindIncludePath(testArena, *duplicateIncludeCookCase));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate material bind include path 'project/material_interfaces/test_surface.bind'")));
 
     EXPECT_TRUE(RemoveAllIfExists(duplicateIncludeRoot));

@@ -31,6 +31,10 @@ inline constexpr u32 s_AssetPayloadMagic = 0x53484431u; // SHD1
 inline constexpr u32 s_AssetPayloadVersion = 1u;
 inline constexpr usize s_AssetPayloadHeaderBytes = sizeof(u32) * 2u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace BytecodeValidationFailure{
     enum Enum : u8{
         None,

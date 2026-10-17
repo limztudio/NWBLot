@@ -63,6 +63,10 @@ static void ResolveAttachmentJointQueries(Core::ECS::World& world, Vector<Skelet
 
 static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void StoreObjectWorldTransform(Core::ECS::World& world, const Core::ECS::EntityID owner, const SkeletonJointMatrix& localTransform, Scene::TransformComponent& transform){
     const Scene::TransformComponent* ownerTransform = world.tryGetComponent<Scene::TransformComponent>(owner);
     const SIMDMatrix ownerMatrix = ownerTransform ? MatrixAffineTransformation(LoadFloat(ownerTransform->scale), VectorZero(), LoadFloat(ownerTransform->rotation), LoadFloat(ownerTransform->position)) : MatrixIdentity();
@@ -127,12 +131,15 @@ void ModelSystem::prepare(Core::ECS::World& world){
     syncModelRuntimes();
 }
 
-void ModelSystem::update(Core::ECS::World& world, const f32 delta){
+Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(world);
     static_cast<void>(delta);
 
-    updateModelObjectTransforms();
+    const auto transformed = updateModelObjectTransforms();
+    if(!transformed)
+        return MakeUnexpected(transformed.error());
     updateStaticMeshAttachments();
+    return {};
 }
 
 void ModelSystem::syncModelRuntimes(){
@@ -379,8 +386,8 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     return true;
 }
 
-void ModelSystem::updateModelObjectTransforms(){
-    m_world.view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
+Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObjectTransforms(){
+    return m_world.view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
         m_world.taskScope(),
         __hidden_model_system::s_ParallelModelObjectTransformGrainSize,
         [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform){
@@ -437,7 +444,8 @@ void ModelSystem::updateStaticMeshAttachments(){
                 parentOrder.push_back(queryIndex);
             Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
                 return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
-            });
+            }
+            );
             __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, parentOrder.data());
         }
     }

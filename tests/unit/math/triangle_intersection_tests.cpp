@@ -24,9 +24,9 @@ namespace __hidden_math_triangle_intersection_tests{
 
 template<typename VectorT>
 static void CheckWindingAndOperandOrder(const VectorT (&first)[3], const VectorT (&second)[3], const bool expected){
-    constexpr u32 permutations[][3] = { { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u }, { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u } };
-    for(const auto& firstOrder : permutations){
-        for(const auto& secondOrder : permutations){
+    constexpr u32 s_Permutations[][3] = { { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u }, { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u } };
+    for(const auto& firstOrder : s_Permutations){
+        for(const auto& secondOrder : s_Permutations){
             if constexpr(IsSame_V<VectorT, SIMDVectorSingle>){
                 EXPECT_EQ(TriangleTests::Intersects(first[firstOrder[0]], first[firstOrder[1]], first[firstOrder[2]], second[secondOrder[0]], second[secondOrder[1]], second[secondOrder[2]]), expected);
                 EXPECT_EQ(TriangleTests::Intersects(second[secondOrder[0]], second[secondOrder[1]], second[secondOrder[2]], first[firstOrder[0]], first[firstOrder[1]], first[firstOrder[2]]), expected);
@@ -149,7 +149,8 @@ TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringInter
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
     volatile u32 singleInactiveBits = 0x7f800001u;
     volatile u64 doubleInactiveBits = 0x7ff0000000000001u;
     const SIMDVectorSingle firstSingle[] = {

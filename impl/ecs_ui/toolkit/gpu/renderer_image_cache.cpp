@@ -21,21 +21,24 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     for(const SharedGlyphPage& page : snapshot.glyphPages()){
         const auto found = FindIf(m_glyphCache.begin(), m_glyphCache.end(), [&page](const GpuVersion<GpuGlyphVersion>& cached)noexcept{
             return SameGlyphPageKey(cached->m_page->binding(), page->binding());
-        });
+        }
+        );
         if(found == m_glyphCache.end())
             ++missing;
     }
     for(const SharedSdfAtlasPage& page : snapshot.sdfPages()){
         const auto found = FindIf(m_sdfCache.begin(), m_sdfCache.end(), [&page](const GpuVersion<GpuSdfAtlasVersion>& cached)noexcept{
             return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
-        });
+        }
+        );
         if(found == m_sdfCache.end())
             ++missing;
     }
     for(const SharedImageSource& source : snapshot.textureImages()){
         const auto found = FindIf(m_textureCache.begin(), m_textureCache.end(), [&source](const auto& cached)noexcept(noexcept(Decay_T<decltype(cached->m_source->generation() == source->generation())>(cached->m_source->generation() == source->generation()))){
             return cached->m_source->generation() == source->generation();
-        });
+        }
+        );
         if(found == m_textureCache.end())
             ++missing;
     }
@@ -48,7 +51,8 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
         const auto& cached = m_glyphCache[index];
         const auto found = FindIf(snapshot.glyphPages().begin(), snapshot.glyphPages().end(), [&cached](const SharedGlyphPage& page)noexcept{
             return SameGlyphPageKey(cached->m_page->binding(), page->binding());
-        });
+        }
+        );
         if(found == snapshot.glyphPages().end())
             m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(index));
         else
@@ -58,7 +62,8 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
         const auto& cached = m_sdfCache[index];
         const auto found = FindIf(snapshot.sdfPages().begin(), snapshot.sdfPages().end(), [&cached](const SharedSdfAtlasPage& page)noexcept{
             return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
-        });
+        }
+        );
         if(found == snapshot.sdfPages().end())
             m_sdfCache.erase(m_sdfCache.begin() + static_cast<isize>(index));
         else

@@ -34,6 +34,10 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename Payload>
 static void ConfirmCausticAccumulatorClears(Payload& payload){
     if(payload.graphOwnsNonTemporalAccumulatorClear)
@@ -46,7 +50,7 @@ static void ConfirmCausticAccumulatorClears(Payload& payload){
 struct CausticAccumulatorDecayGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: decay always brackets the caustic-photon timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
+    // All bindings are required: decay always brackets the caustic-photon timing against this frame's ticket.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -59,6 +63,8 @@ struct CausticAccumulatorDecayGraphTask{
         bool hardwareCaustics = false;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
 
@@ -94,7 +100,7 @@ template<bool Hardware>
 struct CausticProducerGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: photons always record against this frame's ticket and publish dispatch. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
+    // All bindings are required: photons always record against this frame's ticket and publish dispatch.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         DeferredFrameTargets& targets;
@@ -108,6 +114,8 @@ struct CausticProducerGraphTask{
         bool& causticProducerDispatched;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         payload.causticProducerDispatched = false;
@@ -158,7 +166,7 @@ using HardwareCausticsGraphTask = CausticProducerGraphTask<true>;
 struct CausticGeometryDownsampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // All bindings are required: geometry downsample always brackets the caustic-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
+    // All bindings are required: geometry downsample always brackets the caustic-resolve timing against this frame's ticket.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
@@ -168,6 +176,8 @@ struct CausticGeometryDownsampleGraphTask{
         Optional<Core::GpuTimingMeasure>& causticResolveTiming;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
@@ -206,6 +216,7 @@ public:
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
@@ -226,6 +237,7 @@ public:
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
@@ -250,13 +262,15 @@ using CausticResolveUpsampleGraphTask = CausticResolvePhaseGraphTask<&RendererRa
 struct CausticResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
-    // All bindings are required: resolve always closes the caustic-resolve timing against this frame's ticket. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
+    // All bindings are required: resolve always closes the caustic-resolve timing against this frame's ticket.
     struct Payload{
         Core::GpuTimingSubmissionTicket& timingTicket;
         const bool& causticProducerDispatched;
         Optional<Core::GpuTimingMeasure>& causticResolveTiming;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and no resolve dispatch is emitted when the selected photon producer did not record.

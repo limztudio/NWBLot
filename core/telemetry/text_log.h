@@ -7,6 +7,7 @@
 
 #include "recorder.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 #include <global/expected.h>
@@ -44,7 +45,9 @@ struct TextLogPayload{
     AString<TelemetryArena> messageUtf8;
     Common::LogType::Enum type = Common::LogType::Info;
 
-    explicit TextLogPayload(TelemetryArena& arena)
+
+public:
+    explicit TextLogPayload(TelemetryArena& arena)noexcept
         : messageUtf8(arena)
     {}
 };
@@ -54,14 +57,14 @@ struct TextLogPayload{
 
 
 [[nodiscard]] bool IsValidTextLogType(Common::LogType::Enum type)noexcept;
-[[nodiscard]] bool BuildTextLogPayload(TelemetryArena& arena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
+[[nodiscard]] bool BuildTextLogPayload(Alloc::ScratchArena& scratchArena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
 [[nodiscard]] bool RecordTextLog(Recorder& recorder, Common::LogType::Enum type, TStringView message, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class TextLogCaptureLogger final : public Common::ILogger{
 public:
     explicit TextLogCaptureLogger(Recorder& recorder, Common::ILogger* forwardLogger = nullptr)noexcept;
-    virtual ~TextLogCaptureLogger()override = default;
+    virtual ~TextLogCaptureLogger()noexcept override = default;
 
 
 public:
@@ -69,6 +72,7 @@ public:
     void setStreamId(u32 streamId)noexcept{ m_streamId = streamId; }
     void setForwardLogger(Common::ILogger* forwardLogger)noexcept{ m_forwardLogger = forwardLogger; }
 
+    [[nodiscard]] u64 droppedTextLogCount()const noexcept{ return m_droppedTextLogCount.load(MemoryOrder::relaxed); }
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
     [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
     [[nodiscard]] Common::ILogger* forwardLogger()const noexcept{ return m_forwardLogger; }
@@ -87,6 +91,7 @@ private:
     Common::ILogger* m_forwardLogger = nullptr;
     u64 m_frameIndex = 0u;
     u32 m_streamId = 0u;
+    Atomic<u64> m_droppedTextLogCount{ 0u };
 };
 
 

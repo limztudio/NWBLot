@@ -39,7 +39,8 @@ TEST(GlobalSync, FutexPreservesEveryIncrementUnderContention){
                 ScopedLock lock(mutex);
                 ++value;
             }
-        });
+        }
+        );
     }
 
     startGate.arrive_and_wait();

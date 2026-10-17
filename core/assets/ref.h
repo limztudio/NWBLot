@@ -23,13 +23,30 @@ struct AssetRef{
 
 
 public:
-    constexpr AssetRef() = default;
-    explicit constexpr AssetRef(const char* path)
+    [[nodiscard]] static Expected<AssetRef, NameTextError::Enum> FromText(const AStringView path){
+        const auto name = Name::FromText(path);
+        if(!name)
+            return MakeUnexpected(name.error());
+        AssetRef reference;
+        reference.virtualPath = *name;
+        return reference;
+    }
+
+
+public:
+    constexpr AssetRef()noexcept = default;
+    explicit constexpr AssetRef(const char* path)noexcept
         : virtualPath(path)
     {}
-    explicit constexpr AssetRef(const AStringView path)
+    explicit constexpr AssetRef(const NameText<char> path)
         : virtualPath(path)
     {}
+
+
+public:
+    [[nodiscard]] explicit operator bool()const noexcept{
+        return valid();
+    }
 
 
 public:
@@ -37,9 +54,6 @@ public:
         return static_cast<bool>(virtualPath);
     }
 
-    [[nodiscard]] explicit operator bool()const noexcept{
-        return valid();
-    }
 
     void reset()noexcept{
         virtualPath = s_NameNone;

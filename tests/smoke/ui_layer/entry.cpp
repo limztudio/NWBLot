@@ -3,10 +3,12 @@
 
 
 #include "project.h"
+#include "world.h"
 
 #include <impl/assets_graphics/bindless/runtime_abi.h>
 
 #include <core/graphics/runtime/runtime.h>
+#include <core/ecs/world.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +31,10 @@ bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
 
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(ProjectRuntimeContext& context){
-    return MakeUnique<Tests::Smoke::UiLayerSmokeProject>(context);
+    auto world = Tests::Smoke::CreateUiLayerSmokeWorld(context);
+    if(!world)
+        return nullptr;
+    return MakeUnique<Tests::Smoke::UiLayerSmokeProject>(context, Move(*world));
 }
 
 

@@ -10,6 +10,8 @@
 
 #include <impl/assets_font/asset.h>
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,7 +51,9 @@ struct GlyphBitmap{
     i32 bearingX = 0;
     i32 bearingY = 0;
 
-    explicit GlyphBitmap(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit GlyphBitmap(Core::Alloc::GlobalArena& arena)noexcept
         : pixels(arena)
     {}
 };
@@ -63,7 +67,7 @@ class FontFaceState;
 // Native faces borrow copied immutable bytes. Native outline/raster calls belong to this version's owning UI thread.
 class FontFace : NoCopy{
 public:
-    FontFace(Core::Alloc::GlobalArena& arena, const FontSource& source);
+    FontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source);
     ~FontFace();
 
 
@@ -87,7 +91,7 @@ private:
 
 using SharedFontFace = RefCountPtr<RefCounter<FontFace>, ArenaRefDeleter<RefCounter<FontFace>, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] SharedFontFace MakeFontFace(Core::Alloc::GlobalArena& arena, const FontSource& source);
+[[nodiscard]] SharedFontFace MakeFontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

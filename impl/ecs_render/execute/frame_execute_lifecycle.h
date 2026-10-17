@@ -37,7 +37,6 @@ public:
         bool statePrepared = false;
         bool stateReady = true;
     };
-
     struct ShadowVisibilityStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
         RendererFramePipeline* renderer = nullptr;
@@ -52,11 +51,9 @@ public:
         usize returnTextureCount = 0u;
         usize scratchTextureCount = 0u;
         usize scratchBufferCount = 0u;
-        bool runsOnCompute = false;
         bool statePrepared = false;
         bool stateReady = false;
     };
-
     struct SoftwareCausticsStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
         RendererFramePipeline* renderer = nullptr;
@@ -66,11 +63,9 @@ public:
         const Core::TextureHandle* scratchTextures = nullptr;
         usize irradianceTextureCount = 0u;
         usize scratchTextureCount = 0u;
-        bool runsOnCompute = false;
         bool statePrepared = false;
         bool stateReady = false;
     };
-
     struct SurfelGiStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
         RendererFramePipeline* renderer = nullptr;
@@ -88,7 +83,6 @@ public:
         bool statePrepared = false;
         bool stateReady = false;
     };
-
     struct HardwareCausticsStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
         RendererFramePipeline* renderer = nullptr;
@@ -98,7 +92,6 @@ public:
         bool statePrepared = false;
         bool stateReady = false;
     };
-
     struct DeferredLightingStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
         RendererFramePipeline* renderer = nullptr;
@@ -124,11 +117,11 @@ public:
     [[nodiscard]] static bool PrepareShadowVisibilityTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
     [[nodiscard]] static bool AcceptShadowVisibilityTask( void* const rawContext, const Core::QueueSubmissionToken& token );
     [[nodiscard]] static bool PrepareSoftwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptSoftwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+    [[nodiscard]] static bool AcceptSoftwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
     [[nodiscard]] static bool PrepareSurfelGiTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptSurfelGiTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+    [[nodiscard]] static bool AcceptSurfelGiTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
     [[nodiscard]] static bool PrepareHardwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptHardwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+    [[nodiscard]] static bool AcceptHardwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
     [[nodiscard]] static bool PrepareDeferredLightingTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
     [[nodiscard]] static bool AcceptDeferredLightingTask( void* const rawContext, const Core::QueueSubmissionToken& token );
 

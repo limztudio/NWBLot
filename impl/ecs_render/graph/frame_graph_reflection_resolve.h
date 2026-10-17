@@ -93,7 +93,7 @@ struct FrameGraphReflectionResolveResult{
 
 class FrameGraphReflectionResolve final : NoCopy{
 public:
-    FrameGraphReflectionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem, RendererReflectionSystem& reflectionSystem);
+    FrameGraphReflectionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem, RendererReflectionSystem& reflectionSystem)noexcept;
 
 
 public:

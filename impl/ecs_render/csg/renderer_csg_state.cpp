@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererCsgState::invalidateResources(){
+void RendererCsgState::invalidateResources()noexcept{
     m_clipBindingLayout.reset();
     m_intervalPeelBindingLayout.reset();
     m_receiverSpanBuildBindingLayout.reset();

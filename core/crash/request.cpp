@@ -6,6 +6,7 @@
 
 #include <global/diagnostics.h>
 #include <global/thread.h>
+#include <global/scope_exit.h>
 
 NWB_CRASH_BEGIN
 
@@ -95,6 +96,35 @@ static AStringView EventNameForRequest(const CrashReasonKind::Enum reasonKind, c
     return AStringView(DiagnosticEventName::s_Crash);
 }
 
+void PublishCrashStateSnapshot()noexcept{
+    const u32 imageIndex = 1u - g_State.publishedSnapshotImage.load(MemoryOrder::relaxed);
+    CrashSnapshotImage& image = g_State.snapshotImages[imageIndex];
+    u64 expected = 0u;
+    while(!image.access.compare_exchange_weak(expected, s_SnapshotWriteClaim, MemoryOrder::acq_rel, MemoryOrder::relaxed)){
+        expected = 0u;
+        MachinePause(1);
+    }
+
+    CrashStateSnapshot& snapshot = image.value;
+    snapshot.dumpDetailMode = g_State.dumpDetailMode;
+    snapshot.spoolRetention = g_State.spoolRetention;
+    snapshot.nextBreadcrumb = g_State.nextBreadcrumb;
+    CopyFixedBuffer(snapshot.applicationName, g_State.applicationName);
+    CopyFixedBuffer(snapshot.versionText, g_State.versionText);
+    CopyFixedBuffer(snapshot.buildId, g_State.buildId);
+    CopyFixedBuffer(snapshot.spoolDirectoryText, g_State.spoolDirectoryText);
+    CopyFixedBuffer(snapshot.logServerUrl, g_State.logServerUrl);
+    CopyFixedBuffer(snapshot.crashUploadToken, g_State.crashUploadToken);
+    for(usize i = 0u; i < s_MaxMetadata; ++i)
+        snapshot.metadata[i] = g_State.metadata[i];
+    for(usize i = 0u; i < s_MaxBreadcrumbs; ++i)
+        snapshot.breadcrumbs[i] = g_State.breadcrumbs[i];
+
+    // Clear the write claim before publication: a fault may interrupt the publishing thread immediately after the index store.
+    image.access.store(0u, MemoryOrder::release);
+    g_State.publishedSnapshotImage.store(imageIndex, MemoryOrder::release);
+}
+
 void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{
     outRequest = CrashRequest{};
     outRequest.platform = CurrentPlatformKind();
@@ -102,37 +132,43 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     outRequest.reasonCode = reasonCode;
     outRequest.processId = CurrentProcessId();
     outRequest.threadId = CurrentThreadId();
-    outRequest.dumpDetailMode = static_cast<u32>(g_State.dumpDetailMode);
-    outRequest.spoolRetention = g_State.spoolRetention;
-
     const u64 sequence = g_State.crashSequence.fetch_add(1u, MemoryOrder::relaxed);
     BuildCrashId(outRequest, sequence);
-
-    CopyFixedBuffer(outRequest.applicationName, g_State.applicationName);
-    CopyFixedBuffer(outRequest.versionText, g_State.versionText);
-    CopyFixedBuffer(outRequest.buildId, g_State.buildId);
     CopyFixedBuffer(outRequest.abi, CurrentAbiName());
-    CopyFixedBuffer(outRequest.spoolDirectory, g_State.spoolDirectoryText);
-    CopyFixedBuffer(outRequest.logServerUrl, g_State.logServerUrl);
-    CopyFixedBuffer(outRequest.crashUploadToken, g_State.crashUploadToken);
 
-    for(usize i = 0u; i < s_MaxMetadata; ++i){
-        if(!g_State.metadata[i].used)
+    for(;;){
+        const u32 imageIndex = g_State.publishedSnapshotImage.load(MemoryOrder::acquire);
+        CrashSnapshotImage& image = g_State.snapshotImages[imageIndex];
+        u64 readers = image.access.load(MemoryOrder::acquire);
+        if((readers & s_SnapshotWriteClaim) != 0u || readers == s_SnapshotMaxReaders)
             continue;
-        if(outRequest.metadataCount >= s_MaxMetadata)
-            break;
-        outRequest.metadata[outRequest.metadataCount++] = g_State.metadata[i];
-    }
+        if(!image.access.compare_exchange_weak(readers, readers + 1u, MemoryOrder::acquire, MemoryOrder::acquire))
+            continue;
+        ScopeExit releaseImage([&image]()noexcept{ image.access.fetch_sub(1u, MemoryOrder::release); });
 
-    const usize begin = g_State.nextBreadcrumb >= s_MaxBreadcrumbs ? g_State.nextBreadcrumb - s_MaxBreadcrumbs : 0u;
-    const usize end = g_State.nextBreadcrumb;
-    for(usize i = begin; i < end; ++i){
-        const FixedBreadcrumb& breadcrumb = g_State.breadcrumbs[i % s_MaxBreadcrumbs];
-        if(!breadcrumb.used)
-            continue;
-        if(outRequest.breadcrumbCount >= s_MaxBreadcrumbs)
-            break;
-        outRequest.breadcrumbs[outRequest.breadcrumbCount++] = breadcrumb;
+        const CrashStateSnapshot& snapshot = image.value;
+        outRequest.dumpDetailMode = static_cast<u32>(snapshot.dumpDetailMode);
+        outRequest.spoolRetention = snapshot.spoolRetention;
+        CopyFixedBuffer(outRequest.applicationName, snapshot.applicationName);
+        CopyFixedBuffer(outRequest.versionText, snapshot.versionText);
+        CopyFixedBuffer(outRequest.buildId, snapshot.buildId);
+        CopyFixedBuffer(outRequest.spoolDirectory, snapshot.spoolDirectoryText);
+        CopyFixedBuffer(outRequest.logServerUrl, snapshot.logServerUrl);
+        CopyFixedBuffer(outRequest.crashUploadToken, snapshot.crashUploadToken);
+
+        for(usize i = 0u; i < s_MaxMetadata; ++i){
+            if(!snapshot.metadata[i].used)
+                continue;
+            outRequest.metadata[outRequest.metadataCount++] = snapshot.metadata[i];
+        }
+
+        const usize begin = snapshot.nextBreadcrumb >= s_MaxBreadcrumbs ? snapshot.nextBreadcrumb - s_MaxBreadcrumbs : 0u;
+        for(usize i = begin; i < snapshot.nextBreadcrumb; ++i){
+            const FixedBreadcrumb& breadcrumb = snapshot.breadcrumbs[i % s_MaxBreadcrumbs];
+            if(breadcrumb.used)
+                outRequest.breadcrumbs[outRequest.breadcrumbCount++] = breadcrumb;
+        }
+        return;
     }
 }
 
@@ -149,10 +185,22 @@ bool TryConsumeSuppressedPlatformCrashCapture()noexcept{
     return false;
 }
 
-CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
+CrashRequest BuildCrashDumpRequest(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
     CrashRequest request;
     SnapshotCrashState(request, reasonKind, reasonCode);
     request.exceptionPointers = options.exceptionPointers;
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(options.manualContext){
+        request.manualContextSize = sizeof(CONTEXT);
+        request.manualExceptionRecordSize = sizeof(EXCEPTION_RECORD);
+        request.manualContextArchitecture = s_WindowsContextArchitecture;
+        request.manualContext = options.manualContext->context;
+        // RtlCaptureContext owns only this fixed CONTEXT, without separately allocated XSTATE bytes.
+        request.manualContext.ContextFlags &= ~s_WindowsExtendedContextFlag;
+        request.manualExceptionRecord = options.manualContext->exceptionRecord;
+        request.exceptionPointers = 0u;
+    }
+#endif
     request.faultAddress = options.faultAddress;
     request.instructionPointer = options.triggerInstructionPointer != 0u ? options.triggerInstructionPointer : options.instructionPointer;
     request.stackPointer = options.stackPointer;
@@ -186,6 +234,14 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);
+
+    return request;
+}
+
+CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
+    const CrashRequest request = BuildCrashDumpRequest(reasonKind, reasonCode, options);
+    if(!IsCurrentCrashRequest(request))
+        return CrashDumpResult{ CrashDumpStatus::RequestFailed };
 
     // GPU report/dump ship as package files straight from caller bytes (no POD copy, no heap alloc).
     // Device-lost path only (normal thread context), never the signal/SEH path; binary-verbatim writes.

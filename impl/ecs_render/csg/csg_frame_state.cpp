@@ -23,86 +23,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_csg_frame_state{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<CsgFrameStateCacheSignature> BuildCsgFrameStateCacheSignature(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry){
-    CsgFrameStateCacheSignature signature;
-    signature.shapeRegistryRevision = shapeRegistry.revision();
-
-    if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
-        return MakeUnexpected(Failure{});
-
-    u64 contentHash = s_Fnv64OffsetBasis;
-    auto cutterView = world.view<CsgCutterComponent>();
-    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter)noexcept{
-            Fnv64AppendValue(contentHash, entity.id);
-            Fnv64AppendBool(contentHash, cutter.active);
-            Fnv64AppendValue(contentHash, cutter.receiverGroup.hash());
-            Fnv64AppendValue(contentHash, cutter.shapeType.hash());
-            Fnv64AppendValue(contentHash, cutter.worldToShape);
-            Fnv64AppendValue(contentHash, cutter.shapeToWorld);
-            Fnv64AppendBuffer(contentHash, cutter.parameterBytes.data(), cutter.parameterBytes.size());
-        }
-    );
-
-    auto receiverView = world.view<StaticCsgMeshComponent>();
-    bool cacheable = true;
-    receiverView.each([&](const Core::ECS::EntityID entity, StaticCsgMeshComponent& typedReceiver){
-            const CsgReceiverComponent& receiver = typedReceiver;
-            Fnv64AppendValue(contentHash, entity.id);
-            Fnv64AppendBool(contentHash, receiver.enabled);
-            Fnv64AppendBool(contentHash, receiver.affectOpaquePass);
-            Fnv64AppendBool(contentHash, receiver.affectTransparentPass);
-            Fnv64AppendValue(contentHash, receiver.receiverGroup.hash());
-
-            const RendererComponent* renderer = world.tryGetComponent<RendererComponent>(entity);
-            Fnv64AppendBool(contentHash, renderer != nullptr);
-            if(renderer){
-                Fnv64AppendBool(contentHash, renderer->visible);
-                Fnv64AppendValue(contentHash, renderer->material.name().hash());
-            }
-
-            const MeshComponent* mesh = world.tryGetComponent<MeshComponent>(entity);
-            Fnv64AppendBool(contentHash, mesh != nullptr);
-            if(mesh){
-                Fnv64AppendValue(contentHash, mesh->mesh.name().hash());
-            }
-            else if(receiver.enabled && renderer){
-                cacheable = false;
-            }
-
-            const Scene::TransformComponent* transform = world.tryGetComponent<Scene::TransformComponent>(entity);
-            Fnv64AppendBool(contentHash, transform != nullptr);
-            if(transform){
-                Fnv64AppendValue(contentHash, transform->position);
-                Fnv64AppendValue(contentHash, transform->rotation);
-                Fnv64AppendValue(contentHash, transform->scale);
-            }
-        }
-    );
-    if(!cacheable)
-        return MakeUnexpected(Failure{});
-
-    signature.contentHash = contentHash;
-    return signature;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup){
-    const auto signature = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(m_world, m_csgShapeRegistry);
+    auto* ecsMeshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    Expected<CsgFrameStateCacheSignature> signature = MakeUnexpected(Failure{});
+    if(ecsMeshSystemPtr)
+        signature = CsgFrameCacheDetail::BuildSignature(m_world, m_csgShapeRegistry, *ecsMeshSystemPtr);
     const bool cacheable = signature.has_value();
     if(cacheable && m_csgState.m_frameStateCacheValid && m_csgState.m_frameStateCacheSignature == *signature)
         return m_csgState.m_frameStateCache;
@@ -125,7 +50,6 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
     if(receiverLookup.empty())
         return finishFrameState(state);
 
-    auto* ecsMeshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
     if(!ecsMeshSystemPtr){
         frameStateCacheable = false;
         return finishFrameState(state);
@@ -152,7 +76,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
 
         if(resolvedMesh.runtime)
             frameStateCacheable = false;
-        const auto meshResult = resolvedMesh.runtime ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh) : m_meshSystem.createMeshResources(resolvedMesh.mesh);
+        const auto meshResult = resolvedMesh.runtime ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh) : m_meshSystem.createMeshResources(resolvedMesh.mesh, scratchArena);
         if(!meshResult){
             frameStateCacheable = false;
             continue;

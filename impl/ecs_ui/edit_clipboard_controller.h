@@ -40,7 +40,7 @@ struct UiEditClipboardResult{
 // End native text input before a drain that may apply cut/paste, and restart it with the resulting surrounding text.
 class UiEditClipboardController final : NoCopy{
 public:
-    UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service);
+    UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)noexcept;
     ~UiEditClipboardController();
 
 

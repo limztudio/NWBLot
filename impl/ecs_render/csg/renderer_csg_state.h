@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "frame_state_cache.h"
+
 #include <impl/global.h>
 #include <impl/ecs_csg/frame_state.h>
 
@@ -27,26 +29,16 @@ class RendererCsgSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgFrameStateCacheSignature{
-    u64 contentHash = 0u;
-    u64 shapeRegistryRevision = 0u;
-
-};
-inline bool operator==(const CsgFrameStateCacheSignature& lhs, const CsgFrameStateCacheSignature& rhs)noexcept{ return lhs.contentHash == rhs.contentHash && lhs.shapeRegistryRevision == rhs.shapeRegistryRevision; }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererCsgState final : NoCopy{
     friend class RendererCsgSystem;
+
 
 public:
     RendererCsgState() = default;
 
 
 private:
-    void invalidateResources();
+    void invalidateResources()noexcept;
 
 
 private:

@@ -2,7 +2,7 @@
 
 `LayoutTree` owns bounded construction, measurement, and arranged geometry in a caller-owned `GlobalArena`. It depends only on the UI geometry/arena types. It does not shape text, access the OS, or create GPU resources.
 
-Build one root with `s_LayoutNoParent`, then add each child after its parent. Nodes receive `u32` indexes. The tree admits up to 4,096 nodes (or a smaller constructor capacity), rejects a second root or children on `Leaf`, and cannot express a cycle. Containers preserve child insertion order. A failed `addNode` leaves its output index unchanged and prevents publication until `reset()` starts another build.
+Build one root with `s_LayoutNoParent`, then add each child after its parent. Nodes receive `u32` indexes. The tree admits up to 4,096 nodes (or a smaller constructor capacity), rejects a second root or children on `Leaf`, and cannot express a cycle. Containers preserve child insertion order. `addNode(parent, description)` returns `Expected<u32>` with the admitted index. A failed admission returns an unexpected result and prevents publication until `reset()` starts another build; check success before using the index.
 
 `reset()` clears construction and working state while retaining the last successful `boxes()`. `arrange(viewport)` measures bottom-up and arranges top-down without recursion, then swaps the complete result into the published boxes. Invalid viewport geometry, unrepresentable measured sizes, or arranged-coordinate overflow leaves the prior boxes and their addresses intact. Readers must use the current build's node indexes only after successful arrangement; a successful arrange invalidates previous box pointers.
 

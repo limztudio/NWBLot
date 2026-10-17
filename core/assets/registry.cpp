@@ -57,7 +57,7 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     return true;
 }
 
-bool AssetRegistry::unregisterCodec(const Name& assetType){
+bool AssetRegistry::unregisterCodec(const Name& assetType)noexcept{
     if(!assetType)
         return false;
 

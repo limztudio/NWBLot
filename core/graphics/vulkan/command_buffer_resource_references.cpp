@@ -40,7 +40,7 @@ inline constexpr u8 s_BufferStateCommit = 1u << 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CommandBufferResourceReferences::CommandBufferResourceReferences(Alloc::GlobalArena& arena)
+CommandBufferResourceReferences::CommandBufferResourceReferences(Alloc::GlobalArena& arena)noexcept
     : m_resources(arena)
     , m_buffers(arena)
     , m_textures(arena)

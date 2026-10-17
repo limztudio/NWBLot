@@ -8,11 +8,11 @@
 
 #include <core/common/log.h>
 
-#include <global/blocking_io.h>
 #include <global/diagnostics.h>
+#include <global/error_code.h>
 #include <global/scope_exit.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if !defined(NWB_PLATFORM_WINDOWS)
 #include <fcntl.h>
 #endif
 
@@ -33,34 +33,41 @@ namespace __hidden_font_builder_writer{
 
 
 struct OutputPaths{
-    Path metadata;
-    Path font;
-    Path metadataTemporary;
-    Path fontTemporary;
-    Path metadataBackup;
-    Path fontBackup;
+    ScratchPath metadata;
+    ScratchPath font;
+    ScratchPath metadataTemporary;
+    ScratchPath fontTemporary;
+    ScratchPath metadataBackup;
+    ScratchPath fontBackup;
 
-    explicit OutputPaths(const Path& output)
-        : metadata(output)
-        , font(output)
-        , metadataTemporary(output)
-        , fontTemporary(output)
-        , metadataBackup(output)
-        , fontBackup(output)
-    {
-        font.replaceExtension(".font");
-        metadataTemporary += ".tmp";
-        fontTemporary = font;
-        fontTemporary += ".tmp";
-        metadataBackup += ".old";
-        fontBackup = font;
-        fontBackup += ".old";
+
+private:
+    [[nodiscard]] static ScratchPath MakeFontPath(Core::Alloc::ScratchArena& scratch, const Path& output){
+        ScratchPath path(scratch, output);
+        path.replaceExtension(".font");
+        return path;
     }
+    [[nodiscard]] static ScratchPath MakeWorkPath(Core::Alloc::ScratchArena& scratch, const ScratchPath& base, const AStringView suffix){
+        ScratchPath path(scratch, base);
+        path += suffix;
+        return path;
+    }
+
+
+public:
+    explicit OutputPaths(Core::Alloc::ScratchArena& scratch, const Path& output)
+        : metadata(scratch, output)
+        , font(MakeFontPath(scratch, output))
+        , metadataTemporary(MakeWorkPath(scratch, metadata, ".tmp"))
+        , fontTemporary(MakeWorkPath(scratch, font, ".tmp"))
+        , metadataBackup(MakeWorkPath(scratch, metadata, ".old"))
+        , fontBackup(MakeWorkPath(scratch, font, ".old"))
+    {}
 };
 
 class TemporaryFile final : NoCopy{
 public:
-    explicit TemporaryFile(const Path& path)
+    explicit TemporaryFile(const ScratchPath& path)noexcept
         : m_path(path)
     {}
     ~TemporaryFile()noexcept{
@@ -75,25 +82,69 @@ public:
 
 
 public:
-    [[nodiscard]] bool stage(const u8* data, const usize count){
+    [[nodiscard]] Expected<void, ErrorCode> stage(const u8* data, const usize count)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
+        if(static_cast<u64>(count) > static_cast<u64>(Limit<i64>::s_Max))
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
         const HANDLE handle = CreateFile(m_path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
         if(handle == INVALID_HANDLE_VALUE)
-            return false;
+            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
         m_owned = true;
-        const bool written = WriteAllWin32Handle(handle, data, count);
-        const bool flushed = written && FlushFileBuffers(handle);
-        const bool closed = CloseHandle(handle);
+        ErrorCode error;
+        const u8* cursor = static_cast<const u8*>(data);
+        usize remaining = count;
+        while(remaining > 0u){
+            const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max) ? Limit<DWORD>::s_Max : static_cast<DWORD>(remaining);
+            DWORD transferred = 0u;
+            if(!WriteFile(handle, cursor, requestSize, &transferred, nullptr)){
+                error = GlobalFilesystemDetail::LastSystemError();
+                break;
+            }
+            if(transferred == 0u){
+                error = MakeErrorCode(ErrorCondition::io_error);
+                break;
+            }
+            cursor += transferred;
+            remaining -= transferred;
+        }
+        if(!error && !FlushFileBuffers(handle))
+            error = GlobalFilesystemDetail::LastSystemError();
+        if(!CloseHandle(handle) && !error)
+            error = GlobalFilesystemDetail::LastSystemError();
 #else
+        if(static_cast<u64>(count) > static_cast<u64>(Limit<off_t>::s_Max))
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
         const int descriptor = open(m_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666u);
         if(descriptor < 0)
-            return false;
+            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
         m_owned = true;
-        const bool written = WriteAllFileDescriptor(descriptor, data, count);
-        const bool flushed = written && fsync(descriptor) == 0;
-        const bool closed = close(descriptor) == 0;
+        ErrorCode error;
+        const u8* cursor = static_cast<const u8*>(data);
+        usize remaining = count;
+        while(remaining > 0u){
+            const usize requestSize = remaining > static_cast<usize>(Limit<ssize_t>::s_Max) ? static_cast<usize>(Limit<ssize_t>::s_Max) : remaining;
+            const ssize_t transferred = write(descriptor, cursor, requestSize);
+            if(transferred < 0){
+                if(errno == EINTR)
+                    continue;
+                error = GlobalFilesystemDetail::LastSystemError();
+                break;
+            }
+            if(transferred == 0){
+                error = MakeErrorCode(ErrorCondition::io_error);
+                break;
+            }
+            cursor += static_cast<usize>(transferred);
+            remaining -= static_cast<usize>(transferred);
+        }
+        if(!error && fsync(descriptor) != 0)
+            error = GlobalFilesystemDetail::LastSystemError();
+        if(close(descriptor) != 0 && !error)
+            error = GlobalFilesystemDetail::LastSystemError();
 #endif
-        return written && flushed && closed;
+        if(error)
+            return MakeUnexpected(error);
+        return {};
     }
     [[nodiscard]] bool verify(const u8* expected, const usize count)const{
         InputFileStream stream(m_path, InputFileStream::binary);
@@ -116,46 +167,50 @@ public:
 
 
 private:
-    Path m_path;
+    const ScratchPath& m_path;
     bool m_owned = false;
 };
 
-[[nodiscard]] static Expected<bool> CheckOutputs(const OutputPaths& paths, const bool overwrite){
-    const Path* files[] = { &paths.metadata, &paths.font };
+[[nodiscard]] static Expected<bool, ErrorCode> CheckOutputs(const OutputPaths& paths, const bool overwrite)noexcept{
+    const ScratchPath* files[] = { &paths.metadata, &paths.font };
     u32 presentCount = 0u;
-    for(const Path* file : files){
+    for(const ScratchPath* file : files){
         const auto exists = FileExistsNoFollow(*file);
         if(!exists)
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(exists.error());
         if(*exists){
             const auto regular = IsRegularFile(*file);
-            if(!regular || !*regular)
-                return MakeUnexpected(Failure{});
+            if(!regular)
+                return MakeUnexpected(regular.error());
+            if(!*regular)
+                return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
             ++presentCount;
         }
     }
     if(presentCount != 0u && (presentCount != 2u || !overwrite))
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(MakeErrorCode(presentCount != 2u ? ErrorCondition::invalid_argument : ErrorCondition::file_exists));
     return presentCount == 2u;
 }
 
-[[nodiscard]] static bool CheckWorkPaths(const OutputPaths& paths){
-    const Path* files[] = { &paths.metadataTemporary, &paths.fontTemporary, &paths.metadataBackup, &paths.fontBackup, };
-    for(const Path* file : files){
+[[nodiscard]] static Expected<void, ErrorCode> CheckWorkPaths(const OutputPaths& paths)noexcept{
+    const ScratchPath* files[] = { &paths.metadataTemporary, &paths.fontTemporary, &paths.metadataBackup, &paths.fontBackup, };
+    for(const ScratchPath* file : files){
         const auto exists = FileExistsNoFollow(*file);
-        if(!exists || *exists)
-            return false;
+        if(!exists)
+            return MakeUnexpected(exists.error());
+        if(*exists)
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::file_exists));
     }
-    return true;
+    return {};
 }
 
-[[nodiscard]] static bool Publish(const OutputPaths& paths, TemporaryFile& font, TemporaryFile& metadata, const bool overwrite){
+[[nodiscard]] static Expected<void, ErrorCode> Publish(const OutputPaths& paths, TemporaryFile& font, TemporaryFile& metadata, const bool overwrite){
     const auto present = CheckOutputs(paths, overwrite);
     if(!present)
-        return false;
-    const Path* outputs[] = { &paths.font, &paths.metadata };
-    const Path* backups[] = { &paths.fontBackup, &paths.metadataBackup };
-    const Path* temporaries[] = { &paths.fontTemporary, &paths.metadataTemporary };
+        return MakeUnexpected(present.error());
+    const ScratchPath* outputs[] = { &paths.font, &paths.metadata };
+    const ScratchPath* backups[] = { &paths.fontBackup, &paths.metadataBackup };
+    const ScratchPath* temporaries[] = { &paths.fontTemporary, &paths.metadataTemporary };
     TemporaryFile* staged[] = { &font, &metadata };
     ErrorCode removalErrors[2u];
     ErrorCode restorationErrors[2u];
@@ -186,37 +241,41 @@ private:
     };
     ScopeExit restoreOnFailure(rollback);
 
-    const auto failPublication = [&](){
+    const auto failPublication = [&](const ErrorCode& error) -> Expected<void, ErrorCode>{
         rollback();
         restoreOnFailure.release();
         for(u32 index = 0u; index < 2u; ++index){
             if(removalErrors[index])
-                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}'"), PathToString<tchar>(*outputs[index]));
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(removalErrors[index].message()));
             if(restorationErrors[index])
-                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}'"), PathToString<tchar>(*outputs[index]));
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(restorationErrors[index].message()));
         }
-        return false;
+        return MakeUnexpected(error);
     };
 
     if(*present){
         for(; backedUp < 2u; ++backedUp){
-            if(!RenamePath(*outputs[backedUp], *backups[backedUp]))
-                return failPublication();
+            const auto preserved = RenamePath(*outputs[backedUp], *backups[backedUp]);
+            if(!preserved)
+                return failPublication(preserved.error());
         }
     }
     for(; published < 2u; ++published){
-        if(!RenamePath(*temporaries[published], *outputs[published]))
-            return failPublication();
+        const auto finalized = RenamePath(*temporaries[published], *outputs[published]);
+        if(!finalized)
+            return failPublication(finalized.error());
         staged[published]->published();
     }
 
     restoreOnFailure.release();
     for(u32 index = 0u; index < backedUp; ++index){
         const auto removed = RemoveFile(*backups[index]);
-        if(!removed || !*removed)
-            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}'"), PathToString<tchar>(*backups[index]));
+        if(!removed)
+            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}': {}"), PathToString<tchar>(*backups[index]), StringConvert(removed.error().message()));
+        else if(!*removed)
+            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but previous backup was already absent: '{}'"), PathToString<tchar>(*backups[index]));
     }
-    return true;
+    return {};
 }
 
 
@@ -230,33 +289,54 @@ private:
 
 
 bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
-    Core::Assets::AssetArena& arena = payload.glyphs.get_allocator().arena();
     auto fontBinary = BuildPreparedFont(options, payload, scratch);
-    MetadataString metadata(arena);
+    MetadataString metadata(scratch);
     if(!fontBinary){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: prepared font failed: {}"), StringConvert(fontBinary.error()));
         return false;
     }
     BuildFontMetadata(payload, metadata);
 
-    const __hidden_font_builder_writer::OutputPaths paths(options.output);
-    if(!__hidden_font_builder_writer::CheckOutputs(paths, options.overwrite) || !__hidden_font_builder_writer::CheckWorkPaths(paths)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files"));
+    const __hidden_font_builder_writer::OutputPaths paths(scratch, options.output);
+    const auto outputs = __hidden_font_builder_writer::CheckOutputs(paths, options.overwrite);
+    if(!outputs){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files: {}"), StringConvert(outputs.error().message()));
         return false;
     }
-    const Path directory = options.output.parentPath();
-    if(!directory.empty() && !EnsureDirectories(directory))
+    const auto workPaths = __hidden_font_builder_writer::CheckWorkPaths(paths);
+    if(!workPaths){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: publication work paths unavailable: {}"), StringConvert(workPaths.error().message()));
         return false;
+    }
+    const ScratchPath directory = paths.metadata.parentPath();
+    if(!directory.empty()){
+        const auto ensured = EnsureDirectories(directory);
+        if(!ensured){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to prepare output directory '{}': {}"), PathToString<tchar>(directory), StringConvert(ensured.error().message()));
+            return false;
+        }
+    }
 
     __hidden_font_builder_writer::TemporaryFile stagedFont(paths.fontTemporary);
     __hidden_font_builder_writer::TemporaryFile stagedMetadata(paths.metadataTemporary);
     const u8* metadataBytes = reinterpret_cast<const u8*>(metadata.data());
-    if(!stagedFont.stage(fontBinary->data(), fontBinary->size()) || !stagedMetadata.stage(metadataBytes, metadata.size()) || !stagedFont.verify(fontBinary->data(), fontBinary->size()) || !stagedMetadata.verify(metadataBytes, metadata.size())){
+    const auto fontStaged = stagedFont.stage(fontBinary->data(), fontBinary->size());
+    if(!fontStaged){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage font temporary: {}"), StringConvert(fontStaged.error().message()));
+        return false;
+    }
+    const auto metadataStaged = stagedMetadata.stage(metadataBytes, metadata.size());
+    if(!metadataStaged){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage metadata temporary: {}"), StringConvert(metadataStaged.error().message()));
+        return false;
+    }
+    if(!stagedFont.verify(fontBinary->data(), fontBinary->size()) || !stagedMetadata.verify(metadataBytes, metadata.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }
-    if(!__hidden_font_builder_writer::Publish(paths, stagedFont, stagedMetadata, options.overwrite)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed"));
+    const auto published = __hidden_font_builder_writer::Publish(paths, stagedFont, stagedMetadata, options.overwrite);
+    if(!published){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed: {}"), StringConvert(published.error().message()));
         return false;
     }
     return true;

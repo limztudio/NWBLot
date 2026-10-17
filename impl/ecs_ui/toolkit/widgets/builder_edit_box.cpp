@@ -35,20 +35,20 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     }
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::EditBox);
+    const auto widget = m_context.declare(stableKey, WidgetKind::EditBox);
     if(!widget)
         return {};
-    if((integerFrame || floatFrame) && (!numericStateAvailable(state) || !m_context.claimState(*widget, model.instanceGeneration()))){
+    if((integerFrame || floatFrame) && (!numericStateAvailable(state) || !m_context.claimState(**widget, model.instanceGeneration()))){
         m_context.fail();
         return {};
     }
     if(!options.enabled)
-        m_context.input().invalidateTarget(widget->id);
+        m_context.input().invalidateTarget((*widget)->id);
     EditBoxResult result;
     result.valid = true;
-    result.focused = options.enabled && m_context.input().focus() == widget->id;
+    result.focused = options.enabled && m_context.input().focus() == (*widget)->id;
     if(m_editHost){
-        result = actions ? m_editHost->editActions(*widget, model, options, m_context.popupToken(), *actions) : m_editHost->edit(*widget, model, options);
+        result = actions ? m_editHost->editActions(**widget, model, options, m_context.popupToken(), *actions) : m_editHost->edit(**widget, model, options);
     }
     if(!result.valid || m_context.failed()){
         result.valid = false;
@@ -76,7 +76,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     Item item(m_arena);
     item.style = m_style;
     item.editStyle = m_editStyle;
-    item.state = *widget;
+    item.state = **widget;
     item.editOptions = options;
     if(!prepareEditBox(item, model, state, result)){
         result.valid = false;

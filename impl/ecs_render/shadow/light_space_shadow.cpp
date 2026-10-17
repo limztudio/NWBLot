@@ -37,15 +37,15 @@ bool LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceSha
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 LightSpaceShadowDrawCount(const LightSpaceShadowCaster* const casters, const usize casterCount)noexcept{
+Expected<u32> LightSpaceShadowDrawCount(const LightSpaceShadowCaster* const casters, const usize casterCount)noexcept{
     if(casterCount != 0u && !casters)
-        return 0u;
+        return MakeUnexpected(Failure{});
     u64 drawCount = 0u;
     for(usize index = 0u; index < casterCount; ++index){
         const u32 meshletCount = casters[index].meshletCount;
         drawCount += meshletCount == 0u ? 1u : meshletCount / NWB_LIGHT_SPACE_MESHLETS_PER_DRAW + (meshletCount % NWB_LIGHT_SPACE_MESHLETS_PER_DRAW != 0u ? 1u : 0u);
         if(drawCount > Limit<u32>::s_Max)
-            return 0u;
+            return MakeUnexpected(Failure{});
     }
     return static_cast<u32>(drawCount);
 }
@@ -54,7 +54,7 @@ u32 LightSpaceShadowDrawCount(const LightSpaceShadowCaster* const casters, const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings){
+bool RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
     if(!ValidateSoftwareShadowSettings(settings))
         return false;
     auto& state = m_lightSpaceShadow;
@@ -175,7 +175,10 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
             return MakeUnexpected(Failure{});
         settings.memoryBudgetBytes -= state.m_csg.bytes.size() + sizeof(u32);
     }
-    auto plan = BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(), LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size()), state.m_csg.snapshot.hasCsg);
+    const auto drawCount = LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size());
+    if(!drawCount)
+        return MakeUnexpected(drawCount.error());
+    auto plan = BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg);
     if(!plan || plan->viewCount == 0u)
         return MakeUnexpected(Failure{});
     return Move(*plan);
@@ -199,6 +202,9 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
+    const auto drawCount = LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size());
+    if(!drawCount)
+        return;
     const LightSpaceShadowStorageCapacity capacity{
         snapshot.counts->getCreationDescription().byteSize, snapshot.events->getCreationDescription().byteSize,
         snapshot.views->getCreationDescription().byteSize, snapshot.drawArguments->getCreationDescription().byteSize,
@@ -250,7 +256,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     snapshot.push.eventsSlot = snapshot.eventsDescriptor.slot();
     snapshot.push.depthSlot = snapshot.depthDescriptor.slot();
     snapshot.push.instanceCount = static_cast<u32>(state.m_casters.size());
-    snapshot.push.captureDrawCount = LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size());
+    snapshot.push.captureDrawCount = *drawCount;
     snapshot.push.width = targets.width;
     snapshot.push.receiverFactor = targets.shadowReceiverFactor;
     snapshot.push.height = targets.height;

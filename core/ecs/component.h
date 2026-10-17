@@ -9,18 +9,13 @@
 #include "type_id.h"
 
 #include <global/expected.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ECS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ComponentTypeId = usize;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,11 +38,6 @@ struct ViewTupleAccess;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename T>
-inline ComponentTypeId ComponentType()noexcept{
-    return ::TypeCounter<ECSDetail::ComponentTypeTag>::Id<Decay_T<T>>();
-}
 
 template<typename... Ts>
 class View;
@@ -92,7 +82,7 @@ private:
         return denseIndex;
     }
 
-    [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const{
+    [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const noexcept{
         const u32 index = entityId.index();
         NWB_ASSERT(index < static_cast<u32>(m_sparse.size()));
 
@@ -104,7 +94,7 @@ private:
 
 
 public:
-    explicit ComponentPool(Alloc::GlobalArena& arena)
+    explicit ComponentPool(Alloc::GlobalArena& arena)noexcept
         : m_sparse(arena)
         , m_dense(arena)
         , m_components(arena)
@@ -124,38 +114,40 @@ public:
             m_sparse.resize(static_cast<usize>(index) + 1, ~0u);
 
         const u32 denseIndex = static_cast<u32>(m_dense.size());
-        m_sparse[index] = denseIndex;
         m_dense.push_back(entityId);
+        ScopeExit rollbackDense([this]()noexcept{ m_dense.pop_back(); });
         m_components.emplace_back(Forward<Args>(args)...);
+        m_sparse[index] = denseIndex;
         ++m_mutationVersion;
+        rollbackDense.release();
 
         return m_components[denseIndex];
     }
 
-    inline T& get(EntityID entityId){
+    inline T& get(EntityID entityId)noexcept{
         return m_components[requireDenseIndex(entityId)];
     }
-    inline const T& get(EntityID entityId)const{
+    inline const T& get(EntityID entityId)const noexcept{
         return m_components[requireDenseIndex(entityId)];
     }
     inline T* tryGet(EntityID entityId)noexcept{
         const auto denseIndex = findDenseIndex(entityId);
         if(!denseIndex)
             return nullptr;
-        return &m_components[*denseIndex];
+        return AddressOf(m_components[*denseIndex]);
     }
     inline const T* tryGet(EntityID entityId)const noexcept{
         const auto denseIndex = findDenseIndex(entityId);
         if(!denseIndex)
             return nullptr;
-        return &m_components[*denseIndex];
+        return AddressOf(m_components[*denseIndex]);
     }
 
-    inline virtual bool has(EntityID entityId)const override{
+    inline virtual bool has(EntityID entityId)const noexcept override{
         return findDenseIndex(entityId).has_value();
     }
 
-    virtual bool remove(EntityID entityId)override{
+    virtual bool remove(EntityID entityId)noexcept(noexcept(DeclVal<T&>() = DeclVal<T&&>()))override{
         const auto resolvedDenseIndex = findDenseIndex(entityId);
         if(!resolvedDenseIndex)
             return false;
@@ -166,8 +158,8 @@ public:
 
         if(denseIndex != lastDense){
             const EntityID lastEntityId = m_dense[lastDense];
-            m_dense[denseIndex] = lastEntityId;
             m_components[denseIndex] = Move(m_components[lastDense]);
+            m_dense[denseIndex] = lastEntityId;
             m_sparse[lastEntityId.index()] = denseIndex;
         }
 
@@ -178,7 +170,7 @@ public:
         return true;
     }
 
-    inline virtual void clear()override{
+    inline virtual void clear()noexcept override{
         if(!m_dense.empty())
             ++m_mutationVersion;
         m_sparse.clear();
@@ -186,8 +178,9 @@ public:
         m_components.clear();
     }
 
-    inline virtual usize size()const override{ return m_dense.size(); }
-    inline virtual u64 mutationVersion()const override{ return m_mutationVersion; }
+    inline virtual usize size()const noexcept override{ return m_dense.size(); }
+    inline virtual u64 mutationVersion()const noexcept override{ return m_mutationVersion; }
+
 
 
 private:

@@ -18,6 +18,7 @@ target_sources(nwb_global_tests PRIVATE
 target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/name_identity_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/process_filesystem_boundary_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/filesystem_cleanup_tests.cpp"
 )
 target_link_libraries(nwb_global_tests PRIVATE nwb_common nwb_alloc)
 

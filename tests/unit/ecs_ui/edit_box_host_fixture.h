@@ -117,10 +117,10 @@ protected:
         m_host.beginFrame(m_generation, { 500.0f, 200.0f, 1.0f, 1.0f });
         if(!m_context.beginRoot({ 17u, 1u }))
             return false;
-        const Ui::WidgetState* widget = m_context.declare("edit", Ui::WidgetKind::EditBox);
+        const auto widget = m_context.declare("edit", Ui::WidgetKind::EditBox);
         if(!widget)
             return false;
-        m_widget = *widget;
+        m_widget = **widget;
         return true;
     }
 
@@ -133,10 +133,10 @@ protected:
         if(!publishEdit(model, options, bounds))
             return false;
         if(m_includeButton){
-            const Ui::WidgetState* button = m_context.declare("other", Ui::WidgetKind::Button);
+            const auto button = m_context.declare("other", Ui::WidgetKind::Button);
             if(!button)
                 return false;
-            m_otherWidget = *button;
+            m_otherWidget = **button;
             Ui::HitTarget other;
             other.rectangle = { 230.0f, 20.0f, 100.0f, 30.0f };
             other.clip = { 0.0f, 0.0f, 500.0f, 200.0f };

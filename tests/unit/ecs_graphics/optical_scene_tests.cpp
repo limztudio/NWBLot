@@ -228,7 +228,8 @@ TEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionF
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     Float34U transform{};
     transform._11 = -2.f;

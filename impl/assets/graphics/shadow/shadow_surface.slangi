@@ -38,6 +38,10 @@ static uint g_NwbShadowMaterialConstantByteOffset = 0u;
 static uint g_NwbShadowMeshInstanceIndex = 0u;
 static uint g_NwbShadowSurfaceDispatchId = 0u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void nwbShadowSetMaterialContext(NwbShadowHit hit){
     g_NwbShadowMaterialConstantByteOffset = hit.materialConstantByteOffset;
     g_NwbShadowMeshInstanceIndex = hit.meshInstanceIndex;

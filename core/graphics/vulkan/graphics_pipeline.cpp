@@ -194,7 +194,6 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     retainResource(m_currentGraphicsState.indirectParams);
 }
 
-
 void CommandList::setViewportState(const ViewportState& viewportState){
     if(!viewportState.viewports.empty()){
         const auto& vp = viewportState.viewports[0u];
@@ -232,7 +231,6 @@ void CommandList::setViewportState(const ViewportState& viewportState){
     }
 }
 
-
 bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
     if(framebuffer.m_framebufferInfo.width == 0 || framebuffer.m_framebufferInfo.height == 0 || framebuffer.m_framebufferInfo.arraySize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
@@ -254,15 +252,15 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
 
         const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_creationDesc, TextureSubresourceMipResolve::Single);
         const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(tex->m_creationDesc, resolvedColorSubresources);
-        VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, fbDesc.colorAttachments[i].format);
-        if(view == VK_NULL_HANDLE){
+        const auto view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, fbDesc.colorAttachments[i].format);
+        if(!view){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
             return false;
         }
 
         colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        colorAttachments[i].imageView = view;
+        colorAttachments[i].imageView = *view;
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.colorAttachmentActions[i]);
         colorAttachments[i].loadOp = operations.loadOp;
@@ -282,8 +280,8 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
         auto* depthTex = fbDesc.depthAttachment.texture;
         const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_creationDesc, TextureSubresourceMipResolve::Single);
         const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(depthTex->m_creationDesc, resolvedDepthSubresources);
-        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, fbDesc.depthAttachment.format);
-        if(depthView == VK_NULL_HANDLE){
+        const auto depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, fbDesc.depthAttachment.format);
+        if(!depthView){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             return false;
@@ -292,7 +290,7 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
         const VkImageLayout depthStencilLayout = fbDesc.depthAttachment.isReadOnly ? VulkanDetail::s_ReadOnlyImageLayout : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.depthAttachmentActions);
-            depthAttachment.imageView = depthView;
+            depthAttachment.imageView = *depthView;
             depthAttachment.imageLayout = depthStencilLayout;
             depthAttachment.loadOp = operations.loadOp;
             depthAttachment.storeOp = operations.storeOp;
@@ -301,7 +299,7 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
         }
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.stencilAttachmentActions);
-            stencilAttachment.imageView = depthView;
+            stencilAttachment.imageView = *depthView;
             stencilAttachment.imageLayout = depthStencilLayout;
             stencilAttachment.loadOp = operations.loadOp;
             stencilAttachment.storeOp = operations.storeOp;

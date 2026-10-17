@@ -35,7 +35,10 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         const auto document = catalog.read(index, scratchArena);
         if(!document)
             return MakeUnexpected(Failure{});
-        if(Name(document->assetType()) != Impl::UiSkin::s_AssetTypeName)
+        const auto documentAssetType = Name::FromText(document->assetType());
+        if(!documentAssetType)
+            return MakeUnexpected(Failure{});
+        if(*documentAssetType != Impl::UiSkin::s_AssetTypeName)
             continue;
         const auto& file = files[index];
         const auto texture = Impl::ExtractUiSkinTextureDependency(file.assetRoot, file.virtualRoot.view(), file.filePath, *document, scratchArena);

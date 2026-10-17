@@ -261,31 +261,31 @@ Expected<StagingTextureRange> BuildStagingTextureRange(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
+Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
     if(!ResourceQueueSharing::IsValid(d.queueSharing)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(cpuAccess != CpuAccessMode::Read && cpuAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: CPU access must be Read or Write"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid CPU access"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(!VulkanDetail::ValidateTextureShape(d, NWB_TEXT("create staging texture"))){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(d.sampleCount != 1){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(static_cast<u32>(d.format) >= static_cast<u32>(Format::kCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
@@ -293,36 +293,36 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     if(!formatLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const auto bufferOffsetAlignment = VulkanDetail::TryComputeCommonAlignment(s_BufferAlignmentBytes, formatLayout->bytesPerBlock);
     if(!bufferOffsetAlignment){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     auto layout = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(m_context.objectArena, d, *formatLayout, *bufferOffsetAlignment);
     if(!layout || layout->arrayByteSize == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const auto totalSize = TryMultiply<u64>(layout->arrayByteSize, static_cast<u64>(d.arraySize));
     if(!totalSize || *totalSize == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     auto queueFamilies = __hidden_vulkan_staging_texture::BuildStagingTextureQueueFamilies(m_context.objectArena, *this, d.queueSharing);
     if(!queueFamilies){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: requested queue sharing is unavailable"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: unavailable queue sharing"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     StagingTextureHandle staging(NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator), StagingTextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!staging){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate staging texture wrapper"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     VkBufferCreateInfo bufferInfo{};
@@ -338,7 +338,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     const VkResult res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture buffer: {}"), ResultToString(res));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     staging->m_desc = d;

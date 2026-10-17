@@ -43,6 +43,10 @@ inline constexpr u32 s_MeshletRefEncodingTangentShift = NWB_MESHLET_REF_ENCODING
 inline constexpr u32 s_MeshletRefEncodingUv0Shift = NWB_MESHLET_REF_ENCODING_UV0_SHIFT;
 inline constexpr u32 s_MeshletRefEncodingColorShift = NWB_MESHLET_REF_ENCODING_COLOR_SHIFT;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace MeshletRefDeltaWidth{
     enum Enum : u32{
         U8 = NWB_MESHLET_REF_WIDTH_U8,
@@ -52,7 +56,8 @@ namespace MeshletRefDeltaWidth{
 };
 
 [[nodiscard]] constexpr NWB_INLINE u32 PackMeshletCounts(const u32 vertexCount, const u32 primitiveCount, const u32 positionCount, const u32 attributeCount)noexcept{
-    return (vertexCount & s_MeshletCountMask)
+    return
+        (vertexCount & s_MeshletCountMask)
         | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift)
         | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift)
         | ((attributeCount & s_MeshletCountMask) << s_MeshletAttributeCountShift)

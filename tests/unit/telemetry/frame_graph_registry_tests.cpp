@@ -29,6 +29,9 @@ static constexpr AStringView s_TARGET = "target";
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using namespace TelemetryTestDetail;
 
 class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
@@ -46,6 +49,74 @@ public:
     }
 };
 
+struct ContributionFailure{};
+
+class CacheLifetimeContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    CacheLifetimeContributor(Telemetry::FrameGraphRegistry& registry, Telemetry::CaptureSession& session, const AString<Telemetry::TelemetryArena>& label)noexcept
+        : m_registry(registry)
+        , m_session(session)
+        , m_label(label)
+    {}
+
+
+public:
+    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        if(!builder.addPass(Name("cache_lifetime"), AStringView(m_label)).valid())
+            return false;
+        if(throwNext){
+            throwNext = false;
+            throw ContributionFailure{};
+        }
+        reentryRejected = !m_registry.record(m_session);
+        return true;
+    }
+
+
+public:
+    bool throwNext = true;
+    bool reentryRejected = false;
+
+
+private:
+    Telemetry::FrameGraphRegistry& m_registry;
+    Telemetry::CaptureSession& m_session;
+    const AString<Telemetry::TelemetryArena>& m_label;
+};
+
+TEST(Telemetry, RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphCapacity){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    AString<Telemetry::TelemetryArena> label("first borrowed label", testArena.arena);
+    CacheLifetimeContributor contributor(registry, session, label);
+    registry.registerContributor(contributor);
+    EXPECT_THROW(EXPECT_TRUE(registry.record(session)), ContributionFailure);
+    EXPECT_EQ(session.eventCount(), 0u);
+
+    label.assign("replacement label after unwind");
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_TRUE(contributor.reentryRejected);
+    const auto* const event = session.view().eventAt(0u);
+    ASSERT_NE(event, nullptr);
+    const auto parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());
+    ASSERT_TRUE(parsed);
+    ASSERT_EQ(parsed->nodes.size(), 1u);
+    EXPECT_EQ(AStringView(parsed->nodes[0u].label), AStringView(label));
+    session.clear();
+
+    const auto warmed = testArena.arena.memoryStats();
+    for(usize iteration = 0u; iteration < 8u; ++iteration){
+        ASSERT_TRUE(registry.record(session));
+        session.clear();
+    }
+    const auto after = testArena.arena.memoryStats();
+    EXPECT_EQ(after.allocationCount, warmed.allocationCount);
+    EXPECT_EQ(after.reallocationCount, warmed.reallocationCount);
+    EXPECT_EQ(after.deallocationCount, warmed.deallocationCount);
+}
+
 TEST(Telemetry, PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
@@ -62,7 +133,7 @@ TEST(Telemetry, PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets){
     ASSERT_NE(event, nullptr);
 
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
-    EXPECT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size())));
+    EXPECT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size())));
     ASSERT_EQ(parsed->nodes.size(), 3u);
     ASSERT_EQ(parsed->edges.size(), 1u);
     EXPECT_EQ(parsed->edges[0u].fromNodeIndex, 0u);
@@ -75,7 +146,7 @@ TEST(Telemetry, PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCounts)
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
-    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingNameEdges, records, 915u);
+    Telemetry::FrameGraphBuilder builder(testArena.scratchArena, nodes, edges, pendingNameEdges, records, 915u);
 
     const Telemetry::FrameGraphNodeHandle owner = builder.addPass(Name("runtime_owner"), "Runtime owner", Telemetry::FrameGraphPassMetadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = MakeFrameGraphRuntimeStatistics(), });
     Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);

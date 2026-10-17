@@ -33,20 +33,26 @@ public:
     using ErrorList = MVector<ParseError>;
     using VariableMap = MStringMap<Value>;
 
+
+public:
     struct Declaration{
         MString type;
         MString variable;
 
-        explicit Declaration(MetaArena& arena)
+
+    public:
+        explicit Declaration(MetaArena& arena)noexcept
             : type(arena)
             , variable(arena)
         {}
-
         Declaration(MStringView inType, MStringView inVariable, MetaArena& arena)
             : type(inType.data(), inType.size(), arena)
             , variable(inVariable.data(), inVariable.size(), arena)
         {}
     };
+
+
+public:
     using DeclarationList = MVector<Declaration>;
 
 
@@ -56,13 +62,13 @@ public:
 
 public:
     [[nodiscard]] bool parse(MStringView source);
-    [[nodiscard]] bool parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable);
     [[nodiscard]] bool parse(IMetaReader& reader);
+    [[nodiscard]] bool parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable);
 
     [[nodiscard]] MStringView assetType()const noexcept{ return MStringView(m_assetType.data(), m_assetType.size()); }
     [[nodiscard]] MStringView assetVariable()const noexcept{ return MStringView(m_assetVariable.data(), m_assetVariable.size()); }
-    [[nodiscard]] const Value& asset()const;
-    [[nodiscard]] Value& asset();
+    [[nodiscard]] const Value& asset()const noexcept;
+    [[nodiscard]] Value& asset()noexcept;
 
     [[nodiscard]] const Value* findVariable(MStringView name)const noexcept;
     [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }

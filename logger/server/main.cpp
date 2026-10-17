@@ -71,9 +71,10 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
         }
         return __hidden_logger_server_main::s_LoggerServerExitSuccess;
     }, [&](const GeneralException& error){
-        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(logger.arena(), error.what())), NWB::Core::Common::LogType::Fatal);
+        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(error.what())), NWB::Core::Common::LogType::Fatal);
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
-    }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
+    }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; }
+    );
 }
 
 
@@ -81,10 +82,10 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
 
 
 static int EntryPoint(isize argc, tchar** argv, void* inst){
-    NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_logger_server_main::s_CommandLineArena);
-    u16 logPort = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
-    AString<NWB::Core::Alloc::GlobalArena> crashSymbolStoreDirectory(commandLineArena);
-    AString<NWB::Core::Alloc::GlobalArena> crashUploadToken(commandLineArena);
+    NWB::Core::Alloc::ScratchArena commandLineArena(__hidden_logger_server_main::s_CommandLineArena);
+    u16 logPort = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::s_ArgDefault);
+    AString<NWB::Core::Alloc::ScratchArena> crashSymbolStoreDirectory(commandLineArena);
+    AString<NWB::Core::Alloc::ScratchArena> crashUploadToken(commandLineArena);
     NWB::Log::CrashRetentionConfig crashRetentionConfig;
     CLI::App app{ __hidden_logger_server_main::s_AppName.data() };
 
@@ -99,7 +100,8 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         CommandLineParseApp(app, argc, argv);
 
         return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, AStringView(crashUploadToken.data(), crashUploadToken.size()), inst);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; }
+    );
 }
 
 

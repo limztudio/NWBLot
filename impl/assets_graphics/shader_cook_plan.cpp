@@ -15,6 +15,7 @@
 
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
+#include <impl/assets_shader/source_dependencies.h>
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
@@ -58,8 +59,11 @@ static bool AppendIncludeDirectory(const Path& includeDirectory, const ShaderCoo
         return false;
     }
 
-    ScratchString normalizedIncludeDirectory = PathToString(scratchArena, includeDirectory.lexicallyNormal());
+    const ::Path<ScratchArena> normalizedIncludeDirectoryPath = ::Path<ScratchArena>(scratchArena, includeDirectory).lexicallyNormal();
+    ScratchString normalizedIncludeDirectory = PathToString(scratchArena, normalizedIncludeDirectoryPath);
+#if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(normalizedIncludeDirectory);
+#endif
     if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
         return true;
 
@@ -70,7 +74,7 @@ static bool AppendIncludeDirectory(const Path& includeDirectory, const ShaderCoo
 static Expected<CookVector<Path>> BuildIncludeDirectories(
     const Path& repoRoot,
     const CookVector<Core::Assets::ResolvedAssetRoot>& assetRoots,
-    const Span<const Path> implicitIncludeRoots,
+    const Span<const NotNull<const Path*>> implicitIncludeRoots,
     const ShaderCook::ShaderEntry& entry,
     ShaderCook::CookArena& arena,
     ScratchArena& scratchArena
@@ -86,8 +90,8 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
     includeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
     seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
 
-    for(const Path& implicitIncludeRoot : implicitIncludeRoots){
-        if(!AppendIncludeDirectory(implicitIncludeRoot, entry, seenIncludeDirectories, includeDirectories, scratchArena))
+    for(const NotNull<const Path*> implicitIncludeRoot : implicitIncludeRoots){
+        if(!AppendIncludeDirectory(*implicitIncludeRoot, entry, seenIncludeDirectories, includeDirectories, scratchArena))
             return MakeUnexpected(Failure{});
     }
 
@@ -118,9 +122,7 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
 
 
 static bool ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entry, const AStringView defineName){
-    ShaderCook::CookArena& arena = entry.name.get_allocator().arena();
-    CookString defineNameKey(defineName, arena);
-    if(entry.defineValues.find(defineNameKey) == entry.defineValues.end())
+    if(entry.defineValues.find(defineName) == entry.defineValues.end())
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader '{}' uses reserved implicit define '{}' as a variant define"), StringConvert(entry.name), StringConvert(defineName));
@@ -168,11 +170,11 @@ static Expected<u64> CountShaderVariants(const ShaderCook::ShaderEntry& entry){
     return variantCount;
 }
 
-static Expected<Path> ResolveProjectEvaluatorModuleIncludePath(ShaderCook::CookArena& arena, const AStringView includeName, const ShaderCook::CookVector<Path>& includeDirectories){
+static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(const AStringView includeName, const ShaderCook::CookVector<Path>& includeDirectories, ScratchArena& scratchArena){
     if(includeName.empty())
         return MakeUnexpected(Failure{});
 
-    const Path includePath(arena, includeName);
+    const ::Path<ScratchArena> includePath(scratchArena, includeName);
     if(includePath.isAbsolute()){
         const auto includePathQueryResult = IsRegularFile(includePath);
         if(includePathQueryResult && *includePathQueryResult){
@@ -185,7 +187,7 @@ static Expected<Path> ResolveProjectEvaluatorModuleIncludePath(ShaderCook::CookA
     }
 
     for(const Path& includeDirectory : includeDirectories){
-        const Path candidate = (includeDirectory / includePath).lexicallyNormal();
+        const ::Path<ScratchArena> candidate = (::Path<ScratchArena>(scratchArena, includeDirectory) / includePath).lexicallyNormal();
         const auto candidateQueryResult = IsRegularFile(candidate);
         if(candidateQueryResult && *candidateQueryResult){
             return candidate;
@@ -200,30 +202,24 @@ static Expected<Path> ResolveProjectEvaluatorModuleIncludePath(ShaderCook::CookA
     return MakeUnexpected(Failure{});
 }
 
-static bool AppendUniqueDependency(ShaderCook::CookVector<Path>& inOutDependencies, const Path& dependency, DependencyPathScratchSet& seenDependencies, ScratchArena& scratchArena){
+static bool AppendUniqueDependency(ShaderCook::CookVector<Path>& inOutDependencies, const ::Path<ScratchArena>& dependency, DependencyPathScratchSet& seenDependencies, ScratchArena& scratchArena){
     auto absoluteDependencyResult = AbsolutePath(dependency);
     if(!absoluteDependencyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve CSG evaluator module dependency '{}': {}"), PathToString<tchar>(dependency), StringConvert(absoluteDependencyResult.error().message()));
         return false;
     }
-    Path absoluteDependency = absoluteDependencyResult->lexicallyNormal();
+    const ::Path<ScratchArena> absoluteDependency = absoluteDependencyResult->lexicallyNormal();
     ScratchString canonicalPath = PathToString(scratchArena, absoluteDependency);
+#if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(canonicalPath);
+#endif
     if(seenDependencies.insert(Move(canonicalPath)).second)
-        inOutDependencies.push_back(Move(absoluteDependency));
+        inOutDependencies.emplace_back(inOutDependencies.get_allocator().arena(), absoluteDependency);
     return true;
 }
 
-static bool AppendCsgProjectEvaluatorModuleDependencies(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
-    const ShaderCook::ShaderEntry& entry,
-    const ShaderCook::CookVector<Path>& includeDirectories,
-    ShaderCook::CookVector<Path>& inOutDependencies,
-    ScratchArena& scratchArena
-){
-    ShaderCook::CookString defineName(AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, cookArena);
-    const auto foundDefine = entry.defineValues.find(defineName);
+static bool AppendCsgProjectEvaluatorModuleDependencies(const ShaderCook::ShaderEntry& entry, const ShaderCook::CookVector<Path>& includeDirectories, ShaderCook::CookVector<Path>& inOutDependencies, ScratchArena& scratchArena){
+    const auto foundDefine = entry.defineValues.find(AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName);
     if(foundDefine == entry.defineValues.end())
         return true;
 
@@ -232,12 +228,18 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
     // Dependency collection already produces normalized absolute paths; retain its first-seen ordering.
     for(const Path& dependency : inOutDependencies){
         ScratchString canonicalPath = PathToString(scratchArena, dependency);
+#if defined(NWB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(canonicalPath);
-        if(!seenDependencies.insert(Move(canonicalPath)).second)
+#endif
+        if(seenDependencies.contains(canonicalPath))
             continue;
+        if(!seenDependencies.insert(Move(canonicalPath)).second){
+            NWB_ASSERT(false);
+            return false;
+        }
     }
 
-    ShaderCook::CookVector<Path> moduleDependencies(cookArena);
+    Vector<::Path<ScratchArena>, ScratchArena> moduleDependencies(scratchArena);
     for(const ShaderCook::CookString& defineValue : foundDefine.value().values){
         const AStringView includeName = UnquoteDoubleQuotedView(AStringView(defineValue));
         if(includeName.empty()){
@@ -245,14 +247,14 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
             return false;
         }
 
-        const auto modulePath = ResolveProjectEvaluatorModuleIncludePath(cookArena, includeName, includeDirectories);
+        const auto modulePath = ResolveProjectEvaluatorModuleIncludePath(includeName, includeDirectories, scratchArena);
         if(!modulePath)
             return false;
 
         moduleDependencies.clear();
-        if(!shaderCook.gatherShaderDependencies(*modulePath, includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, moduleDependencies, scratchArena))
+        if(!ShaderSourceDependencies::Gather(*modulePath, includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, moduleDependencies, scratchArena))
             return false;
-        for(const Path& dependency : moduleDependencies){
+        for(const ::Path<ScratchArena>& dependency : moduleDependencies){
             if(!AppendUniqueDependency(inOutDependencies, dependency, seenDependencies, scratchArena))
                 return false;
         }
@@ -302,9 +304,13 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys{ 0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena };
     AssetsGraphicsCsgShaderVariants::ShaderStageKeySet avboitClipShaderKeys{ 0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena };
     AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, materialClipShaderKeys);
-    AssetsGraphicsCsgShaderVariants::CollectAvboitClipShaderKeys(materialEntries, avboitClipShaderKeys);
+    const auto avboitKeys = AssetsGraphicsCsgShaderVariants::CollectAvboitClipShaderKeys(materialEntries, avboitClipShaderKeys);
+    if(!avboitKeys){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid generated AVBOIT shader identity (failure {})"), static_cast<u32>(avboitKeys.error()));
+        return MakeUnexpected(Failure{});
+    }
 
-    Vector<Path, ScratchArena> implicitIncludeRoots(scratchArena);
+    Vector<NotNull<const Path*>, ScratchArena> implicitIncludeRoots(scratchArena);
     usize implicitIncludeRootCount = 0u;
     if(!materialBindIncludeRoot.empty())
         ++implicitIncludeRootCount;
@@ -322,15 +328,15 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     }
     implicitIncludeRoots.reserve(implicitIncludeRootCount);
     if(!materialBindIncludeRoot.empty())
-        implicitIncludeRoots.push_back(materialBindIncludeRoot);
+        implicitIncludeRoots.push_back(MakeNotNull(&materialBindIncludeRoot));
     if(!deferredBxdfIncludeRoot.empty())
-        implicitIncludeRoots.push_back(deferredBxdfIncludeRoot);
+        implicitIncludeRoots.push_back(MakeNotNull(&deferredBxdfIncludeRoot));
     if(!shadowSurfaceIncludeRoot.empty())
-        implicitIncludeRoots.push_back(shadowSurfaceIncludeRoot);
+        implicitIncludeRoots.push_back(MakeNotNull(&shadowSurfaceIncludeRoot));
     if(!csgShapeIncludeRoot.empty()){
-        implicitIncludeRoots.push_back(csgShapeIncludeRoot);
+        implicitIncludeRoots.push_back(MakeNotNull(&csgShapeIncludeRoot));
         for(const Core::Assets::ResolvedAssetRoot& assetRoot : resolvedPaths.assetRoots)
-            implicitIncludeRoots.push_back(assetRoot.path);
+            implicitIncludeRoots.push_back(MakeNotNull(&assetRoot.path));
     }
 
     for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){
@@ -370,12 +376,12 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         if(!includeDirectories)
             return MakeUnexpected(Failure{});
         preparedEntry.includeDirectories = Move(*includeDirectories);
-        if(!shaderCook.gatherShaderDependencies(preparedEntry.sourcePath, preparedEntry.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, preparedEntry.dependencies, scratchArena))
+        if(!ShaderSourceDependencies::Gather(preparedEntry.sourcePath, preparedEntry.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, preparedEntry.dependencies, scratchArena))
             return MakeUnexpected(Failure{});
 
         shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata, scratchArena);
         const usize initialDependencyCount = preparedEntry.dependencies.size();
-        if(!__hidden_shader_cook_plan::AppendCsgProjectEvaluatorModuleDependencies(cookArena, shaderCook, preparedEntry.entry, preparedEntry.includeDirectories, preparedEntry.dependencies, scratchArena))
+        if(!__hidden_shader_cook_plan::AppendCsgProjectEvaluatorModuleDependencies(preparedEntry.entry, preparedEntry.includeDirectories, preparedEntry.dependencies, scratchArena))
             return MakeUnexpected(Failure{});
         if(preparedEntry.dependencies.size() != initialDependencyCount)
             shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata, scratchArena);
@@ -407,6 +413,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             return MakeUnexpected(Failure{});
         const auto dependency = shaderCook.computeDependencyChecksum(
             preparedEntry.dependencies,
+            preparedEntry.includeDirectories,
             {
                 { resolvedPaths.repoRoot, "repo" },
                 { resolvedPaths.cacheDirectory, "generated_cache" },
@@ -419,8 +426,18 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             return MakeUnexpected(Failure{});
         preparedEntry.dependencyChecksum = dependency->checksum;
         preparedEntry.compilerInputsHaveBom = dependency->compilerInputsHaveBom;
-        preparedEntry.supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialClipShaderKeys, preparedEntry.entry);
-        preparedEntry.supportsAvboitCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(avboitClipShaderKeys, preparedEntry.entry);
+        const auto supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialClipShaderKeys, preparedEntry.entry);
+        const auto supportsAvboitCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(avboitClipShaderKeys, preparedEntry.entry);
+        if(!supportsCsgClipVariant){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid CSG clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsCsgClipVariant.error()));
+            return MakeUnexpected(Failure{});
+        }
+        if(!supportsAvboitCsgClipVariant){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid AVBOIT clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsAvboitCsgClipVariant.error()));
+            return MakeUnexpected(Failure{});
+        }
+        preparedEntry.supportsCsgClipVariant = *supportsCsgClipVariant;
+        preparedEntry.supportsAvboitCsgClipVariant = *supportsAvboitCsgClipVariant;
         const auto variantCount = __hidden_shader_cook_plan::CountShaderVariants(preparedEntry.entry);
         if(!variantCount)
             return MakeUnexpected(Failure{});

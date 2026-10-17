@@ -64,7 +64,8 @@ bool GpuCompiledGraph::matchesRecordingAttempt(const GpuTaskGraph& graph, const 
         return false;
 
     NothrowScopedLock lock(m_attemptBindingMutex);
-    return (m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting)
+    return
+        (m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting)
         && m_attemptGraph == &graph
         && m_attemptPlanGeneration == expectedPlanGeneration
         && m_attemptRecordingGeneration == recordingAttemptGeneration
@@ -95,7 +96,8 @@ bool GpuCompiledGraph::bindSubmissionTransaction(const GpuTaskGraph& graph, cons
 
     NothrowScopedLock lock(m_attemptBindingMutex);
     if(m_attemptBindingState == AttemptBindingState::Submitting){
-        return m_attemptGraph == &graph
+        return
+            m_attemptGraph == &graph
             && m_attemptPlanGeneration == expectedPlanGeneration
             && m_attemptRecordingGeneration == recordingAttemptGeneration
             && m_attemptTransactionIdentity == submissionBinding.m_transactionIdentity
@@ -119,7 +121,8 @@ bool GpuCompiledGraph::matchesSubmissionTransaction(const GpuTaskGraph& graph, c
         return false;
 
     NothrowScopedLock lock(m_attemptBindingMutex);
-    return m_attemptGraph == &graph
+    return
+        m_attemptGraph == &graph
         && m_attemptPlanGeneration == expectedPlanGeneration
         && m_attemptBindingState != AttemptBindingState::None
         && m_attemptBindingState != AttemptBindingState::Recording
@@ -158,7 +161,8 @@ bool GpuCompiledGraph::matchesActiveAttemptIdentity(const GpuTaskGraph* const gr
         return false;
 
     NothrowScopedLock lock(m_attemptBindingMutex);
-    return planAccess.validFor(*this)
+    return
+        planAccess.validFor(*this)
         && m_objectIdentity == compiledObjectIdentity
         && (m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting)
         && m_attemptGraph == graphIdentity

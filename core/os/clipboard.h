@@ -7,6 +7,8 @@
 
 #include <core/alloc/general.h>
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,7 +32,7 @@ namespace ClipboardStatus{
 };
 
 namespace ClipboardAdmission{
-    enum Enum : u8{ Accepted, WrongThread, QueueFull };
+    enum Enum : u8{ WrongThread, QueueFull };
 };
 
 namespace ClipboardPollResult{
@@ -39,6 +41,10 @@ namespace ClipboardPollResult{
 
 inline constexpr usize s_ClipboardMaxOutstandingRequests = 32u;
 inline constexpr usize s_ClipboardMaxTextBytes = 16u * 1024u * 1024u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct ClipboardCapabilities{
     bool readText = false;
@@ -49,17 +55,14 @@ struct ClipboardRequestToken{
     u64 service = 0u;
     u64 generation = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return service != 0u && generation != 0u; }
 };
 
 [[nodiscard]] inline bool operator==(const ClipboardRequestToken& lhs, const ClipboardRequestToken& rhs)noexcept{
     return lhs.service == rhs.service && lhs.generation == rhs.generation;
 }
-
-struct ClipboardRequestResult{
-    ClipboardRequestToken token;
-    ClipboardAdmission::Enum admission = ClipboardAdmission::QueueFull;
-};
 
 struct ClipboardCompletion{
     AString<Alloc::GlobalArena> text;
@@ -68,7 +71,9 @@ struct ClipboardCompletion{
     ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
     ClipboardStatus::Enum status = ClipboardStatus::Unavailable;
 
-    explicit ClipboardCompletion(Alloc::GlobalArena& arena)
+
+public:
+    explicit ClipboardCompletion(Alloc::GlobalArena& arena)noexcept
         : text(arena)
     {}
 };
@@ -94,8 +99,8 @@ public:
 public:
     [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum channel)const noexcept = 0;
     [[nodiscard]] virtual bool isOwnerThread()const noexcept = 0;
-    [[nodiscard]] virtual ClipboardRequestResult requestReadText(ClipboardChannel::Enum channel) = 0;
-    [[nodiscard]] virtual ClipboardRequestResult requestWriteText(ClipboardChannel::Enum channel, AStringView text) = 0;
+    [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestReadText(ClipboardChannel::Enum channel) = 0;
+    [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWriteText(ClipboardChannel::Enum channel, AStringView text) = 0;
     [[nodiscard]] virtual ClipboardPollResult::Enum poll(ClipboardRequestToken token, ClipboardCompletion& completion) = 0;
     [[nodiscard]] virtual bool cancel(ClipboardRequestToken token) = 0;
     // Starts admitted operations in order and advances native transfers without waiting for another client.
@@ -107,7 +112,7 @@ public:
 // The native window is borrowed until service destruction.
 // Windows requires a live owner HWND for writes; nullptr selects an explicitly unsupported service.
 // Linux native factories live in the X11/Wayland OS domains.
-[[nodiscard]] GlobalUniquePtr<IClipboardService> CreateClipboardService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
+[[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateClipboardService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

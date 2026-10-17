@@ -52,6 +52,7 @@ inline Core::Alloc::GlobalArena& Arena(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 using AString = DefaultAString<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
 using AStringStream = DefaultAStringStream<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
 

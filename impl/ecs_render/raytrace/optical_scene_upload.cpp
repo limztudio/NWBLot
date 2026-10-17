@@ -31,7 +31,7 @@ RayTracingOpticalSceneUpload::RayTracingOpticalSceneUpload(Core::Alloc::GlobalAr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalUploadState::RayTracingOpticalUploadState(Core::BufferHandle buffer, const Core::GpuPhysicalQueueId primaryQueue)
+RayTracingOpticalUploadState::RayTracingOpticalUploadState(Core::BufferHandle buffer, const Core::GpuPhysicalQueueId primaryQueue)noexcept
     : m_buffer(Move(buffer))
     , m_primaryQueue(primaryQueue)
 {}
@@ -118,10 +118,13 @@ bool RayTracingOpticalUploadState::matchesBuffer(const RayTracingOpticalUploadPl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, const Core::GpuPhysicalQueueId primaryQueue){
+Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, const Core::GpuPhysicalQueueId primaryQueue){
     if(!buffer || !primaryQueue.valid() || primaryQueue.deviceGeneration != buffer->getDeviceGeneration())
-        return {};
-    return RayTracingOpticalUploadControlHandle(NewArenaObject<RayTracingOpticalUploadControl>(arena, buffer, primaryQueue), ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+        return MakeUnexpected(Failure{});
+    auto control = RayTracingOpticalUploadControlHandle(NewArenaObject<RayTracingOpticalUploadControl>(arena, buffer, primaryQueue), ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    if(!control)
+        return MakeUnexpected(Failure{});
+    return control;
 }
 
 

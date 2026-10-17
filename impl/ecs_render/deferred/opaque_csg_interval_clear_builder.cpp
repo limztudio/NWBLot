@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph)
+OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph)noexcept
     : m_graph(graph){
 }
 
@@ -48,28 +48,31 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph&
     const Core::Rect csgClearRect = inputs.csgFrameData->workRegion.resolveRect(inputs.targets->width, inputs.targets->height);
     const Core::GpuClearTextureTaskRecordHooks csgIntervalClearBeginHooks{ .context = &clearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
     const Core::GpuClearTextureTaskRecordHooks csgIntervalClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
-    Core::GpuTaskId clearTask = m_graph.addClearTextureRectUIntTask(
+    auto clearTaskResult = m_graph.addClearTextureRectUIntTask(
         makeCsgIntervalClearTaskDesc(Name("render.graphics_prefix.csg_interval_clear"), "CSG Interval Id Clear", inputs.dependencyTask),
         Core::GpuClearTextureRectUIntTaskDesc{ .destination = inputs.csgIntervalId, .subresources = inputs.csgPeelSubresources, .rect = csgClearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearBeginHooks, }
     );
-    if(!clearTask.valid()){
+    if(!clearTaskResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"));
         return MakeUnexpected(Failure{});
     }
+    Core::GpuTaskId clearTask = *clearTaskResult;
     result.clearFirstTask = clearTask;
     Core::GpuTaskSchedulingHint csgIntervalClearTailScheduling = csgIntervalClearScheduling;
     // The timing endpoint must remain in the first clear's Graphics packet even when another queue observes the interval id. The explicit immediate dependency satisfies FrontierSafe's consumer-frontier override.
     csgIntervalClearTailScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc csgIntervalClearTailDesc;
     csgIntervalClearTailDesc.setIdentity(Name("render.graphics_prefix.csg_receiver_event_count_clear")).setMarkerLabel("CSG Receiver Event Count Clear").setScheduling(csgIntervalClearTailScheduling).setDependencies(&clearTask, 1u);
-    clearTask = m_graph.addClearTextureRectUIntTask(
+    const auto clearTaskResult2 = m_graph.addClearTextureRectUIntTask(
         csgIntervalClearTailDesc,
         Core::GpuClearTextureRectUIntTaskDesc{ .destination = inputs.csgReceiverEventCount, .subresources = inputs.csgReceiverEventCountSubresources, .rect = csgClearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearEndHooks, }
     );
-    if(!clearTask.valid()){
+    if(!clearTaskResult2){
+        clearTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"));
         return MakeUnexpected(Failure{});
     }
+    clearTask = *clearTaskResult2;
     result.clearTask = clearTask;
     return result;
 }

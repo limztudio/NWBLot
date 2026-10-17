@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "compiler.h"
 #include "compiler_internal.h"
 
 #include <global/simplemath.h>
@@ -86,7 +87,8 @@ bool GpuTaskGraphCompiler::compile(
         const GpuTaskQueueAssignmentDiagnostic diagnostic = outAssignments.m_diagnostic;
         outAssignments.reset();
         outAssignments.m_diagnostic = diagnostic;
-    });
+    }
+    );
 
     GpuCompiledGraph::CompilationScope compilation(outCompiledGraph);
     if(!compilation.valid()){

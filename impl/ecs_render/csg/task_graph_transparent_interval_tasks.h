@@ -47,6 +47,8 @@ struct TransparentCsgIntervalRecordInputs{
     TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
     bool csgFrameBuffersUploaded = false;
 
+
+public:
     explicit TransparentCsgIntervalRecordInputs(
         Core::Alloc::GlobalArena& arena,
         RendererMaterialSystem& materialSystemIn,
@@ -54,19 +56,20 @@ struct TransparentCsgIntervalRecordInputs{
         DeferredFrameTargets& targetsIn,
         Core::GpuTimingSubmissionTicket& timingTicketIn,
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
-    );
+    )noexcept;
 };
 
 
 struct AvboitCsgReceiverSpanGraphTask{
     // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     using Payload = TransparentCsgIntervalRecordInputs;
 
 
 public:
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
@@ -78,13 +81,14 @@ public:
 // Interval combine maps visible span/peel inputs to removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
     // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     using Payload = TransparentCsgIntervalRecordInputs;
 
 
 public:
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){

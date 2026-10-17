@@ -46,6 +46,10 @@ bool AssetCodecAutoRegistrar::initialize(){
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCodecsScratch);
     Vector<AssetCodecFactory, Alloc::ScratchArena> codecFactories{scratchArena};

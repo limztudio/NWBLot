@@ -5,6 +5,8 @@
 #include <impl/ecs_ui/toolkit/text/atlas.h>
 #include <impl/ecs_ui/toolkit/text/service.h>
 
+#include <core/common/log.h>
+
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
@@ -26,6 +28,48 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr i32 s_FontConstructionLogFailure = 61;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ThrowingFontConstructionLogger final : public Core::Common::ILogger{
+public:
+    explicit ThrowingFontConstructionLogger(Core::Common::LogArena& arena)noexcept
+        : m_arena(arena)
+    {}
+
+
+public:
+    virtual Core::Common::LogArena& arena()noexcept override{ return m_arena; }
+    virtual void enqueue(Core::Common::LogString&& text, Core::Common::LogType::Enum)override{ observe(text); }
+    virtual void enqueue(const Core::Common::LogString& text, Core::Common::LogType::Enum)override{ observe(text); }
+    [[nodiscard]] bool sawFaceFailure()const noexcept{ return m_sawFaceFailure; }
+
+
+private:
+    void observe(const Core::Common::LogString& text){
+        if(text.find(NWB_TEXT("UI font face initialization failed")) == Core::Common::LogString::npos)
+            return;
+        m_sawFaceFailure = true;
+        throw s_FontConstructionLogFailure;
+    }
+
+
+private:
+    Core::Common::LogArena& m_arena;
+    bool m_sawFaceFailure = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class TextFontTests : public testing::Test{
 public:
     TextFontTests()
@@ -41,13 +85,14 @@ public:
 
 protected:
     virtual void SetUp()override{
+        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
         ASSERT_TRUE(Tests::LoadBundledFont(m_latin, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         ASSERT_TRUE(Tests::LoadBundledFont(m_korean, m_arena, NWB_TEST_FONT_DIRECTORY, "korean.font"));
         const FontSource sources[]{
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u },
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
         };
-        ASSERT_TRUE(m_service.setFonts(sources, 2u));
+        ASSERT_TRUE(m_service.setFonts(fontScratchArena, sources, 2u));
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
     }
@@ -70,6 +115,25 @@ protected:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(TextFontConstruction, ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemory){
+    Core::Alloc::GlobalArena sourceArena(Name("tests/ui/font_construction/source"));
+    const Core::Assets::AssetRef<Font> emptyFontRef("tests/ui/font_construction/empty");
+    Font emptyFont(sourceArena, emptyFontRef.name());
+    Core::Alloc::GlobalArena fontArena(Name("tests/ui/font_construction/native"));
+    Core::Alloc::ScratchArena scratchArena(Name("tests/ui/font_construction/scratch"));
+    Core::Common::LogArena logArena(Name("tests/ui/font_construction/logger"));
+    ThrowingFontConstructionLogger logger(logArena);
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    const FontSource source{ emptyFontRef, emptyFont, 1u };
+    const ArenaMemoryStats before = fontArena.memoryStats();
+    EXPECT_THROW({ const SharedFontFace failed = MakeFontFace(scratchArena, fontArena, source); EXPECT_FALSE(failed && failed->valid()); }, i32);
+    EXPECT_TRUE(logger.sawFaceFailure());
+    const ArenaMemoryStats after = fontArena.memoryStats();
+    EXPECT_GT(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+}
 
 TEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClusters){
     ShapeRequest request{ "\xed\x95\x9c\xea\xb8\x80" };
@@ -102,6 +166,7 @@ TEST_F(TextFontTests, RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart)
 }
 
 TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsable){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     {
         auto layoutResult = m_service.layout({ "AV" });
         ASSERT_TRUE(layoutResult);
@@ -111,7 +176,7 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
     const f32 width = m_layout.measure().x;
     const u64 oldServiceGeneration = m_service.generation();
     const FontSource replacement{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 2u };
-    ASSERT_TRUE(m_service.setFonts(&replacement, 1u));
+    ASSERT_TRUE(m_service.setFonts(fontScratchArena, &replacement, 1u));
     EXPECT_EQ(m_service.generation(), oldServiceGeneration + 1u);
     Core::Assets::AssetBytes cleared(m_arena);
     m_latin.setFontBytes(Move(cleared));
@@ -122,7 +187,7 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
     EXPECT_EQ(snapshot.glyphPages()[0]->binding().fontGeneration, 1u);
     EXPECT_EQ(oldFace->generation(), 1u);
     EXPECT_FLOAT_EQ(m_layout.measure().x, width);
-    EXPECT_FALSE(m_service.setFonts(nullptr, 0u));
+    EXPECT_FALSE(m_service.setFonts(fontScratchArena, nullptr, 0u));
     EXPECT_EQ(m_service.generation(), oldServiceGeneration + 1u);
 }
 
@@ -195,6 +260,7 @@ TEST_F(TextFontTests, OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads){
 }
 
 TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossReset){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     {
         auto layoutResult = m_service.layout({ "A" });
         ASSERT_TRUE(layoutResult);
@@ -204,7 +270,7 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
     const SharedFontFace face = m_layout.glyphs()[0].face;
     const u32 glyphId = m_layout.glyphs()[0].glyphId;
     const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u };
-    const SharedFontFace otherFace = MakeFontFace(m_arena, source);
+    const SharedFontFace otherFace = MakeFontFace(fontScratchArena, m_arena, source);
     ASSERT_TRUE(otherFace && otherFace->valid());
     ASSERT_NE(face.get(), otherFace.get());
     GlyphAtlas atlas(m_arena);
@@ -237,7 +303,9 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
     ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
     EXPECT_EQ(atlas.glyphCount(), 4u);
 
-    const SharedGlyphPage oldPage = atlas.page(0u);
+    auto oldPageCreationResult = atlas.page(0u);
+    ASSERT_TRUE(oldPageCreationResult);
+    const SharedGlyphPage oldPage = Move(*oldPageCreationResult);
     ASSERT_TRUE(oldPage);
     atlas.reset();
     EXPECT_EQ(atlas.glyphCount(), 0u);
@@ -245,7 +313,9 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
     EXPECT_EQ(atlas.find(face, glyphId, 24u), nullptr);
     EXPECT_EQ(atlas.find(face, spaceId, 24u), nullptr);
     ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
-    const SharedGlyphPage newPage = atlas.page(0u);
+    auto newPageCreationResult = atlas.page(0u);
+    ASSERT_TRUE(newPageCreationResult);
+    const SharedGlyphPage newPage = Move(*newPageCreationResult);
     ASSERT_TRUE(newPage);
     EXPECT_NE(newPage->binding().atlasIdentity, oldPage->binding().atlasIdentity);
 }
@@ -265,7 +335,10 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
         ASSERT_NE(record, nullptr);
         EXPECT_LT(record->pixels.x + record->pixels.width, static_cast<f32>(s_GlyphAtlasPageExtent));
         EXPECT_LT(record->pixels.y + record->pixels.height, static_cast<f32>(s_GlyphAtlasPageExtent));
-        ASSERT_TRUE(atlas.page(index));
+        auto pageResult = atlas.page(index);
+        ASSERT_TRUE(pageResult);
+        const SharedGlyphPage page = Move(*pageResult);
+        ASSERT_TRUE(page);
     }
     EXPECT_FALSE(atlas.prepare(glyph.face, glyph.glyphId, 476u));
     EXPECT_EQ(atlas.find(glyph.face, glyph.glyphId, 476u), nullptr);
@@ -275,6 +348,7 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
 }
 
 TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
+    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     ShapeRequest request{ "\xed\x95\x9c" };
     request.scriptTag = 0x48616e67u;
     request.language = "ko";
@@ -291,7 +365,7 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
     EXPECT_GT(glyph.coverage.ink.height, 0.0f);
     const Rect saved = glyph.coverage.ink;
     const FontSource replacement{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 2u };
-    ASSERT_TRUE(m_service.setFonts(&replacement, 1u));
+    ASSERT_TRUE(m_service.setFonts(fontScratchArena, &replacement, 1u));
     EXPECT_TRUE(glyph.coverage.known);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.x, saved.x);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.width, saved.width);

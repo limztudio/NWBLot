@@ -49,7 +49,9 @@ struct AvboitExtinctionRecordInputs : public AvboitRecordInputsBase{
     Core::GpuTimingSubmissionTicket* extinctionTimingTicket = nullptr;
     Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
 
-    explicit AvboitExtinctionRecordInputs(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit AvboitExtinctionRecordInputs(Core::Alloc::GlobalArena& arena)noexcept
         : AvboitRecordInputsBase(arena){
     }
 };
@@ -66,11 +68,12 @@ struct AvboitExtinctionRecordResult{
 
 class AvboitExtinctionRecordBuilder final : NoCopy{
 public:
-    AvboitExtinctionRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem);
+    AvboitExtinctionRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept;
 
 
 public:
     [[nodiscard]] Expected<AvboitExtinctionRecordResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         ObjectGeometryCacheGraph& objectGeometry,

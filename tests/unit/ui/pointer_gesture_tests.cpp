@@ -21,7 +21,7 @@ namespace __hidden_ui_pointer_gesture_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-HitTarget GestureTarget(const u64 value = 1u){
+HitTarget GestureTarget(const u64 value = 1u)noexcept{
     HitTarget target;
     target.id = { value };
     target.rectangle = { 10.0f, 20.0f, 80.0f, 30.0f };
@@ -64,17 +64,19 @@ protected:
         EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, position)).pointerConsumed);
     }
 
-    WidgetState prepare(const u64 generation, const WidgetRoot& root = { 91u, 1u }){
+    [[nodiscard]] Expected<WidgetState> prepare(const u64 generation, const WidgetRoot& root = { 91u, 1u }){
         EXPECT_TRUE(m_context.beginFrame(generation));
         EXPECT_TRUE(m_context.beginRoot(root));
-        const WidgetState* state = m_context.declare("title", WidgetKind::Panel);
-        EXPECT_NE(state, nullptr);
-        if(state == nullptr)
-            return {};
-        const WidgetState snapshot = *state;
+        const auto state = m_context.declare("title", WidgetKind::Panel);
+        EXPECT_TRUE(state);
+        if(!state)
+            return MakeUnexpected(state.error());
+        const WidgetState snapshot = **state;
         EXPECT_TRUE(m_context.addTarget(snapshot, GestureTarget()));
         EXPECT_TRUE(m_context.endRoot());
         EXPECT_TRUE(m_context.finishFrame());
+        if(m_context.failed())
+            return MakeUnexpected(Failure{});
         return snapshot;
     }
 
@@ -579,7 +581,9 @@ TEST_F(UiPointerGestureTests, InvalidLayoutPublicationPreservesTheActiveGesture)
 }
 
 TEST_F(UiPointerGestureTests, ContextRejectsStaleForeignAndWrongKindDeclarationsWithoutConsuming){
-    const WidgetState original = prepare(1u);
+    const auto originalResult = prepare(1u);
+    ASSERT_TRUE(originalResult);
+    const WidgetState original = *originalResult;
     ASSERT_TRUE(m_context.commitFrame(1u));
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 100.0f })).pointerConsumed);
@@ -587,43 +591,45 @@ TEST_F(UiPointerGestureTests, ContextRejectsStaleForeignAndWrongKindDeclarations
     EXPECT_FALSE(m_context.takePointerGesture(original, true));
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const WidgetState* current = m_context.declare("title", WidgetKind::Panel);
-    ASSERT_NE(current, nullptr);
+    const auto current = m_context.declare("title", WidgetKind::Panel);
+    ASSERT_TRUE(current);
     EXPECT_FALSE(m_context.takePointerGesture(original, true));
-    WidgetState invalid = *current;
+    WidgetState invalid = **current;
     ++invalid.root.generation;
     EXPECT_FALSE(m_context.takePointerGesture(invalid, true));
-    invalid = *current;
+    invalid = **current;
     ++invalid.declarationGeneration;
     EXPECT_FALSE(m_context.takePointerGesture(invalid, true));
-    invalid = *current;
+    invalid = **current;
     invalid.kind = WidgetKind::Button;
     EXPECT_FALSE(m_context.takePointerGesture(invalid, true));
-    const auto gestureResult = m_context.takePointerGesture(*current, true);
+    const auto gestureResult = m_context.takePointerGesture(**current, true);
     ASSERT_TRUE(gestureResult);
     gesture = *gestureResult;
-    EXPECT_EQ(gesture.id.target, current->id);
-    EXPECT_EQ(gesture.id.declarationGeneration, current->declarationGeneration);
+    EXPECT_EQ(gesture.id.target, (*current)->id);
+    EXPECT_EQ(gesture.id.declarationGeneration, (*current)->declarationGeneration);
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
-    EXPECT_FALSE(m_context.takePointerGesture(*current, true));
+    EXPECT_FALSE(m_context.takePointerGesture(**current, true));
 }
 
 TEST_F(UiPointerGestureTests, ContextRetainsTheFinalGestureWhileItsGpuCandidateIsPending){
-    const WidgetState original = prepare(1u);
+    const auto originalResult = prepare(1u);
+    ASSERT_TRUE(originalResult);
+    const WidgetState original = *originalResult;
     ASSERT_TRUE(m_context.commitFrame(1u));
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const WidgetState* state = m_context.declare("title", WidgetKind::Panel);
-    ASSERT_NE(state, nullptr);
+    auto state = m_context.declare("title", WidgetKind::Panel);
+    ASSERT_TRUE(state);
     PointerGesture gesture;
-    const auto gestureResult1 = m_context.takePointerGesture(*state, true);
+    const auto gestureResult1 = m_context.takePointerGesture(**state, true);
     ASSERT_TRUE(gestureResult1);
     gesture = *gestureResult1;
     const u64 sequence = gesture.id.sequence;
     HitTarget candidate = GestureTarget();
     candidate.rectangle.x = 100.0f;
-    ASSERT_TRUE(m_context.addTarget(*state, candidate));
+    ASSERT_TRUE(m_context.addTarget(**state, candidate));
     ASSERT_TRUE(m_context.endRoot());
     ASSERT_TRUE(m_context.finishFrame());
     EXPECT_FALSE(m_context.beginFrame(3u));
@@ -633,8 +639,8 @@ TEST_F(UiPointerGestureTests, ContextRetainsTheFinalGestureWhileItsGpuCandidateI
     ASSERT_TRUE(m_context.beginFrame(3u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
     state = m_context.declare("title", WidgetKind::Panel);
-    ASSERT_NE(state, nullptr);
-    const auto gestureResult2 = m_context.takePointerGesture(*state, true);
+    ASSERT_TRUE(state);
+    const auto gestureResult2 = m_context.takePointerGesture(**state, true);
     ASSERT_TRUE(gestureResult2);
     gesture = *gestureResult2;
     EXPECT_EQ(gesture.id.sequence, sequence);
@@ -642,40 +648,46 @@ TEST_F(UiPointerGestureTests, ContextRetainsTheFinalGestureWhileItsGpuCandidateI
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.targetRectangle.x, 10.0f);
     EXPECT_FLOAT_EQ(gesture.position.x, 150.0f);
-    EXPECT_FALSE(m_context.takePointerGesture(*state, true));
+    EXPECT_FALSE(m_context.takePointerGesture(**state, true));
 }
 
 TEST_F(UiPointerGestureTests, ContextDisablingTheCurrentDeclarationCancelsItsHeldGesture){
-    const WidgetState original = prepare(1u);
+    const auto originalResult = prepare(1u);
+    ASSERT_TRUE(originalResult);
+    const WidgetState original = *originalResult;
     ASSERT_TRUE(m_context.commitFrame(1u));
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const WidgetState* state = m_context.declare("title", WidgetKind::Panel);
-    ASSERT_NE(state, nullptr);
-    EXPECT_FALSE(m_context.takePointerGesture(*state, false));
+    const auto state = m_context.declare("title", WidgetKind::Panel);
+    ASSERT_TRUE(state);
+    EXPECT_FALSE(m_context.takePointerGesture(**state, false));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_TRUE(m_context.input().primaryDown());
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
-    EXPECT_FALSE(m_context.takePointerGesture(*state, true));
+    EXPECT_FALSE(m_context.takePointerGesture(**state, true));
 }
 
 TEST_F(UiPointerGestureTests, ContextRootRetirementCancelsPendingGestureAndReplacementCannotReplayIt){
-    const WidgetState original = prepare(1u);
+    const auto originalResult = prepare(1u);
+    ASSERT_TRUE(originalResult);
+    const WidgetState original = *originalResult;
     ASSERT_TRUE(m_context.commitFrame(1u));
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 100.0f })).pointerConsumed);
     m_context.retainRoots(nullptr, 0u);
     EXPECT_TRUE(m_context.states().entries().empty());
-    const WidgetState replacement = prepare(2u);
+    const auto replacementResult = prepare(2u);
+    ASSERT_TRUE(replacementResult);
+    const WidgetState replacement = *replacementResult;
     EXPECT_EQ(replacement.id, original.id);
     EXPECT_GT(replacement.declarationGeneration, original.declarationGeneration);
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_TRUE(m_context.beginFrame(3u));
     ASSERT_TRUE(m_context.beginRoot(replacement.root));
-    const WidgetState* current = m_context.declare("title", WidgetKind::Panel);
-    ASSERT_NE(current, nullptr);
-    EXPECT_FALSE(m_context.takePointerGesture(*current, true));
+    const auto current = m_context.declare("title", WidgetKind::Panel);
+    ASSERT_TRUE(current);
+    EXPECT_FALSE(m_context.takePointerGesture(**current, true));
 }
 
 

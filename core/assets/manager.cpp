@@ -26,7 +26,7 @@ AssetManager::AssetManager(AssetArena& arena, const AssetRegistry& registry, con
 {}
 
 
-void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor){
+void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor)noexcept{
     ScopedLock lock(m_mutex);
     m_asyncExecutor = asyncExecutor;
 }
@@ -59,16 +59,16 @@ Expected<UniquePtr<IAsset>> AssetManager::loadSync(const Name& assetType, const 
 }
 
 
-u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
+Expected<u64> AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
     if(!assetType || !virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: rejected async load request with empty asset type or virtual path"));
-        return 0;
+        return MakeUnexpected(Failure{});
     }
 
-    const u64 requestId = allocateRequestId();
-    if(requestId == 0){
+    const auto requestId = allocateRequestId();
+    if(!requestId){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: async load request ids are exhausted"));
-        return 0;
+        return MakeUnexpected(requestId.error());
     }
 
     IAssetAsyncExecutor* asyncExecutor = nullptr;
@@ -76,22 +76,22 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
         ScopedLock lock(m_mutex);
 
         RequestRecord request;
-        request.result.requestId = requestId;
+        request.result.requestId = *requestId;
         request.result.state = AssetLoadState::Pending;
         request.assetType = assetType;
         request.virtualPath = virtualPath;
-        if(!m_requests.emplace(requestId, Move(request)).second){
+        if(!m_requests.emplace(*requestId, Move(request)).second){
             NWB_ASSERT(false);
-            return 0u;
+            return MakeUnexpected(Failure{});
         }
 
         asyncExecutor = m_asyncExecutor;
     }
 
     if(asyncExecutor != nullptr)
-        dispatchAsync(requestId, *asyncExecutor);
+        dispatchAsync(*requestId, *asyncExecutor);
 
-    return requestId;
+    return *requestId;
 }
 
 
@@ -112,7 +112,7 @@ void AssetManager::processPending(){
 }
 
 
-Expected<AssetLoadResult> AssetManager::tryPopResult(const u64 requestId){
+Expected<AssetLoadResult> AssetManager::tryPopResult(const u64 requestId)noexcept{
 
     ScopedLock lock(m_mutex);
 
@@ -131,13 +131,13 @@ Expected<AssetLoadResult> AssetManager::tryPopResult(const u64 requestId){
 }
 
 
-void AssetManager::clear(){
+void AssetManager::clear()noexcept{
     ScopedLock lock(m_mutex);
     m_requests.clear();
 }
 
 
-u64 AssetManager::pendingRequestCount()const{
+u64 AssetManager::pendingRequestCount()const noexcept{
     ScopedLock lock(m_mutex);
 
     u64 pendingCount = 0;
@@ -150,7 +150,7 @@ u64 AssetManager::pendingRequestCount()const{
 }
 
 
-u64 AssetManager::completedRequestCount()const{
+u64 AssetManager::completedRequestCount()const noexcept{
     ScopedLock lock(m_mutex);
 
     u64 completedCount = 0;
@@ -166,11 +166,11 @@ u64 AssetManager::completedRequestCount()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 AssetManager::allocateRequestId(){
+Expected<u64> AssetManager::allocateRequestId()noexcept{
     u64 requestId = m_nextRequestId.load(MemoryOrder::relaxed);
     for(;;){
         if(requestId == 0)
-            return 0;
+            return MakeUnexpected(Failure{});
 
         const u64 nextRequestId = requestId + 1;
         if(m_nextRequestId.compare_exchange_weak(requestId, nextRequestId, MemoryOrder::relaxed, MemoryOrder::relaxed))
@@ -182,7 +182,8 @@ u64 AssetManager::allocateRequestId(){
 void AssetManager::dispatchAsync(const u64 requestId, IAssetAsyncExecutor& asyncExecutor){
     asyncExecutor.enqueue([this, requestId](){
         processRequest(requestId);
-    });
+    }
+    );
 }
 
 

@@ -3,6 +3,7 @@
 
 
 #include "text_area_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,21 +54,21 @@ public:
 
 class UiTextAreaScrollLifetimeTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static TextAreaOptions SmallOptions(){
+    [[nodiscard]] static TextAreaOptions SmallOptions()noexcept{
         TextAreaOptions options;
         options.width = { LayoutSizePolicy::Fixed, 180.0f };
         options.height = { LayoutSizePolicy::Fixed, 100.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions ParentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions()noexcept{
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions ChildOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
         PopupOptions options;
         options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
@@ -97,9 +98,9 @@ protected:
         return seedModel() && frameArea(generation, options, bounds) && m_state.scrollbars().horizontal.visible && m_state.scrollbars().vertical.visible;
     }
 
-    [[nodiscard]] WidgetId popupArea()const noexcept{
-        const WidgetId parent = MakeWidgetId(MakeRootId(m_root), "parent");
-        return MakeWidgetId(MakeWidgetId(parent, "child"), "area");
+    [[nodiscard]] WidgetId popupArea()const{
+        const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent"));
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "child")), "area"));
     }
 
     [[nodiscard]] bool popupFrame(const u64 generation){
@@ -118,13 +119,14 @@ protected:
     }
 
     [[nodiscard]] bool startThumb(const WidgetId area){
-        const WidgetId thumbId = MakeWidgetId(area, "scroll.y.thumb");
+        const WidgetId thumbId = UiTestSupport::RequireWidgetId(MakeWidgetId(area, "scroll.y.thumb"));
         const HitTarget* thumb = target(thumbId);
         if(thumb == nullptr)
             return false;
         const Point origin = UiWidgetTests::Center(thumb->rectangle);
         const Point destination{ origin.x, origin.y + 24.0f };
-        return send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed
+        return
+            send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed
             && m_context.input().capture() == thumbId
         ;
     }
@@ -159,7 +161,7 @@ protected:
 TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcceptedTrackPage){
     ASSERT_TRUE(prepareOverflow());
     const AreaModelSnapshot model(m_arena, m_model);
-    const WidgetId afterId = MakeWidgetId(id("area", "panel"), "scroll.y.after");
+    const WidgetId afterId = UiTestSupport::RequireWidgetId(MakeWidgetId(id("area", "panel"), "scroll.y.after"));
     const HitTarget* after = target(afterId);
     ASSERT_NE(after, nullptr);
     click(UiWidgetTests::Center(after->rectangle));

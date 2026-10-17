@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
+#include "shadow_prepare_packet_validator.h"
+
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
@@ -15,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShadowPreparePacketValidator::ShadowPreparePacketValidator(NotNull<RendererFramePipeline*> pipeline)
+ShadowPreparePacketValidator::ShadowPreparePacketValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
     : m_pipeline(pipeline){
 }
 

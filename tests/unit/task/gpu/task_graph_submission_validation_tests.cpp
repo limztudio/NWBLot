@@ -64,7 +64,8 @@ TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWit
             .physicalQueueIndex = static_cast<u16>(index < 4u ? queue.index : 300u + index % 12u),
             .deviceGeneration = static_cast<u16>(queue.deviceGeneration + (index % 5u == 0u ? 1u : 0u)),
             .queue = Graphics::CommandQueue::Compute,
-        });
+        }
+        );
     }
     const auto original = tokens;
     ExpectWaitStatistics(queue, nullptr, 0u);

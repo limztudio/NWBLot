@@ -25,7 +25,9 @@ struct MeshSkinningGraphResourceUses{
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> localBounds;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> finalizer;
 
-    explicit MeshSkinningGraphResourceUses(Core::Alloc::ScratchArena& scratchArena)
+
+public:
+    explicit MeshSkinningGraphResourceUses(Core::Alloc::ScratchArena& scratchArena)noexcept
         : deformation(scratchArena)
         , postDispatch(scratchArena)
         , localBounds(scratchArena)

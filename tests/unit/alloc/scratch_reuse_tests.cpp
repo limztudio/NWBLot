@@ -455,7 +455,8 @@ TEST(ScratchArenaReuse, NestedContainerDestructionAndCallerUnwindPreserveEarlier
         Vector<u64, ScratchArena> inner(arena);
         inner.resize(4096u, 47u);
         throw RuntimeException("scratch nested scope unwind");
-    })(), RuntimeException);
+    })(), RuntimeException
+    );
     EXPECT_EQ(arena.memoryStats().usedBytes, retained.usedBytes);
     for(const u64 value : caller)
         EXPECT_EQ(value, 0x12345678u);

@@ -61,7 +61,6 @@ struct DeferredCompositeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The deferred system, the frame targets, and the timing ticket are required: the pass always records against this frame's targets.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         DeferredFrameTargets& targets;
@@ -69,6 +68,8 @@ struct DeferredCompositeGraphTask{
         ReflectionCompositeInputs reflectionInputs;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
@@ -101,8 +102,12 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::CompositePushConstants)));
 
-        m_deferredState.m_compositeComputeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_deferredState.m_compositeComputeBindingLayout){
+        auto compositeComputeBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(compositeComputeBindingLayoutResult)
+            m_deferredState.m_compositeComputeBindingLayout = Move(*compositeComputeBindingLayoutResult);
+        else
+            m_deferredState.m_compositeComputeBindingLayout.reset();
+        if(!compositeComputeBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
             return false;
         }
@@ -113,8 +118,12 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PresentPushConstants)));
 
-        m_deferredState.m_presentBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_deferredState.m_presentBindingLayout){
+        auto presentBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(presentBindingLayoutResult)
+            m_deferredState.m_presentBindingLayout = Move(*presentBindingLayoutResult);
+        else
+            m_deferredState.m_presentBindingLayout.reset();
+        if(!presentBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
             return false;
         }
@@ -149,8 +158,12 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(){
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_deferredState.m_compositeComputeShader).addBindingLayout(m_deferredState.m_compositeComputeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
-    m_deferredState.m_compositeComputePipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_deferredState.m_compositeComputePipeline){
+    auto compositeComputePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(compositeComputePipelineResult)
+        m_deferredState.m_compositeComputePipeline = Move(*compositeComputePipelineResult);
+    else
+        m_deferredState.m_compositeComputePipeline.reset();
+    if(!compositeComputePipelineResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute pipeline"));
         return false;
     }
@@ -181,8 +194,12 @@ bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer* pr
         .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    m_deferredState.m_presentPipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
-    if(!m_deferredState.m_presentPipeline){
+    auto presentPipelineResult = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    if(presentPipelineResult)
+        m_deferredState.m_presentPipeline = Move(*presentPipelineResult);
+    else
+        m_deferredState.m_presentPipeline.reset();
+    if(!presentPipelineResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation pipeline"));
         return false;
     }
@@ -190,7 +207,13 @@ bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer* pr
     return true;
 }
 
-Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, const ReflectionCompositeInputs& reflectionInputs){
+Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const ReflectionCompositeInputs& reflectionInputs
+){
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
         desc,
         __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .reflectionInputs = reflectionInputs, }

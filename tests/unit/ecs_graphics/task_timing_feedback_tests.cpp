@@ -85,7 +85,9 @@ TEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssig
     const Name scopeName("tests.renderer_timing.sample_first");
     const Core::GpuPhysicalQueueId queue{ .index = s_ExpectedDualCount, .deviceGeneration = 7u };
     const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.sample_first.task"), .variant = 3u, .resolutionClass = 4u, .queue = Core::CommandQueue::Compute, };
-    const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 42u, false));
     state.completeSample(PublishedSample(attribution, scopeName, queue, 42u, 0.004), true);
 
@@ -140,8 +142,12 @@ TEST(RendererTaskTimingFeedbackState, RejectedAndDiscardedCallbacksDoNotAllocate
     const Name scopeName("tests.renderer_timing.callback_allocation");
     const Core::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = s_ExpectedDualCount };
     const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.callback_allocation.task"), .queue = Core::CommandQueue::Compute, };
-    const Core::GpuTimingSampleAttribution rejectedAttribution = timingRecorder.allocateSampleAttribution();
-    const Core::GpuTimingSampleAttribution discardedAttribution = timingRecorder.allocateSampleAttribution();
+    const auto rejectedAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(rejectedAttributionResult);
+    const Core::GpuTimingSampleAttribution rejectedAttribution = *rejectedAttributionResult;
+    const auto discardedAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(discardedAttributionResult);
+    const Core::GpuTimingSampleAttribution discardedAttribution = *discardedAttributionResult;
     ASSERT_TRUE(state.trackSample(rejectedAttribution, scopeName, key, queue, 1u, false));
     ASSERT_TRUE(state.trackSample(discardedAttribution, scopeName, key, queue, s_ExpectedDualCount, false));
 
@@ -166,7 +172,9 @@ TEST(RendererTaskTimingFeedbackState, AcceptancePublishesAssignmentBeforeLateDur
     const Name scopeName("tests.renderer_timing.accept_first");
     const Core::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 5u };
     const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.accept_first.task"), .variant = 1u, .resolutionClass = s_ExpectedDualCount, .queue = Core::CommandQueue::Compute, };
-    const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 18u, false));
 
     const ArenaMemoryStats beforeAcceptance = testArena.arena.memoryStats();
@@ -214,8 +222,12 @@ TEST(RendererTaskTimingFeedbackState, UnpublishedSamplesRetireInEitherRaceOrderW
     const Name secondScope("tests.renderer_timing.unpublished_second");
     const Core::GpuTaskTimingKey firstKey{ .task = Name("tests.renderer_timing.unpublished_first.task"), .queue = Core::CommandQueue::Compute, };
     const Core::GpuTaskTimingKey secondKey{ .task = Name("tests.renderer_timing.unpublished_second.task"), .queue = Core::CommandQueue::Compute, };
-    const Core::GpuTimingSampleAttribution firstAttribution = timingRecorder.allocateSampleAttribution();
-    const Core::GpuTimingSampleAttribution secondAttribution = timingRecorder.allocateSampleAttribution();
+    const auto firstAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(firstAttributionResult);
+    const Core::GpuTimingSampleAttribution firstAttribution = *firstAttributionResult;
+    const auto secondAttributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(secondAttributionResult);
+    const Core::GpuTimingSampleAttribution secondAttribution = *secondAttributionResult;
     ASSERT_TRUE(state.trackSample(firstAttribution, firstScope, firstKey, queue, 10u, false));
     ASSERT_TRUE(state.trackSample(secondAttribution, secondScope, secondKey, queue, 11u, false));
 
@@ -246,7 +258,9 @@ TEST(RendererTaskTimingFeedbackState, InvalidPublishedMetadataIsTerminalButKeeps
     const Name scopeName("tests.renderer_timing.invalid_metadata");
     const Core::GpuPhysicalQueueId queue{ .index = 3u, .deviceGeneration = 9u };
     const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.invalid_metadata.task"), .queue = Core::CommandQueue::Graphics, };
-    const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 70u, false));
     state.completeSample(PublishedSample(attribution, Name("tests.renderer_timing.wrong_scope"), queue, 70u, 0.002), true);
     state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
@@ -276,7 +290,9 @@ TEST(RendererTaskTimingFeedbackState, NonFiniteDurationIsTerminalButKeepsAccepte
     const Name scopeName("tests.renderer_timing.non_finite_duration");
     const Core::GpuPhysicalQueueId queue{ .index = s_ExpectedDualCount, .deviceGeneration = 10u };
     const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.non_finite_duration.task"), .queue = Core::CommandQueue::Compute, };
-    const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 80u, false));
     state.completeSample(PublishedSample(attribution, scopeName, queue, 80u, Limit<f64>::s_QuietNaN), true);
     state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
@@ -302,7 +318,9 @@ TEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsAcceptedEntryAw
     const Name scopeName("tests.renderer_timing.device_change");
     const Core::GpuPhysicalQueueId oldQueue{ .index = 0u, .deviceGeneration = 6u };
     const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.device_change.task"), .queue = Core::CommandQueue::Compute, };
-    const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, oldQueue, 31u, false));
     state.acceptSubmission(attribution, AcceptedToken(key, oldQueue), true);
 
@@ -338,7 +356,9 @@ TEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsEntryBeforeSubm
     const Name scopeName("tests.renderer_timing.unresolved_device_change");
     const Core::GpuPhysicalQueueId oldQueue{ .index = 0u, .deviceGeneration = 12u };
     const Core::GpuTaskTimingKey key{ .task = Name("tests.renderer_timing.unresolved_device_change.task"), .queue = Core::CommandQueue::Compute, };
-    const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
+    const auto attributionResult = timingRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(attributionResult);
+    const Core::GpuTimingSampleAttribution attribution = *attributionResult;
     ASSERT_TRUE(state.trackSample(attribution, scopeName, key, oldQueue, 40u, false));
 
     const u16 newDeviceGeneration = 13u;

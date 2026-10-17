@@ -140,7 +140,7 @@ Array<u64, 15u> UiPopupToolsSmokeScene::values()const{
         static_cast<u64>(m_sentinel.text().size()), m_menu.listState().selectedKey() };
 }
 
-Impl::Ui::Rect UiPopupToolsSmokeScene::rowBounds(const u64 key)const{
+Impl::Ui::Rect UiPopupToolsSmokeScene::rowBounds(const u64 key)const noexcept{
     const auto& placement = m_menu.listState().placement();
     if(!m_menu.isOpen())
         return {};

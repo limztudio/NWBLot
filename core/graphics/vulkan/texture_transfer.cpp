@@ -26,15 +26,9 @@ namespace __hidden_texture_transfer{
 [[nodiscard]] inline bool TextureTransferImagesWithinFormatLimits(const VulkanContext& context, const VkImageCreateInfo& source, const VkImageCreateInfo& destination){
     VkImageFormatProperties sourceProperties{};
     const VkResult sourceResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, source.format, source.imageType, source.tiling, source.usage, source.flags, &sourceProperties);
-    if(sourceResult != VK_SUCCESS)
-        return false;
-
     VkImageFormatProperties destinationProperties{};
     const VkResult destinationResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, destination.format, destination.imageType, destination.tiling, destination.usage, destination.flags, &destinationProperties);
-    if(destinationResult != VK_SUCCESS)
-        return false;
-
-    return VulkanTextureDetail::IsTextureImageWithinFormatLimits(source, sourceProperties) && VulkanTextureDetail::IsTextureImageWithinFormatLimits(destination, destinationProperties);
+    return sourceResult == VK_SUCCESS && destinationResult == VK_SUCCESS && VulkanTextureDetail::IsTextureImageWithinFormatLimits(source, sourceProperties) && VulkanTextureDetail::IsTextureImageWithinFormatLimits(destination, destinationProperties);
 }
 
 [[nodiscard]] inline bool ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources)noexcept{

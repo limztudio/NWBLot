@@ -29,6 +29,10 @@
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapAvboitWriteBuffers[];
 #pragma warning(pop)
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 StructuredBuffer<uint, Std430DataLayout> nwbAvboitCoverageWords(){
     return g_NwbHeapAvboitReadBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.x];
 }

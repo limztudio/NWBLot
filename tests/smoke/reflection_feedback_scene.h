@@ -42,6 +42,7 @@ public:
 private:
     [[nodiscard]] Core::ECS::EntityID createPanel(const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, bool horizontal = false);
 
+
 private:
     ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;

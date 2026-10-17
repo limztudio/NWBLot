@@ -3,6 +3,7 @@
 
 
 #include "widget_fixture.h"
+#include "widget_id_assertion.h"
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
@@ -42,7 +43,8 @@ public:
 
 protected:
     virtual void SetUp()override{
-        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
+        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text));
         configureSkin();
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
@@ -77,8 +79,8 @@ protected:
         return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId id(const AStringView stableKey)const noexcept{
-        return MakeWidgetId(MakeWidgetId(MakeRootId(m_root), "panel"), stableKey);
+    [[nodiscard]] WidgetId id(const AStringView stableKey)const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")), stableKey));
     }
 
     [[nodiscard]] const WidgetState* state(const WidgetId widget)const noexcept{
@@ -274,8 +276,8 @@ TEST_F(UiBuilderTests, RowUsesSkinMetricsPaddingAndClipsOverflowingControlHits){
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
     const WidgetId rowId = id("actions");
-    const WidgetId firstId = MakeWidgetId(rowId, "first");
-    const WidgetId secondId = MakeWidgetId(rowId, "second");
+    const WidgetId firstId = UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "first"));
+    const WidgetId secondId = UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "second"));
     const HitTarget* secondTarget = UiTestSupport::FindHitTarget(m_context.input().targets(), secondId);
     ASSERT_NE(secondTarget, nullptr);
     EXPECT_FLOAT_EQ(secondTarget->clip.width, 18.0f);
@@ -299,8 +301,8 @@ TEST_F(UiBuilderTests, ScopedKeysRemainDistinctAndDuplicateDeclarationsRejectPub
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId left = MakeWidgetId(id("left"), "caption");
-    const WidgetId right = MakeWidgetId(id("right"), "caption");
+    const WidgetId left = UiTestSupport::RequireWidgetId(MakeWidgetId(id("left"), "caption"));
+    const WidgetId right = UiTestSupport::RequireWidgetId(MakeWidgetId(id("right"), "caption"));
     EXPECT_NE(left, right);
     EXPECT_NE(state(left), nullptr);
     EXPECT_NE(state(right), nullptr);

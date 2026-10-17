@@ -61,14 +61,14 @@ private:
 
 
 template<class ExecutionQueue>
-NWB_INLINE QueueSubmissionToken GpuTimingSubmissionTicket::submitToQueue(Device& device, CommandList* const* commandLists, const usize commandListCount, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc){
+NWB_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQueue(Device& device, CommandList* const* commandLists, const usize commandListCount, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc){
     Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
     Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
     if(!prepareSubmission(commandLists, commandListCount, waitTokens))
-        return {};
+        return MakeUnexpected(Failure{});
     if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
         discardPreparedSubmission();
-        return {};
+        return MakeUnexpected(Failure{});
     }
     PreparedSubmissionUnwindScope submissionUnwind(*this);
     waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
@@ -84,6 +84,8 @@ NWB_INLINE QueueSubmissionToken GpuTimingSubmissionTicket::submitToQueue(Device&
     submissionUnwind.release();
     if(!resolved)
         NWB_LOGGER_ERROR(NWB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
+    if(!submission)
+        return MakeUnexpected(submission.error());
     return token;
 }
 
@@ -104,7 +106,10 @@ GpuTimingSubmissionTicket::RecordingScope::~RecordingScope()noexcept{
 }
 
 
-GpuTimingSubmissionTicket::GpuTimingSubmissionTicket(GpuTimingRecorder& recorder)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTimingSubmissionTicket::GpuTimingSubmissionTicket(GpuTimingRecorder& recorder)noexcept
     : m_recorder(recorder)
     , m_scopePublications(recorder.m_arena)
     , m_submissionPrerequisites(recorder.m_arena)
@@ -114,15 +119,11 @@ GpuTimingSubmissionTicket::~GpuTimingSubmissionTicket()noexcept{
     abandonWithoutCallbacks();
 }
 
-bool GpuTimingSubmissionTicket::submit(Device& device, CommandList* const* commandLists, const usize commandListCount, const CommandQueue::Enum executionQueue){
-    return submit(device, commandLists, commandListCount, executionQueue, QueueSubmissionDesc{}).valid();
-}
-
-QueueSubmissionToken GpuTimingSubmissionTicket::submit(Device& device, CommandList* const* commandLists, const usize commandListCount, const CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
+Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submit(Device& device, CommandList* const* commandLists, const usize commandListCount, const CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
     return submitToQueue(device, commandLists, commandListCount, executionQueue, submitDesc);
 }
 
-QueueSubmissionToken GpuTimingSubmissionTicket::submit(Device& device, CommandList* const* commandLists, const usize commandListCount, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
+Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submit(Device& device, CommandList* const* commandLists, const usize commandListCount, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
     return submitToQueue(device, commandLists, commandListCount, executionQueue, submitDesc);
 }
 
@@ -318,11 +319,11 @@ bool GpuTimingSubmissionTicket::resolveSubmission(const QueueSubmissionToken& to
     return true;
 }
 
-usize GpuTimingSubmissionTicket::reserveScopePublication(){
+Expected<usize> GpuTimingSubmissionTicket::reserveScopePublication(){
     ScopedLock lock(m_mutex);
     NWB_ASSERT_MSG(!m_resolved && !m_submissionPrepared, NWB_TEXT("GPU timing scope reserved after its submission ticket stopped recording"));
     if(m_resolved || m_submissionPrepared)
-        return Limit<usize>::s_Max;
+        return MakeUnexpected(Failure{});
 
     m_scopePublications.emplace_back();
     ++m_reservedScopePublicationCount;

@@ -9,6 +9,8 @@
 #include <core/os/linux/wayland/clipboard.h>
 #include <core/os/linux/wayland/text_input.h>
 
+#include <global/diagnostics.h>
+#include <global/scope_exit.h>
 #include <global/thread.h>
 #include <global/simd/vector_arithmetic.h>
 
@@ -67,8 +69,12 @@ static constexpr u32 s_WaylandWmBaseBindVersion = 1u;
 static constexpr u32 s_WaylandPointerFrameSeatVersion = 5u;
 static constexpr u32 s_InitialConfigureRoundtripLimit = 2u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct WaylandContext{
-    Frame* frame = nullptr;
+    Frame& frame;
 
     wl_display* display = nullptr;
     wl_registry* registry = nullptr;
@@ -110,6 +116,12 @@ struct WaylandContext{
     f64 scrollY = 0.0;
     i32 scrollDiscreteX = 0;
     i32 scrollDiscreteY = 0;
+
+
+public:
+    explicit WaylandContext(Frame& owner)noexcept
+        : frame(owner)
+    {}
 };
 
 
@@ -141,14 +153,8 @@ static void ApplyBufferScale(WaylandContext& context, i32 value){
     context.bufferScale = ClampBufferScale(value);
     if(context.surface)
         wl_surface_set_buffer_scale(context.surface, context.bufferScale);
-    if(ITextInputService* const textInput = context.frame->tryTextInput())
+    if(ITextInputService* const textInput = context.frame.tryTextInput())
         SetWaylandTextInputBufferScale(*textInput, context.bufferScale);
-}
-
-static i32 LogicalDimensionForPixels(u16 pixelDimension, i32 bufferScale)noexcept{
-    const i32 scale = ClampBufferScale(bufferScale);
-    const i32 pixels = pixelDimension > 0u ? static_cast<i32>(pixelDimension) : 1;
-    return (pixels + scale - 1) / scale;
 }
 
 static u16 PixelDimensionForLogical(i32 logicalDimension, i32 bufferScale)noexcept{
@@ -205,7 +211,7 @@ static i32 TranslatePointerButton(u32 button)noexcept{
 
 NWB_DECLARE_LINUX_KEY_SYMBOLS(WaylandKeySymbols, xkb_keysym_t, XKB_KEY);
 
-static i32 TranslateKey(xkb_keysym_t keySym){
+static i32 TranslateKey(xkb_keysym_t keySym)noexcept{
     return TranslateLinuxKeySymbol<WaylandKeySymbols>(keySym);
 }
 
@@ -224,7 +230,7 @@ static void DispatchTextInput(InputDispatcher& input, const WaylandContext& cont
     if(unicode < s_TextInputControlCodePointLimit || unicode == s_TextInputDeleteCodePoint)
         return;
 
-    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+    if(ITextInputService* const textInput = context.frame.tryTextInput()){
         if(DispatchWaylandDirectTextInput(*textInput, unicode))
             return;
     }
@@ -242,7 +248,7 @@ static void DispatchScroll(WaylandContext& context){
     const f64 yoffset = VectorDoubleGetY(offsets);
 
     if(xoffset != 0.0 || yoffset != 0.0)
-        context.frame->input().mouseScrollUpdate(xoffset, yoffset);
+        context.frame.input().mouseScrollUpdate(xoffset, yoffset);
 
     context.scrollX = 0.0;
     context.scrollY = 0.0;
@@ -291,7 +297,7 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData)noexcept{
         return;
     }
 
-    UniquePtr<WaylandContext> contextOwner(context);
+    GlobalUniquePtr<WaylandContext> contextOwner(context, ArenaDeleter<WaylandContext, Alloc::GlobalArena>(context->frame.projectObjectArena()));
 
     DestroyKeyboard(*context);
     DestroyPointer(*context);
@@ -391,6 +397,10 @@ static const wl_output_listener s_OutputListener = {
 #endif
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void AttachSeatListener(WaylandContext& context);
 
 static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version){
@@ -418,9 +428,9 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
         context.seatVersion = bindVersion;
         context.seatGlobalName = name;
         AttachSeatListener(context);
-        if(IClipboardService* const clipboard = context.frame->tryClipboard())
+        if(IClipboardService* const clipboard = context.frame.tryClipboard())
             AttachWaylandClipboardSeat(*clipboard, context.seat, name);
-        if(ITextInputService* const textInput = context.frame->tryTextInput())
+        if(ITextInputService* const textInput = context.frame.tryTextInput())
             AttachWaylandTextInputSeat(*textInput, context.seat, name);
     }
     else if(NWB_STRCMP(interfaceName, xdg_wm_base_interface.name) == 0){
@@ -436,16 +446,16 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
         return;
     context.keyboardFocused = false;
     context.inputSerial = 0u;
-    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+    if(ITextInputService* const textInput = context.frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
             NWB_FATAL_ASSERT(false);
         AttachWaylandTextInputSeat(*textInput, nullptr, 0u);
     }
-    context.frame->input().windowFocusUpdate(false);
-    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+    context.frame.input().windowFocusUpdate(false);
+    if(IClipboardService* const clipboard = context.frame.tryClipboard())
         AttachWaylandClipboardSeat(*clipboard, nullptr, 0u);
-    context.frame->input().pointerCaptureLost();
-    context.frame->input().pointerLeave();
+    context.frame.input().pointerCaptureLost();
+    context.frame.input().pointerLeave();
     DestroyKeyboard(context);
     DestroyPointer(context);
     if(context.seatVersion >= 5u)
@@ -455,7 +465,7 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
     context.seat = nullptr;
     context.seatGlobalName = 0u;
     context.seatVersion = 0u;
-    context.frame->data<Common::LinuxFrame>().setActive(false);
+    context.frame.data<Common::LinuxFrame>().setActive(false);
 }
 
 static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial){
@@ -480,11 +490,11 @@ static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 seria
         wl_surface_commit(context.surface);
 }
 
-static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i32 height, wl_array* states){
+static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i32 height, wl_array* states)noexcept{
     static_cast<void>(toplevel);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    auto& frameData = context.frame->data<Common::LinuxFrame>();
+    auto& frameData = context.frame.data<Common::LinuxFrame>();
 
     if(width > 0)
         frameData.width() = PixelDimensionForLogical(width, context.bufferScale);
@@ -510,9 +520,9 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
     static_cast<void>(toplevel);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().pointerCaptureLost();
-    context.frame->input().pointerLeave();
-    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+    context.frame.input().pointerCaptureLost();
+    context.frame.input().pointerLeave();
+    if(ITextInputService* const textInput = context.frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
             NWB_FATAL_ASSERT(false);
     }
@@ -551,7 +561,7 @@ static void OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surfa
     static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().mousePosUpdate(SurfaceCoordinateToPixels(sx, context.bufferScale), SurfaceCoordinateToPixels(sy, context.bufferScale));
+    context.frame.input().mousePosUpdate(SurfaceCoordinateToPixels(sx, context.bufferScale), SurfaceCoordinateToPixels(sy, context.bufferScale));
 }
 
 static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
@@ -560,9 +570,9 @@ static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surfa
     static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().pointerLeave();
+    context.frame.input().pointerLeave();
     // The compositor retains pointer focus during the implicit grab; leave terminates any remaining grab.
-    context.frame->input().pointerCaptureLost();
+    context.frame.input().pointerCaptureLost();
 }
 
 static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_t sx, wl_fixed_t sy){
@@ -570,7 +580,7 @@ static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_
     static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().mousePosUpdate(SurfaceCoordinateToPixels(sx, context.bufferScale), SurfaceCoordinateToPixels(sy, context.bufferScale));
+    context.frame.input().mousePosUpdate(SurfaceCoordinateToPixels(sx, context.bufferScale), SurfaceCoordinateToPixels(sy, context.bufferScale));
 }
 
 static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
@@ -579,11 +589,11 @@ static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 tim
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.inputSerial = serial;
-    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+    if(IClipboardService* const clipboard = context.frame.tryClipboard())
         ObserveWaylandClipboardInputSerial(*clipboard, serial);
     const i32 translatedButton = TranslatePointerButton(button);
     if(translatedButton != -1){
-        context.frame->input().mouseButtonUpdate(translatedButton, state == WL_POINTER_BUTTON_STATE_PRESSED ? InputAction::Press : InputAction::Release, TranslateModifiers(context));
+        context.frame.input().mouseButtonUpdate(translatedButton, state == WL_POINTER_BUTTON_STATE_PRESSED ? InputAction::Press : InputAction::Release, TranslateModifiers(context));
     }
 }
 
@@ -622,7 +632,7 @@ static void OnPointerAxisStop(void* data, wl_pointer* pointer, u32 time, u32 axi
     static_cast<void>(axis);
 }
 
-static void OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32 discrete){
+static void OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32 discrete)noexcept{
     static_cast<void>(pointer);
 
     auto& context = *static_cast<WaylandContext*>(data);
@@ -652,26 +662,42 @@ static void OnPointerAxisRelativeDirection(void* data, wl_pointer* pointer, u32 
 }
 #endif
 
+static void ReleaseKeymapResources(const i32 fd, void* const map, const u32 size)noexcept{
+    const bool unmapFailed = map && munmap(map, size) != 0;
+    const i32 unmapError = unmapFailed ? errno : 0;
+    // Linux releases the descriptor before reporting close errors; retrying can close a reused descriptor.
+    const bool closeFailed = close(fd) != 0;
+    const i32 closeError = closeFailed ? errno : 0;
+    if(unmapFailed){
+        const DiagnosticEventText message = MakeDiagnosticEventText("Frame Wayland keymap unmap failed; native_domain=POSIX native_code={}", unmapError);
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "frame_keymap_lifecycle", .message = message.view(), .file = __FILE__, .line = __LINE__, });
+    }
+    if(closeFailed){
+        const DiagnosticEventText message = MakeDiagnosticEventText("Frame Wayland keymap descriptor release failed; native_domain=POSIX native_code={}", closeError);
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "frame_keymap_lifecycle", .message = message.view(), .file = __FILE__, .line = __LINE__, });
+    }
+}
+
 static void OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 fd, u32 size){
     static_cast<void>(keyboard);
 
     auto& context = *static_cast<WaylandContext*>(data);
 
     if(format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1){
-        close(fd);
+        ReleaseKeymapResources(fd, nullptr, 0u);
         return;
     }
 
     char* map = static_cast<char*>(mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0));
     if(map == MAP_FAILED){
-        close(fd);
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keymap mmap failed"));
+        const i32 nativeError = errno;
+        ReleaseKeymapResources(fd, nullptr, 0u);
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keymap mmap failed; native_domain=POSIX native_code={}"), nativeError);
         return;
     }
 
     xkb_keymap* keymap = xkb_keymap_new_from_string(context.xkbContext, map, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
-    munmap(map, size);
-    close(fd);
+    ReleaseKeymapResources(fd, map, size);
 
     if(!keymap){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland keymap creation failed"));
@@ -703,14 +729,14 @@ static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     if(surface != context.surface)
         return;
     context.keyboardFocused = true;
-    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+    if(ITextInputService* const textInput = context.frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, true))
             NWB_FATAL_ASSERT(false);
     }
-    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+    if(IClipboardService* const clipboard = context.frame.tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, true);
-    context.frame->data<Common::LinuxFrame>().setActive(true);
-    context.frame->input().windowFocusUpdate(true);
+    context.frame.data<Common::LinuxFrame>().setActive(true);
+    context.frame.input().windowFocusUpdate(true);
 }
 
 static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface){
@@ -722,15 +748,15 @@ static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_su
         return;
     context.keyboardFocused = false;
     context.inputSerial = 0u;
-    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+    if(ITextInputService* const textInput = context.frame.tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
             NWB_FATAL_ASSERT(false);
     }
-    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+    if(IClipboardService* const clipboard = context.frame.tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, false);
-    context.frame->data<Common::LinuxFrame>().setActive(false);
+    context.frame.data<Common::LinuxFrame>().setActive(false);
     StopKeyRepeat(context);
-    context.frame->input().windowFocusUpdate(false);
+    context.frame.input().windowFocusUpdate(false);
 }
 
 static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 time, u32 key, u32 state){
@@ -739,7 +765,7 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.inputSerial = serial;
-    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+    if(IClipboardService* const clipboard = context.frame.tryClipboard())
         ObserveWaylandClipboardInputSerial(*clipboard, serial);
     if(!context.xkbState)
         return;
@@ -752,8 +778,8 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
         xkb_state_update_key(context.xkbState, keycode, XKB_KEY_DOWN);
 
         const i32 mods = TranslateModifiers(context);
-        context.frame->input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
-        DispatchTextInput(context.frame->input(), context, keycode, static_cast<i32>(key), mods);
+        context.frame.input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
+        DispatchTextInput(context.frame.input(), context, keycode, static_cast<i32>(key), mods);
 
         if(context.repeatRate > 0 && context.xkbKeymap && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0){
             context.repeatPending = true;
@@ -767,14 +793,14 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
         xkb_state_update_key(context.xkbState, keycode, XKB_KEY_UP);
 
         const i32 mods = TranslateModifiers(context);
-        context.frame->input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Release, mods);
+        context.frame.input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Release, mods);
 
         if(context.repeatPending && context.repeatKeycode == keycode)
             StopKeyRepeat(context);
     }
 }
 
-static void OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u32 serial, u32 depressed, u32 latched, u32 locked, u32 group){
+static void OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u32 serial, u32 depressed, u32 latched, u32 locked, u32 group)noexcept{
     static_cast<void>(keyboard);
     static_cast<void>(serial);
 
@@ -783,7 +809,7 @@ static void OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u32 serial, u
         xkb_state_update_mask(context.xkbState, depressed, latched, locked, 0, 0, group);
 }
 
-static void OnKeyboardRepeatInfo(void* data, wl_keyboard* keyboard, i32 rate, i32 delay){
+static void OnKeyboardRepeatInfo(void* data, wl_keyboard* keyboard, i32 rate, i32 delay)noexcept{
     static_cast<void>(keyboard);
 
     auto& context = *static_cast<WaylandContext*>(data);
@@ -813,6 +839,10 @@ static const xdg_toplevel_listener s_ToplevelListener = {
 
 static const wl_seat_listener s_SeatListener = { &OnSeatCapabilities, &OnSeatName, };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void AttachSeatListener(WaylandContext& context){
     if(wl_seat_add_listener(context.seat, &s_SeatListener, &context) != 0)
         NWB_FATAL_ASSERT(false);
@@ -838,6 +868,10 @@ static const wl_pointer_listener s_PointerListener = {
 
 static const wl_keyboard_listener s_KeyboardListener = { &OnKeyboardKeymap, &OnKeyboardEnter, &OnKeyboardLeave, &OnKeyboardKey, &OnKeyboardModifiers, &OnKeyboardRepeatInfo, };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     auto& context = *static_cast<WaylandContext*>(data);
 
@@ -852,8 +886,8 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     }
     else{
         if(context.pointer){
-            context.frame->input().pointerCaptureLost();
-            context.frame->input().pointerLeave();
+            context.frame.input().pointerCaptureLost();
+            context.frame.input().pointerLeave();
         }
         DestroyPointer(context);
     }
@@ -870,51 +904,56 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     else{
         context.keyboardFocused = false;
         context.inputSerial = 0u;
-        if(ITextInputService* const textInput = context.frame->tryTextInput()){
+        if(ITextInputService* const textInput = context.frame.tryTextInput()){
             if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
                 NWB_FATAL_ASSERT(false);
         }
-        if(IClipboardService* const clipboard = context.frame->tryClipboard())
+        if(IClipboardService* const clipboard = context.frame.tryClipboard())
             SetWaylandClipboardKeyboardFocus(*clipboard, false);
         DestroyKeyboard(context);
-        context.frame->data<Common::LinuxFrame>().setActive(false);
-        context.frame->input().windowFocusUpdate(false);
+        context.frame.data<Common::LinuxFrame>().setActive(false);
+        context.frame.input().windowFocusUpdate(false);
     }
 }
 
-static bool FlushDisplay(wl_display& display)noexcept{
+struct WaylandEventFailure{
+    TStringView operation{};
+    TStringView nativeDomain{};
+    i32 nativeCode = 0;
+};
+
+[[nodiscard]] static Expected<void, i32> FlushDisplay(wl_display& display)noexcept{
     i32 result;
+    i32 nativeError = 0;
     do{
         result = wl_display_flush(&display);
-    }while(result < 0 && errno == EINTR);
-    return result >= 0 || errno == EAGAIN || errno == EWOULDBLOCK;
+        if(result < 0)
+            nativeError = errno;
+    }while(result < 0 && nativeError == EINTR);
+    if(result < 0 && nativeError != EAGAIN && nativeError != EWOULDBLOCK)
+        return MakeUnexpected(nativeError);
+    return {};
 }
 
-static bool RoundtripDisplay(wl_display* display, const TStringView operation){
-    if(wl_display_roundtrip(display) == -1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland {} failed"), operation);
-        return false;
-    }
-    return true;
+[[nodiscard]] static Expected<void, i32> RoundtripDisplay(wl_display& display){
+    if(wl_display_roundtrip(&display) == -1)
+        return MakeUnexpected(errno);
+    return {};
 }
 
-static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
-    if(wl_display_dispatch_pending(context.display) == -1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland dispatch pending failed"));
-        return false;
-    }
+[[nodiscard]] static Expected<void, WaylandEventFailure> PumpEvents(WaylandContext& context, const i32 timeoutMs){
+    if(wl_display_dispatch_pending(context.display) == -1)
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
 
     while(wl_display_prepare_read(context.display) != 0){
-        if(wl_display_dispatch_pending(context.display) == -1){
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland dispatch pending during prepare_read failed"));
-            return false;
-        }
+        if(wl_display_dispatch_pending(context.display) == -1)
+            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending during prepare_read"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
     }
 
-    if(!FlushDisplay(*context.display)){
+    const auto flushed = FlushDisplay(*context.display);
+    if(!flushed){
         wl_display_cancel_read(context.display);
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display flush failed"));
-        return false;
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("display flush"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = flushed.error(), });
     }
 
     pollfd fd;
@@ -923,41 +962,33 @@ static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
 
     const i32 pollResult = poll(&fd, 1, timeoutMs);
     if(pollResult < 0){
+        const i32 nativeError = errno;
         wl_display_cancel_read(context.display);
-        if(errno == EINTR)
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland poll failed"));
-        return false;
+        if(nativeError == EINTR)
+            return {};
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("poll"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = nativeError, });
     }
 
     if(pollResult == 0){
         wl_display_cancel_read(context.display);
-        return true;
+        return {};
     }
 
     if((fd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0){
         wl_display_cancel_read(context.display);
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display connection closed"));
-        return false;
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("display connection"), .nativeDomain = NWB_TEXT("poll.revents"), .nativeCode = fd.revents, });
     }
 
     if((fd.revents & POLLIN) != 0){
-        if(wl_display_read_events(context.display) == -1){
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland read events failed"));
-            return false;
-        }
+        if(wl_display_read_events(context.display) == -1)
+            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("read events"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
     }
-    else{
+    else
         wl_display_cancel_read(context.display);
-    }
 
-    if(wl_display_dispatch_pending(context.display) == -1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland dispatch pending after poll failed"));
-        return false;
-    }
-
-    return true;
+    if(wl_display_dispatch_pending(context.display) == -1)
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending after poll"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
+    return {};
 }
 
 static void ProcessKeyRepeat(WaylandContext& context){
@@ -972,8 +1003,8 @@ static void ProcessKeyRepeat(WaylandContext& context){
     const i32 stepMs = context.repeatRate > 0 ? (candidateStepMs > 0 ? candidateStepMs : s_MinKeyRepeatStepMs) : 0;
     do{
         const i32 mods = TranslateModifiers(context);
-        context.frame->input().keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
-        DispatchTextInput(context.frame->input(), context, context.repeatKeycode, context.repeatScancode, mods);
+        context.frame.input().keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
+        DispatchTextInput(context.frame.input(), context, context.repeatKeycode, context.repeatScancode, mods);
 
         if(stepMs <= 0){
             StopKeyRepeat(context);
@@ -993,60 +1024,73 @@ bool InitWaylandFrame(Frame& frame){
 
     auto& frameData = frame.data<Common::LinuxFrame>();
 
-    auto contextOwner = MakeUnique<WaylandContext>();
+    ScopeExit cleanupOnFailure([&frame]()noexcept{ CleanupWaylandFrame(frame); });
+    auto contextOwner = MakeGlobalUnique<WaylandContext>(frame.projectObjectArena(), frame);
+    if(!contextOwner){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland context allocation failed"));
+        return false;
+    }
     auto* context = contextOwner.get();
-    context->frame = &frame;
     SetWaylandContext(frameData, context);
     contextOwner.release();
 
     context->display = wl_display_connect(nullptr);
     if(!context->display){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display connection failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display connection failed"));
         return false;
     }
     SetWaylandDisplay(frameData, context->display);
 
     context->xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if(!context->xkbContext){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xkb context creation failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xkb context creation failed"));
         return false;
     }
 
     context->registry = wl_display_get_registry(context->display);
     if(!context->registry){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry acquisition failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry acquisition failed"));
         return false;
     }
     if(wl_registry_add_listener(context->registry, &s_RegistryListener, context) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry listener registration failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry listener registration failed"));
         return false;
     }
 
-    if(!RoundtripDisplay(context->display, NWB_TEXT("registry roundtrip"))){
+    if(const auto roundtrip = RoundtripDisplay(*context->display); !roundtrip){
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
         return false;
     }
 
     if(!context->compositor || !context->wmBase){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor/xdg-shell globals are unavailable"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor/xdg-shell globals are unavailable"));
         return false;
     }
 
     if(xdg_wm_base_add_listener(context->wmBase, &s_WmBaseListener, context) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg-shell listener registration failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg-shell listener registration failed"));
         return false;
     }
 
     context->surface = wl_compositor_create_surface(context->compositor);
     if(!context->surface){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland surface creation failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland surface creation failed"));
         return false;
     }
     ApplyBufferScale(*context, context->bufferScale);
@@ -1054,25 +1098,29 @@ bool InitWaylandFrame(Frame& frame){
 
     context->xdgSurface = xdg_wm_base_get_xdg_surface(context->wmBase, context->surface);
     if(!context->xdgSurface){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface creation failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface creation failed"));
         return false;
     }
     if(xdg_surface_add_listener(context->xdgSurface, &s_XdgSurfaceListener, context) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface listener registration failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface listener registration failed"));
         return false;
     }
 
     context->toplevel = xdg_surface_get_toplevel(context->xdgSurface);
     if(!context->toplevel){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel creation failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel creation failed"));
         return false;
     }
     if(xdg_toplevel_add_listener(context->toplevel, &s_ToplevelListener, context) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel listener registration failed"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel listener registration failed"));
         return false;
     }
     xdg_toplevel_set_title(context->toplevel, windowTitle.data());
@@ -1082,50 +1130,55 @@ bool InitWaylandFrame(Frame& frame){
     context->initialSizeConstrained = true;
 
     wl_surface_commit(context->surface);
-    if(!FlushDisplay(*context->display)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial display flush failed"));
+    if(const auto flushed = FlushDisplay(*context->display); !flushed){
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial display flush failed; native_domain=POSIX native_code={}"), flushed.error());
         return false;
     }
 
     for(u32 i = 0u; i < s_InitialConfigureRoundtripLimit && !context->configured; ++i){
-        if(!RoundtripDisplay(context->display, NWB_TEXT("initial configure roundtrip"))){
+        if(const auto roundtrip = RoundtripDisplay(*context->display); !roundtrip){
             CleanupWaylandFrame(frame);
+            cleanupOnFailure.release();
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial configure roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
             return false;
         }
     }
 
     if(!context->configured){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor did not send an initial configure"));
         CleanupWaylandFrame(frame);
+        cleanupOnFailure.release();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor did not send an initial configure"));
         return false;
     }
 
     context->visible = true;
+    cleanupOnFailure.release();
     return true;
 }
 
-GlobalUniquePtr<IClipboardService> CreateWaylandFrameClipboard(Frame& frame){
+Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandFrameClipboard(Frame& frame){
     WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
     NWB_FATAL_ASSERT(context && context->display);
     auto service = CreateWaylandClipboardService(frame.projectObjectArena(), *context->display);
     if(service){
-        AttachWaylandClipboardSeat(*service, context->seat, context->seatGlobalName);
-        SetWaylandClipboardKeyboardFocus(*service, context->keyboardFocused);
+        AttachWaylandClipboardSeat(**service, context->seat, context->seatGlobalName);
+        SetWaylandClipboardKeyboardFocus(**service, context->keyboardFocused);
         if(context->inputSerial)
-            ObserveWaylandClipboardInputSerial(*service, context->inputSerial);
+            ObserveWaylandClipboardInputSerial(**service, context->inputSerial);
     }
     return service;
 }
 
-GlobalUniquePtr<ITextInputService> CreateWaylandFrameTextInput(Frame& frame){
+Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& frame){
     WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
     NWB_FATAL_ASSERT(context && context->display && context->surface);
     auto service = CreateWaylandTextInputService(frame.projectObjectArena(), *context->display, *context->surface);
     if(service){
-        AttachWaylandTextInputSeat(*service, context->seat, context->seatGlobalName);
-        SetWaylandTextInputBufferScale(*service, context->bufferScale);
-        if(!SetWaylandTextInputKeyboardFocus(*service, context->keyboardFocused))
+        AttachWaylandTextInputSeat(**service, context->seat, context->seatGlobalName);
+        SetWaylandTextInputBufferScale(**service, context->bufferScale);
+        if(!SetWaylandTextInputKeyboardFocus(**service, context->keyboardFocused))
             NWB_FATAL_ASSERT(false);
     }
     return service;
@@ -1133,9 +1186,11 @@ GlobalUniquePtr<ITextInputService> CreateWaylandFrameTextInput(Frame& frame){
 
 bool ShowWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
-    if(wl_display* const display = GetWaylandDisplay(frameData); display && !FlushDisplay(*display)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland show display flush failed"));
-        return false;
+    if(wl_display* const display = GetWaylandDisplay(frameData)){
+        if(const auto flushed = FlushDisplay(*display); !flushed){
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland show display flush failed; native_domain=POSIX native_code={}"), flushed.error());
+            return false;
+        }
     }
     return true;
 }
@@ -1164,8 +1219,11 @@ bool RunWaylandFrame(Frame& frame){
             timeoutMs = timeoutMs < repeatTimeoutMs ? timeoutMs : repeatTimeoutMs;
         }
 
-        if(!PumpEvents(*context, timeoutMs))
+        if(const auto pumped = PumpEvents(*context, timeoutMs); !pumped){
+            const WaylandEventFailure& error = pumped.error();
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland {} failed; native_domain={} native_code={}"), error.operation, error.nativeDomain, error.nativeCode);
             return false;
+        }
 
         if(context->shouldClose)
             return true;
@@ -1177,8 +1235,8 @@ bool RunWaylandFrame(Frame& frame){
 
         if(const Optional<TStringView> title = frame.syncGraphicsWindowState(frameData.width(), frameData.height(), windowVisible, windowIsInFocus)){
             xdg_toplevel_set_title(context->toplevel, title->data());
-            if(!FlushDisplay(*context->display)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland title display flush failed"));
+            if(const auto flushed = FlushDisplay(*context->display); !flushed){
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland title display flush failed; native_domain=POSIX native_code={}"), flushed.error());
                 return false;
             }
         }

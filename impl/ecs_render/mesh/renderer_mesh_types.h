@@ -100,6 +100,8 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool swBvhBuildAccepted = false;
     CsgReceiverCpuBounds csgLocalBounds;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return meshName != s_NameNone && buffersValid() && meshletCount > 0 && meshletPrimitiveIndexCount > 0 && solidTriangleWords != nullptr;
     }

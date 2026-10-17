@@ -67,7 +67,11 @@ public:
         Value& object = asset.field(s_SKINNED_MESHES).field(objectName);
         object.field("skin").setString("tests/model_cook_metadata/skin");
         object.field(s_SKELETON).setString(skeleton);
-        expectedSkeletons.insert_or_assign(Name(objectName), Name(expectedObject));
+        const auto objectIdentity = Name::FromText(objectName);
+        ASSERT_TRUE(objectIdentity);
+        const auto expectedIdentity = Name::FromText(expectedObject);
+        ASSERT_TRUE(expectedIdentity);
+        expectedSkeletons.insert_or_assign(*objectIdentity, *expectedIdentity);
     }
 
     [[nodiscard]] bool parse(){

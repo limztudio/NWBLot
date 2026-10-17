@@ -46,14 +46,13 @@ static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MergeGatheredGraphicsAsset(const Name& virtualPath, Core::Assets::AssetBytes& existingPayload, const void* incomingPayload, const usize incomingSize){
+bool MergeGatheredGraphicsAsset(const Name& virtualPath, Core::Assets::AssetBytes& existingPayload, const void* incomingPayload, const usize incomingSize, Core::Alloc::ScratchArena& scratchArena){
     if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
         return false;
     if(incomingSize > 0u && incomingPayload == nullptr)
         return false;
 
     Core::Assets::AssetArena& arena = existingPayload.get_allocator().arena();
-    Core::Alloc::ScratchArena scratchArena(Name("assets_graphics/gather"));
     auto parsedRecords = Core::ShaderArchive::DeserializeIndex(arena, { existingPayload.data(), existingPayload.size() });
     if(!parsedRecords)
         return false;
@@ -97,7 +96,7 @@ bool MergeGatheredGraphicsAsset(const Name& virtualPath, Core::Assets::AssetByte
         }
     }
 
-    auto merged = Core::ShaderArchive::SerializeIndex(arena, records);
+    auto merged = Core::ShaderArchive::SerializeIndex(arena, records, scratchArena);
     if(!merged)
         return false;
     existingPayload = Move(*merged);

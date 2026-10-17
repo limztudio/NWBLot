@@ -476,11 +476,21 @@ void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportReco
     out += "  \"perf\": {\n";
     StringAppendFormat(out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
     StringAppendFormat(out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
-    StringAppendFormat(out, "    \"cpuTimingSeconds\": {:.9},\n", summary.cpuTimingSeconds);
+    out += "    \"cpuTimingSeconds\": ";
+    if(summary.cpuTimingSecondsValid)
+        StringAppendFormat(out, "{:.9}", summary.cpuTimingSeconds);
+    else
+        out += s_JsonNullText;
+    out += ",\n";
     StringAppendFormat(out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
     StringAppendFormat(out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
     StringAppendFormat(out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
-    StringAppendFormat(out, "    \"gpuTimingSeconds\": {:.9},\n", summary.gpuTimingSeconds);
+    out += "    \"gpuTimingSeconds\": ";
+    if(summary.gpuTimingSecondsValid)
+        StringAppendFormat(out, "{:.9}", summary.gpuTimingSeconds);
+    else
+        out += s_JsonNullText;
+    out += ",\n";
     StringAppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
     StringAppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
     AppendTelemetryMemorySourcesJson(out, summary);

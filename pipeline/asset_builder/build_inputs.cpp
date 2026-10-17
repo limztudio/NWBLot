@@ -37,6 +37,8 @@ struct PathSelectionIndex{
     Vector<IndexedPath, Assets::ScratchArena> m_entries;
     Optional<Vector<Assets::ScratchString, Assets::ScratchArena>> m_ownedPaths;
 
+
+public:
     PathSelectionIndex(const Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena, const bool preserveCase)
         : m_entries(scratchArena){
         m_entries.reserve(files.size());
@@ -49,7 +51,8 @@ struct PathSelectionIndex{
                 m_ownedPaths->emplace_back(PathToString(scratchArena, files[i].filePath.lexicallyNormal()));
                 m_entries.push_back({ AStringView(m_ownedPaths->back()), i });
             }
-            else m_entries.push_back({ AStringView(files[i].normalizedPathText), i });
+            else
+                m_entries.push_back({ AStringView(files[i].normalizedPathText), i });
         }
         Sort(m_entries.begin(), m_entries.end(), [](const IndexedPath& lhs, const IndexedPath& rhs)noexcept{ return lhs.text < rhs.text; });
     }
@@ -134,7 +137,7 @@ bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedC
             }
         }
 
-        const __hidden_build_inputs::PathSelectionIndex* selectionIndex = &fileIndex;
+        NotNull<const __hidden_build_inputs::PathSelectionIndex*> selectionIndex(&fileIndex);
 #if !defined(NWB_PLATFORM_WINDOWS)
         // Directory containment follows host case rules; explicit asset identities retain their canonical spelling.
         if(isDirectory){

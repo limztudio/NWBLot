@@ -37,7 +37,7 @@ public:
 
 
 public:
-    void invalidateResources();
+    void invalidateResources()noexcept;
 
 
 private:

@@ -108,7 +108,7 @@ void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
+Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     const GpuTaskDesc& desc,
     const GpuTaskCommandRequirements& commands,
     void* const payload,
@@ -120,7 +120,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     const DeclarationMutationScope& mutationAccess
 ){
     if(!mutationAccess.validFor(*this))
-        return {};
+        return MakeUnexpected(Failure{});
 
     const bool appendPreludeDependency = m_normalExecutionPrelude.valid() && desc.dependencyCount == 0u && !desc.scheduling.joinsAcceptedQueueFrontier && !desc.scheduling.isRecoverySubmission;
     const usize preludeDependencyCount = appendPreludeDependency ? 1u : 0u;
@@ -145,11 +145,11 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
         || (desc.resourceVersionUseCount > 0u && !desc.resourceVersionUses)
         || ((payload == nullptr) != (payloadObjectSize == 0u))
     )
-        return {};
+        return MakeUnexpected(Failure{});
 
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         if(!desc.externalStateSources[sourceIndex].states || !desc.externalStateSources[sourceIndex].states->valid() || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount)
-            return {};
+            return MakeUnexpected(Failure{});
     }
 
     // Resource sets are immutable graph data.
@@ -157,14 +157,14 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     usize expandedResourceUseCount = desc.resourceUseCount;
     const usize remainingResourceUseCapacity = static_cast<usize>(Limit<u32>::s_Max) - m_resourceUses.size();
     if(expandedResourceUseCount > remainingResourceUseCapacity)
-        return {};
+        return MakeUnexpected(Failure{});
     for(usize resourceSetUseIndex = 0u; resourceSetUseIndex < desc.resourceSetUseCount; ++resourceSetUseIndex){
         const GpuTaskResourceSetUse& resourceSetUse = desc.resourceSetUses[resourceSetUseIndex];
         if(!validResourceSet(resourceSetUse.resourceSet))
-            return {};
+            return MakeUnexpected(Failure{});
         const GpuGraphResourceSetNode& resourceSet = m_resourceSets[resourceSetUse.resourceSet.index];
         if(resourceSet.memberCount > remainingResourceUseCapacity - expandedResourceUseCount)
-            return {};
+            return MakeUnexpected(Failure{});
         expandedResourceUseCount += resourceSet.memberCount;
     }
 
@@ -178,9 +178,9 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
             const CommandListResourceStateHandoff* const source = desc.externalStateSources[sourceIndex].states;
             GlobalUniquePtr<CommandListResourceStateHandoff> snapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
             if(!snapshot)
-                return {};
+                return MakeUnexpected(Failure{});
             if(!snapshot->copyFrom(*source))
-                return {};
+                return MakeUnexpected(Failure{});
             snapshots.push_back(Move(snapshot));
         }
     }
@@ -205,7 +205,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
 
     const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
     if(!markerLabelRange)
-        return {};
+        return MakeUnexpected(Failure{});
 
     GpuTaskNode task;
     task.identity = desc.identity;
@@ -260,7 +260,8 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
                 .requiredState = resourceSetUse.requiredState,
                 .access = resourceSetUse.access,
                 .hasIndependentStateSource = resourceSetUse.hasIndependentStateSource,
-            });
+            }
+            );
         }
     }
 
@@ -291,9 +292,9 @@ void GpuTaskGraph::discardAndDestroyUnappendedPayload(void* const payload, const
         discardPayload(payload);
 }
 
-GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphResourceDesc& desc, const ResourceQueueAdmissionSnapshot* const queueAdmission, const ResourceBinding& binding, const DeclarationMutationScope& mutationAccess){
+Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const GpuGraphResourceDesc& desc, const ResourceQueueAdmissionSnapshot* const queueAdmission, const ResourceBinding& binding, const DeclarationMutationScope& mutationAccess){
     if(!mutationAccess.validFor(*this))
-        return {};
+        return MakeUnexpected(Failure{});
 
     const usize queueFamilyIndexCount = queueAdmission ? queueAdmission->queueFamilyIndexCount : 0u;
     const bool hasInitialOwnerHandoff = desc.initialOwnerHandoffSources != nullptr || desc.initialOwnerHandoffSourceCount != 0u;
@@ -332,7 +333,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphReso
         || (desc.initialOwnerQueue.valid() && desc.type != GpuGraphResourceType::Texture && desc.type != GpuGraphResourceType::Buffer && desc.type != GpuGraphResourceType::AccelStruct)
         || m_resources.size() >= Limit<u32>::s_Max
     )
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(hasInitialOwnerHandoff){
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
@@ -350,18 +351,18 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphReso
                 || !source.stateSource
                 || !source.stateSource->valid()
             )
-                return {};
+                return MakeUnexpected(Failure{});
             for(usize previousSourceIndex = 0u; previousSourceIndex < sourceIndex; ++previousSourceIndex){
                 const GpuGraphInitialOwnerHandoffSourceDesc& previousSource = desc.initialOwnerHandoffSources[previousSourceIndex];
                 // One completion binding supplies one physical-queue timeline token at submission.
                 // Reusing it for sources from different queues would make a later graph impossible to submit safely: one acquire would necessarily wait on the wrong producer frontier.
                 if(source.completion == previousSource.completion && source.sourceQueue != previousSource.sourceQueue)
-                    return {};
+                    return MakeUnexpected(Failure{});
                 const bool overlaps = desc.type == GpuGraphResourceType::Texture ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources) : desc.type == GpuGraphResourceType::AccelStruct
                         || source.range.bufferRange.overlaps(previousSource.range.bufferRange)
                 ;
                 if(overlaps)
-                    return {};
+                    return MakeUnexpected(Failure{});
             }
         }
     }
@@ -376,9 +377,9 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphReso
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
             GlobalUniquePtr<CommandListResourceStateHandoff> stateSnapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
             if(!stateSnapshot)
-                return {};
+                return MakeUnexpected(Failure{});
             if(!stateSnapshot->copyFrom(*source.stateSource))
-                return {};
+                return MakeUnexpected(Failure{});
             snapshots.push_back(Move(stateSnapshot));
         }
     }
@@ -406,7 +407,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphReso
 
     const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
     if(!markerLabelRange)
-        return {};
+        return MakeUnexpected(Failure{});
 
     for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
         const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
@@ -417,7 +418,8 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphReso
             .completion = source.completion,
             .minimumCompletionToken = source.minimumCompletionToken,
             .stateSource = (*initialOwnerHandoffStateSnapshots)[sourceIndex].get(),
-        });
+        }
+        );
         m_initialOwnerHandoffStateSnapshots.push_back((*initialOwnerHandoffStateSnapshots)[sourceIndex].get());
     }
 
@@ -459,17 +461,18 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphReso
             m_resourcePointerIndex->erase(pointerKey);
         if(identityInserted)
             m_resourceIdentityIndex->erase(identityKey);
-    });
+    }
+    );
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
     if(m_resourceIdentityIndex){
         identityInserted = m_resourceIdentityIndex->emplace(identityKey, index).second;
         if(!identityInserted)
-            return {};
+            return MakeUnexpected(Failure{});
         if(pointerKey.pointer){
             pointerInserted = m_resourcePointerIndex->emplace(pointerKey, index).second;
             if(!pointerInserted)
-                return {};
+                return MakeUnexpected(Failure{});
         }
     }
     if(initialOwnerHandoffStateSnapshots){
@@ -486,13 +489,13 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(const GpuGraphReso
     return GpuGraphResourceId{ .generation = m_generation, .index = index };
 }
 
-GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphResourceVersionDesc& desc){
+Expected<GpuGraphResourceVersionId> GpuTaskGraph::appendResourceVersion(const GpuGraphResourceVersionDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(m_resourceVersions.size() >= Limit<u32>::s_Max)
-        return {};
+        return MakeUnexpected(Failure{});
 
     GpuGraphResourceVersionNode version;
     version.resource = desc.resource;
@@ -505,10 +508,10 @@ GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphReso
     return GpuGraphResourceVersionId{ .generation = m_generation, .index = index };
 }
 
-GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetDesc& desc){
+Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(
         !desc.identity
@@ -519,7 +522,7 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
         || desc.memberCount > static_cast<usize>(Limit<u32>::s_Max) - m_resourceSetMembers.size()
         || m_resourceSets.size() >= Limit<u32>::s_Max
     )
-        return {};
+        return MakeUnexpected(Failure{});
 
     {
         constexpr usize s_InlineMemberCount = 32u;
@@ -528,13 +531,13 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
         for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex){
             const GpuGraphResourceId member = desc.members[memberIndex];
             if(!validResource(member))
-                return {};
+                return MakeUnexpected(Failure{});
 
             // Validity establishes this graph generation before index-only membership is used.
             if(memberIndex < s_InlineMemberCount){
                 for(usize previousMemberIndex = 0u; previousMemberIndex < memberIndex; ++previousMemberIndex){
                     if(inlineMembers[previousMemberIndex] == member.index)
-                        return {};
+                        return MakeUnexpected(Failure{});
                 }
                 inlineMembers[memberIndex] = member.index;
             }
@@ -545,7 +548,7 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
                     indexedMembers->insert(inlineMembers, inlineMembers + s_InlineMemberCount);
                 }
                 if(!indexedMembers->insert(member.index).second)
-                    return {};
+                    return MakeUnexpected(Failure{});
             }
         }
     }
@@ -561,7 +564,7 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
 
     const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
     if(!markerLabelRange)
-        return {};
+        return MakeUnexpected(Failure{});
 
     GpuGraphResourceSetNode resourceSet;
     resourceSet.identity = desc.identity;
@@ -577,13 +580,14 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     ScopeExit indexRollback([&]()noexcept{
         if(identityInserted)
             m_resourceSetIdentityIndex->erase(identityKey);
-    });
+    }
+    );
     const u32 index = static_cast<u32>(m_resourceSets.size());
     m_resourceSets.push_back(Move(resourceSet));
     if(m_resourceSetIdentityIndex){
         identityInserted = m_resourceSetIdentityIndex->emplace(identityKey, index).second;
         if(!identityInserted)
-            return {};
+            return MakeUnexpected(Failure{});
     }
     markerRollback.commit();
     memberRollback.commit();
@@ -593,13 +597,13 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     return GpuGraphResourceSetId{ .generation = m_generation, .index = index };
 }
 
-GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternalCompletionDesc& desc){
+Expected<GpuExternalCompletionId> GpuTaskGraph::appendExternalCompletion(const GpuExternalCompletionDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!desc.identity || desc.markerLabel.empty() || desc.markerLabel.size() > Limit<u32>::s_Max || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size() || m_externalCompletions.size() >= Limit<u32>::s_Max)
-        return {};
+        return MakeUnexpected(Failure{});
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_externalCompletions, m_externalCompletions.size() + 1u);
@@ -610,7 +614,7 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
 
     const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
     if(!markerLabelRange)
-        return {};
+        return MakeUnexpected(Failure{});
 
     GpuExternalCompletionNode completion;
     completion.identity = desc.identity;
@@ -625,13 +629,14 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     ScopeExit indexRollback([&]()noexcept{
         if(identityInserted)
             m_externalCompletionIdentityIndex->erase(identityKey);
-    });
+    }
+    );
     const u32 index = static_cast<u32>(m_externalCompletions.size());
     m_externalCompletions.push_back(Move(completion));
     if(m_externalCompletionIdentityIndex){
         identityInserted = m_externalCompletionIdentityIndex->emplace(identityKey, index).second;
         if(!identityInserted)
-            return {};
+            return MakeUnexpected(Failure{});
     }
     markerRollback.commit();
     completionRollback.commit();

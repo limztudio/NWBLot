@@ -27,6 +27,9 @@
 #pragma warning(pop)
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> nwbHeapShadowMaterialContextSlots(const uint slot){
     return g_NwbHeapShadowMaterialContextSlotBuffers[slot];
 }

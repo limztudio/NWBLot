@@ -49,7 +49,9 @@ struct AssetVolumePackEntry{
     Path objectPath;
     Core::Assets::AssetBytes payloadBytes;
 
-    explicit AssetVolumePackEntry(Core::Assets::AssetArena& arena)
+
+public:
+    explicit AssetVolumePackEntry(Core::Assets::AssetArena& arena)noexcept
         : objectPath(arena)
         , payloadBytes(arena)
     {}
@@ -61,7 +63,9 @@ struct AssetVolumePackManifest{
     AssetVolumePackEntryVector entries;
     u64 plannedFileCount = 0u;
 
-    explicit AssetVolumePackManifest(Core::Assets::AssetArena& arena)
+
+public:
+    explicit AssetVolumePackManifest(Core::Assets::AssetArena& arena)noexcept
         : entries(arena)
     {}
 };

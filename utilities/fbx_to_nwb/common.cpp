@@ -4,6 +4,7 @@
 
 #include "module.h"
 
+#include <global/allocation_size.h>
 #include <global/command_line.h>
 
 
@@ -28,6 +29,24 @@ static constexpr NormalMode::Enum s_NormalModeValues[] = { NormalMode::Imported,
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<typename EnumT, usize Count, typename TextFunction>
+static ScratchString BuildOptionTexts(Core::Alloc::ScratchArena& scratchArena, const EnumT (&values)[Count], TextFunction textFunction){
+    usize capacity = 0u;
+    for(usize i = 0u; i < Count; ++i){
+        if(i > 0u)
+            capacity = AddSize(capacity, i + 1u == Count ? 5u : 2u);
+        capacity = AddSize(capacity, textFunction(values[i]).size());
+    }
+    ScratchString text(scratchArena);
+    text.reserve(capacity);
+    for(usize i = 0u; i < Count; ++i){
+        if(i > 0u)
+            text += i + 1u == Count ? ", or " : ", ";
+        text += textFunction(values[i]);
+    }
+    return text;
+}
 
 template<typename TextFunction, typename ParseFunction>
 static bool ValidateOptionText(AString& inOutValue, TextFunction textFunction, ParseFunction parseValue){
@@ -89,18 +108,20 @@ static Expected<NormalMode::Enum> ParseNormalizedNormalModeText(const AStringVie
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AString OutputAssetTypeOptionsText(){
-    return BuildEnumOptionTexts<AString, OutputAssetType::Enum>(__hidden_common::OutputAssetTypeText, __hidden_common::s_OutputAssetTypeValues, LengthOf(__hidden_common::s_OutputAssetTypeValues));
+ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena){
+    return __hidden_common::BuildOptionTexts(scratchArena, __hidden_common::s_OutputAssetTypeValues, __hidden_common::OutputAssetTypeText);
 }
 
-AString OutputAssetTypeErrorText(){
-    AString message("Asset type must be ");
-    message += OutputAssetTypeOptionsText();
+ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
+    const ScratchString options = OutputAssetTypeOptionsText(scratchArena);
+    ScratchString message("Asset type must be ", scratchArena);
+    message.reserve(AddSize(message.size(), options.size()));
+    message += options;
     return message;
 }
 
-Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value){
-    const AString normalized = NormalizeOptionText(AString(value));
+Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena){
+    const ScratchString normalized = NormalizeOptionText(ScratchString(value, scratchArena));
     return __hidden_common::ParseNormalizedAssetTypeText(AStringView(normalized));
 }
 
@@ -108,18 +129,20 @@ bool ValidateAssetTypeText(AString& inOutValue){
     return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::OutputAssetTypeText, __hidden_common::ParseNormalizedAssetTypeText);
 }
 
-AString NormalModeOptionsText(){
-    return BuildEnumOptionTexts<AString, NormalMode::Enum>(__hidden_common::NormalModeText, __hidden_common::s_NormalModeValues, LengthOf(__hidden_common::s_NormalModeValues));
+ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena){
+    return __hidden_common::BuildOptionTexts(scratchArena, __hidden_common::s_NormalModeValues, __hidden_common::NormalModeText);
 }
 
-AString NormalModeErrorText(){
-    AString message("normal mode must be ");
-    message += NormalModeOptionsText();
+ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
+    const ScratchString options = NormalModeOptionsText(scratchArena);
+    ScratchString message("normal mode must be ", scratchArena);
+    message.reserve(AddSize(message.size(), options.size()));
+    message += options;
     return message;
 }
 
-Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value){
-    const AString normalized = NormalizeOptionText(AString(value));
+Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena){
+    const ScratchString normalized = NormalizeOptionText(ScratchString(value, scratchArena));
     return __hidden_common::ParseNormalizedNormalModeText(AStringView(normalized));
 }
 
@@ -140,10 +163,10 @@ AStringView SourceTangentModeText(const SourceTangentMode::Enum mode)noexcept{
     }
 }
 
-Expected<Vec4> ParseColorText(const AStringView text){
-    AString normalized(text);
+Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena){
+    ScratchString normalized(text, scratchArena);
     Replace(normalized.begin(), normalized.end(), ',', ' ');
-    AStringStream in(normalized);
+    ScratchStringStream in(normalized, ScratchStringStream::in, scratchArena);
 
     f32 red = 0.0f;
     f32 green = 0.0f;
@@ -152,7 +175,7 @@ Expected<Vec4> ParseColorText(const AStringView text){
     if(!(in >> red >> green >> blue >> alpha))
         return MakeUnexpected(Failure{});
 
-    AString trailing;
+    ScratchString trailing(scratchArena);
     if(in >> trailing)
         return MakeUnexpected(Failure{});
 
@@ -165,8 +188,8 @@ Expected<Vec4> ParseColorText(const AStringView text){
     return result;
 }
 
-Path DefaultOutputPath(const AStringView inputPath){
-    Path outputPath(UtilityDetail::Arena(), inputPath);
+ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena){
+    ScratchPath outputPath(scratchArena, inputPath);
     outputPath.replaceExtension(s_NwbOutputExtension);
     return outputPath;
 }

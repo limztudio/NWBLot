@@ -6,6 +6,9 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/floating_point_environment.h>
+#include <global/scope_exit.h>
+
 #include <gtest/gtest.h>
 
 #include "frame_graph_test_helpers.h"
@@ -32,6 +35,9 @@ static constexpr AStringView s_RESOURCE_WITH_NULL_STATISTICS_JSON = "\"kind\": \
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using namespace TelemetryTestDetail;
 
 
@@ -52,7 +58,7 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 40u, nodes, edges, 7u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 40u, nodes, edges, 7u));
 
     NWB::Core::Perf::TimingStats secondTiming = MakeTestTimingStats();
     secondTiming.seconds = 0.042;
@@ -63,10 +69,10 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Gpu, gbufferScopeName, "gbuffer", secondTiming, 80u));
 
     nodes[0u].label = "Second GBuffer Pass";
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 41u, nodes, edges, 8u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 41u, nodes, edges, 8u));
 
     nodes[0u].label = "Unmatched GBuffer Pass";
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 42u, nodes, edges, 9u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 42u, nodes, edges, 9u));
 
     Log::TelemetryReport report(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
@@ -120,9 +126,9 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 43u, nodes, edges, 7u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 43u, nodes, edges, 7u));
     nodes[0u].label = "Publish Frame GBuffer Pass";
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 44u, nodes, edges, 8u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 44u, nodes, edges, 8u));
 
     Log::TelemetryReport report(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
@@ -149,7 +155,7 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
 
     Telemetry::Recorder exactRecorder(testArena.arena);
     exactRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(exactRecorder, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(exactRecorder, testArena.scratchArena, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
     Log::TelemetryReport exactReport(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
     auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, exactRecorder.view(), scratchArena);
@@ -162,7 +168,7 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
 
     Telemetry::Recorder absentRecorder(testArena.arena);
     absentRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(absentRecorder, 59u, nodes, edges, 19u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(absentRecorder, testArena.scratchArena, 59u, nodes, edges, 19u));
     Log::TelemetryReport absentReport(testArena.arena);
     auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, absentRecorder.view(), scratchArena);
     ASSERT_TRUE(reportResult4);
@@ -179,11 +185,11 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 55u, nodes, edges, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 55u, nodes, edges, payload));
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 55u, nodes, edges, 15u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 55u, nodes, edges, 15u));
 
     const u16 unsupportedVersions[] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u), Limit<u16>::s_Max, };
     Telemetry::EncodedFrameGraphPayloadHeader header;
@@ -214,7 +220,7 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 53u, nodes, edges, 13u));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 53u, nodes, edges, 13u));
 
     Log::TelemetryReport report(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
@@ -261,6 +267,50 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     EXPECT_TRUE(ContainsText(firstPassDot, s_RUNTIME_STATISTICS_NONE));
     EXPECT_TRUE(ContainsText(resourceDot, s_RUNTIME_STATISTICS_NONE));
     EXPECT_TRUE(ContainsText(secondPassDot, s_RUNTIME_STATISTICS_NONE));
+}
+
+TEST(Telemetry, TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
+            NWB_ASSERT(false);
+    });
+    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
+
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    NWB::Core::Perf::TimingStats timing = MakeTestTimingStats();
+    timing.seconds = Limit<f64>::s_Max * 0.75;
+    timing.minSeconds = timing.seconds;
+    timing.maxSeconds = timing.seconds;
+    timing.lastSeconds = timing.seconds;
+    timing.sampleCount = 1u;
+    timing.firstSampleFrameIndex = 70u;
+    timing.lastSampleFrameIndex = 70u;
+    for(const auto source : { Telemetry::PerfTimingSource::Cpu, Telemetry::PerfTimingSource::Gpu }){
+        ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, source, Name("large_first"), "large_first", timing));
+        ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, source, Name("large_second"), "large_second", timing));
+    }
+
+    const auto report = Log::BuildTelemetryReport(testArena.arena, recorder.view(), testArena.scratchArena);
+    ASSERT_TRUE(report);
+    EXPECT_EQ(report->summary.eventCount, 4u);
+    EXPECT_EQ(report->summary.parseFailureCount, 0u);
+    EXPECT_EQ(report->summary.cpuTimingEventCount, 2u);
+    EXPECT_EQ(report->summary.gpuTimingEventCount, 2u);
+
+    const AStringView json(report->json.data(), report->json.size());
+    EXPECT_TRUE(ContainsText(json, "\"cpuTimingSeconds\": null"));
+    EXPECT_TRUE(ContainsText(json, "\"gpuTimingSeconds\": null"));
+    const AStringView csv(report->perfCsv.data(), report->perfCsv.size());
+    EXPECT_TRUE(ContainsText(csv, "cpu,large_first,"));
+    EXPECT_TRUE(ContainsText(csv, "cpu,large_second,"));
+    EXPECT_TRUE(ContainsText(csv, "gpu,large_first,"));
+    EXPECT_TRUE(ContainsText(csv, "gpu,large_second,"));
 }
 
 

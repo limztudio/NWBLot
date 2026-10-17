@@ -1987,7 +1987,7 @@ def parse_args(argv):
     parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"), help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
     parser.add_argument("--resize-settle-seconds", type=float, help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
     parser.add_argument(LIT_RENDER_READY_TIMEOUT, type=float, default=RENDER_READY_TIMEOUT_SECONDS, help="Seconds to wait for a blank visible window to publish its first rendered frame.",)
-    parser.add_argument("--application-capture", action=LIT_STORE_TRUE, help="Use the application's Vulkan framebuffer readback instead of desktop window capture.",)
+    parser.add_argument("--application-capture", action=LIT_STORE_TRUE, help="Use the application's framebuffer readback instead of desktop window capture.",)
     parser.add_argument(LIT_APPLICATION_CAPTURE_FRAME_COUNT, type=int, default=360, help="Positive rendered frame count at which application capture is requested. Defaults to 360.",)
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Do not start a logserver; launch with standalone log output.")

@@ -142,7 +142,8 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
             sortedAssignments.push_back(AssignmentPtr{ &defineName, &defineValue });
         Sort(sortedAssignments.begin(), sortedAssignments.end(), [](const AssignmentPtr& lhs, const AssignmentPtr& rhs)noexcept{
             return *lhs.key < *rhs.key;
-        });
+        }
+        );
 
         usize canonicalVariantSize = sortedAssignments.size() - 1u;
         for(const AssignmentPtr& assignment : sortedAssignments)
@@ -195,10 +196,15 @@ static Expected<MaterialCookEntry::StageShaderMap> ParseMaterialStageShaders(con
             return MakeUnexpected(Failure{});
         }
 
-        const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(stageKeyText));
-        const Name shaderName = ToName(shaderPath);
+        const auto stageName = ToName(stageKeyText);
+        const auto shaderName = ToName(shaderPath);
+        if(!stageName || !*stageName || !shaderName || !*shaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
+            return MakeUnexpected(Failure{});
+        }
+        const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(**stageName);
         Core::Assets::AssetRef<IShader> shaderAsset;
-        shaderAsset.virtualPath = shaderName;
+        shaderAsset.virtualPath = **shaderName;
         if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
@@ -357,7 +363,8 @@ static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, cons
     }
 
     // Store path text; the Name hash is produced on demand.
-    if(!Name(AStringView(strippedInterface))){
+    const auto interfaceName = Name::FromText(AStringView(strippedInterface));
+    if(!interfaceName || !*interfaceName){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface '{}' is invalid"), PathToString<tchar>(nwbFilePath), StringConvert(interfacePath));
         return MakeUnexpected(Failure{});
     }
@@ -442,10 +449,11 @@ Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStri
         return MakeUnexpected(Failure{});
 
     // Keep the material path as readable text for generated shader paths; validate its Name identity before storage.
-    auto derivedVirtualPath = Core::Assets::BuildDerivedAssetVirtualPath(arena, assetRoot, virtualRoot, nwbFilePath);
+    auto derivedVirtualPath = Core::Assets::BuildDerivedAssetVirtualPath(arena, assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!derivedVirtualPath)
         return MakeUnexpected(Failure{});
-    if(!Name(AStringView(*derivedVirtualPath))){
+    const auto virtualPathName = Name::FromText(AStringView(*derivedVirtualPath));
+    if(!virtualPathName || !*virtualPathName){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': failed to derive a valid virtual path"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }

@@ -44,11 +44,15 @@ public:
     [[nodiscard]] MemoryView memoryView()const noexcept{ return MemoryView(m_memory); }
 
     template<typename Arena>
-    void recordMemorySnapshot(const Name& scopeName, const Arena& arena){
+    [[nodiscard]] bool recordMemorySnapshot(const Name& scopeName, const Arena& arena){
         if(!captureOptions().memoryActive())
-            return;
+            return true;
 
-        m_memory.recordSnapshot(m_memory.registerScope(scopeName), arena.memoryStats(), m_frameIndex);
+        const auto scope = m_memory.registerScope(scopeName);
+        if(!scope)
+            return false;
+        m_memory.recordSnapshot(*scope, arena.memoryStats(), m_frameIndex);
+        return true;
     }
 
 

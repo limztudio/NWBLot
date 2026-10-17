@@ -40,9 +40,13 @@ using TaskGraphTestUtils::TestArena;
 
 
 TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const TransferOwnershipPair pair = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::Exclusive);
+    const auto pairResult = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::Exclusive);
+    ASSERT_TRUE(pairResult);
+    const TransferOwnershipPair pair = *pairResult;
     ASSERT_TRUE(pair.texture.valid());
     ASSERT_TRUE(pair.producer.valid());
     ASSERT_TRUE(pair.consumer.valid());
@@ -52,7 +56,7 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     {
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
@@ -154,14 +158,14 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
         EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
     }
 
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     {
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
     }
     const Graphics::GpuPhysicalQueueTopology invalidTopology{};
-    EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, invalidTopology, assignments, compiledGraph));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, invalidTopology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     EXPECT_FALSE(compiledPlan.valid());
@@ -171,9 +175,13 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
 }
 
 TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/multi_range_ownership_texture"), "Multi-Range Ownership Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/multi_range_ownership_texture"), "Multi-Range Ownership Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
+    ASSERT_TRUE(textureResult);
+    const Graphics::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
 
     const Graphics::GpuTaskResourceRange firstRange{ .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u), };
@@ -193,8 +201,12 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     producerDesc.setIdentity(Name("tests/task_graph/multi_range_ownership_producer")).setMarkerLabel("Multi-Range Ownership Producer").setScheduling(scheduling).setResourceUses(producerUses, LengthOf(producerUses));
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc.setIdentity(Name("tests/task_graph/multi_range_ownership_consumer")).setMarkerLabel("Multi-Range Ownership Consumer").setScheduling(scheduling).setResourceUses(consumerUses, LengthOf(consumerUses));
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute });
+    const auto producerResult = graph.addTask(producerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
+    ASSERT_TRUE(producerResult);
+    const Graphics::GpuTaskId producer = *producerResult;
+    const auto consumerResult = graph.addTask(consumerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute });
+    ASSERT_TRUE(consumerResult);
+    const Graphics::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
 
@@ -203,7 +215,7 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -277,9 +289,13 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
 }
 
 TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(graph, Name("tests/task_graph/repeated_ownership_texture"), "Repeated Ownership Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/repeated_ownership_texture"), "Repeated Ownership Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
+    ASSERT_TRUE(textureResult);
+    const Graphics::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
 
     Graphics::GpuTaskSchedulingHint scheduling;
@@ -293,9 +309,15 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
         desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling).setResourceUses(&use, 1u);
         return graph.addTask(desc, commands);
     };
-    const Graphics::GpuTaskId firstGraphics = addTask(Name("tests/task_graph/repeated_ownership_first_graphics"), "Repeated Ownership First Graphics", graphicsCommands, Graphics::GpuTaskResourceAccess::Write);
-    const Graphics::GpuTaskId compute = addTask(Name("tests/task_graph/repeated_ownership_compute"), "Repeated Ownership Compute", computeCommands, Graphics::GpuTaskResourceAccess::Write);
-    const Graphics::GpuTaskId secondGraphics = addTask(Name("tests/task_graph/repeated_ownership_second_graphics"), "Repeated Ownership Second Graphics", graphicsCommands, Graphics::GpuTaskResourceAccess::Read);
+    const auto firstGraphicsResult = addTask(Name("tests/task_graph/repeated_ownership_first_graphics"), "Repeated Ownership First Graphics", graphicsCommands, Graphics::GpuTaskResourceAccess::Write);
+    ASSERT_TRUE(firstGraphicsResult);
+    const Graphics::GpuTaskId firstGraphics = *firstGraphicsResult;
+    const auto computeResult = addTask(Name("tests/task_graph/repeated_ownership_compute"), "Repeated Ownership Compute", computeCommands, Graphics::GpuTaskResourceAccess::Write);
+    ASSERT_TRUE(computeResult);
+    const Graphics::GpuTaskId compute = *computeResult;
+    const auto secondGraphicsResult = addTask(Name("tests/task_graph/repeated_ownership_second_graphics"), "Repeated Ownership Second Graphics", graphicsCommands, Graphics::GpuTaskResourceAccess::Read);
+    ASSERT_TRUE(secondGraphicsResult);
+    const Graphics::GpuTaskId secondGraphics = *secondGraphicsResult;
     ASSERT_TRUE(firstGraphics.valid());
     ASSERT_TRUE(compute.valid());
     ASSERT_TRUE(secondGraphics.valid());
@@ -305,7 +327,7 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -388,7 +410,9 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
 TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const TransferOwnershipPair pair = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
+    const auto pairResult = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
+    ASSERT_TRUE(pairResult);
+    const TransferOwnershipPair pair = *pairResult;
     ASSERT_TRUE(pair.texture.valid());
     ASSERT_TRUE(pair.producer.valid());
     ASSERT_TRUE(pair.consumer.valid());
@@ -430,9 +454,13 @@ TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
 }
 
 TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const TransferOwnershipPair pair = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::Exclusive);
+    const auto pairResult = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::Exclusive);
+    ASSERT_TRUE(pairResult);
+    const TransferOwnershipPair pair = *pairResult;
     ASSERT_TRUE(pair.texture.valid());
     ASSERT_TRUE(pair.producer.valid());
     ASSERT_TRUE(pair.consumer.valid());
@@ -443,7 +471,7 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
         const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
@@ -467,7 +495,7 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
         const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
@@ -524,9 +552,13 @@ TEST(GpuTaskGraph, LogicalSharingRequiresTwoSelectedFamiliesAcrossEveryMaskAndTo
 }
 
 TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFamily){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const TransferOwnershipPair pair = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    const auto pairResult = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_TRUE(pairResult);
+    const TransferOwnershipPair pair = *pairResult;
     ASSERT_TRUE(pair.texture.valid());
     ASSERT_TRUE(pair.producer.valid());
     ASSERT_TRUE(pair.consumer.valid());
@@ -539,7 +571,7 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(pair.consumer);
@@ -561,9 +593,13 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
 }
 
 TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const TransferOwnershipPair pair = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    const auto pairResult = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_TRUE(pairResult);
+    const TransferOwnershipPair pair = *pairResult;
     ASSERT_TRUE(pair.texture.valid());
     ASSERT_TRUE(pair.producer.valid());
     ASSERT_TRUE(pair.consumer.valid());
@@ -573,7 +609,7 @@ TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride);

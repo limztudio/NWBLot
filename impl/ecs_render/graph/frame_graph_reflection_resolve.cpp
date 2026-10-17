@@ -2,11 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/graph/frame_graph_reflection_resolve.h>
+#include "frame_graph_reflection_resolve.h"
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/task_graph_refraction_resolve.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
@@ -22,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphReflectionResolve::FrameGraphReflectionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem, RendererReflectionSystem& reflectionSystem)
+FrameGraphReflectionResolve::FrameGraphReflectionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem, RendererReflectionSystem& reflectionSystem)noexcept
     : m_graph(graph)
     , m_graphics(graphics)
     , m_raytracingSystem(raytracingSystem)
@@ -76,9 +75,12 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     if(!reflectionResources.valid())
         return MakeUnexpected(Failure{});
     if(!sceneReads.valid() && (reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace))){
-        sceneReads = ImportRayTracingSceneGraphReads(m_graph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena);
-        if(!sceneReads.valid())
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(m_graph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena);
+        if(!sceneReadsResult){
+            sceneReads = RayTracingSceneGraphReads(scratchArena);
             return MakeUnexpected(Failure{});
+        }
+        sceneReads = Move(*sceneReadsResult);
     }
     const Core::GpuTaskResourceUse reflectionSurfaceReads[] = {
         ReadUse(specularRoughness), ReadUse(refractionSpecularRoughness), ReadUse(normal), ReadUse(depth), ReadUse(worldPosition),
@@ -114,16 +116,16 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         .hardwareDispatchLogged = inputs.hardwareDispatchLogged,
         .fallbackDispatchLogged = inputs.fallbackDispatchLogged,
     };
-    const ReflectionGraphResult reflectionGraph = DeclareReflectionTasks(m_graph, m_graphics, m_reflectionSystem, traceGeometryScratchArena, reflectionResources, reflectionInputs, inputs.lightingTask);
-    if(!reflectionGraph.valid())
+    auto reflectionGraphResult = DeclareReflectionTasks(m_graph, m_graphics, m_reflectionSystem, traceGeometryScratchArena, reflectionResources, reflectionInputs, inputs.lightingTask);
+    if(!reflectionGraphResult)
         return MakeUnexpected(Failure{});
+    const ReflectionGraphResult reflectionGraph = Move(*reflectionGraphResult);
     const ReflectionCompositeInputs reflectionCompositeInputs{ .opaqueRadianceSlot = reflectionResources.parameters.opaqueRadianceSlot, .glassRadianceSlot = reflectionResources.parameters.glassRadianceSlot, .debugView = reflectionSettings.debugView, };
     refractionResources.opaqueReflectionSlot = reflectionCompositeInputs.opaqueRadianceSlot;
 
-    Core::GpuTaskId refractionResolveTask;
+    Expected<Core::GpuTaskId> refractionResolveTask = MakeUnexpected(Failure{});
     if(refractionActive && refractionResources.valid()){
-        Core::Alloc::ScratchArena refractionScratch(RendererArenaScope::s_TaskGraphArena);
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{refractionScratch};
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{scratchArena};
         const Core::GpuGraphResourceId refractionInputs[] = {
             refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
             opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
@@ -156,7 +158,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
             .setMarkerLabel("AVBOIT Refraction Resolve")
             .setDependencies(refractionDependencies, LengthOf(refractionDependencies))
             .setResourceUses(refractionUses.data(), refractionUses.size())
-            .setResourceSetUses(refractionSets, refractionSetCount);
+            .setResourceSetUses(refractionSets, refractionSetCount)
+        ;
         refractionResolveTask = m_graph.addTask<RefractionResolveGraphTask>(refractionDesc,
             RefractionResolveGraphTask::Payload{
                 .system = m_raytracingSystem, .targets = deferredTargets, .resources = refractionResources,
@@ -164,7 +167,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
                 .dispatchLogged = refractionResources.usesHardwareTrace
                     ? inputs.refractionHardwareLogged : inputs.refractionScreenLogged,
                 .screenFallbackDispatchLogged = inputs.refractionScreenLogged,
-            });
+            }
+        );
     }
     else{
         Core::GpuTaskDesc clearDesc;
@@ -176,11 +180,11 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         clear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
         refractionResolveTask = m_graph.addClearTextureTask(clearDesc, clear);
     }
-    if(!refractionResolveTask.valid())
+    if(!refractionResolveTask)
         return MakeUnexpected(Failure{});
     result.reflectionGraph = reflectionGraph;
     result.reflectionCompositeInputs = reflectionCompositeInputs;
-    result.refractionResolveTask = refractionResolveTask;
+    result.refractionResolveTask = *refractionResolveTask;
     result.declared = true;
     return result;
 }

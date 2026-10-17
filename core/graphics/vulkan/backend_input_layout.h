@@ -23,7 +23,7 @@ class InputLayout final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    InputLayout(const VulkanContext& context);
+    InputLayout(const VulkanContext& context)noexcept;
     ~InputLayout() = default;
 
 

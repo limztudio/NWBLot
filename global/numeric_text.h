@@ -7,6 +7,8 @@
 
 #include "basic_string.h"
 #include "expected.h"
+#include "error_code.h"
+#include "limit.h"
 #include "simplemath.h"
 
 #include <charconv>
@@ -23,6 +25,12 @@ namespace TextDetail{
 
 inline constexpr usize s_DecimalTextBufferBytes = 32u;
 inline constexpr i32 s_DefaultNumericTextBase = 10;
+inline constexpr usize s_UsizeDecimalDigitCount = []()noexcept{
+    usize digits = 1u;
+    for(usize value = Limit<usize>::s_Max; value >= 10u; value /= 10u)
+        ++digits;
+    return digits;
+}();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,43 +55,53 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
 
 // Caller-owned bounded storage keeps scalar formatting independent of an allocator or locale.
 template<usize N>
-[[nodiscard]] inline AStringView FormatI64(const i64 value, char (&buffer)[N])noexcept{
+[[nodiscard]] inline Expected<AStringView, ErrorCode> FormatI64(const i64 value, char (&buffer)[N])noexcept{
     const auto result = std::to_chars(buffer, buffer + N, value);
-    if(result.ec != std::errc())
-        return {};
-    return { buffer, static_cast<usize>(result.ptr - buffer) };
+    if(result.ec != ErrorCondition{})
+        return MakeUnexpected(MakeErrorCode(result.ec));
+    return AStringView(buffer, static_cast<usize>(result.ptr - buffer));
 }
 
 // The shortest general representation roundtrips to the same finite double, including signed zero.
 template<usize N>
-[[nodiscard]] inline AStringView FormatF64(const f64 value, char (&buffer)[N])noexcept{
+[[nodiscard]] inline Expected<AStringView, ErrorCode> FormatF64(const f64 value, char (&buffer)[N])noexcept{
     if(!IsFinite(value))
-        return {};
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
     const auto result = std::to_chars(buffer, buffer + N, value);
-    if(result.ec != std::errc())
-        return {};
-    return { buffer, static_cast<usize>(result.ptr - buffer) };
+    if(result.ec != ErrorCondition{})
+        return MakeUnexpected(MakeErrorCode(result.ec));
+    return AStringView(buffer, static_cast<usize>(result.ptr - buffer));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Full-range caller storage makes decimal formatting total, including zero and the largest usize.
 template<usize N>
-[[nodiscard]] inline AStringView FormatDecimal(const usize value, char (&buffer)[N])noexcept{
-    const auto formatResult = std::to_chars(buffer, buffer + N, value);
-    if(formatResult.ec != std::errc())
-        return AStringView();
-
-    return AStringView(buffer, static_cast<usize>(formatResult.ptr - buffer));
+    requires (N >= TextDetail::s_UsizeDecimalDigitCount)
+[[nodiscard]] inline constexpr AStringView FormatDecimal(const usize value, char (&buffer)[N])noexcept{
+    usize remaining = value;
+    usize length = 0u;
+    do{
+        buffer[length] = static_cast<char>('0' + remaining % 10u);
+        ++length;
+        remaining /= 10u;
+    }while(remaining != 0u);
+    for(usize left = 0u, right = length - 1u; left < right; ++left, --right){
+        const char digit = buffer[left];
+        buffer[left] = buffer[right];
+        buffer[right] = digit;
+    }
+    return AStringView(buffer, length);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline std::ios_base& StreamHex(std::ios_base& stream){ return std::hex(stream); }
-inline std::ios_base& StreamDec(std::ios_base& stream){ return std::dec(stream); }
+inline std::ios_base& StreamHex(std::ios_base& stream)noexcept(noexcept(stream.setf(std::ios_base::hex, std::ios_base::basefield))){ return std::hex(stream); }
+inline std::ios_base& StreamDec(std::ios_base& stream)noexcept(noexcept(stream.setf(std::ios_base::dec, std::ios_base::basefield))){ return std::dec(stream); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,14 +111,14 @@ namespace TextParseDetail{
 
 
 template<typename NumberT>
-[[nodiscard]] inline Expected<NumberT> ParseNumber(const AStringView text)noexcept{
+[[nodiscard]] inline Expected<NumberT> ParseNumber(const AStringView text)noexcept(IsArithmetic_V<NumberT>){
     if(text.empty())
         return MakeUnexpected(Failure{});
 
     NumberT value = NumberT(0);
     const char* const begin = text.data();
     const char* const end = begin + text.size();
-    const auto parsed = [&]()noexcept{
+    const auto parsed = [&]()noexcept(IsArithmetic_V<NumberT>){
         if constexpr(IsIntegral_V<NumberT>)
             return std::from_chars(begin, end, value, TextDetail::s_DefaultNumericTextBase);
         else
@@ -113,6 +131,9 @@ template<typename NumberT>
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline Expected<i64> ParseI64FromChars(const AStringView text)noexcept{
@@ -219,7 +240,10 @@ template<typename CharT>
 }
 
 template<typename StringT>
-inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& outText){
+inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& outText)noexcept(
+    noexcept(static_cast<bool>(outText.size() > outText.max_size() || outText.max_size() - outText.size() < nibbleCount))
+    && noexcept(outText.push_back(HexDigit<typename StringT::value_type>(DeclVal<const usize&>())))
+){
     if(outText.size() > outText.max_size() || outText.max_size() - outText.size() < nibbleCount)
         return;
 
@@ -232,12 +256,12 @@ inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& 
 }
 
 template<typename StringT>
-inline void AppendHexU32Impl(const u32 value, StringT& outText){
+inline void AppendHexU32Impl(const u32 value, StringT& outText)noexcept(noexcept(AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText))){
     AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText);
 }
 
 template<typename StringT>
-inline void AppendHexU64Impl(const u64 value, StringT& outText){
+inline void AppendHexU64Impl(const u64 value, StringT& outText)noexcept(noexcept(AppendFixedHexImpl(value, s_HexU64DigitCount, outText))){
     AppendFixedHexImpl(value, s_HexU64DigitCount, outText);
 }
 
@@ -252,7 +276,7 @@ inline void AppendHexU64Impl(const u64 value, StringT& outText){
 
 
 template<typename CharT, typename ArenaT>
-inline void AppendHexU32(const u32 value, BasicString<CharT, ArenaT>& outText){
+inline void AppendHexU32(const u32 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU32Impl(value, outText))){
     NumericTextDetail::AppendHexU32Impl(value, outText);
 }
 template<typename StringT>
@@ -262,7 +286,7 @@ template<typename StringT>
         text.max_size();
         text.push_back(typename StringT::value_type{});
     }
-inline void AppendHexU32(const u32 value, StringT& outText){
+inline void AppendHexU32(const u32 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendHexU32Impl(value, outText))){
     NumericTextDetail::AppendHexU32Impl(value, outText);
 }
 
@@ -271,7 +295,7 @@ template<typename StringT>
         typename StringT::value_type;
         text += typename StringT::value_type{};
     }
-inline void AppendHexU32UnsignedLiteral(const u32 value, StringT& outText){
+inline void AppendHexU32UnsignedLiteral(const u32 value, StringT& outText)noexcept(noexcept(outText += static_cast<typename StringT::value_type>('0')) && noexcept(AppendHexU32(value, outText))){
     using CharT = typename StringT::value_type;
     outText += static_cast<CharT>('0');
     outText += static_cast<CharT>('x');
@@ -280,7 +304,7 @@ inline void AppendHexU32UnsignedLiteral(const u32 value, StringT& outText){
 }
 
 template<typename CharT, typename ArenaT>
-inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText){
+inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU64Impl(value, outText))){
     NumericTextDetail::AppendHexU64Impl(value, outText);
 }
 template<typename StringT>
@@ -290,7 +314,7 @@ template<typename StringT>
         text.max_size();
         text.push_back(typename StringT::value_type{});
     }
-inline void AppendHexU64(const u64 value, StringT& outText){
+inline void AppendHexU64(const u64 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendHexU64Impl(value, outText))){
     NumericTextDetail::AppendHexU64Impl(value, outText);
 }
 

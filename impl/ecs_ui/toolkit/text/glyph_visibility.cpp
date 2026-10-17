@@ -103,10 +103,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
         if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
             return TextGlyphIntersection::Visible;
     }
-    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(
-        VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(64.0)), VectorDoubleReplicate(0.5))),
-        VectorDoubleReplicate(64.0)
-    );
+    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(64.0)), VectorDoubleReplicate(0.5))), VectorDoubleReplicate(64.0));
     const f64 shapedSize = VectorDoubleGetX(shapedSizeValue);
     const SIMDVectorDouble scaleNumerators = VectorDoubleSet(glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize), physicalSize, glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize), 0.0);
     const SIMDVectorDouble scaleDenominators = VectorDoubleSet(glyph.coverage.known ? 1.0 : shapedSize, fontSize, glyph.coverage.known ? 1.0 : static_cast<f64>(glyph.face->unitsPerEm()), 1.0);
@@ -116,10 +113,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const f64 designMargin = VectorDoubleGetZ(scales);
     const SIMDVectorDouble rasterMarginValue = VectorDoubleAdd(
-        VectorDoubleAdd(
-            VectorDoubleDivide(VectorDoubleMax(VectorDoubleSplatOne(), VectorDoubleReplicate(correction)), VectorDoubleReplicate(64.0)),
-            VectorDoubleDivide(VectorDoubleReplicate(2.0), VectorDoubleReplicate(rasterScale))
-        ),
+        VectorDoubleAdd(VectorDoubleDivide(VectorDoubleMax(VectorDoubleSplatOne(), VectorDoubleReplicate(correction)), VectorDoubleReplicate(64.0)), VectorDoubleDivide(VectorDoubleReplicate(2.0), VectorDoubleReplicate(rasterScale))),
         VectorDoubleReplicate(designMargin)
     );
     const f64 rasterMargin = VectorDoubleGetX(rasterMarginValue);

@@ -23,6 +23,8 @@ struct ControlToken{
     u64 contentGeneration = 0u;
     u64 contentRevision = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return instanceGeneration != 0u && contentGeneration != 0u && contentRevision != 0u;
     }

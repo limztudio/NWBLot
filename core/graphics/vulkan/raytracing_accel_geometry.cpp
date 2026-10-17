@@ -30,6 +30,9 @@ inline constexpr u32 s_LssSuccessiveIndicesPerPrimitive = 1u;
 inline constexpr u32 s_AabbStrideAlignment = 8u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset)noexcept{
     if(!bufferResource)
         return 0;

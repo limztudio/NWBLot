@@ -74,6 +74,11 @@ struct StagingTextureMapping{
 // Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes concurrent Vulkan sharing only for the distinct families the device created.
 namespace ResourceQueueSharing{
     static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
     enum Mask : u8{
         Exclusive = s_ResourceQueueSharingExclusiveBase,
         Graphics = 1 << 0,
@@ -99,8 +104,11 @@ struct ResourceQueueAdmissionSnapshot{
     ResourceQueueSharing::Mask admittedQueueClasses = ResourceQueueSharing::Exclusive;
     bool usesConcurrentSharing = false;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
-        return ResourceQueueSharing::IsValid(admittedQueueClasses)
+        return
+            ResourceQueueSharing::IsValid(admittedQueueClasses)
             && ((!usesConcurrentSharing && queueFamilyIndexCount == 0u && !queueFamilyIndices) || (usesConcurrentSharing && admittedQueueClasses != ResourceQueueSharing::Exclusive && queueFamilyIndexCount >= 2u && queueFamilyIndices))
         ;
     }
@@ -108,6 +116,11 @@ struct ResourceQueueAdmissionSnapshot{
 
 namespace ResourceStates{
     static constexpr auto s_ResourceStatesUnknownBase = 0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
     enum Mask : u32{
         Unknown = s_ResourceStatesUnknownBase,
         Common = 1 << 0,
@@ -175,6 +188,8 @@ struct TextureDesc{
     // If keepInitialState is true, command lists restore each used subresource to initialState before close. That retained native state becomes globally known only after the restoring command buffer is successfully submitted; a pre-submit cross-list consumer must import CommandListResourceStateHandoff instead.
     bool keepInitialState = false;
 
+
+public:
     constexpr TextureDesc& setWidth(u32 v)noexcept{ width = v; return *this; }
     constexpr TextureDesc& setHeight(u32 v)noexcept{ height = v; return *this; }
     constexpr TextureDesc& setDepth(u32 v)noexcept{ depth = v; return *this; }
@@ -209,6 +224,8 @@ struct TextureSlice{
     MipLevel mipLevel = 0;
     ArraySlice arraySlice = 0;
 
+
+public:
     [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const;
     [[nodiscard]] TextureSlice resolve(u32 mipWidth, u32 mipHeight, u32 mipDepth)const noexcept;
 
@@ -234,6 +251,8 @@ struct TextureSubresourceSet{
     static constexpr auto s_AllArraySlices = static_cast<ArraySlice>(-1);
     static constexpr usize s_ByteSize = 16u;
 
+
+public:
     MipLevel baseMipLevel = 0;
     MipLevel numMipLevels = 1;
     ArraySlice baseArraySlice = 0;
@@ -247,14 +266,6 @@ public:
 
 
 public:
-    [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const noexcept;
-    [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const noexcept;
-
-
-public:
-
-
-public:
     constexpr TextureSubresourceSet() = default;
     constexpr TextureSubresourceSet(MipLevel baseMipLevelValue, MipLevel numMipLevelsValue, ArraySlice baseArraySliceValue, ArraySlice numArraySlicesValue)noexcept
         : baseMipLevel(baseMipLevelValue)
@@ -265,11 +276,19 @@ public:
 
 
 public:
+    [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const noexcept;
+    [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const noexcept;
+
     constexpr TextureSubresourceSet& setBaseMipLevel(MipLevel value)noexcept{ baseMipLevel = value; return *this; }
+
     constexpr TextureSubresourceSet& setNumMipLevels(MipLevel value)noexcept{ numMipLevels = value; return *this; }
+
     constexpr TextureSubresourceSet& setMipLevels(MipLevel base, MipLevel num)noexcept{ baseMipLevel = base; numMipLevels = num; return *this; }
+
     constexpr TextureSubresourceSet& setBaseArraySlice(ArraySlice value)noexcept{ baseArraySlice = value; return *this; }
+
     constexpr TextureSubresourceSet& setNumArraySlices(ArraySlice value)noexcept{ numArraySlices = value; return *this; }
+
     constexpr TextureSubresourceSet& setArraySlices(ArraySlice base, ArraySlice num)noexcept{ baseArraySlice = base; numArraySlices = num; return *this; }
 
     [[nodiscard]] constexpr bool hasExtent()const noexcept{
@@ -316,6 +335,8 @@ struct VertexAttributeDesc{
     Format::Enum format = Format::UNKNOWN;
     bool isInstanced = false;
 
+
+public:
     constexpr VertexAttributeDesc& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
     constexpr VertexAttributeDesc& setArraySize(u32 value)noexcept{ arraySize = value; return *this; }
     constexpr VertexAttributeDesc& setBufferIndex(u32 value)noexcept{ bufferIndex = value; return *this; }
@@ -360,6 +381,8 @@ struct BufferDesc{
     // see TextureDesc::keepInitialState
     bool keepInitialState = false;
 
+
+public:
     constexpr BufferDesc& setByteSize(u64 value)noexcept{ byteSize = value; return *this; }
     constexpr BufferDesc& setStructStride(u32 value)noexcept{ structStride = value; return *this; }
     constexpr BufferDesc& setMaxVersions(u32 value)noexcept{ maxVersions = value; return *this; }
@@ -398,11 +421,17 @@ struct BufferRange{
     u64 byteOffset = 0;
     u64 byteSize = 0;
 
+
+public:
     BufferRange() = default;
     constexpr BufferRange(u64 byteOffsetValue, u64 byteSizeValue)noexcept
         : byteOffset(byteOffsetValue)
         , byteSize(byteSizeValue)
     {}
+
+
+public:
+    constexpr bool operator==(const BufferRange& other)const noexcept{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
 
 
 public:
@@ -419,7 +448,7 @@ public:
     }
     [[nodiscard]] BufferRange intersect(const BufferRange& other)const noexcept;
     [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const noexcept{ return (!byteOffset) && (byteSize == s_AllBytes || byteSize == desc.byteSize); }
-    constexpr bool operator==(const BufferRange& other)const noexcept{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
+
 
     constexpr BufferRange& setByteOffset(u64 value)noexcept{ byteOffset = value; return *this; }
     constexpr BufferRange& setByteSize(u64 value)noexcept{ byteSize = value; return *this; }

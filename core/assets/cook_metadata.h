@@ -38,11 +38,12 @@ struct ResolvedAssetRoot{
     Path path;
     ACompactString virtualRoot;
 
-    explicit ResolvedAssetRoot(CookArena& arena)
+
+public:
+    explicit ResolvedAssetRoot(CookArena& arena)noexcept
         : path(arena)
     {}
-
-    ResolvedAssetRoot(Path&& inPath, const ACompactString& inVirtualRoot)
+    ResolvedAssetRoot(Path&& inPath, const ACompactString& inVirtualRoot)noexcept
         : path(Move(inPath))
         , virtualRoot(inVirtualRoot)
     {}
@@ -54,9 +55,12 @@ struct DiscoveredNwbFile{
     CookString normalizedPathText;
     ACompactString virtualRoot;
 
-    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const Path& inFilePath, AStringView inNormalizedPathText, ACompactString inVirtualRoot)
-        : assetRoot(inAssetRoot)
-        , filePath(inFilePath)
+
+public:
+    template<typename FileArenaT>
+    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const ::Path<FileArenaT>& inFilePath, AStringView inNormalizedPathText, ACompactString inVirtualRoot)
+        : assetRoot(arena, inAssetRoot)
+        , filePath(arena, inFilePath)
         , normalizedPathText(inNormalizedPathText, arena)
         , virtualRoot(inVirtualRoot)
     {}
@@ -70,6 +74,8 @@ struct ParsedAssetMetadata{
     CookEntryRegistry entryRegistry;
     ParsedMetadataExtensionMap extensions;
 
+
+public:
     explicit ParsedAssetMetadata(CookArena& arena)
         : arena(arena)
         , entryRegistry(arena)

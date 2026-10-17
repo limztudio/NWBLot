@@ -8,6 +8,7 @@
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
 
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -128,7 +129,6 @@ void GpuDescriptorHeap::collectRetired(){
     m_heapUses.resize(keptHeapUses);
 }
 
-
 bool GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept{
     for(const HeapUse& heapUse : m_heapUses){
         if(!heapUse.commandBuffer)
@@ -191,7 +191,9 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& comman
         return false;
 
     commandBuffer.m_referencedDescriptorHeaps.push_back(this);
+    ScopeExit rollbackHeapReference([&commandBuffer]()noexcept{ commandBuffer.m_referencedDescriptorHeaps.pop_back(); });
     m_heapUses.push_back(HeapUse{ .commandBuffer = &commandBuffer, .submissionToken = {}, .id = ++m_lastHeapUseID, .physicalQueue = physicalQueue, });
+    rollbackHeapReference.release();
     return true;
 }
 

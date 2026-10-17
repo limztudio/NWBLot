@@ -48,8 +48,14 @@ using RuntimeMeshDirtyFlags = u8;
 struct RuntimeMeshHandle{
     u64 value = 0;
 
-    [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
+
+public:
     [[nodiscard]] explicit operator bool()const noexcept{ return valid(); }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
+
     void reset()noexcept{ value = 0; }
 };
 
@@ -77,6 +83,8 @@ struct RuntimeMeshBuffers{
     Core::BufferHandle meshletLocalVertexRefBuffer;
     Core::BufferHandle meshletPrimitiveIndexBuffer;
 
+
+public:
     [[nodiscard]] bool buffersValid()const noexcept{
         return
             positionBuffer != nullptr
@@ -101,6 +109,8 @@ struct RuntimeMeshLocalBounds{
     Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
     Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0; }
     // Non-finite bounds are conservative; keep payload for transforms, skip culling.
     [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsFiniteFlag) != 0; }
@@ -130,6 +140,8 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return entity.valid() && meshKey != s_NameNone && buffersValid() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / 3u + 31u) / 32u && localBounds.valid();
     }
@@ -163,6 +175,8 @@ struct RenderableMeshDesc{
     RuntimeMeshDesc runtimeMesh;
     bool runtime = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return runtime ? runtimeMesh.valid() : mesh.valid();
     }

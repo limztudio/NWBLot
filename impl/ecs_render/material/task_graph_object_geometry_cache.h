@@ -28,8 +28,16 @@ struct DeferredFrameTargets;
 
 // One declaration-local registry deduplicates immutable object vertices and indices across every material raster phase.
 class ObjectGeometryCacheGraph final : NoCopy{
+private:
+    struct Entry{
+        MaterialPassDrawItem draw;
+        Core::GpuGraphResourceId resource;
+        Core::GpuTaskId producer;
+    };
+
+
 public:
-    ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena);
+    ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)noexcept;
 
 
 public:
@@ -45,12 +53,9 @@ public:
         Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr
     );
 
+
 private:
-    struct Entry{
-        MaterialPassDrawItem draw;
-        Core::GpuGraphResourceId resource;
-        Core::GpuTaskId producer;
-    };
+
 
     Core::GpuTaskGraph& m_graph;
     RendererMaterialSystem& m_materialSystem;

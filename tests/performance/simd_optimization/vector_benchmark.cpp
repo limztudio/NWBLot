@@ -115,20 +115,28 @@ NWB_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDo
 template<Operation::Enum Kind, bool Candidate>
 NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Kind == Operation::Dot2){
-        if constexpr(Candidate) return VectorDouble2Dot(lhs, rhs);
-        else return BaselineDot2(lhs, rhs);
+        if constexpr(Candidate)
+            return VectorDouble2Dot(lhs, rhs);
+        else
+            return BaselineDot2(lhs, rhs);
     }
     else if constexpr(Kind == Operation::Dot3){
-        if constexpr(Candidate) return VectorDouble3Dot(lhs, rhs);
-        else return BaselineDot3(lhs, rhs);
+        if constexpr(Candidate)
+            return VectorDouble3Dot(lhs, rhs);
+        else
+            return BaselineDot3(lhs, rhs);
     }
     else if constexpr(Kind == Operation::Dot4){
-        if constexpr(Candidate) return VectorDouble4Dot(lhs, rhs);
-        else return BaselineDot4(lhs, rhs);
+        if constexpr(Candidate)
+            return VectorDouble4Dot(lhs, rhs);
+        else
+            return BaselineDot4(lhs, rhs);
     }
     else{
-        if constexpr(Candidate) return VectorDoubleSum(lhs);
-        else return BaselineSum(lhs);
+        if constexpr(Candidate)
+            return VectorDoubleSum(lhs);
+        else
+            return BaselineSum(lhs);
     }
 }
 
@@ -139,7 +147,7 @@ NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVec
 }
 
 template<Operation::Enum Kind>
-u32 VerifyReduction(u64& seed)noexcept{
+u32 VerifyReduction(u64& seed){
 #pragma STDC FENV_ACCESS ON
     return SimdOptimizationBenchmark::VerifyReductionCases(s_OperationNames[Kind], seed,
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
@@ -162,13 +170,13 @@ NWB_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
 }
 
 template<Operation::Enum Kind>
-u32 VerifyFactory()noexcept{
+u32 VerifyFactory(){
 #pragma STDC FENV_ACCESS ON
-    constexpr u64 bits[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
+    constexpr u64 s_Bits[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
         0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull, 0x400921fb54442d18ull };
     u32 failures = 0u;
-    for(usize index = 0u; index < LengthOf(bits); ++index){
-        const f64 angle = BitCast<f64>(bits[index]);
+    for(usize index = 0u; index < LengthOf(s_Bits); ++index){
+        const f64 angle = BitCast<f64>(s_Bits[index]);
         if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
             return failures + 1u;
         errno = E2BIG;
@@ -196,19 +204,19 @@ NWB_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis
     return QuaternionNormal<Candidate>(angle, axis);
 }
 
-u32 VerifyQuaternionAxes()noexcept{
+u32 VerifyQuaternionAxes(){
 #pragma STDC FENV_ACCESS ON
-    constexpr u64 axisBits[][4]{
+    constexpr u64 s_AxisBits[][4]{
         { 0x3ff0000000000000ull, 0u, 0x8000000000000000ull, 0x7ff0000000000123ull },
         { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull },
         { 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7fefffffffffffffull, 0u },
         { 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0u }
     };
-    constexpr u64 angleBits[]{ 0u, 0x8000000000000000ull, 1u, 0x3ff0000000000000ull, 0x7ff0000000000000ull, 0x7ff8000000000233ull, 0xfff0000000000234ull };
+    constexpr u64 s_AngleBits[]{ 0u, 0x8000000000000000ull, 1u, 0x3ff0000000000000ull, 0x7ff0000000000000ull, 0x7ff8000000000233ull, 0xfff0000000000234ull };
     u32 failures = 0u;
-    for(const auto& components : axisBits){
+    for(const auto& components : s_AxisBits){
         const SIMDVectorDouble axis = VectorDoubleSetInt(components[0], components[1], components[2], components[3]);
-        for(const u64 bits : angleBits){
+        for(const u64 bits : s_AngleBits){
             const f64 angle = BitCast<f64>(bits);
             if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
                 return failures + 1u;
@@ -229,9 +237,9 @@ u32 VerifyQuaternionAxes()noexcept{
     return failures;
 }
 
-u32 Verify()noexcept{
+u32 Verify(){
 #pragma STDC FENV_ACCESS ON
-    const auto verification = SimdOptimizationBenchmark::VerifyRoundingModes([](u64& seed)noexcept{
+    const auto verification = SimdOptimizationBenchmark::VerifyRoundingModes([](u64& seed){
         u32 failures = 0u;
         failures += VerifyReduction<Operation::Dot2>(seed);
         failures += VerifyReduction<Operation::Dot3>(seed);
@@ -242,7 +250,8 @@ u32 Verify()noexcept{
         failures += VerifyFactory<Operation::QuaternionNormal>();
         failures += VerifyQuaternionAxes();
         return failures;
-    });
+    }
+    );
     if(!verification.environmentAvailable)
         return verification.failures;
     const u32 failures = verification.failures;
@@ -294,7 +303,8 @@ template<Operation::Enum Kind, bool Candidate>
 void Measure(const Dataset& data, const usize iterations, const bool latency){
     const usize operations = Kind <= Operation::Sum && !latency ? iterations * 8u : iterations;
     SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations,
-        [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); });
+        [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); }
+    );
 }
 
 template<Operation::Enum Kind>

@@ -25,7 +25,7 @@ bool Builder::image(const AStringView stableKey, const Name& regionName, const I
         return true;
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::Image);
+    const auto widget = m_context.declare(stableKey, WidgetKind::Image);
     const UiSkinRegion* skinRegion = m_skin->findRegion(regionName);
     ImageFrame frame;
     frame.options = options;
@@ -40,7 +40,7 @@ bool Builder::image(const AStringView stableKey, const Name& regionName, const I
     }
     frame.metrics = *metrics;
     frame.region = skinRegion->name;
-    return publishImageFrame(*widget, Move(frame));
+    return publishImageFrame(**widget, Move(frame));
 }
 
 bool Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){

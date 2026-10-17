@@ -7,6 +7,7 @@
 
 #include "global.h"
 
+#include <global/span.h>
 #include <global/texture_payload.h>
 
 
@@ -36,10 +37,12 @@ inline constexpr AStringView s_TemporaryOutputSuffix = ".tmp";
 struct AlphaSource{
     AlphaSourceMode::Enum mode = AlphaSourceMode::Original;
     f32 constant = 1.0f;
-    Path path;
+    ScratchPath path;
 
-    AlphaSource()
-        : path(UtilityDetail::Arena())
+
+public:
+    explicit AlphaSource(Core::Alloc::ScratchArena& scratchArena)noexcept
+        : path(scratchArena)
     {}
 };
 
@@ -63,6 +66,8 @@ struct OutputPaths{
     Path metadataTemporary;
     Path dataTemporary;
 
+
+public:
     OutputPaths()
         : metadata(UtilityDetail::Arena())
         , data(UtilityDetail::Arena())
@@ -75,12 +80,12 @@ struct OutputPaths{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsSupportedInputPath(const Path& path);
-bool IsHdrInputPath(const Path& path);
-Expected<OutputPaths> ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument);
-bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force);
-Expected<PreparedTexture> PrepareTexture(Core::Alloc::ScratchArena& scratchArena, const Span<const Path> inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource);
-bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, bool force);
+[[nodiscard]] bool IsSupportedInputPath(const ScratchPath& path);
+[[nodiscard]] bool IsHdrInputPath(const ScratchPath& path);
+[[nodiscard]] Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, AStringView outputArgument, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<PreparedTexture> PrepareTexture(Span<const ScratchPath> inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, bool force, Core::Alloc::ScratchArena& scratchArena);
 
 int Run(int argc, char** argv);
 

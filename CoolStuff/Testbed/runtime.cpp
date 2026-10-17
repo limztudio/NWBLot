@@ -219,93 +219,6 @@ NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::Pr
     return MakeNotNullUnique(Move(*world));
 }
 
-bool Project::createDefaultScene(){
-    if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world).valid()){
-        NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
-        return false;
-    }
-    __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
-
-    auto uiEntity = m_world->createEntity();
-    auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
-    customUi.paint = [this](NWB::Impl::UiPaintContext& context){
-        drawUiControls(context);
-        drawCustomUiControls(context);
-    };
-
-    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_StartupSceneText, __hidden_runtime::s_DefaultSceneDescription);
-    return true;
-}
-
-void Project::registerInputHandler(){
-    if(m_inputRegistered)
-        return;
-
-    m_context.input.addHandlerToFront(*this);
-    m_inputRegistered = true;
-}
-
-void Project::unregisterInputHandler(){
-    if(!m_inputRegistered)
-        return;
-
-    m_context.input.removeHandler(*this);
-    m_inputRegistered = false;
-}
-
-void Project::clearInputState()noexcept{
-    m_keyPressed.fill(false);
-    m_pendingMouseDeltaX = 0.0f;
-    m_pendingMouseDeltaY = 0.0f;
-    m_lastMouseX = 0.0;
-    m_lastMouseY = 0.0;
-    m_mouseLookActive = false;
-    m_mousePositionValid = false;
-}
-
-void Project::setKeyState(const i32 key, const bool pressed)noexcept{
-    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
-    if(!keyIndex)
-        return;
-
-    m_keyPressed[*keyIndex] = pressed;
-}
-
-bool Project::keyPressed(const i32 key)const noexcept{
-    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
-    if(!keyIndex)
-        return false;
-
-    return m_keyPressed[*keyIndex];
-}
-
-void Project::updateMainCamera(const f32 delta){
-    const bool pointerCaptured = __hidden_runtime::UiWantsMouseCapture(*m_world);
-    // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
-    const f32 mouseDeltaX = m_pendingMouseDeltaX;
-    const f32 mouseDeltaY = m_pendingMouseDeltaY;
-    m_pendingMouseDeltaX = 0.0f;
-    m_pendingMouseDeltaY = 0.0f;
-    if(pointerCaptured){
-        m_mouseLookActive = false;
-        m_mousePositionValid = false;
-    }
-
-    const bool keyboardCaptured = __hidden_runtime::UiWantsKeyboardCapture(*m_world);
-    const f32 rightAxis = keyboardCaptured ? 0.0f : __hidden_runtime::KeyAxis(keyPressed(NWB::Core::Key::A), keyPressed(NWB::Core::Key::D));
-    const f32 forwardAxis = keyboardCaptured ? 0.0f : __hidden_runtime::KeyAxis(keyPressed(NWB::Core::Key::S), keyPressed(NWB::Core::Key::W));
-    const bool boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
-
-    __hidden_runtime::ApplyFlyCameraInputToMainCamera(*m_world, rightAxis, forwardAxis, boosted, mouseDeltaX, mouseDeltaY, delta);
-}
-
-void Project::destroyWorld(){
-    if(!m_world.owner())
-        return;
-
-    NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
-}
-
 Project::Project(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(CreateInitialWorldOrDie(context))
@@ -359,7 +272,11 @@ bool Project::onUpdate(f32 delta){
     const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
     updateMainCamera(safeDelta);
-    m_world->tick(safeDelta);
+    const auto updated = m_world->tick(safeDelta);
+    if(!updated){
+        NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        return false;
+    }
     return true;
 }
 
@@ -456,6 +373,93 @@ bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mo
         m_mousePositionValid = false;
     }
     return false;
+}
+
+bool Project::createDefaultScene(){
+    if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world).valid()){
+        NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
+        return false;
+    }
+    __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
+
+    auto uiEntity = m_world->createEntity();
+    auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
+    customUi.paint = [this](NWB::Impl::UiPaintContext& context){
+        drawUiControls(context);
+        drawCustomUiControls(context);
+    };
+
+    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_StartupSceneText, __hidden_runtime::s_DefaultSceneDescription);
+    return true;
+}
+
+void Project::registerInputHandler(){
+    if(m_inputRegistered)
+        return;
+
+    m_context.input.addHandlerToFront(*this);
+    m_inputRegistered = true;
+}
+
+void Project::unregisterInputHandler(){
+    if(!m_inputRegistered)
+        return;
+
+    m_context.input.removeHandler(*this);
+    m_inputRegistered = false;
+}
+
+void Project::clearInputState()noexcept{
+    m_keyPressed.fill(false);
+    m_pendingMouseDeltaX = 0.0f;
+    m_pendingMouseDeltaY = 0.0f;
+    m_lastMouseX = 0.0;
+    m_lastMouseY = 0.0;
+    m_mouseLookActive = false;
+    m_mousePositionValid = false;
+}
+
+void Project::setKeyState(const i32 key, const bool pressed)noexcept{
+    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
+    if(!keyIndex)
+        return;
+
+    m_keyPressed[*keyIndex] = pressed;
+}
+
+bool Project::keyPressed(const i32 key)const noexcept{
+    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
+    if(!keyIndex)
+        return false;
+
+    return m_keyPressed[*keyIndex];
+}
+
+void Project::updateMainCamera(const f32 delta){
+    const bool pointerCaptured = __hidden_runtime::UiWantsMouseCapture(*m_world);
+    // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
+    const f32 mouseDeltaX = m_pendingMouseDeltaX;
+    const f32 mouseDeltaY = m_pendingMouseDeltaY;
+    m_pendingMouseDeltaX = 0.0f;
+    m_pendingMouseDeltaY = 0.0f;
+    if(pointerCaptured){
+        m_mouseLookActive = false;
+        m_mousePositionValid = false;
+    }
+
+    const bool keyboardCaptured = __hidden_runtime::UiWantsKeyboardCapture(*m_world);
+    const f32 rightAxis = keyboardCaptured ? 0.0f : __hidden_runtime::KeyAxis(keyPressed(NWB::Core::Key::A), keyPressed(NWB::Core::Key::D));
+    const f32 forwardAxis = keyboardCaptured ? 0.0f : __hidden_runtime::KeyAxis(keyPressed(NWB::Core::Key::S), keyPressed(NWB::Core::Key::W));
+    const bool boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
+
+    __hidden_runtime::ApplyFlyCameraInputToMainCamera(*m_world, rightAxis, forwardAxis, boosted, mouseDeltaX, mouseDeltaY, delta);
+}
+
+void Project::destroyWorld(){
+    if(!m_world.owner())
+        return;
+
+    NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
 }
 
 

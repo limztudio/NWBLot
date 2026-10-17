@@ -32,6 +32,8 @@ struct MaterialCookEntry{
     using StageShaderMap = MaterialCookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<IShader>>;
     using ParameterMap = MaterialBindParameterMap;
 
+
+public:
     // Readable source text (not Name); the cook builds paths and dedup keys from it.
     MaterialCookString virtualPath;
     MaterialCookString materialInterface;
@@ -60,6 +62,8 @@ struct MaterialCookEntry{
     // Explicit caster classification, independent of transparency; NwbMeshSurface supplies the optical parameters.
     bool refractive = false;
 
+
+public:
     explicit MaterialCookEntry(MaterialCookArena& arena)
         : virtualPath(arena)
         , materialInterface(arena)
@@ -112,6 +116,8 @@ struct GeneratedMaterialPixelShader{
     MaterialCookString name;    // shader virtual name (identity), e.g. "generated/material_ps/<material path>"
     MaterialCookString source;  // absolute, forward-slash path of the generated .slang source in the cook cache
 
+
+public:
     explicit GeneratedMaterialPixelShader(MaterialCookArena& arena)noexcept
         : name(arena)
         , source(arena)
@@ -131,6 +137,8 @@ struct MaterialBindDependency{
     Name interfaceName = s_NameNone;
     bool dependsOnMaterialBind = false;
 
+
+public:
     explicit MaterialBindDependency(MaterialCookArena& arena)noexcept
         : interfacePath(arena)
     {}

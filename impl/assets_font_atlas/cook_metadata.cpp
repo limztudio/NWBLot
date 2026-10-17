@@ -137,7 +137,7 @@ static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& paylo
 
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
@@ -190,7 +190,39 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
 
 Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     FontAtlas candidate(arena, entry.virtualPath);
-    FontAtlasPayload payload(entry.payload);
+    const FontAtlasPayload& source = entry.payload;
+    FontAtlasPayload payload(arena);
+    payload.font = source.font;
+    payload.fontSha256 = source.fontSha256;
+    payload.faceIndex = source.faceIndex;
+    payload.unitsPerEm = source.unitsPerEm;
+    payload.sourceGlyphCount = source.sourceGlyphCount;
+    payload.bakePpem = source.bakePpem;
+    payload.spreadPixels = source.spreadPixels;
+    payload.guardTexels = source.guardTexels;
+    payload.rasterMode = source.rasterMode;
+    payload.ascenderUnits = source.ascenderUnits;
+    payload.descenderUnits = source.descenderUnits;
+    payload.lineGapUnits = source.lineGapUnits;
+    payload.glyphs.assign(source.glyphs.begin(), source.glyphs.end());
+    payload.groups.reserve(source.groups.size());
+    for(const FontAtlasGroup& sourceGroup : source.groups){
+        FontAtlasGroup group(arena);
+        group.width = sourceGroup.width;
+        group.height = sourceGroup.height;
+        group.channelCount = sourceGroup.channelCount;
+        group.sha256 = sourceGroup.sha256;
+        group.pixels.assign(sourceGroup.pixels.begin(), sourceGroup.pixels.end());
+        payload.groups.push_back(Move(group));
+    }
+    payload.positioningTables.reserve(source.positioningTables.size());
+    for(const FontAtlasPositioningTable& sourceTable : source.positioningTables){
+        FontAtlasPositioningTable table(arena);
+        table.tag = sourceTable.tag;
+        table.sha256 = sourceTable.sha256;
+        table.bytes.assign(sourceTable.bytes.begin(), sourceTable.bytes.end());
+        payload.positioningTables.push_back(Move(table));
+    }
     candidate.setPayload(Move(payload));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});

@@ -80,13 +80,17 @@ bool SelectablePainter::Paint(
     return painted && textPopped && rowPopped && clipPopped;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Builder::selectable(const AStringView stableKey, const StringView text, const bool selected, const WidgetOptions& options){
-    Item* item = addItem(stableKey, text, WidgetKind::Selectable, options);
+    const auto item = addItem(stableKey, text, WidgetKind::Selectable, options);
     if(!item)
         return false;
-    item->selectableStyle = m_listStyle.row;
-    item->checked = selected;
-    return m_context.takeActivation(item->state, item->enabled);
+    (*item)->selectableStyle = m_listStyle.row;
+    (*item)->checked = selected;
+    return m_context.takeActivation((*item)->state, (*item)->enabled);
 }
 
 bool Builder::paintSelectable(const Item& item, const LayoutBox& box){

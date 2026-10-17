@@ -10,6 +10,7 @@
 
 #include <core/assets/ref.h>
 
+#include <global/expected.h>
 #include <global/refcount_ptr.h>
 
 
@@ -25,6 +26,10 @@ NWB_IMPL_UI_BEGIN
 inline constexpr u32 s_GlyphAtlasPageExtent = 512u;
 inline constexpr usize s_GlyphAtlasMaxPages = 16u;
 inline constexpr usize s_PaintMaxGlyphPages = 64u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct GlyphPageBinding{
     Core::Assets::AssetRef<Font> font;
@@ -71,7 +76,7 @@ private:
 
 using SharedGlyphPage = RefCountPtr<RefCounter<GlyphPage>, ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] SharedGlyphPage CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels);
+[[nodiscard]] Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

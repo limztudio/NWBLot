@@ -31,13 +31,15 @@ NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const bo
     return result;
 }
 
-Expected<bool> IntegerEditModel::canonicalize(const i64 value){
+Expected<bool, ErrorCode> IntegerEditModel::canonicalize(const i64 value){
     char buffer[s_NumericEditMaxBytes];
-    const AStringView formatted = FormatI64(value, buffer);
-    const bool changed = formatted != m_draft.text();
-    if(formatted.empty() || !m_draft.setText(formatted))
-        return MakeUnexpected(Failure{});
-    m_acceptedDraft.assign(formatted.data(), formatted.size());
+    const auto formatted = FormatI64(value, buffer);
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    const bool changed = *formatted != m_draft.text();
+    if(!m_draft.setText(*formatted))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    m_acceptedDraft.assign(formatted->data(), formatted->size());
     return changed;
 }
 

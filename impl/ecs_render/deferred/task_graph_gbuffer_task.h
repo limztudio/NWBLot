@@ -42,7 +42,6 @@ struct GbufferGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
     // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: G-buffer always records the opaque pass against this frame's bindings.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -64,6 +63,8 @@ struct GbufferGraphTask{
         bool csgReceiverComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* regularSharedComputeEmulationTiming = nullptr;
 
+
+    public:
         explicit Payload(
             Core::Alloc::GlobalArena& arena,
             Core::GraphicsRuntime& graphicsIn,
@@ -73,7 +74,7 @@ struct GbufferGraphTask{
             Core::GpuTimingSubmissionTicket*& timingTicketIn,
             const bool& meshViewSetupReadyIn,
             const bool& sceneShadingSetupReadyIn
-        )
+        )noexcept
             : graphics(graphicsIn)
             , materialSystem(materialSystemIn)
             , csgSystem(csgSystemIn)
@@ -85,6 +86,8 @@ struct GbufferGraphTask{
         {}
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){

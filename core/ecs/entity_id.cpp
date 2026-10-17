@@ -33,7 +33,7 @@ static_assert(s_FreeEntityFlag > ECSDetail::s_EntityGenerationMask);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EntityManager::EntityManager(Alloc::GlobalArena& arena)
+EntityManager::EntityManager(Alloc::GlobalArena& arena)noexcept
     : m_generations(arena)
     , m_freeIndices(arena)
     , m_nextEntityIndex(0u)

@@ -26,12 +26,12 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     }
     if(nested && !synchronizePopup())
         return false;
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::Popup);
-    if(!widget || !m_context.claimState(*widget, state.instanceGeneration()))
+    const auto widget = m_context.declare(stableKey, WidgetKind::Popup);
+    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
         return false;
-    const WidgetState declaration = *widget;
+    const WidgetState declaration = **widget;
     state.bindParent(m_context.popupToken());
-    const PopupToken token{ widget->id, widget->declarationGeneration, state.instanceGeneration(), state.openGeneration() };
+    const PopupToken token{ (*widget)->id, (*widget)->declarationGeneration, state.instanceGeneration(), state.openGeneration() };
     m_context.input().fencePopup(token);
     if(m_context.input().consumePopupDismissal(token))
         state.close();

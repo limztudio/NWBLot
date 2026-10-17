@@ -48,10 +48,10 @@ class ComboState final : NoCopy{
 
 public:
     ComboState()noexcept;
+    ComboState(ComboState&&) = delete;
 
 
 public:
-    ComboState(ComboState&&) = delete;
     ComboState& operator=(ComboState&&) = delete;
 
 

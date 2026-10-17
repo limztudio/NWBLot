@@ -38,11 +38,17 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     host.focusOnCommit = frame.m_focusOnCommit;
     if(!m_context.addTarget(item.state, host))
         return false;
-    const WidgetId choices = MakeWidgetId(item.state.id, "choices");
+    const auto choicesResult = MakeWidgetId(item.state.id, "choices");
+    if(!choicesResult)
+        return false;
+    const WidgetId choices = *choicesResult;
     const UiSkinRegion* mark = placement->count != 0u ? region(frame.m_style.mark, frame.m_style.markFallback) : nullptr;
     for(u32 index = 0u; index < placement->count; ++index){
         const RadioGroupChoicePlacement& row = placement->rows[index];
-        const WidgetId part = MakeWidgetPartId(choices, row.key);
+        const auto partResult = MakeWidgetPartId(choices, row.key);
+        if(!partResult)
+            return false;
+        const WidgetId part = *partResult;
         const InputRouter& input = m_context.input();
         const bool enabled = frame.m_options.enabled && row.enabled;
         const bool checked = frame.m_snapshot.selectedKey == row.key;

@@ -27,14 +27,18 @@ namespace ArgCommand{
         iNumArg,
     };
 };
-inline constexpr StringView g_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };
+inline constexpr StringView s_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };
 inline constexpr u16 s_DefaultLogServerPort = 7117u;
-inline const Tuple< AStringView, u16 > g_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
-inline constexpr StringView g_ArgDesc[] = { "Log server address", "Log server port", };
+inline const Tuple< AStringView, u16 > s_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
+inline constexpr StringView s_ArgDesc[] = { "Log server address", "Log server port", };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<ArgCommand::Enum i, typename CLI, typename T>
 inline auto ArgAddOption(CLI& cli, T& arg){
-    return cli.add_option(g_ArgCmd[static_cast<usize>(i)].data(), arg, g_ArgDesc[static_cast<usize>(i)].data())->default_val(Get<static_cast<usize>(i)>(g_ArgDefault));
+    return cli.add_option(s_ArgCmd[static_cast<usize>(i)].data(), arg, s_ArgDesc[static_cast<usize>(i)].data())->default_val(Get<static_cast<usize>(i)>(s_ArgDefault));
 }
 
 

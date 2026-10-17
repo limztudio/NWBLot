@@ -10,6 +10,8 @@
 
 #include <impl/ecs_render/reflection/statistics.h>
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,7 +50,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool create();
+    [[nodiscard]] bool create(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics);
 
 

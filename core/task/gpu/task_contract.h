@@ -8,6 +8,7 @@
 #include "task_desc.h"
 
 #include <global/type.h>
+#include <global/type_properties.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +44,14 @@ concept DiscardedApi = requires{
 // Payload-dependent contracts are evaluated once at declaration, before immutable graph compilation.
 // They describe commands and external timeline requirements, independently of physical placement.
 template<typename TaskT>
-[[nodiscard]] GpuTaskCommandRequirements CommandRequirements(const typename TaskT::Payload& payload){
+[[nodiscard]] GpuTaskCommandRequirements CommandRequirements(const typename TaskT::Payload& payload)noexcept([]()noexcept{
+    if constexpr(requires{ static_cast<GpuTaskCommandRequirements (*)(const typename TaskT::Payload&)>(&TaskT::CommandRequirements); })
+        return noexcept(TaskT::CommandRequirements(DeclVal<const typename TaskT::Payload&>()));
+    else if constexpr(requires{ GpuTaskCommandRequirements{ TaskT::s_CommandRequirements }; })
+        return noexcept([](GpuTaskCommandRequirements)noexcept{}(TaskT::s_CommandRequirements));
+    else
+        return true;
+}()){
     if constexpr(requires{ static_cast<GpuTaskCommandRequirements (*)(const typename TaskT::Payload&)>(&TaskT::CommandRequirements); })
         return TaskT::CommandRequirements(payload);
     else if constexpr(requires{ GpuTaskCommandRequirements{ TaskT::s_CommandRequirements }; })

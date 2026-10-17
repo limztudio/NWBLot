@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Framebuffer::Framebuffer(const VulkanContext& context)
+Framebuffer::Framebuffer(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_resources(context.objectArena)
     , m_context(context)
@@ -39,26 +39,26 @@ Framebuffer::~Framebuffer(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
+Expected<FramebufferHandle> Device::createFramebuffer(const FramebufferDesc& desc){
     for(u32 i = 0u; i < static_cast<u32>(desc.colorAttachments.size()); ++i){
         Texture* const texture = desc.colorAttachments[i].texture;
         if(texture && &texture->m_context != &m_context){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create framebuffer: color attachment {} belongs to another device."), i);
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
     }
     if(desc.depthAttachment.texture && &desc.depthAttachment.texture->m_context != &m_context){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create framebuffer: depth attachment belongs to another device."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.shadingRateAttachment.texture && &desc.shadingRateAttachment.texture->m_context != &m_context){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create framebuffer: shading-rate attachment belongs to another device."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     FramebufferHandle fb(NewArenaObject<Framebuffer>(m_context.objectArena, m_context), FramebufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!fb)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     fb->m_desc = desc;
     fb->m_framebufferInfo = FramebufferInfoEx(desc);
 

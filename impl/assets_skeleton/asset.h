@@ -60,13 +60,13 @@ public:
 
 
 public:
-    void setJoints(JointVector&& joints, JointIndexMap&& jointIndices);
+    void setJoints(JointVector&& joints, JointIndexMap&& jointIndices)noexcept;
 
 public:
     [[nodiscard]] const JointVector& joints()const noexcept{ return m_joints; }
     [[nodiscard]] const JointIndexMap& jointIndices()const noexcept{ return m_jointIndices; }
     [[nodiscard]] u32 jointCount()const noexcept{ return static_cast<u32>(m_joints.size()); }
-    [[nodiscard]] u32 findJointIndex(Name jointName)const;
+    [[nodiscard]] u32 findJointIndex(Name jointName)const noexcept;
 
 public:
     [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;

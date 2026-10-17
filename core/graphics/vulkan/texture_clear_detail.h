@@ -67,6 +67,11 @@ inline constexpr f32 s_SRGBClearLinearScale = 12.92f;
 inline constexpr f32 s_SRGBClearNonlinearScale = 1.055f;
 inline constexpr f32 s_SRGBClearNonlinearExponent = 2.4f;
 inline constexpr f32 s_SRGBClearNonlinearOffset = 0.055f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline bool TextureClearRectEmpty(const Rect& rect)noexcept{
     return rect.minX >= rect.maxX || rect.minY >= rect.maxY;
 }
@@ -159,6 +164,10 @@ inline bool TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mip
 }
 
 inline constexpr u64 s_TextureClearMergedLayerUploadThreshold = 64ull * 1024ull;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct TextureClearUploadLayout{
     u64 uploadSize = 0ull;

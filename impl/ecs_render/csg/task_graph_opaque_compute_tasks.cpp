@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>
+#include "task_graph_opaque_compute_tasks.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -36,7 +36,7 @@ OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(
     Core::GpuTimingSubmissionTicket*& timingTicketIn,
     const bool& meshViewSetupReadyIn,
     const bool& sceneShadingSetupReadyIn
-)
+)noexcept
     : materialSystem(materialSystemIn)
     , targets(targetsIn)
     , timingTicket(timingTicketIn)
@@ -44,6 +44,9 @@ OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(
     , sceneShadingSetupReady(sceneShadingSetupReadyIn)
     , plan(arena)
 {}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -89,6 +92,9 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, 
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphicsIn,
@@ -98,7 +104,7 @@ OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(
     const bool& meshViewSetupReadyIn,
     const bool& sceneShadingSetupReadyIn,
     Optional<Core::GpuTimingMeasure>& opaqueCsgTimingIn
-)
+)noexcept
     : graphics(graphicsIn)
     , materialSystem(materialSystemIn)
     , targets(targetsIn)
@@ -108,6 +114,9 @@ OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(
     , opaqueCsgTiming(opaqueCsgTimingIn)
     , plan(arena)
 {}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){

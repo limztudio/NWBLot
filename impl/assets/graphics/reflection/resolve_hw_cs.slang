@@ -30,6 +30,10 @@
 #pragma warning(pop)
 #define g_NwbReflectionMaterialContext g_NwbHeapReflectionMaterialContexts[g_NwbReflectionParameters.materialContextSlot]
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbReflectionMaterialContext.sceneSlots.w; }
 uint nwbMeshFrameInstanceHeapSlot(){ return g_NwbReflectionMaterialContext.materialSlots.x; }
 uint nwbMeshFrameViewHeapSlot(){ return g_NwbReflectionParameters.viewSlot; }

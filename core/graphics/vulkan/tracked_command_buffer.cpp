@@ -6,7 +6,6 @@
 
 #include <core/common/log.h>
 
-#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -16,7 +15,7 @@
 NWB_VULKAN_BEGIN
 
 
-TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& context, const u32 queueFamilyIndex, const VkCommandPool commandPool, const bool ownsCommandPool, Futex* const sharedCommandPoolMutex)
+TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& context, const VkCommandPool commandPool, const bool ownsCommandPool, Futex* const sharedCommandPoolMutex)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_cmdPool(commandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
@@ -30,45 +29,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& co
     , m_ownsCmdPool(ownsCommandPool)
     , m_context(context)
     , m_queue(queue)
-{
-    ScopeExit destroyUnpublishedPool([&]()noexcept{
-        if(m_ownsCmdPool && m_cmdPool)
-            m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
-    });
-
-    if(m_ownsCmdPool){
-        auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
-        poolInfo.queueFamilyIndex = queueFamilyIndex;
-        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-
-        const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
-        if(createResult != VK_SUCCESS){
-            m_cmdPool = VK_NULL_HANDLE;
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
-            return;
-        }
-    }
-    else if(m_cmdPool == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot allocate a command buffer without a worker command pool."));
-        return;
-    }
-
-    auto allocInfo = VulkanDetail::MakeVkStruct<VkCommandBufferAllocateInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
-    allocInfo.commandPool = m_cmdPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
-
-    const VkResult allocateResult = m_context.deviceDispatch.vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
-    if(allocateResult != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
-        m_cmdBuf = VK_NULL_HANDLE;
-        if(m_ownsCmdPool)
-            m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
-        m_cmdPool = VK_NULL_HANDLE;
-        m_ownsCmdPool = false;
-    }
-    destroyUnpublishedPool.release();
-}
+{}
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){
     abandonPendingAccelStructBuildCommits();
@@ -92,6 +53,42 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
 
     clearTrackedReferences();
     m_queue.unregisterCommandBuffer(*this);
+}
+
+Expected<void, VkResult> TrackedCommandBuffer::initialize(const u32 queueFamilyIndex){
+    if(m_ownsCmdPool){
+        auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
+        poolInfo.queueFamilyIndex = queueFamilyIndex;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
+        const VkResult createResult = m_context.deviceDispatch.vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
+        if(createResult != VK_SUCCESS){
+            m_cmdPool = VK_NULL_HANDLE;
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
+            return MakeUnexpected(createResult);
+        }
+    }
+    else if(m_cmdPool == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot allocate a command buffer without a worker command pool."));
+        return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
+    }
+
+    auto allocInfo = VulkanDetail::MakeVkStruct<VkCommandBufferAllocateInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
+    allocInfo.commandPool = m_cmdPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    const VkResult allocateResult = m_context.deviceDispatch.vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
+    if(allocateResult != VK_SUCCESS){
+        m_cmdBuf = VK_NULL_HANDLE;
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
+        if(m_ownsCmdPool)
+            m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
+        m_cmdPool = VK_NULL_HANDLE;
+        m_ownsCmdPool = false;
+        return MakeUnexpected(allocateResult);
+    }
+    return {};
 }
 
 TrackedCommandBuffer::TimerQueryRecordingClaim& TrackedCommandBuffer::findOrAppendTimerQueryRecordingClaim(TimerQuery& query){

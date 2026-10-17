@@ -57,21 +57,24 @@ void InputDispatcher::windowFocusUpdate(const bool focused){
     dispatchToHandlers([focused](IInputEventHandler& handler){
         handler.windowFocusUpdate(focused);
         return false;
-    });
+    }
+    );
 }
 
 void InputDispatcher::pointerLeave(){
     dispatchToHandlers([](IInputEventHandler& handler){
         handler.pointerLeave();
         return false;
-    });
+    }
+    );
 }
 
 void InputDispatcher::pointerCaptureLost(){
     dispatchToHandlers([](IInputEventHandler& handler){
         handler.pointerCaptureLost();
         return false;
-    });
+    }
+    );
 }
 
 void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){
@@ -98,7 +101,8 @@ void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods
         }
         // Releases reach every owner so a changed UI focus cannot leave scene input held.
         return action != InputAction::Release && consumed;
-    });
+    }
+    );
 }
 
 bool InputDispatcher::keyboardTextBlocked(const i32 scancode)const noexcept{
@@ -110,7 +114,8 @@ bool InputDispatcher::keyboardTextBlocked(const i32 scancode)const noexcept{
 void InputDispatcher::keyboardCharInput(u32 unicode, i32 mods){
     dispatchToHandlers([&](IInputEventHandler& handler){
         return handler.keyboardCharInput(unicode, mods);
-    });
+    }
+    );
 }
 
 void InputDispatcher::mousePosUpdate(f64 xpos, f64 ypos){
@@ -120,7 +125,8 @@ void InputDispatcher::mousePosUpdate(f64 xpos, f64 ypos){
 
     dispatchToHandlers([&](IInputEventHandler& handler){
         return handler.mousePosUpdate(xpos, ypos);
-    });
+    }
+    );
 }
 
 void InputDispatcher::mouseButtonUpdate(i32 button, i32 action, i32 mods){
@@ -130,13 +136,15 @@ void InputDispatcher::mouseButtonUpdate(i32 button, i32 action, i32 mods){
     dispatchToHandlers([&](IInputEventHandler& handler){
         const bool consumed = handler.mouseButtonUpdate(button, action, mods);
         return action != InputAction::Release && consumed;
-    });
+    }
+    );
 }
 
 void InputDispatcher::mouseScrollUpdate(f64 xoffset, f64 yoffset){
     dispatchToHandlers([&](IInputEventHandler& handler){
         return handler.mouseScrollUpdate(xoffset, yoffset);
-    });
+    }
+    );
 }
 
 void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler){

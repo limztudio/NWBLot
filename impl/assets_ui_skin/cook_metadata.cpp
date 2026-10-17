@@ -174,16 +174,16 @@ template<usize Count>
 [[nodiscard]] static Expected<UiSkinPalette> ParsePalette(const Path& path, const Value& asset){
     UiSkinPalette palette{};
 
-    const Value* colors = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, s_ColorsField);
+    const auto colors = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, s_ColorsField);
     if(!colors)
-        return MakeUnexpected(Failure{});
-    if(colors->asList().size() != UiSkinColorRole::Count){
+        return MakeUnexpected(colors.error());
+    if((*colors)->asList().size() != UiSkinColorRole::Count){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::Count));
         return MakeUnexpected(Failure{});
     }
 
     Array<bool, UiSkinColorRole::Count> seen{};
-    for(const Value& value : colors->asList()){
+    for(const Value& value : (*colors)->asList()){
         if(!Core::Assets::CheckMetadataAssetMap(path, value, s_DiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { s_NameField, s_RgbaField }))
             return MakeUnexpected(Failure{});
         AStringView name;
@@ -273,7 +273,7 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const A
     if(!typographyResult)
         return MakeUnexpected(Failure{});
     parsed.typography = *typographyResult;
-    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     parsed.virtualPath = *virtualPathResult;
@@ -305,19 +305,19 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const A
     }
     parsed.completeToolkitSkin = hasToolkitContract;
 
-    const Value* regions = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, s_RegionsField);
+    const auto regions = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, s_RegionsField);
     if(!regions)
-        return MakeUnexpected(Failure{});
-    if(regions->asList().size() > s_UiSkinMaxRegionCount){
+        return MakeUnexpected(regions.error());
+    if((*regions)->asList().size() > s_UiSkinMaxRegionCount){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions exceed schema limit {}"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), s_UiSkinMaxRegionCount);
         return MakeUnexpected(Failure{});
     }
-    if(regions->asList().empty()){
+    if((*regions)->asList().empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions must be nonempty and fit the supported count"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    parsed.regions.reserve(regions->asList().size());
-    for(const Value& value : regions->asList()){
+    parsed.regions.reserve((*regions)->asList().size());
+    for(const Value& value : (*regions)->asList()){
         auto regionResult = ParseRegion(nwbFilePath, value);
         if(!regionResult)
             return MakeUnexpected(Failure{});

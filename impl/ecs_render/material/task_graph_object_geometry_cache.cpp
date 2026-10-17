@@ -46,13 +46,15 @@ using namespace RendererTaskGraphDetail;
     usize sourceIndex = 0u;
     ForEachMaterialPassMeshSourceBuffer(right.meshResources, [&](const Core::BufferHandle& source)noexcept{
         rightSources[sourceIndex++] = source.get();
-    });
+    }
+    );
     sourceIndex = 0u;
     bool same = true;
     ForEachMaterialPassMeshSourceBuffer(left.meshResources, [&](const Core::BufferHandle& source)noexcept{
         same = same && source.get() == rightSources[sourceIndex];
         ++sourceIndex;
-    });
+    }
+    );
     for(usize index = 0u; index < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++index)
         same = same && left.meshResources.geometryHeapHandles[index] == right.meshResources.geometryHeapHandles[index];
     return same;
@@ -83,6 +85,8 @@ struct DecodeTask{
         Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         Core::GpuTimingSubmissionTicket* ticket = payload.rebindableTimingTicket ? *payload.rebindableTimingTicket : payload.timingTicket;
         Optional<Core::GpuTimingSubmissionTicket::RecordingScope> timing;
@@ -109,6 +113,9 @@ struct ReadyTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
     struct Payload{};
+
+
+public:
     [[nodiscard]] static bool Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{ return true; }
 };
 
@@ -122,7 +129,7 @@ struct ReadyTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)
+ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_meshSystem(meshSystem)
@@ -167,9 +174,11 @@ bool ObjectGeometryCacheGraph::prepare(
         if(!retained){
             Core::GpuGraphResourceDesc bufferDesc = BufferResourceDesc(cache.buffer->getCreationDescription().debugName, "Object Geometry Cache");
             bufferDesc.setInitialState(cache.initialized ? ECSRenderDetail::s_ObjectGeometryRasterState : Core::ResourceStates::Common).setExternalFinalState(ECSRenderDetail::s_ObjectGeometryRasterState);
-            Entry entry{draw, m_graph.importBuffer(cache.buffer, bufferDesc), {}};
-            if(!entry.resource.valid())
+            Entry entry{draw, {}, {}};
+            const auto importedResource = m_graph.importBuffer(cache.buffer, bufferDesc);
+            if(!importedResource)
                 return false;
+            entry.resource = *importedResource;
             if(cache.requiresDecode){
                 MaterialPassDrawItems sourceDraws{scratchArena};
                 sourceDraws.computeDrawItems.push_back(draw);
@@ -191,11 +200,17 @@ bool ObjectGeometryCacheGraph::prepare(
                 uses.push_back(ReadBufferUse(instances, Core::BufferRange(static_cast<u64>(draw.instanceIndex) * sizeof(InstanceGpuData), sizeof(InstanceGpuData))));
                 uses.push_back(WriteUse(entry.resource, Core::ResourceStates::UnorderedAccess));
                 uses.push_back(ReadUse(entry.resource, ECSRenderDetail::s_ObjectGeometryRasterState));
-                Core::GpuTaskDesc desc = TaskDesc(ToName(StringFormat(scratchArena, "render.object_geometry.decode_{}", m_entries.size())), "Object Geometry Decode");
-                desc.setDependencies(&dependency, 1u).setResourceUses(uses.data(), uses.size());
-                entry.producer = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, targets, draw, frameBindings, timingTicket, rebindableTimingTicket, });
-                if(!entry.producer.valid())
+                const auto identity = ToName(StringFormat(scratchArena, "render.object_geometry.decode_{}", m_entries.size()));
+                if(!identity || !*identity)
                     return false;
+                Core::GpuTaskDesc desc = TaskDesc(**identity, "Object Geometry Decode");
+                desc.setDependencies(&dependency, 1u).setResourceUses(uses.data(), uses.size());
+                const auto entryProducerResult = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, targets, draw, frameBindings, timingTicket, rebindableTimingTicket, });
+                if(!entryProducerResult){
+                    entry.producer = {};
+                    return false;
+                }
+                entry.producer = *entryProducerResult;
                 dependency = entry.producer;
             }
             m_entries.push_back(Move(entry));
@@ -223,11 +238,19 @@ bool ObjectGeometryCacheGraph::prepare(
         containsDependency = containsDependency || producer == dependency;
     if(!containsDependency)
         producers.push_back(dependency);
-    Core::GpuTaskDesc ready = TaskDesc(ToName(StringFormat(scratchArena, "render.object_geometry.ready_{}", m_phaseCount++)), "Object Geometry Ready");
-    ready.setDependencies(producers.data(), producers.size()).setResourceUses(cacheReads.data(), cacheReads.size());
-    dependency = m_graph.addTask<ReadyTask>(ready, ReadyTask::Payload{});
-    if(!dependency.valid())
+    const auto readyIdentity = ToName(StringFormat(scratchArena, "render.object_geometry.ready_{}", m_phaseCount++));
+    if(!readyIdentity || !*readyIdentity){
+        dependency = {};
         return false;
+    }
+    Core::GpuTaskDesc ready = TaskDesc(**readyIdentity, "Object Geometry Ready");
+    ready.setDependencies(producers.data(), producers.size()).setResourceUses(cacheReads.data(), cacheReads.size());
+    const auto dependencyResult = m_graph.addTask<ReadyTask>(ready, ReadyTask::Payload{});
+    if(!dependencyResult){
+        dependency = {};
+        return false;
+    }
+    dependency = *dependencyResult;
     return true;
 }
 

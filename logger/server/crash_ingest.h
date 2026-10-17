@@ -35,7 +35,9 @@ struct CrashIngestConfig{
     CrashSymbolicationConfig symbolication;
     CrashRetentionConfig retention;
 
-    explicit CrashIngestConfig(LogArena& arena)
+
+public:
+    explicit CrashIngestConfig(LogArena& arena)noexcept
         : storageDirectory(arena)
         , symbolication(arena)
     {}
@@ -46,7 +48,9 @@ struct CrashIngestResult{
     Core::Common::LogType::Enum type = Core::Common::LogType::EssentialInfo;
     bool accepted = false;
 
-    explicit CrashIngestResult(LogArena& arena)
+
+public:
+    explicit CrashIngestResult(LogArena& arena)noexcept
         : message(arena)
     {}
 };

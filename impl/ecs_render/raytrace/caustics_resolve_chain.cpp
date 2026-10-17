@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/caustics_resolve_chain.h>
+#include "caustics_resolve_chain.h"
+
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
@@ -21,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CausticsResolveChainBuilder::CausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)
+CausticsResolveChainBuilder::CausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
     : m_graph(graph)
     , m_raytracingSystem(raytracingSystem){
 }
@@ -41,7 +42,7 @@ struct ResolveStageDesc{
     bool applyStateSources;
     const CausticsResolveStageUses* stageUses;
     Core::GpuTaskId* outTask;
-    Core::GpuTaskId (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, DeferredFrameTargets&, const bool&);
+    Expected<Core::GpuTaskId> (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, DeferredFrameTargets&, const bool&);
 };
 
 
@@ -67,9 +68,12 @@ struct ResolveStageDesc{
         for(u32 index = 0u; index < LengthOf(activityResources); ++index){
             Core::GpuGraphResourceDesc desc = BufferResourceDesc(names[index], "caustic resolve activity");
             desc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
-            activityResources[index] = m_graph.importBuffer(activity.buffers[index], desc);
-            if(!activityResources[index].valid())
+            const auto activityResourcesIndexResult = m_graph.importBuffer(activity.buffers[index], desc);
+            if(!activityResourcesIndexResult){
+                activityResources[index] = {};
                 return MakeUnexpected(Failure{});
+            }
+            activityResources[index] = *activityResourcesIndexResult;
         }
     }
 
@@ -109,21 +113,25 @@ struct ResolveStageDesc{
         }
         if(!inputs.applyStateSourcesToPrepareOnly || stage.applyStateSources)
             stageDesc.setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
-        *stage.outTask = (m_raytracingSystem.*(stage.declareTask))(m_graph, stageDesc, (*inputs.targets), (*inputs.producerDispatched));
-        if(!stage.outTask->valid()){
+        const auto stageTask = (m_raytracingSystem.*(stage.declareTask))(m_graph, stageDesc, (*inputs.targets), (*inputs.producerDispatched));
+        if(!stageTask){
+            *stage.outTask = {};
             NWB_LOGGER_WARNING(stage.naming->warnText);
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(stageTask.error());
         }
+        *stage.outTask = *stageTask;
         previousTask = *stage.outTask;
     }
 
     Core::GpuTaskDesc timingCloseDesc;
     timingCloseDesc.setIdentity(naming.timingClose.identity).setMarkerLabel(naming.timingClose.label).setScheduling(stageScheduling).setDependencies(&result.causticResolveUpsampleTask, 1u);
-    result.causticsTask = m_raytracingSystem.declareCausticResolveTask(m_graph, timingCloseDesc, (*inputs.timingTicket), (*inputs.producerDispatched), (*inputs.resolveTiming));
-    if(!result.causticsTask.valid()){
+    const auto resultCausticsTaskResult = m_raytracingSystem.declareCausticResolveTask(m_graph, timingCloseDesc, (*inputs.timingTicket), (*inputs.producerDispatched), (*inputs.resolveTiming));
+    if(!resultCausticsTaskResult){
+        result.causticsTask = {};
         NWB_LOGGER_WARNING(naming.timingClose.warnText);
         return MakeUnexpected(Failure{});
     }
+    result.causticsTask = *resultCausticsTaskResult;
     return result;
 }
 

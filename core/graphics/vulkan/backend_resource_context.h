@@ -7,6 +7,9 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -15,7 +18,6 @@
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
-#include <core/task/cpu/scheduler.h>
 #include <core/common/log.h>
 
 
@@ -140,7 +142,9 @@ struct PipelineRenderingInfo{
     VkPipelineRenderingCreateInfo info = {};
     PipelineRenderingFormatVector colorFormats;
 
-    explicit PipelineRenderingInfo(Alloc::ScratchArena& scratchArena)
+
+public:
+    explicit PipelineRenderingInfo(Alloc::ScratchArena& scratchArena)noexcept
         : colorFormats(scratchArena)
     {}
 };
@@ -155,7 +159,9 @@ struct GraphicsPipelineFixedState{
     VkPipelineRenderingCreateInfo renderingInfo = {};
     PipelineRenderingFormatVector colorFormats;
 
-    explicit GraphicsPipelineFixedState(Alloc::ScratchArena& scratchArena)
+
+public:
+    explicit GraphicsPipelineFixedState(Alloc::ScratchArena& scratchArena)noexcept
         : blendAttachments(scratchArena)
         , colorFormats(scratchArena)
     {}
@@ -257,6 +263,8 @@ struct ClusterOperationInput{
     VkClusterAccelerationStructureTriangleClusterInputNV cluster = {};
     VkClusterAccelerationStructureClustersBottomLevelInputNV blas = {};
 
+
+public:
     [[nodiscard]] VkClusterAccelerationStructureInputInfoNV nativeInfo()noexcept{
         auto native = info;
         switch(info.opType){
@@ -435,9 +443,9 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
 Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, bool alphaToCoverageEnable, TStringView operationName);
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
 
-inline void CopyHostMemory(CpuTaskScheduler& cpuScheduler, void* dst, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){
+[[nodiscard]] inline Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(CpuTaskScheduler& cpuScheduler, void* dst, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){
     if(!dst || !src || size == 0)
-        return;
+        return {};
 
     const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
     const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
@@ -446,15 +454,16 @@ inline void CopyHostMemory(CpuTaskScheduler& cpuScheduler, void* dst, const void
         auto* dstBytes = static_cast<u8*>(dst);
         auto* srcBytes = static_cast<const u8*>(src);
         const usize chunkCount = DivideUp(size, effectiveChunkSize);
-        cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex)noexcept{
+        return cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex)noexcept{
             const usize chunkOffset = chunkIndex * effectiveChunkSize;
             const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
             NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
-        });
-        return;
+        }
+        );
     }
 
     NWB_MEMCPY(dst, size, src, size);
+    return {};
 }
 
 

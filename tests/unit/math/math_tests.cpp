@@ -75,7 +75,8 @@ TEST(Math, SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExcept
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     volatile u32 inactiveBits[][2]{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u } };
     for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
@@ -108,7 +109,8 @@ TEST(Math, SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes){
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
 
     volatile u32 inactiveBits[][2]{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u }, { 0u, 0x7f800001u }, { 0x7f7fffffu, 0x7f7fffffu } };
     for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
@@ -151,7 +153,8 @@ TEST(Math, DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvali
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    });
+    }
+    );
     const f64 lhsInactive[]{ Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN, Limit<f64>::s_QuietNaN };
     const f64 rhsInactive[]{ 0.0, Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN };
     for(usize index = 0u; index < LengthOf(lhsInactive); ++index){

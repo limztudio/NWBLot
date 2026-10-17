@@ -31,12 +31,14 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(const RayTrac
     if(!m_deferredSurfelGiTask.valid() || !m_deferredFrameTimingEndTask.valid() || !m_raytracingSystem.shouldCaptureSurfelCountReadback())
         return;
 
-    const Core::GpuGraphResourceId counter = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterBuffer, BufferResourceDesc(Name("render.surfel_gi.counter"), "Surfel Counter"));
-    const Core::GpuGraphResourceId readback = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterReadbackBuffer, BufferResourceDesc(Name("render.surfel_gi.counter_readback"), "Surfel Counter Readback"));
-    if(!counter.valid() || !readback.valid()){
+    const auto counterResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterBuffer, BufferResourceDesc(Name("render.surfel_gi.counter"), "Surfel Counter"));
+    const auto readbackResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterReadbackBuffer, BufferResourceDesc(Name("render.surfel_gi.counter_readback"), "Surfel Counter Readback"));
+    if(!counterResult || !readbackResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
         return;
     }
+    const Core::GpuGraphResourceId counter = *counterResult;
+    const Core::GpuGraphResourceId readback = *readbackResult;
 
     const Core::GpuCopyBufferTaskRegion regions[] = { Core::GpuCopyBufferTaskRegion{ .source = counter, .destination = readback, .dataSizeBytes = static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE, }, };
     Core::GpuTaskSchedulingHint scheduling;
@@ -47,11 +49,13 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(const RayTrac
     const Core::GpuTaskId dependencies[] = { m_deferredSurfelGiTask, m_deferredFrameTimingEndTask, };
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("render.surfel_gi.counter_readback")).setMarkerLabel("Surfel Counter Readback").setScheduling(scheduling).setDependencies(dependencies, LengthOf(dependencies));
-    m_deferredSurfelGiCounterReadbackTask = m_deferredLightingTaskGraph.addCopyBufferTask(desc, Core::GpuCopyBufferTaskDesc{ .regions = regions, .regionCount = LengthOf(regions), });
-    if(!m_deferredSurfelGiCounterReadbackTask.valid()){
+    const auto mDeferredSurfelGiCounterReadbackTaskResult = m_deferredLightingTaskGraph.addCopyBufferTask(desc, Core::GpuCopyBufferTaskDesc{ .regions = regions, .regionCount = LengthOf(regions), });
+    if(!mDeferredSurfelGiCounterReadbackTaskResult){
+        m_deferredSurfelGiCounterReadbackTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel counter-readback task"));
         return;
     }
+    m_deferredSurfelGiCounterReadbackTask = *mDeferredSurfelGiCounterReadbackTaskResult;
     // The token stays invalid until native submission accepts; this timestamp is only read when it publishes.
     m_raytracingSystem.markSurfelCountReadbackScheduled();
 }

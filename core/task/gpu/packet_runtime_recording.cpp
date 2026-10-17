@@ -221,10 +221,12 @@ bool GpuNativePacketRecorder::recordPacket(
     PacketRecordingExceptionScope exceptionScope(graph, compiledGraph, planAccess, outRecordedGraph, artifactAccess, packetID, recordingAttemptGeneration, recordingLease, deferredAbort, commandIrCapture, capturedPrefix, packetStateSeed);
     const Timer recordingBegin = TimerNow();
 
-    if(!outRecordedGraph.buildPacketInitialStateSeed(scratch, stateFanInScratchArena, graph, declarationAccess, compiledGraph, planAccess, artifactAccess, packetID, initialStates)){
+    const auto initialStateResult = outRecordedGraph.buildPacketInitialStateSeed(scratch, stateFanInScratchArena, graph, declarationAccess, compiledGraph, planAccess, artifactAccess, packetID);
+    if(!initialStateResult){
         abortPacketRecording();
         return false;
     }
+    initialStates = *initialStateResult;
 
     packetStateSeed = outRecordedGraph.packetStateSeed(packetID, artifactAccess);
     if(!packetStateSeed){
@@ -253,14 +255,15 @@ bool GpuNativePacketRecorder::recordPacket(
     parameters.setPhysicalQueue(packet.queue);
     parameters.setRecordingWorker(recordingWorkerDomain, recordingWorkerIndex);
     const Timer commandListAcquisitionBegin = TimerNow();
-    CommandListHandle commandList = m_device.createCommandList(parameters);
-    if(!commandList){
+    auto commandListResult = m_device.createCommandList(parameters);
+    if(!commandListResult){
         packetStateSeed->reset();
         abortPacketRecording();
         if(commandIrCapture && !commandIrCapture->rollback(captureCheckpoint))
             TerminateInvariant();
         return false;
     }
+    CommandListHandle commandList = Move(*commandListResult);
 
     commandList->open(initialStates);
     const f64 commandListAcquisitionSeconds = DurationInSeconds<f64>(TimerNow(), commandListAcquisitionBegin);
@@ -273,7 +276,11 @@ bool GpuNativePacketRecorder::recordPacket(
     CommandMarkerRecordingToken packetMarker;
     if(recorded && packetTimingTicket){
         packetTimingRecordingScope.emplace(*packetTimingTicket);
-        packetTiming.emplace(*m_timingRecorder, GpuPacketRecordingDetail::TimingScopeDefinition(GpuPacketRecordingDetail::PacketTimingScopeName(declarationAccess, planAccess, packetID), GpuPacketRecordingDetail::s_PacketMarkerLabel), m_device, *commandList);
+        const auto packetScopeName = GpuPacketRecordingDetail::PacketTimingScopeName(declarationAccess, planAccess, packetID);
+        if(packetScopeName)
+            packetTiming.emplace(*m_timingRecorder, GpuPacketRecordingDetail::TimingScopeDefinition(*packetScopeName, GpuPacketRecordingDetail::s_PacketMarkerLabel), m_device, *commandList);
+        else
+            recorded = false;
     }
     else if(recorded){
         packetMarker = commandList->beginMarkerLease(GpuPacketRecordingDetail::s_PacketMarkerLabel);
@@ -359,8 +366,9 @@ bool GpuNativePacketRecorder::recordPacket(
 #endif
         if(recorded){
             const Timer taskRecordBegin = TimerNow();
-            bool recordThunkInvoked = false;
-            recorded = graph.recordTask(task, *commandList, context, recordingLease, recordThunkInvoked);
+            const auto taskRecorded = graph.recordTask(task, *commandList, context, recordingLease);
+            recorded = static_cast<bool>(taskRecorded);
+            const bool recordThunkInvoked = !taskRecorded && taskRecorded.error().recordThunkInvoked;
             taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
@@ -518,12 +526,12 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
     GpuRecordedGraph& outRecordedGraph,
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
-    const GpuRecordedGraph::ArtifactOperation& artifactAccess
+    const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+    Alloc::ScratchArena& scratchArena
 )const{
     if(!range.valid() || !planAccess.validFor(compiledGraph) || !artifactAccess.exclusiveFor(outRecordedGraph) || !planAccess.validFor(declarationAccess) || m_device.getDeviceGeneration() != planAccess.deviceGeneration() || !planAccess.validPacketRange(range))
         return false;
-    Alloc::ScratchArena timingScratchArena(GpuPacketRecordingDetail::s_PacketTimingScratchArena);
-    if(!GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, m_timingRecorder, timingScratchArena))
+    if(!GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, m_timingRecorder, scratchArena))
         return false;
     const bool artifactMatchesPlan = outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess);
     if(artifactMatchesPlan && graph.matchesRecordingAttempt(compiledGraph, outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess))){

@@ -80,6 +80,8 @@ constexpr CaptureFlag::Mask operator~(const CaptureFlag::Mask value)noexcept{
 struct CaptureOptions{
     CaptureFlag::Mask flags = CaptureFlag::None;
 
+
+public:
     [[nodiscard]] static constexpr CaptureOptions Disabled()noexcept{
         return {};
     }
@@ -121,6 +123,8 @@ struct EventHeader{
     u16 version = s_TelemetryFormatVersion;
     u8 reserved = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return magic == s_EventMagic && version == s_TelemetryFormatVersion && kind != EventKind::Unknown && IsValidEventKind(kind);
     }

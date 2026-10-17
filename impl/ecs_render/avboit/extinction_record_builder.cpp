@@ -2,11 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/extinction_record_builder.h>
+#include "extinction_record_builder.h"
+
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/csg/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
@@ -47,7 +47,7 @@ static constexpr usize s_SharedGenerateUseCount = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)
+AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept
     : m_graph(graph)
     , m_graphics(graphics)
     , m_materialSystem(materialSystem)
@@ -59,6 +59,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
 
 
 [[nodiscard]] Expected<AvboitExtinctionRecordResult> AvboitExtinctionRecordBuilder::declare(
+    Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -89,14 +90,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     extinctionPayload.extinctionMaterialFrameStatesGraphOwned = inputs.streamsUploaded;
     extinctionPayload.extinctionMaterialGeometryStatesGraphOwned = inputs.streamsUploaded && extinctionPayload.extinctionMaterialGeometryStatesGraphOwned;
     Core::GpuGraphResourceSetId extinctionComputeEmulationOutputSet;
-    Core::Alloc::ScratchArena extinctionComputeEmulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     const bool extinctionComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
     bool extinctionComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.regularComputeEmulationPlanCaptured){
         const auto extinctionComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_graph,
             computeEmulationPayload.plan,
-            extinctionComputeEmulationResourceScratch,
+            scratchArena,
             Name("render.avboit.extinction.compute_emulation.outputs"),
             "AVBOIT Extinction Compute Emulation Outputs"
         );
@@ -108,7 +108,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         const auto extinctionComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
                 m_graph,
                 computeEmulationPayload.csgPlan,
-                extinctionComputeEmulationResourceScratch,
+                scratchArena,
                 Name("render.avboit.extinction.csg_compute_emulation.outputs"),
                 "AVBOIT Extinction CSG Compute Emulation Outputs"
             );
@@ -140,8 +140,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     const Core::BufferRange extinctionReceiverRange(0u, extinctionPayload.extinctionSnapshot.csgReceiverRanges.size() * sizeof(CsgReceiverRangeGpuData));
     const Core::BufferRange extinctionCutterRange(0u, extinctionPayload.extinctionSnapshot.csgCutters.size() * sizeof(CsgCutterGpuData));
 
-    Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ scratchArena };
     extinctionResourceUses.reserve(
         __hidden_avboit_extinction_record::s_ResourceBaseCount
         + (inputs.streamsUploaded ? __hidden_avboit_extinction_record::s_StreamUseCount : 0u)
@@ -219,13 +218,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.data(),
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
+        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.data(),
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
+        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
 
@@ -238,7 +237,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         computeEmulationPayload.materialFrameStatesGraphOwned = extinctionPayload.extinctionMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = extinctionPayload.extinctionMaterialGeometryStatesGraphOwned;
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionComputeEmulationResourceUses{ extinctionResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionComputeEmulationResourceUses{ scratchArena };
         extinctionComputeEmulationResourceUses.reserve(__hidden_avboit_extinction_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_extinction_record::s_EmulationPlanUseCount : 0u));
         extinctionComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         extinctionComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, extinctionInstanceRange));
@@ -283,17 +282,19 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             .setResourceUses(extinctionComputeEmulationResourceUses.data(), extinctionComputeEmulationResourceUses.size())
             .setResourceSetUses(extinctionComputeEmulationResourceSetUses, extinctionComputeEmulationResourceSetUseCount)
         ;
-        m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask = m_graph.addTask< AvboitExtinctionComputeEmulationGraphTask >(extinctionComputeEmulationDesc, Move(computeEmulationPayload));
-        if(!m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask.valid()){
+        const auto mAvboitSystemTaskGraphStageMExtinctionComputeEmulationTaskResult = m_graph.addTask< AvboitExtinctionComputeEmulationGraphTask >(extinctionComputeEmulationDesc, Move(computeEmulationPayload));
+        if(!mAvboitSystemTaskGraphStageMExtinctionComputeEmulationTaskResult){
+            m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Extinction compute-emulation producer"));
             return MakeUnexpected(Failure{});
         }
+        m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask = *mAvboitSystemTaskGraphStageMExtinctionComputeEmulationTaskResult;
         extinctionDependency = m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
         avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(extinctionSharedComputeEmulationOutputStatesGraphOwned){
         // Keep the retained output concrete so the compiler preserves alternating uses.
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedGenerateResourceUses{ extinctionResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedGenerateResourceUses{ scratchArena };
         extinctionSharedGenerateResourceUses.reserve(__hidden_avboit_extinction_record::s_SharedGenerateUseCount);
         extinctionSharedGenerateResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         extinctionSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialInstances, extinctionInstanceRange));
@@ -301,7 +302,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         extinctionSharedGenerateResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
         extinctionSharedGenerateResourceUses.push_back(WriteUse(extinctionSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess));
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedRasterResourceUses{ extinctionResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedRasterResourceUses{ scratchArena };
         extinctionSharedRasterResourceUses.reserve(extinctionResourceUses.size() + 1u);
         extinctionSharedRasterResourceUses.assign(extinctionResourceUses.begin(), extinctionResourceUses.end());
         extinctionSharedRasterResourceUses.push_back(ReadUse(extinctionSharedComputeEmulationOutput, ECSRenderDetail::s_GeneratedGeometryRasterState));
@@ -394,8 +395,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;
         for(usize phaseIndex = 0u; phaseIndex < extinctionSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] =
-                addExtinctionSharedComputeEmulationPhase(
+            const auto mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult = addExtinctionSharedComputeEmulationPhase(
                     extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
                     extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],
                     extinctionSharedComputeEmulationDependency,
@@ -406,12 +406,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
                     isRasterPhase ? extinctionSharedRasterResourceUses : extinctionSharedGenerateResourceUses,
                     extinctionMaterialResourceSetUses,
                     extinctionMaterialResourceSetUseCount
-                )
-            ;
-            if(!m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex].valid()){
+                );
+            if(!mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult){
+                m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Extinction shared compute-emulation phase"));
                 return MakeUnexpected(Failure{});
             }
+            m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] = *mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult;
             extinctionSharedComputeEmulationDependency = m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex];
         }
         m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTaskCount = extinctionSharedComputeEmulationPhaseCount;
@@ -419,22 +420,24 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         m_avboitSystem.taskGraphStage().m_extinctionTask = extinctionSharedComputeEmulationDependency;
     }
     else{
-    const Core::GpuTaskId rasterDependencies[] = { extinctionDependency, inputs.reusedGeometryProducer };
-    const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != extinctionDependency ? 2u : 1u;
-    Core::GpuTaskDesc extinctionDesc;
-    extinctionDesc
-        .setIdentity(Name("render.avboit.extinction"))
-        .setMarkerLabel("AVBOIT Extinction")
-        .setScheduling(avboitExtinctionScheduling)
-        .setDependencies(rasterDependencies, rasterDependencyCount)
-        .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())
-        .setResourceSetUses(extinctionMaterialResourceSetUseCount != 0u ? extinctionMaterialResourceSetUses : nullptr, extinctionMaterialResourceSetUseCount)
-    ;
-    m_avboitSystem.taskGraphStage().m_extinctionTask = m_graph.addTask<AvboitExtinctionGraphTask>(extinctionDesc, Move(extinctionPayload));
-    if(!m_avboitSystem.taskGraphStage().m_extinctionTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
-        return MakeUnexpected(Failure{});
-    }
+        const Core::GpuTaskId rasterDependencies[] = { extinctionDependency, inputs.reusedGeometryProducer };
+        const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != extinctionDependency ? 2u : 1u;
+        Core::GpuTaskDesc extinctionDesc;
+        extinctionDesc
+            .setIdentity(Name("render.avboit.extinction"))
+            .setMarkerLabel("AVBOIT Extinction")
+            .setScheduling(avboitExtinctionScheduling)
+            .setDependencies(rasterDependencies, rasterDependencyCount)
+            .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())
+            .setResourceSetUses(extinctionMaterialResourceSetUseCount != 0u ? extinctionMaterialResourceSetUses : nullptr, extinctionMaterialResourceSetUseCount)
+        ;
+        const auto mAvboitSystemTaskGraphStageMExtinctionTaskResult = m_graph.addTask<AvboitExtinctionGraphTask>(extinctionDesc, Move(extinctionPayload));
+        if(!mAvboitSystemTaskGraphStageMExtinctionTaskResult){
+            m_avboitSystem.taskGraphStage().m_extinctionTask = {};
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
+            return MakeUnexpected(Failure{});
+        }
+        m_avboitSystem.taskGraphStage().m_extinctionTask = *mAvboitSystemTaskGraphStageMExtinctionTaskResult;
     }
     result.extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask;
     result.declared = true;

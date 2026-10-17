@@ -95,13 +95,13 @@ class RendererOpticalVolumeSelection;
 
 
 class RendererMaterialSystem final : public IMaterialSurfaceLookup, NoCopy{
-private:
-    static void SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes);
-
-
 public:
     [[nodiscard]] static Expected<MaterialInstanceOverrideField> FindMaterialInstanceOverrideField(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter);
     [[nodiscard]] static bool ApplyMaterialInstanceOverrides(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, MaterialTypedByteDataVector& inOutMutableTypedBytes);
+
+
+private:
+    static void SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes);
 
 
 public:
@@ -116,7 +116,7 @@ public:
         RendererMeshSystem& meshSystem,
         RendererCsgSystem& csgSystem,
         const RendererOpticalVolumeSelection& opticalVolumes
-    );
+    )noexcept;
 
 
 public:
@@ -126,7 +126,7 @@ public:
     [[nodiscard]] virtual Expected<MaterialSurfaceInfo*> findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset)override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
-    void prepareVisibleMaterialInstanceMutableCache();
+    void prepareVisibleMaterialInstanceMutableCache(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<Core::BindingLayoutHandle> prepareMaterialPassBindingLayout();
     [[nodiscard]] Expected<MaterialPipelineResources*> createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer);
     [[nodiscard]] Expected<MaterialPipelineResources*> findRendererPipeline(const MaterialPipelineKey& pipelineKey);
@@ -160,8 +160,9 @@ public:
         // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so a mixed CSG stream cannot accidentally suppress its required local dispatch/raster interleaving.
         bool csgEmulationOutputEntryStateGraphOwned = false,
         // A matching earlier producer permits raster timing independent of this pass.
-        bool emulationOutputReused = false);
-    [[nodiscard]] bool prepareMaterialPassResources(Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass, bool transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets);
+        bool emulationOutputReused = false
+    );
+    [[nodiscard]] bool prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass, bool transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets);
     void gatherMaterialPassDrawItems(
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
@@ -176,9 +177,15 @@ public:
         MaterialTypedByteDataVector& materialTypedBytes,
         RendererResourceLookupMode::Enum lookupMode,
         // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState);
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
+    );
     // Creation and override application belong to preparation; render paths only use the prepared lookup below.
-    [[nodiscard]] Expected<const MaterialTypedByteVector*> prepareMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance);
+    [[nodiscard]] Expected<const MaterialTypedByteVector*> prepareMaterialInstanceMutableTypedBytes(
+        Core::Alloc::ScratchArena& scratchArena,
+        Core::ECS::EntityID entity,
+        const MaterialSurfaceInfo& materialInfo,
+        const MaterialInstanceComponent* materialInstance
+    );
     [[nodiscard]] Expected<const MaterialTypedByteVector*> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const;
     // Shadow-owned copy of one occluder's constants context (draw-pass buffers hold one transparency class at trace time).
     // Mirrors gatherMaterialPassDrawItems packing so the trace hook reads rasterizer-identical bytes.
@@ -187,6 +194,7 @@ public:
         const MaterialSurfaceInfo& materialInfo,
         const NWB::Impl::Scene::TransformComponent* transform,
         MaterialTypedByteDataVector& inOutMaterialTypedBytes,
+        ECSRenderDetail::MaterialTypedConstantRangeMap& inOutConstantRanges,
         ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges
     );
     void pruneMaterialInstanceMutableCache();
@@ -229,6 +237,7 @@ public:
     // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
     void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, bool computeEmulation);
+
 
 private:
     void releaseMaterialResourceReferences();

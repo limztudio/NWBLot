@@ -14,7 +14,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
+usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type)noexcept{
     switch(type){
     case CooperativeVectorDataType::UInt8:
     case CooperativeVectorDataType::SInt8:
@@ -46,9 +46,9 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
     return 0;
 }
 
-usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
+Expected<usize> GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns)noexcept{
     if(type > CooperativeVectorDataType::Float64 || rows == 0u || columns == 0u)
-        return 0;
+        return MakeUnexpected(Failure{});
 
     usize minorElementCount = 0u;
     switch(layout){
@@ -60,17 +60,17 @@ usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum ty
         break;
     case CooperativeVectorMatrixLayout::InferencingOptimal:
     case CooperativeVectorMatrixLayout::TrainingOptimal:
-        return 0;
+        return 0u;
     default:
-        return 0;
+        return MakeUnexpected(Failure{});
     }
 
     const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
     const auto minorByteSize = TryMultiply<usize>(minorElementCount, dataTypeSize);
     if(!minorByteSize)
-        return 0;
+        return MakeUnexpected(Failure{});
     if(AddOverflows<usize>(*minorByteSize, dataTypeSize))
-        return 0;
+        return MakeUnexpected(Failure{});
     return *minorByteSize + dataTypeSize;
 }
 

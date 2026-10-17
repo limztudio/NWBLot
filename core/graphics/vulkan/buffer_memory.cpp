@@ -154,18 +154,18 @@ void Device::unmapBuffer(Buffer& buffer){
     }
 }
 
-MemoryRequirements Device::getBufferMemoryRequirements(Buffer& buffer){
+Expected<MemoryRequirements> Device::getBufferMemoryRequirements(Buffer& buffer){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer belongs to another device"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     if(!buffer.m_managed || !buffer.m_creationDesc.isVirtual || buffer.m_allocation != nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is not a managed virtual buffer"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     if(buffer.m_buffer == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: native buffer is null"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
     ScopedLock resourceLock(buffer.m_memoryBindingMutex);
@@ -181,7 +181,7 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer& buffer){
     const auto result = VulkanDetail::TryBuildBufferHeapRequirements(nativeRequirements, buffer.m_creationDesc.cpuAccess, buffer.m_creationDesc.isVolatile, m_context.physicalDeviceProperties.limits.nonCoherentAtomSize);
     if(!result){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: padded requirements overflow"));
-        return {};
+        return MakeUnexpected(result.error());
     }
     return *result;
 }

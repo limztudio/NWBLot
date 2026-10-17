@@ -6,6 +6,7 @@
 
 
 #include "combo_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,15 +112,15 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return full.instanceGeneration(); }
-    [[nodiscard]] virtual u64 revision()const override{ return full.revision(); }
-    [[nodiscard]] virtual u64 rowCount()const override{ return full.rowCount(); }
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ return full.key(index); }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return full.indexOf(key); }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return full.instanceGeneration(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return full.revision(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return full.rowCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return full.key(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return full.findEnabled(start, reverse);
     }
-    [[nodiscard]] virtual StringView text(const u64 index)const override{ return full.text(index); }
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
     [[nodiscard]] virtual bool enabled(const u64 index)const override{
         if(fullMutation){
             EditModel* query = fullMutation;
@@ -188,10 +189,10 @@ public:
         result.cancelled = cancelled;
         submitted = false;
         cancelled = false;
-        if(changeText){
-            result.valid = model.setText(nextText);
+        if(m_changeText){
+            result.valid = model.setText(m_nextText);
             result.textChanged = result.valid;
-            changeText = false;
+            m_changeText = false;
         }
         if(preedit){
             result.valid = result.valid && model.beginComposition() && model.updateComposition("preedit", 0u, 7u);
@@ -200,8 +201,8 @@ public:
         return result;
     }
 
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
         ++publications;
@@ -215,13 +216,13 @@ public:
         return true;
     }
 
-    void text(const AStringView value)noexcept{ nextText = value; changeText = true; }
+    void text(const AStringView value)noexcept{ m_nextText = value; m_changeText = true; }
 
 
 private:
     Context& m_context;
-    AStringView nextText;
-    bool changeText = false;
+    AStringView m_nextText;
+    bool m_changeText = false;
 
 
 public:
@@ -244,7 +245,7 @@ public:
 
 class SearchFixture : public ComboFixture{
 protected:
-    [[nodiscard]] static SearchComboOptions Options(){
+    [[nodiscard]] static SearchComboOptions Options()noexcept{
         SearchComboOptions value;
         value.combo = NWB::UiComboTests::Options();
         value.combo.popupHeight = 220.0f;
@@ -266,7 +267,6 @@ protected:
         m_builder.setEditHost(&m_host);
     }
 
-
     [[nodiscard]] bool declareSearch(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
             return false;
@@ -275,11 +275,12 @@ protected:
     }
 
     [[nodiscard]] bool prepareSearch(const u64 generation){ return declareSearch(generation) && finishPanel(); }
+
     [[nodiscard]] bool acceptSearch(const u64 generation){
         return prepareSearch(generation) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId query(const AStringView key = "combo")const noexcept{ return MakeWidgetId(host(key), "query"); }
+    [[nodiscard]] WidgetId query(const AStringView key = "combo")const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "query")); }
 
     [[nodiscard]] bool openSearch(const u64 generation){
         const HitTarget* field = target(host());

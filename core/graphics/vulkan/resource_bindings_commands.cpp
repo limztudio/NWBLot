@@ -46,7 +46,8 @@ namespace __hidden_vulkan_descriptor_buffer_commands{
     const GpuDescriptorHeapAbi& abi,
     const bool bindAccelStruct
 )noexcept{
-    return HasExactLayoutAtSet(pipelineBindings, resourceLayout, abi.resourceSetIndex, 1u)
+    return
+        HasExactLayoutAtSet(pipelineBindings, resourceLayout, abi.resourceSetIndex, 1u)
         && HasExactLayoutAtSet(pipelineBindings, samplerLayout, abi.samplerSetIndex, 1u)
         && HasExactLayoutAtSet(pipelineBindings, accelStructLayout, abi.accelStructSetIndex, bindAccelStruct ? 1u : 0u)
     ;
@@ -132,7 +133,6 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
     m_context.deviceDispatch.vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
 }
-
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const ComputePipeline& pipeline, const GpuDescriptorHandle accelStructHandle){
     constexpr TStringView s_OperationName = NWB_TEXT("bind compute descriptor-buffer heap");

@@ -7,6 +7,9 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -14,8 +17,6 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
-
-#include <core/task/cpu/scheduler.h>
 
 #include <global/span.h>
 
@@ -299,7 +300,6 @@ public:
     const CommandListParameters& getDescription()noexcept{ return m_desc; }
     [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
 
-
 private:
     [[nodiscard]] bool publicCommandStateAccessible()const noexcept;
     [[nodiscard]] bool hasCommandBufferUnchecked()const noexcept{ return matchesNativeLeaseIdentity(); }
@@ -350,7 +350,7 @@ private:
     [[nodiscard]] bool validateTrackedTexturesReadyForClose();
     [[nodiscard]] bool validateTrackedBuffersReadyForClose();
     [[nodiscard]] bool validateTrackedResourcesReadyForSubmission()const;
-    [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
+    [[nodiscard]] bool importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
     void collectHostReadbackBuffers();
@@ -383,8 +383,8 @@ private:
     void discardInvalidCommandBuffer();
     [[nodiscard]] bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, TStringView commandName);
     [[nodiscard]] Expected<Buffer*> prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, TStringView operationLabel, TStringView commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode);
-    void clearColorTexture(Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    void clearColorTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    void clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     [[nodiscard]] bool validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, CpuAccessMode::Enum requiredCpuAccess, VkImageUsageFlags requiredImageUsage, TStringView operationName);
@@ -515,6 +515,8 @@ private:
     [[nodiscard]] bool hasCompletedCycleWithinLock()const noexcept;
     [[nodiscard]] bool completedCycleMatchesWithinLock(u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* queueInfo)const noexcept;
 
+
+private:
     Futex m_mutex;
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
     RecordingOwner m_resetRecordingOwner;

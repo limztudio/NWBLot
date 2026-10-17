@@ -186,7 +186,8 @@ TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
     NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueStatistics(testArena.arena);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(testArena.arena);
-    NWB::Core::Telemetry::FrameGraphBuilder builder(nodes, edges, pendingNameEdges, physicalQueueStatistics, packetStatistics, 41u);
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ecs_graphics/frame_graph_builder_scratch"));
+    NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingNameEdges, physicalQueueStatistics, packetStatistics, 41u);
 
     const NWB::Core::Telemetry::FrameGraphNodeHandle owner = builder.addPass(
         Name("packet_owner"),

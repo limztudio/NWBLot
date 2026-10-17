@@ -248,7 +248,12 @@ struct MaterialBindGeneratedLayoutBlock{
 };
 
 static Expected<MaterialBindGeneratedLayoutBlock> ResolveMaterialBindGeneratedLayoutBlock(const AStringView includePath, const MaterialBindInstance& instance, const MaterialBindTypedLayout& layout){
-    const auto blockIt = layout.blockLookup.find(Name(AStringView(instance.name)));
+    const auto instanceName = Name::FromText(AStringView(instance.name));
+    if(!instanceName){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' has no typed layout block"), StringConvert(includePath), StringConvert(instance.name));
+        return MakeUnexpected(Failure{});
+    }
+    const auto blockIt = layout.blockLookup.find(*instanceName);
     if(blockIt == layout.blockLookup.end()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' has no typed layout block"), StringConvert(includePath), StringConvert(instance.name));
         return MakeUnexpected(Failure{});
@@ -329,8 +334,10 @@ static bool AppendMaterialBindLayoutConstants(const AStringView includePath, con
     const u32 constantByteSize = storageByteSizes->constantBytes;
     const u32 mutableByteSize = storageByteSizes->mutableBytes;
 
-    const Name interfaceName(AStringView(entry.virtualPath));
-    const NameHash& interfaceHash = interfaceName.hash();
+    const auto interfaceName = Name::FromText(AStringView(entry.virtualPath));
+    if(!interfaceName)
+        return false;
+    const NameHash& interfaceHash = interfaceName->hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         ScratchString laneSuffix("INTERFACE_HASH_", scratchArena);
         char laneDigits[TextDetail::s_DecimalTextBufferBytes];
@@ -512,7 +519,8 @@ static bool AppendMaterialBindGeneratedInstance(
 
         const MaterialBindField& field = bindStruct.fields[fieldOffset];
         const MaterialTypedLayoutField& layoutField = layout.typedLayoutFields[layoutFieldIndex];
-        if(layoutField.fieldName != Name(AStringView(field.name))){
+        const auto fieldName = Name::FromText(AStringView(field.name));
+        if(!fieldName || layoutField.fieldName != *fieldName){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' typed layout metadata mismatch"), StringConvert(includePath), StringConvert(bindStruct.name), StringConvert(field.name));
             return false;
         }
@@ -592,7 +600,10 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
 
     const ScratchString includeGuard = BuildMaterialBindIncludeGuard(scratchArena, AStringView(includePath));
 
-    const auto layoutResult = BuildMaterialBindTypedLayout(entry, Name(AStringView(entry.virtualPath)), arena, scratchArena);
+    const auto interfaceName = Name::FromText(AStringView(entry.virtualPath));
+    if(!interfaceName)
+        return MakeUnexpected(Failure{});
+    const auto layoutResult = BuildMaterialBindTypedLayout(entry, *interfaceName, arena, scratchArena);
     if(!layoutResult)
         return MakeUnexpected(Failure{});
     const MaterialBindTypedLayout& layout = *layoutResult;
@@ -675,7 +686,6 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
 }
 
 
-
 Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena){
     Path includeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Material bind include generation"))
@@ -701,7 +711,7 @@ Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirec
             return MakeUnexpected(Failure{});
         const CookString& generatedSource = *generatedSourceResult;
 
-        const Path outputPath = includeRoot / AStringView(includePath);
+        const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / AStringView(includePath);
         auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));

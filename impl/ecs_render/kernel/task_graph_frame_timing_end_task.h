@@ -30,11 +30,13 @@ struct FrameTimingEndGraphTask{
     // Frame timing must end on the same primary physical queue that recorded its beginning.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
 
-    // The transaction owns the timing reservation opened by the frame-timing prelude. It is a reference (not a nullable pointer), so a missing binding fails at declaration time.
+    // The transaction owns the timing reservation opened by the frame-timing prelude.
     struct Payload{
         Core::GpuTimingFrameTransaction& frameTimingTransaction;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 

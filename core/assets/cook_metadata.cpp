@@ -47,9 +47,9 @@ struct AutoMetadataParser{
     return s_Queue;
 }
 
-[[nodiscard]] static Expected<Core::Metascript::Document> ParseMetascriptDocument(CookArena& cookArena, const Path& nwbFilePath){
+[[nodiscard]] static Expected<Core::Metascript::Document> ParseMetascriptDocument(CookArena& cookArena, const Path& nwbFilePath, ScratchArena& scratchArena){
     Core::Metascript::Document doc(cookArena);
-    CookString metaText{cookArena};
+    ScratchString metaText{scratchArena};
     if(!ReadTextFile(nwbFilePath, metaText)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
@@ -97,7 +97,12 @@ struct AutoMetadataParser{
     ScratchArena& scratchArena
 ){
     const AStringView rawAssetTypeText(doc.assetType().data(), doc.assetType().size());
-    const Name assetType = ToName(rawAssetTypeText);
+    const auto assetTypeResult = ToName(rawAssetTypeText);
+    if(!assetTypeResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type contains an embedded null in meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
+        return false;
+    }
+    const Name assetType = *assetTypeResult ? **assetTypeResult : s_NameNone;
     AssetDocumentMetadataParseContext metadataParseContext{ cookArena, discoveredNwbFile, assetType, doc, outMetadata, scratchArena };
     const AssetMetadataParseResult::Enum metadataParseResult = TryAutoCollectedDocumentMetadataParsers(metadataParseContext);
     if(metadataParseResult == AssetMetadataParseResult::Parsed)
@@ -137,9 +142,17 @@ AssetMetadataParserAutoRegistrar::AssetMetadataParserAutoRegistrar(const AssetDo
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 AssetBunchExpanderAutoRegistrar::AssetBunchExpanderAutoRegistrar(const AssetBunchExpandFunction function){
     ::RegisterAutoFactory(__hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue(), function);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookArena, const CookVector<ResolvedAssetRoot>& assetRoots, const AStringView expectedExtension, ScratchArena& scratchArena){
     DiscoveredNwbFileVector files(cookArena);
@@ -157,11 +170,14 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
             return MakeUnexpected(Failure{});
         }
 
-        const auto entries = RecursiveDirectoryIterator<AssetArena>::Create(assetRoot.path);
+        const ::Path<ScratchArena> scratchRoot(scratchArena, assetRoot.path);
+        const auto entries = RecursiveDirectoryIterator<ScratchArena>::Create(scratchRoot);
         if(!entries){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: error scanning asset root '{}': {}"), PathToString<tchar>(assetRoot.path), StringConvert(entries.error().message()));
             return MakeUnexpected(Failure{});
         }
+        files.reserve(AddSize(files.size(), static_cast<usize>(entries->end() - entries->begin())));
+        seenPathHashes.reserve(AddSize(seenPathHashes.size(), static_cast<usize>(entries->end() - entries->begin())));
         for(const auto& dirEntry : *entries){
             const auto isRegularFile = dirEntry.isRegularFile();
             if(!isRegularFile){
@@ -171,16 +187,21 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
             if(!*isRegularFile)
                 continue;
 
-            const Path& filePath = dirEntry.path();
+            const ::Path<ScratchArena>& filePath = dirEntry.path();
             ScratchString extension = PathToString(scratchArena, filePath.extension());
             CanonicalizeTextInPlace(extension);
             if(extension != expectedExtension)
                 continue;
 
             ScratchString normalizedPath = PathToString(scratchArena, filePath.lexicallyNormal());
+#if defined(NWB_PLATFORM_WINDOWS)
             CanonicalizeTextInPlace(normalizedPath);
+#endif
             if(!seenPathHashes.insert(ComputeFnv64Text(normalizedPath)).second)
                 continue;
+#if !defined(NWB_PLATFORM_WINDOWS)
+            CanonicalizeTextInPlace(normalizedPath);
+#endif
 
             files.emplace_back(cookArena, assetRoot.path, filePath, normalizedPath, assetRoot.virtualRoot);
         }
@@ -239,8 +260,7 @@ AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMe
 }
 
 Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context){
-    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_AssetBunchExpandersScratch);
-    Vector<AssetBunchExpandFunction, Core::Alloc::ScratchArena> functions{scratchArena};
+    Vector<AssetBunchExpandFunction, Core::Alloc::ScratchArena> functions{context.scratchArena};
     __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue().copyTo(functions);
 
     for(const AssetBunchExpandFunction function : functions){
@@ -263,7 +283,7 @@ bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwb
 
     bool parsedAnyMetadata = false;
     for(const DiscoveredNwbFile& discoveredNwbFile : nwbFiles){
-        const auto parsedDoc = __hidden_cook_metadata::ParseMetascriptDocument(cookArena, discoveredNwbFile.filePath);
+        const auto parsedDoc = __hidden_cook_metadata::ParseMetascriptDocument(cookArena, discoveredNwbFile.filePath, scratchArena);
         if(!parsedDoc)
             return false;
         const auto& doc = *parsedDoc;

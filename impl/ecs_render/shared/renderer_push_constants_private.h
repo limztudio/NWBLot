@@ -191,7 +191,7 @@ NWB_INLINE void SetTransparentDrawPushConstants(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
-NWB_INLINE void SetEmulatedVertexAttribute(Core::VertexAttributeDesc& attribute, const Core::Format::Enum format, const u32 offsetByteCount, const AStringView name){
+NWB_INLINE void SetEmulatedVertexAttribute(Core::VertexAttributeDesc& attribute, const Core::Format::Enum format, const u32 offsetByteCount, const NameText<char> name){
     attribute.setFormat(format).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(Name(name));
 }
 

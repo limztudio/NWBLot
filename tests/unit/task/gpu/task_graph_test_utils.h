@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include <core/alloc/scratch.h>
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/task/gpu/capture/command_ir_internal.h>
 #include <core/task/gpu/compiler_internal.h>
@@ -54,12 +55,15 @@ using TestPath = ::Path<Graphics::Alloc::GlobalArena>;
 inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual);
 
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddHazardDomain(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label);
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddHazardDomain(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label);
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddTextureMetadata(
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddTextureMetadata(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
@@ -68,7 +72,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 );
 
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddBufferMetadata(
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddBufferMetadata(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
@@ -76,7 +80,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
 );
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddAccelStructMetadata(
+[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddAccelStructMetadata(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
@@ -84,9 +88,9 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
 );
 
-[[nodiscard]] Graphics::GpuGraphPipelineId AddPipelineMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::GpuGraphPipelineType::Enum type);
+[[nodiscard]] Expected<Graphics::GpuGraphPipelineId> AddPipelineMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::GpuGraphPipelineType::Enum type);
 
-[[nodiscard]] Graphics::GpuTaskId AddTask(
+[[nodiscard]] Expected<Graphics::GpuTaskId> AddTask(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
@@ -98,7 +102,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const usize resourceSetUseCount = 0u
 );
 
-[[nodiscard]] Graphics::GpuTaskId AddTaskWithCommands(
+[[nodiscard]] Expected<Graphics::GpuTaskId> AddTaskWithCommands(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
@@ -109,9 +113,10 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const usize dependencyCount = 0u
 );
 
-[[nodiscard]] bool Analyze(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis);
+[[nodiscard]] bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis);
 
 [[nodiscard]] bool Assign(
+    Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
@@ -120,6 +125,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 );
 
 [[nodiscard]] bool Compile(
+    Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
@@ -130,6 +136,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 
 // Synthetic ownership and packet fixtures require distinct transports independent of automatic placement scores.
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
+    Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
@@ -139,6 +146,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 );
 
 struct SingleQueueCompile{
+    Core::Alloc::ScratchArena scratchArena;
     Graphics::GpuPhysicalQueueInfo singleQueue;
     Graphics::GpuPhysicalQueueTopology topology;
     Graphics::GpuTaskGraphAnalysis analysis;
@@ -155,6 +163,7 @@ public:
 };
 
 struct TwoQueueCompile{
+    Core::Alloc::ScratchArena scratchArena;
     Graphics::GpuPhysicalQueueInfo graphicsQueue;
     Graphics::GpuPhysicalQueueInfo computeQueue;
     Graphics::GpuPhysicalQueueInfo queueStorage[2u];
@@ -173,6 +182,7 @@ public:
 };
 
 struct ThreeQueueCompile{
+    Core::Alloc::ScratchArena scratchArena;
     Graphics::GpuPhysicalQueueInfo graphicsQueue;
     Graphics::GpuPhysicalQueueInfo computeQueue;
     Graphics::GpuPhysicalQueueInfo transferQueue;
@@ -222,7 +232,7 @@ struct TransferOwnershipPair{
     Graphics::GpuTaskId consumer;
 };
 
-[[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(Graphics::GpuTaskGraph& graph, const Graphics::ResourceQueueSharing::Mask queueSharing);
+[[nodiscard]] Expected<TransferOwnershipPair> AddTransferOwnershipPair(Graphics::GpuTaskGraph& graph, const Graphics::ResourceQueueSharing::Mask queueSharing);
 
 [[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer)noexcept;
 
@@ -233,7 +243,7 @@ struct ExternalFinalReadPair{
 };
 
 
-[[nodiscard]] ExternalFinalReadPair AddExternalFinalReadPair(
+[[nodiscard]] Expected<ExternalFinalReadPair> AddExternalFinalReadPair(
     Graphics::GpuTaskGraph& graph,
     const Graphics::GpuGraphResourceType::Enum resourceType,
     const Graphics::GpuTaskResourceRange& earlierRange,

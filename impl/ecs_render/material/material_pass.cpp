@@ -10,6 +10,7 @@
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
 #include <impl/ecs_mesh/module.h>
+#include <impl/ecs_csg/shape_registry.h>
 #include <impl/ecs_scene/module.h>
 
 #include <core/common/log.h>
@@ -34,6 +35,10 @@ namespace __hidden_material_pass{
 
 
 inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] static bool MeshletConeCullScaleSafe(const SIMDVectorSingle scale)noexcept{
     if(!VectorIsFinite(scale, VectorComponentMask::s_XYZ) || !Vector3Greater(scale, VectorZero()))
@@ -79,21 +84,6 @@ struct MaterialInstanceAppend{
     ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
 };
 
-struct MaterialTypedByteRangeKey{
-    Name materialName = s_NameNone;
-    u64 typedLayoutHash = 0u;
-
-};
-inline bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{ return lhs.materialName == rhs.materialName && lhs.typedLayoutHash == rhs.typedLayoutHash; }
-
-struct MaterialTypedByteRangeKeyHasher{
-    usize operator()(const MaterialTypedByteRangeKey& key)const{
-        usize seed = Hasher<Name>{}(key.materialName);
-        ::HashCombine(seed, key.typedLayoutHash);
-        return seed;
-    }
-};
-
 struct MaterialTypedByteRangeCache{
     ECSRenderDetail::MaterialTypedByteRange constantRange;
     ECSRenderDetail::MaterialTypedByteRange defaultMutableRange;
@@ -110,6 +100,10 @@ struct MaterialTypedByteRangeCache{
 }
 
 inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] static const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
@@ -214,7 +208,14 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     }
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResources(Core::Framebuffer* framebuffer, const MaterialPipelinePass::Enum pass, const bool transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets){
+bool RendererMaterialSystem::prepareMaterialPassResources(
+    Core::Alloc::ScratchArena& scratchArena,
+    Core::Framebuffer* framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    const bool transparent,
+    const CsgFrameState& csgFrameState,
+    const AvboitFrameTargets* avboitTargets
+){
     if(!framebuffer)
         return false;
 
@@ -222,7 +223,6 @@ bool RendererMaterialSystem::prepareMaterialPassResources(Core::Framebuffer* fra
     if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PreparePassArena);
     MaterialPassDrawItemPartitions drawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};
@@ -242,7 +242,8 @@ bool RendererMaterialSystem::prepareMaterialPassResources(Core::Framebuffer* fra
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes, RendererResourceLookupMode::CreateMissing, nullptr);
+        materialTypedBytes, RendererResourceLookupMode::CreateMissing, nullptr
+    );
     if(drawItems.empty())
         return true;
 
@@ -265,7 +266,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-    MaterialTypedByteDataVector& materialTypedBytes, const RendererResourceLookupMode::Enum lookupMode, const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState){
+    MaterialTypedByteDataVector& materialTypedBytes, const RendererResourceLookupMode::Enum lookupMode, const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState
+){
     if(!framebuffer)
         return;
 
@@ -286,8 +288,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     materialTypedBytes.reserve(materialTypedByteReserve);
 
     using MaterialTypedByteRangeMap =
-        HashMap<__hidden_material_pass::MaterialTypedByteRangeKey, __hidden_material_pass::MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, __hidden_material_pass::MaterialTypedByteRangeKeyHasher, EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>>;
-    MaterialTypedByteRangeMap materialTypedRangeCache(0, __hidden_material_pass::MaterialTypedByteRangeKeyHasher(), EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>(), materialTypedBytes.get_allocator().arena());
+        HashMap<ECSRenderDetail::MaterialTypedByteRangeKey, __hidden_material_pass::MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, ECSRenderDetail::MaterialTypedByteRangeKeyHasher, EqualTo<ECSRenderDetail::MaterialTypedByteRangeKey>>;
+    MaterialTypedByteRangeMap materialTypedRangeCache(0, ECSRenderDetail::MaterialTypedByteRangeKeyHasher(), EqualTo<ECSRenderDetail::MaterialTypedByteRangeKey>(), materialTypedBytes.get_allocator().arena());
     materialTypedRangeCache.reserve(rendererCapacity);
 
     ECSRenderDetail::MaterialTypedByteContentRangeMap mutableMaterialTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), materialTypedBytes.get_allocator().arena());
@@ -307,7 +309,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     }
 
     auto appendConstantMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
-        const __hidden_material_pass::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
+        const ECSRenderDetail::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.constantRangeCached){
@@ -324,7 +326,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     };
 
     auto appendDefaultMutableMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
-        const __hidden_material_pass::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
+        const ECSRenderDetail::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.defaultMutableRangeCached){
@@ -347,7 +349,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         // Prepared-only gathers must never populate the persistent override cache.
         const auto mutableTypedBytes = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
+            ? prepareMaterialInstanceMutableTypedBytes(materialTypedBytes.get_allocator().arena(), entity, materialInfo, materialInstance)
             : findPreparedMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
         ;
         if(!mutableTypedBytes)
@@ -392,6 +394,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(csgClipActive){
             pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
             pipelineKey.csgEvaluatorVariant = csgClipInfo->evaluatorVariant;
+            pipelineKey.csgShapeRegistryRevision = m_csgShapeRegistry.revision();
             pipelineKey.twoSided = true;
         }
 
@@ -557,7 +560,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         const auto meshResult = resolvedMesh.runtime
             ? (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh) : m_meshSystem.findRuntimeMeshResources(resolvedMesh.runtimeMesh))
-            : (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createMeshResources(resolvedMesh.mesh) : m_meshSystem.findMeshResources(resolvedMesh.mesh))
+            : (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createMeshResources(resolvedMesh.mesh, materialTypedBytes.get_allocator().arena()) : m_meshSystem.findMeshResources(resolvedMesh.mesh))
         ;
         if(!meshResult)
             continue;

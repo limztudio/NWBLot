@@ -8,6 +8,7 @@
 
 #include <core/common/log.h>
 
+#include <global/allocation_size.h>
 #include <global/json_text.h>
 
 
@@ -43,6 +44,8 @@ inline constexpr AStringView s_SkinAssetKindText = "skin";
 inline constexpr AStringView s_AssetVariableName = "asset";
 inline constexpr AStringView s_AssetBunchDisplayName = "asset bunch";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Normalize streamed metadata to CRLF without buffering another full copy of large mesh payloads.
@@ -166,8 +169,8 @@ void WriteVertexRef(Stream& out, const SourceVertexRef& ref){
     out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]";
 }
 
-bool EnsureOutputDirectory(const Path& outputPath, const AStringView assetKind){
-    const Path parentPath = outputPath.parentPath();
+bool EnsureOutputDirectory(const ScratchPath& outputPath, const AStringView assetKind){
+    const ScratchPath parentPath = outputPath.parentPath();
     if(parentPath.empty())
         return true;
 
@@ -236,7 +239,7 @@ void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStri
     file << indent << "];\n";
 }
 
-bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
+bool WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
     if(!ValidatePlainMeshAsset(mesh))
         return false;
     if(!EnsureOutputDirectory(outputPath, s_MeshAssetKindText))
@@ -261,95 +264,120 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     return true;
 }
 
-bool NameUsed(const UtilityVector<AString>& names, const AStringView name)noexcept{
-    for(const AString& usedName : names){
+bool NameUsed(const UtilityScratchVector<ScratchString>& names, const AStringView name)noexcept{
+    for(const ScratchString& usedName : names){
         if(usedName == name)
             return true;
     }
     return false;
 }
 
-AString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const UtilityVector<AString>& usedNames){
-    const AString baseName = AssetWriterSkeletonDetail::NodeName(node, fallbackIndex);
-    AString name = baseName;
+ScratchString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const UtilityScratchVector<ScratchString>& usedNames, Core::Alloc::ScratchArena& scratchArena){
+    const ScratchString baseName = AssetWriterSkeletonDetail::NodeName(node, fallbackIndex, scratchArena);
+    ScratchString name(baseName, scratchArena);
+    name.reserve(AddSize(baseName.size(), 11u));
 
     u32 suffix = 1u;
     while(NameUsed(usedNames, name)){
-        AStringStream out;
-        out << baseName << "_" << suffix++;
-        name = out.str();
+        name.clear();
+        StringAppendFormat(name, "{}_{}", baseName, suffix);
+        ++suffix;
     }
 
     return name;
 }
 
-UtilityVector<AString> BuildUniqueJointNames(const UtilityVector<ufbx_node*>& joints){
-    UtilityVector<AString> names;
+UtilityScratchVector<ScratchString> BuildUniqueJointNames(const UtilityVector<ufbx_node*>& joints, Core::Alloc::ScratchArena& scratchArena){
+    UtilityScratchVector<ScratchString> names(scratchArena);
     names.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
-        names.push_back(UniqueNodeName(joints[jointIndex], jointIndex, names));
+        names.push_back(UniqueNodeName(joints[jointIndex], jointIndex, names, scratchArena));
 
     return names;
 }
 
-AString BuildVirtualBasePath(const Path& outputPath, const AStringView virtualRoot){
+ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringView virtualRoot){
+    Core::Alloc::ScratchArena& scratchArena = outputPath.arena();
     const AStringView trimmedVirtualRoot = TrimView(virtualRoot);
 
-    Path noExtension = outputPath;
+    ScratchPath noExtension = outputPath;
     noExtension.replaceExtension();
 
-    Path relativePath(outputPath.arena());
+    BasicString<ScratchPath::value_type, Core::Alloc::ScratchArena> relativeNative(scratchArena);
+    relativeNative.reserve(noExtension.native().size());
     bool foundAssets = false;
-    for(const Path& part : noExtension){
-        const AString partText = ToAsciiLowerCopy(PathToGenericString<AString>(part));
-        if(partText == s_AssetsSourceDirectoryText){
+    for(const ScratchPath& part : noExtension){
+        const auto partText = part.native();
+        bool assetsDirectory = partText.size() == s_AssetsSourceDirectoryText.size();
+        for(usize i = 0u; assetsDirectory && i < partText.size(); ++i)
+            assetsDirectory = ToAsciiLower(partText[i]) == static_cast<ScratchPath::value_type>(s_AssetsSourceDirectoryText[i]);
+        if(assetsDirectory){
             foundAssets = true;
-            relativePath.clear();
+            relativeNative.clear();
             continue;
         }
-        if(foundAssets)
-            relativePath /= part;
+        if(foundAssets){
+            if(!relativeNative.empty())
+                relativeNative.push_back(static_cast<ScratchPath::value_type>('/'));
+            relativeNative.append(partText.data(), partText.size());
+        }
     }
-    if(relativePath.empty())
+    ScratchPath relativePath(scratchArena);
+    if(relativeNative.empty())
         relativePath = noExtension.filename();
+    else
+        relativePath = BasicStringView<ScratchPath::value_type>(relativeNative);
 
-    AString virtualPath(trimmedVirtualRoot.empty() ? s_DefaultVirtualRootText : trimmedVirtualRoot);
-    if(!virtualPath.empty() && virtualPath.back() != '/')
-        virtualPath.push_back('/');
-
-    AString relativeText = PathToGenericString<AString>(relativePath);
+    auto relativeText = PathToGenericString(scratchArena, relativePath);
     while(!relativeText.empty() && (relativeText.front() == '/' || relativeText.front() == '\\'))
         relativeText.erase(relativeText.begin());
+    ScratchString virtualPath(trimmedVirtualRoot.empty() ? s_DefaultVirtualRootText : trimmedVirtualRoot, scratchArena);
+    virtualPath.reserve(AddSize(AddSize(virtualPath.size(), relativeText.size()), 1u));
+    if(!virtualPath.empty() && virtualPath.back() != '/')
+        virtualPath.push_back('/');
     virtualPath += relativeText;
     return virtualPath;
 }
 
 template<typename Stream>
-void WriteReferenceValue(Stream& file, const AStringView value, const bool quote){
-    if(quote)
-        file << "\"" << MakeJsonEscapedText<AString>(value) << "\"";
+void WriteReferenceValue(Stream& file, const AStringView value, const bool quote, Core::Alloc::ScratchArena& scratchArena){
+    if(quote){
+        ScratchString escaped(scratchArena);
+        escaped.reserve(SizeOf<2u>(value.size()));
+        AppendJsonEscapedText(escaped, value);
+        file << "\"" << escaped << "\"";
+    }
     else
         file << value;
 }
 
 template<typename Stream>
-void WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
+bool WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
     file << variableName << ".joints = [\n";
-    const UtilityVector<AString> jointNames = BuildUniqueJointNames(joints);
+    const auto jointNames = BuildUniqueJointNames(joints, scratchArena);
 
     UtilityScratchMap<const ufbx_node*, usize> jointLookup(scratchArena);
     jointLookup.reserve(joints.size());
-    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
-        jointLookup.emplace(joints[jointIndex], jointIndex);
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const auto inserted = jointLookup.emplace(joints[jointIndex], jointIndex);
+        if(!inserted.second){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
 
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         file << "    {\n";
-        file << "        \"name\": \"" << MakeJsonEscapedText<AString>(AStringView(jointNames[jointIndex].data(), jointNames[jointIndex].size())) << "\",\n";
+        file << "        \"name\": ";
+        WriteReferenceValue(file, jointNames[jointIndex], true, scratchArena);
+        file << ",\n";
         if(joints[jointIndex] && joints[jointIndex]->parent){
             const auto foundParent = jointLookup.find(joints[jointIndex]->parent);
             if(foundParent != jointLookup.end()){
-                const AString& parentName = jointNames[foundParent.value()];
-                file << "        \"parent\": \"" << MakeJsonEscapedText<AString>(AStringView(parentName.data(), parentName.size())) << "\",\n";
+                const ScratchString& parentName = jointNames[foundParent.value()];
+                file << "        \"parent\": ";
+                WriteReferenceValue(file, parentName, true, scratchArena);
+                file << ",\n";
             }
         }
         file << "        \"local_bind_pose\": ";
@@ -358,9 +386,10 @@ void WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const 
         file << "    },\n";
     }
     file << "];\n";
+    return true;
 }
 
-bool WriteSkeletonAsset(const Path& outputPath, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
+bool WriteSkeletonAsset(const ScratchPath& outputPath, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
     if(!EnsureOutputDirectory(outputPath, s_SkeletonAssetKindText))
         return false;
 
@@ -373,7 +402,8 @@ bool WriteSkeletonAsset(const Path& outputPath, const UtilityVector<ufbx_node*>&
     file.precision(s_OutputFloatPrecision);
 
     file << "skeleton asset;\n\n";
-    WriteSkeletonAssetBody(file, s_AssetVariableName, joints, bindPoseMatrices, scratchArena);
+    if(!WriteSkeletonAssetBody(file, s_AssetVariableName, joints, bindPoseMatrices, scratchArena))
+        return false;
 
     rawFile.close();
     if(!file){
@@ -391,13 +421,14 @@ void WriteSkinAssetBody(
     const AStringView skeletonName,
     const UtilityVector<MeshSkinInfluence>& influences,
     const UtilityVector<JointMatrix>& inverseBindMatrices,
+    Core::Alloc::ScratchArena& scratchArena,
     const bool quoteReferences = true
 ){
     file << variableName << ".mesh = ";
-    WriteReferenceValue(file, meshName, quoteReferences);
+    WriteReferenceValue(file, meshName, quoteReferences, scratchArena);
     file << ";\n";
     file << variableName << ".skeleton = ";
-    WriteReferenceValue(file, skeletonName, quoteReferences);
+    WriteReferenceValue(file, skeletonName, quoteReferences, scratchArena);
     file << ";\n\n";
 
     file << variableName << ".influences = [\n";
@@ -419,7 +450,7 @@ void WriteSkinAssetBody(
     file << "];\n";
 }
 
-bool WriteSkinAsset(const Path& outputPath, const AStringView meshName, const AStringView skeletonName, const UtilityVector<MeshSkinInfluence>& influences, const UtilityVector<JointMatrix>& inverseBindMatrices){
+bool WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, const AStringView skeletonName, const UtilityVector<MeshSkinInfluence>& influences, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     if(influences.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: no skin influences were produced"));
         return false;
@@ -436,7 +467,7 @@ bool WriteSkinAsset(const Path& outputPath, const AStringView meshName, const AS
     file.precision(s_OutputFloatPrecision);
 
     file << "skin asset;\n\n";
-    WriteSkinAssetBody(file, s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices);
+    WriteSkinAssetBody(file, s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, scratchArena);
 
     rawFile.close();
     if(!file){
@@ -453,6 +484,7 @@ void WriteModelAssetBody(
     const AStringView meshName,
     const Optional<AStringView> skinName,
     const Optional<AStringView> skeletonName,
+    Core::Alloc::ScratchArena& scratchArena,
     const AStringView skinnedMeshSkeletonName = s_SkeletonAssetKindText,
     const bool quoteAssetReferences = true,
     const bool quoteSkinnedMeshSkeletonReference = true
@@ -461,7 +493,7 @@ void WriteModelAssetBody(
         file << variableName << ".skeletons = {\n";
         file << "    \"skeleton\": {\n";
         file << "        \"skeleton\": ";
-        WriteReferenceValue(file, *skeletonName, quoteAssetReferences);
+        WriteReferenceValue(file, *skeletonName, quoteAssetReferences, scratchArena);
         file << ",\n";
         file << "    },\n";
         file << "};\n\n";
@@ -469,10 +501,10 @@ void WriteModelAssetBody(
         file << variableName << ".skinned_meshes = {\n";
         file << "    \"mesh\": {\n";
         file << "        \"skin\": ";
-        WriteReferenceValue(file, *skinName, quoteAssetReferences);
+        WriteReferenceValue(file, *skinName, quoteAssetReferences, scratchArena);
         file << ",\n";
         file << "        \"skeleton\": ";
-        WriteReferenceValue(file, skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference);
+        WriteReferenceValue(file, skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference, scratchArena);
         file << ",\n";
         file << "    },\n";
         file << "};\n";
@@ -481,14 +513,14 @@ void WriteModelAssetBody(
         file << variableName << ".static_meshes = {\n";
         file << "    \"base\": {\n";
         file << "        \"mesh\": ";
-        WriteReferenceValue(file, meshName, quoteAssetReferences);
+        WriteReferenceValue(file, meshName, quoteAssetReferences, scratchArena);
         file << ",\n";
         file << "    },\n";
         file << "};\n";
     }
 }
 
-bool WriteModelAsset(const Path& outputPath, const AStringView meshName, const Optional<AStringView> skinName, const Optional<AStringView> skeletonName){
+bool WriteModelAsset(const ScratchPath& outputPath, const AStringView meshName, const Optional<AStringView> skinName, const Optional<AStringView> skeletonName, Core::Alloc::ScratchArena& scratchArena){
     if(!EnsureOutputDirectory(outputPath, s_ModelAssetKindText))
         return false;
 
@@ -501,7 +533,7 @@ bool WriteModelAsset(const Path& outputPath, const AStringView meshName, const O
     file.precision(s_OutputFloatPrecision);
 
     file << "model asset;\n\n";
-    WriteModelAssetBody(file, s_AssetVariableName, meshName, skinName, skeletonName);
+    WriteModelAssetBody(file, s_AssetVariableName, meshName, skinName, skeletonName, scratchArena);
 
     rawFile.close();
     if(!file){
@@ -512,7 +544,7 @@ bool WriteModelAsset(const Path& outputPath, const AStringView meshName, const O
 }
 
 bool WriteAssetBunch(
-    const Path& outputPath,
+    const ScratchPath& outputPath,
     const SourceMeshStreams& mesh,
     const Optional<AStringView> skinName,
     const Optional<AStringView> skeletonName,
@@ -539,21 +571,22 @@ bool WriteAssetBunch(
     if(skinName && skeletonName && skinInfluences){
         file << "\n\n";
         file << "skeleton skeleton;\n\n";
-        WriteSkeletonAssetBody(file, s_SkeletonAssetKindText, skeletonJoints, skeletonBindPoseMatrices, scratchArena);
+        if(!WriteSkeletonAssetBody(file, s_SkeletonAssetKindText, skeletonJoints, skeletonBindPoseMatrices, scratchArena))
+            return false;
 
         file << "\n\n";
         file << "skin skin;\n\n";
-        WriteSkinAssetBody(file, s_SkinAssetKindText, s_MeshAssetKindText, s_SkeletonAssetKindText, *skinInfluences, inverseBindMatrices, false);
+        WriteSkinAssetBody(file, s_SkinAssetKindText, s_MeshAssetKindText, s_SkeletonAssetKindText, *skinInfluences, inverseBindMatrices, scratchArena, false);
     }
 
     const bool skinnedBunch = skinName && skeletonName && skinInfluences;
     file << "\n\n";
     file << "model model;\n\n";
     if(skinnedBunch){
-        WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, s_SkinAssetKindText, s_SkeletonAssetKindText, s_SkeletonAssetKindText, false, true);
+        WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, s_SkinAssetKindText, s_SkeletonAssetKindText, scratchArena, s_SkeletonAssetKindText, false, true);
     }
     else{
-        WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, {}, {}, s_SkeletonAssetKindText, false, false);
+        WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, {}, {}, scratchArena, s_SkeletonAssetKindText, false, false);
     }
 
     file << "\n\n";
@@ -585,19 +618,19 @@ bool WriteAssetBunch(
 
 
 bool WriteNwbAsset(
-    const Path& outputPath,
+    const ScratchPath& outputPath,
     const SourceMeshStreams& mesh,
     const AStringView assetTypeText,
     const AStringView virtualRoot,
     const bool separateAssets,
     const UtilityVector<ufbx_node*>& skeletonJoints,
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
-    const UtilityVector<JointMatrix>& inverseBindMatrices
+    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_AssetWriteScratch);
-    const auto assetTypeResult = ParseAssetTypeText(assetTypeText);
+    const auto assetTypeResult = ParseAssetTypeText(assetTypeText, scratchArena);
     if(!assetTypeResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: {}"), StringConvert(OutputAssetTypeErrorText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: {}"), StringConvert(OutputAssetTypeErrorText(scratchArena)));
         return false;
     }
 
@@ -616,18 +649,18 @@ bool WriteNwbAsset(
     }
 
     const bool skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
-    const Path packageDirectory = outputPath.parentPath() / outputPath.stem();
-    const Path meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
-    const AString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
-    const AString meshName = virtualBase + "/mesh";
+    const ScratchPath packageDirectory = outputPath.parentPath() / outputPath.stem();
+    const ScratchPath meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
+    const ScratchString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
+    const ScratchString meshName = virtualBase + "/mesh";
 
     if(assetType == OutputAssetType::Model){
         if(skinnedModel){
-            const AString skeletonName = virtualBase + "/skeleton";
-            const AString skinName = virtualBase + "/skin";
-            return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName));
+            const ScratchString skeletonName = virtualBase + "/skeleton";
+            const ScratchString skinName = virtualBase + "/skin";
+            return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName), scratchArena);
         }
-        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, {}, {});
+        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, {}, {}, scratchArena);
     }
 
     if(!skinnedModel){
@@ -640,7 +673,7 @@ bool WriteNwbAsset(
 
         if(!__hidden_asset_writer::WriteMeshAsset(meshPath, mesh))
             return false;
-        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, {}, {});
+        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, {}, {}, scratchArena);
     }
 
     if(!AssetWriterSkeletonDetail::ValidateSplitSkinSource(mesh, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices))
@@ -659,23 +692,23 @@ bool WriteNwbAsset(
     if(!AssetWriterSkeletonDetail::RemapSkinInfluences(positionSkin, skeletonOutput.oldToNewJointIndices))
         return false;
 
-    const Path skeletonPath = packageDirectory / __hidden_asset_writer::s_SkeletonSplitFileName;
-    const Path skinPath = packageDirectory / __hidden_asset_writer::s_SkinSplitFileName;
-    const AString skeletonName = virtualBase + "/skeleton";
-    const AString skinName = virtualBase + "/skin";
+    const ScratchPath skeletonPath = packageDirectory / __hidden_asset_writer::s_SkeletonSplitFileName;
+    const ScratchPath skinPath = packageDirectory / __hidden_asset_writer::s_SkinSplitFileName;
+    const ScratchString skeletonName = virtualBase + "/skeleton";
+    const ScratchString skinName = virtualBase + "/skin";
 
     if(assetType == OutputAssetType::Skeleton)
         return __hidden_asset_writer::WriteSkeletonAsset(outputPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices, scratchArena);
     if(assetType == OutputAssetType::Skin)
-        return __hidden_asset_writer::WriteSkinAsset(outputPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices);
+        return __hidden_asset_writer::WriteSkinAsset(outputPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices, scratchArena);
     if(assetType == OutputAssetType::Bunch && !separateAssets)
         return __hidden_asset_writer::WriteAssetBunch(outputPath, splitMesh, AStringView(skinName), AStringView(skeletonName), skeletonOutput.joints, skeletonOutput.bindPoseMatrices, &positionSkin, skeletonOutput.inverseBindMatrices, scratchArena);
 
     return
         __hidden_asset_writer::WriteMeshAsset(meshPath, splitMesh)
         && __hidden_asset_writer::WriteSkeletonAsset(skeletonPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices, scratchArena)
-        && __hidden_asset_writer::WriteSkinAsset(skinPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices)
-        && __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName))
+        && __hidden_asset_writer::WriteSkinAsset(skinPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices, scratchArena)
+        && __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName), scratchArena)
     ;
 }
 

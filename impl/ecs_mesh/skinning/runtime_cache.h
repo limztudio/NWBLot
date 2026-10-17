@@ -5,7 +5,9 @@
 #pragma once
 
 
+#include <core/alloc/scratch.h>
 #include <core/assets/module.h>
+
 #include "runtime_instance.h"
 
 
@@ -79,6 +81,8 @@ private:
         UniquePtr<Core::Assets::IAsset> skinAsset;
         u32 referenceCount = 0;
 
+
+    public:
         [[nodiscard]] const Mesh* mesh()const;
         [[nodiscard]] const Skin* skin()const;
     };
@@ -89,7 +93,7 @@ public:
 
 
 public:
-    void prepareResources(Core::ECS::World& world);
+    void prepareResources(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
     void clear();
 
     [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle);
@@ -97,16 +101,16 @@ public:
 
 
 private:
-    [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component);
+    [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<MeshSkinningSource*> ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset);
-    [[nodiscard]] bool uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance);
+    [[nodiscard]] bool uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] RuntimeMeshHandle allocateHandle();
     void releaseRuntimeMesh(Core::ECS::EntityID entity);
     void releaseSource(const Name& sourceName);
     void eraseUnusedSource(const Name& sourceName);
     [[nodiscard]] Core::ECS::EntityID entityForHandle(RuntimeMeshHandle handle)const;
-    [[nodiscard]] MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity);
-    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)const;
+    [[nodiscard]] MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)noexcept;
+    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)const noexcept;
 
 
 private:

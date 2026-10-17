@@ -33,7 +33,8 @@ protected:
     using UpdateBaseType = QueuedLoggerWorkerBase<T, loggerName>;
 
 
-    explicit ClientBase(const AStringView allocationLog)
+protected:
+    explicit ClientBase(const NameText<char> allocationLog)
         : UpdateBaseType(allocationLog)
     {}
 

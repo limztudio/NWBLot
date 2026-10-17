@@ -34,29 +34,40 @@ struct TargetReadyTask{
         Core::GpuGraphResourceId color;
     };
 
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+
+public:
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context)noexcept{
         return context.declarations.textureForResource(payload.color) == payload.target->m_color.get() && !commands.commandRecordingFailed();
     }
 };
 
-[[nodiscard]] static Core::GpuTaskId DeclareTargetInitialization(void* const rawTarget, Core::GpuTaskGraph& graph){
+[[nodiscard]] static Expected<Core::GpuTaskId> DeclareTargetInitialization(void* const rawTarget, Core::GpuTaskGraph& graph){
     const auto& target = *static_cast<GpuVersion<GpuTargetVersion>*>(rawTarget);
-    const Core::GpuGraphResourceId color = graph.importTexture(
+    const auto colorResult = graph.importTexture(
         target->m_color,
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.target_initialization")).setMarkerLabel("UI Target Initialization")
             .setType(Core::GpuGraphResourceType::Texture).setInitialState(Core::ResourceStates::Unknown)
             .setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
-    if(!color.valid())
-        return {};
-    const Core::GpuTaskId clear = graph.addClearTextureTask(
+    if(!colorResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuGraphResourceId color = *colorResult;
+    const auto clearResult = graph.addClearTextureTask(
         Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_clear")).setMarkerLabel("UI Target Initialization Clear"),
         Core::GpuClearTextureTaskDesc{ .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
     );
-    if(!clear.valid())
-        return {};
+    if(!clearResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuTaskId clear = *clearResult;
     const Core::GpuTaskResourceUse use{ color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read };
-    return graph.addTask<TargetReadyTask>(Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_ready")).setMarkerLabel("UI Target Ready").setDependencies(&clear, 1u).setResourceUses(&use, 1u), TargetReadyTask::Payload{ target, color });
+    const auto readyResult = graph.addTask<TargetReadyTask>(
+        Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_ready")).setMarkerLabel("UI Target Ready").setDependencies(&clear, 1u).setResourceUses(&use, 1u),
+        TargetReadyTask::Payload{ target, color }
+    );
+    if(!readyResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuTaskId ready = *readyResult;
+    return ready;
 }
 
 [[nodiscard]] static Core::RenderState PaintRenderState(){
@@ -109,9 +120,10 @@ bool GpuRendererState::createResources(){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    GpuVersion<GpuSharedResources> resources = MakeGpuVersion<GpuSharedResources>(m_arena, m_graphics);
-    if(!resources)
+    auto resourcesResult = MakeGpuVersion<GpuSharedResources>(m_arena, m_graphics);
+    if(!resourcesResult)
         return false;
+    GpuVersion<GpuSharedResources> resources = Move(*resourcesResult);
     if(
         !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_vertexShader, AssetsGraphicsUi::s_VertexShaderName)
         || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_pixelShader, AssetsGraphicsUi::s_PixelShaderName)
@@ -123,19 +135,35 @@ bool GpuRendererState::createResources(){
     attributes[NWB_UI_VERTEX_POSITION_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_POSITION_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("POSITION"));
     attributes[NWB_UI_VERTEX_UV_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_UV_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("TEXCOORD"));
     attributes[NWB_UI_VERTEX_COLOR_LOCATION].setFormat(Core::Format::RGBA32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_COLOR_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("COLOR"));
-    resources->m_inputLayout = device.createInputLayout(attributes, NWB_UI_VERTEX_ATTRIBUTE_COUNT, resources->m_vertexShader.get());
-    if(!resources->m_inputLayout)
+    auto inputLayoutResult = device.createInputLayout(attributes, NWB_UI_VERTEX_ATTRIBUTE_COUNT, resources->m_vertexShader.get());
+    if(inputLayoutResult)
+        resources->m_inputLayout = Move(*inputLayoutResult);
+    else
+        resources->m_inputLayout.reset();
+    if(!inputLayoutResult)
         return false;
     Core::BindingLayoutDesc paintLayout(m_arena);
     paintLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(GpuPaintPushConstants)));
-    resources->m_layout = device.createBindingLayout(paintLayout);
+    auto layoutResult = device.createBindingLayout(paintLayout);
+    if(layoutResult)
+        resources->m_layout = Move(*layoutResult);
+    else
+        resources->m_layout.reset();
     Core::BindingLayoutDesc outputLayout(m_arena);
     outputLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(GpuOutputPushConstants)));
-    resources->m_outputLayout = device.createBindingLayout(outputLayout);
+    auto outputLayoutResult = device.createBindingLayout(outputLayout);
+    if(outputLayoutResult)
+        resources->m_outputLayout = Move(*outputLayoutResult);
+    else
+        resources->m_outputLayout.reset();
     Core::SamplerDesc sampler;
     sampler.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
-    resources->m_sampler = device.createSampler(sampler);
-    if(!resources->m_layout || !resources->m_outputLayout || !resources->m_sampler)
+    auto samplerResult = device.createSampler(sampler);
+    if(samplerResult)
+        resources->m_sampler = Move(*samplerResult);
+    else
+        resources->m_sampler.reset();
+    if(!layoutResult || !outputLayoutResult || !samplerResult)
         return false;
     resources->m_samplerDescriptor = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!resources->m_samplerDescriptor.valid() || !heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::Sampler(0u, resources->m_sampler.get())))
@@ -150,17 +178,22 @@ bool GpuRendererState::createResources(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    resources->m_pipeline = device.createGraphicsPipeline(pipeline, Core::FramebufferInfo().addColorFormat(Core::Format::RGBA16_FLOAT));
-    if(!resources->m_pipeline)
+    auto pipelineResult = device.createGraphicsPipeline(pipeline, Core::FramebufferInfo().addColorFormat(Core::Format::RGBA16_FLOAT));
+    if(pipelineResult)
+        resources->m_pipeline = Move(*pipelineResult);
+    else
+        resources->m_pipeline.reset();
+    if(!pipelineResult)
         return false;
     m_resources = Move(resources);
     return true;
 }
 
-GpuVersion<GpuTargetVersion> GpuRendererState::createTarget(const u32 width, const u32 height){
-    GpuVersion<GpuTargetVersion> target = MakeGpuVersion<GpuTargetVersion>(m_arena, m_graphics);
-    if(!target)
-        return {};
+Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 width, const u32 height){
+    auto targetResult = MakeGpuVersion<GpuTargetVersion>(m_arena, m_graphics);
+    if(!targetResult)
+        return MakeUnexpected(targetResult.error());
+    GpuVersion<GpuTargetVersion> target = Move(*targetResult);
     Core::TextureDesc description;
     description
         .setName(Name("ui.layer"))
@@ -172,28 +205,36 @@ GpuVersion<GpuTargetVersion> GpuRendererState::createTarget(const u32 width, con
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
     Core::Device& device = m_graphics.getDevice();
-    target->m_color = device.createTexture(description);
-    if(!target->m_color)
-        return {};
-    target->m_framebuffer = device.createFramebuffer(Core::FramebufferDesc().addColorAttachment(target->m_color.get()));
-    if(!target->m_framebuffer)
-        return {};
+    auto colorResult = device.createTexture(description);
+    if(colorResult)
+        target->m_color = Move(*colorResult);
+    else
+        target->m_color.reset();
+    if(!colorResult)
+        return MakeUnexpected(Failure{});
+    auto framebufferResult = device.createFramebuffer(Core::FramebufferDesc().addColorAttachment(target->m_color.get()));
+    if(framebufferResult)
+        target->m_framebuffer = Move(*framebufferResult);
+    else
+        target->m_framebuffer.reset();
+    if(!framebufferResult)
+        return MakeUnexpected(Failure{});
     const Core::GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     // A creation descriptor does not transition a fresh native image. Initialize before publishing its bindless view.
     if(!queue.valid())
-        return {};
+        return MakeUnexpected(Failure{});
     const auto submission = m_graphics.submitStandaloneTaskGraph(&target, __hidden_ui_gpu_resources::DeclareTargetInitialization, queue);
     if(!submission)
-        return {};
+        return MakeUnexpected(submission.error());
     target->m_readinessToken = *submission;
     if(!target->m_readinessToken.valid() || !target->m_readinessToken.hasPhysicalQueueIdentity())
-        return {};
+        return MakeUnexpected(Failure{});
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     target->m_sampledImage = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     const Core::DescriptorWriteItem view = Core::DescriptorWriteItem::TextureSrv(0u, target->m_color.get(), Core::Format::RGBA16_FLOAT, Core::s_AllSubresources, Core::TextureDimension::Texture2D);
     if(!target->m_sampledImage.valid() || !heap.write(target->m_sampledImage, view))
-        return {};
-    return target;
+        return MakeUnexpected(Failure{});
+    return Move(target);
 }
 
 bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot){
@@ -213,9 +254,10 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
             .setDebugName(Name("ui.vertices")).enableAutomaticStateTracking(Core::ResourceStates::Common)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         ;
-        Core::BufferHandle buffer = device.createBuffer(description);
-        if(!buffer)
+        auto bufferResult = device.createBuffer(description);
+        if(!bufferResult)
             return false;
+        Core::BufferHandle buffer = Move(*bufferResult);
         slot.vertices = Move(buffer);
         slot.vertexCapacity = capacity;
     }
@@ -228,9 +270,10 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
             .setDebugName(Name("ui.indices")).enableAutomaticStateTracking(Core::ResourceStates::Common)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         ;
-        Core::BufferHandle buffer = device.createBuffer(description);
-        if(!buffer)
+        auto bufferResult = device.createBuffer(description);
+        if(!bufferResult)
             return false;
+        Core::BufferHandle buffer = Move(*bufferResult);
         slot.indices = Move(buffer);
         slot.indexCapacity = capacity;
     }
@@ -255,8 +298,12 @@ bool GpuRendererState::prepareOutputPipeline(const Core::AcquiredPresentationFra
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    m_resources->m_outputPipeline = device.createGraphicsPipeline(description, info);
-    return m_resources->m_outputPipeline != nullptr;
+    auto outputPipelineResult = device.createGraphicsPipeline(description, info);
+    if(outputPipelineResult)
+        m_resources->m_outputPipeline = Move(*outputPipelineResult);
+    else
+        m_resources->m_outputPipeline.reset();
+    return static_cast<bool>(outputPipelineResult);
 }
 
 bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){

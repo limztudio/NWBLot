@@ -129,10 +129,12 @@ TEST_F(UiEditNavigationLifetimeTests, BlurResetsPreferredColumnAtItsOrderedPosit
     EXPECT_EQ(m_resolver.records[0u].caret, 8u);
     EXPECT_TRUE(m_resolver.records[0u].navigation.valid);
     EXPECT_FLOAT_EQ(m_resolver.records[0u].navigation.preferredX, 40.0f);
-    EXPECT_EQ(m_resolver.records[0u].result.committedByte, 4u);
+    ASSERT_TRUE(m_resolver.records[0u].result);
+    EXPECT_EQ(m_resolver.records[0u].result->committedByte, 4u);
     EXPECT_EQ(m_resolver.records[1u].caret, 4u);
     EXPECT_FALSE(m_resolver.records[1u].navigation.valid);
-    EXPECT_EQ(m_resolver.records[1u].result.committedByte, 8u);
+    ASSERT_TRUE(m_resolver.records[1u].result);
+    EXPECT_EQ(m_resolver.records[1u].result->committedByte, 8u);
     EXPECT_FLOAT_EQ(m_navigation.preferredX(), 40.0f);
 }
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/frame_execute_surfel_readback.h>
+#include "frame_execute_surfel_readback.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool FrameExecuteSurfelReadback::AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token){
+[[nodiscard]] bool FrameExecuteSurfelReadback::AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
     if(!context || !context->renderer || !context->candidate || !context->finalStateReady)

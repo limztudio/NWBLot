@@ -43,6 +43,8 @@ namespace DirectPresentTransitionPolicy{
 struct SwapChainImagePresentationState{
     bool hasPresented = false;
 
+
+public:
     [[nodiscard]] ResourceStates::Mask nativeInitialState()const noexcept{
         return hasPresented ? ResourceStates::Present : ResourceStates::Unknown;
     }

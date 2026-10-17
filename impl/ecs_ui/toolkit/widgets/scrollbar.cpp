@@ -69,15 +69,9 @@ namespace __hidden_ui_scrollbar{
     if(maximum <= 0.0 || trackWidth <= 0.0f || trackHeight <= 0.0f)
         return false;
     if(axis == ScrollAxis::Horizontal){
-        return
-            viewportExtent == static_cast<f64>(trackWidth) && thumbY == trackY && thumbHeight == trackHeight
-            && thumbX >= trackX && thumbWidth <= trackWidth && thumbX + thumbWidth <= trackX + trackWidth
-        ;
+        return viewportExtent == static_cast<f64>(trackWidth) && thumbY == trackY && thumbHeight == trackHeight && thumbX >= trackX && thumbWidth <= trackWidth && thumbX + thumbWidth <= trackX + trackWidth;
     }
-    return
-        viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth
-        && thumbY >= trackY && thumbHeight <= trackHeight && thumbY + thumbHeight <= trackY + trackHeight
-    ;
+    return viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth && thumbY >= trackY && thumbHeight <= trackHeight && thumbY + thumbHeight <= trackY + trackHeight;
 }
 
 [[nodiscard]] static Expected<SIMDVectorDouble> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const bool visible)noexcept{

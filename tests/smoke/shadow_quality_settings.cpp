@@ -6,6 +6,8 @@
 
 #include "smoke_environment.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,7 +18,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyShadowQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::ShadowQualitySettings& baseSettings){
+bool ApplyShadowQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::ShadowQualitySettings& baseSettings){
     Impl::ShadowQualitySettings settings = baseSettings;
     if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SHADOW_TRANSPARENT_SAMPLING")){
         const AStringView sampling(value->data(), value->size());

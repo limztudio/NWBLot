@@ -17,18 +17,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const{
-    Core::GpuUploadBlobId blob;
+Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const{
     if(!m_shadowVisibilityTraceResourcesPreflighted || !m_lightSpaceShadow.m_csg.snapshot.hasCsg)
-        return blob;
+        return Optional<Core::GpuUploadBlobId>{};
     const auto& bytes = m_lightSpaceShadow.m_csg.bytes;
     if(bytes.empty() || !m_rayTracingState.m_csgTraceContextBuffer || !m_rayTracingState.m_csgTraceContextHeapHandle.valid())
         return MakeUnexpected(Failure{});
 
-    blob = graph.copyUploadData(bytes.data(), bytes.size(), alignof(u32));
-    if(!blob.valid())
+    const auto blobResult = graph.copyUploadData(bytes.data(), bytes.size(), alignof(u32));
+    if(!blobResult)
         return MakeUnexpected(Failure{});
-    return blob;
+    return Optional<Core::GpuUploadBlobId>{*blobResult};
 }
 
 void RendererRayTracingSystem::confirmCsgTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept{
@@ -93,13 +92,14 @@ bool RendererRayTracingSystem::ensureCsgTraceContextResources(){
     }
     Core::BufferDesc desc;
     desc.setByteSize(capacity).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name("raytrace_csg_context")).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    Core::BufferHandle replacement = m_graphics.createBuffer(desc);
-    if(!replacement)
+    auto replacementResult = m_graphics.createBuffer(desc);
+    if(!replacementResult)
         return false;
+    Core::BufferHandle replacement = Move(*replacementResult);
     const auto replacementHandle = RayTracingDetail::RegisterHeapBuffer(heap, *replacement, Core::GpuDescriptorClass::StorageBuffer, false);
     if(!replacementHandle)
         return false;
-    ScopeExit retireReplacement([&]()noexcept{ heap.free(*replacementHandle); });
+    Core::GpuDescriptorRetirementGuard retireReplacement(heap, *replacementHandle);
 
     RayTracingDetail::RetireHeapHandle(heap, handle);
     buffer = Move(replacement);

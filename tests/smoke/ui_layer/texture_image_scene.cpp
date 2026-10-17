@@ -59,8 +59,12 @@ UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& are
     , m_input(input)
 {
     using namespace __hidden_ui_texture_image_scene;
-    m_default = Impl::Ui::LoadImageSource(arena, assets, s_DefaultTexture);
-    m_alternate = Impl::Ui::LoadImageSource(arena, assets, s_AlternateTexture);
+    auto defaultSource = Impl::Ui::LoadImageSource(arena, assets, s_DefaultTexture);
+    if(defaultSource)
+        m_default = Move(*defaultSource);
+    auto alternateSource = Impl::Ui::LoadImageSource(arena, assets, s_AlternateTexture);
+    if(alternateSource)
+        m_alternate = Move(*alternateSource);
     m_replacement = m_default;
     m_sourcesValid = m_default && m_alternate && m_default->texture().width() == 256u
         && m_default->texture().height() == 256u && m_alternate->texture().width() == 256u
@@ -133,7 +137,10 @@ bool UiTextureImageSmokeScene::replaceVersion(){
     Core::Assets::AssetBytes bytes(m_arena);
     bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
     replacement.setPayload(payload.width(), payload.height(), Move(mipLevels), Move(bytes), payload.dimension(), payload.depth(), payload.payloadFormat(), payload.alphaMode(), payload.alphaConstantUnorm8());
-    Impl::Ui::SharedImageSource next = Impl::Ui::MakeImageSource(m_arena, replacement);
+    auto nextSource = Impl::Ui::MakeImageSource(m_arena, replacement);
+    if(!nextSource)
+        return false;
+    Impl::Ui::SharedImageSource next = Move(*nextSource);
     if(!next || next->generation() == m_replacement->generation() || next->generation() == m_default->generation() || next->generation() == m_alternate->generation() || next->identity().name() != m_default->identity().name())
         return false;
     m_replacement = Move(next);

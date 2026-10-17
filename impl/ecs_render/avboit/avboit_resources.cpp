@@ -30,8 +30,12 @@ static bool CreateHeapComputePipeline(Core::Device& device, Core::ComputePipelin
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    pipeline = device.createComputePipeline(pipelineDesc);
-    return pipeline != nullptr;
+    auto pipelineResult = device.createComputePipeline(pipelineDesc);
+    if(pipelineResult)
+        pipeline = Move(*pipelineResult);
+    else
+        pipeline.reset();
+    return static_cast<bool>(pipelineResult);
 }
 
 

@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/compute_effect_chain_builder.h>
+#include "compute_effect_chain_builder.h"
+
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
@@ -47,7 +48,10 @@ namespace __hidden_avboit_compute_effect_chain{
 };
 
 
-AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
     : m_graph(graph)
     , m_avboitSystem(avboitSystem){
 }
@@ -92,14 +96,16 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
             .setDependencies(preDependency, LengthOf(preDependency))
             .setResourceUses(depthWarpResourceUses, LengthOf(depthWarpResourceUses))
         ;
-        m_avboitSystem.taskGraphStage().m_depthWarpTask = m_graph.addTask<AvboitDepthWarpGraphTask>(
+        const auto mAvboitSystemTaskGraphStageMDepthWarpTaskResult = m_graph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
             AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = *inputs.targets, .timingTicket = *inputs.depthWarpTimingTicket, .timingFeedback = inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, }
         );
-        if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid()){
+        if(!mAvboitSystemTaskGraphStageMDepthWarpTaskResult){
+            m_avboitSystem.taskGraphStage().m_depthWarpTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
             return MakeUnexpected(Failure{});
         }
+        m_avboitSystem.taskGraphStage().m_depthWarpTask = *mAvboitSystemTaskGraphStageMDepthWarpTaskResult;
         completionTask = m_avboitSystem.taskGraphStage().m_depthWarpTask;
     }
 
@@ -147,14 +153,16 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
         .setDependencies(integrationDependency, LengthOf(integrationDependency))
         .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
     ;
-    m_avboitSystem.taskGraphStage().m_integrationTask = m_graph.addTask<AvboitIntegrationGraphTask>(
+    const auto mAvboitSystemTaskGraphStageMIntegrationTaskResult = m_graph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,
         AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = *inputs.targets, .timingTicket = *inputs.integrationTimingTicket, .timingFeedback = inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, }
     );
-    if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid()){
+    if(!mAvboitSystemTaskGraphStageMIntegrationTaskResult){
+        m_avboitSystem.taskGraphStage().m_integrationTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return MakeUnexpected(Failure{});
     }
+    m_avboitSystem.taskGraphStage().m_integrationTask = *mAvboitSystemTaskGraphStageMIntegrationTaskResult;
 
     result.integrationTask = m_avboitSystem.taskGraphStage().m_integrationTask;
     return result;

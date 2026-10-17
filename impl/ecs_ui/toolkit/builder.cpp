@@ -36,14 +36,14 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
         return false;
     }
     const UiSkinRegion* panel = region(m_style.panel, m_style.panel);
-    WidgetState* state = m_context.declare(stableKey, WidgetKind::Panel);
+    const auto state = m_context.declare(stableKey, WidgetKind::Panel);
     if(!panel || !state){
         m_context.fail();
         return false;
     }
     reset();
     m_scope->m_panelStyle = m_style;
-    m_scope->m_panelState = *state;
+    m_scope->m_panelState = **state;
     m_scope->m_bounds = bounds;
     LayoutNodeDesc description;
     description.direction = direction;
@@ -100,22 +100,22 @@ bool Builder::endContainer()noexcept{
 }
 
 bool Builder::label(const AStringView stableKey, const StringView text, const WidgetOptions& options){
-    return addItem(stableKey, text, WidgetKind::Label, options) != nullptr;
+    return addItem(stableKey, text, WidgetKind::Label, options).has_value();
 }
 
 bool Builder::button(const AStringView stableKey, const StringView text, const WidgetOptions& options){
-    const Item* item = addItem(stableKey, text, WidgetKind::Button, options);
-    return item && m_context.takeActivation(item->state, item->enabled);
+    const auto item = addItem(stableKey, text, WidgetKind::Button, options);
+    return item && m_context.takeActivation((*item)->state, (*item)->enabled);
 }
 
 bool Builder::checkbox(const AStringView stableKey, const StringView text, bool& checked, const WidgetOptions& options){
-    Item* item = addItem(stableKey, text, WidgetKind::Checkbox, options);
+    const auto item = addItem(stableKey, text, WidgetKind::Checkbox, options);
     if(!item)
         return false;
-    const bool changed = m_context.takeActivation(item->state, item->enabled);
+    const bool changed = m_context.takeActivation((*item)->state, (*item)->enabled);
     if(changed)
         checked = !checked;
-    item->checked = checked;
+    (*item)->checked = checked;
     return changed;
 }
 
@@ -147,6 +147,87 @@ bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
     return true;
 }
 
+WidgetStyle& Builder::style()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_style;
+}
+
+ScrollbarStyle& Builder::scrollbarStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_scrollbarStyle;
+}
+
+EditBoxStyle& Builder::editStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_editStyle;
+}
+
+PopupStyle& Builder::popupStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_popupStyle;
+}
+
+ListStyle& Builder::listStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_listStyle;
+}
+
+RadioGroupStyle& Builder::radioGroupStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_radioGroupStyle;
+}
+
+SliderStyle& Builder::sliderStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_sliderStyle;
+}
+
+ProgressStyle& Builder::progressStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_progressStyle;
+}
+
+ComboStyle& Builder::comboStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_comboStyle;
+}
+
+TooltipStyle& Builder::tooltipStyle()noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    return m_tooltipStyle;
+}
+
+void Builder::setEditHost(IEditBoxHost* host)noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    else
+        m_editHost = host;
+}
+
+void Builder::setDeltaSeconds(const f32 delta)noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    else
+        m_deltaSeconds = delta;
+}
+
+void Builder::setPointerBusy(const bool busy)noexcept{
+    if(declarationBlocked())
+        m_context.fail();
+    else
+        m_pointerBusy = busy;
+}
+
 ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
     return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()) };
 }
@@ -173,29 +254,29 @@ bool Builder::beginContainer(const AStringView stableKey, const LayoutDirection:
     return true;
 }
 
-Builder::Item* Builder::addItem(const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
+Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addItem(const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
     if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
-        return nullptr;
+        return MakeUnexpected(ItemDeclarationFailure{});
     }
-    WidgetState* state = m_context.declare(stableKey, kind);
+    const auto state = m_context.declare(stableKey, kind);
     if(!state)
-        return nullptr;
+        return MakeUnexpected(ItemDeclarationFailure{});
     Item item(m_arena);
     item.style = m_style;
-    item.state = *state;
+    item.state = **state;
     item.enabled = options.enabled && synchronizePopup();
     const ShapeRequest request = textShapeRequest(text, m_style.fontSize);
     auto layout = m_text.layout(request);
     if(!layout){
         m_context.fail();
-        return nullptr;
+        return MakeUnexpected(ItemDeclarationFailure{ layout.error() });
     }
     item.text = Move(*layout);
     const auto textBounds = m_text.measure(item.text, m_paint.displayMetrics());
     if(!textBounds){
         m_context.fail();
-        return nullptr;
+        return MakeUnexpected(ItemDeclarationFailure{});
     }
     item.textBounds = *textBounds;
     SIMDVectorSingle minimum = VectorZero();
@@ -204,7 +285,7 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
         const auto metrics = SelectablePainter::Measure(*m_skin, m_listStyle.row);
         if(!metrics){
             m_context.fail();
-            return nullptr;
+            return MakeUnexpected(ItemDeclarationFailure{});
         }
         item.padding = metrics->padding;
         const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
@@ -214,7 +295,7 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
     else if(kind == WidgetKind::Button){
         if(!region(m_style.button, m_style.button)){
             m_context.fail();
-            return nullptr;
+            return MakeUnexpected(ItemDeclarationFailure{});
         }
         SIMDVectorSingle paddingValue = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
         loadButtonMetrics(minimum, paddingValue);
@@ -227,7 +308,7 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
         SIMDVectorSingle checkboxExtent = VectorReplicate(m_style.checkboxExtent);
         if(!region(m_style.checkbox, m_style.checkbox)){
             m_context.fail();
-            return nullptr;
+            return MakeUnexpected(ItemDeclarationFailure{});
         }
         for(const auto& name : names){
             const UiSkinRegion* skinRegion = region(name, m_style.checkbox);
@@ -247,11 +328,11 @@ Builder::Item* Builder::addItem(const AStringView stableKey, const StringView te
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();
-        return nullptr;
+        return MakeUnexpected(ItemDeclarationFailure{});
     }
     item.node = *admittedNode;
     m_scope->m_items.push_back(Move(item));
-    return &m_scope->m_items.back();
+    return MakeNotNull(&m_scope->m_items.back());
 }
 
 const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)const noexcept{

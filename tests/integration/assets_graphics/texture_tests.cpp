@@ -53,6 +53,9 @@ static constexpr AStringView s_TextureTestMetadata =
 ;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(TestArena& testArena){
     NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     bytes.resize(96u);
@@ -96,17 +99,7 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
 
     TestArena testArena;
     NWB::Impl::Texture texture(testArena.arena, Name("project/textures/version_admission"));
-    texture.setPayload(
-        7u,
-        5u,
-        MakeTextureTestMipLevels(testArena),
-        MakeTextureTestUastcPayload(testArena),
-        TextureDimension::Texture2D,
-        1u,
-        TexturePayloadFormat::UastcLdr4x4,
-        TextureAlphaMode::EmbeddedLdr,
-        TextureFormat::s_OpaqueAlphaUnorm8
-    );
+    texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
     NWB::Impl::TextureAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
@@ -129,17 +122,7 @@ TEST(AssetsGraphics, TexturePayloadRejectsAlphaTransportIncompatibleWithFormat){
 
     TestArena testArena;
     NWB::Impl::Texture texture(testArena.arena, Name("project/textures/invalid_alpha_mode"));
-    texture.setPayload(
-        7u,
-        5u,
-        MakeTextureTestMipLevels(testArena),
-        MakeTextureTestUastcPayload(testArena),
-        TextureDimension::Texture2D,
-        1u,
-        TexturePayloadFormat::UastcLdr4x4,
-        TextureAlphaMode::ConstantUnorm8,
-        77u
-    );
+    texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::ConstantUnorm8, 77u);
     EXPECT_FALSE(texture.validatePayload());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid alpha transport for its payload format")));
 }
@@ -194,7 +177,6 @@ TEST(AssetsGraphics, TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes){
     entry.virtualPath = Name("project/textures/truncated_raw");
     entry.width = 7u;
     entry.height = 5u;
-    entry.mipCount = 3u;
     entry.alphaMode = TextureAlphaMode::EmbeddedLdr;
     for(usize prefix = 0u; prefix < original.size(); ++prefix){
         entry.payloadBytes.assign(original.begin(), original.begin() + prefix);
@@ -239,9 +221,6 @@ TEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAll
         entry.width = layout.width;
         entry.height = layout.height;
         entry.depth = layout.depth;
-        const auto mipCount = TextureFormat::ComputeCompleteMipCount(layout.dimension, layout.width, layout.height, layout.depth);
-        ASSERT_TRUE(mipCount);
-        entry.mipCount = *mipCount;
         const usize allocatedBytes = testArena.arena.memoryStats().usedBytes;
         EXPECT_FALSE(Impl::BuildTextureAsset(entry, testArena.arena)) << layout.dimension << ": " << layout.width << ", " << layout.height << ", " << layout.depth;
         EXPECT_EQ(testArena.arena.memoryStats().usedBytes, allocatedBytes);
@@ -292,6 +271,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
     };
     constexpr Array<ObsoleteField, 24u> s_ObsoleteFields = {{
         { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
+        { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
         { "asset.data = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'data'") },
         { "asset.file = \"checker.tex\";\n", NWB_TEXT("unsupported asset field 'file'") },
         { "asset.mip_filter = \"linear\";\n", NWB_TEXT("unsupported asset field 'mip_filter'") },
@@ -306,7 +286,6 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", NWB_TEXT("unsupported asset field 'payload_layout'") },
         { "asset.mip_address_mode = \"clamp\";\n", NWB_TEXT("unsupported asset field 'mip_address_mode'") },
         { "asset.mips = [];\n", NWB_TEXT("unsupported asset field 'mips'") },
-        { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
         { "asset.has_alpha = 1;\n", NWB_TEXT("unsupported asset field 'has_alpha'") },
         { "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
         { "asset.alpha_payload_offset_bytes = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },

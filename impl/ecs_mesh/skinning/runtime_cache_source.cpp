@@ -3,7 +3,6 @@
 
 
 #include "runtime_cache.h"
-#include "arena_names.h"
 
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
@@ -14,6 +13,8 @@
 #include <core/assets/manager.h>
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +39,9 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     | RuntimeMeshDirtyFlag::GpuUploadDirty
     | RuntimeMeshDirtyFlag::MeshletBoundsDirty
 ;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVertexRefVectorT>
@@ -82,8 +86,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 
 
 template<typename MeshT, typename SkinStreamT>
-[[nodiscard]] bool BuildRuntimeZippedPayload(const MeshT& mesh, const SkinStreamT& skinStream, MeshSkinningRuntimeInstance& instance){
-    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_ZippedPayloadArena);
+[[nodiscard]] bool BuildRuntimeZippedPayload(const MeshT& mesh, const SkinStreamT& skinStream, MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
     usize positionRefCount = 0u;
@@ -172,7 +175,7 @@ template<typename MeshT, typename SkinStreamT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
+bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component, Core::Alloc::ScratchArena& scratchArena){
     const Name& sourceName = component.skin.name();
     if(!component.skin.valid()){
         releaseRuntimeMesh(entity);
@@ -186,7 +189,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
         if(instance.sourceName == sourceName){
             component.runtimeMesh = instance.handle;
             if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u){
-                if(!uploadRuntimeMeshBuffers(instance)){
+                if(!uploadRuntimeMeshBuffers(instance, scratchArena)){
                     releaseRuntimeMesh(entity);
                     component.runtimeMesh.reset();
                     return false;
@@ -230,24 +233,44 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     instance.meshletPrimitiveIndices = mesh->meshletPrimitiveIndices();
     instance.solidTriangleWords = mesh->solidTriangleWords();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
-    if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(*mesh, skin->influences(), instance)){
+    if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(*mesh, skin->influences(), instance, scratchArena)){
         eraseUnusedSource(sourceName);
         return false;
     }
 
-    if(!uploadRuntimeMeshBuffers(instance)){
+    if(!uploadRuntimeMeshBuffers(instance, scratchArena)){
         eraseUnusedSource(sourceName);
         return false;
     }
     instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags);
 
-    ++source.referenceCount;
+    if(!instance.valid()){
+        eraseUnusedSource(sourceName);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: prepared runtime mesh is incomplete"));
+        return false;
+    }
+
     const RuntimeMeshHandle handle = instance.handle;
-    auto result = m_instances.try_emplace(entity, Move(instance));
-    auto it = result.first;
-    m_handleToEntity.emplace(handle.value, entity);
+    auto [storedInstance, instanceInserted] = m_instances.try_emplace(entity, Move(instance));
+    if(!instanceInserted){
+        eraseUnusedSource(sourceName);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime instance identity was already registered"));
+        return false;
+    }
+    ScopeExit discardInstance([&]()noexcept{ m_instances.erase(storedInstance); });
+    const auto [storedEntity, handleInserted] = m_handleToEntity.emplace(handle.value, entity);
+    if(!handleInserted){
+        m_instances.erase(storedInstance);
+        discardInstance.release();
+        eraseUnusedSource(sourceName);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh handle was already registered"));
+        return false;
+    }
+
+    ++source.referenceCount;
     component.runtimeMesh = handle;
-    return it.value().valid();
+    discardInstance.release();
+    return true;
 }
 
 Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
@@ -279,9 +302,12 @@ Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache
     source.meshAsset = Move(*loadedMeshAsset);
     source.skinAsset = Move(*loadedSkinAsset);
 
-    auto result = m_sources.try_emplace(sourceName, Move(source));
-    auto it = result.first;
-    MeshSkinningSource& storedSource = it.value();
+    auto [stored, inserted] = m_sources.try_emplace(sourceName, Move(source));
+    if(!inserted){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source identity was already registered"));
+        return MakeUnexpected(Failure{});
+    }
+    MeshSkinningSource& storedSource = stored.value();
     if(!storedSource.mesh() || !storedSource.skin())
         return MakeUnexpected(Failure{});
     return &storedSource;

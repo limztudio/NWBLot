@@ -20,6 +20,10 @@
 #pragma warning(pop)
 #define g_NwbRefractionMaterialContext g_NwbHeapRefractionMaterialContexts[g_NwbRefractionPush.materialContextSlotsHeapSlot]
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbRefractionMaterialContext.sceneSlots.w; }
 uint nwbMeshFrameInstanceHeapSlot(){ return g_NwbRefractionMaterialContext.materialSlots.x; }
 uint nwbMeshFrameViewHeapSlot(){ return g_NwbRefractionPush.viewHeapSlot; }

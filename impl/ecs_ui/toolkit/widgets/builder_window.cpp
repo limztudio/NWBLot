@@ -29,7 +29,7 @@ bool Builder::beginWindow(const AStringView stableKey, const StringView title, W
     const UiSkinRegion* header = region(m_style.windowTitle, m_style.windowTitle);
     const UiSkinRegion* collapse = region(m_style.windowCollapse, m_style.windowCollapse);
     const UiSkinRegion* resize = region(m_style.windowResize, m_style.windowResize);
-    WidgetState* window = m_context.declare(stableKey, WidgetKind::Window);
+    const auto window = m_context.declare(stableKey, WidgetKind::Window);
     const ShapeRequest request = textShapeRequest(title, m_style.fontSize);
     if(!frame || !header || (options.collapsible && !collapse) || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window){
         m_context.fail();
@@ -53,7 +53,7 @@ bool Builder::beginWindow(const AStringView stableKey, const StringView title, W
         return false;
     }
     m_scope->m_window.metrics = *metrics;
-    m_scope->m_panelState = *window;
+    m_scope->m_panelState = **window;
     m_scope->m_window.state = &state;
     m_scope->m_window.options = options;
     m_scope->m_window.firstUse = !state.initialized;
@@ -63,16 +63,16 @@ bool Builder::beginWindow(const AStringView stableKey, const StringView title, W
         return false;
     }
     // Keys beginning with @window. belong to the window's internal chrome.
-    WidgetState* titleState = m_context.declare("@window.title", WidgetKind::Window);
-    WidgetState* collapseState = m_context.declare("@window.collapse", WidgetKind::Button);
-    WidgetState* resizeState = m_context.declare("@window.resize", WidgetKind::Window);
+    const auto titleState = m_context.declare("@window.title", WidgetKind::Window);
+    const auto collapseState = m_context.declare("@window.collapse", WidgetKind::Button);
+    const auto resizeState = m_context.declare("@window.resize", WidgetKind::Window);
     if(!titleState || !collapseState || !resizeState){
         m_context.fail();
         return false;
     }
-    m_scope->m_window.titleState = *titleState;
-    m_scope->m_window.collapseState = *collapseState;
-    m_scope->m_window.resizeState = *resizeState;
+    m_scope->m_window.titleState = **titleState;
+    m_scope->m_window.collapseState = **collapseState;
+    m_scope->m_window.resizeState = **resizeState;
     if(!options.collapsible)
         candidate.collapsed = false;
     if(m_context.takeActivation(m_scope->m_window.collapseState, options.collapsible))

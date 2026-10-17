@@ -65,7 +65,7 @@ void UiImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.values[5u] = static_cast<u64>(m_child.isOpen());
     current.values[6u] = input.popupCount();
     current.values[7u] = imageTargets;
-    const auto update = PublishPassiveSmokeSnapshot(current, m_snapshot, [&]{ return current.values != m_snapshot.values; });
+    const auto update = PublishPassiveSmokeSnapshot(current, m_snapshot, [&]()noexcept{ return current.values != m_snapshot.values; });
     if(!update.published)
         return;
     if(update.displayChanged){

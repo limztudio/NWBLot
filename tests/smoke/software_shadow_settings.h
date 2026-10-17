@@ -9,6 +9,8 @@
 
 #include <impl/ecs_render/module.h>
 
+#include <core/alloc/scratch.h>
+
 #include <global/limit.h>
 
 
@@ -21,7 +23,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ApplySoftwareShadowSmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::SoftwareShadowSettings& baseSettings = {}){
+[[nodiscard]] inline bool ApplySoftwareShadowSmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::SoftwareShadowSettings& baseSettings = {}){
     Impl::SoftwareShadowSettings settings = baseSettings;
     if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_BACKEND")){
         const AStringView mode(value->data(), value->size());

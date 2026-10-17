@@ -61,7 +61,10 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     sample.sourceFrame = frame.firstSampleFrameIndex;
     sample.publishFrame = frame.publishFrameIndex;
     for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
-        const auto& timing = report.cpuTiming.stats(Name(s_CpuNames[scope]));
+        const auto scopeName = Name::FromText(s_CpuNames[scope]);
+        if(!scopeName)
+            return false;
+        const auto& timing = report.cpuTiming.stats(*scopeName);
         if(!timing.valid() || timing.sampleCount != 1u || timing.publishFrameIndex != frame.publishFrameIndex || timing.firstSampleFrameIndex != sample.sourceFrame || timing.lastSampleFrameIndex != sample.sourceFrame)
             return false;
         sample.milliseconds[scope] = timing.seconds;
@@ -76,14 +79,20 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
         sample.milliseconds[scope] *= 1000.0;
     if(memoryEnabled){
         for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
-            const auto& snapshot = report.memory.snapshot(Name(s_ArenaNames[scope]), Core::Perf::MemorySource::Arena);
+            const auto arenaName = Name::FromText(s_ArenaNames[scope]);
+            if(!arenaName)
+                return false;
+            const auto& snapshot = report.memory.snapshot(*arenaName, Core::Perf::MemorySource::Arena);
             if(snapshot.valid() && snapshot.frameIndex != sample.publishFrame)
                 return false;
             sample.memory[scope] = snapshot;
         }
     }
     for(u32 scope = 0u; scope < s_GpuScopeCount; ++scope){
-        const auto& timing = report.gpuTiming.stats(Name(s_GpuNames[scope]));
+        const auto scopeName = Name::FromText(s_GpuNames[scope]);
+        if(!scopeName)
+            return false;
+        const auto& timing = report.gpuTiming.stats(*scopeName);
         if(!timing.valid() || (m_hasGpuPublication[scope] && timing.publishFrameIndex == m_gpuPublish[scope]))
             continue;
         if(m_hasGpuPublication[scope] && timing.publishFrameIndex < m_gpuPublish[scope])
@@ -110,7 +119,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
         return false;
     output.setf(s_FileFormatFixed, s_FileFormatFloatField);
     output.precision(9);
-    output << "{\"type\":\"configuration\",\"schema\":1,\"workload\":\"" << workload
+    output << "{\"type\":\"configuration\",\"schema\":2,\"workload\":\"" << workload
         << "\",\"mode\":\"" << (memoryEnabled ? "memory" : "timing")
         << "\",\"width\":960,\"height\":720,\"warmup\":" << s_WarmupFrames
         << ",\"samples\":" << s_SampleFrames << ",\"drain\":" << s_DrainFrames
@@ -154,7 +163,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
     }
     if(complete)
         output << "{\"type\":\"complete\"}\n";
-    output.flush();
+    output.close();
     return output.good() && complete;
 }
 

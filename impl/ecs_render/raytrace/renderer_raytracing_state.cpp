@@ -18,7 +18,6 @@ RayTracingFrameCpuStateSnapshot RendererRayTracingState::captureFrameCpuState()c
     return RayTracingFrameCpuStateSnapshot{
         .surfelCountReadbackSubmissionToken = m_surfelCountReadbackSubmissionToken,
         .softShadowFrameIndex = m_softShadowFrameIndex,
-        .causticTemporalReuseFrameCount = m_causticTemporalReuseFrameCount,
         .surfelFrameIndex = m_surfelFrameIndex,
         .surfelCountReadbackFrame = m_surfelCountReadbackFrame,
         .softShadowSlotMask = m_softShadowSlotMask,
@@ -39,7 +38,6 @@ void RendererRayTracingState::restoreShadowPacketCpuState(const RayTracingFrameC
 
 void RendererRayTracingState::restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
     m_causticAccumulatorInitialized = snapshot.causticAccumulatorInitialized;
-    m_causticTemporalReuseFrameCount = snapshot.causticTemporalReuseFrameCount;
     m_swCausticDispatchLogged = snapshot.swCausticDispatchLogged;
     m_hwCausticDispatchLogged = snapshot.hwCausticDispatchLogged;
     m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
@@ -225,7 +223,6 @@ void RendererRayTracingState::invalidateResources(){
     m_causticAccumulatorDecayPipelineFailed = false;
     // Accumulator target is recreated on invalidation; re-seed the EMA.
     m_causticAccumulatorInitialized = false;
-    m_causticTemporalReuseFrameCount = 0u;
     // Surfel buffers live on this state; resize keeps convergence, invalidate re-seeds.
     m_surfelSpawnBindingLayout.reset();
     m_surfelAgeFreeBindingLayout.reset();

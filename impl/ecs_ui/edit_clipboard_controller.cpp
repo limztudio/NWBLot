@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiEditClipboardController::UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)
+UiEditClipboardController::UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)noexcept
     : m_service(service)
     , m_completion(arena)
     , m_expectedModel(arena)
@@ -55,11 +55,11 @@ UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& 
     if(reads ? !capabilities.readText : !capabilities.writeText)
         return { UiEditClipboardStatus::Unsupported };
     const auto result = reads ? m_service.requestReadText(channel) : m_service.requestWriteText(channel, model.selectedText());
-    if(result.admission != Core::ClipboardAdmission::Accepted)
-        return { result.admission == Core::ClipboardAdmission::WrongThread ? UiEditClipboardStatus::WrongThread : UiEditClipboardStatus::QueueFull };
-    if(!result.token.valid())
+    if(!result)
+        return { result.error() == Core::ClipboardAdmission::WrongThread ? UiEditClipboardStatus::WrongThread : UiEditClipboardStatus::QueueFull };
+    if(!result->valid())
         return { UiEditClipboardStatus::NativeFailure };
-    m_token = result.token;
+    m_token = *result;
     m_owner = owner;
     m_channel = channel;
     m_action = action;

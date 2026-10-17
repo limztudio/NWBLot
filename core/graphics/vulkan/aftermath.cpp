@@ -71,6 +71,8 @@ struct State{
     Futex dumpMutex;
     Vector<u8, Alloc::GlobalArena> dumpBytes;
 
+
+public:
     State()
         : dumpBytes(DumpArena())
     {}
@@ -131,8 +133,10 @@ bool Initialize(){
         return true; // process-global: only enable once.
 
     Alloc::GlobalArena& arena = DumpArena();
-    if(!state.library.open(arena, Common::s_AftermathRuntimeName)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime is not present next to the executable; GPU crash dumps disabled."));
+    const auto opened = state.library.open(arena, Common::s_AftermathRuntimeName);
+    if(!opened){
+        const SharedLibraryFailure& failure = opened.error();
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime load failed: {}; native detail '{}'; detail truncated {}"), StringConvert(failure.code.message()), StringConvert(failure.detail.view()), failure.detailTruncated);
         return false;
     }
 
@@ -140,7 +144,8 @@ bool Initialize(){
     const auto disable = state.library.resolve<PFN_GFSDK_Aftermath_DisableGpuCrashDumps>(arena, "GFSDK_Aftermath_DisableGpuCrashDumps");
     const auto getStatus = state.library.resolve<PFN_GFSDK_Aftermath_GetCrashDumpStatus>(arena, "GFSDK_Aftermath_GetCrashDumpStatus");
     if(!enable || !disable || !getStatus){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath entry points could not be resolved; GPU crash dumps disabled."));
+        const SharedLibraryFailure& failure = !enable ? enable.error() : !disable ? disable.error() : getStatus.error();
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath symbol lookup failed: {}; native detail '{}'; detail truncated {}"), StringConvert(failure.code.message()), StringConvert(failure.detail.view()), failure.detailTruncated);
         state.library.close();
         return false;
     }

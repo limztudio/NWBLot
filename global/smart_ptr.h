@@ -148,17 +148,18 @@ template<typename T1, typename D1, typename T2, typename D2> \
 inline bool operator==(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerEqual(a, b))){ return SmartPtrDetail::OwnerPointerEqual(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
 requires ThreeWayComparableWith<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> \
-inline CompareThreeWayResult_T<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> operator<=>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerCompare(a, b))){ return SmartPtrDetail::OwnerPointerCompare(a, b); } \
+inline CompareThreeWayResult_T<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> \
+operator<=>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerCompare(a, b))){ return SmartPtrDetail::OwnerPointerCompare(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
 inline bool operator<(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerLess(a, b))){ return SmartPtrDetail::OwnerPointerLess(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept((b < a))){ return (b < a); } \
+inline bool operator>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((b < a)))){ return (b < a); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator<=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(!(b < a))){ return !(b < a); } \
+inline bool operator<=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(b < a)))){ return !(b < a); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator>=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(!(a < b))){ return !(a < b); } \
+inline bool operator>=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(a < b)))){ return !(a < b); } \
 template<typename T, typename D> \
-inline bool operator==(const OwnerType<T, D>& a, std::nullptr_t)noexcept{ return !a; } \
+inline bool operator==(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!a))){ return !a; } \
 template<typename T, typename D> \
 requires ThreeWayComparableWith<typename OwnerType<T, D>::pointer, std::nullptr_t> \
 inline CompareThreeWayResult_T<typename OwnerType<T, D>::pointer, std::nullptr_t> operator<=>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(IsPointer_V<typename OwnerType<T, D>::pointer> && noexcept(a.get())){ return a.get() <=> nullptr; } \
@@ -167,17 +168,17 @@ inline bool operator<(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept
 template<typename T, typename D> \
 inline bool operator<(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(SmartPtrDetail::NullLessOwnerPointer(b))){ return SmartPtrDetail::NullLessOwnerPointer(b); } \
 template<typename T, typename D> \
-inline bool operator>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept((nullptr < a))){ return (nullptr < a); } \
+inline bool operator>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((nullptr < a)))){ return (nullptr < a); } \
 template<typename T, typename D> \
-inline bool operator>(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept((b < nullptr))){ return (b < nullptr); } \
+inline bool operator>(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((b < nullptr)))){ return (b < nullptr); } \
 template<typename T, typename D> \
-inline bool operator<=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(!(nullptr < a))){ return !(nullptr < a); } \
+inline bool operator<=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(nullptr < a)))){ return !(nullptr < a); } \
 template<typename T, typename D> \
-inline bool operator<=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(!(b < nullptr))){ return !(b < nullptr); } \
+inline bool operator<=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(b < nullptr)))){ return !(b < nullptr); } \
 template<typename T, typename D> \
-inline bool operator>=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(!(a < nullptr))){ return !(a < nullptr); } \
+inline bool operator>=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(a < nullptr)))){ return !(a < nullptr); } \
 template<typename T, typename D> \
-inline bool operator>=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(!(nullptr < b))){ return !(nullptr < b); }
+inline bool operator>=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(nullptr < b)))){ return !(nullptr < b); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -209,6 +210,8 @@ template<typename T, typename POOL>
 struct ArenaDeleter{
     POOL* m_pool = nullptr;
 
+
+public:
     constexpr ArenaDeleter()noexcept = default;
     constexpr ArenaDeleter(POOL& pool)noexcept
         : m_pool(&pool)
@@ -217,6 +220,8 @@ struct ArenaDeleter{
     ArenaDeleter(const ArenaDeleter<U, POOL>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept
         : m_pool(other.m_pool){}
 
+
+public:
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
         p->~T();
@@ -228,6 +233,8 @@ struct ArenaDeleter<T[], POOL>{
     POOL* m_pool = nullptr;
     usize m_size = 0;
 
+
+public:
     constexpr ArenaDeleter()noexcept = default;
     constexpr ArenaDeleter(POOL& pool, usize size)noexcept
         : m_pool(&pool)
@@ -239,6 +246,8 @@ struct ArenaDeleter<T[], POOL>{
         , m_size(other.m_size)
     {}
 
+
+public:
     void operator()(T* p)const noexcept{
         for(usize i = 0u; i < m_size; ++i)
             p[i].~T();
@@ -261,6 +270,8 @@ template<typename T>
 struct EmptyDeleter<T[]>{
     usize m_size = 0;
 
+
+public:
     constexpr EmptyDeleter()noexcept = default;
     constexpr EmptyDeleter(usize size)noexcept
         : m_size(size)

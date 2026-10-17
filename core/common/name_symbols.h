@@ -6,10 +6,11 @@
 
 
 #include "global.h"
+#include "arena_names.h"
 
 #include <core/alloc/general.h>
+#include <core/alloc/scratch.h>
 
-#include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/name.h>
 
@@ -41,52 +42,44 @@ inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
 
 void InstallRuntimeRegistry();
 // Detaches callbacks before registry teardown so static use cannot dereference it.
-void UninstallRuntimeRegistry();
+void UninstallRuntimeRegistry()noexcept;
 void ClearRuntimeSymbols();
 
 [[nodiscard]] bool WriteDefaultFile();
 
 [[nodiscard]] usize EntryCount();
 // Serializes the registry using the current `.namesym` document format.
-void Serialize(AString<Alloc::GlobalArena>& outText);
+[[nodiscard]] Expected<void> Serialize(AString<Alloc::GlobalArena>& outText);
 
 // Admits only the current document header before importing symbol records.
+[[nodiscard]] bool LoadFromMemory(AStringView text, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] bool LoadFromMemory(AStringView text);
 
-template<typename ArenaT>
-[[nodiscard]] inline bool LoadFile(const ::Path<ArenaT>& path){
-    AString<ArenaT> text(path.arena());
-    if(!::ReadTextFile(path, text))
-        return false;
+struct DefaultFileLoadFailure final{
+    ErrorCode code;
+    bool loadedAny = false;
+};
 
-    return LoadFromMemory(AStringView(text.data(), text.size()));
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<bool, DefaultFileLoadFailure> LoadDefaultFile();
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<bool, ErrorCode> LoadFile(const ::Path<ArenaT>& path, Alloc::ScratchArena& scratchArena){
+    AString<Alloc::ScratchArena> text(scratchArena);
+    const auto read = ::ReadTextFile(path, text);
+    if(!read)
+        return MakeUnexpected(read.error());
+
+    return LoadFromMemory(AStringView(text.data(), text.size()), scratchArena);
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool LoadDefaultFile(ArenaT& arena){
-    const auto executableDirectory = ::GetExecutableDirectory(arena);
-    if(!executableDirectory)
-        return false;
-
-    bool loadedAny = false;
-
-    const auto directory = ::DirectoryIterator<ArenaT>::Create(*executableDirectory);
-    if(!directory)
-        return loadedAny;
-
-    for(const ::DirectoryEntry<ArenaT>& entry : *directory){
-        const auto isRegularFile = entry.isRegularFile();
-        if(!isRegularFile || !*isRegularFile)
-            continue;
-
-        const ::Path<ArenaT> extensionPath = entry.path().extension();
-        if(extensionPath.native() != s_FileExtension)
-            continue;
-
-        loadedAny = LoadFile(entry.path()) || loadedAny;
-    }
-
-    return loadedAny;
+[[nodiscard]] inline Expected<bool, ErrorCode> LoadFile(const ::Path<ArenaT>& path){
+    Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
+    return LoadFile(path, scratchArena);
 }
 
 template<typename CharT, typename ArenaT>

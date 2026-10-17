@@ -54,7 +54,7 @@ constexpr Graphics::GpuGraphResourceId s_B{ .generation = 1u, .index = 1u };
 }
 
 template<usize Count>
-[[nodiscard]] Graphics::GpuTaskGraphTaskView TaskView(const Graphics::GpuTaskResourceUse (&uses)[Count], const u64 generation = 1u, const u32 taskIndex = 0u){
+[[nodiscard]] Graphics::GpuTaskGraphTaskView TaskView(const Graphics::GpuTaskResourceUse (&uses)[Count], const u64 generation = 1u, const u32 taskIndex = 0u)noexcept{
     Graphics::GpuTaskGraphTaskView view{};
     view.id = { .generation = generation, .index = taskIndex };
     view.resourceUses = uses;
@@ -145,7 +145,9 @@ TEST(GpuTaskUseIndex, InvalidGenerationIdentityAndCapacityNeverPublishAUsableInd
 TEST(GpuTaskUseIndex, FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyRequest){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto buffer = AddBufferMetadata(graph, Name("tests/task_use/first"), "First Use Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/first"), "First Use Buffer");
+    ASSERT_TRUE(bufferResult);
+    const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
     const Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 32u, Graphics::BufferRange::s_AllBytes) };
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -167,8 +169,12 @@ TEST(GpuTaskUseIndex, FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyR
 TEST(GpuTaskUseIndex, PartialAndDisjointEarlierUsesRetainSubtractionOrderAndUnknownStateCoverage){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto buffer = AddBufferMetadata(graph, Name("tests/task_use/partial"), "Partial Use Buffer");
-    const auto other = AddBufferMetadata(graph, Name("tests/task_use/other"), "Other Use Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/partial"), "Partial Use Buffer");
+    ASSERT_TRUE(bufferResult);
+    const auto buffer = *bufferResult;
+    const auto otherResult = AddBufferMetadata(graph, Name("tests/task_use/other"), "Other Use Buffer");
+    ASSERT_TRUE(otherResult);
+    const auto other = *otherResult;
     ASSERT_TRUE(buffer.valid());
     ASSERT_TRUE(other.valid());
     const Graphics::GpuTaskResourceUse uses[] = {
@@ -192,7 +198,9 @@ TEST(GpuTaskUseIndex, PartialAndDisjointEarlierUsesRetainSubtractionOrderAndUnkn
 TEST(GpuTaskUseIndex, CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInvalidPrefixStillFails){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto buffer = AddBufferMetadata(graph, Name("tests/task_use/covered"), "Covered Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/covered"), "Covered Buffer");
+    ASSERT_TRUE(bufferResult);
+    const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
     Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 0u, 64u), BufferUse(buffer, 0u, 0u), BufferUse(buffer, 16u, 16u), };
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -213,7 +221,9 @@ TEST(GpuTaskUseIndex, CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInv
 TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto buffer = AddBufferMetadata(graph, Name("tests/task_use/symbolic"), "Symbolic Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_use/symbolic"), "Symbolic Buffer");
+    ASSERT_TRUE(bufferResult);
+    const auto buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
     const Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 16u, 16u), BufferUse(buffer, 0u, Graphics::BufferRange::s_AllBytes) };
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -232,7 +242,9 @@ TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
 TEST(GpuTaskUseIndex, TextureRectangleKeepsMipThenSliceRemainderOrder){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto texture = AddTextureMetadata(graph, Name("tests/task_use/rectangle"), "Texture Rectangle");
+    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_use/rectangle"), "Texture Rectangle");
+    ASSERT_TRUE(textureResult);
+    const auto texture = *textureResult;
     ASSERT_TRUE(texture.valid());
     const Graphics::GpuTaskResourceUse uses[] = {
         { .resource = texture, .range = { .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u) } },
@@ -254,14 +266,22 @@ TEST(GpuTaskUseIndex, TextureRectangleKeepsMipThenSliceRemainderOrder){
 }
 
 TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto a = AddBufferMetadata(graph, Name("tests/task_use/expanded_a"), "Expanded A", Graphics::ResourceStates::Common);
-    const auto b = AddBufferMetadata(graph, Name("tests/task_use/expanded_b"), "Expanded B", Graphics::ResourceStates::Common);
+    const auto aResult = AddBufferMetadata(graph, Name("tests/task_use/expanded_a"), "Expanded A", Graphics::ResourceStates::Common);
+    ASSERT_TRUE(aResult);
+    const auto a = *aResult;
+    const auto bResult = AddBufferMetadata(graph, Name("tests/task_use/expanded_b"), "Expanded B", Graphics::ResourceStates::Common);
+    ASSERT_TRUE(bResult);
+    const auto b = *bResult;
     ASSERT_TRUE(a.valid());
     ASSERT_TRUE(b.valid());
     const Graphics::GpuGraphResourceId members[] = { a, b };
-    const auto set = graph.importResourceSet(Graphics::GpuGraphResourceSetDesc{}.setIdentity(Name("tests/task_use/expanded_set")).setMarkerLabel("Expanded Set").setMembers(members, LengthOf(members)));
+    const auto setResult = graph.importResourceSet(Graphics::GpuGraphResourceSetDesc{}.setIdentity(Name("tests/task_use/expanded_set")).setMarkerLabel("Expanded Set").setMembers(members, LengthOf(members)));
+    ASSERT_TRUE(setResult);
+    const auto set = *setResult;
     ASSERT_TRUE(set.valid());
     const Graphics::GpuTaskResourceUse direct[] = { BufferUse(a, 16u, 16u), BufferUse(b, 0u, 8u) };
     const Graphics::GpuTaskResourceSetUse expanded{
@@ -272,14 +292,16 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
     };
     Graphics::GpuTaskDesc desc;
     desc.setIdentity(Name("tests/task_use/expanded_task")).setMarkerLabel("Expanded Task").setResourceUses(direct, LengthOf(direct)).setResourceSetUses(&expanded, 1u);
-    const auto task = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
+    const auto taskResult = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
+    ASSERT_TRUE(taskResult);
+    const auto task = *taskResult;
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const auto view = plan.findTask(task);
     ASSERT_NE(view.plan, nullptr);
@@ -299,16 +321,22 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
 }
 
 TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionAndLastStateExport){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto acceleration = graph.importResource(Graphics::GpuGraphResourceDesc{}
+    const auto accelerationResult = graph.importResource(Graphics::GpuGraphResourceDesc{}
         .setIdentity(Name("tests/task_use/acceleration"))
         .setMarkerLabel("Repeated Acceleration")
         .setType(Graphics::GpuGraphResourceType::AccelStruct)
         .setInitialState(Graphics::ResourceStates::Common)
         .setExternalFinalState(Graphics::ResourceStates::AccelStructRead)
     );
-    const auto other = AddBufferMetadata(graph, Name("tests/task_use/acceleration_other"), "Unrelated Buffer", Graphics::ResourceStates::Common);
+    ASSERT_TRUE(accelerationResult);
+    const auto acceleration = *accelerationResult;
+    const auto otherResult = AddBufferMetadata(graph, Name("tests/task_use/acceleration_other"), "Unrelated Buffer", Graphics::ResourceStates::Common);
+    ASSERT_TRUE(otherResult);
+    const auto other = *otherResult;
     ASSERT_TRUE(acceleration.valid());
     ASSERT_TRUE(other.valid());
     const Graphics::GpuTaskResourceUse uses[] = {
@@ -317,14 +345,16 @@ TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionA
         { .resource = acceleration, .range = {}, .requiredState = Graphics::ResourceStates::AccelStructRead, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = acceleration, .range = {}, .requiredState = Graphics::ResourceStates::AccelStructWrite, .access = Graphics::GpuTaskResourceAccess::Write },
     };
-    const auto task = AddTask(graph, Name("tests/task_use/acceleration_task"), "Repeated Acceleration Task", nullptr, 0u, uses, LengthOf(uses));
+    const auto taskResult = AddTask(graph, Name("tests/task_use/acceleration_task"), "Repeated Acceleration Task", nullptr, 0u, uses, LengthOf(uses));
+    ASSERT_TRUE(taskResult);
+    const auto task = *taskResult;
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const auto view = plan.findTask(task);
     ASSERT_NE(view.plan, nullptr);

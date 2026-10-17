@@ -63,7 +63,8 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             m_activeSelectionSequence = 0u;
             m_selectionSource = {};
         }
-    });
+    }
+    );
 
     if(input.type == Ui::InputEventType::FocusLost){
         reset();

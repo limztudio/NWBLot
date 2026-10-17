@@ -29,8 +29,12 @@ using TextureImageLayoutFixture = PaintImageFixture;
 
 
 TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDimensions){
-    const SharedImageSource first = makeImage("tests/ui/layout_version", 37u, 20u, 12u);
-    const SharedImageSource second = makeImage("tests/ui/layout_version", 73u, 9u, 7u);
+    auto firstResult = makeImage("tests/ui/layout_version", 37u, 20u, 12u);
+    ASSERT_TRUE(firstResult);
+    const SharedImageSource first = Move(*firstResult);
+    auto secondResult = makeImage("tests/ui/layout_version", 73u, 9u, 7u);
+    ASSERT_TRUE(secondResult);
+    const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());
@@ -53,7 +57,9 @@ TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDi
 }
 
 TEST_F(TextureImageLayoutFixture, ZeroFixedExtentAndEmptyPlacementRemainValid){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     ImageOptions options;
     options.width = { LayoutSizePolicy::Fixed, 0.0f };
@@ -73,7 +79,9 @@ TEST_F(TextureImageLayoutFixture, ZeroFixedExtentAndEmptyPlacementRemainValid){
 }
 
 TEST_F(TextureImageLayoutFixture, InvalidSizePoliciesAndValuesRejectMeasurement){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     for(u32 field = 0u; field < 8u; ++field){
         ImageOptions options;
@@ -92,7 +100,9 @@ TEST_F(TextureImageLayoutFixture, InvalidSizePoliciesAndValuesRejectMeasurement)
 }
 
 TEST_F(TextureImageLayoutFixture, InvalidTintRejectsMeasurement){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     const auto acceptedResult = ImageLayout::Measure({}, *image);
     ASSERT_TRUE(acceptedResult);

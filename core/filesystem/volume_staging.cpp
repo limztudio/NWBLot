@@ -5,13 +5,15 @@
 #include "volume_staging.h"
 #include "volume_staging_detail.h"
 #include "volume_storage_detail.h"
-#include "arena_names.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/filesystem/volume_naming.h>
 
+#include <global/allocation_size.h>
+#include <global/filesystem/cleanup.h>
 #include <global/limit.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,15 +55,23 @@ bool EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView ope
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 StagedDirectoryCleanupGuard::StagedDirectoryCleanupGuard(const Path& directoryPath, const AStringView operationName, const AStringView label)
     : m_directoryPath(directoryPath)
     , m_operationName(operationName)
     , m_label(label)
 {}
 
-StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard(){
-    if(m_active)
-        CleanupStagedDirectoryBestEffort(m_directoryPath, m_operationName, m_label);
+StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard()noexcept{
+    if(!m_active)
+        return;
+    if(const auto removed = RemoveAllForCleanup(m_directoryPath); !removed){
+        const DiagnosticEventText diagnostic = MakeDiagnosticEventText("{}: failed to remove {} '{}', error {}", m_operationName, m_label, m_directoryPath.c_str(), removed.error().value());
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "filesystem_volume_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+    }
 }
 
 void StagedDirectoryCleanupGuard::dismiss()noexcept{
@@ -82,6 +92,34 @@ constexpr AStringView s_StagedVolumeTokenPrefix = "volume_";
 constexpr char s_StagedVolumeKeySeparator = '|';
 constexpr usize s_StagedVolumeHashDigits = sizeof(u64) * 2u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using StagedVolumePaths = StagedDirectoryPaths;
+using ScratchPath = ::Path<Alloc::ScratchArena>;
+
+struct VolumeSegmentMove{
+    ScratchPath sourcePath;
+    ScratchPath destinationPath;
+
+
+public:
+    VolumeSegmentMove(Alloc::ScratchArena& scratchArena, const Path& fromDirectory, const Path& toDirectory, const AStringView fileName)
+        : sourcePath(scratchArena)
+        , destinationPath(scratchArena)
+    {
+        sourcePath = fromDirectory;
+        sourcePath /= fileName;
+        destinationPath = toDirectory;
+        destinationPath /= fileName;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode, const AStringView fallbackDetail){
     ACompactString detail;
     if(errorCode && detail.assign(errorCode.message()))
@@ -94,15 +132,7 @@ static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode
     return detail;
 }
 
-
-
-using StagedVolumePaths = StagedDirectoryPaths;
-
-template<typename FileNameVector>
-static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames);
-
-StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName){
-    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_StagedVolumePathsScratch);
+StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
     AString<Core::Alloc::ScratchArena> stageKey = PathToString<char>(scratchArena, outputDirectory);
     stageKey += s_StagedVolumeKeySeparator;
     stageKey += volumeName;
@@ -114,22 +144,7 @@ StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStr
     return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
 }
 
-static Expected<Vector<Path, Core::Alloc::ScratchArena>> MoveExistingVolumeSegments(Core::Alloc::ScratchArena& scratchArena, const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName){
-    Vector<Path, Core::Alloc::ScratchArena> movedFileNames{scratchArena};
-
-    const auto rollbackMovedFiles = [&]() -> void {
-        if(movedFileNames.empty())
-            return;
-
-        if(!RestoreVolumeSegments(toDirectory, fromDirectory, movedFileNames)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to roll back existing output volume after backup failure"));
-            return;
-        }
-
-        CleanupStagedDirectoryBestEffort(toDirectory, s_VolumePublishLogPrefix, "backup directory");
-        movedFileNames.clear();
-    };
-
+static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
     const auto sourceExists = FileExists(fromDirectory);
     if(!sourceExists){
         const ErrorCode& errorCode = sourceExists.error();
@@ -137,7 +152,7 @@ static Expected<Vector<Path, Core::Alloc::ScratchArena>> MoveExistingVolumeSegme
         return MakeUnexpected(Failure{});
     }
     if(!*sourceExists)
-        return movedFileNames;
+        return 0u;
 
     const auto directory = IsDirectory(fromDirectory);
     if(!directory || !*directory){
@@ -151,151 +166,106 @@ static Expected<Vector<Path, Core::Alloc::ScratchArena>> MoveExistingVolumeSegme
         return MakeUnexpected(Failure{});
     }
 
-    bool destinationCreated = false;
-    const auto ensureDestination = [&]() -> bool {
-        if(destinationCreated)
-            return true;
-
-        if(const auto operation = EnsureDirectories(toDirectory); !operation){
-            const ErrorCode errorCode = operation.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}"), PathToString<tchar>(toDirectory), StringConvert(errorCode.message()));
-            return false;
-        }
-
-        destinationCreated = true;
-        return true;
-    };
-
-    const auto moveSegmentToBackup = [&](const Path& currentPath) -> bool{
-        if(!ensureDestination())
-            return false;
-        if(const auto operation = RenamePath(currentPath, toDirectory / currentPath.filename()); !operation){
-            const ErrorCode errorCode = operation.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to move existing segment '{}' to backup: {}"), PathToString<tchar>(currentPath), StringConvert(errorCode.message()));
-            rollbackMovedFiles();
-            return false;
-        }
-
-        movedFileNames.push_back(currentPath.filename());
-        return true;
-    };
-
     for(usize segmentIndex = 0u;; ++segmentIndex){
-        const Path currentPath = MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
+        ScratchPath currentPath(scratchArena, fromDirectory);
+        currentPath /= MakeVolumeSegmentFileName(volumeName, segmentIndex).view();
         const auto exists = FileExists(currentPath);
         if(!exists){
             const ErrorCode& errorCode = exists.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}"), PathToString<tchar>(currentPath), StringConvert(errorCode.message()));
-            rollbackMovedFiles();
             return MakeUnexpected(Failure{});
         }
         if(!*exists)
-            break;
-
-        if(!moveSegmentToBackup(currentPath))
-            return MakeUnexpected(Failure{});
-
+            return segmentIndex;
         if(segmentIndex == Limit<usize>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: segment index overflow while backing up existing volume"));
-            rollbackMovedFiles();
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: segment index overflow while inspecting existing volume"));
             return MakeUnexpected(Failure{});
         }
     }
-
-    return movedFileNames;
 }
 
-template<typename FileNameVector>
-static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames){
-
-    if(fileNames.empty())
-        return true;
-    if(const auto operation = EnsureDirectories(toDirectory); !operation){
-        const ErrorCode errorCode = operation.error();
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to recreate output directory '{}' during rollback: {}"), PathToString<tchar>(toDirectory), StringConvert(errorCode.message()));
+bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
+    if(segmentCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), StringConvert(volumeName));
         return false;
     }
+    const auto existingSegmentCount = CountExistingVolumeSegments(outputDirectory, volumeName, scratchArena);
+    if(!existingSegmentCount)
+        return false;
 
-    for(const Path& fileName : fileNames){
-        const Path sourcePath = fromDirectory / fileName;
-        const Path destinationPath = toDirectory / fileName;
-        if(const auto operation = RenamePath(sourcePath, destinationPath); !operation){
+    Vector<VolumeSegmentMove, Alloc::ScratchArena> moves(scratchArena);
+    moves.reserve(AddSize(*existingSegmentCount, segmentCount));
+    // Release prepared paths in reverse construction order before the shared scratch plan storage.
+    ScopeExit releaseMovePaths([&]()noexcept{
+        while(!moves.empty())
+            moves.pop_back();
+    });
+    for(usize segmentIndex = 0u; segmentIndex < *existingSegmentCount; ++segmentIndex)
+        moves.emplace_back(scratchArena, outputDirectory, stagedPaths.backupDirectory, MakeVolumeSegmentFileName(volumeName, segmentIndex).view());
+    for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex)
+        moves.emplace_back(scratchArena, stagedPaths.stageDirectory, outputDirectory, MakeVolumeSegmentFileName(volumeName, segmentIndex).view());
+
+    if(const auto operation = EnsureDirectories(outputDirectory); !operation){
+        const ErrorCode errorCode = operation.error();
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}"), PathToString<tchar>(outputDirectory), StringConvert(errorCode.message()));
+        return false;
+    }
+    if(*existingSegmentCount != 0u){
+        if(const auto operation = EnsureDirectories(stagedPaths.backupDirectory); !operation){
             const ErrorCode errorCode = operation.error();
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to restore backup segment '{}' during rollback: {}"), PathToString<tchar>(sourcePath), StringConvert(errorCode.message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}"), PathToString<tchar>(stagedPaths.backupDirectory), StringConvert(errorCode.message()));
             return false;
         }
     }
 
-    return true;
-}
-
-struct VolumePromotionFailure{
+    bool promoted = true;
+    bool rollbackComplete = true;
     usize movedCount = 0u;
-};
-
-static Expected<void, VolumePromotionFailure> MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, const usize segmentCount){
-
-    usize movedCount = 0u;
-
-    if(segmentCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), StringConvert(volumeName));
-        return MakeUnexpected(VolumePromotionFailure{ .movedCount = movedCount });
-    }
-    if(const auto operation = EnsureDirectories(toDirectory); !operation){
-        const ErrorCode errorCode = operation.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}"), PathToString<tchar>(toDirectory), StringConvert(errorCode.message()));
-        return MakeUnexpected(VolumePromotionFailure{ .movedCount = movedCount });
-    }
-
-    for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
-        const Path sourcePath = MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
-        const Path destinationPath = MakeVolumeSegmentPath(toDirectory, volumeName, segmentIndex);
-        if(const auto operation = RenamePath(sourcePath, destinationPath); !operation){
-            const ErrorCode errorCode = operation.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to promote staged segment '{}' to '{}': {}"), PathToString<tchar>(sourcePath), PathToString<tchar>(destinationPath), StringConvert(errorCode.message()));
-            return MakeUnexpected(VolumePromotionFailure{ .movedCount = movedCount });
+    {
+        ScopeExit rollbackMoves([&]()noexcept{
+            while(movedCount != 0u){
+                const VolumeSegmentMove& move = moves[--movedCount];
+                if(movedCount < *existingSegmentCount){
+                    if(const auto restored = RenamePath(move.destinationPath, move.sourcePath); !restored){
+                        rollbackComplete = false;
+                        const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to restore volume segment '{}', error {}", move.sourcePath.c_str(), restored.error().value());
+                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "filesystem_volume_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+                    }
+                }
+                else{
+                    if(const auto removed = RemoveFile(move.destinationPath); !removed || !*removed){
+                        rollbackComplete = false;
+                        const i32 errorValue = removed ? 0 : removed.error().value();
+                        const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to remove promoted volume segment '{}', error {}", move.destinationPath.c_str(), errorValue);
+                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "filesystem_volume_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+                    }
+                }
+            }
+        });
+        for(const VolumeSegmentMove& move : moves){
+            if(const auto operation = RenamePath(move.sourcePath, move.destinationPath); !operation){
+                const ErrorCode errorCode = operation.error();
+                const AStringView action = movedCount < *existingSegmentCount ? "back up existing" : "promote staged";
+                NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to {} segment '{}' to '{}': {}"), StringConvert(action), PathToString<tchar>(move.sourcePath), PathToString<tchar>(move.destinationPath), StringConvert(errorCode.message()));
+                promoted = false;
+                break;
+            }
+            ++movedCount;
         }
-
-        ++movedCount;
-    }
-
-    return {};
-}
-
-static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-
-    for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
-        const Path segmentPath = MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
-        if(const auto operation = RemoveFile(segmentPath); !operation || !*operation){
-            const ErrorCode errorCode = operation ? ErrorCode{} : operation.error();
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}"), PathToString<tchar>(segmentPath), StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present")));
+        if(promoted){
+            rollbackMoves.release();
+            if(observer.commit)
+                observer.commit(observer.context);
         }
     }
-}
-
-bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_PromoteStagedVolumeScratch);
-    const auto movedBackupFiles = MoveExistingVolumeSegments(scratchArena, outputDirectory, stagedPaths.backupDirectory, volumeName);
-    if(!movedBackupFiles)
-        return false;
-
-    const auto promoted = MoveStagedVolumeSegments(stagedPaths.stageDirectory, outputDirectory, volumeName, segmentCount);
-    if(!promoted){
-        RemovePromotedVolumeSegmentsBestEffort(outputDirectory, volumeName, promoted.error().movedCount);
-        if(RestoreVolumeSegments(stagedPaths.backupDirectory, outputDirectory, *movedBackupFiles)){
-            CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, "backup directory");
-            CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, "stage directory");
-        }
-        return false;
+    if(promoted || rollbackComplete){
+        CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, "backup directory");
+        CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, "stage directory");
     }
-
-    CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, "backup directory");
-    CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, "stage directory");
-
-    return true;
+    return promoted;
 }
 
-bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
+bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
 
     const auto outputExists = FileExists(outputDirectory);
     if(!outputExists){
@@ -318,8 +288,10 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
         return false;
     }
 
+    ScratchPath hashedPath(scratchArena);
     for(usize segmentIndex = 0u;; ++segmentIndex){
-        const Path hashedPath = MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
+        hashedPath = outputDirectory;
+        hashedPath /= MakeVolumeSegmentFileName(volumeName, segmentIndex).view();
 
         const auto exists = FileExists(hashedPath);
         if(!exists){
@@ -355,17 +327,17 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-    return FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount);
+bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena){
+    return FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount, scratchArena);
 }
 
-bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
+bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
     if(!ValidVolumeName(volumeName)){
         FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, "invalid volume name");
         return false;
     }
 
-    return FilesystemVolumeStagingDetail::RemoveExistingVolumeSegments(outputDirectory, volumeName);
+    return FilesystemVolumeStagingDetail::RemoveExistingVolumeSegments(outputDirectory, volumeName, scratchArena);
 }
 
 

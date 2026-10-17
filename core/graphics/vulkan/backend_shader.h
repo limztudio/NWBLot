@@ -24,7 +24,7 @@ class Shader final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    Shader(const VulkanContext& context);
+    Shader(const VulkanContext& context)noexcept;
     ~Shader();
 
 
@@ -88,7 +88,7 @@ public:
 
 public:
     void getBytecode(const void** ppBytecode, usize* pSize)const noexcept;
-    ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType);
+    [[nodiscard]] Expected<ShaderHandle> getShader(AStringView entryName, ShaderType::Mask shaderType);
 
 
 private:

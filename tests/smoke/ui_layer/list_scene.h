@@ -42,7 +42,7 @@ public:
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
     [[nodiscard]] Array<u64, 12u> values()const;
-    [[nodiscard]] Impl::Ui::Rect selectedRow()const;
+    [[nodiscard]] Impl::Ui::Rect selectedRow()const noexcept;
     void observeState();
 
 

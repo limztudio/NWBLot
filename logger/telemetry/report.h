@@ -38,6 +38,8 @@ struct TelemetryMemorySummary{
     u64 maxUsedBytes = 0u;
     u64 maxPeakUsedBytes = 0u;
     i64 totalUsedDeltaBytes = 0;
+    // An unrepresentable sum stays invalid for this report; individual records retain their original deltas.
+    bool totalUsedDeltaValid = true;
 };
 
 struct TelemetryReportSummary{
@@ -52,11 +54,13 @@ struct TelemetryReportSummary{
     u64 cpuTimingEventCount = 0u;
     u64 cpuTimingSampleCount = 0u;
     f64 cpuTimingSeconds = 0.0;
+    bool cpuTimingSecondsValid = true;
     f64 maxCpuTimingSeconds = 0.0;
 
     u64 gpuTimingEventCount = 0u;
     u64 gpuTimingSampleCount = 0u;
     f64 gpuTimingSeconds = 0.0;
+    bool gpuTimingSecondsValid = true;
     f64 maxGpuTimingSeconds = 0.0;
 
     u64 memoryEventCount = 0u;
@@ -75,7 +79,9 @@ struct TelemetryReport{
     AString<TelemetryArena> perfCsv;
     AString<TelemetryArena> graph;
 
-    explicit TelemetryReport(TelemetryArena& arena)
+
+public:
+    explicit TelemetryReport(TelemetryArena& arena)noexcept
         : json(arena)
         , perfCsv(arena)
         , graph(arena)

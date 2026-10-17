@@ -73,13 +73,17 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
                 dependencies[dependencyIndex] = tasks[parents[taskIndex][dependencyIndex]];
             char indexBuffer[32u] = {};
             Graphics::GpuTaskDesc desc;
+            const auto derivedNameAt77Col29 = DeriveName(Name("tests/queue_scoring/task_"), FormatDecimal(taskIndex, indexBuffer));
+            ASSERT_TRUE(derivedNameAt77Col29);
             desc
-                .setIdentity(DeriveName(Name("tests/queue_scoring/task_"), FormatDecimal(taskIndex, indexBuffer)))
+                .setIdentity(*derivedNameAt77Col29)
                 .setMarkerLabel("Queue Scoring Task")
                 .setDependencies(dependencies, dependencyCount)
                 .setScheduling({ .cost = hints[taskIndex], .overlapPreferred = taskIndex != 1u, .avoidQueueCrossing = taskIndex == 6u })
             ;
-            tasks[taskIndex] = graph.addTask(desc, { .requiredCapabilities = Graphics::GpuQueueCapability::Transfer });
+            const auto gpuAdmissionAt82 = graph.addTask(desc, { .requiredCapabilities = Graphics::GpuQueueCapability::Transfer });
+            ASSERT_TRUE(gpuAdmissionAt82);
+            tasks[taskIndex] = *gpuAdmissionAt82;
             ASSERT_TRUE(tasks[taskIndex].valid());
         }
         const Graphics::GpuPhysicalQueueInfo queues[] = {

@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DescriptorBufferManager::DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator)
+DescriptorBufferManager::DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator)noexcept
     : m_device(device)
     , m_context(context)
     , m_allocator(allocator)
@@ -114,7 +114,7 @@ bool DescriptorBufferManager::initialize(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer startup prerequisites are unavailable."));
         return failInitialization();
     }
-    if(m_resourceSegment.storageIdentity == 0u || m_samplerSegment.storageIdentity == 0u){
+    if(!m_resourceSegment.storageIdentity || !m_samplerSegment.storageIdentity){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer storage identity space is exhausted."));
         return failInitialization();
     }
@@ -291,6 +291,8 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
     }
 
     SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
+    if(!segment.storageIdentity)
+        return result;
     auto clearAllocation = [&](const DescriptorBufferSegment& allocation)noexcept{
         if(allocation.valid() && segment.mappedMemory)
             NWB_MEMSET(static_cast<u8*>(segment.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
@@ -299,7 +301,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
         result.kind = kind;
         result.offsetBytes = offsetBytes;
         result.sizeBytes = sizeBytes;
-        result.storageIdentity = segment.storageIdentity;
+        result.storageIdentity = *segment.storageIdentity;
         result.allocationSerial = segment.nextAllocationSerial++;
         clearAllocation(result);
         // Ordered live ranges allow binary-search ownership checks.
@@ -391,7 +393,7 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
 
     ScopedLock lock(storage.mutex);
 
-    if(segment.storageIdentity != storage.storageIdentity){
+    if(!storage.storageIdentity || segment.storageIdentity != *storage.storageIdentity){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: allocation belongs to another storage."));
         return;
     }
@@ -468,9 +470,9 @@ Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::capt
         || m_lifecycleTransitioning
         || m_bindingGeneration == 0u
         || offsetAlignmentBytes == 0u
-        || m_resourceSegment.storageIdentity == 0u
-        || m_samplerSegment.storageIdentity == 0u
-        || m_resourceSegment.storageIdentity == m_samplerSegment.storageIdentity
+        || !m_resourceSegment.storageIdentity
+        || !m_samplerSegment.storageIdentity
+        || *m_resourceSegment.storageIdentity == *m_samplerSegment.storageIdentity
         || m_resourceSegment.buffer == VK_NULL_HANDLE
         || m_samplerSegment.buffer == VK_NULL_HANDLE
         || !m_resourceSegment.allocation
@@ -495,8 +497,8 @@ Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::capt
     snapshot.bindingInfos[s_ResourceDescriptorBufferIndex] = m_resourceSegment.bindingInfo;
     snapshot.bindingInfos[s_SamplerDescriptorBufferIndex] = m_samplerSegment.bindingInfo;
     snapshot.generation = m_bindingGeneration;
-    snapshot.resourceStorageIdentity = m_resourceSegment.storageIdentity;
-    snapshot.samplerStorageIdentity = m_samplerSegment.storageIdentity;
+    snapshot.resourceStorageIdentity = *m_resourceSegment.storageIdentity;
+    snapshot.samplerStorageIdentity = *m_samplerSegment.storageIdentity;
     snapshot.offsetAlignmentBytes = offsetAlignmentBytes;
     return snapshot;
 }
@@ -505,7 +507,8 @@ bool DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage,
     if(
         !segment.valid()
         || segment.kind != expectedKind
-        || segment.storageIdentity != storage.storageIdentity
+        || !storage.storageIdentity
+        || segment.storageIdentity != *storage.storageIdentity
         || segment.offsetBytes > storage.capacityBytes
         || segment.sizeBytes > storage.capacityBytes - segment.offsetBytes
         || segment.offsetBytes > storage.writableOffsetBytes

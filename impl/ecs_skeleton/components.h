@@ -40,10 +40,14 @@ namespace SkeletonSkinningMode{
 struct SkeletonJointPaletteComponent{
     using JointVector = Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>;
 
+
+public:
     JointVector joints;
     u32 skinningMode = SkeletonSkinningMode::LinearBlend;
 
-    explicit SkeletonJointPaletteComponent(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit SkeletonJointPaletteComponent(Core::Alloc::GlobalArena& arena)noexcept
         : joints(arena)
     {}
 };
@@ -58,11 +62,15 @@ struct SkeletonPoseComponent{
     using ParentJointVector = Vector<u32, Core::Alloc::GlobalArena>;
     using JointVector = Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>;
 
+
+public:
     ParentJointVector parentJoints;
     JointVector localJoints;
     u32 skinningMode = SkeletonSkinningMode::LinearBlend;
 
-    explicit SkeletonPoseComponent(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit SkeletonPoseComponent(Core::Alloc::GlobalArena& arena)noexcept
         : parentJoints(arena)
         , localJoints(arena)
     {}

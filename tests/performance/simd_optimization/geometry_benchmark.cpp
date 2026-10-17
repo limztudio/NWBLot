@@ -3,6 +3,8 @@
 
 
 #include <global/floating_point_environment.h>
+#include <global/error_code.h>
+#include <global/expected.h>
 #include <global/simd/collision_triangle.h>
 #include <global/string_view.h>
 #include <global/scope_exit.h>
@@ -428,7 +430,8 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             __builtin_trap();
-    });
+    }
+    );
     const bool original = Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
     const i32 originalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
@@ -451,10 +454,10 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     _exit(32 + information->si_code);
 }
 
-[[nodiscard]] static i32 TrapResult(const Intersection implementation, const TrianglePair& pair, const i32 mask)noexcept{
+[[nodiscard]] static Expected<i32, ErrorCode> TrapResult(const Intersection implementation, const TrianglePair& pair, const i32 mask)noexcept{
     const pid_t child = fork();
     if(child < 0)
-        return -1;
+        return MakeUnexpected(MakeErrorCode(static_cast<ErrorCondition>(errno)));
     if(child == 0){
         struct sigaction action{};
         action.sa_sigaction = TrapHandler;
@@ -468,8 +471,10 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         _exit(result ? 1 : 0);
     }
     i32 status = 0;
-    if(waitpid(child, &status, 0) != child || !WIFEXITED(status))
-        return -1;
+    if(waitpid(child, &status, 0) != child)
+        return MakeUnexpected(MakeErrorCode(static_cast<ErrorCondition>(errno)));
+    if(!WIFEXITED(status))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::state_not_recoverable));
     return WEXITSTATUS(status);
 }
 #endif
@@ -478,9 +483,14 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
 #if defined(NWB_PLATFORM_LINUX)
     const Intersection production = TriangleDoubleTests::Intersects;
     for(const i32 mask : { FE_INVALID, FE_OVERFLOW, FE_INVALID | FE_OVERFLOW, FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT }){
-        const i32 original = TrapResult(Baseline, pair, mask);
-        if(original < 0 || original == 127 || TrapResult(ZeroAxis, pair, mask) != original || TrapResult(AbsHoisted, pair, mask) != original || TrapResult(production, pair, mask) != original)
+        const auto original = TrapResult(Baseline, pair, mask);
+        if(!original || *original == 127)
             return false;
+        for(const Intersection implementation : { ZeroAxis, AbsHoisted, production }){
+            const auto observed = TrapResult(implementation, pair, mask);
+            if(!observed || *observed != *original)
+                return false;
+        }
     }
 #else
     if(!CheckExceptionEquivalence(pair))

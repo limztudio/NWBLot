@@ -32,6 +32,8 @@ struct GpuTaskGraphOutputLayer{
     GpuDescriptorHandle sampledImage;
     u64 frameGeneration = 0u;
 
+
+public:
     [[nodiscard]] bool validShape()const noexcept{
         const bool hasColor = color.valid();
         return (!readyTask.valid() || frameGeneration != 0u) && (!hasColor || readyTask.valid()) && hasColor == colorVersion.valid() && hasColor == sampledImage.valid();

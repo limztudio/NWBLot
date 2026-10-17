@@ -803,7 +803,7 @@ def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
         LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1, "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
         "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else LIT_DISABLED), "CausticTimingProbe: reflection diagnostics false temporal false spatial false feedback false", "CausticTimingProbe: scene single-static-sphere-ground-v1",
         f"CausticTimingProbe: camera {preset} distance {distance} height 0.85", "CausticTimingProbe: fixed delta 0.016666667 yaw 0 sphere scale 0.7", "CausticTimingProbe: directional pitch 0.9 yaw 0.65 intensity 2",
-        "CausticTimingProbe: vertical FOV radians 1.0471976", "CausticTimingProbe: photon phases bootstrap 2 converged 4 warmup 8", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
+        "CausticTimingProbe: vertical FOV radians 1.0471976", "CausticTimingProbe: photon phases 2", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
     if enabled:
         text += "\nRendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, 262144 full-grid budget, 1 caustic lights, 1 refractive instances)"
     if capture:
@@ -842,7 +842,7 @@ class CausticMeasurementTests(unittest.TestCase):
             workload.validate_log(text, workload, True)
             for changed in (text.replace("131072 photons", "65536 photons"), text.replace("262144 full-grid", "131072 full-grid"), text.replace("1 refractive", "2 refractive"),
                 text.replace("height 0.85", "height 0.7"), text.replace("sphere scale 0.7", "sphere scale 0.35"), text.replace("intensity 2", "intensity 4"), text.replace("radians 1.0471976", "radians 0.7"),
-                text.replace("warmup 8", "warmup 16"), text.replace("yaw 0", "yaw 1"), text.replace("hardware caustic producer", "software caustic producer"), text + "\nCausticSphereSmokeProject: reflection mode 2",
+                text.replace("photon phases 2", "photon phases 4"), text.replace("131072 photons/frame, 2 temporal phases", "65536 photons/frame, 4 temporal phases"), text.replace("yaw 0", "yaw 1"), text.replace("hardware caustic producer", "software caustic producer"), text + "\nCausticSphereSmokeProject: reflection mode 2",
                 text + "\nAvboitTimingProbe: caustic in-flight ranges 2"):
                 with self.subTest(preset=preset, changed=changed[-120:]), self.assertRaises(benchmark.SmokeFailure):
                     workload.validate_log(changed, workload, True)

@@ -68,11 +68,15 @@ struct MaterialInstanceParameter{
 struct MaterialInstanceComponent{
     using ParameterVector = Vector<MaterialInstanceParameter, Core::Alloc::GlobalArena>;
 
+
+public:
     Name materialInterface = s_NameNone;
     ParameterVector overrides;
     u64 revision = 0u;
 
-    explicit MaterialInstanceComponent(Core::Alloc::GlobalArena& arena, const Name& interfaceName)
+
+public:
+    explicit MaterialInstanceComponent(Core::Alloc::GlobalArena& arena, const Name& interfaceName)noexcept
         : materialInterface(interfaceName)
         , overrides(arena)
     {}

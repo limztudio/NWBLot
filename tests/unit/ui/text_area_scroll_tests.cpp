@@ -23,7 +23,7 @@ protected:
         return "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\n" "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa";
     }
 
-    [[nodiscard]] static TextAreaOptions SmallOptions(){
+    [[nodiscard]] static TextAreaOptions SmallOptions()noexcept{
         TextAreaOptions options;
         options.width = { LayoutSizePolicy::Fixed, 90.0f };
         options.height = { LayoutSizePolicy::Fixed, 42.0f };

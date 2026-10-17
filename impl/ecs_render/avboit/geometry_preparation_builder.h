@@ -53,7 +53,7 @@ struct AvboitGeometryPreparationResult{
 
 class AvboitGeometryPreparationBuilder final : NoCopy{
 public:
-    AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena);
+    AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)noexcept;
 
 
 public:

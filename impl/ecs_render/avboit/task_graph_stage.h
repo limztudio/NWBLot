@@ -52,6 +52,8 @@ struct RendererAvboitTaskGraphStageState{
     Core::GpuTaskId m_accumulationTask;
     Core::GpuTaskId m_accumulationFinalizeTask;
 
+
+public:
     void reset()noexcept;
     [[nodiscard]] RendererTaskGraphTransparencyStage transparencyStage()const noexcept;
 };
@@ -61,6 +63,8 @@ struct RendererAvboitTaskGraphValidation{
     RendererTaskGraphTransparencyStage m_stage;
     bool m_valid = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] const RendererTaskGraphTransparencyStage& stage()const noexcept{ return m_stage; }
 };

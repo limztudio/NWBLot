@@ -16,7 +16,15 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererCsgSystem::RendererCsgSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, CsgShapeRegistry& csgShapeRegistry, RendererCsgState& csgState, RendererShaderSystem& shaderSystem, RendererMeshSystem& meshSystem)
+RendererCsgSystem::RendererCsgSystem(
+    Core::Alloc::GlobalArena& arena,
+    Core::ECS::World& world,
+    Core::GraphicsRuntime& graphics,
+    CsgShapeRegistry& csgShapeRegistry,
+    RendererCsgState& csgState,
+    RendererShaderSystem& shaderSystem,
+    RendererMeshSystem& meshSystem
+)noexcept
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)

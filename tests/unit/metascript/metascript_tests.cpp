@@ -337,6 +337,45 @@ TEST(Metascript, BindStyleStructDuplicateRejections){
 }
 
 
+TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
+    struct InvalidTargetCase{
+        MStringView source;
+        MStringView message;
+        i64 retainedValue;
+    };
+    const InvalidTargetCase cases[] = {
+        { "float asset = 7;\nmissing.value = 2;", "assignments must target a declared variable", 7 },
+        { "float asset = 9;\nasset.value = 2;", "cannot access field on non-map value", 9 },
+    };
+    for(const auto& testCase : cases){
+        SCOPED_TRACE(testCase.message.data());
+        DestinationArena arena;
+        Document document(arena.arena);
+        EXPECT_FALSE(document.parse(testCase.source));
+        ASSERT_EQ(document.errors().size(), 1u);
+        EXPECT_EQ(document.errors()[0u].line, 2u);
+        EXPECT_EQ(document.errors()[0u].column, 1u);
+        EXPECT_EQ(MStringView(document.errors()[0u].message.data(), document.errors()[0u].message.size()), testCase.message);
+        const Value* asset = document.findVariable("asset");
+        ASSERT_NE(asset, nullptr);
+        ASSERT_TRUE(asset->isInteger());
+        EXPECT_EQ(asset->asInteger(), testCase.retainedValue);
+        EXPECT_EQ(document.findVariable("missing"), nullptr);
+    }
+}
+
+TEST(Metascript, BindDeclarationWithoutAssetPreservesMissingRootDiagnostic){
+    DestinationArena arena;
+    Document document(arena.arena);
+    EXPECT_FALSE(document.parse(LiteralView("struct NwbOrphan{ float value; };")));
+    ASSERT_EQ(document.errors().size(), 1u);
+    EXPECT_EQ(document.errors()[0u].line, 1u);
+    EXPECT_EQ(document.errors()[0u].column, 1u);
+    EXPECT_EQ(MStringView(document.errors()[0u].message.data(), document.errors()[0u].message.size()), LiteralView("missing declared asset variable"));
+    EXPECT_EQ(document.findVariable("asset"), nullptr);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

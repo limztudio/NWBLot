@@ -32,7 +32,7 @@ namespace __hidden_new{
 
 
 template<typename AllocateFunc>
-[[nodiscard]] void* RetryOperatorNew(AllocateFunc allocate){
+[[nodiscard]] NotNull<void*> RetryOperatorNew(AllocateFunc allocate){
     void* result = allocate();
     while(!result){
         const std::new_handler handler = std::get_new_handler();
@@ -42,19 +42,21 @@ template<typename AllocateFunc>
         (*handler)();
         result = allocate();
     }
-    return result;
+    return MakeNotNull(result);
 }
 
-[[nodiscard]] void* InternalOperatorNew(const std::size_t size){
+[[nodiscard]] NotNull<void*> InternalOperatorNew(const std::size_t size){
     return RetryOperatorNew([size]()noexcept{
         return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(size));
-    });
+    }
+    );
 }
 
-[[nodiscard]] void* InternalOperatorNew(const std::size_t size, const std::size_t alignment){
+[[nodiscard]] NotNull<void*> InternalOperatorNew(const std::size_t size, const std::size_t alignment){
     return RetryOperatorNew([size, alignment]()noexcept{
         return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(size), static_cast<usize>(alignment));
-    });
+    }
+    );
 }
 
 
@@ -71,40 +73,11 @@ void operator delete(void* p)noexcept{
     NWB::Core::Alloc::CoreFree(p);
 }
 
-void operator delete[](void* p)noexcept{
-    NWB::Core::Alloc::CoreFree(p);
-}
-
 void operator delete(void* p, const std::nothrow_t&)noexcept{
     NWB::Core::Alloc::CoreFree(p);
 }
 
-void operator delete[](void* p, const std::nothrow_t&)noexcept{
-    NWB::Core::Alloc::CoreFree(p);
-}
-
-NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new(std::size_t n)noexcept(false){
-    return __hidden_new::InternalOperatorNew(n);
-}
-
-NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new[](std::size_t n)noexcept(false){
-    return __hidden_new::InternalOperatorNew(n);
-}
-
-NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new(std::size_t n, const std::nothrow_t&)noexcept{
-    return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
-}
-
-NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new[](std::size_t n, const std::nothrow_t&)noexcept{
-    return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
-}
-
-
 void operator delete(void* p, std::size_t n)noexcept{
-    NWB::Core::Alloc::CoreFreeSize(p, static_cast<usize>(n));
-}
-
-void operator delete[](void* p, std::size_t n)noexcept{
     NWB::Core::Alloc::CoreFreeSize(p, static_cast<usize>(n));
 }
 
@@ -112,15 +85,7 @@ void operator delete(void* p, std::align_val_t)noexcept{
     NWB::Core::Alloc::CoreFreeAligned(p);
 }
 
-void operator delete[](void* p, std::align_val_t)noexcept{
-    NWB::Core::Alloc::CoreFreeAligned(p);
-}
-
 void operator delete(void* p, std::size_t n, std::align_val_t)noexcept{
-    NWB::Core::Alloc::CoreFreeSizeAligned(p, static_cast<usize>(n));
-}
-
-void operator delete[](void* p, std::size_t n, std::align_val_t)noexcept{
     NWB::Core::Alloc::CoreFreeSizeAligned(p, static_cast<usize>(n));
 }
 
@@ -128,20 +93,56 @@ void operator delete(void* p, std::align_val_t, const std::nothrow_t&)noexcept{
     NWB::Core::Alloc::CoreFreeAligned(p);
 }
 
+void operator delete[](void* p)noexcept{
+    NWB::Core::Alloc::CoreFree(p);
+}
+
+void operator delete[](void* p, const std::nothrow_t&)noexcept{
+    NWB::Core::Alloc::CoreFree(p);
+}
+
+void operator delete[](void* p, std::size_t n)noexcept{
+    NWB::Core::Alloc::CoreFreeSize(p, static_cast<usize>(n));
+}
+
+void operator delete[](void* p, std::align_val_t)noexcept{
+    NWB::Core::Alloc::CoreFreeAligned(p);
+}
+
+void operator delete[](void* p, std::size_t n, std::align_val_t)noexcept{
+    NWB::Core::Alloc::CoreFreeSizeAligned(p, static_cast<usize>(n));
+}
+
 void operator delete[](void* p, std::align_val_t, const std::nothrow_t&)noexcept{
     NWB::Core::Alloc::CoreFreeAligned(p);
 }
 
-void* operator new(std::size_t n, std::align_val_t alignment)noexcept(false){
-    return __hidden_new::InternalOperatorNew(n, static_cast<std::size_t>(alignment));
+NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new(std::size_t n)noexcept(false){
+    return __hidden_new::InternalOperatorNew(n).get();
 }
 
-void* operator new[](std::size_t n, std::align_val_t alignment)noexcept(false){
-    return __hidden_new::InternalOperatorNew(n, static_cast<std::size_t>(alignment));
+NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new(std::size_t n, const std::nothrow_t&)noexcept{
+    return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
+}
+
+void* operator new(std::size_t n, std::align_val_t alignment)noexcept(false){
+    return __hidden_new::InternalOperatorNew(n, static_cast<std::size_t>(alignment)).get();
 }
 
 void* operator new(std::size_t n, std::align_val_t alignment, std::nothrow_t const&)noexcept{
     return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(n), static_cast<usize>(alignment));
+}
+
+NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new[](std::size_t n)noexcept(false){
+    return __hidden_new::InternalOperatorNew(n).get();
+}
+
+NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new[](std::size_t n, const std::nothrow_t&)noexcept{
+    return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
+}
+
+void* operator new[](std::size_t n, std::align_val_t alignment)noexcept(false){
+    return __hidden_new::InternalOperatorNew(n, static_cast<std::size_t>(alignment)).get();
 }
 
 void* operator new[](std::size_t n, std::align_val_t alignment, std::nothrow_t const&)noexcept{

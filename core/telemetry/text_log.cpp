@@ -27,10 +27,32 @@ namespace __hidden_telemetry_text_log{
     return header.magic == s_TextLogPayloadMagic && header.version == s_TextLogPayloadVersion && header.reserved == 0u && IsValidTextLogType(static_cast<Common::LogType::Enum>(header.type));
 }
 
-template<typename Out>
-static void AppendUtf8Text(Out& outText, const TStringView message){
+static void AppendUtf8Text(TelemetryBytes& outText, const TStringView message){
     auto inserter = BackInserter(outText);
     BasicStringDetail::WriteConvertedText<char>(inserter, message);
+}
+
+
+[[nodiscard]] static bool BuildUnaliasedPayload(const Common::LogType::Enum type, const TStringView message, TelemetryBytes& outPayload){
+    if(!IsValidTextLogType(type)){
+        outPayload.clear();
+        return false;
+    }
+
+    outPayload.clear();
+    usize minimumPayloadBytes = sizeof(EncodedTextLogPayloadHeader);
+    if(!AddBinaryReserveBytes(minimumPayloadBytes, message.size()))
+        return false;
+
+    EncodedTextLogPayloadHeader header;
+    header.type = static_cast<u8>(type);
+    outPayload.reserve(minimumPayloadBytes);
+    AppendPOD(outPayload, header);
+    AppendUtf8Text(outPayload, message);
+
+    header.messageBytes = static_cast<u64>(outPayload.size() - sizeof(header));
+    NWB_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
+    return true;
 }
 
 
@@ -57,7 +79,7 @@ bool IsValidTextLogType(const Common::LogType::Enum type)noexcept{
     return false;
 }
 
-bool BuildTextLogPayload(TelemetryArena& arena, const Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload){
+bool BuildTextLogPayload(Alloc::ScratchArena& scratchArena, const Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload){
     if(!IsValidTextLogType(type)){
         outPayload.clear();
         return false;
@@ -65,31 +87,18 @@ bool BuildTextLogPayload(TelemetryArena& arena, const Common::LogType::Enum type
 
     // Preserve views into the previous payload before a header write or vector growth can invalidate them.
     // Ordinary logger input is external, so it converts directly into the reusable destination allocation.
-    Optional<TString<TelemetryArena>> aliasedMessage;
+    Optional<TString<Alloc::ScratchArena>> aliasedMessage;
     if(!message.empty() && outPayload.data()){
         const usize sourceAddress = reinterpret_cast<usize>(message.data());
         const usize payloadAddress = reinterpret_cast<usize>(outPayload.data());
         if(sourceAddress >= payloadAddress && sourceAddress - payloadAddress < outPayload.capacity()){
-            TString<TelemetryArena>& alias = aliasedMessage.emplace(arena);
+            TString<Alloc::ScratchArena>& alias = aliasedMessage.emplace(scratchArena);
             alias.assign(message.data(), message.size());
             message = TStringView(alias.data(), alias.size());
         }
     }
 
-    outPayload.clear();
-    usize minimumPayloadBytes = sizeof(EncodedTextLogPayloadHeader);
-    if(!AddBinaryReserveBytes(minimumPayloadBytes, message.size()))
-        return false;
-
-    EncodedTextLogPayloadHeader header;
-    header.type = static_cast<u8>(type);
-    outPayload.reserve(minimumPayloadBytes);
-    AppendPOD(outPayload, header);
-    __hidden_telemetry_text_log::AppendUtf8Text(outPayload, message);
-
-    header.messageBytes = static_cast<u64>(outPayload.size() - sizeof(header));
-    NWB_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
-    return true;
+    return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, outPayload);
 }
 
 Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
@@ -120,8 +129,8 @@ Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* 
 }
 
 bool RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TStringView message, const u64 frameIndex, const u32 streamId){
-    return recorder.recordBuiltPayload(EventKind::TextLog, frameIndex, streamId, [type, message](TelemetryArena& arena, TelemetryBytes& payload){
-            return BuildTextLogPayload(arena, type, message, payload);
+    return recorder.recordBuiltPayload(EventKind::TextLog, frameIndex, streamId, [type, message](TelemetryArena&, TelemetryBytes& payload){
+            return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, payload);
         }
     );
 }
@@ -152,8 +161,11 @@ void TextLogCaptureLogger::enqueue(const Common::LogString& str, const Common::L
 }
 
 void TextLogCaptureLogger::capture(const TStringView message, const Common::LogType::Enum type){
-    if(!RecordTextLog(m_recorder, type, message, m_frameIndex, m_streamId))
-        return;
+    const auto buildPayload = [type, message](TelemetryArena&, TelemetryBytes& payload){
+        return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, payload);
+    };
+    if(m_recorder.recordBuiltPayloadResult(EventKind::TextLog, m_frameIndex, m_streamId, buildPayload) == Recorder::BuiltPayloadResult::Failed)
+        m_droppedTextLogCount.fetch_add(1u, MemoryOrder::relaxed);
 }
 
 

@@ -462,6 +462,10 @@ void GpuCommandIrStreamReader::fail(const GpuCommandIrStreamValidationError::Enu
     m_validation.complete = true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(const BinaryByteView bytes)noexcept{
     GpuCommandIrStreamReader reader(bytes);
     while(reader.next()){}

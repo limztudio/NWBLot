@@ -88,9 +88,12 @@ bool CallbackGraph::prepare(const usize taskCount){
         char suffix[s_NumberBufferBytes] = {};
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % s_MergeGroupSize != 0u;
-        const Graphics::GpuTaskId task = AddTaskWithCommands(
+        const auto derivedNameAt92Col12 = DeriveName(Name("tests/callback_bindings/task/"), FormatDecimal(index, suffix));
+        if(!derivedNameAt92Col12)
+            return false;
+        const auto taskResult = AddTaskWithCommands(
             m_graph,
-            DeriveName(Name("tests/callback_bindings/task/"), FormatDecimal(index, suffix)),
+            *derivedNameAt92Col12,
             "Callback Binding Task",
             GraphicsCommands(),
             scheduling,
@@ -98,6 +101,9 @@ bool CallbackGraph::prepare(const usize taskCount){
             scheduling.mergeWithPrevious ? &m_tasks.back() : nullptr,
             scheduling.mergeWithPrevious ? 1u : 0u
         );
+        if(!taskResult)
+            return false;
+        const Graphics::GpuTaskId task = *taskResult;
         if(!task.valid())
             return false;
         m_tasks.push_back(task);
@@ -256,8 +262,8 @@ TEST(GpuTaskCallbackBindings, ReversedBindingsInvokeInMergedCompiledTaskOrderWit
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     constexpr usize s_Counts[] = { s_InlineCount, s_IndexedCount };
     for(const usize count : s_Counts){
-        CheckReorderedBindings<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, count);
-        CheckReorderedBindings<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, count);
+        ASSERT_NO_FATAL_FAILURE(CheckReorderedBindings<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, count));
+        ASSERT_NO_FATAL_FAILURE(CheckReorderedBindings<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, count));
     }
 }
 
@@ -266,8 +272,8 @@ TEST(GpuTaskCallbackBindings, FailedAdmissionClearsPriorBindingsForBothLookupPat
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     constexpr usize s_Counts[] = { s_InlineCount, s_IndexedCount };
     for(const usize count : s_Counts){
-        CheckInvalidBindings<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, count);
-        CheckInvalidBindings<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, count);
+        ASSERT_NO_FATAL_FAILURE(CheckInvalidBindings<Graphics::GpuTaskGraphTaskRecordedCallback>(testArena, scratch, count));
+        ASSERT_NO_FATAL_FAILURE(CheckInvalidBindings<Graphics::GpuTaskGraphTaskAcceptedCallback>(testArena, scratch, count));
     }
 }
 

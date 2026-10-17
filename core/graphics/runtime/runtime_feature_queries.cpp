@@ -51,12 +51,12 @@ u32 GraphicsRuntime::queryWaveLaneCount()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CooperativeVectorDeviceFeatures GraphicsRuntime::queryCoopVecFeatures()const{
+Expected<CooperativeVectorDeviceFeatures> GraphicsRuntime::queryCoopVecFeatures()const{
     auto& device = getDevice();
     return device.queryCoopVecFeatures();
 }
 
-usize GraphicsRuntime::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
+Expected<usize> GraphicsRuntime::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
     auto& device = getDevice();
     return device.getCoopVecMatrixSize(type, layout, rows, columns);
 }

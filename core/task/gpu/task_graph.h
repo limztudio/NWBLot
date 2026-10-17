@@ -160,11 +160,15 @@ public:
     explicit GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph);
     GpuTaskGraphDeclarationReadView(GpuTaskGraphDeclarationReadView&&) = delete;
     ~GpuTaskGraphDeclarationReadView()noexcept;
+private:
+    GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph, TryAcquireTag)noexcept;
 
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept{ return m_graph == &graph; }
+
     [[nodiscard]] u64 generation()const noexcept;
     [[nodiscard]] u64 declarationRevision()const noexcept;
     [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
@@ -216,11 +220,8 @@ public:
     [[nodiscard]] GpuGraphResourceId findImportedBuffer(const BufferHandle& buffer)const noexcept;
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const & noexcept;
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const && = delete;
+
     [[nodiscard]] bool appendFrameGraphTelemetry(Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, const GpuTaskGraphTelemetryOptions& options = {})const;
-
-
-private:
-    GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph, TryAcquireTag)noexcept;
 
 
 private:
@@ -241,19 +242,17 @@ class GpuGraphSubmissionBinding final{
 
 public:
     GpuGraphSubmissionBinding()noexcept = default;
+private:
+    GpuGraphSubmissionBinding(const u64 transactionIdentity, const u64 resetGeneration)noexcept
+        : m_transactionIdentity(transactionIdentity)
+        , m_resetGeneration(resetGeneration)
+    {}
 
 
 public:
     [[nodiscard]] bool valid()const noexcept{
         return m_transactionIdentity != 0u && m_resetGeneration != 0u;
     }
-
-
-private:
-    GpuGraphSubmissionBinding(const u64 transactionIdentity, const u64 resetGeneration)noexcept
-        : m_transactionIdentity(transactionIdentity)
-        , m_resetGeneration(resetGeneration)
-    {}
 
 
 private:
@@ -287,8 +286,27 @@ class GpuTaskGraph final : NoCopy{
 public:
     using DeclarationReadView = GpuTaskGraphDeclarationReadView;
 
+    // Declare this operation owner after every object borrowed by its task payloads.
+    // It retires CPU payloads after synchronous recording/submission has joined, while keeping graph declarations, resource owners and diagnostic metadata available.
+    // Reset the graph before another execution; every declaration/read/packet claim must finish before this scope ends.
+    class PayloadLifetimeScope final : NoCopy{
+    public:
+        explicit PayloadLifetimeScope(GpuTaskGraph& graph)noexcept
+            : m_graph(graph)
+        {}
+        ~PayloadLifetimeScope()noexcept(false);
+
+
+    private:
+        GpuTaskGraph& m_graph;
+    };
+
 
 private:
+    struct RecordTaskFailure final{
+        bool recordThunkInvoked;
+    };
+
     class RecordThunkClaimGuard;
     class RecordingAttemptResolutionGuard;
 
@@ -305,6 +323,9 @@ private:
         ~ProvisionalPayloadOwner()noexcept{
             DestroyArenaObjectNoexcept(m_arena, m_payload);
         }
+
+
+    public:
         [[nodiscard]] PayloadT& operator*()const noexcept{ return *m_payload; }
         [[nodiscard]] PayloadT* operator->()const noexcept{ return m_payload; }
 
@@ -437,7 +458,6 @@ private:
         bool m_previousPlanWasActive = false;
     };
 
-
 private:
     // A failed parallel recorder transfers its exact packet claim into this capability before leaving its worker.
     // The ready-frontier owner can then invoke typed discard callbacks serially after every worker has joined.
@@ -482,6 +502,9 @@ private:
     public:
         PacketRecordingLease()noexcept = default;
         PacketRecordingLease(PacketRecordingLease&&) = delete;
+
+
+    public:
         PacketRecordingLease& operator=(PacketRecordingLease&&) = delete;
 
 
@@ -542,6 +565,9 @@ private:
     public:
         PacketSubmissionLease()noexcept = default;
         PacketSubmissionLease(PacketSubmissionLease&&) = delete;
+
+
+    public:
         PacketSubmissionLease& operator=(PacketSubmissionLease&&) = delete;
 
 
@@ -568,7 +594,6 @@ private:
         u64 m_claimGeneration = 0u;
         GpuGraphSubmissionBinding m_submissionBinding;
     };
-
 
 private:
     struct GpuTaskNode{
@@ -727,7 +752,9 @@ private:
     struct GpuUploadBlobNode{
         GraphicsBytes bytes;
 
-        explicit GpuUploadBlobNode(GraphicsArena& arena)
+
+    public:
+        explicit GpuUploadBlobNode(GraphicsArena& arena)noexcept
             : bytes(arena)
         {}
     };
@@ -740,6 +767,11 @@ private:
 
 
 private:
+    static constexpr usize s_InlineImportIndexCount = 32u;
+    static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
+
+
+private:
     struct MarkerLabelRange{
         u32 offset = 0u;
         u32 size = 0u;
@@ -747,9 +779,6 @@ private:
 
 
 private:
-    static constexpr usize s_InlineImportIndexCount = 32u;
-    static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
-
     [[nodiscard]] static u64 AllocateGeneration()noexcept;
     [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
     [[nodiscard]] static PipelinePointerKey MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
@@ -817,48 +846,48 @@ public:
 
 public:
     // Metadata-only tasks support graph analysis and scheduling. A task executed through scheduler-owned native recording must provide a payload thunk through the templated overload below.
-    [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands = {});
+    [[nodiscard]] Expected<GpuTaskId> addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands = {});
     // The first isolated primary-Graphics task gates later normal roots without ordering independent branches.
     [[nodiscard]] bool setNormalExecutionPrelude(const GpuTaskId& task);
 
     // Adds a graph-owned native buffer copy. The helper derives command requirements and CopySource/CopyDest resource uses from its regions and retains the imported buffers through recording. The caller must not provide separate resource uses.
-    [[nodiscard]] GpuTaskId addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
+    [[nodiscard]] Expected<GpuTaskId> addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
 
     // Adds a graph-owned native texture copy. The helper derives command requirements and CopySource/CopyDest resource uses from its regions and retains the imported textures through recording. The caller must not provide separate resource uses.
-    [[nodiscard]] GpuTaskId addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
+    [[nodiscard]] Expected<GpuTaskId> addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
     // Adds a graph-owned native texture resolve. The helper derives Graphics command requirements and ResolveSource/ResolveDest resource uses, retaining the imported textures through recording. The caller must not provide separate resource uses.
-    [[nodiscard]] GpuTaskId addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
+    [[nodiscard]] Expected<GpuTaskId> addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
 
     // Copies caller-owned bytes into graph-owned CPU storage. `alignment` must be a nonzero power of two; blobs expose only an opaque byte view, so no typed-alignment promise escapes the graph. Built-in upload tasks resolve the immutable blob while recording, then use the ordinary CommandList staging allocator for GPU lifetime.
-    [[nodiscard]] GpuUploadBlobId copyUploadData(const void* data, usize byteSize, usize alignment = alignof(u8));
+    [[nodiscard]] Expected<GpuUploadBlobId> copyUploadData(const void* data, usize byteSize, usize alignment = alignof(u8));
 
     // Adds graph-owned buffer/texture uploads.
     // Ordered uses expose the native CopyDest write and optional local final transition, packet preflight and later graph packets observe the complete state contract.
-    [[nodiscard]] GpuTaskId addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
-    [[nodiscard]] GpuTaskId addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
+    [[nodiscard]] Expected<GpuTaskId> addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
+    [[nodiscard]] Expected<GpuTaskId> addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
 
     // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives Transfer command requirements and its CopyDest write declaration. The caller must not provide separate resource uses.
-    [[nodiscard]] GpuTaskId addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc);
+    [[nodiscard]] Expected<GpuTaskId> addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc);
 
     // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest write declaration and backend command requirements, including Compute or Graphics alternatives for shader clears. The caller must not provide separate resource uses.
-    [[nodiscard]] GpuTaskId addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
+    [[nodiscard]] Expected<GpuTaskId> addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
     // Adds a graph-owned native rectangular unsigned-integer texture clear. The helper retains the imported texture and derives its exact subresource CopyDest write declaration and backend command requirements. The caller must not provide separate resource uses.
-    [[nodiscard]] GpuTaskId addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc);
+    [[nodiscard]] Expected<GpuTaskId> addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc);
 
     template<typename TaskT>
-    [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
+    [[nodiscard]] Expected<GpuTaskId> addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
         using Payload = typename TaskT::Payload;
         static_assert(IsNothrowDestructible_V<Payload>, "GPU task payload cleanup must remain no-throw");
 
         DeclarationMutationScope mutation(*this);
         if(!mutation.valid())
-            return {};
+            return MakeUnexpected(Failure{});
 
         Payload* const payloadObject = NewArenaObject<Payload>(m_arena, Move(payload));
         if(!payloadObject)
-            return {};
+            return MakeUnexpected(Failure{});
         ProvisionalPayloadOwner<Payload> storedPayload(m_arena, payloadObject);
 
         GpuTaskRecordThunk recordPayload = nullptr;
@@ -873,8 +902,8 @@ public:
         if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
             discardPayload = &DiscardTaskPayload<TaskT>;
 
-        const GpuTaskId task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()), storedPayload.get(), recordPayload, acceptPayload, discardPayload, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation);
-        if(task.valid())
+        const auto task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()), storedPayload.get(), recordPayload, acceptPayload, discardPayload, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation);
+        if(task)
             storedPayload.publish();
         else
             discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyTaskPayload<Payload>);
@@ -882,22 +911,22 @@ public:
     }
 
     template<typename TaskT>
-    GpuTaskId rejectInvalidBuiltinPayload(ProvisionalPayloadOwner<typename TaskT::Payload>& payload){
+    Expected<GpuTaskId> rejectInvalidBuiltinPayload(ProvisionalPayloadOwner<typename TaskT::Payload>& payload){
         using Payload = typename TaskT::Payload;
         discardAndDestroyUnappendedPayload(payload.release(), &DiscardTaskPayload<TaskT>, &DestroyTaskPayload<Payload>);
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
     template<typename TaskT>
-    [[nodiscard]] GpuTaskId appendBuiltinTaskWithinMutation(
+    [[nodiscard]] Expected<GpuTaskId> appendBuiltinTaskWithinMutation(
         const GpuTaskDesc& resolvedDesc,
         ProvisionalPayloadOwner<typename TaskT::Payload>& payload,
         const DeclarationMutationScope& mutation,
         const GpuTaskCommandRequirements& commands = { .requiredCapabilities = GpuQueueCapability::Transfer }
     ){
         using Payload = typename TaskT::Payload;
-        const GpuTaskId task = appendTaskWithinMutation(resolvedDesc, commands, payload.get(), &RecordTaskPayload<TaskT>, &AcceptTaskPayload<TaskT>, &DiscardTaskPayload<TaskT>, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation);
-        if(task.valid())
+        const auto task = appendTaskWithinMutation(resolvedDesc, commands, payload.get(), &RecordTaskPayload<TaskT>, &AcceptTaskPayload<TaskT>, &DiscardTaskPayload<TaskT>, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation);
+        if(task)
             payload.publish();
         else
             discardAndDestroyUnappendedPayload(payload.release(), &DiscardTaskPayload<TaskT>, &DestroyTaskPayload<Payload>);
@@ -906,23 +935,23 @@ public:
 
     // This form covers abstract resources and conservative bindless hazard domains during the metadata-only phase.
     // Tasks that will be recorded later must use a typed import overload so the graph retains the resource.
-    [[nodiscard]] GpuGraphResourceId importResource(const GpuGraphResourceDesc& desc);
-    [[nodiscard]] GpuGraphResourceId importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc);
-    [[nodiscard]] GpuGraphResourceId importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc);
-    [[nodiscard]] GpuGraphResourceId importAccelStruct(const RayTracingAccelStructHandle& accelStruct, const GpuGraphResourceDesc& desc);
-    [[nodiscard]] GpuGraphResourceId importHazardDomain(const GpuGraphResourceDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceId> importResource(const GpuGraphResourceDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceId> importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceId> importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceId> importAccelStruct(const RayTracingAccelStructHandle& accelStruct, const GpuGraphResourceDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceId> importHazardDomain(const GpuGraphResourceDesc& desc);
     // Declares a distinct semantic value for one exact physical resource range. Repeating an identical descriptor intentionally produces a different version ID.
-    [[nodiscard]] GpuGraphResourceVersionId declareResourceVersion(const GpuGraphResourceVersionDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceVersionId> declareResourceVersion(const GpuGraphResourceVersionDesc& desc);
     // Stores an immutable dynamic resource collection.
     // Task resource-set declarations expand to the set's concrete members at task creation, compilation and recording keep their existing resource-level contracts.
-    [[nodiscard]] GpuGraphResourceSetId importResourceSet(const GpuGraphResourceSetDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceSetId> importResourceSet(const GpuGraphResourceSetDesc& desc);
     // Pipeline IDs are graph-local side-table entries.  Metadata-only entries support analysis/capture setup
-    [[nodiscard]] GpuGraphPipelineId importPipeline(const GpuGraphPipelineDesc& desc);
-    [[nodiscard]] GpuGraphPipelineId importGraphicsPipeline(const GraphicsPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
-    [[nodiscard]] GpuGraphPipelineId importComputePipeline(const ComputePipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
-    [[nodiscard]] GpuGraphPipelineId importMeshletPipeline(const MeshletPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
-    [[nodiscard]] GpuGraphPipelineId importRayTracingPipeline(const RayTracingPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
-    [[nodiscard]] GpuExternalCompletionId importExternalCompletion(const GpuExternalCompletionDesc& desc);
+    [[nodiscard]] Expected<GpuGraphPipelineId> importPipeline(const GpuGraphPipelineDesc& desc);
+    [[nodiscard]] Expected<GpuGraphPipelineId> importGraphicsPipeline(const GraphicsPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
+    [[nodiscard]] Expected<GpuGraphPipelineId> importComputePipeline(const ComputePipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
+    [[nodiscard]] Expected<GpuGraphPipelineId> importMeshletPipeline(const MeshletPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
+    [[nodiscard]] Expected<GpuGraphPipelineId> importRayTracingPipeline(const RayTracingPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
+    [[nodiscard]] Expected<GpuExternalCompletionId> importExternalCompletion(const GpuExternalCompletionDesc& desc);
     // One graph may publish one presentation completion. The compiler validates the retained typed backbuffer, its single-sink acquisition/final-state contract, every user-to-producer dependency, at least one real writer, and exact physical Graphics routing before exposing it to native presentation policy.
     [[nodiscard]] bool declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
 
@@ -947,14 +976,13 @@ private:
     [[nodiscard]] bool beginSubmissionExceptionClosing(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
     [[nodiscard]] bool waitForSubmissionExceptionRecordingClaims(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
 
-
 private:
     // Caller holds m_lifecycleMutex; preparation, submission binding and task-state checks remain path-specific.
     [[nodiscard]] bool matchesPacketAttemptWithinLock(const GpuCompiledGraph& compiledGraph, const u64 planGeneration, const u64 recordingAttemptGeneration)const noexcept{
         return !m_teardownInProgress && m_activeCompiledGraph == &compiledGraph && m_activeRecordingPlanGeneration == planGeneration && m_activeRecordingAttemptGeneration == recordingAttemptGeneration;
     }
 
-    [[nodiscard]] bool recordTask(const GpuTaskId& task, CommandList& commandList, const GpuTaskRecordContext& context, const PacketRecordingLease& lease, bool& outRecordThunkInvoked)const;
+    [[nodiscard]] Expected<void, RecordTaskFailure> recordTask(const GpuTaskId& task, CommandList& commandList, const GpuTaskRecordContext& context, const PacketRecordingLease& lease)const;
 
     // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
     void discardPacketTasksWithinLock(const GpuSubmissionPacket& packetPlan, const GpuTaskId* const tasks, const u64 notificationGeneration = 0u)const noexcept{
@@ -984,7 +1012,6 @@ private:
     void abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, PacketRecordingLease& lease)const;
     [[nodiscard]] bool packetReadyForSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration)const noexcept;
 
-
 private:
     [[nodiscard]] bool beginPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
@@ -1012,7 +1039,6 @@ private:
         const GpuGraphSubmissionBinding& submissionBinding
     )const noexcept;
 
-
 private:
     // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks retain responsibility only for barriers internal to their own command sequence.
     [[nodiscard]] bool applyCompiledBarrier(
@@ -1025,7 +1051,6 @@ private:
     )const;
     // Materializes retained resource states in the native tracker after compiler barriers lower. This preserves graph-owned packet handoffs when a required state already matches an imported automatic-state resource and therefore needs no Vulkan transition command.
     [[nodiscard]] bool seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingAccess& recordingAccess, const GpuTaskId& task, CommandList& commandList)const;
-
 
 private:
     [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
@@ -1052,7 +1077,7 @@ private:
     [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
 
-    [[nodiscard]] GpuTaskId appendTaskWithinMutation(
+    [[nodiscard]] Expected<GpuTaskId> appendTaskWithinMutation(
         const GpuTaskDesc& desc,
         const GpuTaskCommandRequirements& commands,
         void* payload,
@@ -1075,14 +1100,17 @@ private:
     void prepareResourceSetIndex();
     void preparePipelineIndexes(const PipelinePointerKey& pendingPointer);
     void prepareExternalCompletionIndex();
-    [[nodiscard]] GpuGraphResourceId appendResourceWithinMutation(const GpuGraphResourceDesc& desc, const ResourceQueueAdmissionSnapshot* queueAdmission, const ResourceBinding& binding, const DeclarationMutationScope& mutationAccess);
-    [[nodiscard]] GpuGraphResourceVersionId appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
-    [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
-    [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding);
-    [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceId> appendResourceWithinMutation(const GpuGraphResourceDesc& desc, const ResourceQueueAdmissionSnapshot* queueAdmission, const ResourceBinding& binding, const DeclarationMutationScope& mutationAccess);
+    [[nodiscard]] Expected<GpuGraphResourceVersionId> appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceSetId> appendResourceSet(const GpuGraphResourceSetDesc& desc);
+    [[nodiscard]] Expected<GpuGraphPipelineId> appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding);
+    [[nodiscard]] Expected<GpuExternalCompletionId> appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
+
+
     [[nodiscard]] Expected<MarkerLabelRange> appendMarkerLabel(AStringView text);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
+    [[nodiscard]] bool retireTaskPayloads();
     [[nodiscard]] bool destroyTaskPayloads();
     [[nodiscard]] bool destroyTaskPayloadsWithoutCallbacks()noexcept;
     void releasePacketRecordingClaimWithinLock()const noexcept;

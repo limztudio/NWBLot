@@ -156,6 +156,8 @@ struct GpuTaskGraphPacketTimingEnvelopeOptions{
     GpuTaskId firstTask;
     GpuTaskId lastTask;
 
+
+public:
     [[nodiscard]] bool enabled()const noexcept{ return firstTask.valid() && lastTask.valid(); }
 };
 
@@ -177,11 +179,16 @@ struct GpuTaskGraphSchedulingTaskIndexView{
     usize taskCount = 0u;
 
 
-    [[nodiscard]] bool empty()const noexcept{ return taskCount == 0u; }
+public:
     [[nodiscard]] u32 operator[](const usize index)const noexcept{
         NWB_ASSERT(index < taskCount);
         return taskIndices[index];
     }
+
+
+public:
+    [[nodiscard]] bool empty()const noexcept{ return taskCount == 0u; }
+
 };
 
 
@@ -190,7 +197,7 @@ class GpuTaskGraphAnalysis final : NoCopy{
 
 
 public:
-    explicit GpuTaskGraphAnalysis(GraphicsArena& arena)
+    explicit GpuTaskGraphAnalysis(GraphicsArena& arena)noexcept
         : m_edges(arena)
         , m_schedulingEdges(arena)
         , m_schedulingOutgoingOffsets(arena)
@@ -269,7 +276,7 @@ class GpuTaskGraphQueueAssignments final : NoCopy{
 
 
 public:
-    explicit GpuTaskGraphQueueAssignments(GraphicsArena& arena)
+    explicit GpuTaskGraphQueueAssignments(GraphicsArena& arena)noexcept
         : m_assignments(arena)
         , m_assignmentIndicesByTask(arena)
     {}

@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -53,7 +52,8 @@ namespace __hidden_material_instance{
 
 // Single source of truth for cache validity shared by prepare and find paths.
 [[nodiscard]] static bool MaterialInstanceMutableCacheEntryMatches(const MaterialInstanceMutableCacheEntry& cacheEntry, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance)noexcept{
-    return cacheEntry.materialName == materialInfo.materialName
+    return
+        cacheEntry.materialName == materialInfo.materialName
         && cacheEntry.materialInterface == materialInfo.materialInterface
         && materialInstance.materialInterface == materialInfo.materialInterface
         && cacheEntry.typedLayoutHash == materialInfo.typedLayoutHash
@@ -159,7 +159,12 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Ent
     return true;
 }
 
-Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance){
+Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
+    Core::Alloc::ScratchArena& scratchArena,
+    const Core::ECS::EntityID entity,
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialInstanceComponent* materialInstance
+){
     pruneMaterialInstanceMutableCache();
 
     if(!materialInstance || materialInstance->overrides.empty()){
@@ -172,7 +177,6 @@ Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterial
         return &cacheEntry.mutableTypedBytes;
     }
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_MutableTypedBytesArena);
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
     mutableTypedBytes.reserve(materialInfo.mutableDefaultTypedBytes.size());
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
@@ -181,11 +185,11 @@ Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterial
         return MakeUnexpected(Failure{});
     }
 
+    AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, mutableTypedBytes);
     cacheEntry.materialName = materialInfo.materialName;
     cacheEntry.materialInterface = materialInfo.materialInterface;
     cacheEntry.typedLayoutHash = materialInfo.typedLayoutHash;
     cacheEntry.revision = materialInstance->revision;
-    AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, mutableTypedBytes);
 
     return &cacheEntry.mutableTypedBytes;
 }
@@ -211,14 +215,15 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
     const MaterialSurfaceInfo& materialInfo,
     const NWB::Impl::Scene::TransformComponent* transform,
     MaterialTypedByteDataVector& inOutMaterialTypedBytes,
+    ECSRenderDetail::MaterialTypedConstantRangeMap& inOutConstantRanges,
     ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges
 ){
-    const auto constantRange = ECSRenderDetail::AppendMaterialTypedByteRange(inOutMaterialTypedBytes, materialInfo.constantTypedBytes);
+    const auto constantRange = ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(inOutMaterialTypedBytes, inOutConstantRanges, materialInfo.materialName, materialInfo.typedLayoutHash, materialInfo.constantTypedBytes);
     if(!constantRange)
         return MakeUnexpected(Failure{});
 
     const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
-    const auto mutableTypedBytes = prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance);
+    const auto mutableTypedBytes = prepareMaterialInstanceMutableTypedBytes(inOutMaterialTypedBytes.get_allocator().arena(), entity, materialInfo, materialInstance);
     if(!mutableTypedBytes)
         return MakeUnexpected(Failure{});
     const auto mutableRange = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(inOutMaterialTypedBytes, inOutMutableRanges, **mutableTypedBytes);

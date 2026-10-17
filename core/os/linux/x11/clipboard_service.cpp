@@ -39,7 +39,7 @@ X11ClipboardService::~X11ClipboardService(){
         X11CheckedOperation operation(m_display);
         XDestroyWindow(&m_display, m_ownerWindow);
         if(!operation.succeeded())
-            NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: owner window destruction failed"));
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "x11_clipboard_lifecycle", .message = "X11 clipboard: owner window destruction failed", .file = __FILE__, .line = __LINE__, });
     }
 }
 
@@ -200,7 +200,7 @@ void X11ClipboardService::releaseOperation(){
         X11CheckedOperation checked(m_display);
         XDestroyWindow(&m_display, m_operationWindow);
         if(!checked.succeeded())
-            NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: request window destruction failed"));
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "x11_clipboard_lifecycle", .message = "X11 clipboard: request window destruction failed", .file = __FILE__, .line = __LINE__, });
     }
     m_operationWindow = 0u;
     m_operationToken = {};
@@ -245,11 +245,11 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlobalUniquePtr<IClipboardService> CreateX11ClipboardService(Alloc::GlobalArena& arena, _XDisplay& display){
+Expected<GlobalUniquePtr<IClipboardService>> CreateX11ClipboardService(Alloc::GlobalArena& arena, _XDisplay& display){
     auto service = MakeGlobalUnique<X11ClipboardService>(arena, arena, display);
-    if(!service->initialize()){
+    if(!service || !service->initialize()){
         NWB_LOGGER_ERROR(NWB_TEXT("X11 clipboard initialization failed"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     return service;
 }

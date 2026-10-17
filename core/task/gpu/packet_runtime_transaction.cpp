@@ -215,8 +215,6 @@ bool GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
 }
 
 
-
-
 void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept{
     if(!m_activeSubmissionBinding.valid() || m_submissionBindingResolved || !allPacketsTerminalLocked())
         return;

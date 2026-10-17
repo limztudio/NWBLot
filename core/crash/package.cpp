@@ -5,6 +5,7 @@
 #include "package_internal.h"
 
 #include <global/diagnostics.h>
+#include <global/error_code.h>
 #include <global/json_text.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -31,6 +32,7 @@ namespace Detail{
 inline constexpr usize s_UnsignedTextBufferCapacity = 32u;
 inline constexpr usize s_ManifestReserveBytes = 2048u;
 inline constexpr usize s_LinuxProcPathTextCapacity = 128u;
+inline constexpr usize s_LinuxCopyBufferBytes = 4096u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,11 +46,6 @@ static void AppendUnsignedText(CrashStringT<ArenaT>& out, const u64 value){
 }
 
 template<typename ArenaT>
-static bool WriteCrashTextFile(const ::Path<ArenaT>& path, const CrashStringT<ArenaT>& text){
-    return WriteTextFile(path, AStringView(text.data(), text.size()));
-}
-
-template<typename ArenaT>
 static void AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const StringView key, const bool isFirst){
     if(!isFirst)
         out += ",\n";
@@ -57,7 +54,7 @@ static void AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const String
     out += "\": ";
 }
 
-static StringView ArtifactStrategyName(const CrashRequest& request){
+static StringView ArtifactStrategyName(const CrashRequest& request)noexcept{
     switch(request.platform){
     case PlatformKind::Windows:
         return "windows_minidump_external_handler";
@@ -100,7 +97,12 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestThreadIdKey, false);
     AppendUnsignedText(manifest, request.threadId);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
-    manifest += request.exceptionPointers ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText;
+#if defined(NWB_PLATFORM_WINDOWS)
+    const bool hasExceptionContext = request.manualContextSize != 0u || request.exceptionPointers != 0u;
+#else
+    const bool hasExceptionContext = request.exceptionPointers != 0u;
+#endif
+    manifest += hasExceptionContext ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText;
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
     AppendUnsignedText(manifest, request.faultAddress);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestInstructionPointerKey, false);
@@ -261,22 +263,25 @@ static CrashStringT<ArenaT> BuildArtifactStrategyText(ArenaT& arena, const Crash
 template<typename ArenaT>
 static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
-    if(!EnsureDirectories(packageDirectory))
+    const auto directory = EnsureDirectories(packageDirectory);
+    if(!directory){
+        CaptureCrashPackageFilesystemFailure("create_package_directory", directory.error());
         return false;
+    }
 
-    if(!WriteCrashTextFile(packageDirectory / PackageNames::s_ManifestFileName, BuildManifest(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_ManifestFileName, BuildManifest(arena, request)))
         return false;
-    if(!WriteCrashTextFile(packageDirectory / PackageNames::s_MetadataFileName, BuildMetadataText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_MetadataFileName, BuildMetadataText(arena, request)))
         return false;
-    if(!WriteCrashTextFile(packageDirectory / PackageNames::s_BreadcrumbsFileName, BuildBreadcrumbText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_BreadcrumbsFileName, BuildBreadcrumbText(arena, request)))
         return false;
-    if(!WriteCrashTextFile(packageDirectory / PackageNames::s_EmergencyFileName, BuildEmergencyText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_EmergencyFileName, BuildEmergencyText(arena, request)))
         return false;
-    if(!WriteCrashTextFile(packageDirectory / PackageNames::s_ArtifactStrategyFileName, BuildArtifactStrategyText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_ArtifactStrategyFileName, BuildArtifactStrategyText(arena, request)))
         return false;
-    if(HasCpuContext(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_CpuContextFileName, BuildCpuContextText(arena, request)))
+    if(HasCpuContext(request) && !WriteTextFile(packageDirectory / PackageNames::s_CpuContextFileName, BuildCpuContextText(arena, request)))
         return false;
-    if(HasCallstack(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_CallstackFileName, BuildCallstackText(arena, request)))
+    if(HasCallstack(request) && !WriteTextFile(packageDirectory / PackageNames::s_CallstackFileName, BuildCallstackText(arena, request)))
         return false;
     return true;
 }
@@ -289,36 +294,53 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
 template<typename ArenaT>
 static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
-
     HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE, FALSE, request.processId);
-    if(!process)
-        return false;
-
-    HANDLE dumpFile = CreateFile(dumpPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if(dumpFile == INVALID_HANDLE_VALUE){
-        CloseHandle(process);
+    if(!process){
+        CaptureCrashPackageFilesystemFailure("open_dump_process", GlobalFilesystemDetail::LastSystemError());
         return false;
     }
-
+    HANDLE dumpFile = CreateFile(dumpPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if(dumpFile == INVALID_HANDLE_VALUE){
+        const ErrorCode createError = GlobalFilesystemDetail::LastSystemError();
+        const BOOL processClosed = CloseHandle(process);
+        const ErrorCode closeError = processClosed ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+        CaptureCrashPackageFilesystemFailure("create_minidump_file", createError);
+        if(!processClosed)
+            CaptureCrashPackageFilesystemFailure("close_dump_process", closeError);
+        return false;
+    }
     const MINIDUMP_TYPE dumpType = request.dumpDetailMode == DumpDetailMode::Full
         ? static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules)
         : static_cast<MINIDUMP_TYPE>(MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules)
     ;
-
+    ManualDumpContextStorage manualContext(request);
     MINIDUMP_EXCEPTION_INFORMATION exceptionInformation = {};
     MINIDUMP_EXCEPTION_INFORMATION* exceptionInformationPointer = nullptr;
-    if(request.exceptionPointers != 0u){
+    if(request.manualContextSize != 0u){
+        exceptionInformation.ThreadId = static_cast<DWORD>(request.threadId);
+        exceptionInformation.ExceptionPointers = &manualContext.exceptionPointers;
+        exceptionInformation.ClientPointers = FALSE;
+        exceptionInformationPointer = &exceptionInformation;
+    }
+    else if(request.exceptionPointers != 0u){
         exceptionInformation.ThreadId = static_cast<DWORD>(request.threadId);
         exceptionInformation.ExceptionPointers = reinterpret_cast<EXCEPTION_POINTERS*>(static_cast<usize>(request.exceptionPointers));
         exceptionInformation.ClientPointers = TRUE;
         exceptionInformationPointer = &exceptionInformation;
     }
-
-    const BOOL ok = MiniDumpWriteDump(process, request.processId, dumpFile, dumpType, exceptionInformationPointer, nullptr, nullptr);
-
-    CloseHandle(dumpFile);
-    CloseHandle(process);
-    return ok == TRUE;
+    const BOOL written = MiniDumpWriteDump(process, request.processId, dumpFile, dumpType, exceptionInformationPointer, nullptr, nullptr);
+    const ErrorCode writeError = written ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    const BOOL dumpClosed = CloseHandle(dumpFile);
+    const ErrorCode dumpCloseError = dumpClosed ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    const BOOL processClosed = CloseHandle(process);
+    const ErrorCode processCloseError = processClosed ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    if(!written)
+        CaptureCrashPackageFilesystemFailure("write_minidump", writeError);
+    if(!dumpClosed)
+        CaptureCrashPackageFilesystemFailure("close_minidump_file", dumpCloseError);
+    if(!processClosed)
+        CaptureCrashPackageFilesystemFailure("close_dump_process", processCloseError);
+    return written == TRUE && dumpClosed == TRUE && processClosed == TRUE;
 }
 #endif
 
@@ -329,9 +351,39 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
     if(!input.is_open())
         return;
 
-    OutputFileStream output((RequestPendingDirectory(arena, request) / outputName).c_str(), s_FileOpenBinary | s_FileOpenTruncate);
-    if(output.is_open())
-        output << input.rdbuf();
+    const ::Path<ArenaT> outputPath = RequestPendingDirectory(arena, request) / outputName;
+    OutputFileStream output(outputPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
+    if(!output.is_open()){
+        CaptureDiagnosticEvent("crash_package", "Failed to open optional crash artifact output", __FILE__, __LINE__);
+        return;
+    }
+
+    bool copied = true;
+    char buffer[s_LinuxCopyBufferBytes];
+    for(;;){
+        input.read(buffer, static_cast<StreamSize>(sizeof(buffer)));
+        const StreamSize bytesRead = input.gcount();
+        if(bytesRead > 0)
+            output.write(buffer, bytesRead);
+        if(!output.good()){
+            copied = false;
+            break;
+        }
+        if(input.eof() && !input.bad())
+            break;
+        if(!input.good()){
+            copied = false;
+            break;
+        }
+    }
+    output.close();
+    if(copied && output.good())
+        return;
+
+    CaptureDiagnosticEvent("crash_package", "Failed to copy or close optional crash artifact output", __FILE__, __LINE__);
+    const auto removed = RemoveFile(outputPath);
+    if(!removed)
+        CaptureCrashPackageFilesystemFailure("remove_incomplete_optional_artifact", removed.error());
 }
 
 template<typename ArenaT>
@@ -348,7 +400,7 @@ static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const AStri
 
 template<typename ArenaT>
 static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& request){
-    if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
+    if(!IsCurrentCrashRequest(request))
         return false;
     if(!WriteCrashPackageBasics(arena, request))
         return false;
@@ -356,7 +408,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
 #if defined(NWB_PLATFORM_WINDOWS)
     if(request.platform == PlatformKind::Windows){
         const bool dumpWritten = WriteWindowsMinidump(arena, request);
-        if(!WriteCrashTextFile(
+        if(!WriteTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
             CrashStringT<ArenaT>(dumpWritten ? "minidump captured; server-side PDB symbolication pending\n" : "minidump capture failed; metadata package only\n", arena)
         ))
@@ -374,18 +426,23 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         CopyProcFile(arena, request, PackageNames::s_ProcStatusName, PackageNames::s_ProcStatusFileName);
         CopyFileToPackage(arena, request, PackageNames::s_LinuxCorePatternPath, PackageNames::s_LinuxCorePatternFileName);
         CopyFileToPackage(arena, request, PackageNames::s_LinuxCoreUsesPidPath, PackageNames::s_LinuxCoreUsesPidFileName);
-        if(!WriteCrashTextFile(
+        if(!WriteTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
             CrashStringT<ArenaT>("linux crash package captured; OS core policy remains authoritative; server-side DWARF symbolication uses reachable module symbols\n", arena)
         ))
             return false;
     }
 #else
-    if(!WriteCrashTextFile(RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName, CrashStringT<ArenaT>("native platform crash artifact expected; server-side symbolication pending\n", arena)))
+    if(!WriteTextFile(RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName, CrashStringT<ArenaT>("native platform crash artifact expected; server-side symbolication pending\n", arena)))
         return false;
 #endif
 
     return true;
+}
+
+void CaptureCrashPackageFilesystemFailure(const AStringView operation, const ErrorCode& error)noexcept{
+    const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash package I/O failure: {} {}", error.category().name(), error.value());
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_package_error", .expression = operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
 }
 
 bool WriteCrashPackage(const CrashRequest& request){
@@ -408,26 +465,31 @@ static void AppendArchiveUnsigned(CrashBytesT<ArenaT>& out, const u64 value){
     AppendArchiveText(out, buffer);
 }
 
-template<typename ArenaT>
-Expected<CrashBytesT<ArenaT>> BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory){
+template<typename ArenaT, typename PathArenaT>
+Expected<CrashBytesT<ArenaT>, ErrorCode> BuildPackageArchive(ArenaT& arena, Alloc::ScratchArena& scratchArena, const ::Path<PathArenaT>& packageDirectory){
     CrashBytesT<ArenaT> archive(arena);
     AppendArchiveText(archive, PackageNames::s_ArchiveHeaderText);
 
-    const auto directory = RecursiveDirectoryIterator<ArenaT>::Create(packageDirectory);
+    const ::Path<Alloc::ScratchArena> sourceDirectory(scratchArena, packageDirectory);
+    const auto directory = RecursiveDirectoryIterator<Alloc::ScratchArena>::Create(sourceDirectory);
     if(!directory)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(directory.error());
 
+    CrashBytesT<Alloc::ScratchArena> fileBytes(scratchArena);
     bool wroteFile = false;
     for(const auto& entry : *directory){
         const auto regularFile = entry.isRegularFile();
-        if(!regularFile || !*regularFile)
+        if(!regularFile)
+            return MakeUnexpected(regularFile.error());
+        if(!*regularFile)
             continue;
 
-        CrashBytesT<ArenaT> fileBytes{arena};
-        if(!ReadBinaryFile(entry.path(), fileBytes))
-            return MakeUnexpected(Failure{});
+        const auto read = ReadBinaryFile(entry.path(), fileBytes);
+        if(!read)
+            return MakeUnexpected(read.error());
 
-        const CrashStringT<ArenaT> pathText = PathToGenericString<char>(arena, entry.path().lexicallyRelative(packageDirectory));
+        const ::Path<Alloc::ScratchArena> relativePath = entry.path().lexicallyRelative(sourceDirectory);
+        const CrashStringT<Alloc::ScratchArena> pathText = PathToGenericString<char>(scratchArena, relativePath);
         AppendArchiveText(archive, PackageNames::s_ArchiveFileHeaderPrefix);
         AppendArchiveText(archive, AStringView(pathText.data(), pathText.size()));
         AppendArchiveText(archive, " ");
@@ -439,13 +501,15 @@ Expected<CrashBytesT<ArenaT>> BuildPackageArchive(ArenaT& arena, const ::Path<Ar
     }
 
     if(!wroteFile)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
     return archive;
 }
 
-template Expected<CrashBytesT<Alloc::GlobalArena>> BuildPackageArchive(Alloc::GlobalArena& arena, const ::Path<Alloc::GlobalArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> BuildPackageArchive(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::GlobalArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> BuildPackageArchive(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
 
-template Expected<CrashBytesT<Alloc::PersistentArena>> BuildPackageArchive(Alloc::PersistentArena& arena, const ::Path<Alloc::PersistentArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> BuildPackageArchive(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::PersistentArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> BuildPackageArchive(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

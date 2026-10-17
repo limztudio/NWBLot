@@ -65,7 +65,7 @@ struct ReflectionPostprocessSnapshot{
 // Only the extra opaque history bank and spatial destination live here.
 class RendererReflectionPostprocess final : NoCopy{
 public:
-    RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);
+    RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept;
 
 
 public:
@@ -77,6 +77,7 @@ private:
     void releaseTargets();
     [[nodiscard]] bool preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, Name name, AStringView variant);
     [[nodiscard]] bool prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

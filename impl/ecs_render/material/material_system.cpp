@@ -27,7 +27,7 @@ RendererMaterialSystem::RendererMaterialSystem(
     RendererMeshSystem& meshSystem,
     RendererCsgSystem& csgSystem,
     const RendererOpticalVolumeSelection& opticalVolumes
-)
+)noexcept
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)

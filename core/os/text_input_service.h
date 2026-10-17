@@ -30,7 +30,7 @@ public:
     [[nodiscard]] virtual bool isOwnerThread()const noexcept override final{ return QueryCurrentThreadId() == m_ownerThread; }
     [[nodiscard]] virtual TextInputSessionToken activeSession()const noexcept override final;
     [[nodiscard]] virtual u64 surroundingRevision(TextInputSessionToken token)const noexcept override final;
-    [[nodiscard]] virtual TextInputBeginResult begin(const TextInputSessionDesc& desc)override final;
+    [[nodiscard]] virtual Expected<TextInputSessionToken, TextInputAdmission::Enum> begin(const TextInputSessionDesc& desc)override final;
     [[nodiscard]] virtual bool end(TextInputSessionToken token)override final;
     [[nodiscard]] virtual TextInputAdmission::Enum updateCaret(TextInputSessionToken token, TextInputRect caret)override final;
     [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, TextInputChangeCause::Enum cause = TextInputChangeCause::Other)override final;

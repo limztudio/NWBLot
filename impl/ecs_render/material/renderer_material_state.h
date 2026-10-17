@@ -36,6 +36,8 @@ struct RendererMaterialResourceState{
     HashMap<Name, UniquePtr<TextureGpuResource>, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> textureAssetCache;
     HashMap<Name, UniquePtr<SamplerGpuResource>, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> samplerAssetCache;
 
+
+public:
     explicit RendererMaterialResourceState(Core::Alloc::GlobalArena& arena)
         : textureAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
         , samplerAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
@@ -48,6 +50,7 @@ struct RendererMaterialResourceState{
 
 class RendererMaterialState final : NoCopy{
     friend class RendererMaterialSystem;
+
 
 public:
     explicit RendererMaterialState(Core::Alloc::GlobalArena& arena);

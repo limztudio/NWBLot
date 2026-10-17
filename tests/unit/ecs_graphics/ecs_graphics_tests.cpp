@@ -17,6 +17,7 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/material/material_typed_private.h>
+#include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
@@ -52,6 +53,9 @@ using NWB::Tests::MakeTriangleIndices;
 using NWB::Tests::NearlyEqual;
 
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes){
@@ -290,6 +294,85 @@ TEST(EcsGraphics, MissingMeshDoesNotReplacePreviousResolution){
     auto missingMeshEntity = testWorld.world.createEntity();
     EXPECT_FALSE(meshSystem.resolveMesh(missingMeshEntity.id()));
     EXPECT_TRUE(resolvedMesh->valid());
+}
+
+TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
+    using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedConstantRangeMap;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> uploadBytes(scratchArena);
+    ::Vector<u8, NWB::Core::Alloc::ScratchArena> constants(scratchArena);
+    constants.assign({0xA1u, 0xB2u, 0xC3u, 0xD4u});
+    RangeMap ranges(0, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
+    ranges.reserve(3u);
+    const Name material("project/materials/shared");
+    const Name otherMaterial("project/materials/other");
+
+    const auto first = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, material, 17u, constants);
+    ASSERT_TRUE(first);
+    const usize firstUploadSize = uploadBytes.size();
+    for(u32 instance = 0u; instance < 8u; ++instance){
+        const auto repeated = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, material, 17u, constants);
+        ASSERT_TRUE(repeated);
+        EXPECT_EQ(repeated->byteOffset, first->byteOffset);
+        EXPECT_EQ(repeated->byteCount, first->byteCount);
+        EXPECT_EQ(uploadBytes.size(), firstUploadSize);
+    }
+    const auto differentLayout = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, material, 18u, constants);
+    const auto differentMaterial = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, otherMaterial, 17u, constants);
+    ASSERT_TRUE(differentLayout);
+    ASSERT_TRUE(differentMaterial);
+    EXPECT_NE(differentLayout->byteOffset, first->byteOffset);
+    EXPECT_NE(differentMaterial->byteOffset, first->byteOffset);
+    EXPECT_NE(differentMaterial->byteOffset, differentLayout->byteOffset);
+    ASSERT_EQ(ranges.size(), 3u);
+    for(const auto& [key, range] : ranges){
+        EXPECT_TRUE(key.materialName == material || key.materialName == otherMaterial);
+        ASSERT_EQ(range.byteCount, constants.size());
+        ASSERT_LE(range.byteOffset + range.byteCount, uploadBytes.size());
+        EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + range.byteOffset, constants.data(), constants.size()), 0);
+    }
+}
+
+TEST(EcsGraphics, MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude){
+    using PipelineKey = NWB::Impl::MaterialPipelineKey;
+    using PipelineMap = HashMap<PipelineKey, u32, NWB::Core::Alloc::GlobalArena, NWB::Impl::MaterialPipelineKeyHasher, NWB::Impl::MaterialPipelineKeyEqualTo>;
+
+    NWB::Tests::TestArena<> arena;
+    NWB::Impl::CsgShapeRegistry registry(arena.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    auto shape = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
+    ASSERT_TRUE(shape);
+    shape->desc.shaderModule = Name("tests/csg/pipeline_evaluator");
+    shape->desc.shaderModuleInclude = "tests/csg/pipeline_evaluator_a.slangi";
+    const auto registered = registry.registerShapeType(shape->desc, true);
+    ASSERT_TRUE(registered);
+
+    PipelineKey original;
+    original.material = Name("tests/csg/pipeline_material");
+    original.csgMode = NWB::Impl::MaterialPipelineCsgMode::ClipOnly;
+    original.csgEvaluatorVariant = shape->desc.shaderModule;
+    original.csgShapeRegistryRevision = registry.revision();
+    PipelineMap pipelines(0u, PipelineMap::hasher(), PipelineMap::key_equal(), arena.arena);
+    ASSERT_TRUE(pipelines.emplace(original, 17u).second);
+
+    shape->desc.shaderModuleInclude = "tests/csg/pipeline_evaluator_b.slangi";
+    const auto replaced = registry.registerShapeType(shape->desc, true);
+    ASSERT_TRUE(replaced);
+    EXPECT_EQ(*registered, *replaced);
+    const auto include = registry.findShaderModuleInclude(original.csgEvaluatorVariant, arena.arena);
+    ASSERT_TRUE(include);
+    EXPECT_EQ(AStringView(*include), "tests/csg/pipeline_evaluator_b.slangi");
+
+    PipelineKey updated = original;
+    updated.csgShapeRegistryRevision = registry.revision();
+    EXPECT_NE(original.csgShapeRegistryRevision, updated.csgShapeRegistryRevision);
+    EXPECT_EQ(original.material, updated.material);
+    EXPECT_EQ(original.csgEvaluatorVariant, updated.csgEvaluatorVariant);
+    EXPECT_FALSE(PipelineMap::key_equal()(original, updated));
+    EXPECT_EQ(pipelines.find(updated), pipelines.end());
+    const auto retained = pipelines.find(original);
+    ASSERT_NE(retained, pipelines.end());
+    EXPECT_EQ(retained.value(), 17u);
 }
 
 TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){

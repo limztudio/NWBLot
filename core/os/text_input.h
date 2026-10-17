@@ -7,6 +7,8 @@
 
 #include <core/alloc/general.h>
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,6 +55,10 @@ inline constexpr usize s_TextInputMaxEventTextBytes = 64u * 1024u;
 inline constexpr usize s_TextInputMaxQueuedTextBytes = 256u * 1024u;
 inline constexpr usize s_TextInputMaxSurroundingBytes = 1024u * 1024u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TextInputCapabilities{
     bool commit = false;
     bool preedit = false;
@@ -65,6 +71,8 @@ struct TextInputSessionToken{
     u64 service = 0u;
     u64 generation = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return service != 0u && generation != 0u; }
 };
 
@@ -87,11 +95,6 @@ struct TextInputSessionDesc{
     usize caretByte = 0u;
 };
 
-struct TextInputBeginResult{
-    TextInputSessionToken token;
-    TextInputAdmission::Enum admission = TextInputAdmission::Unavailable;
-};
-
 struct TextInputEvent{
     AString<Alloc::GlobalArena> text;
     TextInputSessionToken token;
@@ -106,7 +109,9 @@ struct TextInputEvent{
     TextInputCancelReason::Enum cancelReason = TextInputCancelReason::NativeCancelled;
     TextInputDeletionBasis::Enum deletionBasis = TextInputDeletionBasis::Caret;
 
-    explicit TextInputEvent(Alloc::GlobalArena& arena)
+
+public:
+    explicit TextInputEvent(Alloc::GlobalArena& arena)noexcept(noexcept(AString<Alloc::GlobalArena>(arena)))
         : text(arena)
     {}
 };
@@ -136,7 +141,7 @@ public:
     [[nodiscard]] virtual bool isOwnerThread()const noexcept = 0;
     [[nodiscard]] virtual TextInputSessionToken activeSession()const noexcept = 0;
     [[nodiscard]] virtual u64 surroundingRevision(TextInputSessionToken token)const noexcept = 0;
-    [[nodiscard]] virtual TextInputBeginResult begin(const TextInputSessionDesc& desc) = 0;
+    [[nodiscard]] virtual Expected<TextInputSessionToken, TextInputAdmission::Enum> begin(const TextInputSessionDesc& desc) = 0;
     [[nodiscard]] virtual bool end(TextInputSessionToken token) = 0;
     [[nodiscard]] virtual TextInputAdmission::Enum updateCaret(TextInputSessionToken token, TextInputRect caret) = 0;
     [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, TextInputChangeCause::Enum cause = TextInputChangeCause::Other) = 0;
@@ -148,7 +153,7 @@ public:
 // The native HWND is borrowed until service destruction.
 // nullptr returns an explicit unsupported service.
 // Native Linux factories and event bridges belong to their X11/Wayland domains.
-[[nodiscard]] GlobalUniquePtr<ITextInputService> CreateTextInputService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
+[[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateTextInputService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

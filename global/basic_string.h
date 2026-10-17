@@ -93,10 +93,16 @@ using WFormatString = std::wformat_string<T...>;
 template<usize N>
 struct ConstString{
     char data[N];
+
+
+public:
     constexpr ConstString(const char(&str)[N])noexcept{
         for(usize i = 0u; i < N; ++i)
             data[i] = str[i];
     }
+
+
+public:
     constexpr operator AStringView()const noexcept{ return AStringView(data, N - 1u); }
 
 
@@ -106,10 +112,16 @@ public:
 template<usize N>
 struct ConstWString{
     wchar data[N];
+
+
+public:
     constexpr ConstWString(const wchar(&str)[N])noexcept{
         for(usize i = 0u; i < N; ++i)
             data[i] = str[i];
     }
+
+
+public:
     constexpr operator WStringView()const noexcept{ return WStringView(data, N - 1u); }
 
 
@@ -184,6 +196,10 @@ inline constexpr u32 s_UnicodeLowSurrogateMax = 0xDFFFu;
 inline constexpr u32 s_Utf16SurrogatePayloadBits = 10u;
 inline constexpr u32 s_Utf16SurrogatePayloadMask = 0x3FFu;
 inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename In>
 struct StringConvertArg{

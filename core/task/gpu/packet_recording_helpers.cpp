@@ -77,8 +77,11 @@ bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& decla
         const GpuTaskId* const tasks = packetView.tasks;
 
         // Scope IDs and report rows follow first registration, with each packet preceding its task scopes.
-        if(packet.recordsTiming && !countScopeOccurrence(PacketTimingScopeName(declarationAccess, planAccess, packetID)))
-            return false;
+        if(packet.recordsTiming){
+            const auto packetScopeName = PacketTimingScopeName(declarationAccess, planAccess, packetID);
+            if(!packetScopeName || !countScopeOccurrence(*packetScopeName))
+                return false;
+        }
         bool packetRecordsTiming = false;
         for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
             const GpuTaskId task = tasks[taskIndex];

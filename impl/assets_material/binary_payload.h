@@ -80,6 +80,10 @@ inline constexpr usize s_TypedLayoutBlockBytes = sizeof(MaterialTypedLayoutBlock
 inline constexpr usize s_TypedLayoutFieldBytes = sizeof(MaterialTypedLayoutFieldBinary);
 inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferenceBinary);
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename BlockVector>
 [[nodiscard]] inline Expected<usize> ComputeMaterialTypedBlockByteSize(const BlockVector& blocks){
     usize byteSize = 0u;
@@ -155,12 +159,12 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
     return resourceFieldCount == resourceReferences.size();
 }
 
-[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name)noexcept{
+[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name){
     return UpdateFnv64(hash, reinterpret_cast<const u8*>(&name.hash()), sizeof(NameHash));
 }
 
 template<typename ValueType>
-[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashValue(u64 hash, const ValueType& value)noexcept{
+[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashValue(u64 hash, const ValueType& value)noexcept(noexcept(UpdateFnv64(hash, reinterpret_cast<const u8*>(&value), sizeof(value)))){
     return UpdateFnv64(hash, reinterpret_cast<const u8*>(&value), sizeof(value));
 }
 

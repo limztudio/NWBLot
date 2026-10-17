@@ -86,14 +86,14 @@ public:
 public:
     [[nodiscard]] virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const noexcept override;
-    [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, Core::GpuGraphResourceId backbuffer, Core::GpuTaskId previousTask)override;
+    [[nodiscard]] virtual Expected<Core::GpuTaskId> declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, Core::GpuGraphResourceId backbuffer, Core::GpuTaskId previousTask)override;
 
 
 private:
     void markFailed(TStringView reason);
     void requestTerminalQuit();
     void resetPendingReadback();
-    [[nodiscard]] bool stagingMatches(const Core::TextureDesc& description)const;
+    [[nodiscard]] bool stagingMatches(const Core::TextureDesc& description)const noexcept;
     [[nodiscard]] bool prepareReadback(const Core::TextureDesc& description);
     [[nodiscard]] bool writeCapture(const u8* sourceBytes, usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena);
 
@@ -125,13 +125,19 @@ private:
 
 
 // Missing capture configuration is a successful null result; a configured result owns a started observer.
-[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(ProjectRuntimeContext& context, const TStringView projectName, const u32 defaultFrameCount, const FramebufferCaptureOptions& options = {}){
-    const auto outputPath = ReadSmokeEnvironmentText(context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
+    ProjectRuntimeContext& context,
+    Core::Alloc::ScratchArena& scratchArena,
+    const TStringView projectName,
+    const u32 defaultFrameCount,
+    const FramebufferCaptureOptions& options = {}
+){
+    const auto outputPath = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
     if(!outputPath)
         return UniquePtr<FramebufferCapture>{};
 
     u32 captureFrameCount = defaultFrameCount;
-    const auto frameCountText = ReadSmokeEnvironmentText(context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+    const auto frameCountText = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
     if(frameCountText){
         const auto parsedFrameCount = ParseU64(AStringView(frameCountText->data(), frameCountText->size()));
         if(!parsedFrameCount || *parsedFrameCount == 0u || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)){
@@ -145,6 +151,11 @@ private:
     if(!capture || !capture->start())
         return MakeUnexpected(Failure{});
     return capture;
+}
+
+[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(ProjectRuntimeContext& context, const TStringView projectName, const u32 defaultFrameCount, const FramebufferCaptureOptions& options = {}){
+    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
+    return ConfigureSmokeFramebufferCapture(context, scratchArena, projectName, defaultFrameCount, options);
 }
 
 

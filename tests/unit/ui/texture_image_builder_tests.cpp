@@ -3,6 +3,7 @@
 
 
 #include "image_fixture_support.h"
+#include "widget_id_assertion.h"
 #include "widget_fixture.h"
 
 #include <impl/ecs_ui/toolkit/images/image_source.h>
@@ -36,7 +37,7 @@ struct TextureImagePaintSample{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static SharedImageSource MakeImage(Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image", const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u){
+[[nodiscard]] static Expected<SharedImageSource> MakeImage(Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image", const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u){
     return UiFixtureSupport::MakeSeededImage(arena, path, seed, width, height);
 }
 
@@ -82,9 +83,9 @@ struct TextureImagePaintSample{
 
 class UiTextureImageBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ImageOptions Fixed(f32 width = 96.0f, f32 height = 40.0f);
-    [[nodiscard]] static PopupOptions ParentOptions();
-    [[nodiscard]] static PopupOptions ChildOptions();
+    [[nodiscard]] static ImageOptions Fixed(f32 width = 96.0f, f32 height = 40.0f)noexcept;
+    [[nodiscard]] static PopupOptions ParentOptions()noexcept;
+    [[nodiscard]] static PopupOptions ChildOptions()noexcept;
 
 
 protected:
@@ -95,21 +96,21 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ImageOptions UiTextureImageBuilderTests::Fixed(const f32 width, const f32 height){
+ImageOptions UiTextureImageBuilderTests::Fixed(const f32 width, const f32 height)noexcept{
     ImageOptions options;
     options.width = { LayoutSizePolicy::Fixed, width };
     options.height = { LayoutSizePolicy::Fixed, height };
     return options;
 }
 
-PopupOptions UiTextureImageBuilderTests::ParentOptions(){
+PopupOptions UiTextureImageBuilderTests::ParentOptions()noexcept{
     PopupOptions options;
     options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 300.0f, 280.0f };
     return options;
 }
 
-PopupOptions UiTextureImageBuilderTests::ChildOptions(){
+PopupOptions UiTextureImageBuilderTests::ChildOptions()noexcept{
     PopupOptions options;
     options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 280.0f, 240.0f };
@@ -125,14 +126,18 @@ bool UiTextureImageBuilderTests::panel(const u64 generation){
 
 
 TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease){
-    SharedImageSource source = MakeImage(m_arena, "tests/ui/copied_builder_image", 37u);
+    auto sourceResult = MakeImage(m_arena, "tests/ui/copied_builder_image", 37u);
+    ASSERT_TRUE(sourceResult);
+    SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     const u64 generation = source->generation();
     ImageOptions options = Fixed(80.0f, 32.0f);
     options.tint = { 2.0f, 0.8f, 0.6f, 0.5f };
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_builder.image("image", source, options));
-    source = MakeImage(m_arena, "tests/ui/copied_builder_image", 73u, 9u, 7u);
+    auto sourceReplacement = MakeImage(m_arena, "tests/ui/copied_builder_image", 73u, 9u, 7u);
+    ASSERT_TRUE(sourceReplacement);
+    source = Move(*sourceReplacement);
     ASSERT_TRUE(source);
     ASSERT_NE(source->generation(), generation);
     source.reset();
@@ -155,7 +160,9 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
 }
 
 TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease){
-    SharedImageSource source = MakeImage(m_arena, "tests/ui/frozen_builder_image", 37u);
+    auto sourceResult = MakeImage(m_arena, "tests/ui/frozen_builder_image", 37u);
+    ASSERT_TRUE(sourceResult);
+    SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     const u64 original = source->generation();
     ASSERT_TRUE(panel(1u));
@@ -164,7 +171,9 @@ TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderReset
     DrawSnapshot retained = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
     source.reset();
-    source = MakeImage(m_arena, "tests/ui/frozen_builder_image", 73u, 9u, 7u);
+    auto sourceReplacement = MakeImage(m_arena, "tests/ui/frozen_builder_image", 73u, 9u, 7u);
+    ASSERT_TRUE(sourceReplacement);
+    source = Move(*sourceReplacement);
     ASSERT_TRUE(source);
     const u64 replacement = source->generation();
     ASSERT_TRUE(panel(2u));
@@ -194,8 +203,12 @@ TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderReset
 }
 
 TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding){
-    const SharedImageSource first = MakeImage(m_arena, "tests/ui/versioned_builder_image", 37u);
-    const SharedImageSource second = MakeImage(m_arena, "tests/ui/versioned_builder_image", 73u, 9u, 7u);
+    auto firstResult = MakeImage(m_arena, "tests/ui/versioned_builder_image", 37u);
+    ASSERT_TRUE(firstResult);
+    const SharedImageSource first = Move(*firstResult);
+    auto secondResult = MakeImage(m_arena, "tests/ui/versioned_builder_image", 73u, 9u, 7u);
+    ASSERT_TRUE(secondResult);
+    const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());
@@ -220,7 +233,9 @@ TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandle
 }
 
 TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePaintStack){
-    const SharedImageSource source = MakeImage(m_arena);
+    auto sourceResult = MakeImage(m_arena);
+    ASSERT_TRUE(sourceResult);
+    const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_builder.image("image", source, Fixed()));
@@ -246,7 +261,9 @@ TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePa
 }
 
 TEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads){
-    const SharedImageSource source = MakeImage(m_arena);
+    auto sourceResult = MakeImage(m_arena);
+    ASSERT_TRUE(sourceResult);
+    const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
     ImageOptions transparent = Fixed();
@@ -261,7 +278,9 @@ TEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBi
 }
 
 TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput){
-    const SharedImageSource source = MakeImage(m_arena);
+    auto sourceResult = MakeImage(m_arena);
+    ASSERT_TRUE(sourceResult);
+    const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
     EXPECT_FALSE(m_builder.button("before", "Before"));
@@ -289,7 +308,9 @@ TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyW
 }
 
 TEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFrame){
-    const SharedImageSource source = MakeImage(m_arena);
+    auto sourceResult = MakeImage(m_arena);
+    ASSERT_TRUE(sourceResult);
+    const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
     EXPECT_FALSE(m_builder.button("before", "Before"));
@@ -317,7 +338,9 @@ TEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilT
     PopupState child;
     parent.open();
     child.open();
-    SharedImageSource source = MakeImage(m_arena, "tests/ui/nested_builder_image", 37u);
+    auto sourceResult = MakeImage(m_arena, "tests/ui/nested_builder_image", 37u);
+    ASSERT_TRUE(sourceResult);
+    SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     const u64 generation = source->generation();
     ImageOptions options = Fixed(80.0f, 32.0f);
@@ -354,7 +377,9 @@ TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAn
     TooltipState tooltip;
     parent.open();
     child.open();
-    SharedImageSource source = MakeImage(m_arena);
+    auto sourceResult = MakeImage(m_arena);
+    ASSERT_TRUE(sourceResult);
+    SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPopup("parent", parent, ParentOptions()));
@@ -371,18 +396,22 @@ TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAn
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_TRUE(snapshot.textureImages().empty());
     EXPECT_EQ(m_context.input().popupCount(), 0u);
-    const WidgetId parentId = MakeWidgetId(MakeRootId(m_root), "parent");
-    EXPECT_EQ(target(MakeWidgetId(MakeWidgetId(parentId, "child"), "image")), nullptr);
+    const WidgetId parentId = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent"));
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId, "child")), "image"))), nullptr);
 }
 
 TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDeferredPaint){
     FixedVector<SharedImageSource, s_PaintMaxImages> images;
     for(usize index = 0u; index < images.max_size(); ++index){
-        SharedImageSource image = MakeImage(m_arena, "tests/ui/capacity_image", static_cast<u8>(index), 4u, 4u);
+        auto imageResult = MakeImage(m_arena, "tests/ui/capacity_image", static_cast<u8>(index), 4u, 4u);
+        ASSERT_TRUE(imageResult);
+        SharedImageSource image = Move(*imageResult);
         ASSERT_TRUE(image);
         images.push_back(Move(image));
     }
-    const SharedImageSource addition = MakeImage(m_arena);
+    auto additionResult = MakeImage(m_arena);
+    ASSERT_TRUE(additionResult);
+    const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(addition);
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_paint.prepareTextureImages(images.data(), images.size()));
@@ -398,11 +427,15 @@ TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDefer
 TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot){
     FixedVector<SharedImageSource, s_PaintMaxImages> images;
     for(usize index = 0u; index < images.max_size(); ++index){
-        SharedImageSource image = MakeImage(m_arena, "tests/ui/capacity_image", static_cast<u8>(index), 4u, 4u);
+        auto imageResult = MakeImage(m_arena, "tests/ui/capacity_image", static_cast<u8>(index), 4u, 4u);
+        ASSERT_TRUE(imageResult);
+        SharedImageSource image = Move(*imageResult);
         ASSERT_TRUE(image);
         images.push_back(Move(image));
     }
-    const SharedImageSource addition = MakeImage(m_arena);
+    auto additionResult = MakeImage(m_arena);
+    ASSERT_TRUE(additionResult);
+    const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(addition);
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_paint.prepareTextureImages(images.data(), images.size()));

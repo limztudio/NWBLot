@@ -30,7 +30,7 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-[[nodiscard]] Graphics::GpuTaskId AddStateTask(
+[[nodiscard]] Expected<Graphics::GpuTaskId> AddStateTask(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const Graphics::GpuTaskResourceUse& use,
@@ -79,19 +79,27 @@ void CheckSingleLaneStateChangeScratch(const usize taskCount, usize& scratchPeak
     SCOPED_TRACE(concurrentSharing);
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId resource = AddBufferMetadata(
+    const auto resourceResult = AddBufferMetadata(
         graph,
         Name("tests/task_graph/single_lane_read_state_resource"),
         "Single Lane Read State Resource",
         Graphics::ResourceStates::Common,
         concurrentSharing ? Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute : Graphics::ResourceQueueSharing::Exclusive
     );
+    ASSERT_TRUE(resourceResult);
+    const Graphics::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
     for(usize index = 0u; index < taskCount; ++index){
         char identityText[32u] = {};
-        const Name identity = DeriveName(Name("tests/task_graph/single_lane_read_state/"), FormatDecimal(index, identityText));
+        const auto derivedNameAt94Col30 = DeriveName(Name("tests/task_graph/single_lane_read_state/"), FormatDecimal(index, identityText));
+        ASSERT_TRUE(derivedNameAt94Col30);
+        const Name identity = *derivedNameAt94Col30;
         const Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = index % 2u == 0u ? Graphics::ResourceStates::ShaderResource : Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Read, };
-        ASSERT_TRUE(AddStateTask(graph, identity, use, GraphicsCommands()).valid());
+        {
+            const auto gpuAdmissionAt94 = AddStateTask(graph, identity, use, GraphicsCommands());
+            ASSERT_TRUE(gpuAdmissionAt94);
+            ASSERT_TRUE(gpuAdmissionAt94->valid());
+        }
     }
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = concurrentSharing ? LengthOf(queues) : 1u, };
@@ -125,7 +133,7 @@ TEST(GpuTaskGraph, KeepsConcurrentReadersIndependentAfterStateEstablishingProduc
     for(const Graphics::GpuGraphResourceType::Enum resourceType : resourceTypes){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
+        const auto resourceResult = graph.importResource(
             Graphics::GpuGraphResourceDesc{}
                 .setIdentity(Name("tests/task_graph/read_fanout_resource"))
                 .setMarkerLabel("Read Fanout Resource")
@@ -133,15 +141,25 @@ TEST(GpuTaskGraph, KeepsConcurrentReadersIndependentAfterStateEstablishingProduc
                 .setInitialState(Graphics::ResourceStates::Common)
                 .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
         );
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         const bool isAccelStruct = resourceType == Graphics::GpuGraphResourceType::AccelStruct;
         Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = isAccelStruct ? Graphics::ResourceStates::AccelStructWrite : Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
-        const Graphics::GpuTaskId writer = AddStateTask(graph, Name("tests/task_graph/read_fanout_writer"), use, GraphicsCommands());
+        const auto writerResult = AddStateTask(graph, Name("tests/task_graph/read_fanout_writer"), use, GraphicsCommands());
+        ASSERT_TRUE(writerResult);
+        const Graphics::GpuTaskId writer = *writerResult;
         use.requiredState = isAccelStruct ? Graphics::ResourceStates::AccelStructRead : Graphics::ResourceStates::ShaderResource;
         use.access = Graphics::GpuTaskResourceAccess::Read;
-        const Graphics::GpuTaskId firstReader = AddStateTask(graph, Name("tests/task_graph/read_fanout_first"), use, GraphicsCommands());
-        const Graphics::GpuTaskId computeReader = AddStateTask(graph, Name("tests/task_graph/read_fanout_compute"), use, ComputeCommands());
-        const Graphics::GpuTaskId graphicsReader = AddStateTask(graph, Name("tests/task_graph/read_fanout_graphics"), use, GraphicsCommands());
+        const auto firstReaderResult = AddStateTask(graph, Name("tests/task_graph/read_fanout_first"), use, GraphicsCommands());
+        ASSERT_TRUE(firstReaderResult);
+        const Graphics::GpuTaskId firstReader = *firstReaderResult;
+        const auto computeReaderResult = AddStateTask(graph, Name("tests/task_graph/read_fanout_compute"), use, ComputeCommands());
+        ASSERT_TRUE(computeReaderResult);
+        const Graphics::GpuTaskId computeReader = *computeReaderResult;
+        const auto graphicsReaderResult = AddStateTask(graph, Name("tests/task_graph/read_fanout_graphics"), use, GraphicsCommands());
+        ASSERT_TRUE(graphicsReaderResult);
+        const Graphics::GpuTaskId graphicsReader = *graphicsReaderResult;
         ASSERT_TRUE(writer.valid());
         ASSERT_TRUE(firstReader.valid());
         ASSERT_TRUE(computeReader.valid());
@@ -164,13 +182,21 @@ TEST(GpuTaskGraph, KeepsConcurrentReadersIndependentAfterStateEstablishingProduc
 TEST(GpuTaskGraph, KeepsCompatibleTextureReadMasksIndependentWithoutChangingSemanticStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId resource = AddTextureMetadata(graph, Name("tests/task_graph/compatible_read_resource"), "Compatible Read Resource", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    const auto resourceResult = AddTextureMetadata(graph, Name("tests/task_graph/compatible_read_resource"), "Compatible Read Resource", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_TRUE(resourceResult);
+    const Graphics::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
     Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
-    const Graphics::GpuTaskId firstReader = AddStateTask(graph, Name("tests/task_graph/compatible_read_first"), use, GraphicsCommands());
-    const Graphics::GpuTaskId computeReader = AddStateTask(graph, Name("tests/task_graph/compatible_read_compute"), use, ComputeCommands());
+    const auto firstReaderResult = AddStateTask(graph, Name("tests/task_graph/compatible_read_first"), use, GraphicsCommands());
+    ASSERT_TRUE(firstReaderResult);
+    const Graphics::GpuTaskId firstReader = *firstReaderResult;
+    const auto computeReaderResult = AddStateTask(graph, Name("tests/task_graph/compatible_read_compute"), use, ComputeCommands());
+    ASSERT_TRUE(computeReaderResult);
+    const Graphics::GpuTaskId computeReader = *computeReaderResult;
     use.requiredState = Graphics::ResourceStates::DepthRead;
-    const Graphics::GpuTaskId depthReader = AddStateTask(graph, Name("tests/task_graph/compatible_read_depth"), use, GraphicsCommands());
+    const auto depthReaderResult = AddStateTask(graph, Name("tests/task_graph/compatible_read_depth"), use, GraphicsCommands());
+    ASSERT_TRUE(depthReaderResult);
+    const Graphics::GpuTaskId depthReader = *depthReaderResult;
     ASSERT_TRUE(firstReader.valid());
     ASSERT_TRUE(computeReader.valid());
     ASSERT_TRUE(depthReader.valid());
@@ -200,7 +226,7 @@ TEST(GpuTaskGraph, JoinsEveryConcurrentReaderBeforeIncompatibleReadStateChange){
     for(const Graphics::GpuGraphResourceType::Enum resourceType : resourceTypes){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
+        const auto resourceResult = graph.importResource(
             Graphics::GpuGraphResourceDesc{}
                 .setIdentity(Name("tests/task_graph/read_state_join_resource"))
                 .setMarkerLabel("Read State Join Resource")
@@ -208,15 +234,25 @@ TEST(GpuTaskGraph, JoinsEveryConcurrentReaderBeforeIncompatibleReadStateChange){
                 .setInitialState(Graphics::ResourceStates::Common)
                 .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
         );
+        ASSERT_TRUE(resourceResult);
+        const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
-        const Graphics::GpuTaskId firstReader = AddStateTask(graph, Name("tests/task_graph/read_state_join_first"), use, GraphicsCommands());
-        const Graphics::GpuTaskId computeReader = AddStateTask(graph, Name("tests/task_graph/read_state_join_compute"), use, ComputeCommands());
+        const auto firstReaderResult = AddStateTask(graph, Name("tests/task_graph/read_state_join_first"), use, GraphicsCommands());
+        ASSERT_TRUE(firstReaderResult);
+        const Graphics::GpuTaskId firstReader = *firstReaderResult;
+        const auto computeReaderResult = AddStateTask(graph, Name("tests/task_graph/read_state_join_compute"), use, ComputeCommands());
+        ASSERT_TRUE(computeReaderResult);
+        const Graphics::GpuTaskId computeReader = *computeReaderResult;
         if(resourceType == Graphics::GpuGraphResourceType::Texture)
             use.requiredState = Graphics::ResourceStates::DepthRead;
-        const Graphics::GpuTaskId graphicsReader = AddStateTask(graph, Name("tests/task_graph/read_state_join_graphics"), use, GraphicsCommands());
+        const auto graphicsReaderResult = AddStateTask(graph, Name("tests/task_graph/read_state_join_graphics"), use, GraphicsCommands());
+        ASSERT_TRUE(graphicsReaderResult);
+        const Graphics::GpuTaskId graphicsReader = *graphicsReaderResult;
         use.requiredState = Graphics::ResourceStates::CopySource;
-        const Graphics::GpuTaskId transitionReader = AddStateTask(graph, Name("tests/task_graph/read_state_join_transition"), use, GraphicsCommands());
+        const auto transitionReaderResult = AddStateTask(graph, Name("tests/task_graph/read_state_join_transition"), use, GraphicsCommands());
+        ASSERT_TRUE(transitionReaderResult);
+        const Graphics::GpuTaskId transitionReader = *transitionReaderResult;
         ASSERT_TRUE(firstReader.valid());
         ASSERT_TRUE(computeReader.valid());
         ASSERT_TRUE(graphicsReader.valid());
@@ -240,7 +276,7 @@ TEST(GpuTaskGraph, JoinsConcurrentReadersBeforeTaskInternalReadStateChange){
             SCOPED_TRACE(overlappingLaterUse);
             TestArena testArena;
             Graphics::GpuTaskGraph graph(testArena.arena);
-            const Graphics::GpuGraphResourceId resource = graph.importResource(
+            const auto resourceResult = graph.importResource(
                 Graphics::GpuGraphResourceDesc{}
                     .setIdentity(Name("tests/task_graph/internal_read_state_resource"))
                     .setMarkerLabel("Internal Read State Resource")
@@ -248,15 +284,23 @@ TEST(GpuTaskGraph, JoinsConcurrentReadersBeforeTaskInternalReadStateChange){
                     .setInitialState(Graphics::ResourceStates::Common)
                     .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
             );
+            ASSERT_TRUE(resourceResult);
+            const Graphics::GpuGraphResourceId resource = *resourceResult;
             ASSERT_TRUE(resource.valid());
             Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
             if(resourceType == Graphics::GpuGraphResourceType::Texture)
                 use.range.textureSubresources = Graphics::TextureSubresourceSet(0u, overlappingLaterUse ? 2u : 1u, 0u, 1u);
             else
                 use.range.bufferRange = Graphics::BufferRange(0u, overlappingLaterUse ? 128u : 64u);
-            const Graphics::GpuTaskId firstReader = AddStateTask(graph, Name("tests/task_graph/internal_read_state_first"), use, GraphicsCommands());
-            const Graphics::GpuTaskId computeReader = AddStateTask(graph, Name("tests/task_graph/internal_read_state_compute"), use, ComputeCommands());
-            const Graphics::GpuTaskId graphicsReader = AddStateTask(graph, Name("tests/task_graph/internal_read_state_graphics"), use, GraphicsCommands());
+            const auto firstReaderResult = AddStateTask(graph, Name("tests/task_graph/internal_read_state_first"), use, GraphicsCommands());
+            ASSERT_TRUE(firstReaderResult);
+            const Graphics::GpuTaskId firstReader = *firstReaderResult;
+            const auto computeReaderResult = AddStateTask(graph, Name("tests/task_graph/internal_read_state_compute"), use, ComputeCommands());
+            ASSERT_TRUE(computeReaderResult);
+            const Graphics::GpuTaskId computeReader = *computeReaderResult;
+            const auto graphicsReaderResult = AddStateTask(graph, Name("tests/task_graph/internal_read_state_graphics"), use, GraphicsCommands());
+            ASSERT_TRUE(graphicsReaderResult);
+            const Graphics::GpuTaskId graphicsReader = *graphicsReaderResult;
             Graphics::GpuTaskResourceUse internalUses[] = { use, use };
             internalUses[1u].requiredState = Graphics::ResourceStates::CopySource;
             if(resourceType == Graphics::GpuGraphResourceType::Texture)
@@ -268,7 +312,9 @@ TEST(GpuTaskGraph, JoinsConcurrentReadersBeforeTaskInternalReadStateChange){
             scheduling.allowPacketMerge = false;
             Graphics::GpuTaskDesc description;
             description.setIdentity(Name("tests/task_graph/internal_read_state_transition")).setMarkerLabel("Internal Read State Transition").setScheduling(scheduling).setResourceUses(internalUses, LengthOf(internalUses));
-            const Graphics::GpuTaskId transitionReader = graph.addTask(description, GraphicsCommands());
+            const auto transitionReaderResult = graph.addTask(description, GraphicsCommands());
+            ASSERT_TRUE(transitionReaderResult);
+            const Graphics::GpuTaskId transitionReader = *transitionReaderResult;
             ASSERT_TRUE(firstReader.valid());
             ASSERT_TRUE(computeReader.valid());
             ASSERT_TRUE(graphicsReader.valid());
@@ -292,11 +338,17 @@ TEST(GpuTaskGraph, JoinsConcurrentReadersBeforeTaskInternalReadStateChange){
 TEST(GpuTaskGraph, PreservesReaderJoinAcrossPartialTaskInternalStateEpoch){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId resource = AddBufferMetadata(graph, Name("tests/task_graph/partial_read_epoch_resource"), "Partial Read Epoch Resource", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    const auto resourceResult = AddBufferMetadata(graph, Name("tests/task_graph/partial_read_epoch_resource"), "Partial Read Epoch Resource", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_TRUE(resourceResult);
+    const Graphics::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
     Graphics::GpuTaskResourceUse use{ .resource = resource, .range = { .bufferRange = Graphics::BufferRange(0u, 64u) }, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
-    const Graphics::GpuTaskId firstReader = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_first"), use, GraphicsCommands());
-    const Graphics::GpuTaskId computeReader = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_compute"), use, ComputeCommands());
+    const auto firstReaderResult = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_first"), use, GraphicsCommands());
+    ASSERT_TRUE(firstReaderResult);
+    const Graphics::GpuTaskId firstReader = *firstReaderResult;
+    const auto computeReaderResult = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_compute"), use, ComputeCommands());
+    ASSERT_TRUE(computeReaderResult);
+    const Graphics::GpuTaskId computeReader = *computeReaderResult;
     use.range.bufferRange = Graphics::BufferRange(64u, 64u);
     Graphics::GpuTaskResourceUse internalUses[] = { use, use, use };
     internalUses[1u].requiredState = Graphics::ResourceStates::CopySource;
@@ -305,11 +357,17 @@ TEST(GpuTaskGraph, PreservesReaderJoinAcrossPartialTaskInternalStateEpoch){
     scheduling.allowPacketMerge = false;
     Graphics::GpuTaskDesc description;
     description.setIdentity(Name("tests/task_graph/partial_read_epoch_internal")).setMarkerLabel("Partial Read Epoch Internal").setScheduling(scheduling).setResourceUses(internalUses, LengthOf(internalUses));
-    const Graphics::GpuTaskId internalReader = graph.addTask(description, GraphicsCommands());
+    const auto internalReaderResult = graph.addTask(description, GraphicsCommands());
+    ASSERT_TRUE(internalReaderResult);
+    const Graphics::GpuTaskId internalReader = *internalReaderResult;
     use.range.bufferRange = Graphics::BufferRange(0u, 128u);
-    const Graphics::GpuTaskId spanningReader = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_spanning"), use, GraphicsCommands());
+    const auto spanningReaderResult = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_spanning"), use, GraphicsCommands());
+    ASSERT_TRUE(spanningReaderResult);
+    const Graphics::GpuTaskId spanningReader = *spanningReaderResult;
     use.requiredState = Graphics::ResourceStates::CopySource;
-    const Graphics::GpuTaskId transitionReader = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_transition"), use, GraphicsCommands());
+    const auto transitionReaderResult = AddStateTask(graph, Name("tests/task_graph/partial_read_epoch_transition"), use, GraphicsCommands());
+    ASSERT_TRUE(transitionReaderResult);
+    const Graphics::GpuTaskId transitionReader = *transitionReaderResult;
     ASSERT_TRUE(firstReader.valid());
     ASSERT_TRUE(computeReader.valid());
     ASSERT_TRUE(internalReader.valid());
@@ -329,18 +387,20 @@ TEST(GpuTaskGraph, PreservesReaderJoinAcrossPartialTaskInternalStateEpoch){
 TEST(GpuTaskGraph, PreservesExplicitDependencyWhenConcurrentReaderUsesEarlierStateSource){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId resource = AddBufferMetadata(
-        graph,
-        Name("tests/task_graph/read_explicit_dependency_resource"),
-        "Read Explicit Dependency Resource",
-        Graphics::ResourceStates::Common,
-        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
-    );
+    const auto resourceResult = AddBufferMetadata(graph, Name("tests/task_graph/read_explicit_dependency_resource"), "Read Explicit Dependency Resource", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_TRUE(resourceResult);
+    const Graphics::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
     const Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read, };
-    const Graphics::GpuTaskId firstReader = AddStateTask(graph, Name("tests/task_graph/read_explicit_dependency_first"), use, GraphicsCommands());
-    const Graphics::GpuTaskId computeReader = AddStateTask(graph, Name("tests/task_graph/read_explicit_dependency_compute"), use, ComputeCommands());
-    const Graphics::GpuTaskId graphicsReader = AddStateTask(graph, Name("tests/task_graph/read_explicit_dependency_graphics"), use, GraphicsCommands(), &computeReader, 1u);
+    const auto firstReaderResult = AddStateTask(graph, Name("tests/task_graph/read_explicit_dependency_first"), use, GraphicsCommands());
+    ASSERT_TRUE(firstReaderResult);
+    const Graphics::GpuTaskId firstReader = *firstReaderResult;
+    const auto computeReaderResult = AddStateTask(graph, Name("tests/task_graph/read_explicit_dependency_compute"), use, ComputeCommands());
+    ASSERT_TRUE(computeReaderResult);
+    const Graphics::GpuTaskId computeReader = *computeReaderResult;
+    const auto graphicsReaderResult = AddStateTask(graph, Name("tests/task_graph/read_explicit_dependency_graphics"), use, GraphicsCommands(), &computeReader, 1u);
+    ASSERT_TRUE(graphicsReaderResult);
+    const Graphics::GpuTaskId graphicsReader = *graphicsReaderResult;
     ASSERT_TRUE(firstReader.valid());
     ASSERT_TRUE(computeReader.valid());
     ASSERT_TRUE(graphicsReader.valid());
@@ -356,17 +416,27 @@ TEST(GpuTaskGraph, PreservesExplicitDependencyWhenConcurrentReaderUsesEarlierSta
 TEST(GpuTaskGraph, KeepsPartialReadOrderingWhenSourcePacketChangesAdjacentRange){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId resource = AddBufferMetadata(graph, Name("tests/task_graph/read_packet_tail_resource"), "Read Packet Tail Resource", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    const auto resourceResult = AddBufferMetadata(graph, Name("tests/task_graph/read_packet_tail_resource"), "Read Packet Tail Resource", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_TRUE(resourceResult);
+    const Graphics::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
     Graphics::GpuTaskResourceUse use{ .resource = resource, .range = { .bufferRange = Graphics::BufferRange(0u, 128u) }, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
-    const Graphics::GpuTaskId firstReader = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_first"), use, GraphicsCommands(), nullptr, 0u, false, true);
+    const auto firstReaderResult = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_first"), use, GraphicsCommands(), nullptr, 0u, false, true);
+    ASSERT_TRUE(firstReaderResult);
+    const Graphics::GpuTaskId firstReader = *firstReaderResult;
     use.range.bufferRange = Graphics::BufferRange(64u, 64u);
     use.requiredState = Graphics::ResourceStates::CopySource;
-    const Graphics::GpuTaskId packetTail = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_changed_range"), use, GraphicsCommands(), &firstReader, 1u, true, true);
+    const auto packetTailResult = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_changed_range"), use, GraphicsCommands(), &firstReader, 1u, true, true);
+    ASSERT_TRUE(packetTailResult);
+    const Graphics::GpuTaskId packetTail = *packetTailResult;
     use.range.bufferRange = Graphics::BufferRange(0u, 64u);
     use.requiredState = Graphics::ResourceStates::ShaderResource;
-    const Graphics::GpuTaskId computeReader = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_compute"), use, ComputeCommands());
-    const Graphics::GpuTaskId graphicsReader = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_graphics"), use, GraphicsCommands());
+    const auto computeReaderResult = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_compute"), use, ComputeCommands());
+    ASSERT_TRUE(computeReaderResult);
+    const Graphics::GpuTaskId computeReader = *computeReaderResult;
+    const auto graphicsReaderResult = AddStateTask(graph, Name("tests/task_graph/read_packet_tail_graphics"), use, GraphicsCommands());
+    ASSERT_TRUE(graphicsReaderResult);
+    const Graphics::GpuTaskId graphicsReader = *graphicsReaderResult;
     ASSERT_TRUE(firstReader.valid());
     ASSERT_TRUE(packetTail.valid());
     ASSERT_TRUE(computeReader.valid());
@@ -385,8 +455,8 @@ TEST(GpuTaskGraph, KeepsPartialReadOrderingWhenSourcePacketChangesAdjacentRange)
 TEST(GpuTaskGraph, KeepsSingleLaneAlternatingReadStateScratchGrowthLinear){
     usize smallScratchPeak = 0u;
     usize largeScratchPeak = 0u;
-    CheckSingleLaneStateChangeScratch(128u, smallScratchPeak);
-    CheckSingleLaneStateChangeScratch(512u, largeScratchPeak);
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(128u, smallScratchPeak));
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(512u, largeScratchPeak));
     ASSERT_NE(smallScratchPeak, 0u);
     ASSERT_NE(largeScratchPeak, 0u);
     RecordUnsignedTestProperty("small_read_state_scratch_peak_bytes", smallScratchPeak);
@@ -399,8 +469,8 @@ TEST(GpuTaskGraph, KeepsSingleLaneAlternatingReadStateScratchGrowthLinear){
 TEST(GpuTaskGraph, KeepsConcurrentSingleLaneAlternatingReadStateScratchGrowthLinear){
     usize smallScratchPeak = 0u;
     usize largeScratchPeak = 0u;
-    CheckSingleLaneStateChangeScratch(128u, smallScratchPeak, true);
-    CheckSingleLaneStateChangeScratch(512u, largeScratchPeak, true);
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(128u, smallScratchPeak, true));
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(512u, largeScratchPeak, true));
     ASSERT_NE(smallScratchPeak, 0u);
     ASSERT_NE(largeScratchPeak, 0u);
     RecordUnsignedTestProperty("small_concurrent_read_state_scratch_peak_bytes", smallScratchPeak);

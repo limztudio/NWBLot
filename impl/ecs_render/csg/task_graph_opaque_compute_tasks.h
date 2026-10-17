@@ -57,7 +57,6 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The material system, the frame targets, the timing-ticket slot, and the setup readiness flags are required: the receiver emulation always generates against this frame's bindings.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
@@ -74,9 +73,13 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const bool& meshViewSetupReadyIn, const bool& sceneShadingSetupReadyIn);
+
+    public:
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const bool& meshViewSetupReadyIn, const bool& sceneShadingSetupReadyIn)noexcept;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
@@ -86,7 +89,6 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The graphics runtime, the material system, the frame targets, the timing-ticket slot, the setup readiness flags, and the CSG timing slot are required: interval-sample emulation always brackets its dispatch with the frame timing.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -105,6 +107,8 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
 
+
+    public:
         explicit Payload(
             Core::Alloc::GlobalArena& arena,
             Core::GraphicsRuntime& graphicsIn,
@@ -114,9 +118,11 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
             const bool& meshViewSetupReadyIn,
             const bool& sceneShadingSetupReadyIn,
             Optional<Core::GpuTimingMeasure>& opaqueCsgTimingIn
-        );
+        )noexcept;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){

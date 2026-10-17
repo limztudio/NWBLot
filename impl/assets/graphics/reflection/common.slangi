@@ -62,6 +62,10 @@ struct NwbReflectionView{
 #define g_NwbReflectionQueue g_NwbHeapStorageBuffers[g_NwbReflectionParameters.queueSlot]
 #define g_NwbReflectionCounters g_NwbHeapStorageBuffers[g_NwbReflectionParameters.counterSlot]
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Candidate allocation and the feedback receiver bound are scheduling inputs. This helper is only for optional diagnostic counters; disabling their writes never changes trace eligibility, queue contents, or feedback decisions.
 void nwbReflectionRecordDiagnostic(const uint byteOffset, const uint value){
     if(g_NwbReflectionParameters.diagnosticsEnabled != 0u && value != 0u){

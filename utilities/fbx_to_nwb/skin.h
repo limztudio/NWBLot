@@ -34,6 +34,7 @@ struct ExportContext{
     UtilityScratchMap<ufbx_node*, u16> jointLookup;
 
 
+public:
     explicit ExportContext(Core::Alloc::ScratchArena& scratchArena)
         : jointLookup(scratchArena)
     {}
@@ -45,9 +46,9 @@ struct SkinInfluenceCalculation{
     SIMDVectorSingle weights;
 };
 
-Expected<UtilityVector<u16>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context);
+Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context, Core::Alloc::ScratchArena& scratchArena);
 
-Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const UtilityVector<u16>& clusterJoints, u32 logicalVertex);
+Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const Span<const u16> clusterJoints, u32 logicalVertex);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

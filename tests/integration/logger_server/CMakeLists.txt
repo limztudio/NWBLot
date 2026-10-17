@@ -4,6 +4,7 @@ target_sources(nwb_logserver_crash_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.h"
     "${CMAKE_CURRENT_LIST_DIR}/logclient_shutdown_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/logserver_crash_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/logger_producer_contract_tests.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_paths.cpp"
@@ -24,6 +25,7 @@ if(WIN32)
     target_sources(nwb_logserver_crash_tests PRIVATE
         "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_win32.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/minidump_boundary_tests.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/clipboard_text_tests.cpp"
     )
     target_link_libraries(nwb_logserver_crash_tests PRIVATE dbghelp)
 endif()

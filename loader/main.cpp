@@ -2,11 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "callback_shutdown.h"
 #include "project_entry.h"
 #include "profile_names.h"
 
 #include <logger/client/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/alloc/standalone_runtime.h>
 #include <core/common/application_entry.h>
 #include <core/common/command_line.h>
@@ -73,56 +75,21 @@ inline constexpr i32 s_UninitializedFrameExtent = 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CallbackShutdownGuard final : NoCopy{
-public:
-    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks, NWB::Core::CpuTaskScope& tasks)noexcept
-        : m_callbacks(callbacks)
-        , m_tasks(tasks)
-    {}
-    ~CallbackShutdownGuard()noexcept(false){
-        if(!m_active)
-            return;
-
-        m_active = false;
-        if(UncaughtExceptionCount() > 0){
-            m_tasks.drain();
-            return;
-        }
-
-        ScopeExit drainOnFailure([&]()noexcept{
-            m_tasks.drain();
-        });
-
-        m_tasks.wait();
-        m_callbacks.onShutdown();
-        drainOnFailure.release();
-
-        m_tasks.wait();
-    }
-
-
-public:
-    void activate()noexcept{ m_active = true; }
-
-private:
-    NWB::IProjectEntryCallbacks& m_callbacks;
-    NWB::Core::CpuTaskScope& m_tasks;
-    bool m_active = false;
-};
-
 struct UpdateCallbackContext{
     NWB::IProjectEntryCallbacks& callbacks;
 };
 
 struct LoaderOptions{
-    AString<NWB::Core::Alloc::GlobalArena> logAddress;
-    AString<NWB::Core::Alloc::GlobalArena> crashUploadToken;
+    AString<NWB::Core::Alloc::ScratchArena> logAddress;
+    AString<NWB::Core::Alloc::ScratchArena> crashUploadToken;
     bool enableGpuDebug = false;
     bool forceSdrOutput = false;
     bool disableHardwareRayTracing = false;
     bool useStandaloneLogger = false;
 
-    explicit LoaderOptions(NWB::Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit LoaderOptions(NWB::Core::Alloc::ScratchArena& arena)noexcept(noexcept(AString<NWB::Core::Alloc::ScratchArena>(arena)))
         : logAddress(arena)
         , crashUploadToken(arena)
     {}
@@ -134,29 +101,29 @@ bool ProjectTickCallback(void* userData, f32 delta){
     return updateContext->callbacks.onUpdate(delta);
 }
 
-Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    const auto currentDirectory = GetCurrentPath(arena);
+Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
+    const auto currentDirectory = GetCurrentPath(scratchArena);
     if(currentDirectory){
-        const Path currentResDirectory = *currentDirectory / s_ResourceDirectoryName;
+        const auto currentResDirectory = *currentDirectory / s_ResourceDirectoryName;
         if(NWB::Core::Filesystem::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName))
-            return currentResDirectory;
+            return Path(arena, currentResDirectory);
     }
 
-    const auto executableDirectory = GetExecutableDirectory(arena);
+    const auto executableDirectory = GetExecutableDirectory(scratchArena);
     if(!executableDirectory)
         return Path(arena, s_ResourceDirectoryName);
 
-    const Path executableResDirectory = *executableDirectory / s_ResourceDirectoryName;
+    const auto executableResDirectory = *executableDirectory / s_ResourceDirectoryName;
     if(NWB::Core::Filesystem::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName))
-        return executableResDirectory;
+        return Path(arena, executableResDirectory);
 
-    const Path parentDirectory = executableDirectory->parentPath();
+    const auto parentDirectory = executableDirectory->parentPath();
     if(parentDirectory.empty())
         return Path(arena, s_ResourceDirectoryName);
 
-    const Path parentResDirectory = parentDirectory / s_ResourceDirectoryName;
+    const auto parentResDirectory = parentDirectory / s_ResourceDirectoryName;
     if(NWB::Core::Filesystem::VolumeSegmentExists(parentResDirectory, s_GraphicsVolumeName))
-        return parentResDirectory;
+        return Path(arena, parentResDirectory);
 
     return Path(arena, s_ResourceDirectoryName);
 }
@@ -239,7 +206,7 @@ bool InstallCrashCapture(CrashArena& crashArena){
     crashConfig.spoolDirectory = *executableDirectory / s_CrashSpoolDirectoryName;
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
 
-    if(!NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig))
+    if(!NWB::Core::Crash::InstallCrashHandler(crashConfig))
         return false;
 
     NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
@@ -249,11 +216,12 @@ bool InstallCrashCapture(CrashArena& crashArena){
         if(dumpResult.status == NWB::Core::Crash::CrashDumpStatus::NotInstalled || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::RequestFailed || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed){
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
         }
-    }, nullptr);
+    }, nullptr
+    );
     return true;
 }
 
-void ConfigureCrashReporting(const LoaderOptions& options){
+void ConfigureCrashReporting(const LoaderOptions& options)noexcept(!NWB_OCCUR_WARNING){
     const AStringView logServerUrl = options.useStandaloneLogger ? AStringView() : AStringView(options.logAddress.data(), options.logAddress.size());
     if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, AStringView(options.crashUploadToken.data(), options.crashUploadToken.size())))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
@@ -278,7 +246,7 @@ bool UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst, NWB::Log::Client* telemetryClient){
+static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidden_loader::LoaderOptions& options, void* inst, NWB::Log::Client* telemetryClient){
     {
         // The log server resolves Name tokens; release clients do not load .namesym files.
 
@@ -298,7 +266,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
         if(telemetryClient)
             frame.setTelemetryUploadCallback(&__hidden_loader::UploadTelemetry, telemetryClient);
         frame.graphics().setWindowTitle(projectWindowTitle);
-        const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(arena);
+        const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(frame.projectObjectArena(), scratchArena);
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
         NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
         if(!NWB::ConfigureProjectRuntime(startupContext)){
@@ -321,9 +289,10 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
         if(!graphicsMount.volumeName.assign(__hidden_loader::s_GraphicsVolumeName))
             return __hidden_loader::s_LoaderExitFailure;
         graphicsMount.mountDirectory = resourceMountDirectory;
-        UniquePtr<NWB::Core::Filesystem::IFilesystem> graphicsFilesystem = NWB::Core::Filesystem::CreateFilesystem(frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory);
-        if(!graphicsFilesystem)
+        auto graphicsFilesystemResult = NWB::Core::Filesystem::CreateFilesystem(frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory);
+        if(!graphicsFilesystemResult)
             return __hidden_loader::s_LoaderExitFailure;
+        UniquePtr<NWB::Core::Filesystem::IFilesystem> graphicsFilesystem = Move(*graphicsFilesystemResult);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
 
         {
@@ -382,7 +351,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
                 NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
                 return __hidden_loader::s_LoaderExitFailure;
             }
-            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ *callbacks, projectTasks };
+            NWB::LoaderDetail::CallbackShutdownGuard callbackShutdownGuard{ *callbacks, projectTasks };
             __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
 
             callbackShutdownGuard.activate();
@@ -412,7 +381,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
     return __hidden_loader::s_LoaderExitSuccess;
 }
 
-static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst, const bool crashReportingInstalled){
+static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidden_loader::LoaderOptions& options, void* inst, const bool crashReportingInstalled){
     if(options.useStandaloneLogger){
         NWB::Log::ClientStandalone logger;
         if(!logger.init())
@@ -424,7 +393,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         else
             NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
 
-        return RunProjectRuntime(arena, options, inst, nullptr);
+        return RunProjectRuntime(scratchArena, options, inst, nullptr);
     }
 
     NWB::Log::Client logger;
@@ -437,7 +406,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
     else
         NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
 
-    return RunProjectRuntime(arena, options, inst, &logger);
+    return RunProjectRuntime(scratchArena, options, inst, &logger);
 }
 
 
@@ -455,14 +424,15 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             NWB::Core::RegisterGpuCrashSink(nullptr, nullptr);
             NWB::Core::Crash::UninstallCrashHandler();
         }
-    });
+    }
+    );
 
-    NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_loader::s_CommandLineArena);
+    NWB::Core::Alloc::ScratchArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);
     CLI::App app{ __hidden_loader::s_LoaderAppName.data() };
 
-    AInteropString address(Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault));
-    u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
+    AInteropString address(Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::s_ArgDefault));
+    u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::s_ArgDefault);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
     app.add_option(__hidden_loader::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
@@ -480,7 +450,8 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
 
         return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_loader::s_LoaderExitFailure; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_loader::s_LoaderExitFailure; }
+    );
 }
 
 

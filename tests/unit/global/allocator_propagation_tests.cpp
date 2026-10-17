@@ -250,22 +250,22 @@ TEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner
         GlobalArena targetArena(Name("tests/allocator_propagation/map_target"));
         {
             Map<u32, u32, GlobalArena> target{ foreignArena ? targetArena : sourceArena };
-            target.emplace(900u, 900u);
+            ASSERT_TRUE(target.emplace(900u, 900u).second);
             {
                 Map<u32, u32, GlobalArena> source{ sourceArena };
                 for(u32 key = 0u; key < 64u; ++key)
-                    source.emplace(key, key * 3u);
+                    ASSERT_TRUE(source.emplace(key, key * 3u).second);
                 const u32* const sourceValue = &source.find(0u)->second;
                 target = Move(source);
                 EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
                 ASSERT_EQ(target.size(), 64u);
                 EXPECT_EQ(&target.find(0u)->second, sourceValue);
                 EXPECT_TRUE(source.empty());
-                source.emplace(7u, 8u);
+                ASSERT_TRUE(source.emplace(7u, 8u).second);
             }
             for(u32 key = 0u; key < 64u; ++key)
                 EXPECT_EQ(target.find(key)->second, key * 3u);
-            target.emplace(65u, 195u);
+            ASSERT_TRUE(target.emplace(65u, 195u).second);
         }
         EXPECT_EQ(sourceArena.memoryStats().usedBytes, 0u);
         EXPECT_EQ(targetArena.memoryStats().usedBytes, 0u);

@@ -109,9 +109,16 @@ public:
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {}
     ~UnacceptedPacketsFinalizationScope()noexcept{
-        if(!m_armed || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
-            return;
+        if(UncaughtExceptionCount() > m_uncaughtExceptionCount)
+            completeWithoutCallbacks();
+    }
 
+
+public:
+    void completeWithoutCallbacks()noexcept{
+        if(!m_armed)
+            return;
+        m_armed = false;
         if(GpuGraphSubmissionTransaction::WaitForSubmissionExceptionClosing(m_transaction, m_graph, m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
             return;
 
@@ -182,6 +189,39 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuGraphSubmissionTransaction::PayloadLifetimeScope::~PayloadLifetimeScope()noexcept(false){
+    m_transaction.finishPayloadLifetime(m_graph, m_compiledGraph);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void GpuGraphSubmissionTransaction::finishPayloadLifetime(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph){
+    if(!hasUnresolvedSubmissionBinding(compiledGraph))
+        return;
+    if(UncaughtExceptionCount() != 0){
+        UnacceptedPacketsFinalizationScope finalizationScope(*this, graph, compiledGraph);
+        {
+            SubmissionOperation submissionOperation(*this, SubmissionOperationMode::WaitExclusiveBarrier);
+            if(!submissionOperation.valid())
+                TerminateInvariant();
+            finalizationScope.beginClosingWithinSubmissionOperation();
+        }
+        finalizationScope.completeWithoutCallbacks();
+        return;
+    }
+
+    u64 recordingAttemptGeneration = 0u;
+    {
+        NothrowScopedLock lock(m_mutex);
+        recordingAttemptGeneration = m_recordingAttemptGeneration;
+    }
+    if(!discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration))
+        TerminateInvariant();
+}
 
 
 void GpuGraphSubmissionTransaction::rejectTask(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuTaskId task, const u64 recordingAttemptGeneration){

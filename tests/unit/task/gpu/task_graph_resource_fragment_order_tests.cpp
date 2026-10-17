@@ -58,7 +58,7 @@ constexpr usize s_InitialState = Limit<usize>::s_Max;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Graphics::GpuTaskGraphResourceView ResourceView(const Graphics::GpuGraphResourceId id, const Graphics::GpuGraphResourceType::Enum type){
+[[nodiscard]] Graphics::GpuTaskGraphResourceView ResourceView(const Graphics::GpuGraphResourceId id, const Graphics::GpuGraphResourceType::Enum type)noexcept{
     Graphics::GpuTaskGraphResourceView view{};
     view.id = id;
     view.type = type;
@@ -77,7 +77,9 @@ void AppendBufferState(TrackedStates& states, TrackedResourceStateHistory& histo
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-    }));
+    }
+    )
+    );
 }
 
 template<usize Count>
@@ -234,7 +236,9 @@ TEST(GpuTaskGraphResourceFragments, TextureInteriorOverwritePreservesFourRemaind
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-    }));
+    }
+    )
+    );
     ASSERT_TRUE(history.append(TrackedCompiledResourceState{
         .resource = s_Buffer,
         .range = center,
@@ -242,7 +246,9 @@ TEST(GpuTaskGraphResourceFragments, TextureInteriorOverwritePreservesFourRemaind
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-    }));
+    }
+    )
+    );
     RequestedRanges requested(scratchArena);
     requested.push_back(whole);
     StateFragments fragments(scratchArena);
@@ -429,7 +435,8 @@ TEST(GpuTaskGraphResourceFragments, LatestCoveredRangeNormalizesInactiveDimensio
                 type == Graphics::GpuGraphResourceType::Texture ? Graphics::TextureSubresourceSet::s_AllArraySlices : 1u
             ),
             .bufferRange = Graphics::BufferRange(32u, type == Graphics::GpuGraphResourceType::Buffer ? Graphics::BufferRange::s_AllBytes : 8u),
-        });
+        }
+        );
         StateFragments fragments(scratchArena);
         fragments.reserve(s_ExpectedDualCount);
         fragments.push_back(TrackedResourceStateFragment{ .range = {}, .state = &states[0u], .stateIndex = 0u });
@@ -469,6 +476,8 @@ TEST(GpuTaskGraphResourceFragments, LatestCoveredRangeNormalizesInactiveDimensio
 }
 
 TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportSourceOrderAcrossPartialWrites){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
@@ -480,8 +489,10 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
     Graphics::GpuTaskResourceUse readUses[s_BufferCount];
     for(usize index = 0u; index < s_BufferCount; ++index){
         char text[32u] = {};
-        const Name identity = DeriveName(Name("tests/fragment_order/buffer/"), FormatDecimal(index, text));
-        buffers[index] = graph.importResource(Graphics::GpuGraphResourceDesc{}
+        const auto derivedNameAt490Col30 = DeriveName(Name("tests/fragment_order/buffer/"), FormatDecimal(index, text));
+        ASSERT_TRUE(derivedNameAt490Col30);
+        const Name identity = *derivedNameAt490Col30;
+        const auto gpuAdmissionAt491 = graph.importResource(Graphics::GpuGraphResourceDesc{}
             .setIdentity(identity)
             .setMarkerLabel("Fragment Order Buffer")
             .setType(Graphics::GpuGraphResourceType::Buffer)
@@ -489,6 +500,8 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
             .setExternalFinalReleaseDestinationQueue(queues[1u].id)
         );
+        ASSERT_TRUE(gpuAdmissionAt491);
+        buffers[index] = *gpuAdmissionAt491;
         ASSERT_TRUE(buffers[index].valid());
         wholeUses[index] = Graphics::GpuTaskResourceUse{ .resource = buffers[index], .range = BufferRange(0u, 128u), .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
         cutUses[index * s_ExpectedDualCount] = Graphics::GpuTaskResourceUse{ .resource = buffers[index], .range = BufferRange(32u, 16u), .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
@@ -499,20 +512,26 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
     const Graphics::GpuTaskCommandRequirements commands{ .requiredCapabilities = Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskDesc wholeDesc;
     wholeDesc.setIdentity(Name("tests/fragment_order/whole")).setMarkerLabel("Whole Writer").setResourceUses(wholeUses, LengthOf(wholeUses));
-    const Graphics::GpuTaskId whole = graph.addTask(wholeDesc, commands);
+    const auto wholeResult = graph.addTask(wholeDesc, commands);
+    ASSERT_TRUE(wholeResult);
+    const Graphics::GpuTaskId whole = *wholeResult;
     ASSERT_TRUE(whole.valid());
     Graphics::GpuTaskDesc cutsDesc;
     cutsDesc.setIdentity(Name("tests/fragment_order/cuts")).setMarkerLabel("Partial Writers").setDependencies(&whole, 1u).setResourceUses(cutUses, LengthOf(cutUses));
-    const Graphics::GpuTaskId cuts = graph.addTask(cutsDesc, commands);
+    const auto cutsResult = graph.addTask(cutsDesc, commands);
+    ASSERT_TRUE(cutsResult);
+    const Graphics::GpuTaskId cuts = *cutsResult;
     ASSERT_TRUE(cuts.valid());
     Graphics::GpuTaskDesc readerDesc;
     readerDesc.setIdentity(Name("tests/fragment_order/reader")).setMarkerLabel("Gap Reader").setDependencies(&cuts, 1u).setResourceUses(readUses, LengthOf(readUses));
-    const Graphics::GpuTaskId reader = graph.addTask(readerDesc, commands);
+    const auto readerResult = graph.addTask(readerDesc, commands);
+    ASSERT_TRUE(readerResult);
+    const Graphics::GpuTaskId reader = *readerResult;
     ASSERT_TRUE(reader.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const Graphics::GpuTaskId expectedTasks[] = { whole, whole, cuts, cuts, reader };
     const Graphics::BufferRange expectedRanges[] = {

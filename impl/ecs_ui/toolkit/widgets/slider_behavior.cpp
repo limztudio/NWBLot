@@ -132,10 +132,7 @@ Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, co
                 normalized = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(value), VectorDoubleReplicate(minimum)), span));
             else{
                 const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, minimum), VectorDoubleReplicate(0.5));
-                normalized = VectorDoubleGetX(VectorDoubleDivide(
-                    VectorDoubleSubtract(VectorDoubleSplatX(scaled), VectorDoubleSplatY(scaled)),
-                    VectorDoubleSubtract(VectorDoubleSplatZ(scaled), VectorDoubleSplatW(scaled))
-                ));
+                normalized = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleSplatX(scaled), VectorDoubleSplatY(scaled)), VectorDoubleSubtract(VectorDoubleSplatZ(scaled), VectorDoubleSplatW(scaled))));
             }
         }
     }
@@ -266,10 +263,7 @@ bool SliderBehavior::Seek(SliderState& state, const SliderOptions& options, cons
         result = accepted;
         return true;
     }
-    const SIMDVectorDouble normalizedValue = VectorDoubleDivide(
-        VectorDoubleSubtract(VectorDoubleReplicate(gesture.position.x), VectorDoubleReplicate(gesture.referenceRectangle.x)),
-        VectorDoubleReplicate(gesture.referenceRectangle.width)
-    );
+    const SIMDVectorDouble normalizedValue = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(gesture.position.x), VectorDoubleReplicate(gesture.referenceRectangle.x)), VectorDoubleReplicate(gesture.referenceRectangle.width));
     const f64 normalized = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
     const auto value = Interpolate(options.minimum, options.maximum, normalized);
     if(!value)
@@ -299,10 +293,7 @@ bool SliderBehavior::Drag(SliderState& state, const SliderOptions& options, cons
         return false;
     SliderResult accepted = result;
     accepted.valid = true;
-    const SIMDVectorDouble travelDelta = VectorDoubleSubtract(
-        VectorDoubleSet(gesture.referenceRectangle.width, gesture.position.x, 0.0, 0.0),
-        VectorDoubleSet(gesture.targetRectangle.width, gesture.origin.x, 0.0, 0.0)
-    );
+    const SIMDVectorDouble travelDelta = VectorDoubleSubtract(VectorDoubleSet(gesture.referenceRectangle.width, gesture.position.x, 0.0, 0.0), VectorDoubleSet(gesture.targetRectangle.width, gesture.origin.x, 0.0, 0.0));
     const f64 travel = VectorDoubleGetX(travelDelta);
     if(!options.enabled || options.minimum == options.maximum || travel <= 0.0){
         accepted.dragging = false;

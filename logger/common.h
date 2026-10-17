@@ -30,6 +30,10 @@ inline constexpr StringView s_TelemetryUploadEndpoint = "/telemetry";
 inline constexpr i32 s_LocalTimeYearBase = 1900;
 inline constexpr i32 s_LocalTimeMonthBase = 1;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena){
     return MakeTuple(Timer{}, Core::Common::LogType::Info, LogString(arena));
 }
@@ -39,6 +43,11 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 
 
 inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline TStringView MessageTypeToString(Core::Common::LogType::Enum type)noexcept{
     switch(type){
     case Core::Common::LogType::Info:
@@ -90,17 +99,25 @@ inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
     return StringFormat(arena, NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
+namespace MessagePayloadError{
+    enum Enum : u8{
+        InvalidType,
+        SizeOverflow,
+        SizeMismatch,
+    };
+};
+
 template<typename PayloadContainer>
-[[nodiscard]] inline bool BuildMessagePayload(const MessageType& msg, PayloadContainer& outPayload){
+[[nodiscard]] inline Expected<void, MessagePayloadError::Enum> BuildMessagePayload(const MessageType& msg, PayloadContainer& outPayload){
     const auto& [time, type, str] = msg;
     outPayload.clear();
 
     if(!IsValidMessageType(type))
-        return false;
+        return MakeUnexpected(MessagePayloadError::InvalidType);
 
     usize payloadBytes = 0u;
     if(!AddBinaryReserveBytes(payloadBytes, sizeof(time)) || !AddBinaryReserveBytes(payloadBytes, sizeof(type)) || !AddBinaryRepeatedReserveBytes(payloadBytes, str.size(), sizeof(tchar)) || !AddBinaryReserveBytes(payloadBytes, sizeof(tchar)))
-        return false;
+        return MakeUnexpected(MessagePayloadError::SizeOverflow);
 
     if constexpr(requires(PayloadContainer& p, usize bytes){ p.reserve(bytes); })
         outPayload.reserve(payloadBytes);
@@ -113,7 +130,9 @@ template<typename PayloadContainer>
     AppendPOD(outPayload, s_NullTerminator);
 
     NWB_ASSERT(outPayload.size() == payloadBytes);
-    return outPayload.size() == payloadBytes;
+    if(outPayload.size() != payloadBytes)
+        return MakeUnexpected(MessagePayloadError::SizeMismatch);
+    return {};
 }
 
 [[nodiscard]] inline Expected<MessageType, TStringView> ParseMessagePayload(LogArena& arena, const void* contents, const usize totalSize){
@@ -211,8 +230,12 @@ public:
     }
 
     void close(){
-        if(m_stream.is_open())
-            m_stream.close();
+        if(!m_stream.is_open())
+            return;
+
+        m_stream.close();
+        if(!m_stream.good())
+            CaptureDiagnosticEvent("logger_processed_message_file", "Processed log stream failed while closing", __FILE__, __LINE__);
     }
 
     [[nodiscard]] bool writeLine(BasicStringView<tchar> line){
@@ -238,7 +261,7 @@ private:
 template<typename T, const TStringView& loggerName>
 class LoggerWorkerBase{
 public:
-    explicit LoggerWorkerBase(const AStringView allocationLog)
+    explicit LoggerWorkerBase(const NameText<char> allocationLog)
         : m_arena(Name(allocationLog))
         , m_messageQueue(m_arena)
         , m_exit(false)
@@ -254,7 +277,7 @@ protected:
         const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
 
         if(!alreadyStopping)
-            static_cast<T*>(this)->internalDestroy();
+            checked_cast<T*>(this)->internalDestroy();
         if(m_thread.joinable())
             m_thread.join();
     }
@@ -269,19 +292,17 @@ public:
     inline bool init(Args&&... args){
         if constexpr(requires{ T::GlobalInit(); }){
             if(!T::s_GlobalInit){
-                if(!T::GlobalInit()){
-                    static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to initialize {} globally"), loggerName), Core::Common::LogType::Fatal);
+                if(!T::GlobalInit())
                     return false;
-                }
                 T::s_GlobalInit = true;
             }
         }
 
-        const bool initialized = static_cast<T*>(this)->internalInit(Forward<Args>(args)...);
+        const bool initialized = checked_cast<T*>(this)->internalInit(Forward<Args>(args)...);
         if(!initialized)
             return false;
 
-        m_thread = Thread(T::GlobalUpdate, static_cast<T*>(this));
+        m_thread = Thread(T::GlobalUpdate, checked_cast<T*>(this));
 
         return true;
     }
@@ -290,15 +311,15 @@ public:
 public:
     inline void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(Move(str), m_arena);
-        return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
     inline void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
-        return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
     inline void enqueue(BasicStringView<tchar> str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
-        return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
 
 
@@ -345,7 +366,7 @@ private:
 
 
 public:
-    explicit IntervalLoggerWorkerBase(const AStringView allocationLog)
+    explicit IntervalLoggerWorkerBase(const NameText<char> allocationLog)
         : LoggerWorkerBase<T, loggerName>(allocationLog)
         , m_lastUpdateTime(TimerNow())
     {}
@@ -390,7 +411,7 @@ private:
 
 
 public:
-    explicit QueuedLoggerWorkerBase(const AStringView allocationLog)
+    explicit QueuedLoggerWorkerBase(const NameText<char> allocationLog)
         : LoggerWorkerBase<T, loggerName>(allocationLog)
         , m_semaphore(0)
     {}

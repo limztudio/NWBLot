@@ -70,7 +70,7 @@ static constexpr AStringView s_BindFieldTypeSampler = "sampler";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena);
+Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, ScratchArena& scratchArena);
 
 struct MaterialParameterType{
     MaterialParameterValueType::Enum valueType = MaterialParameterValueType::None;

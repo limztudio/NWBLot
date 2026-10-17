@@ -4,6 +4,8 @@
 
 #include "command_line.h"
 
+#include <core/alloc/scratch.h>
+#include <core/assets/arena_names.h>
 #include <core/assets/input_list.h>
 #include <core/common/command_line.h>
 #include <core/common/log.h>
@@ -98,8 +100,13 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         return MakeUnexpected(Failure{});
     }
     if(!m_inputList.empty()){
-        NWB::Core::Assets::AssetString listPath(options.inputs.get_allocator().arena());
-        if(!__hidden_command_line::AssignText(m_inputList, listPath) || !NWB::Core::Assets::ReadAssetInputList(Path(listPath.get_allocator().arena(), listPath), options.inputs, m_tool == PipelineTool::AssetGatherer))
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Core::Assets::AssetsArenaScope::s_InputListScratch);
+        const AStringView listText(m_inputList.data(), m_inputList.size());
+        if(!IsSingleLinePathText(listText)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
+            return MakeUnexpected(Failure{});
+        }
+        if(!NWB::Core::Assets::ReadAssetInputList(Path(arena, listText), options.inputs, scratchArena, m_tool == PipelineTool::AssetGatherer))
             return MakeUnexpected(Failure{});
     }
     options.includeSkinDependencies = m_includeSkinDependencies;

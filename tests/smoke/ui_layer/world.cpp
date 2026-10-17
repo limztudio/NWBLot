@@ -69,7 +69,7 @@ static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"e
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<UniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeContext& context){
+Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeContext& context){
     if(!context.shaderPathResolver){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: shader path resolver is unavailable"));
         return MakeUnexpected(Failure{});
@@ -284,22 +284,19 @@ Expected<UniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeCont
         };
     }
 
-    context.graphics.addRenderPassToBack(layer);
-    return world;
+    return MakeNotNullUnique(Move(world));
 }
 
-void DestroyUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){
-    if(!world)
+void ClearUiLayerSmokeWorld(ProjectRuntimeContext& context, Core::ECS::World& world){
+    world.taskScope().wait();
+    auto* const layer = world.getSystem<Impl::UiLayerSystem>();
+    if(!layer)
         return;
 
-    world->taskScope().wait();
-    auto* const layer = world->getSystem<Impl::UiLayerSystem>();
-    NWB_FATAL_ASSERT(layer);
     context.graphics.removeRenderPass(*layer);
     const bool deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("UI smoke teardown requires device idle or terminal loss"));
-    world->clear();
-    world.reset();
+    world.clear();
 }
 
 

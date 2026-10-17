@@ -32,12 +32,12 @@ using SharedImageSource = RefCountPtr< RefCounter<ImageSource>, ArenaRefDeleter<
 // Each immutable version owns its exact texture payload; the caller's arena outlives every retained reference.
 class ImageSource : NoCopy{
     friend class ::RefCounter<ImageSource>;
-    friend SharedImageSource MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture);
+    friend Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture);
 
 
 private:
     class ConstructionToken final{
-        friend SharedImageSource MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture);
+        friend Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture);
 
 
     private:
@@ -47,10 +47,11 @@ private:
 
 private:
     ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture, ConstructionToken);
+public:
+    ImageSource(ImageSource&&) = delete;
 
 
 public:
-    ImageSource(ImageSource&&) = delete;
     ImageSource& operator=(ImageSource&&) = delete;
 
 
@@ -67,7 +68,7 @@ private:
 };
 
 // Copies a validated static 2D texture and internally assigns a fresh process-wide generation.
-[[nodiscard]] SharedImageSource MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture);
+[[nodiscard]] Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

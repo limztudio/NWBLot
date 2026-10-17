@@ -23,7 +23,7 @@ class UiComboBuilderTests : public ComboFixture{};
 // Behavior resolves the selection first; the subsequent label lookup deliberately violates the stable-key round trip.
 class LabelLookupSource final : public ComboSource{
 public:
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
         auto found = ComboSource::indexOf(key);
         if(found && lookupCalls >= 4u)
             *found = (*found + 1u) % count;

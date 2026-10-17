@@ -36,7 +36,7 @@ constexpr usize s_MaxGraphicsPipelineShaderStageCount = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
+GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
@@ -48,36 +48,38 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
+
+Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
     if(!m_context.extensions.khrDynamicRendering){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(fbinfo.colorFormats.size() > m_context.physicalDeviceProperties.limits.maxColorAttachments){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline color count exceeds the device limit."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const VkPrimitiveTopology primitiveTopology = VulkanDetail::GetPrimitiveTopology(desc.primType);
     if(primitiveTopology == VK_PRIMITIVE_TOPOLOGY_MAX_ENUM){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline primitive topology is invalid."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.renderState.rasterState.depthBiasClamp != 0.0f){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline depthBiasClamp requires an unsupported logical-device feature."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.shadingRateState.enabled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline variable-rate shading is not implemented."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.renderState.singlePassStereo.enabled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline single-pass stereo is not implemented."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!desc.vertexShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: vertex shader is required"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     const auto validateShader = [this](Shader* const shader, const ShaderType::Mask expectedType, const TStringView stageName){
@@ -100,17 +102,17 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         || !validateShader(desc.geometryShader.get(), ShaderType::Geometry, NWB_TEXT("geometry"))
         || !validateShader(desc.pixelShader.get(), ShaderType::Pixel, NWB_TEXT("pixel"))
     )
-        return nullptr;
+        return MakeUnexpected(Failure{});
     if(desc.inputLayout && &desc.inputLayout->m_context != &m_context){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline input layout belongs to another device."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_GraphicsPipelineArena, s_GraphicsPipelineScratchArenaBytes);
 
     GraphicsPipelineHandle pso(NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context), GraphicsPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!pso)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
@@ -120,24 +122,24 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     if(hasTessellationControlShader != hasTessellationEvaluationShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation control and evaluation shaders must both be provided"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(usesTessellation){
         if(!hasTessellationControlShader || !hasTessellationEvaluationShader){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch topology requires tessellation shaders"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         if(desc.primType != PrimitiveType::PatchList){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation shaders require patch-list topology"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         if(desc.patchControlPoints == 0){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation patch control point count is zero"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         if(desc.patchControlPoints > m_context.physicalDeviceProperties.limits.maxTessellationPatchSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}"), desc.patchControlPoints, m_context.physicalDeviceProperties.limits.maxTessellationPatchSize);
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
     }
 
@@ -159,11 +161,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     if(shaderStages.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("graphics pipeline"), *pso, scratchArena))
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
     if(desc.inputLayout){
@@ -206,7 +208,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         scratchArena
     );
     if(!fixedState)
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState->renderingInfo);
@@ -220,7 +222,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.subpass = 0;
 
     if(!createPipeline(NWB_TEXT("graphics pipeline"), *pso, pipelineInfo))
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     return pso;
 }

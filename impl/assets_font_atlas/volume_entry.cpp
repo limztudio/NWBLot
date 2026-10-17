@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -29,8 +28,7 @@ namespace __hidden_font_atlas_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<FontAtlas> BuildFontAtlasCookedAsset(FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena){
-    Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_BuildAssetArena);
+static Expected<FontAtlas> BuildFontAtlasCookedAsset(FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return BuildFontAtlasAsset(entry, arena, scratchArena);
 }
 

@@ -35,6 +35,7 @@ namespace __hidden_cooked_object_cache{
 
 using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
 using ScratchString = AssetsVolumeCookDetail::ScratchString;
+using ScratchBytes = Vector<u8, ScratchArena>;
 
 static constexpr u32 s_ObjectFileMagic = 0x4f4a424e; // NBJO
 static constexpr u16 s_ObjectFileVersion = 2u;
@@ -118,7 +119,7 @@ struct DecodedObjectFileHeader{
     usize payloadOffset = 0u;
 };
 
-static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& objectPath, Core::Assets::AssetBytes& objectBytes){
+static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& objectPath, ScratchBytes& objectBytes){
     const auto read = ReadBinaryFile(objectPath, objectBytes);
     if(!read){
         const ErrorCode& errorCode = read.error();
@@ -148,7 +149,7 @@ static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& object
     return DecodedObjectFileHeader{ .header = *header, .payloadOffset = cursor };
 }
 
-static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, Core::Assets::AssetBytes& objectBytes){
+static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, ScratchBytes& objectBytes){
     if(payload.size() > Limit<usize>::s_Max - sizeof(AssetVolumeObjectFileHeader)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
         return false;
@@ -172,7 +173,7 @@ static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileH
     return false;
 }
 
-static bool UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, Core::Assets::AssetBytes& objectBytes){
+static bool UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, ScratchBytes& objectBytes){
     const auto cached = ReadObjectFileHeader(objectPath, objectBytes);
     if(cached && HeaderMatches(cached->header, header))
         return true;
@@ -182,14 +183,14 @@ static bool UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeO
 
 class AssetVolumeObjectCacheWriter final : public Core::Assets::ICookedAssetWriter{
 public:
-    AssetVolumeObjectCacheWriter(Core::Assets::AssetArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, ScratchArena& scratchArena, Futex& objectCacheWriteMutex)
+    AssetVolumeObjectCacheWriter(Core::Assets::AssetArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, ScratchArena& scratchArena, Futex& objectCacheWriteMutex)noexcept
         : m_cacheDirectory(cacheDirectory)
         , m_configurationSafeName(configurationSafeName)
         , m_manifest(manifest)
         , m_scratchArena(scratchArena)
         , m_objectCacheWriteMutex(objectCacheWriteMutex)
         , m_payloadBinary(arena)
-        , m_objectBinary(arena)
+        , m_objectBinary(scratchArena)
     {}
 
 
@@ -220,13 +221,15 @@ private:
     ScratchArena& m_scratchArena;
     Futex& m_objectCacheWriteMutex;
     Core::Assets::AssetBytes m_payloadBinary;
-    Core::Assets::AssetBytes m_objectBinary;
+    ScratchBytes m_objectBinary;
 };
 
 struct RegistryObjectBucketManifest{
     AssetsVolumeCookDetail::AssetVolumePackManifest manifest;
 
-    explicit RegistryObjectBucketManifest(Core::Assets::AssetArena& arena)
+
+public:
+    explicit RegistryObjectBucketManifest(Core::Assets::AssetArena& arena)noexcept
         : manifest(arena)
     {}
 };
@@ -240,12 +243,12 @@ static bool BuildRegistryObjectBucketManifestEntries(
     Core::Assets::CookEntryRegistry& entryRegistry,
     const usize bucketIndex,
     AssetsVolumeCookDetail::AssetVolumePackManifest& bucketManifest,
-    Futex& objectCacheWriteMutex
+    Futex& objectCacheWriteMutex,
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_CookArena);
     Core::Assets::CookEntryPathHashSet bucketSeenVirtualPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     AssetVolumeObjectCacheWriter cookedAssetWriter(arena, resolvedPaths.cacheDirectory, configurationSafeName, bucketManifest, scratchArena, objectCacheWriteMutex);
-    Core::Assets::CookEntryWriteContext cookEntryWriteContext{ cookedAssetWriter, bucketSeenVirtualPathHashes };
+    Core::Assets::CookEntryWriteContext cookEntryWriteContext{ cookedAssetWriter, bucketSeenVirtualPathHashes, scratchArena };
     return entryRegistry.writeBucket(bucketIndex, cookEntryWriteContext);
 }
 
@@ -312,30 +315,36 @@ bool BuildRegistryObjectManifestEntries(
 
     Futex objectCacheWriteMutex;
     Atomic<bool> failed{ false };
-    cpuScheduler.parallelFor(static_cast<usize>(0u), bucketCount, [&](const usize bucketIndex){
+    const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0u), bucketCount, [&](const usize bucketIndex){
         if(failed.load(MemoryOrder::acquire))
             return;
 
+        Core::Alloc::ScratchArena bucketScratchArena(AssetsVolumeArenaScope::s_CookArena);
         __hidden_cooked_object_cache::RegistryObjectBucketManifest& bucketManifest = bucketManifests[bucketIndex];
-        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(arena, resolvedPaths, configurationSafeName, parsedMetadata.entryRegistry, bucketIndex, bucketManifest.manifest, objectCacheWriteMutex))
+        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(arena, resolvedPaths, configurationSafeName, parsedMetadata.entryRegistry, bucketIndex, bucketManifest.manifest, objectCacheWriteMutex, bucketScratchArena))
             return;
 
         failed.store(true, MemoryOrder::release);
-    });
+    }
+    );
+    if(!parallelWork){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: registry object preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+        return false;
+    }
     if(failed.load(MemoryOrder::acquire))
         return false;
 
     return __hidden_cooked_object_cache::MergeRegistryObjectBucketManifests(bucketManifests, manifest, seenVirtualPathHashes);
 }
 
-Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Core::Assets::AssetBytes& inOutObjectBytes){
+Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Vector<u8, ScratchArena>& inOutObjectBytes){
     const auto decoded = __hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, inOutObjectBytes);
     if(!decoded){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid object cache '{}' for '{}'"), PathToString<tchar>(objectPath), StringConvert(expectedVirtualPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     const auto& header = decoded->header;
-    return CookedObjectPayloadView{ .data = inOutObjectBytes.data() + decoded->payloadOffset, .size = static_cast<usize>(header.payloadSize), .identity = { header.payloadSize, header.payloadHash, header.cookKeyHash }, };
+    return CookedObjectPayloadView{ .data = NotNull<const u8*>(inOutObjectBytes.data() + decoded->payloadOffset), .size = static_cast<usize>(header.payloadSize), .identity = { header.payloadSize, header.payloadHash, header.cookKeyHash }, };
 }
 
 

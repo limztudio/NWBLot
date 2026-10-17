@@ -119,7 +119,7 @@ void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation){
     builder.reserve(16u);
 }
 
-SharedGlyphPage PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 generation){
+Expected<SharedGlyphPage> PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 generation){
     GlyphPage::Pixels pixels(m_arena);
     pixels.resize(64u, 0u);
     pixels[0u] = 64u;
@@ -129,7 +129,7 @@ SharedGlyphPage PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 
     return CreateGlyphPage(m_arena, binding, Move(pixels));
 }
 
-SharedSdfAtlasPage PaintImageFixture::makeSdf(const u64 atlasIdentity){
+Expected<SharedSdfAtlasPage> PaintImageFixture::makeSdf(const u64 atlasIdentity){
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(8u * 8u * 4u, 0u);
     pixels[0u] = 32u;
@@ -151,9 +151,9 @@ SharedSdfAtlasPage PaintImageFixture::makeSdf(const u64 atlasIdentity){
     return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
 }
 
-SharedImageSource PaintImageFixture::makeImage(const StringView path, const u8 seed, const u32 width, const u32 height){
+Expected<SharedImageSource> PaintImageFixture::makeImage(const StringView path, const u8 seed, const u32 width, const u32 height){
     if(path.empty() || width == 0u || height == 0u)
-        return {};
+        return MakeUnexpected(Failure{});
     return UiFixtureSupport::MakeSeededImage(m_arena, path, seed, width, height);
 }
 

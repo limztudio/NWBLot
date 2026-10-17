@@ -27,6 +27,8 @@ namespace ECSRenderDetail{
         usize instanceBufferCapacity = 0u;
         usize materialTypedBufferCapacity = 0u;
 
+
+    public:
         [[nodiscard]] bool valid()const noexcept{
             return instanceBuffer && materialTypedBuffer;
         }
@@ -36,6 +38,8 @@ namespace ECSRenderDetail{
         Core::BufferHandle buffer;
         Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::Invalid();
 
+
+    public:
         [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
         [[nodiscard]] bool bindingValid()const noexcept{
             return buffer && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
@@ -52,6 +56,8 @@ namespace ECSRenderDetail{
         usize instanceBufferCapacity = 0u;
         usize materialTypedBufferCapacity = 0u;
 
+
+    public:
         [[nodiscard]] bool bindingValid()const noexcept{
             return
                 instanceBuffer

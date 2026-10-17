@@ -28,6 +28,8 @@ struct LightSpaceCaptureTicket{
     u64 sequence = 0u;
     bool reuse = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return sequence != 0u; }
 };
 
@@ -42,6 +44,7 @@ public:
     [[nodiscard]] u64 acceptedCaptures()const noexcept{ return m_acceptedCaptures; }
     [[nodiscard]] u64 acceptedReuses()const noexcept{ return m_acceptedReuses; }
     [[nodiscard]] u32 acceptedReuseAge()const noexcept{ return m_acceptedReuseCount; }
+
 
 private:
     LightSpaceCaptureIdentity m_acceptedIdentity;

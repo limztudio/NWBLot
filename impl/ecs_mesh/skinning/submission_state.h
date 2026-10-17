@@ -23,6 +23,8 @@ struct MeshSkinningSubmissionCommit{
     bool bindlessResourceSlotsUploadRecorded = false;
     RuntimeMeshDirtyFlags handledDirtyFlags = RuntimeMeshDirtyFlag::None;
 
+
+public:
     [[nodiscard]] bool empty()const noexcept{
         return handledDirtyFlags == RuntimeMeshDirtyFlag::None && !bindlessResourceSlotsUploadRecorded;
     }

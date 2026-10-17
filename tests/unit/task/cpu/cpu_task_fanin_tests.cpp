@@ -29,6 +29,9 @@ inline constexpr u32 s_GateTimeoutMS = 20000u;
 inline constexpr u32 s_TestTimeoutMS = 60000u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class DeadlineGuard final{
 public:
     DeadlineGuard()
@@ -39,7 +42,8 @@ public:
                     TerminateInvariant();
                 SleepMS(1u);
             }
-        })
+        }
+        )
     {}
     ~DeadlineGuard() = default;
 
@@ -64,15 +68,20 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     CpuTaskScheduler scheduler(config);
     ScopeExit releaseGuard([&]()noexcept{ releaseRoot.store(true, MemoryOrder::release); });
 
-    const CpuTaskHandle completed = scheduler.submit([]()noexcept{});
+    const auto cpuAdmission30 = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(cpuAdmission30);
+    const CpuTaskHandle completed = *cpuAdmission30;
     ASSERT_TRUE(completed.valid());
     scheduler.wait(completed);
 
-    const CpuTaskHandle root = scheduler.submit([&](){
+    const auto cpuAdmission31 = scheduler.submit([&](){
         rootEntered.store(true, MemoryOrder::release);
         if(!CpuTaskTestSupport::WaitUntil(releaseRoot, s_GateTimeoutMS))
             rootExpired.store(true, MemoryOrder::release);
-    });
+    }
+    );
+    ASSERT_TRUE(cpuAdmission31);
+    const CpuTaskHandle root = *cpuAdmission31;
     ASSERT_TRUE(root.valid());
     ASSERT_TRUE(CpuTaskTestSupport::WaitUntil(rootEntered, s_GateTimeoutMS));
     EXPECT_TRUE(scheduler.isComplete(completed));
@@ -83,10 +92,13 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     tasks.reserve(uniqueDependencyCount);
     dependencies.reserve(uniqueDependencyCount * repetitionCount + 2u);
     for(usize index = 0u; index < uniqueDependencyCount; ++index){
-        const CpuTaskHandle dependency = scheduler.submit([&, index]()noexcept{
+        const auto cpuAdmission32 = scheduler.submit([&, index]()noexcept{
             ++dependencyInvocations[index];
             dependencyCompletionCount.fetch_add(1u, MemoryOrder::release);
-        }, root);
+        }, root
+        );
+        ASSERT_TRUE(cpuAdmission32);
+        const CpuTaskHandle dependency = *cpuAdmission32;
         ASSERT_TRUE(dependency.valid());
         tasks.push_back(dependency);
     }
@@ -100,10 +112,13 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     dependencies.push_back(completed);
     dependencies.push_back(CpuTaskHandle{});
 
-    const CpuTaskHandle joined = scheduler.submit([&]()noexcept{
+    const auto cpuAdmission33 = scheduler.submit([&]()noexcept{
         completionCountObservedByJoin.store(dependencyCompletionCount.load(MemoryOrder::acquire), MemoryOrder::release);
         joinInvocationCount.fetch_add(1u, MemoryOrder::release);
-    }, {}, dependencies.data(), dependencies.size());
+    }, {}, dependencies.data(), dependencies.size()
+    );
+    ASSERT_TRUE(cpuAdmission33);
+    const CpuTaskHandle joined = *cpuAdmission33;
     ASSERT_TRUE(joined.valid());
     EXPECT_FALSE(scheduler.isComplete(joined));
     EXPECT_EQ(dependencyCompletionCount.load(MemoryOrder::acquire), 0u);
@@ -154,23 +169,35 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInAcceptsIndependentPredecessorsAndDup
     u32 predecessors = 0u;
     u32 continuations = 0u;
     u32 childInvocations = 0u;
-    const auto root = scheduler.submit([&](){
-        ASSERT_TRUE(scheduler.submit([&](){
+    const auto cpuAdmission34 = scheduler.submit([&](){
+        const auto cpuAdmission35 = scheduler.submit([&](){
             EXPECT_EQ(predecessors, s_FanIn);
             ++childInvocations;
-        }, {}, prerequisites.data(), prerequisites.size()).valid());
-    });
+        }, {}, prerequisites.data(), prerequisites.size()
+        );
+        ASSERT_TRUE(cpuAdmission35);
+        if(cpuAdmission35)
+            ASSERT_TRUE(cpuAdmission35->valid());
+    }
+    );
+    ASSERT_TRUE(cpuAdmission34);
+    const auto root = *cpuAdmission34;
     ASSERT_TRUE(root.valid());
     auto tail = root;
     for(usize index = 0u; index < s_ChainLength; ++index){
-        tail = scheduler.submit([&](){
+        const auto cpuAdmission36 = scheduler.submit([&](){
             EXPECT_EQ(childInvocations, 1u);
             ++continuations;
-        }, tail);
+        }, tail
+        );
+        ASSERT_TRUE(cpuAdmission36);
+        tail = *cpuAdmission36;
         ASSERT_TRUE(tail.valid());
     }
     for(usize index = 0u; index < s_FanIn; ++index){
-        prerequisites[index] = scheduler.submit([&]()noexcept{ ++predecessors; });
+        const auto cpuAdmission37 = scheduler.submit([&]()noexcept{ ++predecessors; });
+        ASSERT_TRUE(cpuAdmission37);
+        prerequisites[index] = *cpuAdmission37;
         ASSERT_TRUE(prerequisites[index].valid());
     }
     prerequisites[s_FanIn] = prerequisites.front();
@@ -190,18 +217,26 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInRejectsACycleAtTheEndOfTheDependency
     CpuTaskScheduler scheduler(0u);
     u32 invocations = 0u;
     bool rejected = false;
-    auto tail = scheduler.submit([&](){
-        rejected = !scheduler.submit([&]()noexcept{ ++invocations; }, {}, prerequisites.data(), prerequisites.size()).valid();
+    const auto cpuAdmission38 = scheduler.submit([&](){
+        const auto cpuAdmission39 = scheduler.submit([&]()noexcept{ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
+        rejected = !cpuAdmission39 || !cpuAdmission39->valid();
         ++invocations;
-    });
+    }
+    );
+    ASSERT_TRUE(cpuAdmission38);
+    auto tail = *cpuAdmission38;
     ASSERT_TRUE(tail.valid());
     for(usize index = 0u; index < s_FanIn; ++index){
-        tail = scheduler.submit([&]()noexcept{ ++invocations; }, tail);
+        const auto cpuAdmission40 = scheduler.submit([&]()noexcept{ ++invocations; }, tail);
+        ASSERT_TRUE(cpuAdmission40);
+        tail = *cpuAdmission40;
         ASSERT_TRUE(tail.valid());
     }
     prerequisites.back() = tail;
     for(usize index = 0u; index < s_FanIn; ++index){
-        prerequisites[index] = scheduler.submit([&]()noexcept{ ++invocations; });
+        const auto cpuAdmission41 = scheduler.submit([&]()noexcept{ ++invocations; });
+        ASSERT_TRUE(cpuAdmission41);
+        prerequisites[index] = *cpuAdmission41;
         ASSERT_TRUE(prerequisites[index].valid());
     }
     scheduler.wait();
@@ -214,14 +249,20 @@ TEST(CpuTaskSchedulerTests, NestedDependencyAcceptsARetiredGenerationInTheAncest
     using namespace __hidden_cpu_task_fanin_tests;
     DeadlineGuard deadline;
     CpuTaskScheduler scheduler(0u);
-    const auto completed = scheduler.submit([]()noexcept{});
+    const auto cpuAdmission42 = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(cpuAdmission42);
+    const auto completed = *cpuAdmission42;
     ASSERT_TRUE(completed.valid());
     scheduler.wait(completed);
     bool accepted = false;
     bool invoked = false;
-    const auto parent = scheduler.submit([&](){
-        accepted = scheduler.submit([&]()noexcept{ invoked = true; }, completed).valid();
-    });
+    const auto cpuAdmission43 = scheduler.submit([&](){
+        const auto cpuAdmission44 = scheduler.submit([&]()noexcept{ invoked = true; }, completed);
+        accepted = cpuAdmission44.has_value() && cpuAdmission44->valid();
+    }
+    );
+    ASSERT_TRUE(cpuAdmission43);
+    const auto parent = *cpuAdmission43;
     ASSERT_TRUE(parent.valid());
     EXPECT_EQ(parent.index, completed.index);
     EXPECT_NE(parent.generation, completed.generation);

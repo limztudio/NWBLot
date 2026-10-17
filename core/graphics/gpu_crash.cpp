@@ -22,7 +22,7 @@ static constexpr AStringView s_NotFoundMarkerString = "ERROR: could not resolve 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCrashMarkerTracker::GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsArena& arena)
+GpuCrashMarkerTracker::GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsArena& arena)noexcept
     : m_tracker(tracker)
     , m_eventStack(arena)
     , m_eventStackOffsets(arena)
@@ -59,7 +59,11 @@ void GpuCrashMarkerTracker::resetEventStack()noexcept{
     m_eventStackOffsets.clear();
 }
 
-GpuCrashTracker::GpuCrashTracker(GraphicsArena& arena)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuCrashTracker::GpuCrashTracker(GraphicsArena& arena)noexcept
     : m_arena(arena)
     , m_eventStrings(0u, Hasher<usize>(), EqualTo<usize>(), arena)
 {}

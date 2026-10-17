@@ -26,6 +26,10 @@ namespace TextWrite{
 inline constexpr f32 s_CleanFloatEpsilon = 0.00000001f;
 inline constexpr int s_OutputFloatPrecision = 9;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline f32 CleanFloat(const f32 value)noexcept{
     if(Abs(value) < s_CleanFloatEpsilon)
         return 0.0f;

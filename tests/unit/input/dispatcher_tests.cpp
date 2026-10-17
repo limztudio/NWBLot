@@ -92,6 +92,32 @@ public:
 };
 
 
+class ThrowingHandler final : public IInputEventHandler{
+public:
+    ThrowingHandler(InputDispatcher& dispatcher, const bool nestedDispatch)noexcept
+        : m_dispatcher(dispatcher)
+        , m_nestedDispatch(nestedDispatch)
+    {}
+
+
+public:
+    virtual bool keyboardUpdate(i32, i32, i32, i32)override{
+        ++m_keyUpdates;
+        if(m_nestedDispatch)
+            m_dispatcher.pointerLeave();
+        throw s_Failure;
+    }
+    virtual void pointerLeave()override{ throw s_Failure; }
+
+
+public:
+    static constexpr u32 s_Failure = 0xD15A7C4u;
+    InputDispatcher& m_dispatcher;
+    usize m_keyUpdates = 0u;
+    const bool m_nestedDispatch;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -318,6 +344,23 @@ TEST(InputDispatcher, RemovingTheConsumingHandlerPreservesOnlyItsQueuedCharacter
     EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
     EXPECT_EQ(transient.m_textPolicyQueries, 1u);
     EXPECT_EQ(scene.m_textPolicyQueries, 1u);
+}
+
+TEST(InputDispatcher, HandlerExceptionsRestoreDirectAndNestedDispatchDepth){
+    for(const bool nestedDispatch : { false, true }){
+        InputDispatcher dispatcher;
+        ThrowingHandler throwing(dispatcher, nestedDispatch);
+        FocusHandler added(dispatcher);
+        dispatcher.addHandlerToBack(throwing);
+
+        EXPECT_THROW(dispatcher.keyboardUpdate(Key::W, 0, InputAction::Press, 0), u32);
+        EXPECT_EQ(throwing.m_keyUpdates, 1u);
+        dispatcher.removeHandler(throwing);
+        dispatcher.addHandlerToBack(added);
+        dispatcher.keyboardUpdate(Key::W, 0, InputAction::Press, 0);
+        EXPECT_EQ(throwing.m_keyUpdates, 1u);
+        EXPECT_EQ(added.m_keyPresses, 1u);
+    }
 }
 
 TEST(InputDispatcher, MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress){

@@ -64,7 +64,8 @@ namespace RendererTaskGraphDetail{
             usize hash = 0u;
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer)noexcept{
                 HashCombine(hash, buffer.get());
-            });
+            }
+            );
             return hash;
         };
         const auto equalSources = [](const MeshSourceRef& lhs, const MeshSourceRef& rhs)noexcept{
@@ -75,12 +76,14 @@ namespace RendererTaskGraphDetail{
             usize sourceIndex = 0u;
             ForEachMaterialPassMeshSourceBuffer(*rhs, [&](const Core::BufferHandle& buffer)noexcept{
                 rhsBuffers[sourceIndex++] = buffer.get();
-            });
+            }
+            );
             sourceIndex = 0u;
             bool equal = true;
             ForEachMaterialPassMeshSourceBuffer(*lhs, [&](const Core::BufferHandle& buffer)noexcept{
                 equal = (buffer.get() == rhsBuffers[sourceIndex++]) && equal;
-            });
+            }
+            );
             return equal;
         };
         using MeshSourceSet = HashSet<MeshSourceRef, Core::Alloc::ScratchArena, RemoveConst_T<decltype(hashSources)>, RemoveConst_T<decltype(equalSources)>>;
@@ -120,7 +123,8 @@ namespace RendererTaskGraphDetail{
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
                 if(sourceBufferIdentities.insert(buffer.get()).second)
                     sourceBuffers.push_back(BufferRef(&buffer));
-            });
+            }
+            );
         }
     }
 
@@ -141,7 +145,10 @@ namespace RendererTaskGraphDetail{
             if(!identity){
                 return MakeUnexpected(Failure{});
             }
-            resource = graph.importBuffer(buffer, BufferResourceDesc(identity, "Prepared Material Geometry"));
+            const auto importedResource = graph.importBuffer(buffer, BufferResourceDesc(identity, "Prepared Material Geometry"));
+            if(!importedResource)
+                return MakeUnexpected(Failure{});
+            resource = *importedResource;
         }
         if(!resource.valid()){
             return MakeUnexpected(Failure{});
@@ -170,9 +177,12 @@ namespace RendererTaskGraphDetail{
     for(const Core::GpuTaskResourceUse& use : *resourceUses)
         members.push_back(use.resource);
 
-    resource = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
-    if(!resource.valid())
+    const auto resourceResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
+    if(!resourceResult){
+        resource = {};
         return MakeUnexpected(Failure{});
+    }
+    resource = *resourceResult;
     return resource;
 }
 
@@ -192,7 +202,10 @@ namespace RendererTaskGraphDetail{
         const Name identity = plan.outputBuffer->getCreationDescription().debugName;
         if(!identity)
             return MakeUnexpected(Failure{});
-        resource = graph.importBuffer(plan.outputBuffer, BufferResourceDesc(identity, label));
+        const auto importedResource = graph.importBuffer(plan.outputBuffer, BufferResourceDesc(identity, label));
+        if(!importedResource)
+            return MakeUnexpected(Failure{});
+        resource = *importedResource;
     }
     if(!resource.valid())
         return MakeUnexpected(Failure{});
@@ -220,9 +233,12 @@ namespace RendererTaskGraphDetail{
     if(members->empty())
         return resource;
 
-    resource = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members->data(), members->size()));
-    if(!resource.valid())
+    const auto resourceResult2 = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members->data(), members->size()));
+    if(!resourceResult2){
+        resource = {};
         return MakeUnexpected(Failure{});
+    }
+    resource = *resourceResult2;
     return resource;
 }
 

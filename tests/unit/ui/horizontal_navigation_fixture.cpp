@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/unit/ui/native_input.h>
-
 #include "horizontal_navigation_fixture.h"
+
+#include <tests/unit/ui/native_input.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +22,7 @@ namespace UiHorizontalNavigationTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-HitTarget Part(const HitTarget& host){
+HitTarget Part(const HitTarget& host)noexcept{
     HitTarget part;
     part.id = { 4u };
     part.declarationGeneration = host.declarationGeneration;
@@ -39,7 +39,7 @@ HitTarget Part(const HitTarget& host){
     return part;
 }
 
-PopupScope Popup(const HitTarget& owner, const u64 openGeneration){
+PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{
     PopupScope popup;
     popup.token = { owner.id, owner.declarationGeneration, 6u, openGeneration };
     popup.bounds = { 0.0f, 0.0f, 300.0f, 200.0f };
@@ -117,7 +117,7 @@ Expected<ControlAction> HorizontalNavigationFixture::take(const usize index)noex
     return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
 }
 
-void HorizontalNavigationFixture::bindEditor(const usize hostIndex){
+void HorizontalNavigationFixture::bindEditor(const usize hostIndex)noexcept{
     const HitTarget& host = m_targets[hostIndex];
     HitTarget& editor = m_targets[2u];
     editor.commandOwner = host.id;

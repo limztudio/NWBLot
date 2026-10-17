@@ -33,7 +33,6 @@ public:
         , y(yValue)
         , z(zValue)
     {}
-
     explicit ShaderInt3(const float3 value)noexcept
         : x(static_cast<i32>(value.x))
         , y(static_cast<i32>(value.y))
@@ -70,6 +69,10 @@ bool AllShaderLanes(const bool value)noexcept{ return value; }
 
 constexpr f32 s_CellSize = NWB_SURFEL_CELL_SIZE;
 constexpr u32 s_CellCount = NWB_SURFEL_HASH_CELL_COUNT;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct FieldRecord{
     float3 position;

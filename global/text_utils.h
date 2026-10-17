@@ -192,15 +192,6 @@ template<typename CharT>
     return false;
 }
 
-template<typename CharT>
-[[nodiscard]] inline bool HasLineBreak(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    for(const CharT ch : text){
-        if(ch == CharT('\n') || ch == CharT('\r'))
-            return true;
-    }
-    return false;
-}
-
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return HasEmbeddedNull(BasicStringView<CharT>(text));
@@ -214,6 +205,14 @@ template<typename StringT>
 [[nodiscard]] inline bool HasEmbeddedNull(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return HasEmbeddedNull(BasicStringView<CharT>(text.data(), text.size()));
+}
+template<typename CharT>
+[[nodiscard]] inline bool HasLineBreak(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    for(const CharT ch : text){
+        if(ch == CharT('\n') || ch == CharT('\r'))
+            return true;
+    }
+    return false;
 }
 
 

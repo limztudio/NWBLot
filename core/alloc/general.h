@@ -34,7 +34,7 @@ public:
     explicit GlobalArena(const Name& allocationLog)
         : Base(allocationLog, ArenaMemoryReservation::FollowsUsage)
     {}
-    ~GlobalArena() = default;
+    ~GlobalArena()noexcept = default;
 
 
 public:
@@ -93,16 +93,15 @@ template<typename T>
 using GlobalUniquePtr = ::ArenaUniquePtr<T, Alloc::GlobalArena>;
 
 template<typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, Args&&... args){
+inline typename EnableIf<!IsArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, Args&&... args)noexcept(ArenaObjectDetail::IsNothrowArenaObjectConstruction<T, Args...>()){
     return ::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
 }
 template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, usize n){
+inline typename EnableIf<IsUnboundedArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, usize n)noexcept(sizeof(RemoveExtent_T<T>) == 1u && ArenaObjectDetail::IsNothrowArenaArrayConstruction<RemoveExtent_T<T>>()){
     return ::MakeArenaUnique<T>(arena, n);
 }
 template<typename T, typename... Args>
-typename EnableIf<IsBoundedArray<T>::value>::type
-MakeGlobalUnique(Args&&...) = delete;
+typename EnableIf<IsBoundedArray<T>::value>::type MakeGlobalUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -69,13 +69,13 @@ ScratchString MeshCookMetadata::MakeIndexedLabel(Core::Alloc::ScratchArena& aren
 }
 
 
-const Core::Metascript::Value* MeshCookMetadata::FindRequiredMetadataListField(const Path& nwbFilePath, const Core::Metascript::Value& map, const TStringView metaKind, const AStringView fieldName){
+Expected<NotNull<const Core::Metascript::Value*>> MeshCookMetadata::FindRequiredMetadataListField(const Path& nwbFilePath, const Core::Metascript::Value& map, const TStringView metaKind, const AStringView fieldName){
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(field && field->isList())
-        return field;
+        return MakeNotNull(field);
 
     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a list"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
-    return nullptr;
+    return MakeUnexpected(Failure{});
 }
 
 

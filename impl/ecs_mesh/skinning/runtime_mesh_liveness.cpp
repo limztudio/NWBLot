@@ -29,7 +29,10 @@ Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(const Cor
     NWB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
-    identity.meshKey = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "skinned_draw");
+    const auto meshKey = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "skinned_draw");
+    if(!meshKey)
+        return MakeUnexpected(Failure{});
+    identity.meshKey = *meshKey;
     identity.version = instance->editRevision;
     NWB_ASSERT(identity.meshKey);
     return identity;

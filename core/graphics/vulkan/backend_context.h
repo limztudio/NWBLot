@@ -7,9 +7,10 @@
 
 #include "backend.h"
 #include "device_extension_policy.h"
-#include "swap_chain_presentation.h"
 
 #include <core/task/cpu/scheduler.h>
+
+#include "swap_chain_presentation.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,40 +28,50 @@ private:
         using is_transparent = void;
 
 
+    public:
         [[nodiscard]] usize operator()(const AStringView value)const noexcept{ return Hasher<AStringView>{}(value); }
     };
     struct ExtensionNameEqualTo{
         using is_transparent = void;
 
 
+    public:
         [[nodiscard]] bool operator()(const AStringView lhs, const AStringView rhs)const noexcept{ return lhs == rhs; }
     };
 
+
+private:
     using ExtensionStringSet = HashSet<GraphicsString, GraphicsArena, ExtensionNameHasher, ExtensionNameEqualTo>;
     using DeviceExtensionMap = HashMap<GraphicsString, DeviceExtensionFeature::Enum, GraphicsArena, ExtensionNameHasher, ExtensionNameEqualTo>;
-
     using ExtEntry = DeviceExtensionEntry;
 
 
+private:
     struct VulkanExtensionSet{
         ExtensionStringSet instance;
         ExtensionStringSet layers;
         DeviceExtensionMap device;
 
+
+    public:
         explicit VulkanExtensionSet(Alloc::GlobalArena& arena)
             : instance(0, ExtensionNameHasher(), ExtensionNameEqualTo(), arena)
             , layers(0, ExtensionNameHasher(), ExtensionNameEqualTo(), arena)
             , device(0, ExtensionNameHasher(), ExtensionNameEqualTo(), arena)
         {}
     };
-
     struct SwapChainImage{
         VkImage image = VK_NULL_HANDLE;
         TextureHandle rhiHandle;
         VulkanDetail::SwapChainImagePresentationState presentationState;
     };
+
+
+private:
     using SemaphoreVector = GraphicsVector<VkSemaphore>;
 
+
+private:
     enum class AcquireSyncSlotState : u8{
         Idle,
         AcquirePending,
@@ -73,8 +84,13 @@ private:
         QueueSubmissionToken consumerToken;
         AcquireSyncSlotState state = AcquireSyncSlotState::Idle;
     };
+
+
+private:
     using AcquireSyncSlotVector = GraphicsVector<AcquireSyncSlot>;
 
+
+private:
     enum class FramePresentationSignalState : u8{
         Idle,
         Claimed,
@@ -98,9 +114,6 @@ private:
 private:
     static constexpr StringView s_EnabledInstanceExts[] = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, };
     static constexpr StringView s_DebugRequiredInstanceExts[] = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME, };
-
-
-private:
     static constexpr ExtEntry s_EnabledDeviceExts[] = {
         { VK_KHR_MAINTENANCE1_EXTENSION_NAME, DeviceExtensionFeature::None },
         // Descriptor buffers are the renderer's only descriptor transport.
@@ -139,7 +152,9 @@ public:
 
 public:
     [[nodiscard]] Device* getDevice()const noexcept{ return m_rhiDevice.get(); }
+
     [[nodiscard]] TStringView getRendererString()const noexcept{ return m_rendererString; }
+
     [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
     [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
     [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const noexcept;
@@ -147,17 +162,21 @@ public:
     [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const{
         return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
     }
+
     [[nodiscard]] bool isDeviceExtensionEnabled(AStringView extensionName)const{
         return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
     }
+
     [[nodiscard]] bool isLayerEnabled(AStringView layerName)const{
         return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
     }
 
     Texture* getBackBuffer(u32 index)const noexcept;
+
     u32 getBackBufferCount()const noexcept{ return static_cast<u32>(m_swapChainImages.size()); }
 
     void setPlatformFrameParam(const Common::FrameParam& frameParam)noexcept{ m_platformFrameParam = frameParam; }
+
     bool createInstance();
     bool createDevice();
     bool createSwapChain();
@@ -183,13 +202,13 @@ public:
 
 private:
     void initDefaultExtensions();
-    bool createVulkanInstance();
+    bool createVulkanInstance(Alloc::ScratchArena& scratchArena);
     bool createWindowSurface();
     void installDebugMessenger();
-    bool pickPhysicalDevice();
-    bool findQueueFamilies(VkPhysicalDevice physicalDevice);
+    bool pickPhysicalDevice(Alloc::ScratchArena& scratchArena);
+    bool findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysicalDevice physicalDevice);
     [[nodiscard]] u32 findNativeQueueIndex(u32 familyIndex, u32 queueIndex)const noexcept;
-    bool createVulkanDevice();
+    bool createVulkanDevice(Alloc::ScratchArena& scratchArena);
     void logVulkanDeviceConfiguration(
         Alloc::ScratchArena& scratchArena,
         const VkPhysicalDeviceProperties& physicalDeviceProperties,
@@ -202,8 +221,8 @@ private:
         bool createCrossFamilySecondaryTransferQueue,
         i32 secondaryTransferQueueFamily
     );
-    bool createVulkanSwapChain();
-    [[nodiscard]] bool createSwapChainResources();
+    bool createVulkanSwapChain(Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool createSwapChainResources(Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSwapChainImageRevocation();
     void commitPreparedSwapChainDestruction()noexcept;
     [[nodiscard]] bool destroySwapChainAfterCreateFailure();
@@ -232,21 +251,14 @@ private:
     CpuTaskScheduler& m_cpuScheduler;
     Alloc::GlobalArena& m_arena;
     Common::FrameParam m_platformFrameParam = {};
-
-
-private:
     VulkanExtensionSet m_enabledExtensions;
     VulkanExtensionSet m_optionalExtensions;
-
     DeviceExtensionMap m_rayTracingExtensions;
-
     GraphicsTString m_rendererString;
-
     VkInstance m_vulkanInstance = VK_NULL_HANDLE;
     PFN_vkGetInstanceProcAddr m_getInstanceProcAddr = nullptr;
     VolkInstanceTable m_instanceDispatch = {};
     VkDebugUtilsMessengerEXT m_debugUtilsMessenger = VK_NULL_HANDLE;
-
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
     i32 m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
     // Family selected for the optional auxiliary Graphics queue; it differs from the primary only for explicitly enabled cross-family routing.
@@ -260,15 +272,11 @@ private:
     i32 m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_presentQueueFamily = s_InvalidQueueFamilyIndex;
-
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
     VolkDeviceTable m_deviceDispatch = {};
-
     VkSurfaceKHR m_windowSurface = VK_NULL_HANDLE;
-
     VkSurfaceFormatKHR m_swapChainFormat = {};
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
-
     GraphicsVector<SwapChainImage> m_swapChainImages;
     // One construction entry per VkQueue created from m_vulkanDevice.
     // Device owns the corresponding synchronized states; physical scheduling queues and the present role retain only canonical indices.
@@ -278,14 +286,12 @@ private:
     // The first entry for each class populates the per-class auxiliary family fields above; graph packets use this complete physical registry.
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
     u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
-
     AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
     // Swap-chain-lifetime direct transition list.
     // Created once with swap-chain resources and reopened per use; present() never creates a command list so the frame path stays allocation-free.
     CommandListHandle m_directPresentCommandList;
     GpuPhysicalQueueId m_directPresentQueue;
-
     VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
     GpuPhysicalQueueId m_framePresentationQueue;
     QueueSubmissionToken m_framePresentationSubmission;
@@ -295,16 +301,13 @@ private:
     bool m_frameAcquired = false;
     bool m_frameAbandonmentComplete = false;
     FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
-
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
-
     u32 m_swapChainIndex = Limit<u32>::s_Max;
     u32 m_acquireSyncSlotIndex = 0u;
     u32 m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
-
     Futex m_swapChainLifecycleMutex;
     u64 m_swapChainLifecycleEpoch = 0u;
     SwapChainLifecycleState m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
@@ -316,7 +319,6 @@ private:
     Futex m_framePresentationMutex;
     ConditionVariableAny m_framePresentationCondition;
     bool m_framePresentationClaimsEnabled = true;
-
     bool m_bufferDeviceAddressSupported = false;
     bool m_hostQueryResetFeatureEnabled = false;
     bool m_textureCompressionBcFeatureEnabled = false;

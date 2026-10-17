@@ -12,6 +12,7 @@
 #include "arena_names.h"
 #include "binary_payload.h"
 #include "cook_matrix.h"
+#include "payload_validation.h"
 
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/paths.h>
@@ -19,6 +20,7 @@
 #include <core/metascript/parser.h>
 
 #include <global/binary.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +36,7 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(!checkSerializeAssetType(asset, NWB_TEXT("SkeletonAssetCodec::serialize")))
         return false;
 
-    const Skeleton& skeleton = static_cast<const Skeleton&>(asset);
+    const Skeleton& skeleton = *checked_cast<const Skeleton*>(&asset);
     Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_SerializeArena);
     if(!skeleton.validatePayload(scratchArena))
         return false;
@@ -124,7 +126,8 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
     return joint;
 }
 
-[[nodiscard]] Expected<u32> ResolveParentIndex(const SkeletonCookEntry& skeletonEntry, const Skeleton::JointIndexMap& earlierJointIndices, const usize jointIndex, const Name& parent){
+template<typename ArenaT>
+[[nodiscard]] Expected<u32> ResolveParentIndex(const SkeletonCookEntry& skeletonEntry, const HashMap<Name, u32, ArenaT, Hasher<Name>, EqualTo<Name>>& earlierJointIndices, const usize jointIndex, const Name& parent){
     if(!parent)
         return s_SkeletonInvalidJointIndex;
 
@@ -141,18 +144,22 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
     return MakeUnexpected(Failure{});
 }
 
+template<typename ArenaT>
 struct SkeletonJointPayload final{
-    Skeleton::JointVector joints;
-    Skeleton::JointIndexMap jointIndices;
+    Vector<SkeletonJoint, ArenaT> joints;
+    HashMap<Name, u32, ArenaT, Hasher<Name>, EqualTo<Name>> jointIndices;
 
-    explicit SkeletonJointPayload(Core::Assets::AssetArena& arena)
+
+public:
+    explicit SkeletonJointPayload(ArenaT& arena)
         : joints(arena)
         , jointIndices(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 };
 
-[[nodiscard]] Expected<SkeletonJointPayload> BuildSkeletonJointPayload(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena){
-    SkeletonJointPayload payload(arena);
+template<typename ArenaT>
+[[nodiscard]] Expected<SkeletonJointPayload<ArenaT>> BuildSkeletonJointPayload(const SkeletonCookEntry& skeletonEntry, ArenaT& arena){
+    SkeletonJointPayload<ArenaT> payload(arena);
     payload.joints.reserve(skeletonEntry.joints.size());
     payload.jointIndices.reserve(skeletonEntry.joints.size());
 
@@ -161,7 +168,7 @@ struct SkeletonJointPayload final{
 
         SkeletonJoint joint;
         joint.localBindPose = cookJoint.localBindPose;
-        auto parentIndexResult = ResolveParentIndex(skeletonEntry, payload.jointIndices, jointIndex, cookJoint.parent);
+        auto parentIndexResult = ResolveParentIndex<ArenaT>(skeletonEntry, payload.jointIndices, jointIndex, cookJoint.parent);
         if(!parentIndexResult)
             return MakeUnexpected(Failure{});
         joint.parentIndex = *parentIndexResult;
@@ -199,11 +206,11 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, co
     if(!ValidateSkeletonAssetFields(nwbFilePath, asset))
         return MakeUnexpected(Failure{});
 
-    const Value* joints = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skeleton meta", s_JointsField);
+    const auto joints = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skeleton meta", s_JointsField);
     if(!joints)
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(joints.error());
 
-    const auto& jointList = joints->asList();
+    const auto& jointList = (*joints)->asList();
     entry.joints.reserve(jointList.size());
     for(usize jointIndex = 0u; jointIndex < jointList.size(); ++jointIndex){
         const Value& jointValue = jointList[jointIndex];
@@ -218,19 +225,17 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, co
         entry.joints.push_back(*jointResult);
     }
 
-    Skeleton testSkeleton(entry.joints.get_allocator().arena(), entry.virtualPath);
-    auto payloadResult = BuildSkeletonJointPayload(entry, entry.joints.get_allocator().arena());
+    auto payloadResult = BuildSkeletonJointPayload(entry, scratchArena);
     if(!payloadResult)
         return MakeUnexpected(Failure{});
-    testSkeleton.setJoints(Move(payloadResult->joints), Move(payloadResult->jointIndices));
-    if(!testSkeleton.validatePayload(scratchArena))
+    if(!AssetsSkeletonPayloadDetail::ValidateJoints<Core::Alloc::ScratchArena>(Span<const SkeletonJoint>(payloadResult->joints.data(), payloadResult->joints.size()), payloadResult->jointIndices, scratchArena))
         return MakeUnexpected(Failure{});
     return entry;
 }
 
 Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;

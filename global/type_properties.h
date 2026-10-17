@@ -109,6 +109,11 @@ template<typename T>
 constexpr RemoveReference_T<T>&& Move(T&& v)noexcept{ return static_cast<RemoveReference_T<T>&&>(v); }
 
 template<typename T>
+[[nodiscard]] constexpr T* AddressOf(T& value)noexcept{ return std::addressof(value); }
+template<typename T>
+const T* AddressOf(const T&&) = delete;
+
+template<typename T>
 [[nodiscard]] auto DeclVal()noexcept->decltype(std::declval<T>());
 
 template<typename T>

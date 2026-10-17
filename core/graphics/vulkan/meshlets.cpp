@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshletPipeline::MeshletPipeline(const VulkanContext& context)
+MeshletPipeline::MeshletPipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
@@ -33,30 +33,30 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
+Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
     if(!m_context.extensions.khrDynamicRendering){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create meshlet pipelines."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader feature and entry point are required for meshlet pipelines."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(fbinfo.colorFormats.size() > m_context.physicalDeviceProperties.limits.maxColorAttachments){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline color count exceeds the device limit."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.renderState.rasterState.depthBiasClamp != 0.0f){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline depthBiasClamp requires an unsupported logical-device feature."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.renderState.singlePassStereo.enabled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline single-pass stereo is not implemented."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!desc.meshShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     const auto validateShaderOwner = [this](Shader* const shader, const TStringView stageName){
@@ -70,13 +70,13 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         || !validateShaderOwner(desc.meshShader.get(), VulkanArenaScope::s_MeshStageLabel)
         || !validateShaderOwner(desc.pixelShader.get(), VulkanArenaScope::s_FragmentStageLabel)
     )
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_MeshletPipelineArena);
 
     MeshletPipelineHandle pso(NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context), MeshletPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!pso)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
@@ -87,19 +87,19 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     if(desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Task shader was supplied for meshlet pipeline, but VK_EXT_mesh_shader taskShader was not enabled."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.amplificationShader && (desc.amplificationShader->m_shaderModule == VK_NULL_HANDLE || desc.amplificationShader->m_desc.shaderType != ShaderType::Amplification)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline task shader has the wrong shader stage."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.meshShader && (desc.meshShader->m_shaderModule == VK_NULL_HANDLE || desc.meshShader->m_desc.shaderType != ShaderType::Mesh)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline mesh shader has the wrong shader stage."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(desc.pixelShader && (desc.pixelShader->m_shaderModule == VK_NULL_HANDLE || desc.pixelShader->m_desc.shaderType != ShaderType::Pixel)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline fragment shader has the wrong shader stage."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(desc.amplificationShader)
@@ -109,14 +109,14 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         appendPipelineShaderStage(*desc.meshShader, VK_SHADER_STAGE_MESH_BIT_EXT, specInfos, shaderStages);
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(desc.pixelShader)
         appendPipelineShaderStage(*desc.pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
     if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("meshlet pipeline"), *pso, scratchArena))
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
 
@@ -131,7 +131,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         scratchArena
     );
     if(!fixedState)
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState->renderingInfo);
@@ -143,7 +143,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
     if(!createPipeline(NWB_TEXT("meshlet pipeline"), *pso, pipelineInfo))
-        return nullptr;
+        return MakeUnexpected(Failure{});
 
     return pso;
 }

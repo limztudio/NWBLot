@@ -188,7 +188,7 @@ Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& worl
     return MakeUnexpected(Failure{});
 }
 
-void AddCsgFrameReceiverWork(CsgFrameState& inOutState, const CsgReceiverKind::Enum receiverKind, const bool opaqueWork, const bool transparentWork, const u32 cutterCount){
+void AddCsgFrameReceiverWork(CsgFrameState& inOutState, const CsgReceiverKind::Enum receiverKind, const bool opaqueWork, const bool transparentWork, const u32 cutterCount)noexcept{
     inOutState.receiverCount = AddSaturating<u32>(inOutState.receiverCount, 1u);
     inOutState.cutterCount = AddSaturating<u32>(inOutState.cutterCount, cutterCount);
 

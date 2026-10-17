@@ -42,7 +42,7 @@ static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultKore
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
+static bool ConfigureRuntime(NWB::ProjectStartupContext& context)noexcept{
     NWB::Core::GraphicsRuntime& graphics = context.graphics;
     return graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && graphics.setHDR10OutputEnabled(true);
 }

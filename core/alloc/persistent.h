@@ -35,8 +35,8 @@ public:
 
 private:
     struct Allocation{
-        void* pointer = nullptr;
-        void* block = nullptr;
+        NotNull<void*> pointer;
+        NotNull<void*> block;
     };
 
 
@@ -47,18 +47,18 @@ public:
 
 public:
     PersistentArena(const Name& allocationLog, usize maxSize);
-    ~PersistentArena();
+    ~PersistentArena()noexcept;
 
 
 public:
     [[nodiscard]] void* allocate(usize align, usize size);
     [[nodiscard]] void* reallocate(void* p, usize align, usize size);
-    void deallocate(void* p, usize align, usize size);
+    void deallocate(void* p, usize align, usize size)noexcept;
 
 
 private:
     [[nodiscard]] Expected<Allocation> allocateLocked(usize align, usize size)noexcept;
-    void deallocateBlockLocked(void* block)noexcept;
+    void deallocateBlockLocked(NotNull<void*> block)noexcept;
 
 
 private:
@@ -89,16 +89,15 @@ template<typename T>
 using PersistentUniquePtr = ::ArenaUniquePtr<T, Alloc::PersistentArena>;
 
 template<typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, Args&&... args){
+inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, Args&&... args)noexcept(ArenaObjectDetail::IsNothrowArenaObjectConstruction<T, Args...>()){
     return ::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
 }
 template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n){
+inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n)noexcept(sizeof(RemoveExtent_T<T>) == 1u && ArenaObjectDetail::IsNothrowArenaArrayConstruction<RemoveExtent_T<T>>()){
     return ::MakeArenaUnique<T>(arena, n);
 }
 template<typename T, typename... Args>
-typename EnableIf<IsBoundedArray<T>::value>::type
-MakePersistentUnique(Args&&...) = delete;
+typename EnableIf<IsBoundedArray<T>::value>::type MakePersistentUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

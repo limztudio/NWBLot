@@ -22,7 +22,7 @@ NWB_IMPL_UI_BEGIN
 class FloatEditModel final : NoCopy{
 private:
     [[nodiscard]] NumericEditResult commit(const FloatBounds& bounds, bool canonical);
-    [[nodiscard]] Expected<bool> canonicalize(f64 value);
+    [[nodiscard]] Expected<bool, ErrorCode> canonicalize(f64 value);
     void advanceRevision()noexcept;
 
 

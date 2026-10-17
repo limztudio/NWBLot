@@ -48,7 +48,7 @@ struct OpaqueCsgIntervalClearResult{
 
 class OpaqueCsgIntervalClearBuilder final : NoCopy{
 public:
-    OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph);
+    OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph)noexcept;
 
 
 public:

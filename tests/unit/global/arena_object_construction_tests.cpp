@@ -140,6 +140,148 @@ public:
     }
 };
 
+struct ArenaPlacementProbe{
+    inline static usize s_PlacementCalls = 0u;
+    inline static usize s_Constructors = 0u;
+    inline static usize s_Destructors = 0u;
+
+
+public:
+    static void* operator new(usize, void*)noexcept{
+        ++s_PlacementCalls;
+        return nullptr;
+    }
+    static void* operator new[](usize, void*)noexcept{
+        ++s_PlacementCalls;
+        return nullptr;
+    }
+
+
+public:
+    ArenaPlacementProbe()noexcept{ ++s_Constructors; }
+    ~ArenaPlacementProbe()noexcept{ ++s_Destructors; }
+};
+
+template<typename Arena>
+struct ThrowingConstructionArgument{
+    Arena& arena;
+    ConstructionState& state;
+
+
+public:
+    ~ThrowingConstructionArgument()noexcept(false){ throw ConstructionFailure{}; }
+};
+
+template<typename Arena>
+struct ConstructionArgumentSource{
+    Arena& arena;
+    ConstructionState& state;
+
+
+public:
+    operator ThrowingConstructionArgument<Arena>()const noexcept{ return { arena, state }; }
+};
+
+template<typename Arena>
+struct ArgumentCleanupProbe{
+    OwnedMember<Arena> member;
+
+
+public:
+    explicit ArgumentCleanupProbe(const ThrowingConstructionArgument<Arena>& argument)
+        : member(argument.arena, argument.state)
+    {}
+    ~ArgumentCleanupProbe()noexcept = default;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Arena>
+struct PrivateDestructorProbe{
+    friend struct ::ArenaDeleter<PrivateDestructorProbe<Arena>, Arena>;
+
+
+public:
+    OwnedMember<Arena> member;
+    bool* destroyed;
+
+
+public:
+    explicit PrivateDestructorProbe(const ThrowingConstructionArgument<Arena>& argument)
+        : member(argument.arena, argument.state)
+        , destroyed(nullptr)
+    {}
+    PrivateDestructorProbe(Arena& arena, ConstructionState& state, bool& wasDestroyed)
+        : member(arena, state)
+        , destroyed(&wasDestroyed)
+    {}
+private:
+    ~PrivateDestructorProbe()noexcept{
+        if(destroyed)
+            *destroyed = true;
+    }
+};
+
+template<typename Arena>
+struct OperatorPrivateDestructorProbe{
+    friend void ::ArenaDeleter<OperatorPrivateDestructorProbe<Arena>, Arena>::operator()(OperatorPrivateDestructorProbe<Arena>*)const noexcept;
+
+
+public:
+    OwnedMember<Arena> member;
+
+
+public:
+    explicit OperatorPrivateDestructorProbe(const ThrowingConstructionArgument<Arena>& argument)
+        : member(argument.arena, argument.state)
+    {}
+    OperatorPrivateDestructorProbe(Arena& arena, ConstructionState& state)
+        : member(arena, state)
+    {}
+private:
+    ~OperatorPrivateDestructorProbe()noexcept = default;
+};
+
+template<typename Arena>
+struct PrivateConstructorProbe{
+    friend PrivateConstructorProbe<Arena>* ::NewArenaObject<PrivateConstructorProbe<Arena>, Arena, bool&>(Arena&, bool&);
+
+
+public:
+    bool& alive;
+
+
+private:
+    explicit PrivateConstructorProbe(bool& wasConstructed)noexcept
+        : alive(wasConstructed)
+    { alive = true; }
+public:
+    ~PrivateConstructorProbe()noexcept{ alive = false; }
+};
+
+template<typename Arena>
+struct RawPrivateDestructorProbe{
+    friend void ::DestroyArenaObject<RawPrivateDestructorProbe<Arena>, Arena>(Arena&, RawPrivateDestructorProbe<Arena>*);
+
+
+public:
+    bool& destroyed;
+
+
+public:
+    explicit RawPrivateDestructorProbe(bool& wasDestroyed)noexcept
+        : destroyed(wasDestroyed)
+    {}
+private:
+    ~RawPrivateDestructorProbe()noexcept{ destroyed = true; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename Arena, typename Factory>
 void VerifyConstructionFailure(Arena& arena, const usize failAt, Factory factory){
     ConstructionState state{ .failAt = failAt };
@@ -170,49 +312,56 @@ TEST(ArenaObjectConstruction, RawObjectFailureReleasesAlignedStorageAndConstruct
     using Probe = ConstructionProbe<GlobalArena>;
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return ArenaUniquePtr<Probe, GlobalArena>(NewArenaObject<Probe>(arena, arena, state), ArenaDeleter<Probe, GlobalArena>(arena));
-    });
+    }
+    );
 }
 
 TEST(ArenaObjectConstruction, GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
     GlobalArena arena(Name("tests/arena_object/generic_constructor_failure"));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakeArenaUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
-    });
+    }
+    );
 }
 
 TEST(ArenaObjectConstruction, GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
     GlobalArena arena(Name("tests/arena_object/global_constructor_failure"));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
-    });
+    }
+    );
 }
 
 TEST(ArenaObjectConstruction, PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
     PersistentArena arena(Name("tests/arena_object/persistent_constructor_failure"), PersistentArena::StructureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>>(arena, arena, state);
-    });
+    }
+    );
 }
 
 TEST(ArenaObjectConstruction, GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
     GlobalArena arena(Name("tests/arena_object/generic_array_failure"));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakeArenaUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
-    });
+    }
+    );
 }
 
 TEST(ArenaObjectConstruction, GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
     GlobalArena arena(Name("tests/arena_object/global_array_failure"));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakeGlobalUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
-    });
+    }
+    );
 }
 
 TEST(ArenaObjectConstruction, PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
     PersistentArena arena(Name("tests/arena_object/persistent_array_failure"), PersistentArena::StructureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>[]>(arena, 4u);
-    });
+    }
+    );
 }
 
 TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows){
@@ -245,6 +394,155 @@ TEST(ArenaObjectConstruction, FailedRawAllocationsNeverRunConstructorsOrDestruct
     EXPECT_EQ(state.constructors, 0u);
     EXPECT_EQ(state.destructors, 0u);
     EXPECT_EQ(state.memberDestructors, 0u);
+}
+
+TEST(ArenaObjectConstruction, ArenaFactoriesRetainStorageIdentityAndBypassClassAllocationHooks){
+    GlobalArena global(Name("tests/arena_object/canonical_global_placement"));
+    PersistentArena persistent(Name("tests/arena_object/canonical_persistent_placement"), PersistentArena::StructureAlignedSize(4096u));
+    ArenaPlacementProbe::s_PlacementCalls = 0u;
+    ArenaPlacementProbe::s_Constructors = 0u;
+    ArenaPlacementProbe::s_Destructors = 0u;
+    const ArenaMemoryStats globalBefore = global.memoryStats();
+    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+    {
+        auto globalObject = MakeGlobalUnique<ArenaPlacementProbe>(global);
+        auto persistentObject = MakePersistentUnique<ArenaPlacementProbe>(persistent);
+        auto globalArray = MakeGlobalUnique<ArenaPlacementProbe[]>(global, 3u);
+        auto persistentArray = MakePersistentUnique<ArenaPlacementProbe[]>(persistent, 3u);
+        EXPECT_TRUE(globalObject);
+        EXPECT_TRUE(persistentObject);
+        EXPECT_TRUE(globalArray);
+        EXPECT_TRUE(persistentArray);
+        ArenaPlacementProbe* const globalRaw = NewArenaObject<ArenaPlacementProbe>(global);
+        ArenaPlacementProbe* const persistentRaw = NewArenaObject<ArenaPlacementProbe>(persistent);
+        EXPECT_NE(globalRaw, nullptr);
+        EXPECT_NE(persistentRaw, nullptr);
+        DestroyArenaObject(global, globalRaw);
+        DestroyArenaObject(persistent, persistentRaw);
+    }
+    EXPECT_EQ(ArenaPlacementProbe::s_PlacementCalls, 0u);
+    EXPECT_EQ(ArenaPlacementProbe::s_Constructors, 10u);
+    EXPECT_EQ(ArenaPlacementProbe::s_Destructors, 10u);
+    const ArenaMemoryStats globalAfter = global.memoryStats();
+    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+}
+
+TEST(ArenaObjectConstruction, ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage){
+    GlobalArena global(Name("tests/arena_object/global_argument_cleanup_failure"));
+    PersistentArena persistent(Name("tests/arena_object/persistent_argument_cleanup_failure"), PersistentArena::StructureAlignedSize(4096u));
+    ConstructionState globalState;
+    ConstructionState persistentState;
+    const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
+    const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
+    const ArenaMemoryStats globalBefore = global.memoryStats();
+    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+    EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<ArgumentCleanupProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
+    EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<ArgumentCleanupProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
+    EXPECT_EQ(globalState.liveMembers, 0u);
+    EXPECT_EQ(globalState.memberDestructors, 1u);
+    EXPECT_EQ(persistentState.liveMembers, 0u);
+    EXPECT_EQ(persistentState.memberDestructors, 1u);
+    const ArenaMemoryStats globalAfter = global.memoryStats();
+    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+}
+
+TEST(ArenaObjectConstruction, CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess){
+    GlobalArena global(Name("tests/arena_object/private_global_destructor"));
+    PersistentArena persistent(Name("tests/arena_object/private_persistent_destructor"), PersistentArena::StructureAlignedSize(4096u));
+    ConstructionState globalState;
+    ConstructionState persistentState;
+    const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
+    const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
+    const ArenaMemoryStats globalBefore = global.memoryStats();
+    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+    EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<PrivateDestructorProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
+    EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<PrivateDestructorProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
+    EXPECT_EQ(globalState.liveMembers, 0u);
+    EXPECT_EQ(globalState.memberDestructors, 1u);
+    EXPECT_EQ(persistentState.liveMembers, 0u);
+    EXPECT_EQ(persistentState.memberDestructors, 1u);
+    bool globalDestroyed = false;
+    bool persistentDestroyed = false;
+    {
+        auto globalOwner = MakeGlobalUnique<PrivateDestructorProbe<GlobalArena>>(global, global, globalState, globalDestroyed);
+        auto persistentOwner = MakePersistentUnique<PrivateDestructorProbe<PersistentArena>>(persistent, persistent, persistentState, persistentDestroyed);
+        EXPECT_TRUE(globalOwner);
+        EXPECT_TRUE(persistentOwner);
+    }
+    EXPECT_TRUE(globalDestroyed);
+    EXPECT_TRUE(persistentDestroyed);
+    bool rawDestroyed = false;
+    auto* const raw = NewArenaObject<RawPrivateDestructorProbe<GlobalArena>>(global, rawDestroyed);
+    ASSERT_NE(raw, nullptr);
+    DestroyArenaObject(global, raw);
+    EXPECT_TRUE(rawDestroyed);
+    const ArenaMemoryStats globalAfter = global.memoryStats();
+    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+}
+
+TEST(ArenaObjectConstruction, IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction){
+    GlobalArena global(Name("tests/arena_object/operator_friend_global_destructor"));
+    PersistentArena persistent(Name("tests/arena_object/operator_friend_persistent_destructor"), PersistentArena::StructureAlignedSize(4096u));
+    ConstructionState globalState;
+    ConstructionState persistentState;
+    const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
+    const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
+    const ArenaMemoryStats globalBefore = global.memoryStats();
+    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+    EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<OperatorPrivateDestructorProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
+    EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<OperatorPrivateDestructorProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
+    EXPECT_EQ(globalState.liveMembers, 0u);
+    EXPECT_EQ(globalState.memberDestructors, 1u);
+    EXPECT_EQ(persistentState.liveMembers, 0u);
+    EXPECT_EQ(persistentState.memberDestructors, 1u);
+    {
+        auto globalOwner = MakeGlobalUnique<OperatorPrivateDestructorProbe<GlobalArena>>(global, global, globalState);
+        auto persistentOwner = MakePersistentUnique<OperatorPrivateDestructorProbe<PersistentArena>>(persistent, persistent, persistentState);
+        EXPECT_TRUE(globalOwner);
+        EXPECT_TRUE(persistentOwner);
+    }
+    EXPECT_EQ(globalState.liveMembers, 0u);
+    EXPECT_EQ(globalState.memberDestructors, 2u);
+    EXPECT_EQ(persistentState.liveMembers, 0u);
+    EXPECT_EQ(persistentState.memberDestructors, 2u);
+    bool globalPrivateAlive = false;
+    bool persistentPrivateAlive = false;
+    {
+        auto globalPrivate = MakeGlobalUnique<PrivateConstructorProbe<GlobalArena>>(global, globalPrivateAlive);
+        auto persistentPrivate = MakePersistentUnique<PrivateConstructorProbe<PersistentArena>>(persistent, persistentPrivateAlive);
+        EXPECT_TRUE(globalPrivate);
+        EXPECT_TRUE(persistentPrivate);
+        EXPECT_TRUE(globalPrivateAlive);
+        EXPECT_TRUE(persistentPrivateAlive);
+    }
+    EXPECT_FALSE(globalPrivateAlive);
+    EXPECT_FALSE(persistentPrivateAlive);
+    const ArenaMemoryStats globalAfter = global.memoryStats();
+    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
 }
 
 

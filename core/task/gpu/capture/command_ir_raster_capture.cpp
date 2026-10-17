@@ -54,7 +54,12 @@ private:
 }
 
 template<typename RecordT>
-static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode, const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept{
+static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode, const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept(
+    noexcept(NWB_MEMSET(&DeclVal<RecordT&>(), 0, sizeof(RecordT)))
+    && noexcept(DeclVal<RecordT&>().header.opcode = DeclVal<const GpuCommandIrWireOpcode::Enum&>())
+    && noexcept(DeclVal<RecordT&>().header.byteSize = static_cast<u16>(sizeof(RecordT)))
+    && noexcept(DeclVal<RecordT&>().context = EncodeContext(DeclVal<const GpuTaskId&>(), DeclVal<const GpuSubmissionPacketId&>(), DeclVal<const GpuPhysicalQueueId&>()))
+){
     static_assert(IsStandardLayout_V<RecordT> && IsTriviallyCopyable_V<RecordT>);
     NWB_MEMSET(&record, 0, sizeof(record));
     record.header.opcode = opcode;

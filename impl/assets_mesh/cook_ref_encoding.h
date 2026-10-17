@@ -26,7 +26,6 @@ public:
     [[nodiscard]] static bool EncodeMeshletRefs(CookEntryT& entry, const bool skinRequired, const TStringView metaKind);
 
 
-
 public:
     MeshCookRefEncoding() = delete;
 };

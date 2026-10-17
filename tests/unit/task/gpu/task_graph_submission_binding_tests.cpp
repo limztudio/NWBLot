@@ -50,7 +50,7 @@ public:
 
 public:
     [[nodiscard]] bool prepare(usize taskCount, usize mergeGroupSize = 1u);
-    [[nodiscard]] Graphics::QueueSubmissionPreSubmitHook hook(u64 identity);
+    [[nodiscard]] Graphics::QueueSubmissionPreSubmitHook hook(u64 identity)noexcept;
 };
 
 
@@ -75,9 +75,12 @@ SubmissionBindingFixture::SubmissionBindingFixture()
         const AStringView suffix = FormatDecimal(index, text);
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % mergeGroupSize != 0u;
-        const Graphics::GpuTaskId task = AddTaskWithCommands(
+        const auto derivedNameAt79Col12 = DeriveName(Name("tests/submission_bindings/task/"), suffix);
+        if(!derivedNameAt79Col12)
+            return false;
+        const auto taskResult = AddTaskWithCommands(
             graph,
-            DeriveName(Name("tests/submission_bindings/task/"), suffix),
+            *derivedNameAt79Col12,
             "Submission Binding",
             commands,
             scheduling,
@@ -85,6 +88,9 @@ SubmissionBindingFixture::SubmissionBindingFixture()
             scheduling.mergeWithPrevious ? &tasks.back() : nullptr,
             scheduling.mergeWithPrevious ? 1u : 0u
         );
+        if(!taskResult)
+            return false;
+        const Graphics::GpuTaskId task = *taskResult;
         if(!task.valid())
             return false;
         tasks.push_back(task);
@@ -95,7 +101,7 @@ SubmissionBindingFixture::SubmissionBindingFixture()
     return compileState.compile(graph);
 }
 
-[[nodiscard]] Graphics::QueueSubmissionPreSubmitHook SubmissionBindingFixture::hook(const u64 identity){
+[[nodiscard]] Graphics::QueueSubmissionPreSubmitHook SubmissionBindingFixture::hook(const u64 identity)noexcept{
     Graphics::QueueSubmissionPreSubmitHook result;
     result.context = &hookInvocationCount;
     result.identity = identity;

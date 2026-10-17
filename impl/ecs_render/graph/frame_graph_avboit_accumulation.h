@@ -6,7 +6,9 @@
 
 
 #include <impl/global.h>
+
 #include "frame_graph_avboit_upload_result.h"
+
 #include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
@@ -65,11 +67,12 @@ using FrameGraphAvboitAccumulationUploadResult = FrameGraphAvboitMaterialUploadR
 
 class FrameGraphAvboitAccumulationUploadChain final : NoCopy{
 public:
-    FrameGraphAvboitAccumulationUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
+    FrameGraphAvboitAccumulationUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept;
 
 
 public:
     [[nodiscard]] Expected<FrameGraphAvboitAccumulationUploadResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitAccumulationUploadInputs& inputs,
         RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& accumulationPayload,
         RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& computeEmulationPayload,

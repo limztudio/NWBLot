@@ -33,7 +33,7 @@ HitTarget Button(const u64 id, const Rect& rectangle, const u32 paintOrder = 0u)
     return target;
 }
 
-PopupScope Scope(const u64 widget = 100u, const u32 layer = 3u, const u64 openGeneration = 1u){
+PopupScope Scope(const u64 widget = 100u, const u32 layer = 3u, const u64 openGeneration = 1u)noexcept{
     PopupScope scope;
     scope.token = { { widget }, 10u, 20u, openGeneration };
     scope.bounds = { 40.0f, 40.0f, 100.0f, 70.0f };

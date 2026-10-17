@@ -4,8 +4,6 @@
 
 #include <impl/ecs_render/avboit/avboit_private.h>
 
-#include <global/scope_exit.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,7 +27,7 @@ static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(Core::GpuDescripto
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, buffer))){
         return MakeUnexpected(Failure{});
@@ -46,7 +44,7 @@ static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(C
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(0u, texture, format, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D))){
         return MakeUnexpected(Failure{});

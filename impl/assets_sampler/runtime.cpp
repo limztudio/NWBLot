@@ -57,7 +57,16 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: unsupported sampler version {}; recook required"), header.version);
         return false;
     }
-    if(header.reserved != 0u || header.minFilter > 1u || header.magFilter > 1u || header.mipFilter > 1u){
+    if(
+        header.reserved != 0u
+        || header.minFilter > 1u
+        || header.magFilter > 1u
+        || header.mipFilter > 1u
+        || header.addressU > static_cast<u32>(Core::SamplerAddressMode::MirrorOnce)
+        || header.addressV > static_cast<u32>(Core::SamplerAddressMode::MirrorOnce)
+        || header.addressW > static_cast<u32>(Core::SamplerAddressMode::MirrorOnce)
+        || header.reductionType > static_cast<u32>(Core::SamplerReductionType::Comparison)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler header contains invalid flags"));
         return false;
     }

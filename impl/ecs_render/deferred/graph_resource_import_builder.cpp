@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/graph_resource_import_builder.h>
+#include "graph_resource_import_builder.h"
+
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 
@@ -18,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph)
+DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph)noexcept
     : m_graph(graph){
 }
 
@@ -62,132 +63,319 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
         return m_graph.importBuffer(deferredTargets.bindless.slotsBuffer, RendererTaskGraphDetail::BufferResourceDesc(identity, label));
     };
 
-    result.albedo = importFirstWriteTexture(deferredTargets.albedo, Name("render.deferred_lighting.albedo"), "G-Buffer Albedo");
-    result.normal = importFirstWriteTexture(deferredTargets.normal, Name("render.deferred_lighting.normal"), "G-Buffer Normal");
-    result.worldPosition = importFirstWriteTexture(deferredTargets.worldPosition, Name("render.deferred_lighting.world_position"), "G-Buffer World Position");
-    result.specularRoughness = importFirstWriteTexture(deferredTargets.specularRoughness, Name("render.deferred_lighting.specular_roughness"), "G-Buffer Specular Roughness");
-    result.depth = importFirstWriteTexture(deferredTargets.depth, Name("render.deferred_lighting.depth"), "G-Buffer Depth");
+    Expected<Core::GpuGraphResourceId> albedoResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> normalResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> worldPositionResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> specularRoughnessResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> depthResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgCapBackNormalResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgIntervalDepthResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgIntervalIdResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgReceiverEventDataResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgReceiverEventCountResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgReceiverSpanDataResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgReceiverSpanCountResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgRemovedIntervalDepthResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgRemovedIntervalCapNormalResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgRemovedIntervalDataResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> csgRemovedIntervalCountResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> shadowVisibilityResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> causticIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> surfelIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> currentShadowVisibilityResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> currentCausticIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> currentSurfelIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> opaqueColorResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> sceneShadingResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> lightsResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> meshViewResult = MakeUnexpected(Failure{});
+    Expected<Optional<Core::GpuGraphResourceId>> materialInstancesResult = Optional<Core::GpuGraphResourceId>{};
+    Expected<Optional<Core::GpuGraphResourceId>> materialTypedResult = Optional<Core::GpuGraphResourceId>{};
+    Expected<Optional<Core::GpuGraphResourceId>> csgReceiverRangesResult = Optional<Core::GpuGraphResourceId>{};
+    Expected<Optional<Core::GpuGraphResourceId>> csgCuttersResult = Optional<Core::GpuGraphResourceId>{};
+    Expected<Optional<Core::GpuGraphResourceId>> csgClipContextSlotsResult = Optional<Core::GpuGraphResourceId>{};
+    Expected<Optional<Core::GpuGraphResourceId>> csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{};
+    Expected<Core::GpuGraphResourceId> bindlessSlotsResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> currentBindlessSlotsResult = MakeUnexpected(Failure{});
+    Expected<Optional<Core::GpuGraphResourceId>> materialContextSlotsResult = Optional<Core::GpuGraphResourceId>{};
+    Expected<Core::GpuGraphResourceId> historyCopyShadowVisibilityResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> historyCopyCausticIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> historyCopySurfelIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> historyCopyDestinationShadowVisibilityResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> historyCopyDestinationCausticIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> historyCopyDestinationSurfelIrradianceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitLowRasterResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitAccumColorResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitAccumExtinctionResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> refractionDepthResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> refractionNormalIorResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> refractionTintCoverageResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> refractionInstanceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> refractionSpecularRoughnessResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> refractionResolveResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitForegroundColorResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitForegroundExtinctionResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitTransmittanceResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitCoverageResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitDepthWarpResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitControlResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitExtinctionResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitExtinctionOverflowResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitMaterialDomainResult = MakeUnexpected(Failure{});
+    Expected<Core::GpuGraphResourceId> avboitCsgDomainResult = MakeUnexpected(Failure{});
+
+    albedoResult = importFirstWriteTexture(deferredTargets.albedo, Name("render.deferred_lighting.albedo"), "G-Buffer Albedo");
+    normalResult = importFirstWriteTexture(deferredTargets.normal, Name("render.deferred_lighting.normal"), "G-Buffer Normal");
+    worldPositionResult = importFirstWriteTexture(deferredTargets.worldPosition, Name("render.deferred_lighting.world_position"), "G-Buffer World Position");
+    specularRoughnessResult = importFirstWriteTexture(deferredTargets.specularRoughness, Name("render.deferred_lighting.specular_roughness"), "G-Buffer Specular Roughness");
+    depthResult = importFirstWriteTexture(deferredTargets.depth, Name("render.deferred_lighting.depth"), "G-Buffer Depth");
 
 
     // CSG working set declared here; wider target lifecycle stays in native producers.
-    result.csgCapBackNormal = importTexture(deferredTargets.csgCapBackNormal, Name("render.deferred.csg_cap_back_normal"), "CSG Cap Back Normal");
-    result.csgIntervalDepth = importTexture(deferredTargets.csgIntervalDepth, Name("render.deferred.csg_interval_depth"), "CSG Interval Depth");
-    result.csgIntervalId = importTexture(deferredTargets.csgIntervalId, Name("render.deferred.csg_interval_id"), "CSG Interval ID");
-    result.csgReceiverEventData = importTexture(deferredTargets.csgReceiverEventData, Name("render.deferred.csg_receiver_event_data"), "CSG Receiver Event Data");
-    result.csgReceiverEventCount = importTexture(deferredTargets.csgReceiverEventCount, Name("render.deferred.csg_receiver_event_count"), "CSG Receiver Event Count");
-    result.csgReceiverSpanData = importTexture(deferredTargets.csgReceiverSpanData, Name("render.deferred.csg_receiver_span_data"), "CSG Receiver Span Data");
-    result.csgReceiverSpanCount = importTexture(deferredTargets.csgReceiverSpanCount, Name("render.deferred.csg_receiver_span_count"), "CSG Receiver Span Count");
-    result.csgRemovedIntervalDepth = importTexture(deferredTargets.csgRemovedIntervalDepth, Name("render.deferred.csg_removed_interval_depth"), "CSG Removed Interval Depth");
-    result.csgRemovedIntervalCapNormal = importTexture(deferredTargets.csgRemovedIntervalCapNormal, Name("render.deferred.csg_removed_interval_cap_normal"), "CSG Removed Interval Cap Normal");
-    result.csgRemovedIntervalData = importTexture(deferredTargets.csgRemovedIntervalData, Name("render.deferred.csg_removed_interval_data"), "CSG Removed Interval Data");
-    result.csgRemovedIntervalCount = importTexture(deferredTargets.csgRemovedIntervalCount, Name("render.deferred.csg_removed_interval_count"), "CSG Removed Interval Count");
-    result.shadowVisibility = importTexture(history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name("render.deferred_lighting.shadow_visibility"), history ? "Lagged Shadow Visibility" : "Shadow Visibility");
-    result.causticIrradiance = importTexture(history ? history->causticIrradiance : deferredTargets.causticIrradiance, Name("render.deferred_lighting.caustic_irradiance"), history ? "Lagged Caustic Irradiance" : "Caustic Irradiance");
-    result.surfelIrradiance = importTexture(history ? history->surfelIrradiance : deferredTargets.surfelIrradiance, Name("render.deferred_lighting.surfel_irradiance"), history ? "Lagged Surfel Irradiance" : "Surfel Irradiance");
-    result.currentShadowVisibility = !history ? result.shadowVisibility : importTexture(deferredTargets.shadowVisibility, Name("render.deferred_shadow_visibility.current_output"), "Shadow Visibility");
-    result.currentCausticIrradiance = !history ? result.causticIrradiance : importTexture(deferredTargets.causticIrradiance, Name("render.deferred_effects.current_caustic_irradiance"), "Caustic Irradiance");
-    result.currentSurfelIrradiance = !history ? result.surfelIrradiance : importTexture(deferredTargets.surfelIrradiance, Name("render.deferred_surfel_gi.current_irradiance"), "Surfel Irradiance");
-    result.opaqueColor = importFirstWriteTexture(deferredTargets.opaqueColor, Name("render.deferred_lighting.opaque_color"), "Opaque Color");
-    result.sceneShading = importBuffer(deferredLightingResources.sceneShadingBuffer, Name("render.deferred_lighting.scene_shading"), "Scene Shading");
-    result.lights = importBuffer(deferredLightingResources.lightBuffer, Name("render.deferred_lighting.lights"), "Lights");
-    result.meshView = importBuffer(meshViewBufferSnapshot.buffer, Name("render.deferred.mesh_view"), "Mesh View");
-    result.materialInstances = frameBindings.instanceBuffer ? importBuffer(frameBindings.instanceBuffer, Name("render.deferred.material_instances"), "Material Instances") : Core::GpuGraphResourceId{};
-    result.materialTyped = frameBindings.materialTypedBuffer ? importBuffer(frameBindings.materialTypedBuffer, Name("render.deferred.material_typed"), "Material Typed Data") : Core::GpuGraphResourceId{};
-    result.csgReceiverRanges = csgResources.receiverRanges ? importBuffer(csgResources.receiverRanges, Name("render.deferred.csg_receiver_ranges"), "CSG Receiver Ranges") : Core::GpuGraphResourceId{};
-    result.csgCutters = csgResources.cutters ? importBuffer(csgResources.cutters, Name("render.deferred.csg_cutters"), "CSG Cutters") : Core::GpuGraphResourceId{};
-    result.csgClipContextSlots = csgResources.clipContextSlots ? importBuffer(csgResources.clipContextSlots, Name("render.deferred.csg_clip_context_slots"), "CSG Clip Context Slots") : Core::GpuGraphResourceId{};
-    result.csgIntervalSampleState = csgResources.intervalSampleState ? importBuffer(csgResources.intervalSampleState, Name("render.deferred.csg_interval_sample_state"), "CSG Interval Sample State") : Core::GpuGraphResourceId{};
-    result.bindlessSlots = history ? importBuffer(history->slotsBuffer, Name("render.deferred_lighting.bindless_slots"), "Lagged Deferred Bindless Slots") : importCurrentBindlessSlots(Name("render.deferred_lighting.bindless_slots"), "Deferred Bindless Slots");
-    result.currentBindlessSlots = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? result.bindlessSlots : importCurrentBindlessSlots(Name("render.deferred_composite.bindless_slots"), "Deferred Bindless Slots");
-    result.materialContextSlots = rayTracingGraphResources.materialContextSlotsBuffer
-        ? importBuffer(rayTracingGraphResources.materialContextSlotsBuffer, Name("render.deferred.material_context_slots"), "Ray Trace Material Context Slots")
-        : Core::GpuGraphResourceId{}
-    ;
+    csgCapBackNormalResult = importTexture(deferredTargets.csgCapBackNormal, Name("render.deferred.csg_cap_back_normal"), "CSG Cap Back Normal");
+    csgIntervalDepthResult = importTexture(deferredTargets.csgIntervalDepth, Name("render.deferred.csg_interval_depth"), "CSG Interval Depth");
+    csgIntervalIdResult = importTexture(deferredTargets.csgIntervalId, Name("render.deferred.csg_interval_id"), "CSG Interval ID");
+    csgReceiverEventDataResult = importTexture(deferredTargets.csgReceiverEventData, Name("render.deferred.csg_receiver_event_data"), "CSG Receiver Event Data");
+    csgReceiverEventCountResult = importTexture(deferredTargets.csgReceiverEventCount, Name("render.deferred.csg_receiver_event_count"), "CSG Receiver Event Count");
+    csgReceiverSpanDataResult = importTexture(deferredTargets.csgReceiverSpanData, Name("render.deferred.csg_receiver_span_data"), "CSG Receiver Span Data");
+    csgReceiverSpanCountResult = importTexture(deferredTargets.csgReceiverSpanCount, Name("render.deferred.csg_receiver_span_count"), "CSG Receiver Span Count");
+    csgRemovedIntervalDepthResult = importTexture(deferredTargets.csgRemovedIntervalDepth, Name("render.deferred.csg_removed_interval_depth"), "CSG Removed Interval Depth");
+    csgRemovedIntervalCapNormalResult = importTexture(deferredTargets.csgRemovedIntervalCapNormal, Name("render.deferred.csg_removed_interval_cap_normal"), "CSG Removed Interval Cap Normal");
+    csgRemovedIntervalDataResult = importTexture(deferredTargets.csgRemovedIntervalData, Name("render.deferred.csg_removed_interval_data"), "CSG Removed Interval Data");
+    csgRemovedIntervalCountResult = importTexture(deferredTargets.csgRemovedIntervalCount, Name("render.deferred.csg_removed_interval_count"), "CSG Removed Interval Count");
+    shadowVisibilityResult = importTexture(history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name("render.deferred_lighting.shadow_visibility"), history ? "Lagged Shadow Visibility" : "Shadow Visibility");
+    causticIrradianceResult = importTexture(history ? history->causticIrradiance : deferredTargets.causticIrradiance, Name("render.deferred_lighting.caustic_irradiance"), history ? "Lagged Caustic Irradiance" : "Caustic Irradiance");
+    surfelIrradianceResult = importTexture(history ? history->surfelIrradiance : deferredTargets.surfelIrradiance, Name("render.deferred_lighting.surfel_irradiance"), history ? "Lagged Surfel Irradiance" : "Surfel Irradiance");
+    currentShadowVisibilityResult = !history ? shadowVisibilityResult : importTexture(deferredTargets.shadowVisibility, Name("render.deferred_shadow_visibility.current_output"), "Shadow Visibility");
+    currentCausticIrradianceResult = !history ? causticIrradianceResult : importTexture(deferredTargets.causticIrradiance, Name("render.deferred_effects.current_caustic_irradiance"), "Caustic Irradiance");
+    currentSurfelIrradianceResult = !history ? surfelIrradianceResult : importTexture(deferredTargets.surfelIrradiance, Name("render.deferred_surfel_gi.current_irradiance"), "Surfel Irradiance");
+    opaqueColorResult = importFirstWriteTexture(deferredTargets.opaqueColor, Name("render.deferred_lighting.opaque_color"), "Opaque Color");
+    sceneShadingResult = importBuffer(deferredLightingResources.sceneShadingBuffer, Name("render.deferred_lighting.scene_shading"), "Scene Shading");
+    lightsResult = importBuffer(deferredLightingResources.lightBuffer, Name("render.deferred_lighting.lights"), "Lights");
+    meshViewResult = importBuffer(meshViewBufferSnapshot.buffer, Name("render.deferred.mesh_view"), "Mesh View");
+    if(frameBindings.instanceBuffer){
+        const auto importedResource = importBuffer(frameBindings.instanceBuffer, Name("render.deferred.material_instances"), "Material Instances");
+        if(!importedResource)
+            materialInstancesResult = MakeUnexpected(importedResource.error());
+        else
+            materialInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+    }
+    if(frameBindings.materialTypedBuffer){
+        const auto importedResource = importBuffer(frameBindings.materialTypedBuffer, Name("render.deferred.material_typed"), "Material Typed Data");
+        if(!importedResource)
+            materialTypedResult = MakeUnexpected(importedResource.error());
+        else
+            materialTypedResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+    }
+    if(csgResources.receiverRanges){
+        const auto importedResource = importBuffer(csgResources.receiverRanges, Name("render.deferred.csg_receiver_ranges"), "CSG Receiver Ranges");
+        if(!importedResource)
+            csgReceiverRangesResult = MakeUnexpected(importedResource.error());
+        else
+            csgReceiverRangesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+    }
+    if(csgResources.cutters){
+        const auto importedResource = importBuffer(csgResources.cutters, Name("render.deferred.csg_cutters"), "CSG Cutters");
+        if(!importedResource)
+            csgCuttersResult = MakeUnexpected(importedResource.error());
+        else
+            csgCuttersResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+    }
+    if(csgResources.clipContextSlots){
+        const auto importedResource = importBuffer(csgResources.clipContextSlots, Name("render.deferred.csg_clip_context_slots"), "CSG Clip Context Slots");
+        if(!importedResource)
+            csgClipContextSlotsResult = MakeUnexpected(importedResource.error());
+        else
+            csgClipContextSlotsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+    }
+    if(csgResources.intervalSampleState){
+        const auto importedResource = importBuffer(csgResources.intervalSampleState, Name("render.deferred.csg_interval_sample_state"), "CSG Interval Sample State");
+        if(!importedResource)
+            csgIntervalSampleStateResult = MakeUnexpected(importedResource.error());
+        else
+            csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+    }
+    bindlessSlotsResult = history ? importBuffer(history->slotsBuffer, Name("render.deferred_lighting.bindless_slots"), "Lagged Deferred Bindless Slots") : importCurrentBindlessSlots(Name("render.deferred_lighting.bindless_slots"), "Deferred Bindless Slots");
+    currentBindlessSlotsResult = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? bindlessSlotsResult : importCurrentBindlessSlots(Name("render.deferred_composite.bindless_slots"), "Deferred Bindless Slots");
+    if(rayTracingGraphResources.materialContextSlotsBuffer){
+        const auto importedResource = importBuffer(rayTracingGraphResources.materialContextSlotsBuffer, Name("render.deferred.material_context_slots"), "Ray Trace Material Context Slots");
+        if(!importedResource)
+            materialContextSlotsResult = MakeUnexpected(importedResource.error());
+        else
+            materialContextSlotsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+    }
 
 
     // History copy declared after Present; reuse active-lighting identities for copy destinations.
     if(capturesLaggedLightingHistory){
-        result.historyCopyShadowVisibility = result.currentShadowVisibility;
-        result.historyCopyCausticIrradiance = result.currentCausticIrradiance;
-        result.historyCopySurfelIrradiance = history ? result.currentSurfelIrradiance : result.surfelIrradiance;
-        result.historyCopyDestinationShadowVisibility = history ? result.shadowVisibility : importFirstWriteTexture(captureHistory->shadowVisibility, Name("render.lagged_history_copy.history_shadow_visibility"), "History Shadow Visibility");
-        result.historyCopyDestinationCausticIrradiance = history ? result.causticIrradiance : importFirstWriteTexture(captureHistory->causticIrradiance, Name("render.lagged_history_copy.history_caustic_irradiance"), "History Caustic Irradiance");
-        result.historyCopyDestinationSurfelIrradiance = history ? result.surfelIrradiance : importFirstWriteTexture(captureHistory->surfelIrradiance, Name("render.lagged_history_copy.history_surfel_irradiance"), "History Surfel Irradiance");
+        historyCopyShadowVisibilityResult = currentShadowVisibilityResult;
+        historyCopyCausticIrradianceResult = currentCausticIrradianceResult;
+        historyCopySurfelIrradianceResult = history ? currentSurfelIrradianceResult : surfelIrradianceResult;
+        historyCopyDestinationShadowVisibilityResult = history ? shadowVisibilityResult : importFirstWriteTexture(captureHistory->shadowVisibility, Name("render.lagged_history_copy.history_shadow_visibility"), "History Shadow Visibility");
+        historyCopyDestinationCausticIrradianceResult = history ? causticIrradianceResult : importFirstWriteTexture(captureHistory->causticIrradiance, Name("render.lagged_history_copy.history_caustic_irradiance"), "History Caustic Irradiance");
+        historyCopyDestinationSurfelIrradianceResult = history ? surfelIrradianceResult : importFirstWriteTexture(captureHistory->surfelIrradiance, Name("render.lagged_history_copy.history_surfel_irradiance"), "History Surfel Irradiance");
     }
 
 
     // AVBOIT shares deferred G-buffer and imports; compiler owns state seeds through Lighting/Composite.
-    result.avboitLowRaster = importAvboitTexture(deferredTargets.avboit.lowRasterTarget, Name("render.avboit.low_raster"), "AVBOIT Low Raster");
-    result.avboitAccumColor = importAvboitTexture(deferredTargets.avboit.accumColor, Name("render.avboit.accum_color"), "AVBOIT Accumulated Color");
-    result.avboitAccumExtinction = importAvboitTexture(deferredTargets.avboit.accumExtinction, Name("render.avboit.accum_extinction"), "AVBOIT Accumulated Extinction");
-    result.refractionDepth = importAvboitTexture(deferredTargets.avboit.refractionDepth, Name("render.avboit.refractionDepth"), "AVBOIT refractionDepth");
-    result.refractionNormalIor = importAvboitTexture(deferredTargets.avboit.refractionNormalIor, Name("render.avboit.refractionNormalIor"), "AVBOIT refractionNormalIor");
-    result.refractionTintCoverage = importAvboitTexture(deferredTargets.avboit.refractionTintCoverage, Name("render.avboit.refractionTintCoverage"), "AVBOIT refractionTintCoverage");
-    result.refractionInstance = importAvboitTexture(deferredTargets.avboit.refractionInstance, Name("render.avboit.refractionInstance"), "AVBOIT refractionInstance");
-    result.refractionSpecularRoughness = importAvboitTexture(deferredTargets.avboit.refractionSpecularRoughness, Name("render.avboit.refractionSpecularRoughness"), "AVBOIT Refraction Specular Roughness");
-    result.refractionResolve = importAvboitTexture(deferredTargets.avboit.refractionResolve, Name("render.avboit.refractionResolve"), "AVBOIT refractionResolve");
-    result.avboitForegroundColor = importAvboitTexture(deferredTargets.avboit.foregroundAccumColor, Name("render.avboit.avboitForegroundColor"), "AVBOIT avboitForegroundColor");
-    result.avboitForegroundExtinction = importAvboitTexture(deferredTargets.avboit.foregroundAccumExtinction, Name("render.avboit.avboitForegroundExtinction"), "AVBOIT avboitForegroundExtinction");
-    result.avboitTransmittance = importAvboitTexture(deferredTargets.avboit.transmittanceTexture, Name("render.avboit.transmittance"), "AVBOIT Transmittance");
-    result.avboitCoverage = importBuffer(deferredTargets.avboit.coverageBuffer, Name("render.avboit.coverage"), "AVBOIT Coverage");
-    result.avboitDepthWarp = importBuffer(deferredTargets.avboit.depthWarpBuffer, Name("render.avboit.depth_warp"), "AVBOIT Depth Warp");
-    result.avboitControl = importBuffer(deferredTargets.avboit.controlBuffer, Name("render.avboit.control"), "AVBOIT Control");
-    result.avboitExtinction = importBuffer(deferredTargets.avboit.extinctionBuffer, Name("render.avboit.extinction"), "AVBOIT Extinction");
-    result.avboitExtinctionOverflow = importBuffer(deferredTargets.avboit.extinctionOverflowBuffer, Name("render.avboit.extinction_overflow"), "AVBOIT Extinction Overflow");
-    result.avboitMaterialDomain = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry"));
-    result.avboitCsgDomain = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.csg_domain"), "Transparent CSG Intervals"));
+    avboitLowRasterResult = importAvboitTexture(deferredTargets.avboit.lowRasterTarget, Name("render.avboit.low_raster"), "AVBOIT Low Raster");
+    avboitAccumColorResult = importAvboitTexture(deferredTargets.avboit.accumColor, Name("render.avboit.accum_color"), "AVBOIT Accumulated Color");
+    avboitAccumExtinctionResult = importAvboitTexture(deferredTargets.avboit.accumExtinction, Name("render.avboit.accum_extinction"), "AVBOIT Accumulated Extinction");
+    refractionDepthResult = importAvboitTexture(deferredTargets.avboit.refractionDepth, Name("render.avboit.refractionDepth"), "AVBOIT refractionDepth");
+    refractionNormalIorResult = importAvboitTexture(deferredTargets.avboit.refractionNormalIor, Name("render.avboit.refractionNormalIor"), "AVBOIT refractionNormalIor");
+    refractionTintCoverageResult = importAvboitTexture(deferredTargets.avboit.refractionTintCoverage, Name("render.avboit.refractionTintCoverage"), "AVBOIT refractionTintCoverage");
+    refractionInstanceResult = importAvboitTexture(deferredTargets.avboit.refractionInstance, Name("render.avboit.refractionInstance"), "AVBOIT refractionInstance");
+    refractionSpecularRoughnessResult = importAvboitTexture(deferredTargets.avboit.refractionSpecularRoughness, Name("render.avboit.refractionSpecularRoughness"), "AVBOIT Refraction Specular Roughness");
+    refractionResolveResult = importAvboitTexture(deferredTargets.avboit.refractionResolve, Name("render.avboit.refractionResolve"), "AVBOIT refractionResolve");
+    avboitForegroundColorResult = importAvboitTexture(deferredTargets.avboit.foregroundAccumColor, Name("render.avboit.avboitForegroundColor"), "AVBOIT avboitForegroundColor");
+    avboitForegroundExtinctionResult = importAvboitTexture(deferredTargets.avboit.foregroundAccumExtinction, Name("render.avboit.avboitForegroundExtinction"), "AVBOIT avboitForegroundExtinction");
+    avboitTransmittanceResult = importAvboitTexture(deferredTargets.avboit.transmittanceTexture, Name("render.avboit.transmittance"), "AVBOIT Transmittance");
+    avboitCoverageResult = importBuffer(deferredTargets.avboit.coverageBuffer, Name("render.avboit.coverage"), "AVBOIT Coverage");
+    avboitDepthWarpResult = importBuffer(deferredTargets.avboit.depthWarpBuffer, Name("render.avboit.depth_warp"), "AVBOIT Depth Warp");
+    avboitControlResult = importBuffer(deferredTargets.avboit.controlBuffer, Name("render.avboit.control"), "AVBOIT Control");
+    avboitExtinctionResult = importBuffer(deferredTargets.avboit.extinctionBuffer, Name("render.avboit.extinction"), "AVBOIT Extinction");
+    avboitExtinctionOverflowResult = importBuffer(deferredTargets.avboit.extinctionOverflowBuffer, Name("render.avboit.extinction_overflow"), "AVBOIT Extinction Overflow");
+    avboitMaterialDomainResult = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry"));
+    avboitCsgDomainResult = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.csg_domain"), "Transparent CSG Intervals"));
     if(
-        !result.albedo.valid()
-        || !result.normal.valid()
-        || !result.worldPosition.valid()
-        || !result.specularRoughness.valid()
-        || !result.refractionSpecularRoughness.valid()
-        || !result.depth.valid()
-        || !result.csgCapBackNormal.valid()
-        || !result.csgIntervalDepth.valid()
-        || !result.csgIntervalId.valid()
-        || !result.csgReceiverEventData.valid()
-        || !result.csgReceiverEventCount.valid()
-        || !result.csgReceiverSpanData.valid()
-        || !result.csgReceiverSpanCount.valid()
-        || !result.csgRemovedIntervalDepth.valid()
-        || !result.csgRemovedIntervalCapNormal.valid()
-        || !result.csgRemovedIntervalData.valid()
-        || !result.csgRemovedIntervalCount.valid()
-        || !result.shadowVisibility.valid()
-        || !result.causticIrradiance.valid()
-        || !result.surfelIrradiance.valid()
-        || !result.currentShadowVisibility.valid()
-        || !result.currentCausticIrradiance.valid()
-        || !result.currentSurfelIrradiance.valid()
-        || !result.opaqueColor.valid()
-        || !result.sceneShading.valid()
-        || !result.lights.valid()
-        || !result.meshView.valid()
-        || !result.bindlessSlots.valid()
-        || !result.currentBindlessSlots.valid()
-        || (rayTracingGraphResources.materialContextSlotsBuffer && !result.materialContextSlots.valid())
+        !csgIntervalSampleStateResult
+        || !materialInstancesResult
+        || !materialTypedResult
+        || !csgReceiverRangesResult
+        || !csgCuttersResult
+        || !csgClipContextSlotsResult
+        || !refractionDepthResult
+        || !refractionNormalIorResult
+        || !refractionTintCoverageResult
+        || !refractionInstanceResult
+        || !refractionResolveResult
+        || !avboitForegroundColorResult
+        || !avboitForegroundExtinctionResult
+        || !albedoResult
+        || !normalResult
+        || !worldPositionResult
+        || !specularRoughnessResult
+        || !refractionSpecularRoughnessResult
+        || !depthResult
+        || !csgCapBackNormalResult
+        || !csgIntervalDepthResult
+        || !csgIntervalIdResult
+        || !csgReceiverEventDataResult
+        || !csgReceiverEventCountResult
+        || !csgReceiverSpanDataResult
+        || !csgReceiverSpanCountResult
+        || !csgRemovedIntervalDepthResult
+        || !csgRemovedIntervalCapNormalResult
+        || !csgRemovedIntervalDataResult
+        || !csgRemovedIntervalCountResult
+        || !shadowVisibilityResult
+        || !causticIrradianceResult
+        || !surfelIrradianceResult
+        || !currentShadowVisibilityResult
+        || !currentCausticIrradianceResult
+        || !currentSurfelIrradianceResult
+        || !opaqueColorResult
+        || !sceneShadingResult
+        || !lightsResult
+        || !meshViewResult
+        || !bindlessSlotsResult
+        || !currentBindlessSlotsResult
+        || (rayTracingGraphResources.materialContextSlotsBuffer && !materialContextSlotsResult)
         || (capturesLaggedLightingHistory && (
-            !result.historyCopyShadowVisibility.valid()
-            || !result.historyCopyCausticIrradiance.valid()
-            || !result.historyCopySurfelIrradiance.valid()
-            || !result.historyCopyDestinationShadowVisibility.valid()
-            || !result.historyCopyDestinationCausticIrradiance.valid()
-            || !result.historyCopyDestinationSurfelIrradiance.valid()
+            !historyCopyShadowVisibilityResult
+            || !historyCopyCausticIrradianceResult
+            || !historyCopySurfelIrradianceResult
+            || !historyCopyDestinationShadowVisibilityResult
+            || !historyCopyDestinationCausticIrradianceResult
+            || !historyCopyDestinationSurfelIrradianceResult
         ))
-        || !result.avboitLowRaster.valid()
-        || !result.avboitAccumColor.valid()
-        || !result.avboitAccumExtinction.valid()
-        || !result.avboitTransmittance.valid()
-        || !result.avboitCoverage.valid()
-        || !result.avboitDepthWarp.valid()
-        || !result.avboitControl.valid()
-        || !result.avboitExtinction.valid()
-        || !result.avboitExtinctionOverflow.valid()
-        || !result.avboitMaterialDomain.valid()
-        || !result.avboitCsgDomain.valid()
+        || !avboitLowRasterResult
+        || !avboitAccumColorResult
+        || !avboitAccumExtinctionResult
+        || !avboitTransmittanceResult
+        || !avboitCoverageResult
+        || !avboitDepthWarpResult
+        || !avboitControlResult
+        || !avboitExtinctionResult
+        || !avboitExtinctionOverflowResult
+        || !avboitMaterialDomainResult
+        || !avboitCsgDomainResult
     )
         return MakeUnexpected(Failure{});
+
+    result.albedo = *albedoResult;
+    result.normal = *normalResult;
+    result.worldPosition = *worldPositionResult;
+    result.specularRoughness = *specularRoughnessResult;
+    result.depth = *depthResult;
+    result.csgCapBackNormal = *csgCapBackNormalResult;
+    result.csgIntervalDepth = *csgIntervalDepthResult;
+    result.csgIntervalId = *csgIntervalIdResult;
+    result.csgReceiverEventData = *csgReceiverEventDataResult;
+    result.csgReceiverEventCount = *csgReceiverEventCountResult;
+    result.csgReceiverSpanData = *csgReceiverSpanDataResult;
+    result.csgReceiverSpanCount = *csgReceiverSpanCountResult;
+    result.csgRemovedIntervalDepth = *csgRemovedIntervalDepthResult;
+    result.csgRemovedIntervalCapNormal = *csgRemovedIntervalCapNormalResult;
+    result.csgRemovedIntervalData = *csgRemovedIntervalDataResult;
+    result.csgRemovedIntervalCount = *csgRemovedIntervalCountResult;
+    result.shadowVisibility = *shadowVisibilityResult;
+    result.causticIrradiance = *causticIrradianceResult;
+    result.surfelIrradiance = *surfelIrradianceResult;
+    result.currentShadowVisibility = *currentShadowVisibilityResult;
+    result.currentCausticIrradiance = *currentCausticIrradianceResult;
+    result.currentSurfelIrradiance = *currentSurfelIrradianceResult;
+    result.opaqueColor = *opaqueColorResult;
+    result.sceneShading = *sceneShadingResult;
+    result.lights = *lightsResult;
+    result.meshView = *meshViewResult;
+    if(*materialInstancesResult)
+        result.materialInstances = **materialInstancesResult;
+    if(*materialTypedResult)
+        result.materialTyped = **materialTypedResult;
+    if(*csgReceiverRangesResult)
+        result.csgReceiverRanges = **csgReceiverRangesResult;
+    if(*csgCuttersResult)
+        result.csgCutters = **csgCuttersResult;
+    if(*csgClipContextSlotsResult)
+        result.csgClipContextSlots = **csgClipContextSlotsResult;
+    if(*csgIntervalSampleStateResult)
+        result.csgIntervalSampleState = **csgIntervalSampleStateResult;
+    result.bindlessSlots = *bindlessSlotsResult;
+    result.currentBindlessSlots = *currentBindlessSlotsResult;
+    if(*materialContextSlotsResult)
+        result.materialContextSlots = **materialContextSlotsResult;
+    if(capturesLaggedLightingHistory)
+        result.historyCopyShadowVisibility = *historyCopyShadowVisibilityResult;
+    if(capturesLaggedLightingHistory)
+        result.historyCopyCausticIrradiance = *historyCopyCausticIrradianceResult;
+    if(capturesLaggedLightingHistory)
+        result.historyCopySurfelIrradiance = *historyCopySurfelIrradianceResult;
+    if(capturesLaggedLightingHistory)
+        result.historyCopyDestinationShadowVisibility = *historyCopyDestinationShadowVisibilityResult;
+    if(capturesLaggedLightingHistory)
+        result.historyCopyDestinationCausticIrradiance = *historyCopyDestinationCausticIrradianceResult;
+    if(capturesLaggedLightingHistory)
+        result.historyCopyDestinationSurfelIrradiance = *historyCopyDestinationSurfelIrradianceResult;
+    result.avboitLowRaster = *avboitLowRasterResult;
+    result.avboitAccumColor = *avboitAccumColorResult;
+    result.avboitAccumExtinction = *avboitAccumExtinctionResult;
+    result.refractionDepth = *refractionDepthResult;
+    result.refractionNormalIor = *refractionNormalIorResult;
+    result.refractionTintCoverage = *refractionTintCoverageResult;
+    result.refractionInstance = *refractionInstanceResult;
+    result.refractionSpecularRoughness = *refractionSpecularRoughnessResult;
+    result.refractionResolve = *refractionResolveResult;
+    result.avboitForegroundColor = *avboitForegroundColorResult;
+    result.avboitForegroundExtinction = *avboitForegroundExtinctionResult;
+    result.avboitTransmittance = *avboitTransmittanceResult;
+    result.avboitCoverage = *avboitCoverageResult;
+    result.avboitDepthWarp = *avboitDepthWarpResult;
+    result.avboitControl = *avboitControlResult;
+    result.avboitExtinction = *avboitExtinctionResult;
+    result.avboitExtinctionOverflow = *avboitExtinctionOverflowResult;
+    result.avboitMaterialDomain = *avboitMaterialDomainResult;
+    result.avboitCsgDomain = *avboitCsgDomainResult;
     result.csgPeelSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgPeelLayerCount);
     result.csgReceiverEventDataSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgReceiverEventLayerCount);
     result.csgReceiverEventCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);

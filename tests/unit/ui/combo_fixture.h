@@ -6,6 +6,7 @@
 
 
 #include "widget_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +100,7 @@ public:
     mutable u64 enabledCalls = 0u;
 };
 
-[[nodiscard]] inline ComboOptions Options(){
+[[nodiscard]] inline ComboOptions Options()noexcept{
     ComboOptions options;
     options.width = { LayoutSizePolicy::Fixed, 220.0f };
     options.height = { LayoutSizePolicy::Fixed, 32.0f };
@@ -133,12 +134,12 @@ protected:
         return prepare(generation, options, bounds) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId host(const AStringView key = "combo")const noexcept{ return id(key, "panel"); }
-    [[nodiscard]] WidgetId popup(const AStringView key = "combo")const noexcept{ return MakeWidgetId(host(key), "popup"); }
-    [[nodiscard]] WidgetId list(const AStringView key = "combo")const noexcept{ return MakeWidgetId(host(key), "rows"); }
+    [[nodiscard]] WidgetId host(const AStringView key = "combo")const{ return id(key, "panel"); }
+    [[nodiscard]] WidgetId popup(const AStringView key = "combo")const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "popup")); }
+    [[nodiscard]] WidgetId list(const AStringView key = "combo")const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "rows")); }
 
-    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = "combo")const noexcept{
-        return MakeWidgetPartId(MakeWidgetId(list(combo), "rows"), key);
+    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = "combo")const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(list(combo), "rows")), key));
     }
 
     using WidgetFixture::press;

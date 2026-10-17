@@ -358,6 +358,8 @@ struct GpuCommandIrStreamValidationResult{
     GpuCommandIrStreamValidationError::Enum error = GpuCommandIrStreamValidationError::None;
     bool complete = false;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return complete && error == GpuCommandIrStreamValidationError::None;
     }
@@ -434,7 +436,7 @@ class GpuCommandIrOwnedStream final : NoCopy{
 
 
 public:
-    explicit GpuCommandIrOwnedStream(GraphicsArena& arena);
+    explicit GpuCommandIrOwnedStream(GraphicsArena& arena)noexcept;
     GpuCommandIrOwnedStream(GpuCommandIrOwnedStream&& other)noexcept;
     ~GpuCommandIrOwnedStream()noexcept;
 
@@ -500,6 +502,8 @@ struct GpuCommandIrReplayResult{
     GpuCommandIrStreamValidationResult streamValidation;
     u64 recordIndex = Limit<u64>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return error == GpuCommandIrReplayError::None;
     }
@@ -512,15 +516,8 @@ struct GpuCommandIrReplayResult{
 
 // Preflight then lowers only `packet`'s commands: list open on the packet's exact queue/class, no render pass, bytes+graph stable.
 // No seeds/barriers/submit; caller keeps the packet contract.
-[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList)noexcept;
-[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
-    const GpuCommandIrOwnedStream& stream,
-    const GpuTaskGraphDeclarationReadView& graph,
-    const GpuCompiledGraph::ReadView& compiledGraph,
-    GpuSubmissionPacketId packet,
-    CommandList& commandList
-)noexcept;
-
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList);
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList);
 
 
 class GpuCommandIrCapture final : NoCopy{

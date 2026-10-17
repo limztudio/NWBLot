@@ -124,7 +124,91 @@ struct StructName{ \
 }
 
 template<typename Symbols>
-[[nodiscard]] inline i32 TranslateLinuxKeySymbol(typename Symbols::value_type keySym){
+inline constexpr bool s_LinuxKeySymbolsUseIntegralOperands =
+    IsIntegral_V<typename Symbols::value_type>
+    && IsIntegral_V<decltype(Symbols::s_AltL)>
+    && IsIntegral_V<decltype(Symbols::s_AltR)>
+    && IsIntegral_V<decltype(Symbols::s_Apostrophe)>
+    && IsIntegral_V<decltype(Symbols::s_BackSpace)>
+    && IsIntegral_V<decltype(Symbols::s_Backslash)>
+    && IsIntegral_V<decltype(Symbols::s_BracketLeft)>
+    && IsIntegral_V<decltype(Symbols::s_BracketRight)>
+    && IsIntegral_V<decltype(Symbols::s_CapsLock)>
+    && IsIntegral_V<decltype(Symbols::s_Comma)>
+    && IsIntegral_V<decltype(Symbols::s_ControlL)>
+    && IsIntegral_V<decltype(Symbols::s_ControlR)>
+    && IsIntegral_V<decltype(Symbols::s_DeleteKey)>
+    && IsIntegral_V<decltype(Symbols::s_Down)>
+    && IsIntegral_V<decltype(Symbols::s_End)>
+    && IsIntegral_V<decltype(Symbols::s_Equal)>
+    && IsIntegral_V<decltype(Symbols::s_Escape)>
+    && IsIntegral_V<decltype(Symbols::s_F1)>
+    && IsIntegral_V<decltype(Symbols::s_F24)>
+    && IsIntegral_V<decltype(Symbols::s_F25)>
+    && IsIntegral_V<decltype(Symbols::s_Grave)>
+    && IsIntegral_V<decltype(Symbols::s_Home)>
+    && IsIntegral_V<decltype(Symbols::s_HyperL)>
+    && IsIntegral_V<decltype(Symbols::s_HyperR)>
+    && IsIntegral_V<decltype(Symbols::s_ISOLeftTab)>
+    && IsIntegral_V<decltype(Symbols::s_Insert)>
+    && IsIntegral_V<decltype(Symbols::s_KP0)>
+    && IsIntegral_V<decltype(Symbols::s_KP9)>
+    && IsIntegral_V<decltype(Symbols::s_KPAdd)>
+    && IsIntegral_V<decltype(Symbols::s_KPBegin)>
+    && IsIntegral_V<decltype(Symbols::s_KPDecimal)>
+    && IsIntegral_V<decltype(Symbols::s_KPDelete)>
+    && IsIntegral_V<decltype(Symbols::s_KPDivide)>
+    && IsIntegral_V<decltype(Symbols::s_KPDown)>
+    && IsIntegral_V<decltype(Symbols::s_KPEnd)>
+    && IsIntegral_V<decltype(Symbols::s_KPEnter)>
+    && IsIntegral_V<decltype(Symbols::s_KPEqual)>
+    && IsIntegral_V<decltype(Symbols::s_KPHome)>
+    && IsIntegral_V<decltype(Symbols::s_KPInsert)>
+    && IsIntegral_V<decltype(Symbols::s_KPLeft)>
+    && IsIntegral_V<decltype(Symbols::s_KPMultiply)>
+    && IsIntegral_V<decltype(Symbols::s_KPNext)>
+    && IsIntegral_V<decltype(Symbols::s_KPPrior)>
+    && IsIntegral_V<decltype(Symbols::s_KPRight)>
+    && IsIntegral_V<decltype(Symbols::s_KPSubtract)>
+    && IsIntegral_V<decltype(Symbols::s_KPUp)>
+    && IsIntegral_V<decltype(Symbols::s_Key0)>
+    && IsIntegral_V<decltype(Symbols::s_Key9)>
+    && IsIntegral_V<decltype(Symbols::s_KeyA)>
+    && IsIntegral_V<decltype(Symbols::s_KeyZ)>
+    && IsIntegral_V<decltype(Symbols::s_Keya)>
+    && IsIntegral_V<decltype(Symbols::s_Keyz)>
+    && IsIntegral_V<decltype(Symbols::s_Left)>
+    && IsIntegral_V<decltype(Symbols::s_Menu)>
+    && IsIntegral_V<decltype(Symbols::s_MetaL)>
+    && IsIntegral_V<decltype(Symbols::s_MetaR)>
+    && IsIntegral_V<decltype(Symbols::s_Minus)>
+    && IsIntegral_V<decltype(Symbols::s_Next)>
+    && IsIntegral_V<decltype(Symbols::s_NumLock)>
+    && IsIntegral_V<decltype(Symbols::s_Pause)>
+    && IsIntegral_V<decltype(Symbols::s_Period)>
+    && IsIntegral_V<decltype(Symbols::s_Print)>
+    && IsIntegral_V<decltype(Symbols::s_Prior)>
+    && IsIntegral_V<decltype(Symbols::s_QuoteLeft)>
+    && IsIntegral_V<decltype(Symbols::s_ReturnKey)>
+    && IsIntegral_V<decltype(Symbols::s_Right)>
+    && IsIntegral_V<decltype(Symbols::s_ScrollLock)>
+    && IsIntegral_V<decltype(Symbols::s_Semicolon)>
+    && IsIntegral_V<decltype(Symbols::s_ShiftL)>
+    && IsIntegral_V<decltype(Symbols::s_ShiftR)>
+    && IsIntegral_V<decltype(Symbols::s_Slash)>
+    && IsIntegral_V<decltype(Symbols::s_Space)>
+    && IsIntegral_V<decltype(Symbols::s_SuperL)>
+    && IsIntegral_V<decltype(Symbols::s_SuperR)>
+    && IsIntegral_V<decltype(Symbols::s_SysReq)>
+    && IsIntegral_V<decltype(Symbols::s_Tab)>
+    && IsIntegral_V<decltype(Symbols::s_Up)>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Symbols>
+[[nodiscard]] inline i32 TranslateLinuxKeySymbol(typename Symbols::value_type keySym)noexcept(s_LinuxKeySymbolsUseIntegralOperands<Symbols>){
     if(keySym >= Symbols::s_Key0 && keySym <= Symbols::s_Key9)
         return static_cast<i32>(keySym);
 

@@ -26,6 +26,8 @@ struct GpuQueueAssignmentScore{
     i32 outgoingCrossings = 0;
     i32 ownershipTransfers = 0;
 
+
+public:
     [[nodiscard]] i32 total()const noexcept;
 };
 
@@ -37,6 +39,8 @@ struct GpuTaskTimingAssignmentKey{
     u32 variant = 0u;
     u32 resolutionClass = 0u;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return static_cast<bool>(task); }
 };
 inline constexpr bool operator==(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
@@ -55,6 +59,8 @@ struct GpuTaskTimingKey{
     u32 resolutionClass = 0u;
     CommandQueue::Enum queue = CommandQueue::Graphics;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return task && queue < CommandQueue::kCount; }
 };
 inline constexpr bool operator==(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
@@ -85,6 +91,8 @@ struct RouteKey{
     CommandQueue::Enum queue;
     GpuPhysicalQueueId physicalQueue;
 
+
+public:
     [[nodiscard]] constexpr bool operator==(const RouteKey&)const = default;
 };
 
@@ -93,6 +101,8 @@ struct AssignmentKey{
     u32 variant;
     u32 resolutionClass;
 
+
+public:
     [[nodiscard]] constexpr bool operator==(const AssignmentKey&)const = default;
 };
 
@@ -109,6 +119,8 @@ struct RouteHash{
 struct RouteEqual{
     using is_transparent = void;
 
+
+public:
     [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteKey& rhs)const noexcept{
         return lhs == rhs;
     }
@@ -125,6 +137,8 @@ struct AssignmentHash{
 struct AssignmentEqual{
     using is_transparent = void;
 
+
+public:
     [[nodiscard]] bool operator()(const AssignmentKey& lhs, const AssignmentKey& rhs)const noexcept{
         return lhs == rhs;
     }
@@ -152,6 +166,8 @@ struct GpuTaskTimingHistory{
     f64 maximumSeconds = 0.0;
     u32 sampleCount = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept;
 };
 
@@ -160,6 +176,8 @@ struct GpuTaskTimingHistoryEntry{
     GpuTaskTimingHistory history;
     GpuPhysicalQueueId physicalQueue;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return key.valid() && physicalQueue.valid() && history.valid();
     }
@@ -174,6 +192,8 @@ struct GpuTaskTimingAssignmentState{
     GpuPhysicalQueueId lastAcceptedQueue;
     bool hasAcceptedAssignment = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return key.valid() && hasAcceptedAssignment && lastAcceptedQueue.valid() && lastSwitchFrameIndex <= lastAcceptedFrameIndex;
     }
@@ -200,6 +220,8 @@ struct GpuTaskTimingFeedbackPolicy{
     // Probes stop after every legal route reaches minimumSampleCount.
     bool enabled = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept;
 };
 
@@ -207,6 +229,8 @@ struct GpuTaskDiagnosticTimingQueueOverride{
     GpuTaskTimingKey key;
     GpuPhysicalQueueId queue;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return key.valid() && queue.valid(); }
 };
 
@@ -251,7 +275,7 @@ class GpuTaskTimingHistorySnapshot final : NoCopy{
 
 
 public:
-    explicit GpuTaskTimingHistorySnapshot(GraphicsArena& arena)
+    explicit GpuTaskTimingHistorySnapshot(GraphicsArena& arena)noexcept
         : m_histories(arena)
         , m_assignments(arena)
     {}
@@ -288,7 +312,9 @@ private:
         GpuTaskTimingHistoryEntry entry;
         GraphicsVector<f64> samples;
 
-        explicit HistoryRecord(GraphicsArena& arena)
+
+    public:
+        explicit HistoryRecord(GraphicsArena& arena)noexcept
             : samples(arena)
         {}
     };

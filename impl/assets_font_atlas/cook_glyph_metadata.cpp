@@ -121,10 +121,10 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
 
 Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload){
     using namespace __hidden_font_atlas_cook_glyph_metadata;
-    const Value* glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, "glyphs");
+    const auto glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, "glyphs");
     if(!glyphs)
-        return MakeUnexpected(Failure{});
-    if(payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || glyphs->asList().size() != payload.sourceGlyphCount){
+        return MakeUnexpected(glyphs.error());
+    if(payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || (*glyphs)->asList().size() != payload.sourceGlyphCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': exactly one record per source glyph is required"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
@@ -132,7 +132,7 @@ Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
     candidate.reserve(payload.sourceGlyphCount);
     const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
     for(u32 index = 0u; index < payload.sourceGlyphCount; ++index){
-        auto glyphResult = ReadGlyph(nwbFilePath, glyphs->asList()[index], index, unitsPerPixel);
+        auto glyphResult = ReadGlyph(nwbFilePath, (*glyphs)->asList()[index], index, unitsPerPixel);
         if(!glyphResult)
             return MakeUnexpected(Failure{});
         candidate.push_back(*glyphResult);

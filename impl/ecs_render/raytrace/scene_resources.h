@@ -47,6 +47,8 @@ struct RayTracingSceneGraphResources{
     u32 materialContextSlotsHeapSlot = 0u;
     bool hardwareAvailable = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return hardwareAvailable && sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer && instanceMaterialBuffer && materialTypedBuffer && instanceBuffer && opticalScene.valid();
     }

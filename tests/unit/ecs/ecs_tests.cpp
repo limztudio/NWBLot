@@ -48,6 +48,16 @@ struct VelocityComponent{
     i32 y = 0;
 };
 
+struct AddressTrapComponent{
+public:
+    mutable u32 addressCalls = 0u;
+
+
+public:
+    [[nodiscard]] AddressTrapComponent* operator&(){ ++addressCalls; throw 37u; }
+    [[nodiscard]] const AddressTrapComponent* operator&()const{ ++addressCalls; throw 41u; }
+};
+
 struct alignas(32) OverAlignedComponent{
     u8 value[32] = {};
 };
@@ -76,7 +86,11 @@ public:
     {
         rhs.value = 0u;
     }
+
+
+public:
     MoveOnlyMessage& operator=(const MoveOnlyMessage&) = delete;
+
     MoveOnlyMessage& operator=(MoveOnlyMessage&& rhs)noexcept{
         if(this != &rhs){
             value = rhs.value;
@@ -94,13 +108,14 @@ public:
         writeAccess<PositionComponent>();
     }
 
+
 public:
     virtual void prepare(NWB::Core::ECS::World& world)noexcept override{
         static_cast<void>(world);
         ++prepares;
     }
 
-    virtual void update(NWB::Core::ECS::World& world, const f32 delta)override{
+    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, const f32 delta)override{
         ++updates;
         lastDelta = delta;
 
@@ -108,7 +123,9 @@ public:
                 ++position.x;
             }
         );
+        return {};
     }
+
 
 public:
     u32 prepares = 0;
@@ -130,10 +147,11 @@ public:
 
 
 public:
-    virtual void update(NWB::Core::ECS::World& world, f32 delta)override{
+    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)override{
         static_cast<void>(world);
         static_cast<void>(delta);
         m_update();
+        return {};
     }
 
     [[nodiscard]] virtual NWB::Core::CpuTaskOptions taskOptions()const noexcept override{ return m_options; }
@@ -142,6 +160,29 @@ public:
 private:
     Function<void()> m_update;
     NWB::Core::CpuTaskOptions m_options;
+};
+
+
+class RejectingRangeSystem final : public NWB::Core::ECS::ISystem{
+public:
+    explicit RejectingRangeSystem(NWB::Core::Alloc::GlobalArena& arena)
+        : NWB::Core::ECS::ISystem(arena)
+    {
+        writeAccess<PositionComponent>();
+    }
+
+
+public:
+    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)override{
+        static_cast<void>(delta);
+        NWB::Core::CpuTaskOptions options;
+        options.target = static_cast<NWB::Core::CpuTaskTarget::Enum>(NWB::Core::CpuTaskTarget::MainThread + 1u);
+        return world.taskScope().parallelFor(0u, 1u, 1u, [this](usize)noexcept{ ++callbacks; }, options);
+    }
+
+
+public:
+    u32 callbacks = 0u;
 };
 
 
@@ -156,6 +197,54 @@ TEST(Ecs, ComponentStoragePreservesOverAlignment){
     auto entity = testWorld.world.createEntity();
     auto& aligned = entity.addComponent<OverAlignedComponent>();
     EXPECT_EQ(reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent), 0u);
+}
+
+TEST(Ecs, StoredComponentLookupBypassesThrowingAddressOperators){
+    TestWorld testWorld;
+    auto entity = testWorld.world.createEntity();
+    AddressTrapComponent& component = entity.addComponent<AddressTrapComponent>();
+    AddressTrapComponent* const expected = AddressOf(component);
+    const NWB::Core::ECS::World& constWorld = testWorld.world;
+    static_assert(noexcept(testWorld.world.tryGetComponent<AddressTrapComponent>(entity.id())));
+    static_assert(noexcept(constWorld.tryGetComponent<AddressTrapComponent>(entity.id())));
+    EXPECT_EQ(testWorld.world.tryGetComponent<AddressTrapComponent>(entity.id()), expected);
+    EXPECT_EQ(constWorld.tryGetComponent<AddressTrapComponent>(entity.id()), expected);
+    EXPECT_EQ(component.addressCalls, 0u);
+    entity.destroy();
+    EXPECT_EQ(testWorld.world.tryGetComponent<AddressTrapComponent>(entity.id()), nullptr);
+}
+
+TEST(Ecs, ViewAndMessageConsumersPreserveCallbackExceptionContracts){
+    TestWorld testWorld;
+    auto entity = testWorld.world.createEntity();
+    entity.addComponent<PositionComponent>();
+    entity.addComponent<VelocityComponent>();
+    const auto single = testWorld.world.view<PositionComponent>();
+    const auto multiple = testWorld.world.view<PositionComponent, VelocityComponent>();
+    const auto singleNoThrow = [](const NWB::Core::ECS::EntityID&, PositionComponent&)noexcept{};
+    const auto singleThrows = [](const NWB::Core::ECS::EntityID&, PositionComponent&){ throw 43u; };
+    const auto multipleNoThrow = [](NWB::Core::ECS::EntityID&, PositionComponent&, VelocityComponent&)noexcept{};
+    const auto multipleThrows = [](NWB::Core::ECS::EntityID&, PositionComponent&, VelocityComponent&){ throw 47u; };
+    static_assert(noexcept(single.each(singleNoThrow)));
+    static_assert(!noexcept(single.each(singleThrows)));
+    static_assert(noexcept(multiple.each(multipleNoThrow)));
+    static_assert(!noexcept(multiple.each(multipleThrows)));
+    EXPECT_THROW(single.each(singleThrows), u32);
+    EXPECT_THROW(multiple.each(multipleThrows), u32);
+    single.each(singleNoThrow);
+    multiple.each(multipleNoThrow);
+
+    testWorld.world.postMessage(7u);
+    testWorld.world.swapMessageBuffers();
+    u32 observed = 0u;
+    const auto messageNoThrow = [&observed](const u32& value)noexcept{ observed += value; };
+    const auto messageThrows = [](const u32&){ throw 53u; };
+    static_assert(noexcept(testWorld.world.consumeMessages<u32>(messageNoThrow)));
+    static_assert(!noexcept(testWorld.world.consumeMessages<u32>(messageThrows)));
+    testWorld.world.consumeMessages<u32>(messageNoThrow);
+    EXPECT_EQ(observed, 7u);
+    EXPECT_THROW(testWorld.world.consumeMessages<u32>(messageThrows), u32);
+    EXPECT_EQ(testWorld.world.messageCount<u32>(), 1u);
 }
 
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
@@ -173,14 +262,14 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
             ++multiViewCount;
         }
     );
-    testWorld.world.view<PositionComponent>().parallelEach(testWorld.world.taskScope(), [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
+    EXPECT_TRUE((testWorld.world.view<PositionComponent>().parallelEach(testWorld.world.taskScope(), [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
             ++singleViewCount;
         }
-    );
-    testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(testWorld.world.taskScope(), [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
+    )));
+    EXPECT_TRUE((testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(testWorld.world.taskScope(), [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
             ++multiViewCount;
         }
-    );
+    )));
 
     EXPECT_EQ(singleViewCount, 0u);
     EXPECT_EQ(multiViewCount, 0u);
@@ -278,7 +367,8 @@ TEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation){
         16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
         32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
         48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
-    >{});
+    >{}
+    );
     EXPECT_NE(typeIds.front(), typeIds.back());
 
     TestWorld firstWorld;
@@ -309,7 +399,8 @@ TEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation){
         EXPECT_EQ(&component, &firstComponent);
         EXPECT_EQ(component.value, 17u);
         ++visits;
-    });
+    }
+    );
     EXPECT_EQ(visits, 1u);
 
     firstEntity.addComponent<PoolSlotComponent<31u>>().value = 53u;
@@ -382,15 +473,15 @@ TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     }
 
     Atomic<u32> visits{ 0u };
-    world.taskScope().parallelFor(static_cast<usize>(0), s_OuterCount, [&](usize outerIndex){
+    EXPECT_TRUE((world.taskScope().parallelFor(static_cast<usize>(0), s_OuterCount, [&](usize outerIndex){
             static_cast<void>(outerIndex);
-            world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
+            EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
                     static_cast<void>(position);
                     visits.fetch_add(1u, MemoryOrder::relaxed);
                 }
-            );
+            )));
         }
-    );
+    )));
 
     EXPECT_EQ(visits.load(MemoryOrder::relaxed), s_EntityCount * static_cast<u32>(s_OuterCount));
 }
@@ -406,11 +497,33 @@ TEST(Ecs, DuplicateSchedulerAddIsStable){
     NWB::Core::ECS::SystemScheduler scheduler(testWorld.arena);
     scheduler.addSystem(system);
     scheduler.addSystem(system);
-    scheduler.execute(testWorld.world, 0.5f);
+    ASSERT_TRUE(scheduler.execute(testWorld.world, 0.5f));
 
     EXPECT_EQ(system.prepares, 1u);
     EXPECT_EQ(system.updates, 1u);
     EXPECT_EQ(position.x, 2);
+}
+
+
+TEST(Ecs, WorldTickPropagatesRangeRejectionAndSkipsDependentSystems){
+    TestWorld testWorld;
+    auto& rejectedSystem = testWorld.world.addSystem<RejectingRangeSystem>();
+    auto& dependent = testWorld.world.addSystem<CountingSystem>();
+    u32 independentUpdates = 0u;
+    testWorld.world.addSystem<ScheduledSystem>(InitializerList<NWB::Core::ECS::ComponentAccess>{}, Function<void()>([&]()noexcept{ ++independentUpdates; }));
+    const auto updated = testWorld.world.tick(0.5f);
+    ASSERT_FALSE(updated);
+    EXPECT_EQ(updated.error(), NWB::Core::CpuTaskAdmissionError::InvalidOptions);
+    EXPECT_EQ(rejectedSystem.callbacks, 0u);
+    EXPECT_EQ(dependent.prepares, 1u);
+    EXPECT_EQ(dependent.updates, 0u);
+    EXPECT_EQ(independentUpdates, 1u);
+    EXPECT_EQ(testWorld.taskScheduler.statistics().outstandingTasks, 0u);
+    u32 laterCallbacks = 0u;
+    const auto admitted = testWorld.taskScheduler.submit([&]()noexcept{ ++laterCallbacks; });
+    ASSERT_TRUE(admitted);
+    testWorld.taskScheduler.wait(*admitted);
+    EXPECT_EQ(laterCallbacks, 1u);
 }
 
 
@@ -426,24 +539,25 @@ TEST(Ecs, SystemDependenciesPreserveRegistrationOrderAcrossComponents){
     ScheduledSystem transfer(testWorld.arena, {
         { positionType, NWB::Core::ECS::AccessMode::Read },
         { velocityType, NWB::Core::ECS::AccessMode::Write },
-    }, [&]()noexcept{ velocity = position + 1; });
+    }, [&]()noexcept{ velocity = position + 1; }
+    );
     ScheduledSystem reader(testWorld.arena, { { velocityType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{ observed = velocity; });
 
     NWB::Core::ECS::SystemScheduler scheduler(testWorld.arena);
     scheduler.addSystem(writer);
     scheduler.addSystem(transfer);
     scheduler.addSystem(reader);
-    scheduler.execute(testWorld.world, 0.0f);
+    ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f));
     EXPECT_EQ(observed, 18);
 
     // Removing and adding a system invalidates the cached predecessor list.
     scheduler.removeSystem(transfer);
     velocity = 31;
-    scheduler.execute(testWorld.world, 0.0f);
+    ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f));
     EXPECT_EQ(observed, 31);
     scheduler.addSystem(transfer);
     velocity = 47;
-    scheduler.execute(testWorld.world, 0.0f);
+    ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f));
     EXPECT_EQ(observed, 47);
     EXPECT_EQ(velocity, 18);
 }
@@ -463,17 +577,19 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
         while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
             SleepMS(1u);
         independentObservedCompletion.store(dependentCompleted.load(MemoryOrder::acquire), MemoryOrder::release);
-    });
+    }
+    );
     ScheduledSystem dependent(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
         EXPECT_EQ(value, 5);
         dependentCompleted.store(true, MemoryOrder::release);
-    });
+    }
+    );
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
     scheduler.addSystem(writer);
     scheduler.addSystem(independent);
     scheduler.addSystem(dependent);
-    scheduler.execute(world, 0.0f);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f));
     EXPECT_TRUE(independentObservedCompletion.load(MemoryOrder::acquire));
 }
 
@@ -491,14 +607,15 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
         executedOnCaller = s_EcsCallerThread;
         EXPECT_EQ(value, 23);
         value = 29;
-    }, { .target = NWB::Core::CpuTaskTarget::MainThread });
+    }, { .target = NWB::Core::CpuTaskTarget::MainThread }
+    );
     ScheduledSystem consumer(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){ EXPECT_EQ(value, 29); });
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
     scheduler.addSystem(worker);
     scheduler.addSystem(caller);
     scheduler.addSystem(consumer);
-    scheduler.execute(world, 0.0f);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f));
     EXPECT_TRUE(executedOnCaller);
     s_EcsCallerThread = false;
 }
@@ -514,21 +631,25 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
     usize observed = 0u;
 
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
-        world.view<PositionComponent>().parallelEach(world.taskScope(), 8u, [](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
+        EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 8u, [](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
             position.y = position.x + 1;
-        });
-    });
+        }
+        )));
+    }
+    );
     ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
         world.view<PositionComponent>().each([&](NWB::Core::ECS::EntityID, PositionComponent& position){
             EXPECT_EQ(position.y, position.x + 1);
             ++observed;
-        });
-    });
+        }
+        );
+    }
+    );
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
     scheduler.addSystem(writer);
     scheduler.addSystem(reader);
-    scheduler.execute(world, 0.0f);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f));
     EXPECT_EQ(observed, s_EntityCount);
 }
 
@@ -541,19 +662,26 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
     i32 observed = 0;
 
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
-        world.taskScope().submit([&](){
+        const auto cpuAdmission2 = world.taskScope().submit([&](){
             SleepMS(25u);
-            world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
-        });
-    });
+            const auto cpuAdmission3 = world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
+            ASSERT_TRUE(cpuAdmission3);
+            EXPECT_TRUE(cpuAdmission3->valid());
+        }
+        );
+        ASSERT_TRUE(cpuAdmission2);
+        EXPECT_TRUE(cpuAdmission2->valid());
+    }
+    );
     ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{
         observed = value.load(MemoryOrder::acquire);
-    });
+    }
+    );
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
     scheduler.addSystem(writer);
     scheduler.addSystem(reader);
-    scheduler.execute(world, 0.0f);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f));
     EXPECT_EQ(observed, 41);
 }
 
@@ -566,14 +694,17 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     Atomic<bool> started{ false };
     Atomic<bool> release{ false };
     Atomic<bool> completed{ false };
-    unrelatedTasks.submit([&](){
+    const auto cpuAdmission4 = unrelatedTasks.submit([&](){
         started.store(true, MemoryOrder::release);
         started.notify_all();
         const Timer begin = TimerNow();
         while(!release.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
             SleepMS(1u);
         completed.store(true, MemoryOrder::release);
-    });
+    }
+    );
+    ASSERT_TRUE(cpuAdmission4);
+    EXPECT_TRUE(cpuAdmission4->valid());
     started.wait(false, MemoryOrder::acquire);
     world.createEntity().addComponent<PositionComponent>();
     world.clear();

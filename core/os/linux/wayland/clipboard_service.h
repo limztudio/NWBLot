@@ -38,7 +38,9 @@ private:
         ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
         Timer created = TimerNow();
 
-        explicit Offer(WaylandClipboardService& owner) : service(owner){}
+
+    public:
+        explicit Offer(WaylandClipboardService& owner)noexcept : service(owner){}
         ~Offer();
     };
 
@@ -48,7 +50,9 @@ private:
         void* handle = nullptr;
         ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
 
-        Source(WaylandClipboardService& owner, Alloc::GlobalArena& arena)
+
+    public:
+        Source(WaylandClipboardService& owner, Alloc::GlobalArena& arena)noexcept
             : service(owner)
             , text(arena)
         {}
@@ -63,23 +67,27 @@ public:
 
 
 private:
+    [[nodiscard]] static NotNull<const char*> NativeMimeForRank(u8 rank);
+
+
+private:
     static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version);
     static void OnRegistryRemove(void* data, wl_registry* registry, u32 name);
     static void OnDataOffer(void* data, wl_data_device* device, wl_data_offer* offer);
-    static void OnEnter(void* data, wl_data_device* device, u32 serial, wl_surface* surface, wl_fixed_t x, wl_fixed_t y, wl_data_offer* offer);
-    static void OnLeave(void* data, wl_data_device* device);
-    static void OnMotion(void* data, wl_data_device* device, u32 time, wl_fixed_t x, wl_fixed_t y);
-    static void OnDrop(void* data, wl_data_device* device);
+    static void OnEnter(void* data, wl_data_device* device, u32 serial, wl_surface* surface, wl_fixed_t x, wl_fixed_t y, wl_data_offer* offer)noexcept;
+    static void OnLeave(void* data, wl_data_device* device)noexcept;
+    static void OnMotion(void* data, wl_data_device* device, u32 time, wl_fixed_t x, wl_fixed_t y)noexcept;
+    static void OnDrop(void* data, wl_data_device* device)noexcept;
     static void OnSelection(void* data, wl_data_device* device, wl_data_offer* offer);
     static void OnOfferMime(void* data, wl_data_offer* offer, const char* mime);
-    static void OnOfferActions(void* data, wl_data_offer* offer, u32 actions);
-    static void OnOfferAction(void* data, wl_data_offer* offer, u32 action);
-    static void OnSourceTarget(void* data, wl_data_source* source, const char* mime);
+    static void OnOfferActions(void* data, wl_data_offer* offer, u32 actions)noexcept;
+    static void OnOfferAction(void* data, wl_data_offer* offer, u32 action)noexcept;
+    static void OnSourceTarget(void* data, wl_data_source* source, const char* mime)noexcept;
     static void OnSourceSend(void* data, wl_data_source* source, const char* mime, int fd);
     static void OnSourceCancelled(void* data, wl_data_source* source);
-    static void OnSourceDrop(void* data, wl_data_source* source);
-    static void OnSourceFinished(void* data, wl_data_source* source);
-    static void OnSourceAction(void* data, wl_data_source* source, u32 action);
+    static void OnSourceDrop(void* data, wl_data_source* source)noexcept;
+    static void OnSourceFinished(void* data, wl_data_source* source)noexcept;
+    static void OnSourceAction(void* data, wl_data_source* source, u32 action)noexcept;
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     static void OnPrimaryOffer(void* data, zwp_primary_selection_device_v1* device, zwp_primary_selection_offer_v1* offer);
     static void OnPrimarySelection(void* data, zwp_primary_selection_device_v1* device, zwp_primary_selection_offer_v1* offer);
@@ -87,10 +95,6 @@ private:
     static void OnPrimarySend(void* data, zwp_primary_selection_source_v1* source, const char* mime, int fd);
     static void OnPrimaryCancelled(void* data, zwp_primary_selection_source_v1* source);
 #endif
-
-
-private:
-    [[nodiscard]] static NotNull<const char*> NativeMimeForRank(u8 rank);
 
 
 public:
@@ -120,9 +124,6 @@ private:
     void selectOffer(void* handle, ClipboardChannel::Enum channel);
     void sendSource(Source& source, int fd);
     [[nodiscard]] ClipboardStatus::Enum writeSelection(ClipboardChannel::Enum channel, AStringView text);
-
-
-
 
 
 private:

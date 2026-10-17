@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/surfel_caustics_merge_validator.h>
+#include "surfel_caustics_merge_validator.h"
+
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
@@ -15,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SurfelCausticsMergeValidator::SurfelCausticsMergeValidator(NotNull<RendererFramePipeline*> pipeline)
+SurfelCausticsMergeValidator::SurfelCausticsMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
     : m_pipeline(pipeline){
 }
 

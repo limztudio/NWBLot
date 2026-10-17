@@ -146,7 +146,10 @@ bool GpuTaskScheduler::compileGraph(
     if(resolvedOptions.queueAssignmentOptions.queueLoadCount == 0u){
         queueLoads.reserve(topology.queueCount);
         for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
-            const GpuQueueTimelineSnapshot timeline = device().getQueueTimelineSnapshot(topology.queues[queueIndex].id);
+            const auto timelineResult = device().getQueueTimelineSnapshot(topology.queues[queueIndex].id);
+            if(!timelineResult)
+                return false;
+            const GpuQueueTimelineSnapshot& timeline = *timelineResult;
             if(!timeline.valid())
                 return false;
             const u64 pendingSubmissionCount = timeline.pendingSubmissionCount();

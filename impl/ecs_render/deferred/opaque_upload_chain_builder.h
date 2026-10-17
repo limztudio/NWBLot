@@ -64,7 +64,7 @@ struct OpaqueUploadChainResult{
 
 class OpaqueUploadChainBuilder final : NoCopy{
 public:
-    OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
+    OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept;
 
 
 public:

@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
+#include "avboit_pass_upload_helper.h"
+
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/material/material_system.h>
 
@@ -18,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialSystem)
+AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialSystem)noexcept
     : m_materialSystem(materialSystem){
 }
 
@@ -34,7 +35,8 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-    MaterialTypedByteDataVector& materialTypedBytes){
+    MaterialTypedByteDataVector& materialTypedBytes
+){
     AvboitPassUploadResult result{};
     if(!inputs.framebuffer || !inputs.csgFrameState || !inputs.frameBindings || !inputs.csgResources || !inputs.meshViewState)
         return MakeUnexpected(Failure{});
@@ -49,7 +51,8 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes, RendererResourceLookupMode::PreparedOnly, inputs.meshViewState);
+        materialTypedBytes, RendererResourceLookupMode::PreparedOnly, inputs.meshViewState
+    );
 
     result.hasDrawItems = !drawItems.empty();
     result.hasCsgDrawItems = !drawItems.csg.empty();

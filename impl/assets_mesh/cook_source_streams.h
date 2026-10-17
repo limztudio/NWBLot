@@ -33,6 +33,8 @@ struct SourceMeshStreams{
     ScratchVector<MeshVertexRef> vertexRefs;
     Core::Assets::AssetVector<u32> indices;
 
+
+public:
     SourceMeshStreams(Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena)noexcept
         : positions(scratchArena)
         , normals(scratchArena)

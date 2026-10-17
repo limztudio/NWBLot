@@ -63,9 +63,13 @@ struct MeshSkinningLocalBoundsTask{
         Core::GpuTimingSubmissionTicket& timingTicket;
         Vector<MeshSkinningLocalBoundsDispatch, Core::Alloc::GlobalArena> dispatches;
 
-        Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket);
+
+    public:
+        Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket)noexcept;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 

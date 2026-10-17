@@ -31,7 +31,6 @@ struct RefractionResolveGraphTask{
 
     // The raytracing system and the frame targets are required: the resolve always records against this frame's targets.
     // The readiness flag and dispatch latches stay optional: the screen fallback route declares no hardware preparation, and only the traced route publishes a dispatch diagnostic.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererRayTracingSystem& system;
         const DeferredFrameTargets& targets;
@@ -41,6 +40,8 @@ struct RefractionResolveGraphTask{
         bool* screenFallbackDispatchLogged = nullptr;
     };
 
+
+public:
     static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
 
         RayTracingRefractionGraphResources resources = payload.resources;

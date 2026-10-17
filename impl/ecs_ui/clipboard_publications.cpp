@@ -69,11 +69,11 @@ UiClipboardPublicationStatus::Enum UiClipboardPublications::request(const AStrin
     if(m_requests.size() == s_UiClipboardMaxPublications)
         return UiClipboardPublicationStatus::QueueFull;
     const auto result = m_service.requestWriteText(channel, text);
-    if(result.admission != Core::ClipboardAdmission::Accepted)
-        return result.admission == Core::ClipboardAdmission::WrongThread ? UiClipboardPublicationStatus::WrongThread : UiClipboardPublicationStatus::QueueFull;
-    if(!result.token.valid())
+    if(!result)
+        return result.error() == Core::ClipboardAdmission::WrongThread ? UiClipboardPublicationStatus::WrongThread : UiClipboardPublicationStatus::QueueFull;
+    if(!result->valid())
         return UiClipboardPublicationStatus::NativeFailure;
-    m_requests.push_back({ result.token, channel });
+    m_requests.push_back({ *result, channel });
     return UiClipboardPublicationStatus::Pending;
 }
 

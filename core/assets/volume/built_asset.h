@@ -26,7 +26,7 @@ namespace BuiltAssetDetail{
 inline constexpr AStringView s_Extension = ".nwba";
 inline constexpr AStringView s_ManifestFilename = "assets.list";
 
-[[nodiscard]] bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest);
+[[nodiscard]] bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena);
 struct BuiltAssetPayload{
     Name virtualPath = s_NameNone;
     usize payloadOffset = 0u;

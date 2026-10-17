@@ -21,8 +21,12 @@ namespace GlobalFilesystemArchiveDetail{
 
 inline constexpr u8 s_MinSafeArchivePathCharacter = 0x20u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename CharT>
-[[nodiscard]] inline bool IsArchivePathSeparator(const CharT ch)noexcept{
+[[nodiscard]] inline bool IsArchivePathSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == static_cast<CharT>('/') || ch == static_cast<CharT>('\\');
 }
 

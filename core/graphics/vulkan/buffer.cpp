@@ -8,8 +8,6 @@
 
 #include <core/common/log.h>
 
-#include <global/scope_exit.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,21 +96,12 @@ Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator, const B
     , m_bufferInfo(__hidden_buffer::RetainBufferCreateInfo(bufferInfo, m_bufferQueueFamilyIndices))
     , m_retainedStateKnown(creationDesc.keepInitialState && initialStateKnown)
     , m_versionTracking(context.objectArena)
-    , m_bufferViews(context.objectArena)
     , m_creationInitialStateKnown(initialStateKnown)
     , m_context(context)
     , m_allocator(allocator)
 {}
 Buffer::~Buffer(){
     const VkBuffer registeredNativeBuffer = m_buffer;
-
-    for(auto& viewEntry : m_bufferViews){
-        if(viewEntry.view != VK_NULL_HANDLE){
-            m_context.deviceDispatch.vkDestroyBufferView(m_context.device, viewEntry.view, m_context.allocationCallbacks);
-            viewEntry.view = VK_NULL_HANDLE;
-        }
-    }
-    m_bufferViews.clear();
 
     {
         ScopedLock bindingLock(m_memoryBindingMutex);
@@ -165,76 +154,6 @@ Object Buffer::getNativeHandle(ObjectType objectType){
     return Object(m_buffer);
 }
 
-
-VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
-    VkResult res = VK_SUCCESS;
-
-    if(m_buffer == VK_NULL_HANDLE || format == Format::UNKNOWN)
-        return VK_NULL_HANDLE;
-
-    const VkFormat vkFormat = ConvertFormat(format);
-    if(vkFormat == VK_FORMAT_UNDEFINED)
-        return VK_NULL_HANDLE;
-    const FormatInfo& formatInfo = GetFormatInfo(format);
-    if(formatInfo.bytesPerBlock == 0)
-        return VK_NULL_HANDLE;
-
-    if(byteOffset >= m_creationDesc.byteSize)
-        return VK_NULL_HANDLE;
-
-    const u64 maxRange = m_creationDesc.byteSize - byteOffset;
-    const u64 offsetAlignment = Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
-    if((byteOffset % offsetAlignment) != 0)
-        return VK_NULL_HANDLE;
-    if((byteOffset % formatInfo.bytesPerBlock) != 0)
-        return VK_NULL_HANDLE;
-
-    u64 resolvedSize = byteSize;
-    if(resolvedSize == 0 || resolvedSize == VK_WHOLE_SIZE)
-        resolvedSize = maxRange;
-    else if(resolvedSize > maxRange)
-        resolvedSize = maxRange;
-    if(resolvedSize == 0)
-        return VK_NULL_HANDLE;
-    if((resolvedSize % formatInfo.bytesPerBlock) != 0)
-        return VK_NULL_HANDLE;
-    if((resolvedSize / formatInfo.bytesPerBlock) > m_context.physicalDeviceProperties.limits.maxTexelBufferElements)
-        return VK_NULL_HANDLE;
-
-    ScopedLock lock(m_bufferViewsMutex);
-    for(const auto& viewEntry : m_bufferViews){
-        if(viewEntry.format == format && viewEntry.byteOffset == byteOffset && viewEntry.byteSize == resolvedSize)
-            return viewEntry.view;
-    }
-
-    auto viewInfo = VulkanDetail::MakeVkStruct<VkBufferViewCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO);
-    viewInfo.buffer = m_buffer;
-    viewInfo.format = vkFormat;
-    viewInfo.offset = byteOffset;
-    viewInfo.range = resolvedSize;
-
-    VkBufferView view = VK_NULL_HANDLE;
-    res = m_context.deviceDispatch.vkCreateBufferView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer view: {}"), ResultToString(res));
-        return VK_NULL_HANDLE;
-    }
-
-    ScopeExit releaseUnpublishedView([this, view]()noexcept{
-        m_context.deviceDispatch.vkDestroyBufferView(m_context.device, view, m_context.allocationCallbacks);
-    });
-
-    BufferViewEntry entry;
-    entry.format = format;
-    entry.byteOffset = byteOffset;
-    entry.byteSize = resolvedSize;
-    entry.view = view;
-    m_bufferViews.push_back(entry);
-    releaseUnpublishedView.release();
-
-    return view;
-}
-
 bool Buffer::isRetainedStateKnown()const noexcept{
     return m_retainedStateKnown.load(MemoryOrder::acquire);
 }
@@ -252,28 +171,28 @@ void Buffer::setRetainedStateKnown(const bool known)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-BufferHandle Device::createBuffer(const BufferDesc& d){
+Expected<BufferHandle> Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
     if(!ResourceQueueSharing::IsValid(d.queueSharing)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(d.byteSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(d.isVolatile && d.maxVersions == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!VulkanBufferDetail::IsBufferCreationStateMaskValid(d.initialState)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: initial state is invalid for a buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: invalid initial state"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!VulkanDetail::TryResolveBufferCpuAccess(d.cpuAccess, d.isVolatile)){
         if(d.isVolatile && d.cpuAccess == CpuAccessMode::Read){
@@ -284,25 +203,25 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
         }
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     const VkBufferUsageFlags usageFlags = VulkanBufferDetail::PickManagedBufferUsage(m_context, d);
     if(!VulkanBufferDetail::IsBufferUsageCompatibleWithResourceStates(d, usageFlags, d.initialState)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: initial state requires an undeclared buffer usage"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: initial state is incompatible with its description"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!VulkanBufferDetail::IsBufferUsageSupportedByDevice(m_context, usageFlags)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(d.isShaderBindingTable){
         if(!m_context.extensions.khrRayTracingPipeline || !m_context.extensions.bufferDeviceAddress){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
 
     }
@@ -314,11 +233,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         const auto alignedSize = AlignUpU64Checked(size, alignment);
         if(!alignedSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         if(*alignedSize > Limit<u64>::s_Max / d.maxVersions){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         size = *alignedSize * d.maxVersions;
     }
@@ -334,7 +253,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     BufferHandle buffer(NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, d, bufferInfo, true), BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!buffer)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     if(d.isVolatile)
         buffer->m_versionTracking.resize(d.maxVersions);
 
@@ -345,12 +264,12 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: native buffer identity is already registered"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: A newly created buffer duplicated a live native buffer identity"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(!d.isVirtual){
@@ -364,6 +283,10 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     return buffer;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes){
     if(dataSize == 0)
@@ -509,7 +432,11 @@ Expected<BufferSuballocation> CommandList::prepareUploadStaging(const void* data
     if(!staging)
         return MakeUnexpected(staging.error());
 
-    VulkanDetail::CopyHostMemory(taskScheduler(), staging->cpuAddress, data, dataSize);
+    const auto copied = VulkanDetail::CopyHostMemory(taskScheduler(), staging->cpuAddress, data, dataSize);
+    if(!copied){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: staging copy for {} rejected CPU work: {}"), operationName, static_cast<u32>(copied.error()));
+        return MakeUnexpected(Failure{});
+    }
     return staging;
 }
 

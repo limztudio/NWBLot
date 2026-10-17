@@ -42,22 +42,23 @@ inline constexpr int s_EntryFailure = -1;
 }
 
 [[nodiscard]] static bool ExportPayload(const NWB::Path& directory, const NWB::Impl::FontAtlasPayload& payload, NWB::Core::Alloc::ScratchArena& scratch){
-    if(!EnsureDirectories(directory))
+    const ::Path<NWB::Core::Alloc::ScratchArena> outputDirectory(scratch, directory);
+    if(!EnsureDirectories(outputDirectory))
         return false;
     const auto binary = NWB::Impl::SerializeFontAtlasPayload(payload, payload.glyphs.get_allocator().arena(), scratch);
-    if(!binary || !WriteBinaryFile(directory / "atlas.bin", *binary))
+    if(!binary || !WriteBinaryFile(outputDirectory / "atlas.bin", *binary))
         return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
-        const auto name = StringFormat(directory.arena(), "group_{}.pixels", index);
-        if(!WriteBinaryFile(directory / name, payload.groups[index].pixels))
+        const auto name = StringFormat(scratch, "group_{}.pixels", index);
+        if(!WriteBinaryFile(outputDirectory / name, payload.groups[index].pixels))
             return false;
     }
     for(const auto& table : payload.positioningTables){
         const AStringView tag = TableTag(table.tag);
         if(tag.empty())
             return false;
-        const auto name = StringFormat(directory.arena(), "table_{}.bin", tag);
-        if(!WriteBinaryFile(directory / name, table.bytes))
+        const auto name = StringFormat(scratch, "table_{}.bin", tag);
+        if(!WriteBinaryFile(outputDirectory / name, table.bytes))
             return false;
     }
     return true;

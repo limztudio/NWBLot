@@ -7,6 +7,9 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -14,8 +17,6 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
-
-#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,10 +34,6 @@ class Queue final : NoCopy{
     friend class TrackedCommandBuffer;
 
 
-public:
-    using SubmissionWait = QueueSubmissionWait;
-
-
 private:
     using CommandBufferList = List<TrackedCommandBufferPtr, Alloc::GlobalArena>;
 
@@ -50,11 +47,14 @@ private:
 
 
 public:
+    using SubmissionWait = QueueSubmissionWait;
+
+
+public:
     struct SubmissionSignal{
         VkSemaphore semaphore = VK_NULL_HANDLE;
         u64 value = 0u;
     };
-
     struct SubmissionCommandListIdentity{
         TrackedCommandBuffer* owner = nullptr;
         u64 recordingLeaseSerial = 0u;
@@ -64,13 +64,11 @@ public:
         u32 recordingWorkerIndex = 0u;
         bool graphSubmissionAuthorized = false;
     };
-
     struct SubmissionReceipt{
         u64 submittedID = 0u;
         usize timelineWaitCount = 0u;
         bool accepted = false;
     };
-
     struct SubmissionFailure{
         u64 lastSubmittedID = 0u;
         VkResult nativeResult = VK_SUCCESS;
@@ -94,6 +92,7 @@ private:
         CommandBufferList commandBuffersPool;
 
 
+    public:
         WorkerCommandArena(Alloc::GlobalArena& arena, const u64 workerDomain, const u32 workerIndex)
             : recordingWorkerDomain(workerDomain)
             , recordingWorkerIndex(workerIndex)
@@ -112,13 +111,11 @@ public:
 
 
 public:
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u64 recordingWorkerDomain = 0u, u32 recordingWorkerIndex = 0u);
+    [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateCommandBuffer(u64 recordingWorkerDomain = 0u, u32 recordingWorkerIndex = 0u);
     [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
     [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
-
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
-
     [[nodiscard]] Expected<SubmissionReceipt, SubmissionFailure> submit(
         CommandList* const* ppCmd,
         usize numCmd,
@@ -130,7 +127,6 @@ public:
         bool forceNativeSubmission = false
     );
     [[nodiscard]] VkResult updateLastFinishedID();
-
     void waitForIdle();
 
 
@@ -146,11 +142,11 @@ private:
     void collectCompletedCommandBuffers();
     // Default/direct lease zero stays private per command buffer because external callers may record it from unrelated threads.
     // Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
-    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(VkCommandPool commandPool, Futex* sharedCommandPoolMutex, u64 recordingWorkerDomain, u32 recordingWorkerIndex);
+    [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> createCommandBuffer(VkCommandPool commandPool, Futex* sharedCommandPoolMutex, u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
-    [[nodiscard]] WorkerCommandArena* getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateDirectCommandBuffer();
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
+    [[nodiscard]] Expected<WorkerCommandArena*, VkResult> getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
+    [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateDirectCommandBuffer();
+    [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas()noexcept;
     void clearPendingSemaphores()noexcept;
     [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(CommandBufferList& source, CommandBufferList::iterator commandBuffer);
@@ -159,15 +155,12 @@ private:
 
 private:
     VkSemaphore m_trackingSemaphore = VK_NULL_HANDLE;
-
     const VulkanContext& m_context;
     Device& m_device;
-
     NativeQueueState& m_nativeQueue;
     GpuPhysicalQueueId m_physicalQueue;
     u32 m_queueFamilyIndex;
     CommandQueue::Enum m_queueID;
-
     // Serializes reusable Device::executeCommandLists workspace through accepted post-submit publication.
     // Acquire before m_mutex when both are required.
     Futex m_submissionWorkspaceMutex;
@@ -191,18 +184,15 @@ private:
     Vector<SubmissionWait, Alloc::GlobalArena> m_executeLocalWaits;
     Vector<SubmissionCommandListIdentity, Alloc::GlobalArena> m_executeExpectedCommandLists;
     VulkanDetail::SubmittedCommandBufferOwnerLookup m_executeSubmittedOwners;
-
     Atomic<u64> m_lastRecordingID = 0u;
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
-
     CommandBufferList m_commandBuffersInFlight;
     CommandBufferList m_commandBuffersPool;
     Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
     // Published worker nodes are append-only while the queue is usable.
     // Device teardown joins recording clients before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
     Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;
-
     Atomic<u64> m_explicitWorkerArenaCount = 0u;
     Atomic<u64> m_directCommandBufferCount = 0u;
     Atomic<u64> m_directHighWaterCommandBufferCount = 0u;

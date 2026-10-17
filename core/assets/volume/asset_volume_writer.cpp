@@ -35,6 +35,7 @@ namespace __hidden_asset_volume_writer{
 
 
 using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
+using ScratchBytes = Vector<u8, ScratchArena>;
 
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
@@ -44,7 +45,7 @@ static constexpr u64 s_SegmentGrowthFactor = 2ull;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<u64> EstimateRequiredMetadataBytes(const u64 fileCount){
+static Expected<u64> EstimateRequiredMetadataBytes(const u64 fileCount)noexcept{
     if(fileCount == 0)
         return s_DefaultMetadataSize;
 
@@ -85,7 +86,7 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     return config;
 }
 
-static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Assets::AssetBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
+static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, ScratchBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
     const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
     if(!payload)
         return false;
@@ -94,14 +95,14 @@ static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::
         return false;
     }
 
-    if(filesystem.writeFileDeferred(entry.virtualPath, payload->data, payload->size))
+    if(filesystem.writeFileDeferred(entry.virtualPath, payload->data.get(), payload->size))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.resolvedText()));
     return false;
 }
 
-static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Assets::AssetBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
+static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, ScratchBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
     switch(entry.source){
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
         if(entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
@@ -123,8 +124,8 @@ static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumeP
     return false;
 }
 
-static bool PushManifestToVolume(Core::Assets::AssetArena& arena, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
-    Core::Assets::AssetBytes objectBytes(arena);
+static bool PushManifestToVolume(ScratchArena& scratchArena, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
+    ScratchBytes objectBytes(scratchArena);
     for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
         if(!PushManifestEntryToVolume(entry, objectBytes, filesystem))
             return false;
@@ -191,7 +192,7 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& aren
             return MakeUnexpected(Failure{});
         }
 
-        if(!__hidden_asset_volume_writer::PushManifestToVolume(arena, manifest, filesystem))
+        if(!__hidden_asset_volume_writer::PushManifestToVolume(scratchArena, manifest, filesystem))
             return MakeUnexpected(Failure{});
         if(!filesystem.flush()){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to flush staged volume metadata"));
@@ -204,7 +205,7 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& aren
             return MakeUnexpected(Failure{});
     }
 
-    if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig->volumeName, stagedSegmentCount))
+    if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig->volumeName, stagedSegmentCount, scratchArena))
         return MakeUnexpected(Failure{});
     stageDirectoryCleanup.dismiss();
 

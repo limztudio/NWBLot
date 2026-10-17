@@ -73,28 +73,33 @@ TextInputAdmission::Enum Win32TextInputService::acceptComposition(const TextInpu
     if(!context)
         return TextInputAdmission::Unavailable;
     Win32TextInputContextGuard release(window, context);
-    if((flags & GCS_RESULTSTR) != 0){
-        const TextInputAdmission::Enum result = readCompositionText(MakeNotNull(static_cast<void*>(context)), GCS_RESULTSTR);
-        if(result != TextInputAdmission::Accepted)
-            return result;
-        const TextInputAdmission::Enum committed = emitCommit(token, m_utf8Text);
-        if(committed != TextInputAdmission::Accepted)
-            return committed;
-        clearCompositionPreedit();
-        const TextInputAdmission::Enum cleared = publishCompositionPreedit(token, {}, 0u, 0u);
-        if(cleared != TextInputAdmission::Accepted)
-            return cleared;
-    }
-    if((flags & (GCS_COMPSTR | GCS_CURSORPOS)) != 0){
-        const TextInputAdmission::Enum result = readCompositionText(MakeNotNull(static_cast<void*>(context)), GCS_COMPSTR);
-        if(result != TextInputAdmission::Accepted)
-            return result;
-        const auto cursorByte = compositionCursor(MakeNotNull(static_cast<void*>(context)));
-        if(!cursorByte)
-            return cursorByte.error();
-        return publishCompositionPreedit(token, m_utf8Text, *cursorByte, *cursorByte);
-    }
-    return TextInputAdmission::Accepted;
+    const TextInputAdmission::Enum admission = [&](){
+        if((flags & GCS_RESULTSTR) != 0){
+            const TextInputAdmission::Enum result = readCompositionText(MakeNotNull(static_cast<void*>(context)), GCS_RESULTSTR);
+            if(result != TextInputAdmission::Accepted)
+                return result;
+            const TextInputAdmission::Enum committed = emitCommit(token, m_utf8Text);
+            if(committed != TextInputAdmission::Accepted)
+                return committed;
+            clearCompositionPreedit();
+            const TextInputAdmission::Enum cleared = publishCompositionPreedit(token, {}, 0u, 0u);
+            if(cleared != TextInputAdmission::Accepted)
+                return cleared;
+        }
+        if((flags & (GCS_COMPSTR | GCS_CURSORPOS)) != 0){
+            const TextInputAdmission::Enum result = readCompositionText(MakeNotNull(static_cast<void*>(context)), GCS_COMPSTR);
+            if(result != TextInputAdmission::Accepted)
+                return result;
+            const auto cursorByte = compositionCursor(MakeNotNull(static_cast<void*>(context)));
+            if(!cursorByte)
+                return cursorByte.error();
+            return publishCompositionPreedit(token, m_utf8Text, *cursorByte, *cursorByte);
+        }
+        return TextInputAdmission::Accepted;
+    }();
+    if(!release.release())
+        NWB_LOGGER_WARNING(NWB_TEXT("Text input: ImmReleaseContext failed"));
+    return admission;
 }
 
 

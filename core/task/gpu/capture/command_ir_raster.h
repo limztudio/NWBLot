@@ -179,6 +179,9 @@ public:
 public:
     GpuCommandIrOwnerAnchor& operator=(const GpuCommandIrOwnerAnchor& other)noexcept;
     GpuCommandIrOwnerAnchor& operator=(GpuCommandIrOwnerAnchor&& other)noexcept;
+
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return m_owner != nullptr; }
 
 
@@ -241,7 +244,9 @@ struct GpuCommandIrRasterOwnerTable{
     GraphicsVector<GpuCommandIrRasterStateOwner> stateOwners;
     GraphicsVector<GpuCommandIrRasterHeapOwner> heapOwners;
 
-    explicit GpuCommandIrRasterOwnerTable(GraphicsArena& arena)
+
+public:
+    explicit GpuCommandIrRasterOwnerTable(GraphicsArena& arena)noexcept
         : stateOwners(arena)
         , heapOwners(arena)
     {}

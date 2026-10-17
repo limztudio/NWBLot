@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regress an active logger window busy-spinning while it has no new messages."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import http.client
 import json
@@ -22,6 +23,9 @@ PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 LB_GETCOUNT = 0x018B
 LB_GETITEMRECT = 0x0198
 SMTO_ABORTIFHUNG = 0x0002
+WM_EXITSIZEMOVE = 0x0232
+RESIZE_MESSAGE_COUNT = 6
+RESIZE_SECONDS = 8.0
 LOG_FAILURE_MESSAGES = (*STRICT_LOG_FAILURE_MESSAGES, "Log server: failed", "Log client: failed", "Exception:")
 
 
@@ -131,6 +135,49 @@ def post_log_message(port, message):
         connection.close()
 
 
+def exercise_resize_message_publication(process, backend, handle, port, directory, pattern):
+    messages = [f"LoggerResizeUnique: pid={process.pid} id={index}" for index in range(RESIZE_MESSAGE_COUNT)]
+    baseline = snapshot_log_files(directory, pattern)
+    before_rows = query_log_list(backend, handle, LB_GETCOUNT)
+    deadline = time.monotonic() + RESIZE_SECONDS
+
+    def publish_messages():
+        responses = []
+        for message in messages:
+            if time.monotonic() >= deadline:
+                raise SmokeFailure("HTTP resize-message publication exceeded its deadline")
+            responses.append(post_log_message(port, message))
+            time.sleep(0.01)
+        return responses
+
+    completions = 0
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(publish_messages)
+        for index in range(32):
+            if time.monotonic() >= deadline:
+                raise SmokeFailure("logger resize completion exceeded its deadline")
+            ensure_process_running(process, "during resize/message publication", "logserver")
+            backend.resize_client(handle, 920 + (index & 1) * 40, 600)
+            result = ctypes.c_size_t()
+            if not backend.user32.SendMessageTimeoutW(handle, WM_EXITSIZEMOVE, 0, 0, SMTO_ABORTIFHUNG, 1000, ctypes.byref(result)):
+                raise SmokeFailure("logger did not process resize completion during HTTP publication")
+            completions += 1
+            time.sleep(0.005)
+        responses = future.result(timeout=max(0.001, deadline - time.monotonic()))
+
+    wait_for_log_message(directory, baseline, pattern, messages[-1], 10.0)
+    expected_rows = before_rows + len(messages)
+    wait_for_visible_log_rows(process, backend, handle, expected_rows)
+    actual_rows = query_log_list(backend, handle, LB_GETCOUNT)
+    if actual_rows != expected_rows:
+        raise SmokeFailure(f"resize/message publication displays {actual_rows} rows; expected exactly {expected_rows}")
+    text = collect_log_delta(directory, baseline, pattern)
+    for message in messages:
+        if text.count(message) != 1:
+            raise SmokeFailure(f"resize HTTP message does not occur exactly once in the log: {message}")
+    return {"messages": messages, "responses": responses, "resize_completions": completions, "rows_before": before_rows, "expected_rows": expected_rows, "actual_rows": actual_rows}
+
+
 def capture_visible_messages(backend, handle, output, minimum_rows=1):
     capture = backend.capture_client_window(handle, output)
     width, height, rows = read_bmp_24_rows(output)
@@ -219,6 +266,9 @@ def main(argv):
         evidence["screenshot_after_idle"] = capture_visible_messages(backend, handle, wake_screenshot, rows_before_wakeup + 1,)
         if evidence["cpu"]["single_core_cpu_fraction"] >= args.max_cpu_fraction:
             raise SmokeFailure(f"active idle logger consumed {evidence['cpu']['single_core_cpu_fraction']:.3f} of one CPU core; " f"required < {args.max_cpu_fraction:.3f}")
+        evidence["resize"] = exercise_resize_message_publication(process, backend, handle, port, directory, pattern)
+        required_messages.extend(evidence["resize"]["messages"])
+        evidence["screenshot_after_resize"] = capture_visible_messages(backend, handle, args.output_directory / "logger_after_resize.bmp", evidence["resize"]["expected_rows"])
     except SmokeSkip as error:
         skip_reason = str(error)
     except Exception as error:

@@ -107,9 +107,14 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setFormat(createdTargets.albedoFormat)
         .setInRenderTarget(true)
         // AsyncCompute lighting samples every G-buffer attachment after Graphics AVBOIT; keep their sharing concurrent.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/gbuffer_albedo").setClearValue(ECSRenderDetail::s_ClearColor);
-    createdTargets.albedo = m_graphics.createTexture(albedoDesc);
-    if(!createdTargets.albedo){
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/gbuffer_albedo").setClearValue(ECSRenderDetail::s_ClearColor)
+    ;
+    auto albedoResult = m_graphics.createTexture(albedoDesc);
+    if(albedoResult)
+        createdTargets.albedo = Move(*albedoResult);
+    else
+        createdTargets.albedo.reset();
+    if(!albedoResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
         return MakeUnexpected(Failure{});
     }
@@ -124,8 +129,12 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/gbuffer_normal")
         .setClearValue(ECSRenderDetail::s_GBufferNormalClearColor)
     ;
-    createdTargets.normal = m_graphics.createTexture(normalDesc);
-    if(!createdTargets.normal){
+    auto normalResult = m_graphics.createTexture(normalDesc);
+    if(normalResult)
+        createdTargets.normal = Move(*normalResult);
+    else
+        createdTargets.normal.reset();
+    if(!normalResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred normal target"));
         return MakeUnexpected(Failure{});
     }
@@ -140,8 +149,12 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/gbuffer_world_position")
         .setClearValue(ECSRenderDetail::s_GBufferWorldPositionClearColor)
     ;
-    createdTargets.worldPosition = m_graphics.createTexture(worldPositionDesc);
-    if(!createdTargets.worldPosition){
+    auto worldPositionResult = m_graphics.createTexture(worldPositionDesc);
+    if(worldPositionResult)
+        createdTargets.worldPosition = Move(*worldPositionResult);
+    else
+        createdTargets.worldPosition.reset();
+    if(!worldPositionResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred world-position target"));
         return MakeUnexpected(Failure{});
     }
@@ -156,8 +169,12 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/gbuffer_specular_roughness")
         .setClearValue(ECSRenderDetail::s_GBufferSpecularRoughnessClearColor)
     ;
-    createdTargets.specularRoughness = m_graphics.createTexture(specularRoughnessDesc);
-    if(!createdTargets.specularRoughness){
+    auto specularRoughnessResult = m_graphics.createTexture(specularRoughnessDesc);
+    if(specularRoughnessResult)
+        createdTargets.specularRoughness = Move(*specularRoughnessResult);
+    else
+        createdTargets.specularRoughness.reset();
+    if(!specularRoughnessResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred specular/roughness target"));
         return MakeUnexpected(Failure{});
     }
@@ -174,8 +191,12 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/opaque_color")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
-    createdTargets.opaqueColor = m_graphics.createTexture(opaqueColorDesc);
-    if(!createdTargets.opaqueColor){
+    auto opaqueColorResult = m_graphics.createTexture(opaqueColorDesc);
+    if(opaqueColorResult)
+        createdTargets.opaqueColor = Move(*opaqueColorResult);
+    else
+        createdTargets.opaqueColor.reset();
+    if(!opaqueColorResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred opaque color target"));
         return MakeUnexpected(Failure{});
     }
@@ -192,16 +213,24 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setName("engine/deferred/composite_color")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
-    createdTargets.compositeColor = m_graphics.createTexture(compositeColorDesc);
-    if(!createdTargets.compositeColor){
+    auto compositeColorResult = m_graphics.createTexture(compositeColorDesc);
+    if(compositeColorResult)
+        createdTargets.compositeColor = Move(*compositeColorResult);
+    else
+        createdTargets.compositeColor.reset();
+    if(!compositeColorResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite color target"));
         return MakeUnexpected(Failure{});
     }
 
     Core::TextureDesc depthDesc;
     depthDesc.setWidth(createdTargets.width).setHeight(createdTargets.height).setFormat(createdTargets.depthFormat).setInRenderTarget(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/depth");
-    createdTargets.depth = m_graphics.createTexture(depthDesc);
-    if(!createdTargets.depth){
+    auto depthResult = m_graphics.createTexture(depthDesc);
+    if(depthResult)
+        createdTargets.depth = Move(*depthResult);
+    else
+        createdTargets.depth.reset();
+    if(!depthResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
         return MakeUnexpected(Failure{});
     }
@@ -215,8 +244,12 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
         framebufferDesc.addColorAttachment(attachment);
     framebufferDesc.setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources);
-    createdTargets.framebuffer = device.createFramebuffer(framebufferDesc);
-    if(!createdTargets.framebuffer){
+    auto framebufferResult = device.createFramebuffer(framebufferDesc);
+    if(framebufferResult)
+        createdTargets.framebuffer = Move(*framebufferResult);
+    else
+        createdTargets.framebuffer.reset();
+    if(!framebufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));
         return MakeUnexpected(Failure{});
     }

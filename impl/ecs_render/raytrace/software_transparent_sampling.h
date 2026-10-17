@@ -34,6 +34,7 @@ public:
     void discard()noexcept{ m_accepted = false; }
     [[nodiscard]] bool usable()const noexcept;
 
+
 private:
     RayTracingSceneContentStamp m_scene;
     RayTracingSceneContentStamp m_acceptedScene;

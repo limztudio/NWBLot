@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 
 // Rewritten on primary Graphics after accepted skinning, then retained by all optical readers in this graph.
 // Frame admission is serial; the terminal graphics join also orders preceding asynchronous optical readers.
-[[nodiscard]] RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, Core::GpuGraphResourceId source, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinalize(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, Core::GpuGraphResourceId source, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

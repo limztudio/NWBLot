@@ -36,6 +36,10 @@ namespace ECSRenderDetail{
 
 inline constexpr usize s_MaterialTypedWordBytes = static_cast<usize>(NWB_MATERIAL_TYPED_WORD_BYTES);
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct MaterialTypedByteRange{
     u32 byteOffset = 0;
     u32 byteCount = 0;
@@ -45,6 +49,25 @@ struct MaterialTypedInstanceRanges{
     MaterialTypedByteRange constantRange;
     MaterialTypedByteRange mutableRange;
 };
+
+struct MaterialTypedByteRangeKey{
+    friend bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{ return lhs.materialName == rhs.materialName && lhs.typedLayoutHash == rhs.typedLayoutHash; }
+
+
+public:
+    Name materialName = s_NameNone;
+    u64 typedLayoutHash = 0u;
+};
+
+struct MaterialTypedByteRangeKeyHasher{
+    usize operator()(const MaterialTypedByteRangeKey& key)const noexcept{
+        usize seed = Hasher<Name>{}(key.materialName);
+        ::HashCombine(seed, key.typedLayoutHash);
+        return seed;
+    }
+};
+
+using MaterialTypedConstantRangeMap = HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
 
 struct MaterialTypedByteAppendRange{
     MaterialTypedByteRange byteRange;
@@ -60,6 +83,8 @@ struct MaterialTypedByteContentKey{
     u64 byteHash = 0u;
     Vector<u8, Core::Alloc::ScratchArena> bytes;
 
+
+public:
     MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteContentLookup& lookup)
         : byteHash(lookup.byteHash)
         , bytes(arena)
@@ -97,6 +122,8 @@ struct MaterialTypedByteContentKeyHasher{
 struct MaterialTypedByteContentKeyEqual{
     using is_transparent = void;
 
+
+public:
     bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)const noexcept{
         return lhs == rhs;
     }
@@ -169,6 +196,23 @@ template<typename DestinationByteVector, typename SourceByteVector>
     AppendTriviallyCopyableVector(materialTypedBytes, typedBytes);
     materialTypedBytes.resize(appendRange->alignedByteEnd, 0u);
     return appendRange->byteRange;
+}
+
+template<typename DestinationByteVector, typename SourceByteVector>
+[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(DestinationByteVector& materialTypedBytes, MaterialTypedConstantRangeMap& rangeMap, const Name& materialName, const u64 typedLayoutHash, const SourceByteVector& typedBytes){
+    const MaterialTypedByteRangeKey key{ materialName, typedLayoutHash };
+    const auto foundRange = rangeMap.find(key);
+    if(foundRange != rangeMap.end())
+        return foundRange.value();
+
+    const auto range = AppendMaterialTypedByteRange(materialTypedBytes, typedBytes);
+    if(!range)
+        return MakeUnexpected(Failure{});
+    if(!rangeMap.emplace(key, *range).second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    return range;
 }
 
 template<typename DestinationByteVector, typename SourceByteVector, typename MaterialTypedByteRangeMap>

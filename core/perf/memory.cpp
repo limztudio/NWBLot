@@ -39,19 +39,19 @@ void MemoryRecorder::clear()noexcept{
     m_emptyDelta = MemoryDelta{};
 }
 
-MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName, const MemorySource::Enum source){
+Expected<MemoryScopeId> MemoryRecorder::registerScope(const Name& scopeName, const MemorySource::Enum source){
     if(!scopeName || source > MemorySource::HeapBacking)
-        return {};
+        return MakeUnexpected(Failure{});
     const ScopeKey key{ scopeName, source };
     const auto found = m_scopeMap.find(key);
     if(found != m_scopeMap.end())
         return found.value();
     if(m_scopes.size() >= static_cast<usize>(Limit<u32>::s_Max))
-        return {};
+        return MakeUnexpected(Failure{});
 
     ScopeRecordPtr record = MakeGlobalUnique<ScopeRecord>(m_arena, scopeName, source);
     if(!record)
-        return {};
+        return MakeUnexpected(Failure{});
     const MemoryScopeId scope{ static_cast<u32>(m_scopes.size()), m_generation };
     record->generation = scope.generation;
     ContainerDetail::ReserveGrowingCapacity(m_scopes, m_scopes.size() + 1u);
@@ -59,7 +59,7 @@ MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName, const MemoryS
     ScopeExit discardScope([&]()noexcept{ m_scopes.pop_back(); });
     if(!m_scopeMap.try_emplace(key, scope).second){
         NWB_ASSERT(false);
-        return {};
+        return MakeUnexpected(Failure{});
     }
     discardScope.release();
     return scope;

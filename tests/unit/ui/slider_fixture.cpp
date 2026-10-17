@@ -3,6 +3,7 @@
 
 
 #include "slider_fixture.h"
+#include "widget_id_assertion.h"
 
 #include <global/simplemath.h>
 
@@ -22,7 +23,7 @@ namespace UiSliderTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SliderCallbackSource::SliderCallbackSource(){
+SliderCallbackSource::SliderCallbackSource()noexcept{
     count = 1u;
     generation = 2501u;
 }
@@ -64,7 +65,7 @@ StringView SliderCallbackSource::text(const u64 index)const{
     return "Later callback";
 }
 
-void SliderCallbackSource::arm(const SliderCallbackMutation::Enum mutation, SliderState* state, Builder* builder, PopupState* popup){
+void SliderCallbackSource::arm(const SliderCallbackMutation::Enum mutation, SliderState* state, Builder* builder, PopupState* popup)noexcept{
     m_mutation = mutation;
     m_state = state;
     m_builder = builder;
@@ -72,7 +73,7 @@ void SliderCallbackSource::arm(const SliderCallbackMutation::Enum mutation, Slid
     clearCounters();
 }
 
-void SliderCallbackSource::clearCounters()const{
+void SliderCallbackSource::clearCounters()const noexcept{
     m_calls = 0u;
     m_mutations = 0u;
     m_beginAccepted = false;
@@ -83,14 +84,14 @@ void SliderCallbackSource::clearCounters()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SliderOptions SliderFixture::Options(){
+SliderOptions SliderFixture::Options()noexcept{
     SliderOptions settings;
     settings.width = { LayoutSizePolicy::Fixed, 280.0f };
     settings.keyStep = 0.125;
     return settings;
 }
 
-ListOptions SliderFixture::SiblingOptions(){
+ListOptions SliderFixture::SiblingOptions()noexcept{
     ListOptions settings;
     settings.width = { LayoutSizePolicy::Fixed, 280.0f };
     settings.height = { LayoutSizePolicy::Fixed, 48.0f };
@@ -112,7 +113,9 @@ void SliderFixture::configureSliderSkin(){
     constexpr StringView s_Names[]{ "slider.track", "slider.thumb.normal", "slider.thumb.hover" };
     for(u32 index = 0u; index < 3u; ++index){
         UiSkinRegion region;
-        region.name = Name(s_Names[index]);
+        const auto regionName = Name::FromText(s_Names[index]);
+        ASSERT_TRUE(regionName);
+        region.name = *regionName;
         region.rectangle = { 96u + index * 32u, 0u, 24u, 24u };
         region.drawMode = UiSkinDrawMode::NineSlice;
         region.sliceInsets = { 6u, 6u, 6u, 6u };
@@ -139,16 +142,16 @@ bool SliderFixture::sibling(const AStringView key){
     return m_builder.virtualList(key, m_laterSource, m_laterState, SiblingOptions()).valid;
 }
 
-WidgetId SliderFixture::host()const noexcept{
+WidgetId SliderFixture::host()const{
     return id("slider", "panel");
 }
 
-WidgetId SliderFixture::track()const noexcept{
-    return MakeWidgetId(host(), "track");
+WidgetId SliderFixture::track()const{
+    return UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "track"));
 }
 
-WidgetId SliderFixture::thumb()const noexcept{
-    return MakeWidgetId(host(), "thumb");
+WidgetId SliderFixture::thumb()const{
+    return UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "thumb"));
 }
 
 Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const noexcept{
@@ -160,7 +163,7 @@ Point SliderFixture::thumbPoint()const noexcept{
     return UiWidgetTests::Center(m_state.placement().thumb);
 }
 
-SliderAcceptedFrame SliderFixture::accepted()const{
+SliderAcceptedFrame SliderFixture::accepted()const noexcept{
     SliderAcceptedFrame saved;
     saved.count = m_context.input().targets().size();
     saved.popupCount = m_context.input().popupCount();

@@ -42,6 +42,10 @@ namespace UtilityDetail{
 
 inline constexpr Name s_UtilityArena("utilities/tex_conv/utility");
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline Core::Alloc::GlobalArena& Arena(){
     static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
     return s_Arena;
@@ -59,8 +63,9 @@ inline Core::Alloc::GlobalArena& Arena(){
 
 template<typename T>
 using Vector = DefaultVector<T, Core::Alloc::GlobalArena, UtilityDetail::Arena>;
-using AString = DefaultAString<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
-using AStringStream = DefaultAStringStream<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+using ScratchString = ::AString<Core::Alloc::ScratchArena>;
+using ScratchStringStream = ::AStringStream<Core::Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

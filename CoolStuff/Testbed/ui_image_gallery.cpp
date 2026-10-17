@@ -18,9 +18,11 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiImageGallery::UiImageGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
-    : m_source(NWB::Impl::Ui::LoadImageSource(arena, assets, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>{"engine/ui/skins/default/texture"}))
-{}
+UiImageGallery::UiImageGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets){
+    auto source = NWB::Impl::Ui::LoadImageSource(arena, assets, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>{"engine/ui/skins/default/texture"});
+    if(source)
+        m_source = Move(*source);
+}
 
 void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;

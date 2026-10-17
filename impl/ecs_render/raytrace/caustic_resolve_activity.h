@@ -33,6 +33,8 @@ struct CausticResolveActivitySnapshot{
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept;
     [[nodiscard]] bool matches(const CausticResolveActivitySnapshot& other)const noexcept;
 };

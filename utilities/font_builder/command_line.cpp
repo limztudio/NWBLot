@@ -41,16 +41,20 @@ int Run(const int argc, char** argv){
                     return 1;
                 }
                 options.outline = rendererArgument == "outline";
-                options.source = Path(UtilityDetail::Arena(), AString(sourceArgument.data(), sourceArgument.size()));
-                options.output = Path(UtilityDetail::Arena(), AString(outputArgument.data(), outputArgument.size()));
-                if(!ValidateOptions(options))
+                options.source = AStringView(sourceArgument.data(), sourceArgument.size());
+                options.output = AStringView(outputArgument.data(), outputArgument.size());
+                Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
+                if(!ValidateOptions(options, scratch))
                     return 1;
                 const auto exists = FileExists(options.output);
-                if(!exists || (*exists && !options.overwrite)){
+                if(!exists){
+                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to inspect output metadata: {}"), StringConvert(exists.error().message()));
+                    return 1;
+                }
+                if(*exists && !options.overwrite){
                     NWB_LOGGER_ERROR(NWB_TEXT("font_builder: cannot replace output metadata without --overwrite"));
                     return 1;
                 }
-                Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
                 auto payload = Bake(options, UtilityDetail::Arena(), scratch);
                 if(!payload || !WriteOutputs(options, *payload, scratch))
                     return 1;

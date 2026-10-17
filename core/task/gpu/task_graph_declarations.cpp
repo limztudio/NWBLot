@@ -104,10 +104,10 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
 }
 
 
-GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands){
+Expected<GpuTaskId> GpuTaskGraph::addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
     return appendTaskWithinMutation(desc, commands, nullptr, nullptr, nullptr, nullptr, nullptr, 0u, mutation);
 }
 
@@ -139,7 +139,7 @@ bool GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
     return true;
 }
 
-GpuGraphResourceVersionId GpuTaskGraph::declareResourceVersion(const GpuGraphResourceVersionDesc& desc){
+Expected<GpuGraphResourceVersionId> GpuTaskGraph::declareResourceVersion(const GpuGraphResourceVersionDesc& desc){
     return appendResourceVersion(desc);
 }
 

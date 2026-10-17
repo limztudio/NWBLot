@@ -42,7 +42,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
         return false;
     }
     SegmentStorage& storage = isSampler ? m_samplerSegment : m_resourceSegment;
-    if(allocation.storageIdentity != storage.storageIdentity){
+    if(!storage.storageIdentity || allocation.storageIdentity != *storage.storageIdentity){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation belongs to another storage."));
         return false;
     }
@@ -237,9 +237,10 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Texture lacks native descriptor usage."));
                 return false;
             }
-            imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format);
-            if(imageInfo.imageView == VK_NULL_HANDLE)
+            const auto imageView = texture->getView(item.subresources, item.dimension, item.format);
+            if(!imageView)
                 return false;
+            imageInfo.imageView = *imageView;
             imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VulkanDetail::s_ReadOnlyImageLayout;
             getInfo.data.pSampledImage = &imageInfo;
             getInfo.data.pStorageImage = &imageInfo;

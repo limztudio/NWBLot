@@ -32,7 +32,7 @@ namespace AssetsVolumeCookDetail{
 
 
 struct CookedObjectPayloadView{
-    const u8* data = nullptr;
+    NotNull<const u8*> data;
     usize size = 0u;
     AssetVolumePayloadIdentity identity;
 };
@@ -47,7 +47,7 @@ struct CookedObjectPayloadView{
     VirtualPathHashSet& seenVirtualPathHashes,
     ScratchArena& scratchArena
 );
-[[nodiscard]] Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Core::Assets::AssetBytes& inOutObjectBytes);
+[[nodiscard]] Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Vector<u8, ScratchArena>& inOutObjectBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,6 @@
 
 #include "arena_names.h"
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 #include <global/assert.h>
@@ -47,8 +46,11 @@ AssetGatherMergeAutoRegistrar::AssetGatherMergeAutoRegistrar(const AssetGatherMe
     ::RegisterAutoFactory(__hidden_gather_merge_registry::QueryAutoMergeQueue(), function);
 }
 
-AssetGatherMergeFunction QueryAutoCollectedAssetGatherMerge(){
-    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_GatherMergeQueryScratch);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AssetGatherMergeFunction QueryAutoCollectedAssetGatherMerge(Alloc::ScratchArena& scratchArena){
     Vector<AssetGatherMergeFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     __hidden_gather_merge_registry::QueryAutoMergeQueue().copyTo(functions);
 

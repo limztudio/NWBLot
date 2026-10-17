@@ -22,8 +22,6 @@ NWB_IMPL_BEGIN
 interface IShader : Core::Assets::IAsset{
 public:
     virtual ~IShader()noexcept override = 0;
-
-
 protected:
     IShader(Core::Assets::AssetArena& arena, const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
         : Core::Assets::IAsset(assetType, virtualPath)
@@ -59,15 +57,16 @@ private:
 template<typename ShaderT>
 class TypedShader : public IShader{
 public:
-    explicit TypedShader(Core::Assets::AssetArena& arena)noexcept(noexcept(ShaderT::AssetTypeName()))
+    explicit TypedShader(Core::Assets::AssetArena& arena)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ShaderT::AssetTypeName())))
         : IShader(arena, ShaderT::AssetTypeName())
     {}
-    TypedShader(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept(noexcept(ShaderT::AssetTypeName()))
+    TypedShader(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ShaderT::AssetTypeName())))
         : IShader(arena, ShaderT::AssetTypeName(), virtualPath)
     {}
     TypedShader(const TypedShader&) = default;
     TypedShader(TypedShader&&)noexcept = default;
     virtual ~TypedShader()noexcept override = 0;
+
 
 public:
     TypedShader& operator=(const TypedShader&) = default;
@@ -320,7 +319,7 @@ namespace ShaderAssetSerialization{
 template<typename ShaderT>
 class ShaderAssetCodec final : public Core::Assets::AssetCodec<ShaderT>{
 public:
-    ShaderAssetCodec()noexcept = default;
+    ShaderAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ShaderT::AssetTypeName()))) = default;
 
 
 #if defined(NWB_COOK)

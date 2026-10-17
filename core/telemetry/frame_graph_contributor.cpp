@@ -24,6 +24,9 @@ inline constexpr u64 s_OwnerNodeShift = 32u;
 inline constexpr u64 s_QueueIndexShift = 16u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static u64 PhysicalQueueIdentity(const u32 ownerNodeIndex, const FrameGraphPhysicalQueueId queue)noexcept{
     return (static_cast<u64>(ownerNodeIndex) << s_OwnerNodeShift) | (static_cast<u64>(queue.index) << s_QueueIndexShift) | queue.deviceGeneration;
 }
@@ -42,29 +45,42 @@ inline constexpr u64 s_QueueIndexShift = 16u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphBuilder::FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex)
-    : m_nodes(nodes)
+FrameGraphBuilder::FrameGraphBuilder(Alloc::ScratchArena& scratchArena, FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex)
+    : m_scratchArena(scratchArena)
+    , m_nodes(nodes)
     , m_edges(edges)
     , m_pendingNameEdges(pendingNameEdges)
-    , m_physicalQueueIdentities(nodes.get_allocator().arena())
-    , m_packetIdentities(nodes.get_allocator().arena())
+    , m_physicalQueueIdentities(scratchArena)
+    , m_packetIdentities(scratchArena)
     , m_frameIndex(frameIndex)
 {}
 
-FrameGraphBuilder::FrameGraphBuilder(FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics, const u64 frameIndex)
-    : FrameGraphBuilder(nodes, edges, pendingNameEdges, frameIndex)
+FrameGraphBuilder::FrameGraphBuilder(
+    Alloc::ScratchArena& scratchArena,
+    FrameGraphNodeDescs& nodes,
+    FrameGraphEdgeDescs& edges,
+    FrameGraphPendingNameEdges& pendingNameEdges,
+    FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const u64 frameIndex
+)
+    : FrameGraphBuilder(scratchArena, nodes, edges, pendingNameEdges, frameIndex)
 {
     m_physicalQueueRuntimeStatistics = &physicalQueueRuntimeStatistics;
     m_physicalQueueIdentities.reserve(physicalQueueRuntimeStatistics.size());
     // Coalesce seeded identities without changing malformed source rows; the payload codec still validates those rows.
     for(const auto& record : physicalQueueRuntimeStatistics){
-        m_physicalQueueIdentities.insert({
-            __hidden_frame_graph_contributor::PhysicalQueueIdentity(record.ownerNodeIndex, record.statistics.queue)
-        });
+        const u64 identity = __hidden_frame_graph_contributor::PhysicalQueueIdentity(record.ownerNodeIndex, record.statistics.queue);
+        if(m_physicalQueueIdentities.contains(identity))
+            continue;
+        if(!m_physicalQueueIdentities.insert(identity).second){
+            NWB_ASSERT(false);
+            return;
+        }
     }
 }
 
 FrameGraphBuilder::FrameGraphBuilder(
+    Alloc::ScratchArena& scratchArena,
     FrameGraphNodeDescs& nodes,
     FrameGraphEdgeDescs& edges,
     FrameGraphPendingNameEdges& pendingNameEdges,
@@ -72,14 +88,18 @@ FrameGraphBuilder::FrameGraphBuilder(
     FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     const u64 frameIndex
 )
-    : FrameGraphBuilder(nodes, edges, pendingNameEdges, physicalQueueRuntimeStatistics, frameIndex)
+    : FrameGraphBuilder(scratchArena, nodes, edges, pendingNameEdges, physicalQueueRuntimeStatistics, frameIndex)
 {
     m_packetSubmissionStatistics = &packetSubmissionStatistics;
     m_packetIdentities.reserve(packetSubmissionStatistics.size());
     for(const auto& record : packetSubmissionStatistics){
-        m_packetIdentities.insert({
-            __hidden_frame_graph_contributor::PacketIdentity(record.ownerNodeIndex, record.packetIndex)
-        });
+        const u64 identity = __hidden_frame_graph_contributor::PacketIdentity(record.ownerNodeIndex, record.packetIndex);
+        if(m_packetIdentities.contains(identity))
+            continue;
+        if(!m_packetIdentities.insert(identity).second){
+            NWB_ASSERT(false);
+            return;
+        }
     }
 }
 

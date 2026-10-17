@@ -37,11 +37,12 @@ bool SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& 
         return false;
     }
 
-    Core::SamplerHandle sampler = device.createSampler(samplerAsset.description());
-    if(!sampler){
+    auto samplerResult = device.createSampler(samplerAsset.description());
+    if(!samplerResult){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create sampler '{}'"), owner, StringConvert(samplerName.resolvedText()));
         return false;
     }
+    Core::SamplerHandle sampler = Move(*samplerResult);
 
     const Core::GpuDescriptorHandle samplerHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!samplerHandle.valid()){

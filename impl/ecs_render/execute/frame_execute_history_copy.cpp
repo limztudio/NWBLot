@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/frame_execute_history_copy.h>
+#include "frame_execute_history_copy.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState(void* const rawContext, const Core::QueueSubmissionToken& token){
+[[nodiscard]] bool FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
     if(!context || !context->renderer || !context->shadowStateCandidate || !context->causticStateCandidate || !context->surfelStateCandidate || !context->finalStateReady)

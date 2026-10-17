@@ -160,7 +160,7 @@ Array<u64, 16u> UiComboSmokeScene::values()const{
         m_underlying, static_cast<u64>(m_enabled), static_cast<u64>(m_bottom), m_source.instanceGeneration() };
 }
 
-Impl::Ui::Rect UiComboSmokeScene::cursorRow()const{
+Impl::Ui::Rect UiComboSmokeScene::cursorRow()const noexcept{
     const auto& list = m_state.listState();
     const auto& placement = list.placement();
     if(!m_visible || !m_state.isOpen())

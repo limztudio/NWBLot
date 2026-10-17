@@ -25,6 +25,7 @@ struct GpuTextureImageVersion : NoCopy{
     TextureGpuResource m_texture;
 
 
+public:
     GpuTextureImageVersion(Core::GraphicsRuntime& graphics, SharedImageSource source)noexcept;
     ~GpuTextureImageVersion()noexcept;
 };

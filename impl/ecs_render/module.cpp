@@ -46,8 +46,9 @@ void RendererSystem::invalidateResources(){
     m_pipeline->invalidateResources();
 }
 
-void RendererSystem::update(Core::ECS::World& world, const f32 delta){
+Expected<void, Core::CpuTaskAdmissionError::Enum> RendererSystem::update(Core::ECS::World& world, const f32 delta){
     m_pipeline->update(world, delta);
+    return {};
 }
 
 bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
@@ -70,23 +71,23 @@ void RendererSystem::setRefractionHardwareTracingEnabled(const bool enabled)noex
     m_pipeline->setRefractionHardwareTracingEnabled(enabled);
 }
 
-bool RendererSystem::setCausticQualitySettings(const CausticQualitySettings& settings){
+bool RendererSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
     return m_pipeline->setCausticQualitySettings(settings);
 }
 
-bool RendererSystem::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings){
+bool RendererSystem::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
     return m_pipeline->setSurfelGiQualitySettings(settings);
 }
 
-bool RendererSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings){
+bool RendererSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
     return m_pipeline->setSoftwareShadowSettings(settings);
 }
 
-bool RendererSystem::setShadowQualitySettings(const ShadowQualitySettings& settings){
+bool RendererSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
     return m_pipeline->setShadowQualitySettings(settings);
 }
 
-bool RendererSystem::setReflectionSettings(const ReflectionSettings& settings){
+bool RendererSystem::setReflectionSettings(const ReflectionSettings& settings)noexcept{
     return m_pipeline->setReflectionSettings(settings);
 }
 
@@ -94,7 +95,7 @@ Expected<ReflectionStatistics> RendererSystem::tryGetLatestReflectionStatistics(
     return m_pipeline->tryGetLatestReflectionStatistics();
 }
 
-bool RendererSystem::setPresentationSettings(const PresentationSettings& settings){
+bool RendererSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
     return m_pipeline->setPresentationSettings(settings);
 }
 

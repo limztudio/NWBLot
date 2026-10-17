@@ -93,21 +93,21 @@ class RendererShaderSystem;
 
 class RendererDeferredSystem final : NoCopy{
 public:
-    RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem);
+    RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem)noexcept;
 
 
 public:
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
     void invalidateResources();
-    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
+    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings)noexcept;
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
     [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput);
     void confirmSceneShadingBufferUploads(const ECSRenderDetail::SceneLightGpuData* lightData, u32 lightCount, bool lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, bool sceneShadingUploadRequired);
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline();
-    [[nodiscard]] Core::GpuTaskId declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, bool useLaggedLightingHistory, Core::GpuTimingSubmissionTicket& timingTicket);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, bool useLaggedLightingHistory, Core::GpuTimingSubmissionTicket& timingTicket);
     [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, bool useLaggedLightingHistory = false);
     [[nodiscard]] Expected<DeferredFrameTargets> createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
@@ -115,7 +115,7 @@ public:
     [[nodiscard]] bool createDeferredCompositePipeline();
     [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
     void resetDeferredFrameTargets(DeferredFrameTargets& targets);
-    [[nodiscard]] Core::GpuTaskId declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, const ReflectionCompositeInputs& reflectionInputs);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, const ReflectionCompositeInputs& reflectionInputs);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs);
     [[nodiscard]] bool renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, Core::GpuDescriptorHandle outputLayerImage);
 

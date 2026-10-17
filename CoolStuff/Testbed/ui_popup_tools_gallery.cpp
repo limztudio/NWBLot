@@ -17,7 +17,7 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void UiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("popup_tools_gallery", { x, y, 280.0f, 132.0f }))
@@ -35,7 +35,6 @@ void UiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x,
         m_command = result.key;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom context command key={}"), m_command);
     }
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/popup_tools_caption"));
     const auto text = StringFormat(scratchArena, "Command: {} / Clicks: {}", m_command, m_anchorClicks);
     valid = ui.label("selected", { text.data(), text.size() }) && result.valid && valid;
     valid = ui.endPanel() && valid;

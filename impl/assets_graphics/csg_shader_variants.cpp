@@ -39,8 +39,15 @@ static constexpr AStringView s_IntervalSampleEnabledImplicitDefineValue = "1";
 
 
 static void InsertShaderKey(ShaderStageKeySet& outShaderKeys, const Name& shaderName, const Name& stageName){
-    if(shaderName && stageName)
-        outShaderKeys.insert(AssetsGraphicsCookDetail::ShaderStageKey{ shaderName, stageName });
+    if(!shaderName || !stageName)
+        return;
+    const AssetsGraphicsCookDetail::ShaderStageKey key{ shaderName, stageName };
+    if(outShaderKeys.contains(key))
+        return;
+    if(!outShaderKeys.insert(key).second){
+        NWB_ASSERT(false);
+        return;
+    }
 }
 
 static void CollectMaterialMeshShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
@@ -68,7 +75,7 @@ void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntr
     CollectMaterialMeshShaderKeys(materialEntries, outShaderKeys);
 }
 
-void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
+Expected<void, NameTextError::Enum> CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
     outShaderKeys.clear();
     outShaderKeys.reserve(materialEntries.size());
 
@@ -77,17 +84,36 @@ void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
     // Every transparent material owns cook-generated AVBOIT accumulate/occupancy/extinction pixel shaders, and each needs the matching CSG clip variant for its typed material binding and project surface/BXDF contract.
     for(const MaterialCookEntry& materialEntry : materialEntries){
-        if(!materialEntry.avboitAccumulatePixelShaderName.empty())
-            InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitAccumulatePixelShaderName)), pixelStageName);
-        if(!materialEntry.avboitOccupancyPixelShaderName.empty())
-            InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitOccupancyPixelShaderName)), pixelStageName);
-        if(!materialEntry.avboitExtinctionPixelShaderName.empty())
-            InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitExtinctionPixelShaderName)), pixelStageName);
+        if(!materialEntry.avboitAccumulatePixelShaderName.empty()){
+            const auto shaderName = Name::FromText(AStringView(materialEntry.avboitAccumulatePixelShaderName));
+            if(!shaderName)
+                return MakeUnexpected(shaderName.error());
+            InsertShaderKey(outShaderKeys, *shaderName, pixelStageName);
+        }
+        if(!materialEntry.avboitOccupancyPixelShaderName.empty()){
+            const auto shaderName = Name::FromText(AStringView(materialEntry.avboitOccupancyPixelShaderName));
+            if(!shaderName)
+                return MakeUnexpected(shaderName.error());
+            InsertShaderKey(outShaderKeys, *shaderName, pixelStageName);
+        }
+        if(!materialEntry.avboitExtinctionPixelShaderName.empty()){
+            const auto shaderName = Name::FromText(AStringView(materialEntry.avboitExtinctionPixelShaderName));
+            if(!shaderName)
+                return MakeUnexpected(shaderName.error());
+            InsertShaderKey(outShaderKeys, *shaderName, pixelStageName);
+        }
     }
+    return {};
 }
 
-bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){
-    const AssetsGraphicsCookDetail::ShaderStageKey shaderKey{ ToName(shaderEntry.name), ToName(shaderEntry.archiveStage.view()) };
+Expected<bool, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){
+    const auto shaderName = ToName(shaderEntry.name);
+    const auto stageName = ToName(shaderEntry.archiveStage.view());
+    if(!shaderName)
+        return MakeUnexpected(shaderName.error());
+    if(!stageName)
+        return MakeUnexpected(stageName.error());
+    const AssetsGraphicsCookDetail::ShaderStageKey shaderKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
     return shaderKeys.find(shaderKey) != shaderKeys.end();
 }
 
@@ -108,10 +134,14 @@ Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& co
         return MakeUnexpected(Failure{});
     }
 
-    ShaderCook::DefineCombo combo{0, Hasher<ShaderCook::CookString>(), EqualTo<ShaderCook::CookString>(), cookArena};
+    ShaderCook::DefineCombo combo{cookArena};
     combo.reserve(sourceCombo.size() + s_AddedDefineCount);
-    for(const auto& [defineName, defineValue] : sourceCombo)
-        combo.try_emplace(defineName, defineValue);
+    for(const auto& [defineName, defineValue] : sourceCombo){
+        if(!combo.try_emplace(defineName, defineValue).second){
+            NWB_ASSERT(false);
+            return MakeUnexpected(Failure{});
+        }
+    }
 
     ShaderCook::CookString csgIntervalSampleEnabledDefineName(s_IntervalSampleEnabledImplicitDefineName, cookArena);
     ShaderCook::CookString csgIntervalSampleEnabledDefineValue(s_IntervalSampleEnabledImplicitDefineValue, cookArena);

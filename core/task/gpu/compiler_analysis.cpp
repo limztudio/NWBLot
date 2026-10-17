@@ -35,6 +35,9 @@ inline constexpr usize s_IndexedInferredEdges = Limit<usize>::s_Max - 1u;
 inline constexpr usize s_InlineInferredReasonCount = 8u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TrackedResourceAccess{
     GpuTaskId task;
     GpuTaskResourceRange range;
@@ -46,6 +49,7 @@ struct TrackedResourceAccessList{
     usize last = s_InvalidAccess;
 
 
+public:
     void append(Vector<TrackedResourceAccess, Alloc::ScratchArena>& accesses, const GpuTaskId task, const GpuTaskResourceRange& range){
         const usize index = accesses.size();
         accesses.push_back(TrackedResourceAccess{ .task = task, .range = range });
@@ -85,6 +89,7 @@ struct InferredDependencyHasher{
     const GraphicsVector<GpuTaskDependencyEdge>* edges = nullptr;
 
 
+public:
     [[nodiscard]] usize operator()(const usize index)const noexcept{
         const GpuTaskDependencyEdge& edge = (*edges)[index];
         const u64 taskPair = (static_cast<u64>(edge.producer.index) << s_EdgePairProducerShift) | edge.consumer.index;
@@ -100,6 +105,7 @@ struct InferredDependencyEqual{
     const GraphicsVector<GpuTaskDependencyEdge>* edges = nullptr;
 
 
+public:
     [[nodiscard]] bool operator()(const usize lhsIndex, const usize rhsIndex)const noexcept{
         const GpuTaskDependencyEdge& lhs = (*edges)[lhsIndex];
         const GpuTaskDependencyEdge& rhs = (*edges)[rhsIndex];
@@ -159,7 +165,8 @@ void GpuTaskGraphAnalysis::reset()noexcept{
 }
 
 bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
-    return m_valid
+    return
+        m_valid
         && m_generation == graph.generation()
         && m_declarationRevision == graph.declarationRevision()
         && m_taskCount == graph.taskCount()

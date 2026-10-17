@@ -102,8 +102,12 @@ template<typename ShaderPathResolver>
     shaderDesc.setEntryName(AStringView(shaderAsset.entryPoint()));
 
     auto& device = graphics.getDevice();
-    outShader = device.createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
-    if(!outShader){
+    auto outShaderResult = device.createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
+    if(outShaderResult)
+        outShader = Move(*outShaderResult);
+    else
+        outShader.reset();
+    if(!outShaderResult){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'"), ownerName, StringConvert(debugName.resolvedText()), StringConvert(shaderVirtualPath->resolvedText()));
         return false;
     }

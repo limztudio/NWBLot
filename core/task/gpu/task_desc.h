@@ -52,6 +52,8 @@ struct GpuTaskCommandRequirements{
     // A framework-owned bridge can target an existing external consumer timeline.
     GpuPhysicalQueueId externalQueue = {};
 
+
+public:
     [[nodiscard]] constexpr GpuQueueCapability::Mask allowedCapabilities()const noexcept{
         return static_cast<GpuQueueCapability::Mask>(static_cast<u8>(requiredCapabilities) | static_cast<u8>(alternativeCapabilities) | static_cast<u8>(additionalAlternativeCapabilities));
     }
@@ -124,7 +126,7 @@ struct GpuTaskTimingMetadata{
 };
 
 // Packet timing identities are derived from the first semantic task rather than compiler packet IDs, preserving one stable telemetry key when an equivalent graph is recompiled into a new plan generation.
-[[nodiscard]] inline Name GpuTaskPacketTimingScopeName(const Name& firstTaskIdentity){
+[[nodiscard]] inline Expected<Name> GpuTaskPacketTimingScopeName(const Name& firstTaskIdentity){
     return DeriveName(firstTaskIdentity, AStringView(".packet"));
 }
 
@@ -168,6 +170,8 @@ struct GpuGraphResourceDesc{
     // A direct native consumer cannot acquire a graph-exported ownership handoff. Exclusive imports stay in its family.
     GpuPhysicalQueueId directConsumerQueue = {};
 
+
+public:
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
     constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
     constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value)noexcept{ type = value; return *this; }
@@ -192,6 +196,8 @@ struct GpuGraphResourceVersionDesc{
     GpuTaskResourceRange range;
     GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
 
+
+public:
     constexpr GpuGraphResourceVersionDesc& setResource(const GpuGraphResourceId value)noexcept{ resource = value; return *this; }
     constexpr GpuGraphResourceVersionDesc& setRange(const GpuTaskResourceRange& value)noexcept{ range = value; return *this; }
     constexpr GpuGraphResourceVersionDesc& setOrigin(const GpuGraphResourceVersionOrigin::Enum value)noexcept{ origin = value; return *this; }
@@ -205,6 +211,8 @@ struct GpuGraphResourceSetDesc{
     const GpuGraphResourceId* members = nullptr;
     usize memberCount = 0u;
 
+
+public:
     constexpr GpuGraphResourceSetDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
     constexpr GpuGraphResourceSetDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
     constexpr GpuGraphResourceSetDesc& setMembers(const GpuGraphResourceId* values, const usize count)noexcept{
@@ -221,6 +229,8 @@ struct GpuGraphPipelineDesc{
     AStringView markerLabel;
     GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
 
+
+public:
     constexpr GpuGraphPipelineDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
     constexpr GpuGraphPipelineDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
     constexpr GpuGraphPipelineDesc& setType(const GpuGraphPipelineType::Enum value)noexcept{ type = value; return *this; }
@@ -233,6 +243,8 @@ struct GpuExternalCompletionDesc{
     AStringView markerLabel;
     QueueSubmissionToken token;
 
+
+public:
     constexpr GpuExternalCompletionDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
     constexpr GpuExternalCompletionDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
     constexpr GpuExternalCompletionDesc& setToken(const QueueSubmissionToken& value)noexcept{ token = value; return *this; }
@@ -256,6 +268,8 @@ struct GpuTaskDesc{
     const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
     usize resourceVersionUseCount = 0u;
 
+
+public:
     constexpr GpuTaskDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
     constexpr GpuTaskDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
     constexpr GpuTaskDesc& setScheduling(const GpuTaskSchedulingHint& value)noexcept{ scheduling = value; return *this; }

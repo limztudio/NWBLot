@@ -73,8 +73,14 @@ namespace __hidden_text_area_scroll_input{
 bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token){
     TextAreaState& state = *frame.state;
     const bool enabled = item.editOptions.enabled;
-    const WidgetId horizontalId = MakeWidgetId(item.state.id, "scroll.x.thumb");
-    const WidgetId verticalId = MakeWidgetId(item.state.id, "scroll.y.thumb");
+    const auto horizontalIdResult = MakeWidgetId(item.state.id, "scroll.x.thumb");
+    if(!horizontalIdResult)
+        return false;
+    const WidgetId horizontalId = *horizontalIdResult;
+    const auto verticalIdResult = MakeWidgetId(item.state.id, "scroll.y.thumb");
+    if(!verticalIdResult)
+        return false;
+    const WidgetId verticalId = *verticalIdResult;
     auto horizontal = m_context.takePartPointerGesture(item.state, horizontalId, enabled);
     bool haveHorizontal = horizontal && horizontal->control == token;
     auto vertical = m_context.takePartPointerGesture(item.state, verticalId, enabled);

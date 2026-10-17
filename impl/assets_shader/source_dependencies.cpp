@@ -152,10 +152,16 @@ Expected<ShaderSourceDependencies::IncludeDirective> ShaderSourceDependencies::E
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> ShaderSourceDependencies::ResolveIncludeFile(const AStringView includeName, const ShaderSourceDependencies::IncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories){
+Expected<::Path<Core::Alloc::ScratchArena>> ShaderSourceDependencies::ResolveIncludeFile(
+    const AStringView includeName,
+    const ShaderSourceDependencies::IncludeKind::Enum kind,
+    const ::Path<Core::Alloc::ScratchArena>& sourceDirectory,
+    const ShaderCook::CookVector<Path>& includeDirectories,
+    Core::Alloc::ScratchArena& scratchArena
+){
 
     if(kind == ShaderSourceDependencies::IncludeKind::Relative){
-        const Path localCandidate = (sourceDirectory / includeName).lexicallyNormal();
+        ::Path<Alloc::ScratchArena> localCandidate = (sourceDirectory / includeName).lexicallyNormal();
         const auto localCandidateQueryResult = IsRegularFile(localCandidate);
         if(localCandidateQueryResult && *localCandidateQueryResult){
             return localCandidate;
@@ -167,7 +173,7 @@ Expected<Path> ShaderSourceDependencies::ResolveIncludeFile(const AStringView in
     }
 
     for(const Path& includeDirectory : includeDirectories){
-        const Path includeCandidate = (includeDirectory / includeName).lexicallyNormal();
+        ::Path<Alloc::ScratchArena> includeCandidate = (::Path<Alloc::ScratchArena>(scratchArena, includeDirectory) / includeName).lexicallyNormal();
         const auto includeCandidateQueryResult = IsRegularFile(includeCandidate);
         if(includeCandidateQueryResult && *includeCandidateQueryResult){
             return includeCandidate;

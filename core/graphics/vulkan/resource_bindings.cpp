@@ -360,20 +360,23 @@ BindingLayout::~BindingLayout(){
 }
 
 
-BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<BindingLayoutHandle> Device::createBindingLayout(const BindingLayoutDesc& desc){
     if(desc.bindings.size() > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding count exceeds Vulkan limit"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding layout: descriptor-buffer backend is unavailable."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     BindingLayoutHandle layout(NewArenaObject<BindingLayout>(m_context.objectArena, m_context), BindingLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!layout)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     layout->m_desc = desc;
 
     for(usize i = 0u; i < desc.bindings.size(); ++i){
@@ -382,19 +385,19 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
             continue;
         if(item.type == ResourceType::PushConstants){
             if(!VulkanDetail::ValidatePushConstantByteSize(m_context, item.size, NWB_TEXT("create binding layout"))){
-                return nullptr;
+                return MakeUnexpected(Failure{});
             }
             continue;
         }
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding layout: pipeline-local resource bindings are retired; register slot {} in GpuDescriptorHeap and select it through push constants."), item.slot);
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
     const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, NWB_TEXT("create binding layout"));
     if(!pipelineLayout){
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     layout->m_pipelineLayout = *pipelineLayout;
@@ -405,23 +408,23 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     return layout;
 }
 
-BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
+Expected<BindingLayoutHandle> Device::createBindlessLayout(const BindlessLayoutDesc& desc){
     VkResult res = VK_SUCCESS;
 
     if(desc.descriptorSetIndex == Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: an explicit descriptor-set index is required."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if((static_cast<u16>(desc.visibility) & ~static_cast<u16>(ShaderType::All)) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: shader visibility contains unknown bits."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DescriptorBindingArena);
 
     BindingLayoutHandle layout(NewArenaObject<BindingLayout>(m_context.objectArena, m_context), BindingLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!layout)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     layout->m_isBindless = true;
     layout->m_bindlessDesc = desc;
 
@@ -435,12 +438,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         const auto& item = desc.registerSpaces[i];
         if(!VulkanDetail::IsBindlessRegisterSpaceType(item.type) || (item.type == ResourceType::RayTracingAccelStruct && desc.layoutType != BindlessLayoutType::Immutable)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}"), item.slot, static_cast<u32>(item.type));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         const auto slotInsert = registerSpaceSlots.insert(item.slot);
         if(!slotInsert.second){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: duplicate register space slot {}"), item.slot);
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
 
         VkDescriptorSetLayoutBinding binding = {};
@@ -455,12 +458,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer backend is unavailable."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const auto descriptorBufferSegmentKind = VulkanDetail::TryResolveBindlessDescriptorBufferLayout(desc);
     if(!descriptorBufferSegmentKind){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer layouts cannot mix sampler and resource bindings."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
@@ -474,7 +477,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     res = m_context.deviceDispatch.vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create bindless descriptor set layout: {}"), ResultToString(res));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
@@ -485,7 +488,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     m_context.deviceDispatch.vkGetDescriptorSetLayoutSizeEXT(m_context.device, descriptorSetLayout, &setSizeBytes);
     if(setSizeBytes == 0u || setSizeBytes > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer set size is invalid."));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     layout->m_descriptorBufferBindingOffsets.reserve(desc.registerSpaces.size());
@@ -493,7 +496,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         VkDeviceSize bindingOffsetBytes = 0;
         m_context.deviceDispatch.vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
         if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(*m_context.descriptorBufferManager, VulkanDetail::ConvertDescriptorType(item.type), maxCapacity, setSizeBytes, bindingOffsetBytes, item.slot, NWB_TEXT("bindless layout"))){
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
     }

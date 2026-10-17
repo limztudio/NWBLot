@@ -190,8 +190,12 @@ TEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReus
         const NWB::Path filePath = fixture.assetRoot / "bundle.nwb";
         const auto firstPath = StringFormat(fixture.metadataArena, "{}/bundle/{}", virtualRoot, firstVariable);
         const auto secondPath = StringFormat(fixture.metadataArena, "{}/bundle/{}", virtualRoot, secondVariable);
-        const Name firstIdentity{ AStringView(firstPath) };
-        const Name secondIdentity{ AStringView(secondPath) };
+        const auto firstIdentityResult = Name::FromText(AStringView(firstPath));
+        ASSERT_TRUE(firstIdentityResult);
+        const Name firstIdentity = *firstIdentityResult;
+        const auto secondIdentityResult = Name::FromText(AStringView(secondPath));
+        ASSERT_TRUE(secondIdentityResult);
+        const Name secondIdentity = *secondIdentityResult;
         const ArenaMemoryStats retainedMetadata = fixture.metadataArena.memoryStats();
 
         // Keep this regression within one chunk per alignment so it isolates string growth from chunk-stack reuse.
@@ -283,7 +287,8 @@ TEST(AssetBunchOwnership, CallerUnwindDestroysEveryPublishedResolvedValue){
         }
         VerifyOwnedOutput(output, fixture.document);
         throw CallerFailure{};
-    }, CallerFailure);
+    }, CallerFailure
+    );
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
 }
 
@@ -299,7 +304,9 @@ loop_b = { "next": loop_a };
 probe first = { "owned": "first output remains valid on failure" };
 probe second = [ { "copied": [4, 5, 6] }, loop_a ];
 asset_bunch bunch = [first, second];
-)"));
+)"
+    )
+    );
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     {
         for(usize iteration = 0u; iteration < 8u; ++iteration){
@@ -322,7 +329,9 @@ metadata known;
 probe first = { "items": ["copied string", 1, 2] };
 probe second = [ { "copied": [4, 5, 6] }, known.missing ];
 asset_bunch bunch = [first, second];
-)"));
+)"
+    )
+    );
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     {
         EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena));
@@ -358,7 +367,9 @@ metadata rig = { "skeleton": "project/shared/skeleton" };
 model model;
 model.skeletons = { "rig": rig };
 asset_bunch bunch = [model];
-)"));
+)"
+    )
+    );
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     Impl::ModelCookEntry entry(fixture.outputArena);
     {
@@ -408,7 +419,9 @@ metadata local = { "id": 22 };
 probe first = { "values": [Local, local, Local] };
 probe second = { "values": [local] };
 ASSET_BUNCH bunch = [second, first];
-)", unusedDeclarations));
+)", unusedDeclarations
+        )
+        );
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
         ExpandedAssetMetadataVector output(fixture.scratchArena);
         {
@@ -451,7 +464,9 @@ metadata known;
 probe Asset = { "missing": known.missing };
 probe asset;
 asset_bunch bunch = [Asset, asset];
-)", unusedDeclarations));
+)", unusedDeclarations
+        )
+        );
         EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(logger.errorCount(), 1u);
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'asset' is listed more than once")));
@@ -470,7 +485,9 @@ metadata local = { "id": 5 };
 Local.next = local;
 probe asset = { "nested": Local };
 asset_bunch bunch = [asset];
-)", unusedDeclarations));
+)", unusedDeclarations
+        )
+        );
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
         EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);

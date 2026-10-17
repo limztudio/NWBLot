@@ -24,7 +24,7 @@ public:
 
 
 public:
-    explicit X11PreeditBuffer(Alloc::GlobalArena& arena);
+    explicit X11PreeditBuffer(Alloc::GlobalArena& arena)noexcept;
 
 
 public:

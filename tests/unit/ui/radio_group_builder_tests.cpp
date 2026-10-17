@@ -3,6 +3,7 @@
 
 
 #include "radio_group_fixture.h"
+#include "widget_id_assertion.h"
 
 #include <global/simplemath.h>
 
@@ -191,7 +192,7 @@ TEST_F(UiRadioGroupBuilderTests, SelectedDisabledChoiceKeepsItsCheckedFrameAndMa
     ASSERT_TRUE(accept(1u));
     EXPECT_EQ(m_state.selectedKey(), 30u);
     EXPECT_EQ(m_state.cursorKey(), 40u);
-    const WidgetId part = MakeWidgetPartId(MakeWidgetId(host(), "choices"), 30u);
+    const WidgetId part = UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "choices")), 30u));
     ASSERT_NE(target(part), nullptr);
     EXPECT_FALSE(target(part)->enabled);
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -211,9 +212,9 @@ TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetire
     ASSERT_NE(target(host()), nullptr);
     EXPECT_FALSE(target(host())->enabled);
     EXPECT_FALSE(target(host())->focusable);
-    EXPECT_EQ(target(MakeWidgetPartId(MakeWidgetId(host(), "choices"), 10u)), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "choices")), 10u))), nullptr);
     const Point point = choicePoint(10u);
-    EXPECT_EQ(m_context.input().hitTest(point), MakeWidgetId(MakeRootId(m_root), "panel"));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
     ASSERT_TRUE(accept(3u, options));

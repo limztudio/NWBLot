@@ -7,6 +7,8 @@
 
 #include "type_id.h"
 
+#include <global/allocation_size.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,26 +19,16 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MessageTypeId = usize;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-inline MessageTypeId MessageType()noexcept{
-    return ::TypeCounter<ECSDetail::MessageTypeTag>::Id<Decay_T<T>>();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MessageBus : NoCopy{
+    friend class World;
+
+
 private:
     class IMessageChannel;
+
+
+private:
     using MessageChannelPtr = GlobalUniquePtr<IMessageChannel>;
-    using ChannelLock = SharedMutex::scoped_lock;
 
 
 private:
@@ -48,6 +40,7 @@ private:
     public:
         virtual void swapBuffers() = 0;
         virtual void clear() = 0;
+        virtual void discardForDestruction()noexcept = 0;
     };
 
     template<typename T>
@@ -61,11 +54,13 @@ private:
                 moveFrom(Move(rhs));
             }
             template<typename... Args>
-            explicit PendingMessage(InPlaceType, Args&&... args)
+            explicit PendingMessage(InPlaceType, Args&&... args)noexcept(noexcept(Optional<T>(s_InPlace, Forward<Args>(args)...)))
                 : m_value(s_InPlace, Forward<Args>(args)...)
             {}
             ~PendingMessage() = default;
 
+
+        public:
             PendingMessage& operator=(const PendingMessage&) = delete;
             PendingMessage& operator=(PendingMessage&& rhs)noexcept(IsNothrowMoveConstructible_V<T>){
                 if(this != &rhs){
@@ -77,12 +72,12 @@ private:
 
 
         public:
-            T& value(){
+            T& value()noexcept{
                 NWB_ASSERT(m_value.has_value());
                 return *m_value;
             }
 
-            void reset(){
+            void reset()noexcept{
                 m_value.reset();
             }
 
@@ -121,7 +116,7 @@ private:
         }
 
         template<typename Func>
-        void consume(Func&& func)const{
+        void consume(Func&& func)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<const T&>()))){
             for(const auto& message : m_readBuffer)
                 func(message);
         }
@@ -138,6 +133,11 @@ private:
         virtual void clear()override{
             m_readBuffer.clear();
             drainPending([](T&)noexcept{});
+        }
+
+        virtual void discardForDestruction()noexcept override{
+            m_readBuffer.clear();
+            m_pending.clear();
         }
 
 
@@ -157,21 +157,13 @@ private:
         Vector<T, Alloc::GlobalArena> m_readBuffer;
     };
 
+
+private:
     using ChannelVector = Vector<MessageChannelPtr, Alloc::GlobalArena>;
 
 
-private:
-    static ChannelLock ReadChannelLock(SharedMutex& mutex){
-        return ChannelLock(mutex, false);
-    }
-
-    static ChannelLock WriteChannelLock(SharedMutex& mutex){
-        return ChannelLock(mutex, true);
-    }
-
-
 public:
-    explicit MessageBus(Alloc::GlobalArena& arena)
+    explicit MessageBus(Alloc::GlobalArena& arena)noexcept
         : m_arena(arena)
         , m_channels(arena)
     {}
@@ -201,7 +193,7 @@ public:
     }
 
     template<typename T, typename Func>
-    void consume(Func&& func)const{
+    void consume(Func&& func)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<const Decay_T<T>&>()))){
         using MessageT = Decay_T<T>;
         const auto* channel = getChannel<MessageT>();
         if(!channel)
@@ -210,7 +202,7 @@ public:
     }
 
     template<typename T>
-    usize messageCount()const{
+    usize messageCount()const noexcept{
         using MessageT = Decay_T<T>;
         const auto* channel = getChannel<MessageT>();
         if(!channel)
@@ -229,11 +221,11 @@ public:
 
 private:
     template<typename Func>
-    void forEachChannel(Func&& func){
+    void forEachChannel(Func&& func)noexcept(noexcept(DeclVal<Func&>()(DeclVal<IMessageChannel&>()))){
         if(!m_hasChannels.load(MemoryOrder::acquire))
             return;
 
-        ChannelLock lock = ReadChannelLock(m_channelsMutex);
+        NothrowScopedLock lock(m_channelsMutex);
 
         for(auto& channel : m_channels){
             if(!channel)
@@ -242,12 +234,17 @@ private:
         }
     }
 
+    // Destruction requires joined task producers and stopped external producers.
+    void discardForDestruction()noexcept{
+        forEachChannel([](IMessageChannel& channel)noexcept{ channel.discardForDestruction(); });
+    }
+
     template<typename T>
     MessageChannel<T>* getOrCreateChannel(){
         const MessageTypeId typeId = MessageType<T>();
 
         if(m_hasChannels.load(MemoryOrder::acquire)){
-            ChannelLock readLock = ReadChannelLock(m_channelsMutex);
+            ScopedLock readLock(m_channelsMutex);
             if(typeId < m_channels.size()){
                 auto& channel = m_channels[typeId];
                 if(channel)
@@ -255,7 +252,7 @@ private:
             }
         }
 
-        ChannelLock writeLock = WriteChannelLock(m_channelsMutex);
+        ScopedLock writeLock(m_channelsMutex);
         if(typeId >= m_channels.size())
             m_channels.resize(typeId + 1u);
 
@@ -264,6 +261,8 @@ private:
             return checked_cast<MessageChannel<T>*>(slot.get());
 
         auto channel = MakeGlobalUnique<MessageChannel<T>>(m_arena, m_arena);
+        if(!channel)
+            throw AllocationException{};
         auto* raw = channel.get();
         slot = Move(channel);
         m_hasChannels.store(true, MemoryOrder::release);
@@ -271,13 +270,13 @@ private:
     }
 
     template<typename T>
-    const MessageChannel<T>* getChannel()const{
+    const MessageChannel<T>* getChannel()const noexcept{
         if(!m_hasChannels.load(MemoryOrder::acquire))
             return nullptr;
 
         const MessageTypeId typeId = MessageType<T>();
 
-        ChannelLock lock = ReadChannelLock(m_channelsMutex);
+        NothrowScopedLock lock(m_channelsMutex);
 
         if(typeId >= m_channels.size())
             return nullptr;
@@ -291,7 +290,7 @@ private:
 
 private:
     Alloc::GlobalArena& m_arena;
-    mutable SharedMutex m_channelsMutex;
+    mutable Futex m_channelsMutex;
     Atomic<bool> m_hasChannels{ false };
     ChannelVector m_channels;
 };

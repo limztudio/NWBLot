@@ -29,6 +29,8 @@ struct EditModelSnapshot{
     u64 m_expectedSelectionGeneration = 0u;
     u64 m_expectedCompositionGeneration = 0u;
 
+
+public:
     explicit EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept;
 
 

@@ -21,6 +21,8 @@ struct ArenaMemoryOwnerRecord{
     ArenaMemoryOwnerRecord* bucketNext = nullptr;
     ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
 
+
+public:
     void attach(ArenaMemoryTracker& tracker)noexcept;
     void retire(ArenaMemoryTracker& tracker)noexcept;
     [[nodiscard]] ArenaMemoryStats snapshot()const noexcept;
@@ -39,10 +41,10 @@ namespace __hidden_arena_memory{
 inline constexpr usize s_OwnerBucketCount = 256u;
 inline constexpr usize s_HeapShardPadBytes = 80u;
 inline constexpr usize s_HeapShardMinBytes = 128u;
-constinit ArenaMemoryOwnerRecord s_HeapBacking{ .ownerName = Name("core/alloc/heap_backing"), .source = ArenaMemorySource::HeapBacking, };
-constinit Atomic<const ArenaMemoryOwnerRecord*> s_OwnerHead{ &s_HeapBacking };
-MallocMutex s_OwnerMutex;
-ArenaMemoryOwnerRecord* s_OwnerBuckets[s_OwnerBucketCount] = {};
+static constinit ArenaMemoryOwnerRecord s_HeapBacking{ .ownerName = Name("core/alloc/heap_backing"), .source = ArenaMemorySource::HeapBacking, };
+static constinit Atomic<const ArenaMemoryOwnerRecord*> s_OwnerHead{ &s_HeapBacking };
+static MallocMutex s_OwnerMutex;
+static ArenaMemoryOwnerRecord* s_OwnerBuckets[s_OwnerBucketCount] = {};
 
 struct HeapMemoryShard{
     Atomic<u64> allocatedBytes{ 0u };
@@ -57,10 +59,14 @@ struct HeapMemoryShard{
 };
 static_assert(sizeof(HeapMemoryShard) >= s_HeapShardMinBytes);
 
-constinit HeapMemoryShard s_HeapFallback;
-constinit Atomic<const HeapMemoryShard*> s_HeapHead{ &s_HeapFallback };
-constinit Atomic<u64> s_HeapSampledPeak{ 0u };
-constinit thread_local HeapMemoryShard* s_ThreadHeapShard = nullptr;
+static constinit HeapMemoryShard s_HeapFallback;
+static constinit Atomic<const HeapMemoryShard*> s_HeapHead{ &s_HeapFallback };
+static constinit Atomic<u64> s_HeapSampledPeak{ 0u };
+static constinit thread_local HeapMemoryShard* s_ThreadHeapShard = nullptr;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contribution)noexcept{
     total.reservedBytes += contribution.reservedBytes;

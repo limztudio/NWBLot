@@ -30,7 +30,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     RendererRayTracingState& rayTracingState,
     const RendererOpticalVolumeSelection& opticalVolumes,
     const CsgShapeRegistry& csgShapeRegistry
-)
+)noexcept
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
@@ -420,10 +420,12 @@ Expected<PreparedSceneBvhUploads> RendererRayTracingSystem::retainPreparedSceneB
         return MakeUnexpected(Failure{});
     }
 
-    result.node = graph.copyUploadData(m_preparedSceneBvhNodeBytes.data(), m_preparedSceneBvhNodeBytes.size(), alignof(NwbBvhNodeGpu));
-    result.instance = graph.copyUploadData(m_preparedSceneBvhInstanceBytes.data(), m_preparedSceneBvhInstanceBytes.size(), alignof(SceneSwBvhInstanceGpu));
-    if(!(result.node.valid() && result.instance.valid()))
+    const auto nodeResult = graph.copyUploadData(m_preparedSceneBvhNodeBytes.data(), m_preparedSceneBvhNodeBytes.size(), alignof(NwbBvhNodeGpu));
+    const auto instanceResult = graph.copyUploadData(m_preparedSceneBvhInstanceBytes.data(), m_preparedSceneBvhInstanceBytes.size(), alignof(SceneSwBvhInstanceGpu));
+    if(!(nodeResult && instanceResult))
         return MakeUnexpected(Failure{});
+    result.node = *nodeResult;
+    result.instance = *instanceResult;
     return result;
 }
 
@@ -543,7 +545,7 @@ bool RendererRayTracingSystem::capturePreparedSceneBvh(
     return true;
 }
 
-bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount){
+bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount)noexcept{
     clearPreparedSceneBvh();
     if(instanceCount == 0u)
         return false;

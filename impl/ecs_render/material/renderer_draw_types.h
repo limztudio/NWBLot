@@ -35,6 +35,8 @@ struct MaterialPassMeshResourceSnapshot{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
 
+
+public:
     [[nodiscard]] bool geometryHeapHandlesReady()const noexcept{
         constexpr u32 s_SourceBindingSlots[] = {
             NWB_MESH_BINDING_POSITION,
@@ -109,7 +111,9 @@ struct MaterialInstanceMutableCacheEntry{
     u64 revision = 0u;
     MaterialTypedByteVector mutableTypedBytes;
 
-    explicit MaterialInstanceMutableCacheEntry(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit MaterialInstanceMutableCacheEntry(Core::Alloc::GlobalArena& arena)noexcept
         : mutableTypedBytes(arena)
     {}
 };
@@ -129,7 +133,9 @@ struct MaterialPassDrawItems{
     MaterialPassDrawItemVector indexedDrawItems;
     MaterialPassDrawItemVector computeDrawItems;
 
-    explicit MaterialPassDrawItems(Core::Alloc::ScratchArena& arena)
+
+public:
+    explicit MaterialPassDrawItems(Core::Alloc::ScratchArena& arena)noexcept
         : meshDrawItems(arena)
         , indexedDrawItems(arena)
         , computeDrawItems(arena)
@@ -150,7 +156,9 @@ struct MaterialPassDrawItemPartitions{
     MaterialPassDrawItems csg;
     MaterialPassDrawItems csgReceiverSurface;
 
-    explicit MaterialPassDrawItemPartitions(Core::Alloc::ScratchArena& arena)
+
+public:
+    explicit MaterialPassDrawItemPartitions(Core::Alloc::ScratchArena& arena)noexcept
         : regular(arena)
         , csg(arena)
         , csgReceiverSurface(arena)

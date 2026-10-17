@@ -52,8 +52,12 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
         desc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_rt_refraction::RefractionPushConstants)));
-        m_rayTracingState.m_refractionBindingLayout = device.createBindingLayout(desc);
-        if(!m_rayTracingState.m_refractionBindingLayout)
+        auto refractionBindingLayoutResult = device.createBindingLayout(desc);
+        if(refractionBindingLayoutResult)
+            m_rayTracingState.m_refractionBindingLayout = Move(*refractionBindingLayoutResult);
+        else
+            m_rayTracingState.m_refractionBindingLayout.reset();
+        if(!refractionBindingLayoutResult)
             return false;
     }
 
@@ -79,8 +83,12 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         desc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         if(hardware)
             desc.addBindingLayout(heap.getAccelStructLayout());
-        pipeline = device.createComputePipeline(desc);
-        if(!pipeline){
+        auto pipelineResult = device.createComputePipeline(desc);
+        if(pipelineResult)
+            pipeline = Move(*pipelineResult);
+        else
+            pipeline.reset();
+        if(!pipelineResult){
             failed = true;
             return false;
         }

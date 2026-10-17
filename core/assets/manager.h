@@ -33,7 +33,7 @@ namespace AssetLoadState{
 
 class IAssetBinarySource{
 public:
-    virtual ~IAssetBinarySource() = default;
+    virtual ~IAssetBinarySource()noexcept = default;
 
 
 public:
@@ -42,7 +42,7 @@ public:
 
 class IAssetAsyncExecutor{
 public:
-    virtual ~IAssetAsyncExecutor() = default;
+    virtual ~IAssetAsyncExecutor()noexcept = default;
 
 
 public:
@@ -66,6 +66,8 @@ private:
         Name virtualPath = s_NameNone;
     };
 
+
+private:
     using RequestMap = HashMap<u64, RequestRecord, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
 
 
@@ -85,21 +87,15 @@ public:
 
 
 public:
-    void setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor);
-
+    void setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor)noexcept;
     [[nodiscard]] Expected<UniquePtr<IAsset>> loadSync(const Name& assetType, const Name& virtualPath)const;
-
-    [[nodiscard]] u64 enqueueLoad(const Name& assetType, const Name& virtualPath);
+    [[nodiscard]] Expected<u64> enqueueLoad(const Name& assetType, const Name& virtualPath);
     void processPending();
-    [[nodiscard]] Expected<AssetLoadResult> tryPopResult(u64 requestId);
+    [[nodiscard]] Expected<AssetLoadResult> tryPopResult(u64 requestId)noexcept;
+    void clear()noexcept;
+    [[nodiscard]] u64 pendingRequestCount()const noexcept;
+    [[nodiscard]] u64 completedRequestCount()const noexcept;
 
-    void clear();
-
-    [[nodiscard]] u64 pendingRequestCount()const;
-    [[nodiscard]] u64 completedRequestCount()const;
-
-
-public:
     template<typename AssetT>
     [[nodiscard]] Expected<UniquePtr<AssetT>> loadTypedSync(const Name& virtualPath, const TStringView ownerName, const AStringView assetKindText)const{
         auto loadedAsset = loadSync(AssetT::AssetTypeName(), virtualPath);
@@ -117,7 +113,7 @@ public:
 
 
 private:
-    [[nodiscard]] u64 allocateRequestId();
+    [[nodiscard]] Expected<u64> allocateRequestId()noexcept;
     void dispatchAsync(u64 requestId, IAssetAsyncExecutor& asyncExecutor);
     void processRequest(u64 requestId);
 
@@ -126,7 +122,6 @@ private:
     const AssetRegistry& m_registry;
     const IAssetBinarySource& m_binarySource;
     IAssetAsyncExecutor* m_asyncExecutor = nullptr;
-
     mutable Futex m_mutex;
     AssetArena& m_arena;
     RequestMap m_requests;

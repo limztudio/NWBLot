@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionStatisticsState::ReflectionStatisticsState(const u16 deviceGeneration)
+ReflectionStatisticsState::ReflectionStatisticsState(const u16 deviceGeneration)noexcept
     : m_deviceGeneration(deviceGeneration)
 {}
 
@@ -221,7 +221,7 @@ void ReflectionStatisticsReservation::discard()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionStatisticsReadback::ReflectionStatisticsReadback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)
+ReflectionStatisticsReadback::ReflectionStatisticsReadback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
     : m_arena(arena)
     , m_graphics(graphics)
 {}
@@ -248,8 +248,12 @@ bool ReflectionStatisticsReadback::prepareResources(){
     for(u32 index = 0u; index < ReflectionStatisticsState::s_SlotCount; ++index){
         Core::BufferDesc desc;
         desc.setByteSize(NWB_REFLECTION_COUNTER_SIZE).setCpuAccess(Core::CpuAccessMode::Read).setDebugName(s_Names[index]).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
-        buffers[index] = m_graphics.createBuffer(desc);
-        if(!buffers[index])
+        auto buffersResult = m_graphics.createBuffer(desc);
+        if(buffersResult)
+            buffers[index] = Move(*buffersResult);
+        else
+            buffers[index].reset();
+        if(!buffersResult)
             return false;
     }
     m_control->reset(deviceGeneration);

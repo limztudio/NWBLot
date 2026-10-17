@@ -31,10 +31,10 @@ namespace __hidden_resources{
 
 
 template<typename PayloadT>
-static Core::BufferHandle SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const TStringView label){
+static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const TStringView label){
     if(MultiplyOverflows<usize>(count, sizeof(PayloadT))){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
-        return {};
+        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow);
     }
 
     return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(graphics, debugName, payload, count, { false, false, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
@@ -42,23 +42,19 @@ static Core::BufferHandle SetupStructuredBuffer(Core::GraphicsRuntime& graphics,
 
 static Expected<Core::GpuDescriptorHandle> RegisterStorageBuffer(Core::GpuDescriptorHeap& heap, const Core::DescriptorWriteItem& item){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!handle.valid())
+    Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
+    if(!handle.valid() || !heap.write(handle, item))
         return MakeUnexpected(Failure{});
-    if(!heap.write(handle, item)){
-        heap.free(handle);
-        return MakeUnexpected(Failure{});
-    }
+    retireHandle.release();
     return handle;
 }
 
 static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(!handle.valid())
+    Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
+    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)))
         return MakeUnexpected(Failure{});
-    if(!heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer))){
-        heap.free(handle);
-        return MakeUnexpected(Failure{});
-    }
+    retireHandle.release();
     return handle;
 }
 
@@ -104,7 +100,30 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
     if(!rebuild)
         return RuntimeResourcePreparation{ &resources, false };
 
+    class UnpublishedRuntimeDescriptors final : NoCopy{
+    public:
+        UnpublishedRuntimeDescriptors(MeshSkinningSystem& system, RuntimeResources& resources)noexcept
+            : m_system(system)
+            , m_resources(resources)
+        {}
+        ~UnpublishedRuntimeDescriptors()noexcept(noexcept(DeclVal<MeshSkinningSystem&>().releaseRuntimeResourceBindlessHeapHandles(DeclVal<RuntimeResources&>()))){
+            if(m_active)
+                m_system.releaseRuntimeResourceBindlessHeapHandles(m_resources);
+        }
+
+
+    public:
+        void release()noexcept{ m_active = false; }
+
+
+    private:
+        MeshSkinningSystem& m_system;
+        RuntimeResources& m_resources;
+        bool m_active = true;
+    };
+
     RuntimeResources rebuilt;
+    UnpublishedRuntimeDescriptors retireRebuilt(*this, rebuilt);
     rebuilt.handle = instance.handle;
     rebuilt.buffers = Move(buffers);
     rebuilt.editRevision = instance.editRevision;
@@ -114,61 +133,63 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
     rebuilt.skinCount = skinCount;
     rebuilt.jointCount = jointCount;
 
-    const auto failRebuild = [&](){
-        releaseRuntimeResourceBindlessHeapHandles(rebuilt);
-        return MakeUnexpected(Failure{});
-    };
-
     if(hasActiveSkin){
         const auto skinInfluences = MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
         if(!skinInfluences)
-            return failRebuild();
+            return MakeUnexpected(Failure{});
 
-        const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
-        const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
+        const auto skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
+        const auto jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
         if(!skinBufferName || !jointPaletteBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
+            return MakeUnexpected(Failure{});
         }
 
-        rebuilt.skinBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, skinBufferName, skinInfluences->data(), skinInfluences->size(), NWB_TEXT("skin influence"));
-        if(!rebuilt.skinBuffer){
+        auto skinBufferResult = __hidden_resources::SetupStructuredBuffer(m_graphics, *skinBufferName, skinInfluences->data(), skinInfluences->size(), NWB_TEXT("skin influence"));
+        if(!skinBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
+            return MakeUnexpected(Failure{});
         }
+        rebuilt.skinBuffer = Move(*skinBufferResult);
 
-        rebuilt.jointPaletteBuffer = __hidden_resources::SetupStructuredBuffer(m_graphics, jointPaletteBufferName, payload.jointMatrices.data(), payload.jointMatrices.size(), NWB_TEXT("joint palette"));
-        if(!rebuilt.jointPaletteBuffer){
+        auto jointPaletteBufferResult = __hidden_resources::SetupStructuredBuffer(m_graphics, *jointPaletteBufferName, payload.jointMatrices.data(), payload.jointMatrices.size(), NWB_TEXT("joint palette"));
+        if(!jointPaletteBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
+            return MakeUnexpected(Failure{});
         }
+        rebuilt.jointPaletteBuffer = Move(*jointPaletteBufferResult);
     }
 
-    const Name bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_bindless_slots");
+    const auto bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_bindless_slots");
     if(!bindlessSlotsBufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
-        return failRebuild();
+        return MakeUnexpected(Failure{});
     }
     Core::BufferDesc bindlessSlotsBufferDesc;
     bindlessSlotsBufferDesc
         .setByteSize(sizeof(MeshSkinningBindlessResourceSlots))
         .setIsConstantBuffer(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(bindlessSlotsBufferName)
+        .setDebugName(*bindlessSlotsBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rebuilt.bindlessResourceSlotsBuffer = m_graphics.createBuffer(bindlessSlotsBufferDesc);
-    if(!rebuilt.bindlessResourceSlotsBuffer){
+    auto bindlessResourceSlotsBufferResult = m_graphics.createBuffer(bindlessSlotsBufferDesc);
+    if(bindlessResourceSlotsBufferResult)
+        rebuilt.bindlessResourceSlotsBuffer = Move(*bindlessResourceSlotsBufferResult);
+    else
+        rebuilt.bindlessResourceSlotsBuffer.reset();
+    if(!bindlessResourceSlotsBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bindless slot buffer for runtime mesh '{}'"), instance.handle.value);
-        return failRebuild();
+        return MakeUnexpected(Failure{});
     }
 
     if(!createRuntimeResourceBindlessHeapHandles(instance, rebuilt))
-        return failRebuild();
+        return MakeUnexpected(Failure{});
 
     // Rebuilds allocate fresh slots; free the replaced generation before dropping its handles.
     releaseRuntimeResourceBindlessHeapHandles(resources);
     resources = Move(rebuilt);
+    retireRebuilt.release();
     return RuntimeResourcePreparation{ &resources, true };
 }
 

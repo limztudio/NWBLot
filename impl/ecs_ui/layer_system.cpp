@@ -106,7 +106,8 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
             return false;
         m_skinAsset = Move(*candidateAsset);
         return true;
-    });
+    }
+    );
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){

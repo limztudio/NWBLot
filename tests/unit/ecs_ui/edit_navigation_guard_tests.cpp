@@ -23,7 +23,7 @@ namespace CallbackMutation{
 
 class UiEditNavigationGuardTests : public UiEditNavigationHostTests{
 protected:
-    void rejectTarget(const Ui::EditNavigationResult target){
+    void rejectTarget(const Expected<Ui::EditNavigationResult>& target){
         ASSERT_TRUE(m_navigationModel.setText("e\xcc\x81\nxy"));
         ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
         ASSERT_TRUE(activateNavigation());
@@ -121,23 +121,23 @@ protected:
 
 
 TEST_F(UiEditNavigationGuardTests, UnresolvedCallbackDoesNotApplyItsPlausibleTargetOrLaterText){
-    rejectTarget({ 4u, 20.0f, false });
+    rejectTarget(MakeUnexpected(Failure{}));
 }
 
 TEST_F(UiEditNavigationGuardTests, OutOfRangeCallbackTargetRejectsWithoutPartialColumnPublication){
-    rejectTarget({ 8u, 20.0f, true });
+    rejectTarget(Ui::EditNavigationResult{ 8u, 20.0f });
 }
 
 TEST_F(UiEditNavigationGuardTests, ScalarEdgeInsideGraphemeCannotBecomeACommittedCaret){
-    rejectTarget({ 1u, 20.0f, true });
+    rejectTarget(Ui::EditNavigationResult{ 1u, 20.0f });
 }
 
 TEST_F(UiEditNavigationGuardTests, ByteInsideUtf8ScalarCannotBecomeACommittedCaret){
-    rejectTarget({ 2u, 20.0f, true });
+    rejectTarget(Ui::EditNavigationResult{ 2u, 20.0f });
 }
 
 TEST_F(UiEditNavigationGuardTests, NonfinitePreferredColumnRejectsBeforeApplyingTheTarget){
-    rejectTarget({ 4u, Limit<f32>::s_QuietNaN, true });
+    rejectTarget(Ui::EditNavigationResult{ 4u, Limit<f32>::s_QuietNaN });
 }
 
 TEST_F(UiEditNavigationGuardTests, ResolverIdenticalSelectionIntentRejectsTheOuterMovement){

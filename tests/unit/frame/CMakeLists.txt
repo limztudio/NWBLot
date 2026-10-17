@@ -1,0 +1,5 @@
+if(WIN32)
+    nwb_declare_gtest_executable(nwb_frame_lifecycle_tests)
+    target_sources(nwb_frame_lifecycle_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/win32_lifecycle_tests.cpp")
+    target_link_libraries(nwb_frame_lifecycle_tests PRIVATE nwb_frame)
+endif()

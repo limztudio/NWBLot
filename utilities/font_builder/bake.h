@@ -29,7 +29,9 @@ struct BakeOptions{
     bool outline = false;
     bool overwrite = false;
 
-    explicit BakeOptions(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit BakeOptions(Core::Alloc::GlobalArena& arena)noexcept
         : source(arena)
         , output(arena)
     {}
@@ -39,14 +41,16 @@ struct RasterGlyph{
     Impl::FontAtlasGlyph record;
     Core::Assets::AssetBytes pixels;
 
-    explicit RasterGlyph(Core::Assets::AssetArena& arena)
+
+public:
+    explicit RasterGlyph(Core::Assets::AssetArena& arena)noexcept
         : pixels(arena)
     {}
 };
 
 using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
 
-[[nodiscard]] bool ValidateOptions(const BakeOptions& options);
+[[nodiscard]] bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::FontAtlasPayload& outPayload, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);

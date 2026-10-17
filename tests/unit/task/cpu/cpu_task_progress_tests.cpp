@@ -40,7 +40,8 @@ public:
                     TerminateInvariant();
                 SleepMS(1u);
             }
-        })
+        }
+        )
     {}
 
 
@@ -83,24 +84,34 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
             scheduler.drain();
             if(releaser.joinable())
                 releaser.join();
-        });
-        const auto gate = scheduler.submit([&](){
+        }
+        );
+        const auto cpuAdmission67 = scheduler.submit([&](){
             workerEntered.store(true, MemoryOrder::release);
             workerEntered.notify_one();
             release.wait(false, MemoryOrder::acquire);
-        });
+        }
+        );
+        ASSERT_TRUE(cpuAdmission67);
+        const auto gate = *cpuAdmission67;
         ASSERT_TRUE(gate.valid());
         workerEntered.wait(false, MemoryOrder::acquire);
-        const auto prerequisite = scheduler.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &gate, 1u);
+        const auto cpuAdmission68 = scheduler.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &gate, 1u);
+        ASSERT_TRUE(cpuAdmission68);
+        const auto prerequisite = *cpuAdmission68;
         ASSERT_TRUE(prerequisite.valid());
-        ASSERT_TRUE(scope.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &prerequisite, 1u).valid());
+        const auto cpuAdmission69 = scope.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &prerequisite, 1u);
+        ASSERT_TRUE(cpuAdmission69);
+        if(cpuAdmission69)
+            ASSERT_TRUE(cpuAdmission69->valid());
         releaser = JoiningThread([&](){
             joining.wait(false, MemoryOrder::acquire);
             if(round % s_ReleaseSchedules == 0u)
                 SleepMS(1u);
             release.store(true, MemoryOrder::release);
             release.notify_one();
-        });
+        }
+        );
         // No handle waiter or completed scope can provide the prerequisite's readiness notification.
         joining.store(true, MemoryOrder::release);
         joining.notify_one();
@@ -131,36 +142,59 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
             start.store(true, MemoryOrder::release);
             start.notify_all();
             scheduler.drain();
-        });
+        }
+        );
         for(u32 waiter = 0u; waiter < s_Workers; ++waiter){
-            ASSERT_TRUE(scheduler.submit([&](){
+            const auto cpuAdmission70 = scheduler.submit([&](){
                 entered.fetch_add(1u, MemoryOrder::release);
                 entered.notify_one();
                 start.wait(false, MemoryOrder::acquire);
                 scope.wait();
                 joined.fetch_add(1u, MemoryOrder::release);
-            }).valid());
+            }
+            );
+            ASSERT_TRUE(cpuAdmission70);
+            if(cpuAdmission70)
+                ASSERT_TRUE(cpuAdmission70->valid());
         }
         for(u32 count = entered.load(MemoryOrder::acquire); count != s_Workers; count = entered.load(MemoryOrder::acquire))
             entered.wait(count, MemoryOrder::acquire);
         for(auto& root : roots){
-            root = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+            const auto cpuAdmission71 = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+            ASSERT_TRUE(cpuAdmission71);
+            root = *cpuAdmission71;
             ASSERT_TRUE(root.valid());
         }
-        ASSERT_TRUE(scope.submit([&](){
-            EXPECT_TRUE(scheduler.submit([&](){
-                EXPECT_TRUE(scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); }).valid());
-            }).valid());
-        }, {}, roots, s_RootCount).valid());
+        const auto cpuAdmission72 = scope.submit([&](){
+            const auto cpuAdmission73 = scheduler.submit([&](){
+                const auto cpuAdmission74 = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+                EXPECT_TRUE(cpuAdmission74);
+                if(cpuAdmission74)
+                    EXPECT_TRUE(cpuAdmission74->valid());
+            }
+            );
+            EXPECT_TRUE(cpuAdmission73);
+            if(cpuAdmission73)
+                EXPECT_TRUE(cpuAdmission73->valid());
+        }, {}, roots, s_RootCount
+        );
+        ASSERT_TRUE(cpuAdmission72);
+        if(cpuAdmission72)
+            ASSERT_TRUE(cpuAdmission72->valid());
         start.store(true, MemoryOrder::release);
         start.notify_all();
         scheduler.wait();
         EXPECT_EQ(joined.load(MemoryOrder::acquire), s_Workers);
         EXPECT_EQ(visits.load(MemoryOrder::acquire), s_RootCount + 1u);
         // This scope keeps its identity after completion, while publication invalidates its old contribution proofs.
-        const auto later = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+        const auto cpuAdmission75 = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+        ASSERT_TRUE(cpuAdmission75);
+        const auto later = *cpuAdmission75;
         ASSERT_TRUE(later.valid());
-        ASSERT_TRUE(scope.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); }, later).valid());
+        const auto cpuAdmission76 = scope.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); }, later);
+        ASSERT_TRUE(cpuAdmission76);
+        if(cpuAdmission76)
+            ASSERT_TRUE(cpuAdmission76->valid());
         scope.wait();
         scheduler.wait();
         finish.release();

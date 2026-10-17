@@ -25,6 +25,10 @@ namespace Format{
     inline constexpr u32 s_AstcVariantsPerBlockFootprint = 3u;
     inline constexpr u32 s_AstcHdrVariantOffset = 2u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
     enum Enum : u8{
         UNKNOWN,
 
@@ -200,6 +204,8 @@ struct FormatInfo{
     bool isSRGB : 1;
     u8 m_nameLength;
 
+
+public:
     template<usize NameSize>
     constexpr FormatInfo(
         const Format::Enum formatValue,

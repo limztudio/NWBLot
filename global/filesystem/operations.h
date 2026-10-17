@@ -56,6 +56,9 @@ inline constexpr usize s_StageDirectoryNameExtraCharacters = 1u + s_StageDirecto
 inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirectorySuffixLength;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
     return ::CanRepresentU64<StreamSize>(byteCount);
 }
@@ -143,7 +146,9 @@ struct StagedDirectoryPaths{
     Path<ArenaT> stageDirectory;
     Path<ArenaT> backupDirectory;
 
-    explicit StagedDirectoryPaths(ArenaT& arena)
+
+public:
+    explicit StagedDirectoryPaths(ArenaT& arena)noexcept(noexcept(decltype(stageDirectory)(arena)) && noexcept(decltype(backupDirectory)(arena)))
         : stageDirectory(arena)
         , backupDirectory(arena)
     {}
@@ -425,24 +430,6 @@ template<typename ArenaT>
 #endif
 }
 
-template<typename ArenaT>
-[[nodiscard]] inline bool PathIsDirectory(const Path<ArenaT>& path)noexcept{
-    const auto result = IsDirectory(path);
-    return result && *result;
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline bool PathIsRegularFile(const Path<ArenaT>& path)noexcept{
-    const auto result = IsRegularFile(path);
-    return result && *result;
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline bool PathIsMissing(const Path<ArenaT>& path)noexcept{
-    const auto result = FileExists(path);
-    return result && !*result;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -472,15 +459,22 @@ template<typename ArenaT>
 #if defined(NWB_PLATFORM_WINDOWS)
     if(CreateDirectory(path.c_str(), nullptr))
         return true;
-    if(GetLastError() == ERROR_ALREADY_EXISTS)
-        return false;
+    const ErrorCode createError = LastSystemError();
+    if(createError.value() != ERROR_ALREADY_EXISTS)
+        return MakeUnexpected(createError);
 #else
     if(mkdir(path.c_str(), static_cast<mode_t>(s_CreateDirectoryPermissionMask)) == 0)
         return true;
-    if(errno == EEXIST)
-        return false;
+    const ErrorCode createError = LastSystemError();
+    if(createError != std::errc::file_exists)
+        return MakeUnexpected(createError);
 #endif
-    return MakeUnexpected(LastSystemError());
+    const auto directory = IsDirectory(path);
+    if(!directory)
+        return MakeUnexpected(directory.error());
+    if(!*directory)
+        return MakeUnexpected(createError);
+    return false;
 }
 
 

@@ -67,7 +67,7 @@ struct AvboitIntegrationStageResult{
 
 class AvboitComputeEffectChainBuilder final : NoCopy{
 public:
-    AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem);
+    AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept;
 
 
 public:

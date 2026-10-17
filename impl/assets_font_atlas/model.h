@@ -67,6 +67,7 @@ struct FontAtlasGroup{
     Core::Assets::AssetBytes pixels;
 
 
+public:
     explicit FontAtlasGroup(Core::Assets::AssetArena& arena)noexcept
         : pixels(arena)
     {}
@@ -79,6 +80,7 @@ struct FontAtlasPositioningTable{
     Core::Assets::AssetBytes bytes;
 
 
+public:
     explicit FontAtlasPositioningTable(Core::Assets::AssetArena& arena)noexcept
         : bytes(arena)
     {}
@@ -102,6 +104,7 @@ struct FontAtlasPayload{
     Core::Assets::AssetVector<FontAtlasPositioningTable> positioningTables;
 
 
+public:
     explicit FontAtlasPayload(Core::Assets::AssetArena& arena)noexcept
         : glyphs(arena)
         , groups(arena)

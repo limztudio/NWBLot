@@ -47,7 +47,7 @@ void BackendContext::initDefaultExtensions(){
         m_rayTracingExtensions.emplace(GraphicsString(e.name, m_arena), e.feature);
 }
 
-bool BackendContext::createVulkanInstance(){
+bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     VkResult res = VK_SUCCESS;
     m_hdr10ColorSpaceExtensionEnabled = false;
 
@@ -107,9 +107,15 @@ bool BackendContext::createVulkanInstance(){
     for(const auto& name : m_deviceParams.optionalBackendLayers)
         m_optionalExtensions.layers.insert(name);
 
-    decltype(m_enabledExtensions.instance) requiredExtensions(m_enabledExtensions.instance);
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InstanceCreateArena, s_DeviceSetupScratchArenaBytes);
+    using ScratchExtensionSet = HashSet<VulkanDetail::ScratchString, Alloc::ScratchArena, ExtensionNameHasher, ExtensionNameEqualTo>;
+    ScratchExtensionSet requiredExtensions(0, ExtensionNameHasher(), ExtensionNameEqualTo(), scratchArena);
+    requiredExtensions.reserve(m_enabledExtensions.instance.size());
+    for(const auto& name : m_enabledExtensions.instance){
+        if(!requiredExtensions.emplace(AStringView(name), scratchArena).second){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
 
     uint32_t extensionCount = 0;
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
@@ -149,7 +155,14 @@ bool BackendContext::createVulkanInstance(){
         NWB_LOGGER_INFO(StringConvert(ss.str()));
     }
 
-    decltype(m_enabledExtensions.layers) requiredLayers(m_enabledExtensions.layers);
+    ScratchExtensionSet requiredLayers(0, ExtensionNameHasher(), ExtensionNameEqualTo(), scratchArena);
+    requiredLayers.reserve(m_enabledExtensions.layers.size());
+    for(const auto& name : m_enabledExtensions.layers){
+        if(!requiredLayers.emplace(AStringView(name), scratchArena).second){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
 
     uint32_t layerCount = 0;
     res = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);

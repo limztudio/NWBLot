@@ -25,7 +25,6 @@ namespace AssetsFontAtlasArenaScope{
 
 inline constexpr Name s_LoadBinaryArena("impl/assets_font_atlas/load_binary");
 inline constexpr Name s_SerializeArena("impl/assets_font_atlas/serialize");
-inline constexpr Name s_BuildAssetArena("impl/assets_font_atlas/build_asset");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

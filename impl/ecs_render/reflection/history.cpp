@@ -66,7 +66,7 @@ ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistory
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionHistoryState::ReflectionHistoryState(const u16 deviceGeneration)
+ReflectionHistoryState::ReflectionHistoryState(const u16 deviceGeneration)noexcept
     : m_deviceGeneration(deviceGeneration)
 {}
 

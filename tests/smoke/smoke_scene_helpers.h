@@ -21,6 +21,7 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_scene/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/assets/ref.h>
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
@@ -58,7 +59,7 @@ struct SmokeTintedEntitySetup{
     Name materialInterface;
 };
 
-[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const SmokeMaterialRef& material, const AStringView materialInterfacePath, const Float4& position, const Float4& scale){
+[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const SmokeMaterialRef& material, const NameText<char> materialInterfacePath, const Float4& position, const Float4& scale){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
     transform.position = position;
@@ -81,7 +82,7 @@ struct SmokeTintedEntitySetup{
     Core::Alloc::GlobalArena& arena,
     const SmokeMeshRef& mesh,
     const SmokeMaterialRef& material,
-    const AStringView materialInterfacePath,
+    const NameText<char> materialInterfacePath,
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
@@ -104,12 +105,13 @@ struct SmokeRenderSystems{
 };
 
 [[nodiscard]] inline SmokeRenderSystems CreateSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context, const SmokeRenderQualitySettings& baseSettings = {}){
+    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
     auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
     auto& rendererSystem = world.addSystem<Impl::RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
-    NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.caustic), NWB_TEXT("Invalid caustic quality smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.surfelGi), NWB_TEXT("Invalid surfel GI quality smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena, baseSettings.softwareShadow), NWB_TEXT("Invalid software shadow smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.shadow), NWB_TEXT("Invalid shadow quality smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.caustic), NWB_TEXT("Invalid caustic quality smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.surfelGi), NWB_TEXT("Invalid surfel GI quality smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, scratchArena, baseSettings.softwareShadow), NWB_TEXT("Invalid software shadow smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.shadow), NWB_TEXT("Invalid shadow quality smoke settings"));
     return { meshSystem, rendererSystem };
 }
 

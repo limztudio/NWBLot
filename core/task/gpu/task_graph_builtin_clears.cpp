@@ -188,16 +188,16 @@ struct ClearTextureRectUIntTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc){
+Expected<GpuTaskId> GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc){
     if(clearDesc.acceptedToken)
         *clearDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validResource(clearDesc.destination))
-        return {};
+        return MakeUnexpected(Failure{});
 
     const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
     if(
@@ -207,12 +207,12 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         || (destinationResource.buffer->getCreationDescription().byteSize & (sizeof(u32) - 1u)) != 0u
         || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationResource.buffer->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
     )
-        return {};
+        return MakeUnexpected(Failure{});
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearBufferTask;
     ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.buffer;
@@ -225,13 +225,13 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
 }
 
-GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
+Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
     if(clearDesc.acceptedToken)
         *clearDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(
         !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
@@ -239,7 +239,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         || clearDesc.valueType >= GpuClearTextureTaskValueType::kCount
         || (clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil && !clearDesc.clearDepth && !clearDesc.clearStencil)
     )
-        return {};
+        return MakeUnexpected(Failure{});
 
     const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
     if(
@@ -247,17 +247,17 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         || !destinationResource.texture
         || !GpuTaskGraphBuiltinDetail::CopyOrClearTextureDestinationCanMaterializeRetainedState(destinationResource.texture->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
     )
-        return {};
+        return MakeUnexpected(Failure{});
     const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType);
     Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
     if(!valueKind || !(clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, *valueKind, clearDesc.clearDepth, clearDesc.clearStencil)))
-        return {};
+        return MakeUnexpected(Failure{});
     const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureTask;
     ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.texture;
@@ -269,21 +269,21 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     GpuTaskDesc resolvedDesc = desc;
     GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(clearContract->queueRequirement);
     if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
-        return {};
+        return MakeUnexpected(Failure{});
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);
 }
 
-GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc){
+Expected<GpuTaskId> GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc){
     if(clearDesc.acceptedToken)
         *clearDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validResource(clearDesc.destination) || clearDesc.rect.maxX <= clearDesc.rect.minX || clearDesc.rect.maxY <= clearDesc.rect.minY)
-        return {};
+        return MakeUnexpected(Failure{});
 
     const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
     if(
@@ -294,16 +294,16 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc& desc, con
         || destinationResource.texture->getCreationDescription().sampleCount != 1u
         || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationResource.texture->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
     )
-        return {};
+        return MakeUnexpected(Failure{});
     Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
     if(!(clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, GraphicsBackend::TextureClearValueKind::UInt, false, false)))
-        return {};
+        return MakeUnexpected(Failure{});
     const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureRectUIntTask;
     ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.texture;
@@ -316,7 +316,7 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc& desc, con
     const GraphicsBackend::TextureClearQueueRequirement::Enum queueRequirement = GraphicsBackend::TextureClearBoxQueueRequirement(destinationResource.texture->getCreationDescription(), resolvedSubresources, clearBox);
     GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(queueRequirement);
     if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
-        return {};
+        return MakeUnexpected(Failure{});
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);
 }

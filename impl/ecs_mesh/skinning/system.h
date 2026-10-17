@@ -155,6 +155,8 @@ private:
         RuntimeBindlessHeapHandles bindlessHeapHandles;
         bool bindlessResourceSlotsUploaded = false;
 
+
+    public:
         [[nodiscard]] bool usesSkinning()const noexcept{ return skinCount != 0u && jointCount != 0u; }
         [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const{
             const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
@@ -216,7 +218,7 @@ public:
 
 
 public:
-    virtual void update(Core::ECS::World& world, f32 delta)noexcept override;
+    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
@@ -248,6 +250,7 @@ private:
     [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
+    void resolveFrameTaskGraphAttempt(const Core::GpuCompiledGraph::ReadView& planAccess)noexcept;
     // Resets reused frame graph storage so the next render() redeclares into clean members.
     void resetFrameTaskGraph();
 

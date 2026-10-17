@@ -36,8 +36,6 @@ LIT_RENDER_AVBOIT_CLEAR = "render.avboit_clear"
 LIT_IMPL_ECS_RENDER = "impl/ecs_render/"
 LIT_PREPARE = "prepare"
 LIT_TASK_GRAPH = "task_graph"
-LIT_MATERIAL_PASS_PREPARE = "material_pass_prepare"
-LIT_RAY_TRACING_BUILD = "ray_tracing_build"
 LIT_SAMPLES = "samples"
 LIT_USED = "used"
 LIT_RESERVED = "reserved"
@@ -103,8 +101,8 @@ GPU_BASE = (LIT_RENDER_FRAME, LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_SHADOW_VISIB
 GPU_TRANSPARENT = (LIT_RENDER_AVBOIT_CLEAR, "render.avboit_occupancy", "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate")
 GPU_INACTIVE = ("render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial")
 GPU_CONTROLS = (LIT_RENDER_FRAME, LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_SHADOW_VISIBILITY, LIT_RENDER_DEFERRED_LIGHTING, LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT)
-ARENAS = tuple(LIT_IMPL_ECS_RENDER + name for name in (LIT_PREPARE, "render", LIT_TASK_GRAPH, "avboit_transparent_csg", LIT_MATERIAL_PASS_PREPARE, "material_pass_render", "material_instance_mutable", LIT_RAY_TRACING_BUILD, "ray_tracing_attribute"))
-REQUIRED_ARENAS = tuple(LIT_IMPL_ECS_RENDER + name for name in (LIT_PREPARE, LIT_TASK_GRAPH, LIT_MATERIAL_PASS_PREPARE, LIT_RAY_TRACING_BUILD))
+ARENAS = tuple(LIT_IMPL_ECS_RENDER + name for name in (LIT_PREPARE, "render", LIT_TASK_GRAPH))
+REQUIRED_ARENAS = tuple(LIT_IMPL_ECS_RENDER + name for name in (LIT_PREPARE, LIT_TASK_GRAPH))
 FROZEN_SETTINGS = {"width": 960, "height": 720, "warmup": 96, LIT_SAMPLES: 256, "drain": 32, "reflection_mode": "hardware", "hardware_budget": 4096, "optical_queries": 16, "temporal": False, "spatial": False, "feedback": False, "diagnostics": False,
     "fixed_delta_seconds": .016666667, "sampling_seed": 0, "refraction": True}
 COUNTERS = ("allocations", "reallocations", "deallocations")
@@ -136,7 +134,7 @@ def summarize_rows(rows, workload, mode):
     if sum(row.get(LIT_TYPE) == LIT_COMPLETE for row in rows) != 1:
         raise SmokeFailure("duplicate completion")
     config = rows[0]
-    if config.get("schema") != 1 or config.get(LIT_WORKLOAD) != workload or config.get(LIT_MODE) != mode:
+    if config.get("schema") != 2 or config.get(LIT_WORKLOAD) != workload or config.get(LIT_MODE) != mode:
         raise SmokeFailure("actual fixture identity differs from requested trial")
     if any(config.get(key) != value or type(config.get(key)) is not type(value) for key, value in FROZEN_SETTINGS.items()):
         raise SmokeFailure("actual fixed fixture controls changed")

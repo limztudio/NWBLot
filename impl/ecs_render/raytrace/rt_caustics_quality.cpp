@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::setCausticQualitySettings(const CausticQualitySettings& settings){
+bool RendererRayTracingSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
     if(!ValidateCausticQualitySettings(settings))
         return false;
     if(m_causticQualitySettings.photonGridDivisor == settings.photonGridDivisor)
@@ -23,7 +23,6 @@ bool RendererRayTracingSystem::setCausticQualitySettings(const CausticQualitySet
     m_causticQualitySettings = settings;
     // The next selected producer clears its accumulator through the existing accepted bootstrap transaction.
     m_rayTracingState.m_causticAccumulatorInitialized = false;
-    m_rayTracingState.m_causticTemporalReuseFrameCount = 0u;
     m_rayTracingState.m_swCausticDispatchLogged = false;
     m_rayTracingState.m_hwCausticDispatchLogged = false;
     return true;

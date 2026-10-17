@@ -49,6 +49,8 @@ struct FinalizeTask{
         Core::GpuUploadBlobId inputUpload;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         const auto inputs = context.declarations.uploadBlobData(payload.inputUpload);
         if(!payload.source || !payload.finalize || !inputs || context.commandIrCapture)
@@ -96,22 +98,29 @@ struct FinalizeTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, const Core::GpuGraphResourceId source, Core::Alloc::ScratchArena& scratchArena){
+Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinalize(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, const Core::GpuGraphResourceId source, Core::Alloc::ScratchArena& scratchArena){
     if(!resources.finalize || !resources.uploadBuffer || !source.valid())
-        return {};
+        return MakeUnexpected(Failure{});
     const auto& finalize = *resources.finalize;
     if(finalize.inputs.empty() || finalize.inputs.size() != finalize.boundsBuffers.size())
-        return {};
-    const auto importCommon = [&](const Core::BufferHandle& buffer, const AStringView label){
+        return MakeUnexpected(Failure{});
+    const auto importCommon = [&](const Core::BufferHandle& buffer, const AStringView label) -> Expected<Core::GpuGraphResourceId>{
         if(!buffer || !buffer->getCreationDescription().keepInitialState || buffer->getCreationDescription().initialState != Core::ResourceStates::Common)
-            return Core::GpuGraphResourceId{};
+            return MakeUnexpected(Failure{});
         return graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, label).setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
     };
-    const Core::GpuGraphResourceId inputs = importCommon(finalize.inputBuffer, "Ray Optical Runtime Inputs");
+    const auto inputsResult = importCommon(finalize.inputBuffer, "Ray Optical Runtime Inputs");
     RayTracingOpticalSceneGraphBuffer result;
-    result.resource = importCommon(finalize.outputBuffer, "Ray Optical Resolved Scene");
-    if(!inputs.valid() || !result.resource.valid())
-        return {};
+    const auto resultResourceResult = importCommon(finalize.outputBuffer, "Ray Optical Resolved Scene");
+    if(!inputsResult || !resultResourceResult){
+        if(resultResourceResult)
+            result.resource = *resultResourceResult;
+        else
+            result.resource = {};
+        return MakeUnexpected(Failure{});
+    }
+    result.resource = *resultResourceResult;
+    const Core::GpuGraphResourceId inputs = *inputsResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses(scratchArena);
     constexpr usize s_BoundsUseCapacity = 8u;
@@ -128,25 +137,29 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(Core::G
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
             if(!declarations.valid())
-                return {};
+                return MakeUnexpected(Failure{});
             resource = declarations.findImportedBuffer(bounds);
         }
         if(!resource.valid()){
-            resource = graph.importBuffer(
+            const auto importedResource = graph.importBuffer(
                 bounds,
                 RendererTaskGraphDetail::BufferResourceDesc(bounds->getCreationDescription().debugName, "Ray Optical Runtime Bounds")
                     .setInitialState(Core::ResourceStates::ShaderResource).setExternalFinalState(Core::ResourceStates::ShaderResource)
             );
+            if(!importedResource)
+                return MakeUnexpected(Failure{});
+            resource = *importedResource;
         }
         if(!resource.valid())
-            return {};
+            return MakeUnexpected(Failure{});
         const auto found = FindIf(uses.begin(), uses.end(), [&](const auto& use)noexcept{ return use.resource == resource; });
         if(found == uses.end())
             uses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
-    const Core::GpuUploadBlobId upload = graph.copyUploadData(finalize.inputs.data(), finalize.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu), alignof(u32));
-    if(!upload.valid())
-        return {};
+    const auto uploadResult = graph.copyUploadData(finalize.inputs.data(), finalize.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu), alignof(u32));
+    if(!uploadResult)
+        return MakeUnexpected(Failure{});
+    const Core::GpuUploadBlobId upload = *uploadResult;
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.forceSubmissionBoundary = false;
@@ -155,8 +168,13 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(Core::G
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("render.raytrace.optical_bounds_finalize")).setMarkerLabel("Ray Optical Bounds Finalize").setScheduling(scheduling).setResourceUses(uses.data(), uses.size());
-    result.uploadTask = graph.addTask<__hidden_task_graph_optical_bounds_finalize::FinalizeTask>(desc, __hidden_task_graph_optical_bounds_finalize::FinalizeTask::Payload{ resources.uploadBuffer, resources.finalize, upload });
-    return result.valid() ? result : RayTracingOpticalSceneGraphBuffer{};
+    const auto uploadTaskResult = graph.addTask<__hidden_task_graph_optical_bounds_finalize::FinalizeTask>(desc, __hidden_task_graph_optical_bounds_finalize::FinalizeTask::Payload{ resources.uploadBuffer, resources.finalize, upload });
+    if(!uploadTaskResult)
+        return MakeUnexpected(uploadTaskResult.error());
+    result.uploadTask = *uploadTaskResult;
+    if(!result.valid())
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 

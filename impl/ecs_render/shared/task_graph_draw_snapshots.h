@@ -65,12 +65,13 @@ inline void MaterializeMaterialPassSnapshot(const Snapshot& snapshot, MaterialPa
 }
 
 
-
 struct OpaqueMaterialPassGraphSnapshot{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
+
+public:
     DrawItemVector regularMeshDrawItems;
     DrawItemVector regularIndexedDrawItems;
     DrawItemVector regularComputeDrawItems;
@@ -87,7 +88,9 @@ struct OpaqueMaterialPassGraphSnapshot{
     CsgFrameWorkRegion csgWorkRegion;
     bool captured = false;
 
-    explicit OpaqueMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit OpaqueMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)noexcept
         : regularMeshDrawItems(arena)
         , regularIndexedDrawItems(arena)
         , regularComputeDrawItems(arena)
@@ -125,6 +128,8 @@ struct TransparentCsgIntervalGraphSnapshot{
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
+
+public:
     DrawItemVector receiverSurfaceMeshDrawItems;
     DrawItemVector receiverSurfaceIndexedDrawItems;
     DrawItemVector receiverSurfaceComputeDrawItems;
@@ -135,7 +140,9 @@ struct TransparentCsgIntervalGraphSnapshot{
     CsgFrameWorkRegion csgWorkRegion;
     bool captured = false;
 
-    explicit TransparentCsgIntervalGraphSnapshot(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit TransparentCsgIntervalGraphSnapshot(Core::Alloc::GlobalArena& arena)noexcept
         : receiverSurfaceMeshDrawItems(arena)
         , receiverSurfaceIndexedDrawItems(arena)
         , receiverSurfaceComputeDrawItems(arena)
@@ -177,6 +184,8 @@ struct TransparentMaterialPassGraphSnapshot{
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
+
+public:
     DrawItemVector regularMeshDrawItems;
     DrawItemVector regularIndexedDrawItems;
     DrawItemVector regularComputeDrawItems;
@@ -190,7 +199,9 @@ struct TransparentMaterialPassGraphSnapshot{
     CsgFrameWorkRegion csgWorkRegion;
     bool captured = false;
 
-    explicit TransparentMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit TransparentMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)noexcept
         : regularMeshDrawItems(arena)
         , regularIndexedDrawItems(arena)
         , regularComputeDrawItems(arena)

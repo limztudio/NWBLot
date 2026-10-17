@@ -8,6 +8,7 @@
 #include <core/graphics/rhi/command.h>
 
 #include <global/allocation_size.h>
+#include <global/exception.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
@@ -19,6 +20,45 @@ NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTaskGraph::PayloadLifetimeScope::~PayloadLifetimeScope()noexcept(false){
+    if(!m_graph.retireTaskPayloads())
+        TerminateInvariant();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool GpuTaskGraph::retireTaskPayloads(){
+    {
+        NothrowScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeDeclarationAccessCount != 0u
+            || m_activeDeclarationReadCount != 0u
+            || m_activeDiscardNotificationCount != 0u
+            || m_activePacketRecordingClaimCount.load(MemoryOrder::acquire) != 0u
+            || m_activeRecordingPreparationSerial != 0u
+            || m_submissionBindingState == SubmissionBindingState::Active
+            || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
+        )
+            return false;
+        for(const GpuTaskNode& task : m_tasks){
+            if(task.lifecycleState == TaskLifecycleState::Recording || task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting)
+                return false;
+        }
+        m_teardownInProgress = true;
+    }
+
+    ScopeExit reopenDeclarations([this]()noexcept{
+        NothrowScopedLock lock(m_lifecycleMutex);
+        m_teardownInProgress = false;
+    }
+    );
+    return UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
+}
 
 
 bool GpuTaskGraph::destroyTaskPayloads(){

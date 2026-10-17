@@ -66,7 +66,7 @@ protected:
 
 
 private:
-    [[nodiscard]] bool enqueueCrashUpload(const Path& path);
+    [[nodiscard]] bool enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena);
     void stopCrashIngestWorker();
     [[nodiscard]] bool crashUploadAuthorized(MHD_Connection& connection)const noexcept;
     [[nodiscard]] Expected<PendingCrashUpload> tryDequeueCrashUpload();

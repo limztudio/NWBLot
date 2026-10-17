@@ -30,6 +30,9 @@ template<typename Identity>
 class MaterialPassEmulationOutputIndex final : NoCopy{
 private:
     using Index = HashSet<Identity, Core::Alloc::ScratchArena>;
+
+
+private:
     static_assert(IsSame_V<Identity, Core::Buffer*> || IsSame_V<Identity, u32>);
 
 
@@ -38,7 +41,7 @@ private:
 
 
 public:
-    explicit MaterialPassEmulationOutputIndex(Core::Alloc::ScratchArena& scratchArena)
+    explicit MaterialPassEmulationOutputIndex(Core::Alloc::ScratchArena& scratchArena)noexcept
         : m_scratchArena(scratchArena)
     {}
     MaterialPassEmulationOutputIndex(MaterialPassEmulationOutputIndex&&) = delete;
@@ -64,7 +67,7 @@ public:
             appendNew(identity);
     }
 
-    [[nodiscard]] bool contains(const Identity identity)const{
+    [[nodiscard]] bool contains(const Identity identity)const noexcept{
         if(m_index)
             return m_index->find(identity) != m_index->end();
         for(usize index = 0u; index < m_inlineCount; ++index){
@@ -83,9 +86,12 @@ private:
             return;
         }
         Index index(s_InlineCount * 4u, m_scratchArena);
-        for(const Identity existing : m_inline)
-            index.insert(existing);
-        index.insert(identity);
+        for(const Identity existing : m_inline){
+            if(!index.insert(existing).second)
+                TerminateInvariant();
+        }
+        if(!index.insert(identity).second)
+            TerminateInvariant();
         static_assert(IsNothrowMoveConstructible_V<Index>);
         m_index.emplace(Move(index));
     }

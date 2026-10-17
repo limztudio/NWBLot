@@ -28,7 +28,8 @@ struct TaskDependencyAdjacency{
     Vector<usize, Alloc::ScratchArena> edgeIndices;
 
 
-    explicit TaskDependencyAdjacency(Alloc::ScratchArena& scratchArena)
+public:
+    explicit TaskDependencyAdjacency(Alloc::ScratchArena& scratchArena)noexcept
         : offsets(scratchArena)
         , edgeIndices(scratchArena)
     {}

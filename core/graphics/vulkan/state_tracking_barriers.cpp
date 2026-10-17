@@ -373,7 +373,6 @@ void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource
         setBufferState(as->m_buffer.get(), stateBits, forceMemoryDependency);
 }
 
-
 void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarriers, const Span<VkImageMemoryBarrier2> imageBarriers, const Span<VkBufferMemoryBarrier2> bufferBarriers){
     if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
         return;

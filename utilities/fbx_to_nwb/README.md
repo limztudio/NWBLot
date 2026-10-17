@@ -134,9 +134,12 @@ skinned selection.
 
 Passing a `.nwb` input automatically enters refresh mode; `--refresh-nwb` can
 also force it. Refresh reads every mesh declaration, validates its supported
-mesh fields, canonicalizes and deduplicates its streams (and associated skin
-influences), then rewrites only changed lists while preserving the rest of the
-document.
+mesh fields, canonicalizes and deduplicates supported vector streams, then
+rewrites only changed lists while preserving the rest of the document. Vector stream identity follows the existing numeric output policy:
+signed zero and magnitudes smaller than `1e-8` share the emitted zero value.
+Refresh remaps their vertex references together, so repeating the refresh keeps
+the same canonical bytes. Skinned refresh preserves the original position and
+skin influence pairing and leaves the influence list text unchanged.
 
 To make a canonical copy:
 

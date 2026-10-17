@@ -3,6 +3,7 @@
 
 
 #include "search_combo_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,7 +176,6 @@ protected:
         m_parent.open();
         m_child.open();
     }
-
 
     [[nodiscard]] bool beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions());
@@ -439,10 +439,10 @@ TEST_F(UiNestedPopupLoanTests, ClosingTheEndedChildSkipsItsCallbacksAndKeepsPare
     EXPECT_EQ(m_childSource.textCalls, 0u);
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId parent = MakeWidgetId(MakeRootId(m_root), "parent");
-    EXPECT_NE(target(MakeWidgetId(parent, "before")), nullptr);
-    EXPECT_NE(target(MakeWidgetId(parent, "after")), nullptr);
-    EXPECT_EQ(target(MakeWidgetId(parent, "child")), nullptr);
+    const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent"));
+    EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "before"))), nullptr);
+    EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "after"))), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "child"))), nullptr);
 }
 
 TEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks){
@@ -462,9 +462,9 @@ TEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSour
     EXPECT_TRUE(m_child.isOpen());
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId parent = MakeWidgetId(MakeRootId(m_root), "parent");
-    EXPECT_NE(target(MakeWidgetId(parent, "after")), nullptr);
-    EXPECT_EQ(target(MakeWidgetId(parent, "child")), nullptr);
+    const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent"));
+    EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "after"))), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "child"))), nullptr);
 }
 
 TEST_F(UiNestedPopupLoanTests, ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback){

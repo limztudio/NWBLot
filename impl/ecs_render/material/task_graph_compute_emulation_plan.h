@@ -37,8 +37,11 @@ struct GeneratedGeometryEquivalenceKey{
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     bool indexedGeometryOutput = false;
 
+
+public:
     [[nodiscard]] bool matches(const MaterialPassDrawItem& drawItem)const noexcept{
-        return drawItem.meshKey == meshKey
+        return
+            drawItem.meshKey == meshKey
             && drawItem.pipelineKey.material == material
             && drawItem.pipelineKey.pass == pass
             && drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None
@@ -77,6 +80,8 @@ struct RegularSharedComputeEmulationGraphPlan{
     u32 outputHeapSlot = 0u;
     bool captured = false;
 
+
+public:
     void reset()noexcept{
         for(MaterialPassDrawItem& drawItem : drawItems)
             drawItem = {};

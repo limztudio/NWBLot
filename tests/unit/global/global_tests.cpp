@@ -127,20 +127,55 @@ public:
 
 
 public:
+    [[nodiscard]] u32 operator[](const usize index)const noexcept{ return values[index]; }
+
+
+public:
     [[nodiscard]] bool empty()const noexcept{ return valueCount == 0u; }
     [[nodiscard]] usize size()const noexcept{ return valueCount; }
     [[nodiscard]] const u32* data()const noexcept{ return values; }
     [[nodiscard]] const u32* begin()const noexcept{ return values; }
     [[nodiscard]] const u32* end()const noexcept{ return values + valueCount; }
 
-
-public:
-    [[nodiscard]] u32 operator[](const usize index)const noexcept{ return values[index]; }
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(Global, DecimalFormattingUsesExactMinimumStorageWithoutEmptySentinelsOrOverrun){
+    struct Storage{
+        char first = 'a';
+        char buffer[TextDetail::s_UsizeDecimalDigitCount]{};
+        char last = 'z';
+    };
+    struct Case{
+        usize value;
+        AStringView expected;
+    };
+    static_assert(sizeof(usize) == sizeof(u32) || sizeof(usize) == sizeof(u64));
+    constexpr AStringView s_MaxValueText = sizeof(usize) == sizeof(u64) ? "18446744073709551615" : "4294967295";
+    const Case cases[]{
+        { 0u, "0" },
+        { 1u, "1" },
+        { 9u, "9" },
+        { 10u, "10" },
+        { 99u, "99" },
+        { 100u, "100" },
+        { Limit<usize>::s_Max, s_MaxValueText },
+    };
+    for(const auto& testCase : cases){
+        SCOPED_TRACE(testCase.value);
+        Storage storage;
+        static_assert(noexcept(FormatDecimal(usize{}, storage.buffer)));
+        const AStringView text = FormatDecimal(testCase.value, storage.buffer);
+        EXPECT_EQ(text, testCase.expected);
+        EXPECT_EQ(text.data(), storage.buffer);
+        EXPECT_FALSE(text.empty());
+        EXPECT_EQ(storage.first, 'a');
+        EXPECT_EQ(storage.last, 'z');
+    }
+}
 
 TEST(Global, ExhaustedPodReadsPreserveCursor){
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);

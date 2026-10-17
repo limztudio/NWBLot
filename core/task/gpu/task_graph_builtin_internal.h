@@ -48,7 +48,9 @@ struct CopiesPayloadBase{
     GraphicsVector<Copy> copies;
     QueueSubmissionToken* acceptedToken = nullptr;
 
-    explicit CopiesPayloadBase(GraphicsArena& arena)
+
+public:
+    explicit CopiesPayloadBase(GraphicsArena& arena)noexcept
         : copies(arena)
     {}
 };
@@ -62,6 +64,8 @@ template<typename PayloadT>
 struct SingletonTokenTaskBase{
     using Payload = PayloadT;
 
+
+public:
     static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept(noexcept(PublishAcceptedToken(payload.acceptedToken, token))){
         PublishAcceptedToken(payload.acceptedToken, token);
     }
@@ -74,7 +78,7 @@ struct SingletonTokenTaskBase{
 template<typename Copy>
 struct CopiesTaskBase{
     struct Payload : public CopiesPayloadBase<Copy>{
-        explicit Payload(GraphicsArena& arena)
+        explicit Payload(GraphicsArena& arena)noexcept
             : CopiesPayloadBase<Copy>(arena)
         {}
     };

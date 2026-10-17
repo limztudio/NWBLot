@@ -26,8 +26,12 @@ bool RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
     if(!sampling.m_layout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(SoftwareTransparentSamplingPush)));
-        sampling.m_layout = device.createBindingLayout(desc);
-        if(!sampling.m_layout)
+        auto layoutResult = device.createBindingLayout(desc);
+        if(layoutResult)
+            sampling.m_layout = Move(*layoutResult);
+        else
+            sampling.m_layout.reset();
+        if(!layoutResult)
             return false;
     }
     const AStringView variants[] = { "NWB_SW_TRANSPARENT_ADAPTIVE=0", "NWB_SW_TRANSPARENT_ADAPTIVE=1" };
@@ -38,8 +42,12 @@ bool RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(sampling.m_shaders[index]).addBindingLayout(sampling.m_layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        sampling.m_pipelines[index] = device.createComputePipeline(desc);
-        if(!sampling.m_pipelines[index])
+        auto pipelinesResult = device.createComputePipeline(desc);
+        if(pipelinesResult)
+            sampling.m_pipelines[index] = Move(*pipelinesResult);
+        else
+            sampling.m_pipelines[index].reset();
+        if(!pipelinesResult)
             return false;
     }
     return true;

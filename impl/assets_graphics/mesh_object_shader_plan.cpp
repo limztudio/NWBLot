@@ -13,6 +13,7 @@
 #include "csg_shader_variants.h"
 
 #include <impl/assets_material/shader_stage_names.h>
+#include <impl/assets_shader/source_dependencies.h>
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
@@ -47,8 +48,8 @@ bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook&
     if(mesh.name != s_SharedMeshProgramName && !TStringView(meshEntry.sourcePath.native()).ends_with(NWB_TEXT("shared_ms.slang")))
         return true;
 
-    const Path expectedSource = resolvedPaths.repoRoot / s_ImplPathToken / s_AssetsPathToken / s_GraphicsPathToken / s_MeshPathToken / s_SharedMeshSourceFile;
-    const bool hasFixedSource = meshEntry.sourcePath.lexicallyNormal() == expectedSource.lexicallyNormal();
+    const ::Path<ScratchArena> expectedSource = ::Path<ScratchArena>(scratchArena, resolvedPaths.repoRoot) / s_ImplPathToken / s_AssetsPathToken / s_GraphicsPathToken / s_MeshPathToken / s_SharedMeshSourceFile;
+    const bool hasFixedSource = ::Path<ScratchArena>(scratchArena, meshEntry.sourcePath).lexicallyNormal() == expectedSource.lexicallyNormal();
     if(mesh.name != s_SharedMeshProgramName && !hasFixedSource)
         return true;
     if(
@@ -73,13 +74,17 @@ bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook&
     prepared.variantCount = 1u;
 
     const auto sourceExists = IsRegularFile(prepared.sourcePath);
-    if(!sourceExists || !*sourceExists){
+    if(!sourceExists){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect fixed object geometry shader '{}': {}:{}"), PathToString<tchar>(prepared.sourcePath), StringConvert(sourceExists.error().category().name()), sourceExists.error().value());
+        return false;
+    }
+    if(!*sourceExists){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
         return false;
     }
-    if(!shaderCook.gatherShaderDependencies(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, prepared.dependencies, scratchArena))
+    if(!ShaderSourceDependencies::Gather(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, prepared.dependencies, scratchArena))
         return false;
-    const auto dependency = shaderCook.computeDependencyChecksum(prepared.dependencies, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
+    const auto dependency = shaderCook.computeDependencyChecksum(prepared.dependencies, prepared.includeDirectories, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
     if(!dependency)
         return false;
     prepared.dependencyChecksum = dependency->checksum;

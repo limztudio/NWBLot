@@ -252,7 +252,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     }
 }
 
-bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, const BinaryByteView blobBytes, CommandList& commandList)noexcept{
+bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, const BinaryByteView blobBytes, CommandList& commandList){
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
         const GpuCommandIrRasterStateOwner* const owner = stream.rasterStateOwner(record.framebufferOwnerIndex);

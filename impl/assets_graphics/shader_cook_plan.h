@@ -38,13 +38,11 @@ namespace AssetsGraphicsCookDetail{
 using CookString = Core::Assets::CookString;
 template<typename T>
 using CookVector = Core::Assets::CookVector<T>;
-template<typename T, typename V>
-using CookMap = Core::Assets::CookMap<T, V>;
 using ResolvedCookPaths = Core::Assets::ResolvedCookPaths;
 using ScratchArena = Core::Assets::ScratchArena;
 using ScratchString = Core::Assets::ScratchString;
 using VirtualPathHashSet = Core::Assets::CookEntryPathHashSet;
-using IncludeMetadataMap = CookMap<CookString, ShaderCook::IncludeEntry>;
+using IncludeMetadataMap = ShaderCook::CookMap<CookString, ShaderCook::IncludeEntry>;
 using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
 
 struct PreparedShaderEntry{
@@ -61,6 +59,8 @@ struct PreparedShaderEntry{
     bool supportsCsgClipVariant = false;
     bool supportsAvboitCsgClipVariant = false;
 
+
+public:
     explicit PreparedShaderEntry(ShaderCook::CookArena& arena)
         : entry(arena)
         , sourcePath(arena)
@@ -76,6 +76,8 @@ struct PreparedShaderPlan{
     PreparedShaderVector preparedEntries;
     u64 plannedFileCount = 0;
 
+
+public:
     explicit PreparedShaderPlan(ShaderCook::CookArena& arena)noexcept
         : preparedEntries(arena)
     {}

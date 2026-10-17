@@ -27,7 +27,7 @@ static constexpr InputSource s_Cursor{ 12u, 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static HitTarget Target(const u64 id, const f32 x){
+[[nodiscard]] static HitTarget Target(const u64 id, const f32 x)noexcept{
     HitTarget target;
     target.id = { id };
     target.declarationGeneration = 7u;
@@ -41,7 +41,7 @@ static constexpr InputSource s_Cursor{ 12u, 1u };
     return target;
 }
 
-[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, const PointerIntent::Enum intent = PointerIntent::Activate, const bool hoverCapable = false){
+[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, const PointerIntent::Enum intent = PointerIntent::Activate, const bool hoverCapable = false)noexcept{
     PointerInput input;
     input.phase = phase;
     input.source = source;

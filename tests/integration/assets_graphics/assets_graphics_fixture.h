@@ -746,8 +746,7 @@ public:
     )" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
     #endif
-    static constexpr AStringView s_MaterialBindBxdfSource =
-    "half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){ return surface.baseColor; }\n";
+    static constexpr AStringView s_MaterialBindBxdfSource = "half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){ return surface.baseColor; }\n";
 
 
 public:
@@ -780,7 +779,7 @@ public:
     static bool CookMinimalMeshWithMaterialBind(const AStringView bindText, TestArena& testArena, const CookCase& cookCase);
     static Expected<NWB::Impl::MaterialBindEntry> ParseMaterialBindFromText(TestArena& testArena, const AStringView bindText, const Path& root, NWB::Core::Alloc::ScratchArena& scratchArena);
     #if defined(NWB_FINAL)
-    static bool CookDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase);
+    [[nodiscard]] static Expected<Path> EmitDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase);
     #endif
     template<typename EntryT>
     static Expected<EntryT> ParseShaderMetadataFile(TestArena& testArena, NWB::Impl::ShaderCook& shaderCook, const Path& metadataPath, NWB::Core::Alloc::ScratchArena& scratchArena){
@@ -817,11 +816,12 @@ public:
         NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
         mountDesc.volumeName = "graphics";
         mountDesc.mountDirectory = outputDirectory;
-        UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
-        const bool loadedVolume = static_cast<bool>(filesystem);
+        auto filesystemResult = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+        const bool loadedVolume = static_cast<bool>(filesystemResult);
         EXPECT_TRUE(loadedVolume);
         if(!loadedVolume)
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(filesystemResult.error());
+        UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = Move(*filesystemResult);
 
         if(expectedVolumeFileCount != 0u)
             EXPECT_EQ(filesystem->fileCount(), expectedVolumeFileCount);
@@ -846,7 +846,7 @@ public:
 
 public:
     template<typename T>
-    static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offset, const T value){
+    static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offset, const T value)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
         if(offset > binary.size() || sizeof(value) > binary.size() - offset)
             return false;
 
@@ -874,6 +874,9 @@ public:
     AssetsGraphicsFixture() = delete;
     AssetsGraphicsFixture(const AssetsGraphicsFixture&) = delete;
     ~AssetsGraphicsFixture() = delete;
+
+
+public:
     AssetsGraphicsFixture& operator=(const AssetsGraphicsFixture&) = delete;
 };
 

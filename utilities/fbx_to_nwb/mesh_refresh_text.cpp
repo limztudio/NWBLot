@@ -9,6 +9,8 @@
 #include <core/common/log.h>
 #include <core/metascript/lexer.h>
 
+#include <global/allocation_size.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +27,6 @@ namespace MeshRefreshTextDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TextWrite::WriteFloat;
 using TextWrite::WriteVec2;
 using TextWrite::WriteVec3;
 using TextWrite::WriteVec4;
@@ -38,9 +39,12 @@ static constexpr AStringView s_ListItemSuffixText = ",\n";
 static constexpr AStringView s_RowOpenText = "    [";
 static constexpr AStringView s_RowItemSeparatorText = ", ";
 static constexpr AStringView s_RowSuffixText = "],\n";
-static constexpr AStringView s_SkinJointsOpenText = "    { \"joints\": [";
-static constexpr AStringView s_SkinWeightsSeparatorText = "], \"weights\": [";
-static constexpr AStringView s_SkinRowSuffixText = "] },\n";
+
+
+struct AssignmentRange{
+    usize begin = 0u;
+    usize end = 0u;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,8 +60,8 @@ static constexpr AStringView s_SkinRowSuffixText = "] },\n";
     return true;
 }
 
-[[nodiscard]] Expected<TextReplacement> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName){
-    TextReplacement outRange;
+[[nodiscard]] Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName){
+    AssignmentRange outRange;
     Core::Metascript::Lexer lexer(source);
     Core::Metascript::Token token = lexer.next();
     bool statementBegin = true;
@@ -112,8 +116,8 @@ static constexpr AStringView s_SkinRowSuffixText = "] },\n";
 }
 
 template<typename Value, typename WriteValue>
-[[nodiscard]] AString WriteValueList(const UtilityVector<Value>& values, WriteValue&& writeValue){
-    AStringStream out;
+[[nodiscard]] ScratchString WriteValueList(const UtilityVector<Value>& values, WriteValue&& writeValue, Core::Alloc::ScratchArena& scratchArena){
+    ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
     for(const Value& value : values){
@@ -122,76 +126,52 @@ template<typename Value, typename WriteValue>
         out << s_ListItemSuffixText;
     }
     out << s_ListCloseText;
-    return out.str();
+    return Move(out).str();
 }
 
-[[nodiscard]] AString WriteIndexList(const UtilityVector<u32>& indices){
-    AStringStream out;
+[[nodiscard]] ScratchString WriteIndexList(const UtilityVector<u32>& indices, Core::Alloc::ScratchArena& scratchArena){
+    ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
     for(usize i = 0u; i < indices.size(); i += s_TriangleIndexCount)
         out << s_RowOpenText << indices[i] << s_RowItemSeparatorText << indices[i + 1u] << s_RowItemSeparatorText << indices[i + 2u] << s_RowSuffixText;
     out << s_ListCloseText;
-    return out.str();
+    return Move(out).str();
 }
 
-[[nodiscard]] AString WriteVertexRefList(const UtilityVector<SourceVertexRef>& refs){
-    AStringStream out;
+[[nodiscard]] ScratchString WriteVertexRefList(const UtilityVector<SourceVertexRef>& refs, Core::Alloc::ScratchArena& scratchArena){
+    ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
     for(const SourceVertexRef& ref : refs){
         out << s_RowOpenText << ref.position << s_RowItemSeparatorText << ref.normal << s_RowItemSeparatorText << ref.tangent << s_RowItemSeparatorText << ref.uv0 << s_RowItemSeparatorText << ref.color << s_RowSuffixText;
     }
     out << s_ListCloseText;
-    return out.str();
+    return Move(out).str();
 }
 
-[[nodiscard]] AString WriteSkinInfluenceList(const UtilityVector<MeshSkinInfluence>& influences){
-    AStringStream out;
-    out.precision(s_OutputFloatPrecision);
-    out << s_ListOpenText;
-    for(const MeshSkinInfluence& influence : influences){
-        out << s_SkinJointsOpenText;
-        for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
-            if(i != 0u)
-                out << s_RowItemSeparatorText;
-            out << influence.joint[i];
-        }
-        out << s_SkinWeightsSeparatorText;
-        for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
-            if(i != 0u)
-                out << s_RowItemSeparatorText;
-            WriteFloat(out, influence.weight.raw[i]);
-        }
-        out << s_SkinRowSuffixText;
-    }
-    out << s_ListCloseText;
-    return out.str();
-}
-
-[[nodiscard]] bool AddReplacement(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText){
+[[nodiscard]] bool AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), StringConvert(variableName), StringConvert(fieldName));
         return false;
     }
 
-    TextReplacement& replacement = *replacementResult;
-    replacement.text = Move(replacementText);
-    replacements.push_back(Move(replacement));
+    const AssignmentRange& range = *replacementResult;
+    replacements.push_back(TextReplacement{ range.begin, range.end, Move(replacementText) });
     return true;
 }
 
-[[nodiscard]] bool AppendMeshReplacements(UtilityScratchVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after){
-    if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
+[[nodiscard]] bool AppendMeshReplacements(TextReplacements& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena){
+    if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
         return false;
-    if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
+    if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
         return false;
-    if(before.tangents != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList(after.tangents, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
+    if(before.tangents != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList(after.tangents, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
         return false;
-    if(before.uv0 != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList(after.uv0, [](AStringStream& out, const Vec2& value){ WriteVec2(out, value); })))
+    if(before.uv0 != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList(after.uv0, [](ScratchStringStream& out, const Vec2& value){ WriteVec2(out, value); }, scratchArena)))
         return false;
-    if(before.colors != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList(after.colors, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
+    if(before.colors != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList(after.colors, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
         return false;
 
     const bool componentRefsChanged =
@@ -202,23 +182,30 @@ template<typename Value, typename WriteValue>
         || before.colors != after.colors.size()
         || before.vertexRefs != after.vertexRefs.size()
     ;
-    if(componentRefsChanged && !AddReplacement(replacements, source, variableName, s_VertexRefsStreamLabel, WriteVertexRefList(after.vertexRefs)))
+    if(componentRefsChanged && !AddReplacement(replacements, source, variableName, s_VertexRefsStreamLabel, WriteVertexRefList(after.vertexRefs, scratchArena)))
         return false;
-    if(before.vertexRefs != after.vertexRefs.size() && !AddReplacement(replacements, source, variableName, s_IndicesStreamLabel, WriteIndexList(after.indices)))
+    if(before.vertexRefs != after.vertexRefs.size() && !AddReplacement(replacements, source, variableName, s_IndicesStreamLabel, WriteIndexList(after.indices, scratchArena)))
         return false;
 
     return true;
 }
 
-[[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityScratchVector<TextReplacement>& replacements){
+[[nodiscard]] bool ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replacements){
     Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
             return lhs.begin > rhs.begin;
         }
     );
 
+    usize capacity = inOutSource.size();
     for(const TextReplacement& replacement : replacements){
         if(replacement.begin > replacement.end || replacement.end > inOutSource.size())
             return false;
+        const usize oldSize = replacement.end - replacement.begin;
+        if(replacement.text.size() > oldSize)
+            capacity = AddSize(capacity, replacement.text.size() - oldSize);
+    }
+    inOutSource.reserve(capacity);
+    for(const TextReplacement& replacement : replacements){
         inOutSource.replace(replacement.begin, replacement.end - replacement.begin, replacement.text);
     }
     return true;

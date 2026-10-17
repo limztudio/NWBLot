@@ -49,8 +49,20 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     endfunction()
 
     if(TARGET testbed)
-        nwb_add_window_capture_smoke(nwb_testbed_window_capture_smoke testbed_window_capture.bmp "$<TARGET_FILE:testbed>" "${NWB_OUTPUT_ROOT}" "NWB Testbed"
+        set(_nwb_testbed_smoke_runtime_root "${CMAKE_BINARY_DIR}/Testing/testbed_runtime/$<CONFIG>")
+        file(GLOB_RECURSE _nwb_testbed_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/assets/*")
+        set(_nwb_testbed_smoke_asset_stamp "${_nwb_testbed_smoke_runtime_root}/res/.nwb_testbed_smoke_assets_$<CONFIG>.stamp")
+        add_custom_command(OUTPUT "${_nwb_testbed_smoke_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_testbed_smoke_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
+                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "CoolStuff/Testbed/assets" --output-directory "${_nwb_testbed_smoke_runtime_root}/res"
+                --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_smoke_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
+                "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_testbed_smoke_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB Testbed smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
+        add_custom_target(nwb_testbed_smoke_assets DEPENDS "${_nwb_testbed_smoke_asset_stamp}")
+        add_dependencies(testbed nwb_testbed_smoke_assets)
+        nwb_add_window_capture_smoke(nwb_testbed_window_capture_smoke testbed_window_capture.bmp "$<TARGET_FILE:testbed>" "${_nwb_testbed_smoke_runtime_root}" "NWB Testbed"
             "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--expect-log-message" "ProjectTestbed: startup scene created" "--expect-log-message" "ProjectTestbed: shutdown")
+        unset(_nwb_testbed_smoke_asset_stamp)
+        unset(_nwb_testbed_smoke_asset_inputs)
+        unset(_nwb_testbed_smoke_runtime_root)
     endif()
 
     function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT)

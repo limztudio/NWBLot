@@ -6,6 +6,7 @@
 
 #include <core/assets/volume/built_asset.h>
 #include <core/filesystem/factory.h>
+#include <core/graphics/shader_archive.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
@@ -29,14 +30,18 @@ namespace Filesystem = NWB::Core::Filesystem;
 
 static usize s_MergeCalls = 0u;
 
-[[nodiscard]] static bool MergeBytes(const Name&, Assets::AssetBytes& existing, const void* incoming, const usize size){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool MergeBytes(const Name&, Assets::AssetBytes& existing, const void* incoming, const usize size, NWB::Core::Alloc::ScratchArena&){
     ++s_MergeCalls;
     const auto* bytes = static_cast<const u8*>(incoming);
     existing.insert(existing.end(), bytes, bytes + size);
     return true;
 }
 
-[[nodiscard]] static Name AssetName(const usize index)noexcept{
+[[nodiscard]] static Expected<Name> AssetName(const usize index){
     char text[32u] = {};
     return DeriveName(Name("project/gather/"), FormatDecimal(index, text));
 }
@@ -54,15 +59,18 @@ protected:
     }
 
     void writeInputs(AStringView directory, const usize count, const usize payloadSize, const u8 seed){
+        NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/built_inputs"));
         Pack::AssetVolumePackManifest manifest(m_testArena.arena);
         ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(manifest, count));
         Assets::AssetBytes bytes(payloadSize, seed, m_testArena.arena);
         for(usize i = 0u; i < count; ++i){
             if(!bytes.empty())
                 bytes.front() = static_cast<u8>(seed + i);
-            ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(manifest, AssetName(i), bytes));
+            const auto derivedNameAt66Col69 = AssetName(i);
+            ASSERT_TRUE(derivedNameAt66Col69);
+            ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(manifest, *derivedNameAt66Col69, bytes));
         }
-        ASSERT_TRUE(Assets::BuiltAssetDetail::WriteBuiltAssets(m_root / directory, manifest));
+        ASSERT_TRUE(Assets::BuiltAssetDetail::WriteBuiltAssets(m_root / directory, manifest, scratchArena));
         m_options.inputs.emplace_back(PathToString(m_testArena.arena, m_root / directory));
     }
 
@@ -70,13 +78,16 @@ protected:
         Filesystem::VolumeMountDesc desc(m_testArena.arena);
         desc.volumeName = "graphics";
         desc.mountDirectory = m_root / "out";
-        auto filesystem = Filesystem::CreateFilesystem(m_testArena.arena, desc);
-        ASSERT_TRUE(filesystem);
+        auto filesystemResult = Filesystem::CreateFilesystem(m_testArena.arena, desc);
+        ASSERT_TRUE(filesystemResult);
+        auto filesystem = Move(*filesystemResult);
         ASSERT_TRUE(filesystem->mounted());
         EXPECT_EQ(filesystem->fileCount(), count);
         Assets::AssetBytes bytes(m_testArena.arena);
         for(usize i = 0u; i < count; ++i){
-            ASSERT_TRUE(filesystem->readFile(AssetName(i), bytes));
+            const auto derivedNameAt83Col45 = AssetName(i);
+            ASSERT_TRUE(derivedNameAt83Col45);
+            ASSERT_TRUE(filesystem->readFile(*derivedNameAt83Col45, bytes));
             ASSERT_EQ(bytes.size(), payloadSize);
             if(!bytes.empty())
                 EXPECT_EQ(bytes.front(), static_cast<u8>(seed + i));
@@ -95,39 +106,65 @@ protected:
     Gatherer::AssetGatherOptions m_options{ m_testArena.arena };
 };
 
+TEST(AssetsGraphics, DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwritten){
+    NWB::Tests::TestArena<> testArena;
+    NWB::Tests::CapturingLogger logger;
+    const NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/borrowed_index"));
+    using ShaderArchive = NWB::Core::ShaderArchive;
+    NWB::Core::GraphicsVector<ShaderArchive::Record> records(testArena.arena);
+    ShaderArchive::Record& record = records.emplace_back(testArena.arena);
+    record.shaderName = Name("project/shaders/borrowed_index");
+    record.variantName = "BORROWED_VARIANT=nontrivial_owned_text";
+    record.stage = Name("ps");
+    const Name virtualPath = ShaderArchive::BuildVirtualPathName(record.shaderName, AStringView(record.variantName), record.stage);
+    ASSERT_TRUE(virtualPath);
+    record.virtualPathHash = virtualPath.hash();
+
+    auto encoded = ShaderArchive::SerializeIndex(testArena.arena, records, scratchArena);
+    ASSERT_TRUE(encoded);
+    const auto decoded = ShaderArchive::DeserializeIndex(testArena.arena, BinaryByteView{ encoded->data(), encoded->size() });
+    ASSERT_TRUE(decoded);
+    ASSERT_EQ(decoded->size(), 1u);
+    encoded->assign(encoded->size(), 0u);
+    EXPECT_EQ(AStringView(decoded->front().variantName), AStringView(record.variantName));
+    EXPECT_EQ(decoded->front().virtualPathHash, record.virtualPathHash);
+    EXPECT_EQ(logger.errorCount(), 0u);
+}
+
 TEST_F(GatherInputs, IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls){
-    writeInputs("a", 64u, 257u, 7u);
-    writeInputs("b", 64u, 257u, 7u);
+    ASSERT_NO_FATAL_FAILURE(writeInputs("a", 64u, 257u, 7u));
+    ASSERT_NO_FATAL_FAILURE(writeInputs("b", 64u, 257u, 7u));
     m_options.inputs.push_back(m_options.inputs.front());
     m_options.mergePayloads = &MergeBytes;
     ASSERT_TRUE(Gatherer::GatherAssets(m_options));
     EXPECT_EQ(s_MergeCalls, 0u);
-    verifyPayloads(64u, 257u, 7u);
+    ASSERT_NO_FATAL_FAILURE(verifyPayloads(64u, 257u, 7u));
 }
 
 TEST_F(GatherInputs, ConflictingDuplicatesPreservePublishedVolume){
-    writeInputs("a", 4u, 8u, 3u);
+    ASSERT_NO_FATAL_FAILURE(writeInputs("a", 4u, 8u, 3u));
     ASSERT_TRUE(Gatherer::GatherAssets(m_options));
-    writeInputs("b", 4u, 8u, 9u);
+    ASSERT_NO_FATAL_FAILURE(writeInputs("b", 4u, 8u, 9u));
     EXPECT_FALSE(Gatherer::GatherAssets(m_options));
     EXPECT_GT(m_logger.errorCount(), 0u);
-    verifyPayloads(4u, 8u, 3u);
+    ASSERT_NO_FATAL_FAILURE(verifyPayloads(4u, 8u, 3u));
 }
 
 TEST_F(GatherInputs, MergedPayloadIdentitySurvivesLaterIdenticalDuplicate){
-    writeInputs("a", 1u, 2u, 5u);
-    writeInputs("b", 1u, 2u, 5u);
-    writeInputs("c", 1u, 4u, 5u);
+    ASSERT_NO_FATAL_FAILURE(writeInputs("a", 1u, 2u, 5u));
+    ASSERT_NO_FATAL_FAILURE(writeInputs("b", 1u, 2u, 5u));
+    ASSERT_NO_FATAL_FAILURE(writeInputs("c", 1u, 4u, 5u));
     // The first two equal payloads collapse without merging; the third is appended exactly once.
     m_options.mergePayloads = &MergeBytes;
     ASSERT_TRUE(Gatherer::GatherAssets(m_options));
     EXPECT_EQ(s_MergeCalls, 1u);
-    verifyPayloads(1u, 6u, 5u);
-    writeInputs("d", 1u, 6u, 5u);
+    ASSERT_NO_FATAL_FAILURE(verifyPayloads(1u, 6u, 5u));
+    ASSERT_NO_FATAL_FAILURE(writeInputs("d", 1u, 6u, 5u));
     s_MergeCalls = 0u;
     ASSERT_TRUE(Gatherer::GatherAssets(m_options));
     EXPECT_EQ(s_MergeCalls, 1u);
-    verifyPayloads(1u, 6u, 5u);
+    ASSERT_NO_FATAL_FAILURE(verifyPayloads(1u, 6u, 5u));
 }
 
 

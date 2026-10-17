@@ -5,6 +5,8 @@
 #include "../command_line.h"
 #include "gather.h"
 
+#include <core/alloc/scratch.h>
+#include <core/assets/arena_names.h>
 #include <core/assets/gather_merge_registry.h>
 
 
@@ -19,9 +21,11 @@ int RunPipelineTool(const int argc, char** argv){
         gatherOptions.inputs = Move(options.inputs);
         gatherOptions.outputDirectory = Move(options.outputPath);
         gatherOptions.configuration = options.configuration;
-        gatherOptions.mergePayloads = NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge();
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Core::Assets::AssetsArenaScope::s_GatherMergeQueryScratch);
+        gatherOptions.mergePayloads = NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena);
         return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions) ? 0 : 1;
-    });
+    }
+    );
 }
 
 

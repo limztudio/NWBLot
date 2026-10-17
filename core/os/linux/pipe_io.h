@@ -37,7 +37,7 @@ void CloseClipboardPipe(int& fd)noexcept;
 
 class ClipboardPipeWriter final : private NoCopy{
 public:
-    explicit ClipboardPipeWriter(Alloc::GlobalArena& arena);
+    explicit ClipboardPipeWriter(Alloc::GlobalArena& arena)noexcept;
     ~ClipboardPipeWriter()noexcept;
 
 

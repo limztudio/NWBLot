@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/task_timing_feedback.h>
+#include "task_timing_feedback.h"
 
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
@@ -217,11 +217,12 @@ void RendererTaskTimingFeedback::activate(){
     }
 
     Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
-    const Core::GpuTimingSampleSubscription subscription = timing.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = this, .invoke = &OnGpuTimingSampleCallback, });
-    if(!subscription.valid()){
+    const auto subscriptionResult = timing.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = this, .invoke = &OnGpuTimingSampleCallback, });
+    if(!subscriptionResult){
         NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
         return;
     }
+    const Core::GpuTimingSampleSubscription subscription = *subscriptionResult;
     ScopeExit discardSubscription([&]()noexcept{ timing.unsubscribeSampleListener(subscription); });
 
     if(feedbackCollectionEnabled){
@@ -280,7 +281,8 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
     ScopeExit resolvePolicy([&]()noexcept{
         ScopedLock lock(m_mutex);
         ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated);
-    });
+    }
+    );
 
     if(transition.action == RendererTaskTimingFeedbackCollectionAction::Enable){
         collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionScopes(subscription, NotNull<const Name*>(m_feedbackCollectionScopes.data()), m_feedbackCollectionScopes.size());
@@ -290,7 +292,7 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
     return collectionUpdated;
 }
 
-Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const bool recordsNonCommittingTimingSample){
+Expected<Core::GpuTimingSampleAttribution> RendererTaskTimingFeedback::beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const bool recordsNonCommittingTimingSample){
     if(!scopeName || !collectsScope(scopeName) || !key.valid() || !expectedQueue.valid())
         return Core::s_NoGpuTimingSampleAttribution;
 
@@ -298,13 +300,13 @@ Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(const N
     if(!m_active || !m_policy.enabled || !m_subscription.valid())
         return Core::s_NoGpuTimingSampleAttribution;
 
-    const Core::GpuTimingSampleAttribution attribution = m_graphics.gpuTiming().allocateSampleAttribution();
-    if(!attribution.valid())
-        return Core::s_NoGpuTimingSampleAttribution;
+    const auto attribution = m_graphics.gpuTiming().allocateSampleAttribution();
+    if(!attribution)
+        return MakeUnexpected(attribution.error());
 
-    if(!m_state.trackSample(attribution, scopeName, key, expectedQueue, m_graphics.getFrameIndex(), recordsNonCommittingTimingSample))
-        return Core::s_NoGpuTimingSampleAttribution;
-    return attribution;
+    if(!m_state.trackSample(*attribution, scopeName, key, expectedQueue, m_graphics.getFrameIndex(), recordsNonCommittingTimingSample))
+        return MakeUnexpected(Failure{});
+    return *attribution;
 }
 
 void RendererTaskTimingFeedback::acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept{
@@ -374,7 +376,11 @@ void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& 
 
 namespace ECSRenderDetail{
 
-[[nodiscard]] Core::GpuTimingSampleAttribution BeginTaskTimingSample(RendererTaskTimingFeedback* timingFeedback, const Core::GpuTimingScopeDefinition* timingScope, const Core::GpuTaskRecordContext& context){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<Core::GpuTimingSampleAttribution> BeginTaskTimingSample(RendererTaskTimingFeedback* timingFeedback, const Core::GpuTimingScopeDefinition* timingScope, const Core::GpuTaskRecordContext& context){
     if(!timingFeedback || !timingScope)
         return Core::s_NoGpuTimingSampleAttribution;
     const Core::GpuPhysicalQueueInfo* const queueInfo = context.compiledPlan.queueInfo(context.queue);

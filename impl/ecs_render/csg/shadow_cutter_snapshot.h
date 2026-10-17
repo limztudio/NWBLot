@@ -51,7 +51,7 @@ struct CsgShadowSnapshot{
 
 
 public:
-    explicit CsgShadowSnapshot(Core::Alloc::GlobalArena& arena)
+    explicit CsgShadowSnapshot(Core::Alloc::GlobalArena& arena)noexcept
         : receiverRanges(arena)
         , cutters(arena)
     {}

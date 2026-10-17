@@ -30,11 +30,16 @@ TEST(EcsGraphics, RaySceneGraphReadsMissingResourcesRetainScratchArena){
     NWB::Core::GpuTaskGraph graph(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ray_scene_graph_reads/scratch"));
     NWB::Impl::RayTracingSceneGraphResources resources;
+    const auto scratchBefore = scratchArena.memoryStats();
     const auto reads = NWB::Impl::ImportRayTracingSceneGraphReads(graph, resources, NWB::Core::ResourceStates::Common, scratchArena);
+    const auto scratchAfter = scratchArena.memoryStats();
 
-    EXPECT_FALSE(reads.valid());
-    EXPECT_TRUE(reads.csgUses.empty());
-    EXPECT_EQ(reads.csgUses.get_allocator().arenaPtr(), &scratchArena);
+    EXPECT_FALSE(reads.has_value());
+    EXPECT_EQ(scratchAfter.usedBytes, scratchBefore.usedBytes);
+    EXPECT_EQ(scratchAfter.reservedBytes, scratchBefore.reservedBytes);
+    EXPECT_EQ(scratchAfter.allocationCount, scratchBefore.allocationCount);
+    EXPECT_EQ(scratchAfter.reallocationCount, scratchBefore.reallocationCount);
+    EXPECT_EQ(scratchAfter.deallocationCount, scratchBefore.deallocationCount);
     const NWB::Core::GpuTaskGraph::DeclarationReadView view(graph);
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), 0u);

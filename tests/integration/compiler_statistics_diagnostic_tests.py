@@ -74,7 +74,7 @@ def compiler_rows(count=384, offset=0):
 
 
 def gather_rows(offset=0):
-    values = [dict(gather.FROZEN_SETTINGS, type="configuration", schema=1, workload=LIT_UNIQUE, mode=LIT_TIMING, successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0, transparent_renderers=64)]
+    values = [dict(gather.FROZEN_SETTINGS, type="configuration", schema=2, workload=LIT_UNIQUE, mode=LIT_TIMING, successful_frames=384, renderers=65, runtime_renderers=0, runtime_owners=0, transparent_renderers=64)]
     for source in range(offset + 96, offset + 352):
         values.append({LIT_TYPE: "cpu", LIT_SOURCE_FRAME: source, LIT_PUBLISH_FRAME: source + 1, "scopes_ms": { "graphics.frame": 8., "graphics.frame_preamble": .05, "graphics.prepare_resources": 2.,
             "graphics.render_passes": 2., "graphics.render": 5., "frame.project_update": .1, "graphics.present": .2, "graphics.begin_frame": .4}})

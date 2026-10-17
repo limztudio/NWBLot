@@ -78,11 +78,12 @@ struct FrameGraphAvboitOccupancyUploadResult{
 
 class FrameGraphAvboitOccupancyUploadChain final : NoCopy{
 public:
-    FrameGraphAvboitOccupancyUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem);
+    FrameGraphAvboitOccupancyUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept;
 
 
 public:
     [[nodiscard]] Expected<FrameGraphAvboitOccupancyUploadResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitOccupancyUploadInputs& inputs,
         RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
         RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload,

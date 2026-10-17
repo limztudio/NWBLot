@@ -59,8 +59,14 @@ public:
         members.reserve(count);
         for(usize index = 0u; index < count; ++index){
             char text[32u] = {};
-            const Name identity = DeriveName(Name("tests/resource_set_validation/resource/"), FormatDecimal(index, text));
-            const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Input").setType(Core::GpuGraphResourceType::Buffer));
+            const auto derivedNameAt60Col34 = DeriveName(Name("tests/resource_set_validation/resource/"), FormatDecimal(index, text));
+            if(!derivedNameAt60Col34)
+                return false;
+            const Name identity = *derivedNameAt60Col34;
+            const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Input").setType(Core::GpuGraphResourceType::Buffer));
+            if(!resourceResult)
+                return false;
+            const Core::GpuGraphResourceId resource = *resourceResult;
             if(!resource.valid())
                 return false;
             members.push_back(resource);
@@ -91,7 +97,9 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
     ASSERT_TRUE(context.ready);
     constexpr Name s_Identity("tests/resource_set_validation/ordered");
     Core::GpuGraphResourceSetDesc desc = context.description(s_Identity);
-    const Core::GpuGraphResourceSetId set = context.graph.importResourceSet(desc);
+    const auto setResult = context.graph.importResourceSet(desc);
+    ASSERT_TRUE(setResult);
+    const Core::GpuGraphResourceSetId set = *setResult;
     ASSERT_TRUE(set.valid());
     u64 revision = 0u;
     {
@@ -104,10 +112,15 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
             EXPECT_EQ(stored.members[index], context.members[index]);
     }
     desc.markerLabel = "Replacement Label Does Not Replace Stored Metadata";
-    EXPECT_EQ(context.graph.importResourceSet(desc), set);
+    {
+        const auto gpuAdmissionAt105 = context.graph.importResourceSet(desc);
+        EXPECT_TRUE(gpuAdmissionAt105);
+        if(gpuAdmissionAt105)
+            EXPECT_EQ(*gpuAdmissionAt105, set);
+    }
     ExpectUnchangedDeclaration(context, revision, 1u);
     Swap(context.members.front(), context.members.back());
-    EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+    EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     ExpectUnchangedDeclaration(context, revision, 1u);
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
@@ -118,10 +131,15 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
     }
     Swap(context.members.front(), context.members.back());
     --desc.memberCount;
-    EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+    EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     ExpectUnchangedDeclaration(context, revision, 1u);
     desc = context.description(Name("tests/resource_set_validation/second_ordered"));
-    EXPECT_TRUE(context.graph.importResourceSet(desc).valid());
+    {
+        const auto gpuAdmissionAt122 = context.graph.importResourceSet(desc);
+        EXPECT_TRUE(gpuAdmissionAt122);
+        if(gpuAdmissionAt122)
+            EXPECT_TRUE(gpuAdmissionAt122->valid());
+    }
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
     EXPECT_EQ(declarations.resourceSetCount(), s_ExpectedDualCount);
 }
@@ -139,26 +157,31 @@ TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartia
         for(const usize index : Array<usize, s_ExpectedDualCount>{ 1u, count - 1u }){
             const Core::GpuGraphResourceId saved = context.members[index];
             context.members[index] = context.members[0u];
-            EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+            EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
             ExpectUnchangedDeclaration(context, revision, 0u);
             context.members[index] = saved;
         }
         for(const usize index : Array<usize, s_ExpectedDualCount>{ 0u, count - 1u }){
             const Core::GpuGraphResourceId saved = context.members[index];
             context.members[index] = {};
-            EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+            EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
             ExpectUnchangedDeclaration(context, revision, 0u);
             context.members[index] = saved;
             context.members[index].generation = saved.generation + 1u;
-            EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+            EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
             ExpectUnchangedDeclaration(context, revision, 0u);
             context.members[index] = saved;
             context.members[index].index = static_cast<u32>(count);
-            EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+            EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
             ExpectUnchangedDeclaration(context, revision, 0u);
             context.members[index] = saved;
         }
-        EXPECT_TRUE(context.graph.importResourceSet(desc).valid());
+        {
+            const auto gpuAdmissionAt159 = context.graph.importResourceSet(desc);
+            EXPECT_TRUE(gpuAdmissionAt159);
+            if(gpuAdmissionAt159)
+                EXPECT_TRUE(gpuAdmissionAt159->valid());
+        }
         const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
         EXPECT_EQ(declarations.resourceSetCount(), 1u);
     }
@@ -169,9 +192,16 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
     ASSERT_TRUE(context.ready);
     Core::GpuGraphResourceSetDesc desc = context.description(Name("tests/resource_set_validation/empty"));
     desc.setMembers(nullptr, 0u);
-    const Core::GpuGraphResourceSetId empty = context.graph.importResourceSet(desc);
+    const auto emptyResult = context.graph.importResourceSet(desc);
+    ASSERT_TRUE(emptyResult);
+    const Core::GpuGraphResourceSetId empty = *emptyResult;
     ASSERT_TRUE(empty.valid());
-    EXPECT_EQ(context.graph.importResourceSet(desc), empty);
+    {
+        const auto gpuAdmissionAt172 = context.graph.importResourceSet(desc);
+        EXPECT_TRUE(gpuAdmissionAt172);
+        if(gpuAdmissionAt172)
+            EXPECT_EQ(*gpuAdmissionAt172, empty);
+    }
     u64 revision = 0u;
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
@@ -180,15 +210,15 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
     }
     desc.identity = Name("tests/resource_set_validation/bad_shape");
     desc.setMembers(nullptr, 1u);
-    EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+    EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     desc = context.description(s_NameNone);
-    EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+    EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     desc = context.description(Name("tests/resource_set_validation/bad_label"));
     desc.markerLabel = {};
-    EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+    EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     desc = context.description(Name("tests/resource_set_validation/too_many"));
     desc.memberCount = static_cast<usize>(Limit<u32>::s_Max) + 1u;
-    EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
+    EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     ExpectUnchangedDeclaration(context, revision, 1u);
 }
 
@@ -196,7 +226,9 @@ TEST(ResourceSetValidation, ResetRejectsOldGenerationsAndAcceptsFreshIdsAtTheSam
     ResourceSetContext context(64u);
     ASSERT_TRUE(context.ready);
     constexpr Name s_Identity("tests/resource_set_validation/reset");
-    const Core::GpuGraphResourceSetId previousSet = context.graph.importResourceSet(context.description(s_Identity));
+    const auto previousSetResult = context.graph.importResourceSet(context.description(s_Identity));
+    ASSERT_TRUE(previousSetResult);
+    const Core::GpuGraphResourceSetId previousSet = *previousSetResult;
     ASSERT_TRUE(previousSet.valid());
     const Core::GpuGraphResourceId previousMember = context.members.back();
     context.graph.reset();
@@ -205,9 +237,11 @@ TEST(ResourceSetValidation, ResetRejectsOldGenerationsAndAcceptsFreshIdsAtTheSam
     EXPECT_EQ(freshMember.index, previousMember.index);
     EXPECT_NE(freshMember.generation, previousMember.generation);
     context.members.back() = previousMember;
-    EXPECT_FALSE(context.graph.importResourceSet(context.description(s_Identity)).valid());
+    EXPECT_FALSE(context.graph.importResourceSet(context.description(s_Identity)).has_value());
     context.members.back() = freshMember;
-    const Core::GpuGraphResourceSetId freshSet = context.graph.importResourceSet(context.description(s_Identity));
+    const auto freshSetResult = context.graph.importResourceSet(context.description(s_Identity));
+    ASSERT_TRUE(freshSetResult);
+    const Core::GpuGraphResourceSetId freshSet = *freshSetResult;
     ASSERT_TRUE(freshSet.valid());
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
     EXPECT_FALSE(declarations.validResourceSet(previousSet));
@@ -219,7 +253,9 @@ TEST(ResourceSetValidation, LiveReadViewsRejectBothNewAndIdempotentResourceSetMu
     ResourceSetContext context(64u);
     ASSERT_TRUE(context.ready);
     const Core::GpuGraphResourceSetDesc first = context.description(Name("tests/resource_set_validation/read_first"));
-    const Core::GpuGraphResourceSetId set = context.graph.importResourceSet(first);
+    const auto setResult = context.graph.importResourceSet(first);
+    ASSERT_TRUE(setResult);
+    const Core::GpuGraphResourceSetId set = *setResult;
     ASSERT_TRUE(set.valid());
     const Core::GpuGraphResourceSetDesc second = context.description(Name("tests/resource_set_validation/read_second"));
     {
@@ -229,13 +265,18 @@ TEST(ResourceSetValidation, LiveReadViewsRejectBothNewAndIdempotentResourceSetMu
         const Core::GpuTaskGraphResourceSetView stored = declarations.resourceSetAt(set.index);
         Core::GpuGraphResourceSetDesc borrowed = second;
         borrowed.setMembers(stored.members, stored.memberCount);
-        EXPECT_FALSE(context.graph.importResourceSet(borrowed).valid());
-        EXPECT_FALSE(context.graph.importResourceSet(first).valid());
+        EXPECT_FALSE(context.graph.importResourceSet(borrowed).has_value());
+        EXPECT_FALSE(context.graph.importResourceSet(first).has_value());
         EXPECT_EQ(declarations.declarationRevision(), revision);
         EXPECT_EQ(declarations.resourceSetCount(), 1u);
         EXPECT_EQ(stored.members[0u], context.members[0u]);
     }
-    EXPECT_TRUE(context.graph.importResourceSet(second).valid());
+    {
+        const auto gpuAdmissionAt236 = context.graph.importResourceSet(second);
+        EXPECT_TRUE(gpuAdmissionAt236);
+        if(gpuAdmissionAt236)
+            EXPECT_TRUE(gpuAdmissionAt236->valid());
+    }
 }
 
 

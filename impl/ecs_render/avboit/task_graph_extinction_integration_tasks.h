@@ -47,7 +47,7 @@ namespace RendererTaskGraphDetail{
 struct AvboitExtinctionComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -66,6 +66,8 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         bool materialGeometryStatesGraphOwned = false;
         bool conservativeGeometryScissor = false;
 
+
+    public:
         explicit Payload(
             Core::Alloc::GlobalArena& arena,
             Core::GraphicsRuntime& graphicsIn,
@@ -73,7 +75,7 @@ struct AvboitExtinctionComputeEmulationGraphTask{
             DeferredFrameTargets& targetsIn,
             Core::GpuTimingSubmissionTicket& timingTicketIn,
             Optional<Core::GpuTimingMeasure>& extinctionTimingIn
-        )
+        )noexcept
             : graphics(graphicsIn)
             , materialSystem(materialSystemIn)
             , targets(targetsIn)
@@ -84,6 +86,8 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         {}
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
@@ -101,7 +105,7 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         };
     };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -136,7 +140,7 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
 struct AvboitExtinctionGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The avboit system, the frame targets, and the timing ticket are required: extinction always records against this frame's bindings. Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
+    // The avboit system, the frame targets, and the timing ticket are required: extinction always records against this frame's bindings.
     struct Payload{
         RendererAvboitSystem& avboitSystem;
         DeferredFrameTargets& targets;
@@ -153,7 +157,9 @@ struct AvboitExtinctionGraphTask{
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererAvboitSystem& avboitSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn)
+
+    public:
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererAvboitSystem& avboitSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
             : avboitSystem(avboitSystemIn)
             , targets(targetsIn)
             , timingTicket(timingTicketIn)
@@ -161,6 +167,8 @@ struct AvboitExtinctionGraphTask{
         {}
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
@@ -172,17 +180,16 @@ struct AvboitExtinctionGraphTask{
 struct AvboitIntegrationGraphTask{
     // The avboit system, the frame targets, and the timing ticket are required: integration always dispatches against this frame's targets.
     // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     using Payload = AvboitComputeEffectRecordInputs;
 
 
 public:
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-
     static void Discarded(Payload& payload);
 };
 

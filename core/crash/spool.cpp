@@ -32,27 +32,30 @@ Alloc::PersistentArena& DumpArena(){
     return s_Arena;
 }
 
-void InitializeDumpArena()noexcept{
+void InitializeDumpArena(){
     const ::ArenaMemoryStats stats = DumpArena().memoryStats();
     if(stats.reservedBytes != 0u)
         return;
 }
 
 template<typename ArenaT>
-bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
-    if(!EnsureDirectories(PendingDirectory(spoolDirectory)))
-        return false;
+Expected<void, ErrorCode> EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
+    const auto pending = EnsureDirectories(PendingDirectory(spoolDirectory));
+    if(!pending)
+        return MakeUnexpected(pending.error());
 
-    if(!EnsureDirectories(UploadedDirectory(spoolDirectory)))
-        return false;
+    const auto uploaded = EnsureDirectories(UploadedDirectory(spoolDirectory));
+    if(!uploaded)
+        return MakeUnexpected(uploaded.error());
 
-    if(!EnsureDirectories(UploadingDirectory(spoolDirectory)))
-        return false;
+    const auto uploading = EnsureDirectories(UploadingDirectory(spoolDirectory));
+    if(!uploading)
+        return MakeUnexpected(uploading.error());
 
-    return EnsureDirectories(FailedDirectory(spoolDirectory)).has_value();
+    return EnsureDirectories(FailedDirectory(spoolDirectory));
 }
 
-template bool EnsureCrashSpoolDirectories(const ::Path<Alloc::PersistentArena>& spoolDirectory);
+template Expected<void, ErrorCode> EnsureCrashSpoolDirectories(const ::Path<Alloc::ScratchArena>& spoolDirectory);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

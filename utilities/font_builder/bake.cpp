@@ -19,7 +19,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateOptions(const BakeOptions& options){
+bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scratch){
     if(
         options.ppem < Impl::s_FontAtlasMinBakePpem
         || options.ppem > Impl::s_FontAtlasMaxBakePpem
@@ -36,16 +36,18 @@ bool ValidateOptions(const BakeOptions& options){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid options; ppem16..256, spread2..32, extent32..2048, groups1..8, total capacity<=128MiB"));
         return false;
     }
-    if(PathToGenericString<AString>(options.output.extension()) != ".nwb"){
+    const ScratchPath output(scratch, options.output);
+    if(PathToGenericString(scratch, output.extension()) != ".nwb"){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;
     }
-    const AString stem = PathToGenericString<AString>(options.output.stem());
+    const auto stem = PathToGenericString(scratch, output.stem());
     if(stem.empty() || stem == "." || stem == ".."){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output must have a nonempty asset stem"));
         return false;
     }
-    const AString sourceExtension = LowerPathExtension<AString>(options.source);
+    const ScratchPath source(scratch, options.source);
+    const auto sourceExtension = ToAsciiLowerCopy(PathToGenericString(scratch, source.extension()));
     if(sourceExtension != ".ttf" && sourceExtension != ".otf" && sourceExtension != ".font"){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
         return false;
@@ -54,11 +56,11 @@ bool ValidateOptions(const BakeOptions& options){
 }
 
 Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
-    if(!ValidateOptions(options))
+    if(!ValidateOptions(options, scratch))
         return MakeUnexpected(Failure{});
     Impl::FontAtlasPayload candidate(arena);
     FontSource source(candidate.glyphs.get_allocator().arena());
-    if(!source.open(options, candidate))
+    if(!source.open(options, candidate, scratch))
         return MakeUnexpected(Failure{});
     auto glyphs = Rasterize(source, options);
     if(!glyphs || !PackGlyphs(options, *glyphs, candidate, scratch) || !ExportPositioning(source, candidate))

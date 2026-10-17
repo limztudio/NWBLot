@@ -136,16 +136,15 @@ bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, const UtilityVector<
 }
 
 
-AString NodeName(const ufbx_node* node, const usize fallbackIndex){
-    AString name;
+ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
+    ScratchString name(scratchArena);
     if(node && node->name.data && node->name.length != 0u)
         name.assign(node->name.data, node->name.length);
     if(!name.empty())
         return name;
 
-    AStringStream out;
-    out << s_JointFallbackNamePrefix << fallbackIndex;
-    return out.str();
+    StringAppendFormat(name, "{}{}", s_JointFallbackNamePrefix, fallbackIndex);
+    return name;
 }
 
 Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
@@ -166,7 +165,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
 
     UtilityScratchMap<const ufbx_node*, usize> sourceJointLookup(scratchArena);
     sourceJointLookup.reserve(joints.size());
-    UtilityScratchVector<AString> sortNames(scratchArena);
+    UtilityScratchVector<ScratchString> sortNames(scratchArena);
     sortNames.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         ufbx_node* joint = joints[jointIndex];
@@ -179,7 +178,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
             return MakeUnexpected(Failure{});
         }
-        sortNames.push_back(NodeName(joint, jointIndex));
+        sortNames.push_back(NodeName(joint, jointIndex, scratchArena));
     }
 
     UtilityScratchVector<u32> parentIndices(scratchArena);
@@ -214,7 +213,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
     sortedJointIndices.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
         sortedJointIndices.push_back(jointIndex);
-    Sort(sortedJointIndices.begin(), sortedJointIndices.end(), [&parentDepths, &sortNames](const usize lhs, const usize rhs){
+    Sort(sortedJointIndices.begin(), sortedJointIndices.end(), [&parentDepths, &sortNames](const usize lhs, const usize rhs)noexcept{
             if(parentDepths[lhs] != parentDepths[rhs])
                 return parentDepths[lhs] < parentDepths[rhs];
             if(sortNames[lhs] != sortNames[rhs])
@@ -311,7 +310,11 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
             positionIndex = static_cast<u32>(outMesh.positions.size());
             outMesh.positions.push_back(sourceMesh.positions[sourceRef.position]);
             outPositionSkin.push_back(sourceMesh.skin[sourceRef.skin]);
-            positionSkinLookup.emplace(key, positionIndex);
+            const auto inserted = positionSkinLookup.emplace(key, positionIndex);
+            if(!inserted.second){
+                NWB_ASSERT(false);
+                return MakeUnexpected(Failure{});
+            }
         }
 
         SourceVertexRef ref = sourceRef;

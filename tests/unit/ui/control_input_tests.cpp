@@ -21,7 +21,7 @@ namespace __hidden_ui_control_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-HitTarget Host(const u64 id = 1u, const f32 x = 0.0f){
+HitTarget Host(const u64 id = 1u, const f32 x = 0.0f)noexcept{
     HitTarget target;
     target.id = { id };
     target.declarationGeneration = 7u;
@@ -37,7 +37,7 @@ HitTarget Host(const u64 id = 1u, const f32 x = 0.0f){
     return target;
 }
 
-HitTarget Part(const HitTarget& host, const u64 id, const Rect& rectangle, const u64 value = 0u){
+HitTarget Part(const HitTarget& host, const u64 id, const Rect& rectangle, const u64 value = 0u)noexcept{
     HitTarget target;
     target.id = { id };
     target.rectangle = rectangle;
@@ -52,14 +52,14 @@ HitTarget Part(const HitTarget& host, const u64 id, const Rect& rectangle, const
     return target;
 }
 
-InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 10.0f, 10.0f }){
+InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 10.0f, 10.0f })noexcept{
     InputEvent event;
     event.type = type;
     event.position = position;
     return event;
 }
 
-InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const bool repeat = false){
+InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const bool repeat = false)noexcept{
     InputEvent event;
     event.type = type;
     event.key = key;
@@ -109,7 +109,7 @@ protected:
         EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Tab)).commandConsumed);
     }
 
-    void revise(){
+    void revise()noexcept{
         for(auto& target : m_targets)
             ++target.control.contentRevision;
     }

@@ -179,6 +179,11 @@ namespace MaterialLayoutFieldType{
 inline constexpr u32 s_MaterialLayoutFieldComponentsPerValueType = NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT;
 inline constexpr u32 s_MaterialLayoutFieldFirstTypeId = static_cast<u32>(MaterialLayoutFieldType::Bool);
 inline constexpr u32 s_MaterialParameterFirstValueTypeId = static_cast<u32>(MaterialParameterValueType::Bool);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static_assert(
     static_cast<u32>(MaterialParameterValueType::Float) - s_MaterialParameterFirstValueTypeId
         == (static_cast<u32>(MaterialLayoutFieldType::Float4) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType,
@@ -313,7 +318,7 @@ struct MaterialResourceReference{
     u32 constantByteOffset = 0u;
 };
 
-[[nodiscard]] inline bool AssignMaterialResourceReferenceAsset(MaterialResourceReference& reference, const MaterialResourceKind::Enum resourceKind, const Name& resourceName){
+[[nodiscard]] inline bool AssignMaterialResourceReferenceAsset(MaterialResourceReference& reference, const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
         reference.textureAsset.virtualPath = resourceName;

@@ -3,7 +3,6 @@
 
 
 #include "backend.h"
-#include "arena_names.h"
 #include "buffer_resource_detail.h"
 #include "state_tracking_detail.h"
 #include "texture_resource_detail.h"
@@ -70,7 +69,7 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
     }
 }
 
-bool CommandList::importResourceStateHandoff(const CommandListResourceStateHandoff& states){
+bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states){
     if(!states.validForDeviceGeneration(m_context.deviceGeneration)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff belongs to a retired device generation"));
         return false;
@@ -110,7 +109,6 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
     }
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
     Vector<const CommandListResourceStateHandoff::BufferState*, Alloc::ScratchArena> orderedBufferStates{scratchArena};
     orderedBufferStates.reserve(states.m_bufferStates.size());
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
@@ -124,7 +122,8 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     }
     Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto* lhs, const auto* rhs)noexcept{
         return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
-    });
+    }
+    );
     for(usize index = 1u; index < orderedBufferStates.size(); ++index){
         const auto& previous = *orderedBufferStates[index - 1u];
         const auto& current = *orderedBufferStates[index];

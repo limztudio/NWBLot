@@ -55,9 +55,9 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
             declarationRevision = declarations.declarationRevision();
         }
         const ArenaMemoryStats memoryStats = testArena.arena.memoryStats();
-        const Graphics::GpuGraphResourceId resource = useHazardDomainWrapper ? graph.importHazardDomain(desc) : graph.importResource(desc);
+        const auto resource = useHazardDomainWrapper ? graph.importHazardDomain(desc) : graph.importResource(desc);
 
-        EXPECT_FALSE(resource.valid());
+        EXPECT_FALSE(resource.has_value());
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_EQ(declarations.resourceCount(), resourceCount);
         EXPECT_EQ(declarations.declarationRevision(), declarationRevision);

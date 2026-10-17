@@ -39,7 +39,7 @@ using ThreadId = std::thread::id;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void SleepMS(u32 duration){
+inline void SleepMS(u32 duration)noexcept{
     std::this_thread::sleep_for(std::chrono::milliseconds(duration));
 }
 

@@ -25,7 +25,7 @@ class StagedDirectoryCleanupGuard : NoCopy{
 public:
     // The operation and label backing text must outlive this guard.
     StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = "stage directory");
-    ~StagedDirectoryCleanupGuard();
+    ~StagedDirectoryCleanupGuard()noexcept;
 
 
 public:
@@ -39,8 +39,8 @@ private:
     bool m_active = true;
 };
 
-bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount);
-bool RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName);
+bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena);
+bool RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

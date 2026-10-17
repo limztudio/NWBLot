@@ -32,6 +32,9 @@ constexpr AStringView s_ExpectedTokenFoundSeparator = ", found ";
 constexpr usize s_ExpectedTokenFoundSeparatorLength = s_ExpectedTokenFoundSeparator.size();
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs)noexcept{
     switch(op){
     case TokenType::Plus:
@@ -70,10 +73,10 @@ private:
 
 
 public:
-    Parser(MStringView source, MetaArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations)
+    Parser(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations)
         : m_lexer(source)
         , m_arena(arena)
-        , m_scratchArena(MetascriptArenaScope::s_ParserScratch, s_ParserScratchArenaBytes)
+        , m_scratchArena(scratchArena)
         , m_declaredStructs(m_scratchArena)
         , m_errors(errors)
         , m_variables(variables)
@@ -245,28 +248,29 @@ private:
         if(!expect(TokenType::Semicolon, "expected ';' after expression"))
             return false;
 
-        Value* target = resolveTarget(path, firstLine, firstColumn);
+        const auto target = resolveTarget(path, firstLine, firstColumn);
         if(!target)
             return false;
+        Value& targetValue = **target;
 
-        if(!validateAssignment(assignOp, *target, rhs, assignLine, assignColumn))
+        if(!validateAssignment(assignOp, targetValue, rhs, assignLine, assignColumn))
             return false;
 
         switch(assignOp){
         case TokenType::Equal:
-            *target = Move(rhs);
+            targetValue = Move(rhs);
             break;
         case TokenType::PlusEqual:
-            *target += rhs;
+            targetValue += rhs;
             break;
         case TokenType::MinusEqual:
-            *target -= rhs;
+            targetValue -= rhs;
             break;
         case TokenType::StarEqual:
-            *target *= rhs;
+            targetValue *= rhs;
             break;
         case TokenType::SlashEqual:
-            *target /= rhs;
+            targetValue /= rhs;
             break;
         default:
             break;
@@ -485,7 +489,7 @@ private:
 
     Value parseMultiplicative(){
         return parseBinaryExpression([&](){ return parseUnary(); },
-            TokenType::Star, TokenType::Slash, [](const TokenType::Enum op, const Value& left, const Value& right){
+            TokenType::Star, TokenType::Slash, [](const TokenType::Enum op, const Value& left, const Value& right)noexcept{
                 return op == TokenType::Star ? left * right : left / right;
             }
         );
@@ -731,14 +735,14 @@ private:
     }
 
 
-    Value* resolveTarget(const ScratchPath& path, const u32 errorLine, const u32 errorColumn){
+    [[nodiscard]] Expected<NotNull<Value*>> resolveTarget(const ScratchPath& path, const u32 errorLine, const u32 errorColumn){
         NWB_ASSERT(!path.empty());
 
         const auto rootName = path[0];
         auto rootIt = m_variables.find(rootName);
         if(rootIt == m_variables.end()){
             error(errorLine, errorColumn, "assignments must target a declared variable");
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
 
         Value* current = &rootIt.value();
@@ -747,13 +751,13 @@ private:
                 current->makeMap();
             else if(!current->isMap()){
                 error(errorLine, errorColumn, "cannot access field on non-map value");
-                return nullptr;
+                return MakeUnexpected(Failure{});
             }
 
             current = &current->field(path[i]);
         }
 
-        return current;
+        return MakeNotNull(current);
     }
 
     Value makeReference(const ScratchPath& path){
@@ -764,7 +768,12 @@ private:
             return Value(m_arena);
         }
 
-        MString text(m_arena);
+        usize textSize = path.size() - 1u;
+        for(const MStringView segment : path)
+            textSize += segment.size();
+
+        ScratchString text(m_scratchArena);
+        text.reserve(textSize);
         for(usize i = 0u; i < path.size(); ++i){
             if(i != 0u)
                 text.push_back('.');
@@ -790,13 +799,13 @@ private:
         return m_variables.find(name) != m_variables.end();
     }
 
-    [[nodiscard]] Value* declaredAssetRoot(const u32 line, const u32 column){
+    [[nodiscard]] Expected<NotNull<Value*>> declaredAssetRoot(const u32 line, const u32 column){
         auto rootIt = m_variables.find(m_declaredAssetVariable);
         if(rootIt == m_variables.end()){
             error(line, column, "missing declared asset variable");
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
-        return &rootIt.value();
+        return MakeNotNull(&rootIt.value());
     }
 
     bool ensureMapValue(Value& value, const u32 line, const u32 column, MStringView message){
@@ -819,7 +828,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool containsBindInstanceName(const Value& instances, MStringView instanceName)const{
+    [[nodiscard]] bool containsBindInstanceName(const Value& instances, MStringView instanceName)const noexcept{
         NWB_ASSERT(instances.isList());
 
         for(const Value& instance : instances.asList()){
@@ -835,13 +844,14 @@ private:
     }
 
     bool addBindStruct(MStringView structName, Value&& attributes, Value&& fields, const u32 line, const u32 column){
-        Value* assetRoot = declaredAssetRoot(line, column);
-        if(!assetRoot)
+        const auto root = declaredAssetRoot(line, column);
+        if(!root)
             return false;
-        if(!ensureMapValue(*assetRoot, line, column, "bind declarations require asset root to be a map"))
+        Value& assetRoot = **root;
+        if(!ensureMapValue(assetRoot, line, column, "bind declarations require asset root to be a map"))
             return false;
 
-        Value& structs = assetRoot->field(LiteralView("structs"));
+        Value& structs = assetRoot.field(LiteralView("structs"));
         if(!ensureMapValue(structs, line, column, "asset.structs must be a map"))
             return false;
         if(structs.findField(structName)){
@@ -857,13 +867,14 @@ private:
     }
 
     bool addBindInstance(MStringView typeName, MStringView instanceName, const u32 line, const u32 column){
-        Value* assetRoot = declaredAssetRoot(line, column);
-        if(!assetRoot)
+        const auto root = declaredAssetRoot(line, column);
+        if(!root)
             return false;
-        if(!ensureMapValue(*assetRoot, line, column, "bind declarations require asset root to be a map"))
+        Value& assetRoot = **root;
+        if(!ensureMapValue(assetRoot, line, column, "bind declarations require asset root to be a map"))
             return false;
 
-        Value& instances = assetRoot->field(LiteralView("instances"));
+        Value& instances = assetRoot.field(LiteralView("instances"));
         if(!ensureListValue(instances, line, column, "asset.instances must be a list"))
             return false;
         if(containsBindInstanceName(instances, instanceName)){
@@ -879,7 +890,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool isZero(const Value& value)const{
+    [[nodiscard]] bool isZero(const Value& value)const noexcept{
         if(value.isInteger())
             return value.asInteger() == 0;
         if(value.isDouble())
@@ -1017,6 +1028,8 @@ private:
         switch(m_current.type){
         case TokenType::Identifier:{
             ScratchString d("identifier '", m_scratchArena);
+            if(m_current.text.size() <= Limit<usize>::s_Max - d.size() - 1u)
+                d.reserve(d.size() + m_current.text.size() + 1u);
             d.append(m_current.text.data(), m_current.text.size());
             d.push_back('\'');
             return d;
@@ -1024,6 +1037,8 @@ private:
         case TokenType::IntegerLiteral:
         case TokenType::DoubleLiteral:{
             ScratchString d("number '", m_scratchArena);
+            if(m_current.text.size() <= Limit<usize>::s_Max - d.size() - 1u)
+                d.reserve(d.size() + m_current.text.size() + 1u);
             d.append(m_current.text.data(), m_current.text.size());
             d.push_back('\'');
             return d;
@@ -1058,7 +1073,7 @@ private:
 private:
     Lexer m_lexer;
     MetaArena& m_arena;
-    Alloc::ScratchArena m_scratchArena;
+    Alloc::ScratchArena& m_scratchArena;
     ScratchNameList m_declaredStructs;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
@@ -1095,19 +1110,9 @@ bool Document::parse(MStringView source){
     m_variables.clear();
     m_declarations.clear();
 
-    __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables, m_declarations);
+    Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch, __hidden_metascript_parser::s_ParserScratchArenaBytes);
+    __hidden_metascript_parser::Parser parser(source, m_arena, scratchArena, m_errors, m_variables, m_declarations);
     return parser.parseInto(m_assetType, m_assetVariable);
-}
-
-bool Document::parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable){
-    m_errors.clear();
-    m_assetType.clear();
-    m_assetVariable.clear();
-    m_variables.clear();
-    m_declarations.clear();
-
-    __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables, m_declarations);
-    return parser.parseWithImplicitAsset(m_assetType, m_assetVariable, assetType, assetVariable);
 }
 
 bool Document::parse(IMetaReader& reader){
@@ -1123,31 +1128,50 @@ bool Document::parse(IMetaReader& reader){
     MChar chunk[__hidden_metascript_parser::s_DocumentReaderChunkBytes];
 
     for(;;){
-        const isize bytesRead = reader.read(chunk, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
-        if(bytesRead < 0){
+        const auto bytesRead = reader.read(chunk, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
+        if(!bytesRead){
             m_errors.push_back(ParseError{0, 0, MString("read error", m_arena)});
             return false;
         }
-        if(bytesRead == 0)
+        if(*bytesRead == 0u)
             break;
-        if(static_cast<usize>(bytesRead) > __hidden_metascript_parser::s_DocumentReaderChunkBytes){
+        if(*bytesRead > __hidden_metascript_parser::s_DocumentReaderChunkBytes){
             m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", m_arena)});
             return false;
         }
-        buffer.append(chunk, static_cast<usize>(bytesRead));
+        buffer.append(chunk, *bytesRead);
     }
 
-    return parse(MStringView(buffer.data(), buffer.size()));
+    m_errors.clear();
+    m_assetType.clear();
+    m_assetVariable.clear();
+    m_variables.clear();
+    m_declarations.clear();
+
+    __hidden_metascript_parser::Parser parser(MStringView(buffer.data(), buffer.size()), m_arena, scratchArena, m_errors, m_variables, m_declarations);
+    return parser.parseInto(m_assetType, m_assetVariable);
 }
 
-const Value& Document::asset()const{
+bool Document::parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable){
+    m_errors.clear();
+    m_assetType.clear();
+    m_assetVariable.clear();
+    m_variables.clear();
+    m_declarations.clear();
+
+    Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch, __hidden_metascript_parser::s_ParserScratchArenaBytes);
+    __hidden_metascript_parser::Parser parser(source, m_arena, scratchArena, m_errors, m_variables, m_declarations);
+    return parser.parseWithImplicitAsset(m_assetType, m_assetVariable, assetType, assetVariable);
+}
+
+const Value& Document::asset()const noexcept{
     const MStringView key(m_assetVariable.data(), m_assetVariable.size());
     auto it = m_variables.find(key);
     NWB_ASSERT(it != m_variables.end());
     return it.value();
 }
 
-Value& Document::asset(){
+Value& Document::asset()noexcept{
     const MStringView key(m_assetVariable.data(), m_assetVariable.size());
     auto it = m_variables.find(key);
     NWB_ASSERT(it != m_variables.end());

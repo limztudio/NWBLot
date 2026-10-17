@@ -47,7 +47,7 @@ static void AppendGeneratedMaterialShaderIncludes(ScratchString& outSource, cons
     outSource += "\"\n";
 }
 
-static void AssignGeneratedMaterialShaderSource(CookString& outSource, ScratchArena& scratchArena, const Path& sourcePath){
+static void AssignGeneratedMaterialShaderSource(CookString& outSource, ScratchArena& scratchArena, const ScratchPath& sourcePath){
     ScratchString sourceText = PathToString(scratchArena, sourcePath);
     for(char& ch : sourceText){
         if(ch == '\\')
@@ -76,13 +76,13 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     }
     generatedShaders.reserve(generatedShaderCount);
 
-    const Name sharedMeshShaderNameId = ToName(sharedMeshShaderName);
-    if(!sharedMeshShaderNameId){
+    const auto sharedMeshShaderNameId = ToName(sharedMeshShaderName);
+    if(!sharedMeshShaderNameId || !*sharedMeshShaderNameId){
         NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: invalid shared mesh shader name '{}'"), StringConvert(sharedMeshShaderName));
         return MakeUnexpected(Failure{});
     }
 
-    const Path generatedRoot = cacheDirectory / configurationSafeName / "generated" / "material_pixel_shaders";
+    const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / "generated" / "material_pixel_shaders";
     auto removeAllIfExistsResult = RemoveAllIfExists(generatedRoot);
     if(!removeAllIfExistsResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to clear generated directory '{}': {}"), PathToString<tchar>(generatedRoot), StringConvert(removeAllIfExistsResult.error().message()));
@@ -118,7 +118,7 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
         ScratchString relativeFile(scratchArena);
         relativeFile += entry.virtualPath;
         relativeFile += ".slang";
-        const Path outputPath = generatedRoot / AStringView(relativeFile);
+        const ScratchPath outputPath = generatedRoot / AStringView(relativeFile);
         auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to create generated parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
@@ -134,16 +134,16 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
         generated.name += entry.virtualPath;
         AssignGeneratedMaterialShaderSource(generated.source, scratchArena, outputPath);
 
-        const Name pixelShaderName = ToName(AStringView(generated.name));
-        if(!pixelShaderName){
+        const auto pixelShaderName = ToName(AStringView(generated.name));
+        if(!pixelShaderName || !*pixelShaderName){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated pixel shader name is invalid for material '{}'"), StringConvert(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
         }
 
         Core::Assets::AssetRef<IShader> pixelShaderRef;
-        pixelShaderRef.virtualPath = pixelShaderName;
+        pixelShaderRef.virtualPath = **pixelShaderName;
         Core::Assets::AssetRef<IShader> meshShaderRef;
-        meshShaderRef.virtualPath = sharedMeshShaderNameId;
+        meshShaderRef.virtualPath = **sharedMeshShaderNameId;
         if(!entry.stageShaders.emplace(Core::ShaderType::PixelStage, pixelShaderRef).second || !entry.stageShaders.emplace(Core::ShaderType::MeshStage, meshShaderRef).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign generated stage shaders for material '{}'"), StringConvert(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
@@ -180,7 +180,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
     }
     generatedShaders.reserve(generatedShaderCount);
 
-    const Path generatedRoot = cacheDirectory / configurationSafeName / "generated" / generatedDirectoryLeaf;
+    const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / "generated" / generatedDirectoryLeaf;
     auto removeAllIfExistsResult2 = RemoveAllIfExists(generatedRoot);
     if(!removeAllIfExistsResult2){
         NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to clear generated directory '{}': {}"), StringConvert(passLabel), PathToString<tchar>(generatedRoot), StringConvert(removeAllIfExistsResult2.error().message()));
@@ -207,7 +207,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         ScratchString relativeFile(scratchArena);
         relativeFile += entry.virtualPath;
         relativeFile += ".slang";
-        const Path outputPath = generatedRoot / AStringView(relativeFile);
+        const ScratchPath outputPath = generatedRoot / AStringView(relativeFile);
         auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult2){
             NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"), StringConvert(passLabel), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult2.error().message()));
@@ -223,8 +223,8 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         generated.name += entry.virtualPath;
         AssignGeneratedMaterialShaderSource(generated.source, scratchArena, outputPath);
 
-        const Name pixelShaderName = ToName(AStringView(generated.name));
-        if(!pixelShaderName){
+        const auto pixelShaderName = ToName(AStringView(generated.name));
+        if(!pixelShaderName || !*pixelShaderName){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'"), StringConvert(passLabel), StringConvert(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
         }

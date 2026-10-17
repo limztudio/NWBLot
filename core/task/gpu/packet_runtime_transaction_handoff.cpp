@@ -87,7 +87,8 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
         return !handoff.producerTask.valid() && !handoff.sourceQueue.valid() && !handoff.token.valid();
     }
     const GpuTaskGraphExternalResourceHandoffProducer& producer = handoff.producers[0u];
-    return handoff.producerTask == producer.producerTask
+    return
+        handoff.producerTask == producer.producerTask
         && handoff.sourceQueue == producer.sourceQueue
         && handoff.token.queue == producer.token.queue
         && handoff.token.value == producer.token.value
@@ -119,7 +120,8 @@ struct GpuTaskGraphExternalResourceHandoffSnapshot::Storage final : NoCopy{
     u64 compiledObjectIdentity = 0u;
 
 
-    explicit Storage(GraphicsArena& arena)
+public:
+    explicit Storage(GraphicsArena& arena)noexcept
         : arena(arena)
         , stateSource(arena)
         , stateMerge(arena)
@@ -162,7 +164,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskGraphExternalResourceHandoffSnapshot::GpuTaskGraphExternalResourceHandoffSnapshot(GraphicsArena& arena)
+GpuTaskGraphExternalResourceHandoffSnapshot::GpuTaskGraphExternalResourceHandoffSnapshot(GraphicsArena& arena)noexcept
     : m_arena(arena)
     , m_activeStorage(MakeGlobalUnique<Storage>(arena, arena))
     , m_candidateStorage(MakeGlobalUnique<Storage>(arena, arena))

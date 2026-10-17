@@ -6,6 +6,7 @@
 
 #include "smoke_environment.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 #include <global/limit.h>
@@ -20,7 +21,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyCausticQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena, const Impl::CausticQualitySettings& baseSettings){
+bool ApplyCausticQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::CausticQualitySettings& baseSettings){
     Impl::CausticQualitySettings settings = baseSettings;
     const auto value = ReadSmokeEnvironmentText(arena, "NWB_CAUSTIC_PHOTON_GRID_DIVISOR");
     if(value){

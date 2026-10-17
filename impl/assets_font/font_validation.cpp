@@ -8,6 +8,8 @@
 #include <core/common/log.h>
 
 #include <global/algorithm.h>
+#include <global/diagnostics.h>
+#include <global/optional.h>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -87,9 +89,14 @@ static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct NativeFontFailure{
+    AStringView operation{};
+    Optional<FT_Error> nativeError{};
+};
+
 class NativeFontValidator final : NoCopy{
 private:
-    [[nodiscard]] static void* Allocate(FT_Memory memory, const FT_Long size){
+    [[nodiscard]] static void* Allocate(FT_Memory memory, const FT_Long size)noexcept{
         if(size <= 0)
             return nullptr;
         auto& arena = *static_cast<Core::Assets::AssetArena*>(memory->user);
@@ -103,7 +110,7 @@ private:
         }
     }
 
-    [[nodiscard]] static void* Reallocate(FT_Memory memory, const FT_Long oldSize, const FT_Long newSize, void* block){
+    [[nodiscard]] static void* Reallocate(FT_Memory memory, const FT_Long oldSize, const FT_Long newSize, void* block)noexcept{
         static_cast<void>(oldSize);
         if(newSize <= 0){
             Release(memory, block);
@@ -122,23 +129,38 @@ public:
         m_memory.realloc = &Reallocate;
     }
     ~NativeFontValidator()noexcept{
-        if(m_face)
-            FT_Done_Face(m_face);
-        if(m_library)
-            FT_Done_Library(m_library);
+        const FT_Face face = m_face;
+        const FT_Library library = m_library;
+        m_face = nullptr;
+        m_library = nullptr;
+        const FT_Error faceError = face ? FT_Done_Face(face) : 0;
+        const FT_Error libraryError = library ? FT_Done_Library(library) : 0;
+        if(faceError != 0){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Font native cleanup failed: native_domain=FreeType native_code={}", faceError);
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "font_native_validation", .expression = "FT_Done_Face", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        }
+        if(libraryError != 0){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Font native cleanup failed: native_domain=FreeType native_code={}", libraryError);
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "font_native_validation", .expression = "FT_Done_Library", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        }
     }
 
 
 public:
-    [[nodiscard]] bool validate(const Core::Assets::AssetBytes& bytes){
+    [[nodiscard]] Expected<void, NativeFontFailure> validate(const Core::Assets::AssetBytes& bytes)noexcept{
         const FT_Error libraryError = FT_New_Library(&m_memory, &m_library);
         if(libraryError != 0)
-            return false;
+            return MakeUnexpected(NativeFontFailure{ .operation = "FT_New_Library", .nativeError = libraryError });
         FT_Add_Default_Modules(m_library);
         const FT_Error faceError = FT_New_Memory_Face(m_library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &m_face);
         if(faceError != 0)
-            return false;
-        return m_face->num_faces == 1 && m_face->num_glyphs > 0 && m_face->units_per_EM > 0u && FT_IS_SFNT(m_face) && FT_IS_SCALABLE(m_face) && !FT_HAS_MULTIPLE_MASTERS(m_face) && FT_Select_Charmap(m_face, FT_ENCODING_UNICODE) == 0;
+            return MakeUnexpected(NativeFontFailure{ .operation = "FT_New_Memory_Face", .nativeError = faceError });
+        if(m_face->num_faces != 1 || m_face->num_glyphs <= 0 || m_face->units_per_EM == 0u || !FT_IS_SFNT(m_face) || !FT_IS_SCALABLE(m_face) || FT_HAS_MULTIPLE_MASTERS(m_face))
+            return MakeUnexpected(NativeFontFailure{ .operation = "admit_static_scalable_face" });
+        const FT_Error charmapError = FT_Select_Charmap(m_face, FT_ENCODING_UNICODE);
+        if(charmapError != 0)
+            return MakeUnexpected(NativeFontFailure{ .operation = "FT_Select_Charmap", .nativeError = charmapError });
+        return {};
     }
 
 
@@ -168,8 +190,13 @@ bool ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceInd
         return false;
     }
     __hidden_font_validation::NativeFontValidator validator(bytes.get_allocator().arena());
-    if(!validator.validate(bytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: FreeType rejected the scalable Unicode face"));
+    const auto nativeValidation = validator.validate(bytes);
+    if(!nativeValidation){
+        const auto& failure = nativeValidation.error();
+        if(failure.nativeError)
+            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: native_operation={} native_domain=FreeType native_code={}"), StringConvert(failure.operation), *failure.nativeError);
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: FreeType rejected the scalable Unicode face ({})"), StringConvert(failure.operation));
         return false;
     }
     return true;

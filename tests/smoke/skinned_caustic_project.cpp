@@ -25,6 +25,7 @@
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
 #include <core/common/log.h>
 #include <core/ecs/module.h>
@@ -200,7 +201,8 @@ private:
         NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(m_context.objectArena);
         NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(m_context.objectArena);
         NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(m_context.objectArena);
-        NWB::Core::Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
+        NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/skinned_caustic_frame_graph"));
+        NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
         if(!renderer->appendFrameGraph(builder)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: could not capture public accepted-queue telemetry"));
             m_context.requestQuit();
@@ -386,7 +388,6 @@ public:
         , m_bindJoints(context.objectArena)
         , m_transitionOutput(context.objectArena)
     {}
-
     virtual ~SkinnedCausticSmokeProject()override{
         destroyWorld();
     }
@@ -399,12 +400,13 @@ public:
 
         m_transitionEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_TRANSITION");
         if(m_transitionEnabled){
+            NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             m_transitionLagged = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED");
             m_transitionPhotonsEnabled = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS");
-            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
             if(!output)
                 return false;
-            m_transitionOutput = *output;
+            m_transitionOutput.assign(output->data(), output->size());
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED") ? 1u : 0u
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
@@ -462,7 +464,11 @@ public:
             m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_PoseAnimationSpeed;
         }
         animatePoses();
-        m_world->tick(m_transitionEnabled ? 1.0f / 60.0f : safeDelta);
+        const auto updated = m_world->tick(m_transitionEnabled ? 1.0f / 60.0f : safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         if(m_transitionEnabled)
             updateTransitionCapture();
         return true;

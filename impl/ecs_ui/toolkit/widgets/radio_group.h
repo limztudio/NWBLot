@@ -51,6 +51,8 @@ struct RadioGroupSnapshot{
     u64 sourceGeneration = 0u;
     u64 sourceRevision = 0u;
 
+
+public:
     [[nodiscard]] bool operator==(const RadioGroupSnapshot&)const noexcept = default;
 };
 
@@ -66,10 +68,10 @@ class RadioGroupState final : NoCopy{
 
 public:
     RadioGroupState()noexcept;
+    RadioGroupState(RadioGroupState&&) = delete;
 
 
 public:
-    RadioGroupState(RadioGroupState&&) = delete;
     RadioGroupState& operator=(RadioGroupState&&) = delete;
 
 

@@ -21,7 +21,7 @@ namespace __hidden_ui_command_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-HitTarget Target(const u64 id = 1u){
+HitTarget Target(const u64 id = 1u)noexcept{
     HitTarget target;
     target.id = { id };
     target.rectangle = { 0.0f, 0.0f, 80.0f, 40.0f };
@@ -33,7 +33,7 @@ HitTarget Target(const u64 id = 1u){
     return target;
 }
 
-HitTarget Control(const u64 id = 1u){
+HitTarget Control(const u64 id = 1u)noexcept{
     HitTarget target = Target(id);
     target.navigable = true;
     target.horizontalNavigation = true;
@@ -41,7 +41,7 @@ HitTarget Control(const u64 id = 1u){
     return target;
 }
 
-InputEvent Command(const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const bool repeat = false){
+InputEvent Command(const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const bool repeat = false)noexcept{
     InputEvent event;
     event.type = type;
     event.source = source;
@@ -50,7 +50,7 @@ InputEvent Command(const InputEventType::Enum type, const InputSource source, co
     return event;
 }
 
-InputEvent Key(const InputEventType::Enum type, const bool shift = false, const bool repeat = false){
+InputEvent Key(const InputEventType::Enum type, const bool shift = false, const bool repeat = false)noexcept{
     InputEvent event;
     event.type = type;
     event.key = Core::Key::W;

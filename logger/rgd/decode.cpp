@@ -6,6 +6,7 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/algorithm.h>
 #include <global/basic_string.h>
 #include <global/containers.h>
 #include <global/numeric_text.h>
@@ -16,7 +17,6 @@
 #include "rgd_serializer.h"
 #include "rgd_marker_data_serializer.h"
 #include "rgd_resource_info_serializer.h"
-
 #include "dev_driver/include/rgdevents.h"
 
 
@@ -37,17 +37,13 @@ namespace Rgd{
 
 namespace __hidden_rgd_decode{
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Name s_DecodeScratchArena("logger/rgd/decode");
+inline constexpr Name s_RgdDecodeScratch("Log/RgdDecodeScratch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Futex& RgdConsoleMutex(){
+Futex& RgdDecodeMutex()noexcept{
     static Futex s_Mutex;
     return s_Mutex;
 }
@@ -56,40 +52,8 @@ Futex& RgdConsoleMutex(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The vendored RGD parser writes progress diagnostics to the process console. Capture that chatter in a caller-owned sink instead of leaking it into the logger stream, and drop it with the guard.
-class ScopedRgdConsoleCapture final{
-public:
-    explicit ScopedRgdConsoleCapture(Core::Alloc::ScratchArena& scratchArena)
-        : m_sink(s_FileOpenWrite, scratchArena)
-        , m_lock(RgdConsoleMutex())
-        , m_coutBuffer(NWB_COUT.rdbuf(m_sink.rdbuf()))
-        , m_cerrBuffer(NWB_CERR.rdbuf(m_sink.rdbuf()))
-    {
-    }
-    ~ScopedRgdConsoleCapture()noexcept{
-        NWB_COUT.rdbuf(m_coutBuffer);
-        NWB_CERR.rdbuf(m_cerrBuffer);
-    }
-
-
-public:
-    ScopedRgdConsoleCapture(const ScopedRgdConsoleCapture&) = delete;
-    ScopedRgdConsoleCapture& operator=(const ScopedRgdConsoleCapture&) = delete;
-
-
-private:
-    AStringStream<Core::Alloc::ScratchArena> m_sink;
-    ScopedLock<Futex> m_lock;
-    AStreamBuffer* m_coutBuffer;
-    AStreamBuffer* m_cerrBuffer;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The upstream serializer APIs keep native C++ strings and streams at this integration boundary; decode failures retain any report sections already produced.
-AInteropString AssembleTextSummary(Core::Alloc::ScratchArena& scratchArena, const Config& config, RgdCrashDumpContents& contents){
+// The upstream serializer APIs require native strings; decode failures retain any report sections already produced while project streams use scratch storage.
+AInteropString AssembleTextSummary(const Config& config, RgdCrashDumpContents& contents, Core::Alloc::ScratchArena& scratchArena){
     AStringStream<Core::Alloc::ScratchArena> txt(s_FileOpenWrite, scratchArena);
 
     {
@@ -129,15 +93,12 @@ AInteropString AssembleTextSummary(Core::Alloc::ScratchArena& scratchArena, cons
     }
 
     {
-        Vector<usize, Core::Alloc::ScratchArena> pageFaultEvents(scratchArena);
-        pageFaultEvents.reserve(contents.kmd_crash_data.events.size());
-        for(usize i = 0, count = contents.kmd_crash_data.events.size(); i < count; ++i){
-            const RgdEventOccurrence& currentEvent = contents.kmd_crash_data.events[i];
-            if(currentEvent.rgd_event != nullptr && currentEvent.rgd_event->header.eventId == static_cast<u8>(KmdEventId::RgdEventVmPageFault))
-                pageFaultEvents.push_back(i);
-        }
-
-        if(!pageFaultEvents.empty()){
+        const auto isPageFault = [](const RgdEventOccurrence& event)noexcept{
+            return event.rgd_event != nullptr && event.rgd_event->header.eventId == static_cast<u8>(KmdEventId::RgdEventVmPageFault);
+        };
+        const auto eventsEnd = contents.kmd_crash_data.events.end();
+        const auto firstPageFault = FindIf(contents.kmd_crash_data.events.begin(), eventsEnd, isPageFault);
+        if(firstPageFault != eventsEnd){
             txt << '\n' << '\n';
             txt << "==================" << '\n';
             txt << "PAGE FAULT SUMMARY" << '\n';
@@ -148,8 +109,10 @@ AInteropString AssembleTextSummary(Core::Alloc::ScratchArena& scratchArena, cons
             if(!resourceHistoryReady)
                 txt << "ERROR: failed to initialize page-fault resource history." << '\n';
 
-            for(const usize eventIndex : pageFaultEvents){
-                const RgdEventOccurrence& pageFaultEvent = contents.kmd_crash_data.events[eventIndex];
+            for(auto eventIt = firstPageFault; eventIt != eventsEnd; ++eventIt){
+                const RgdEventOccurrence& pageFaultEvent = *eventIt;
+                if(!isPageFault(pageFaultEvent))
+                    continue;
                 const VmPageFaultEvent& pageFault = static_cast<const VmPageFaultEvent&>(*pageFaultEvent.rgd_event);
 
                 txt << "Offending VA: 0x" << StreamHex << pageFault.faultVmAddress << StreamDec << '\n' << '\n';
@@ -163,14 +126,11 @@ AInteropString AssembleTextSummary(Core::Alloc::ScratchArena& scratchArena, cons
     }
 
     AInteropString inputInfo;
-    RgdSerializer::InputInfoToString(config, contents, {}, inputInfo);
+    RgdSerializer::InputInfoToString(config, contents, InteropVector<AInteropString>{}, inputInfo);
 
-    AStringStream<Core::Alloc::ScratchArena> summary(s_FileOpenWrite, scratchArena);
-    summary << inputInfo;
-    summary << txt.view();
-
-    const auto report = summary.view();
-    return AInteropString(report.data(), report.size());
+    const AStringView summary = txt.view();
+    inputInfo.append(summary.data(), summary.size());
+    return inputInfo;
 }
 
 
@@ -209,18 +169,18 @@ Expected<AInteropString, StringView> DecodeCrashDumpToText(const AInteropString&
     if(!admitted)
         return MakeUnexpected(admitted.error());
 
-    Core::Alloc::ScratchArena scratchArena(__hidden_rgd_decode::s_DecodeScratchArena);
+    // The vendor trace loader owns process-global state; retain this lock through report assembly and local teardown.
+    ScopedLock decodeLock(__hidden_rgd_decode::RgdDecodeMutex());
+    Core::Alloc::ScratchArena scratchArena(__hidden_rgd_decode::s_RgdDecodeScratch);
+
     Config config;
     config.crash_dump_file = filePath;
     RgdCrashDumpContents contents;
-    {
-        __hidden_rgd_decode::ScopedRgdConsoleCapture captureRgdConsole(scratchArena);
+    // Keep vendor console diagnostics on their existing streams; replacing shared buffers races with the server output worker.
+    if(!RgdParsingUtils::ParseCrashDump(config, contents))
+        return MakeUnexpected(StringView("parse_failed"));
 
-        if(!RgdParsingUtils::ParseCrashDump(config, contents))
-            return MakeUnexpected(StringView("parse_failed"));
-    }
-
-    return __hidden_rgd_decode::AssembleTextSummary(scratchArena, config, contents);
+    return __hidden_rgd_decode::AssembleTextSummary(config, contents, scratchArena);
 }
 
 

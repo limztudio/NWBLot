@@ -38,6 +38,8 @@ namespace __hidden_shader_volume_writer{
 
 using namespace AssetsGraphicsCookDetail;
 
+using ScratchPath = ::Path<ScratchArena>;
+
 namespace CacheReadStatus{
     enum Enum : u8{
         Hit = 0,
@@ -50,16 +52,21 @@ namespace CacheReadStatus{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Path BuildVariantCachePath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
+static ScratchPath BuildVariantCachePath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
     ScratchString bytecodeFileName(sourceChecksumHex, scratchArena);
     bytecodeFileName += ".spv";
-    return cacheDirectory / configurationSafeName / bytecodeFileName;
+    return ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / bytecodeFileName;
 }
 
-static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry& entry, const Path& bytecodePath, Core::GraphicsBytes& outBytecode){
+static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
     const auto read = ReadBinaryFile(bytecodePath, outBytecode);
     if(read){
-        const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(entry.stage.view()));
+        const auto stageName = ToName(entry.stage.view());
+        if(!stageName){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader stage contains an embedded null for entry '{}'"), StringConvert(entry.name));
+            return CacheReadStatus::Error;
+        }
+        const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(*stageName ? **stageName : s_NameNone);
         if(Core::ResolveSpirvEntryPointName(BinaryByteView{ outBytecode.data(), outBytecode.size() }, AStringView(entry.entryPoint), Core::ShaderType::ToMask(shaderType)))
             return CacheReadStatus::Hit;
 
@@ -87,7 +94,7 @@ static bool GetVariantBytecode(
     const ShaderCook::CookVector<Path>& includeDirectories,
     const ShaderCook::CookVector<Path>& dependencies,
     const Path& sourcePath,
-    const Path& bytecodeCachePath,
+    const ScratchPath& bytecodeCachePath,
     const bool compilerInputsHaveBom,
     Core::GraphicsBytes& outBytecode,
     ScratchArena& scratchArena
@@ -124,11 +131,13 @@ static bool GetVariantBytecode(
         compileDefines.push_back(ShaderCook::ShaderMacroDefinition{ defineName, value });
     Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderCook::ShaderMacroDefinition& lhs, const ShaderCook::ShaderMacroDefinition& rhs)noexcept{
         return lhs.name < rhs.name;
-    });
+    }
+    );
 
-    auto ensureDirectoriesResult = EnsureDirectories(bytecodeCachePath.parentPath());
+    const ScratchPath cacheParentPath = bytecodeCachePath.parentPath();
+    auto ensureDirectoriesResult = EnsureDirectories(cacheParentPath);
     if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}"), PathToString<tchar>(bytecodeCachePath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}"), PathToString<tchar>(cacheParentPath), StringConvert(ensureDirectoriesResult.error().message()));
         return false;
     }
 
@@ -176,7 +185,8 @@ static bool AppendShaderIndexToManifest(
     ShaderCook::CookArena& cookArena,
     const Span<const Core::ShaderArchive::Record> shaderIndexRecords,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
+    VirtualPathHashSet& inOutSeenVirtualPathHashes,
+    ScratchArena& scratchArena
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
@@ -184,7 +194,7 @@ static bool AppendShaderIndexToManifest(
         return false;
     }
 
-    const auto indexBinary = Core::ShaderArchive::SerializeIndex(cookArena, shaderIndexRecords);
+    const auto indexBinary = Core::ShaderArchive::SerializeIndex(cookArena, shaderIndexRecords, scratchArena);
     if(!indexBinary){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize shader index"));
         return false;
@@ -252,12 +262,14 @@ bool AppendPreparedShadersToManifest(
 
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         ShaderCook::ShaderEntry& entry = preparedEntry.entry;
-        const Name shaderName = ToName(entry.name);
-        const Name stageName = ToName(entry.archiveStage.view());
-        if(!shaderName || !stageName || entry.entryPoint.empty()){
+        const auto shaderNameResult = ToName(entry.name);
+        const auto stageNameResult = ToName(entry.archiveStage.view());
+        if(!shaderNameResult || !stageNameResult || !*shaderNameResult || !*stageNameResult || entry.entryPoint.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage.view()), StringConvert(entry.entryPoint));
             return false;
         }
+        const Name shaderName = **shaderNameResult;
+        const Name stageName = **stageNameResult;
 
         auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> bool{
             const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
@@ -265,7 +277,7 @@ bool AppendPreparedShadersToManifest(
             const u64 sourceChecksum = shaderCook.computeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
             const ScratchString sourceChecksumHex = FormatHex64A(scratchArena, sourceChecksum);
 
-            const Path bytecodeCachePath = __hidden_shader_volume_writer::BuildVariantCachePath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
+            const __hidden_shader_volume_writer::ScratchPath bytecodeCachePath = __hidden_shader_volume_writer::BuildVariantCachePath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
             if(!__hidden_shader_volume_writer::GetVariantBytecode(
                 entry,
                 generatedVariantName,
@@ -345,7 +357,7 @@ bool AppendPreparedShadersToManifest(
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count mismatch after cook"));
         return false;
     }
-    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(cookArena, shaderIndexRecords, manifest, inOutSeenVirtualPathHashes);
+    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(cookArena, shaderIndexRecords, manifest, inOutSeenVirtualPathHashes, scratchArena);
 }
 
 

@@ -95,6 +95,7 @@ private:
         }
     }
 
+
 private:
     mutable Futex m_mutex;
     LogArena m_arena;

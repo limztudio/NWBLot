@@ -232,7 +232,8 @@ template<typename StoreTexelT>
         outUploadBytes[destinationByteOffset + 1u] = sourceTexel.g;
         outUploadBytes[destinationByteOffset + 2u] = sourceTexel.b;
         outUploadBytes[destinationByteOffset + 3u] = sourceTexel.a;
-    })){
+    }
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-RGBA8 decoding failed"));
         return false;
     }
@@ -329,7 +330,8 @@ static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex,
     if(!VisitDecodedUastcTexels(mip, alphaSource->data(), [outRgba16FloatBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         // The companion stream is a grayscale LDR mask: (a, a, a, 255).
         StoreHdrAlpha(outRgba16FloatBytes, destinationTexelIndex, sourceTexel.r);
-    })){
+    }
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC alpha decoding failed"));
         return false;
     }

@@ -78,7 +78,7 @@ struct ReflectionFeedbackOutcome{
 // An unprovable token quarantines the generation until reset after join.
 class ReflectionFeedbackState : NoCopy{
 public:
-    explicit ReflectionFeedbackState(u16 deviceGeneration);
+    explicit ReflectionFeedbackState(u16 deviceGeneration)noexcept;
 
 
 public:
@@ -87,6 +87,7 @@ public:
     [[nodiscard]] bool reserve(const ReflectionFeedbackPlan& plan)noexcept;
     void discard(const ReflectionFeedbackPlan& plan)noexcept;
     [[nodiscard]] bool accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+
 
 private:
     ReflectionSceneContentStamp m_stamp;
@@ -119,6 +120,9 @@ public:
     ReflectionFeedbackReservation(ReflectionFeedbackControlHandle control, const ReflectionFeedbackPlan& plan);
     ReflectionFeedbackReservation(ReflectionFeedbackReservation&& other)noexcept;
     ~ReflectionFeedbackReservation()noexcept;
+
+
+public:
     ReflectionFeedbackReservation& operator=(ReflectionFeedbackReservation&& other)noexcept;
 
 
@@ -126,6 +130,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_reserved; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
     void discard()noexcept;
+
 
 private:
     ReflectionFeedbackControlHandle m_control;

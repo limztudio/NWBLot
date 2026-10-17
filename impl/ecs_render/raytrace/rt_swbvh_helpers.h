@@ -12,6 +12,8 @@
 #include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
 #include <impl/ecs_csg/components.h>
 
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+
 #include <global/algorithm.h>
 #include <global/hash_utils.h>
 
@@ -37,7 +39,11 @@ using MeshBufferSlotLookup = HashMap<const Core::Buffer*, u32, Core::Alloc::Scra
 // Hash semantic scene inputs, not padded object representations.
 inline constexpr u32 s_SceneStaticCacheHashVersion = 2u;
 
-inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingInstanceDesc& instance){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingInstanceDesc& instance)noexcept{
     Fnv64AppendValue(inOutHash, instance.transform);
     Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceID));
     Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceMask));
@@ -47,7 +53,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     Fnv64AppendValue(inOutHash, bottomLevelAsIdentity);
 }
 
-[[nodiscard]] inline u64 ComputeTlasStaticSceneHash(const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances){
+[[nodiscard]] inline u64 ComputeTlasStaticSceneHash(const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances)noexcept{
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
     Fnv64AppendValue(hash, instances.size());
@@ -56,7 +62,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     return hash;
 }
 
-[[nodiscard]] inline u64 ComputeSceneSwBvhStaticSceneHash(const Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena>& instances, const Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena>& primitives){
+[[nodiscard]] inline u64 ComputeSceneSwBvhStaticSceneHash(const Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena>& instances, const Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena>& primitives)noexcept{
     NWB_ASSERT(instances.size() == primitives.size());
 
     u64 hash = s_Fnv64OffsetBasis;
@@ -80,7 +86,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     return hash;
 }
 
-[[nodiscard]] inline u64 ComputeShadowMaterialContextHash(const Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena>& instanceMaterials, const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes){
+[[nodiscard]] inline u64 ComputeShadowMaterialContextHash(const Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena>& instanceMaterials, const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)noexcept{
     NWB_ASSERT(instanceMaterials.size() == instanceData.size());
 
     u64 hash = s_Fnv64OffsetBasis;
@@ -110,11 +116,16 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     if(!handle)
         return MakeUnexpected(Failure{});
 
+    Core::GpuDescriptorRetirementGuard descriptorRetirement(heap, *handle);
     RtMeshHeapHandleCacheEntry entry;
     entry.keepAlive = bufferHandle;
     entry.handle = *handle;
     entry.seenThisFrame = true;
-    cache.insert({bufferKey, Move(entry)});
+    if(!cache.insert({bufferKey, Move(entry)}).second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    descriptorRetirement.release();
     return *handle;
 }
 
@@ -132,8 +143,7 @@ inline void SweepUnseenMeshHeapHandles(Core::GpuDescriptorHeap& heap, RtMeshHeap
     }
 }
 
-// Mark entries unseen before gathering.
-inline void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache){
+inline void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache)noexcept{
     for(auto it = cache.begin(); it != cache.end(); ++it)
         it.value().seenThisFrame = false;
 }
@@ -148,7 +158,17 @@ inline void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache){
 }
 
 template<typename RayTracingState>
-[[nodiscard]] inline bool HasPreparedShadowMaterialContextBuffers(const RayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes){
+[[nodiscard]] inline bool HasPreparedShadowMaterialContextBuffers(const RayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(
+    state.m_shadowInstanceMaterialBuffer
+        && state.m_shadowInstanceMaterialCapacity >= materialCount
+        && IsStorageBufferHeapHandle(state.m_shadowInstanceMaterialHeapHandle)
+        && state.m_shadowInstanceBuffer
+        && state.m_shadowInstanceCapacity >= instanceCount
+        && IsStorageBufferHeapHandle(state.m_shadowInstanceHeapHandle)
+        && state.m_shadowMaterialTypedBuffer
+        && state.m_shadowMaterialTypedCapacity >= DeclVal<const usize&>()
+        && IsStorageBufferHeapHandle(state.m_shadowMaterialTypedHeapHandle)
+))){
     const usize requiredMaterialTypedBytes = AlignUp(Max<usize>(materialTypedUploadBytes, sizeof(u32)), sizeof(u32));
     return
         state.m_shadowInstanceMaterialBuffer
@@ -164,7 +184,14 @@ template<typename RayTracingState>
 }
 
 template<typename RayTracingState>
-[[nodiscard]] inline bool HasPreparedSceneBvhBuffers(const RayTracingState& state, const u32 instanceCount){
+[[nodiscard]] inline bool HasPreparedSceneBvhBuffers(const RayTracingState& state, const u32 instanceCount)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(
+    state.m_sceneBvhNodeBuffer
+        && state.m_sceneInstanceBuffer
+        && state.m_sceneBvhNodeCapacity >= DeclVal<const usize&>()
+        && state.m_sceneInstanceCapacity >= instanceCount
+        && IsStorageBufferHeapHandle(state.m_sceneBvhNodeHeapHandle)
+        && IsStorageBufferHeapHandle(state.m_sceneInstanceHeapHandle)
+))){
     NWB_ASSERT(instanceCount > 0u);
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
     return
@@ -182,7 +209,7 @@ template<typename RayTracingState>
     return RayTracingDetail::RegisterHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, true);
 }
 
-[[nodiscard]] inline Expected<PreparedMeshBlasBuild> ResolvePreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources){
+[[nodiscard]] inline Expected<PreparedMeshBlasBuild> ResolvePreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept{
     PreparedMeshBlasBuild build;
     if(!meshResources.meshName || !meshResources.positionBuffer || !meshResources.triangleIndexBuffer || !meshResources.blas || !meshResources.blas->getBackingBufferHandle())
         return MakeUnexpected(Failure{});
@@ -215,7 +242,7 @@ template<typename RayTracingState>
     return build;
 }
 
-[[nodiscard]] inline bool MatchesPreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build){
+[[nodiscard]] inline bool MatchesPreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
     if(
         meshResources.meshName != build.meshName
         || meshResources.runtimeMesh != build.runtimeMesh

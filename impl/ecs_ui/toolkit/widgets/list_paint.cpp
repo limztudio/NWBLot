@@ -18,67 +18,70 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::prepareListRow(const ListFrame& frame, const u64 index, ListRow& row){
+Expected<Builder::ListRow> Builder::prepareListRow(const ListFrame& frame, const u64 index){
+    ListRow row(m_arena);
     if(!listMatches(frame) || index >= frame.rowCount)
-        return false;
+        return MakeUnexpected(Failure{});
     const u64 key = frame.source->key(index);
     if(key == 0u || !listStateMatches(frame))
-        return false;
+        return MakeUnexpected(Failure{});
     const auto resolved = frame.source->indexOf(key);
     if(!resolved || *resolved != index || !listStateMatches(frame))
-        return false;
+        return MakeUnexpected(Failure{});
     const bool enabled = frame.options.enabled && frame.source->enabled(index);
     if(!listStateMatches(frame))
-        return false;
+        return MakeUnexpected(Failure{});
     const ShapeRequest request{ frame.source->text(index), frame.widgetStyle.fontSize, TextDirection::LeftToRight, frame.measureKey.scriptTag, StringView(frame.measureKey.language.data()) };
     if(!listStateMatches(frame))
-        return false;
+        return MakeUnexpected(Failure{});
     // The source owns a temporary view; shaping must copy it before any further source callback.
     auto layout = m_text.layout(request);
     if(!layout || !listMatches(frame))
-        return false;
+        return MakeUnexpected(Failure{});
     const auto bounds = m_text.measure(*layout, m_paint.displayMetrics());
     if(!bounds)
-        return false;
+        return MakeUnexpected(Failure{});
     row.index = index;
     row.key = key;
     row.enabled = enabled;
     row.textBounds = *bounds;
     row.text = Move(*layout);
-    return listMatches(frame);
+    if(!listMatches(frame))
+        return MakeUnexpected(Failure{});
+    return row;
 }
 
-bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip, ScrollPlacement& placement){
+Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip){
     auto& rows = frame.rows;
     ListState& state = *frame.state;
     ScrollState scroll;
     if(!listMatches(frame) || !scroll.setOffset(frame.scrollOffset))
-        return false;
+        return MakeUnexpected(Failure{});
     const bool revealCursor = frame.revealCursor && frame.cursorKey != 0u;
     u64 cursorIndex = 0u;
     if(revealCursor){
         const auto resolved = frame.source->indexOf(frame.cursorKey);
         if(!resolved || *resolved >= frame.rowCount || !listStateMatches(frame))
-            return false;
+            return MakeUnexpected(Failure{});
         cursorIndex = *resolved;
         if(frame.source->key(cursorIndex) != frame.cursorKey || !listStateMatches(frame) || !frame.source->enabled(cursorIndex) || !listMatches(frame))
-            return false;
+            return MakeUnexpected(Failure{});
     }
     for(;;){
         auto candidate = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
         if(!candidate)
-            return false;
+            return MakeUnexpected(Failure{});
         if(revealCursor){
             const SIMDVectorDouble startValue = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(cursorIndex)), VectorDoubleReplicate(frame.rowHeight));
             const f64 start = VectorDoubleGetX(startValue);
             const f64 end = VectorDoubleGetX(VectorDoubleAdd(startValue, VectorDoubleReplicate(frame.rowHeight)));
             if(!IsFinite(start) || !IsFinite(end) || end <= start || !scroll.ensureVisible(start, end, candidate->viewport.height))
-                return false;
+                return MakeUnexpected(Failure{});
         }
         if(revealCursor)
             candidate = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
         if(!candidate || candidate->endRow - candidate->firstRow > 1024u)
-            return false;
+            return MakeUnexpected(Failure{});
         f32 height = frame.rowHeight;
         for(u64 index = candidate->firstRow; index < candidate->endRow; ++index){
             const auto found = LowerBound(rows.begin(), rows.end(), index, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
@@ -86,23 +89,22 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
                 continue;
             // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
             if(rows.size() >= 1024u)
-                return false;
-            ListRow row(m_arena);
-            if(!prepareListRow(frame, index, row))
-                return false;
-            const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(row.textBounds.width, row.textBounds.height, 0.0f, 0.0f), VectorSet(frame.style.row.padding.left, frame.style.row.padding.top, 0.0f, 0.0f)), VectorSet(frame.style.row.padding.right, frame.style.row.padding.bottom, 0.0f, 0.0f));
+                return MakeUnexpected(Failure{});
+            auto row = prepareListRow(frame, index);
+            if(!row)
+                return MakeUnexpected(Failure{});
+            const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(row->textBounds.width, row->textBounds.height, 0.0f, 0.0f), VectorSet(frame.style.row.padding.left, frame.style.row.padding.top, 0.0f, 0.0f)), VectorSet(frame.style.row.padding.right, frame.style.row.padding.bottom, 0.0f, 0.0f));
             height = VectorGetY(VectorMax(VectorSet(0.0f, height, 0.0f, 0.0f), paddedSize));
-            rows.insert(found, Move(row));
+            rows.insert(found, Move(*row));
         }
         if(!IsFinite(height) || height <= 0.0f || !listMatches(frame))
-            return false;
+            return MakeUnexpected(Failure{});
         if(height == frame.rowHeight){
             frame.scrollOffset = candidate->offset;
             // Another declaration can share this state with a different sizing context.
             if(state.m_measureKey == frame.measureKey)
                 state.m_rowHeight = VectorGetX(VectorMax(VectorReplicate(state.m_rowHeight), VectorReplicate(frame.rowHeight)));
-            placement = *candidate;
-            return true;
+            return *candidate;
         }
         // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
         const SIMDVectorDouble clippedTop = VectorDoubleSubtract(VectorDoubleReplicate(candidate->contentClip.y), VectorDoubleReplicate(candidate->viewport.y));
@@ -110,7 +112,7 @@ bool Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const
         const SIMDVectorDouble within = VectorDoubleSubtract(VectorDoubleAdd(VectorDoubleReplicate(candidate->offset), clippedTop), VectorDoubleSplatX(rowOffsets));
         const SIMDVectorDouble offset = VectorDoubleSubtract(VectorDoubleAdd(VectorDoubleSplatY(rowOffsets), within), clippedTop);
         if(!scroll.setOffset(VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), offset))))
-            return false;
+            return MakeUnexpected(Failure{});
         frame.rowHeight = height;
     }
 }
@@ -122,9 +124,10 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     if(!listMatches(frame))
         return false;
     const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
-    ScrollPlacement placement;
-    if(!measureListPlacement(frame, box, clip, placement))
+    const auto measuredPlacement = measureListPlacement(frame, box, clip);
+    if(!measuredPlacement)
         return false;
+    const ScrollPlacement& placement = *measuredPlacement;
     if(!frame.state->m_scroll.setOffset(frame.scrollOffset))
         return false;
     frame.state->m_scrollRowHeight = frame.rowHeight;
@@ -160,7 +163,10 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     frame.rows.clear();
     if(placement.scrollbarVisible){
         const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
-        const WidgetId thumbId = MakeWidgetId(item.state.id, "scrollbar");
+        const auto thumbIdResult = MakeWidgetId(item.state.id, "scrollbar");
+        if(!thumbIdResult)
+            return false;
+        const WidgetId thumbId = *thumbIdResult;
         const bool hover = m_context.input().hover() == thumbId;
         const UiSkinRegion* thumb = region(hover ? frame.style.thumbHover : frame.style.thumb, frame.style.thumbFallback);
         if(!track || !thumb)
@@ -176,7 +182,8 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
             target.rectangle = placement.track;
             target.clip = clip;
             target.control = frame.token;
-            if(!m_context.addPartTarget(item.state, MakeWidgetId(item.state.id, "track"), target))
+            const auto trackId = MakeWidgetId(item.state.id, "track");
+            if(!trackId || !m_context.addPartTarget(item.state, *trackId, target))
                 return false;
             target.rectangle = placement.thumb;
             target.pointerGesture = placement.track.height > placement.thumb.height;
@@ -191,7 +198,10 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
 
 bool Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
     const auto& rows = frame.rows;
-    const WidgetId rowsId = MakeWidgetId(item.state.id, "rows");
+    const auto rowsIdResult = MakeWidgetId(item.state.id, "rows");
+    if(!rowsIdResult)
+        return false;
+    const WidgetId rowsId = *rowsIdResult;
     const bool focused = m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_context.input().focus() == frame.commandFocus);
     auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
     for(u64 index = placement.firstRow; index < placement.endRow; ++index, ++found){
@@ -200,7 +210,10 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
         const ListRow& row = *found;
         const u64 key = row.key;
         const bool enabled = item.enabled && row.enabled;
-        const WidgetId part = MakeWidgetPartId(rowsId, key);
+        const auto partResult = MakeWidgetPartId(rowsId, key);
+        if(!partResult)
+            return false;
+        const WidgetId part = *partResult;
         const auto rectangle = ScrollLayout::RowBounds(index, placement, frame.rowHeight);
         if(!rectangle)
             return false;

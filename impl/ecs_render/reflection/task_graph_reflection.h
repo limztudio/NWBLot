@@ -33,7 +33,7 @@ namespace RendererTaskGraphDetail{
 
 inline constexpr Name s_ReflectionCsgHardwareSliceFamily("render.reflection.hardware.csg_slice");
 
-[[nodiscard]] Name ReflectionCsgHardwareSliceIdentity(u32 slice);
+[[nodiscard]] Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(u32 slice);
 
 struct ReflectionGraphInputs{
     RendererRayTracingSystem& raytracingSystem;
@@ -58,11 +58,13 @@ struct ReflectionGraphResult{
     Core::GpuGraphResourceId frameParameters;
     Core::GpuGraphResourceId counters;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return completion.valid(); }
 };
 
 // Inputs copy at declaration; outcomes and latches are frame-owned past packet lifetime.
-[[nodiscard]] ReflectionGraphResult DeclareReflectionTasks(
+[[nodiscard]] Expected<ReflectionGraphResult> DeclareReflectionTasks(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
     RendererReflectionSystem& reflectionSystem,

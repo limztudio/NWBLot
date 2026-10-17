@@ -30,6 +30,8 @@ struct RayTracingOpticalSceneUpload{
     Vector<u8, Core::Alloc::GlobalArena> bytes;
     u32 instanceCount = 0u;
 
+
+public:
     RayTracingOpticalSceneUpload(Core::Alloc::GlobalArena& arena, const RayTracingOpticalSceneGather& gather);
 };
 using RayTracingOpticalSceneUploadControl = RefCounter<RayTracingOpticalSceneUpload>;
@@ -49,6 +51,8 @@ struct RayTracingOpticalUploadPlan{
     bool reused = false;
     bool available = false;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return available && buffer && upload && owner && sequence != 0u && queue.valid(); }
 };
 
@@ -57,7 +61,7 @@ struct RayTracingOpticalUploadPlan{
 // Renderer graph admission is serial; this does not admit independently submitted overlapping read graphs.
 class RayTracingOpticalUploadState : NoCopy{
 public:
-    RayTracingOpticalUploadState(Core::BufferHandle buffer, Core::GpuPhysicalQueueId primaryQueue);
+    RayTracingOpticalUploadState(Core::BufferHandle buffer, Core::GpuPhysicalQueueId primaryQueue)noexcept;
 
 
 public:
@@ -70,6 +74,7 @@ public:
 
 private:
     [[nodiscard]] bool matchesBuffer(const RayTracingOpticalUploadPlan& plan)const noexcept;
+
 
 private:
     Core::BufferHandle m_buffer;
@@ -88,13 +93,16 @@ private:
 using RayTracingOpticalUploadControl = RefCounter<RayTracingOpticalUploadState>;
 using RayTracingOpticalUploadControlHandle = RefCountPtr<RayTracingOpticalUploadControl, ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, Core::GpuPhysicalQueueId primaryQueue);
+[[nodiscard]] Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, Core::GpuPhysicalQueueId primaryQueue);
 
 class RayTracingOpticalUploadReservation final : NoCopy{
 public:
     RayTracingOpticalUploadReservation(RayTracingOpticalUploadControlHandle control, const RayTracingOpticalUploadPlan& plan);
     RayTracingOpticalUploadReservation(RayTracingOpticalUploadReservation&& other)noexcept;
     ~RayTracingOpticalUploadReservation()noexcept;
+
+
+public:
     RayTracingOpticalUploadReservation& operator=(RayTracingOpticalUploadReservation&& other)noexcept;
 
 
@@ -102,6 +110,7 @@ public:
     [[nodiscard]] bool valid()const noexcept;
     [[nodiscard]] bool accept(const Core::QueueSubmissionToken& token)noexcept;
     void discard()noexcept;
+
 
 private:
     RayTracingOpticalUploadControlHandle m_control;

@@ -74,13 +74,18 @@ private:
         bool contextMenu = false;
         bool annotated = false;
 
+
+    public:
         explicit Item(Core::Alloc::GlobalArena& arena)noexcept
             : text(arena)
             , editView(arena)
         {}
         Item(Item&&)noexcept = default;
-        Item& operator=(Item&&)noexcept = default;
         Item(const Item&) = delete;
+
+
+    public:
+        Item& operator=(Item&&)noexcept = default;
         Item& operator=(const Item&) = delete;
     };
 
@@ -96,6 +101,8 @@ private:
         Rect titleBounds;
         bool firstUse = false;
 
+
+    public:
         explicit WindowFrame(Core::Alloc::GlobalArena& arena)noexcept
             : title(arena)
         {}
@@ -148,6 +155,7 @@ private:
         bool enabled = false;
 
 
+    public:
         explicit ListRow(Core::Alloc::GlobalArena& arena)noexcept : text(arena) {}
     };
 
@@ -170,6 +178,7 @@ private:
         WidgetId commandFocus;
 
 
+    public:
         explicit ListFrame(Core::Alloc::GlobalArena& arena)noexcept : rows(arena) {}
     };
 
@@ -222,12 +231,17 @@ private:
         u32 anchorIndex = 0u;
         u32 layer = 1u;
 
+
+    public:
         explicit TooltipFrame(Core::Alloc::GlobalArena& arena)noexcept
             : text(arena)
         {}
         TooltipFrame(TooltipFrame&&)noexcept = default;
-        TooltipFrame& operator=(TooltipFrame&&)noexcept = default;
         TooltipFrame(const TooltipFrame&) = delete;
+
+
+    public:
+        TooltipFrame& operator=(TooltipFrame&&)noexcept = default;
         TooltipFrame& operator=(const TooltipFrame&) = delete;
     };
 
@@ -254,6 +268,9 @@ private:
 public:
     explicit BuilderScopeFrame(Core::Alloc::GlobalArena& arena);
     BuilderScopeFrame(BuilderScopeFrame&&) = delete;
+
+
+public:
     BuilderScopeFrame& operator=(BuilderScopeFrame&&) = delete;
 
 

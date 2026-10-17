@@ -46,7 +46,7 @@ ShaderFloat3 operator/(ShaderFloat3 value, float divisor)noexcept{
 }
 
 // Provide the Slang `exp` builtin for the C++ compilation through the project math wrapper.
-inline float exp(const float value){ return ::Exp(value); }
+inline float exp(const float value)noexcept{ return ::Exp(value); }
 
 #include <impl/assets/graphics/gi/surfel/surfel_coverage.slangi>
 

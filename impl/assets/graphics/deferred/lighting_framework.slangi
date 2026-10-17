@@ -34,6 +34,10 @@ struct NwbDeferredLightingPushConstants{
 
 #define g_NwbDeferredBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbDeferredLightingPushConstants.resourceSlots]
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool nwbDeferredPresentationIsHdr10(){
     return g_NwbDeferredLightingPushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10;
 }

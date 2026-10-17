@@ -3,10 +3,12 @@
 
 
 #include "command.h"
-#include "resource_state_handoff_key.h"
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/backend_selection/resource_validation.h>
+
+#include "resource_state_handoff_key.h"
+
 #include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>
@@ -308,7 +310,8 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
             if(lhs.offset != rhs.offset)
                 return lhs.offset < rhs.offset;
             return lhs.beginning < rhs.beginning;
-        });
+        }
+        );
 
         // Sweep the union of interval boundaries.
         // A branch retaining the base state contributes no change; independent changes must agree only where their byte ranges overlap.

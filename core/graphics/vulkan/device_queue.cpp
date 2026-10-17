@@ -71,7 +71,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CommandListHandle Device::createCommandList(const CommandListParameters& params){
+Expected<CommandListHandle> Device::createCommandList(const CommandListParameters& params){
     CommandListParameters resolvedParams = params;
     if(resolvedParams.recordingWorkerIndex == 0u)
         resolvedParams.recordingWorkerDomain = 0u;
@@ -80,7 +80,7 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
         queue = getQueue(resolvedParams.physicalQueue);
         if(!queue){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command list: requested physical queue is not available"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         resolvedParams.queueType = queue->m_queueID;
     }
@@ -88,18 +88,21 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
         queue = getQueue(resolvedParams.queueType);
         if(!queue){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command list: requested queue is not available"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
         resolvedParams.physicalQueue = queue->m_physicalQueue;
     }
 
     auto* cmdList = NewArenaObject<CommandList>(m_context.objectArena, *this, resolvedParams);
+    if(!cmdList)
+        return MakeUnexpected(Failure{});
     return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
     return executeCommandLists(pCommandLists, numCommandLists, getPrimaryPhysicalQueue(executionQueue), submitDesc);
 }
+
 
 Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
     return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, false);
@@ -123,7 +126,8 @@ void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandLi
                 .graphRecordingOwnershipSerial = graphSubmissionAuthorized ? commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) : 0u,
                 .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
                 .graphSubmissionAuthorized = graphSubmissionAuthorized,
-            });
+            }
+            );
         }
     }
 
@@ -333,7 +337,6 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     return QueueSubmissionReceipt{ submissionToken, submission->timelineWaitCount };
 }
 
-
 bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
     if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
         return false;
@@ -394,7 +397,6 @@ bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, c
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for submission token: {}"), ResultToString(result));
     return result == VK_SUCCESS;
 }
-
 
 bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue){
     const u32 queueClassIndex = static_cast<u32>(desc.queueClass);

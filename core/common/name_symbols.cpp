@@ -10,7 +10,9 @@
 #include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>
+#include <global/allocation_size.h>
 #include <global/arena_memory.h>
+#include <global/filesystem/directory_iterator.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,13 +44,19 @@ inline constexpr char s_NamesymRecordTerminator = '\n';
 inline constexpr AStringView s_NamesymProducerSuffix = "\tproducer=runtime\n";
 inline constexpr AStringView s_NamesymRuntimeSource = "\truntime\t";
 
-void AppendDebugHashText(SymbolString& outText, const NameHash& hash){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+void AppendDebugHashText(AString<ArenaT>& outText, const NameHash& hash){
     char hashText[::NameDetail::s_DebugHashTextLength + 1u];
     NameDetail::HashToDebugString(hash, hashText, sizeof(hashText));
     outText += AStringView(hashText, ::NameDetail::s_DebugHashTextLength);
 }
 
-void AppendEscapedNamesymText(SymbolString& outText, const AStringView text){
+template<typename ArenaT>
+void AppendEscapedNamesymText(AString<ArenaT>& outText, const AStringView text){
     for(const char ch : text){
         switch(ch){
         case '\\':
@@ -111,15 +119,16 @@ public:
         return true;
     }
 
-    void clear(){
+    void clear()noexcept{
         m_symbols.clear();
     }
 
-    [[nodiscard]] usize size()const{
+    [[nodiscard]] usize size()const noexcept{
         return m_symbols.size();
     }
 
-    void appendFileText(Alloc::ScratchArena& scratchArena, SymbolString& outText)const{
+    template<typename ArenaT>
+    void appendFileText(Alloc::ScratchArena& scratchArena, AString<ArenaT>& outText)const{
         Vector<SymbolRecordView, Alloc::ScratchArena> records(scratchArena);
         records.reserve(m_symbols.size());
         for(const auto& symbol : m_symbols)
@@ -129,6 +138,22 @@ public:
                 return LessNameHash(lhs.hash, rhs.hash);
             }
         );
+
+        usize requiredSize = AddSize(outText.size(), NameSymbols::s_FileHeader.size());
+        requiredSize = AddSize(requiredSize, s_NamesymProducerSuffix.size());
+        for(const SymbolRecordView& record : records){
+            if(!record.text)
+                continue;
+
+            requiredSize = AddSize(requiredSize, ::NameDetail::s_DebugHashTextLength);
+            requiredSize = AddSize(requiredSize, s_NamesymRuntimeSource.size());
+            for(const char ch : *record.text){
+                const usize encodedSize = ch == '\\' || ch == '\n' || ch == '\r' || ch == '\t' ? 2u : 1u;
+                requiredSize = AddSize(requiredSize, encodedSize);
+            }
+            requiredSize = AddSize(requiredSize, 1u);
+        }
+        outText.reserve(requiredSize);
 
         outText += NameSymbols::s_FileHeader;
         outText += s_NamesymProducerSuffix;
@@ -165,35 +190,39 @@ public:
         return m_symbols.resolve(hash, outText, outTextSize);
     }
 
-    void clear(){
+    void clear()noexcept{
         m_symbols.clear();
     }
 
-    [[nodiscard]] usize size()const{
+    [[nodiscard]] usize size()const noexcept{
         return m_symbols.size();
     }
 
-    void serialize(SymbolString& outText){
+    [[nodiscard]] Expected<void> serialize(SymbolString& outText){
         Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
-        recordArenaOwnerSymbols();
+        const auto captured = recordArenaOwnerSymbols();
+        if(!captured)
+            return MakeUnexpected(captured.error());
         m_symbols.appendFileText(scratchArena, outText);
+        return {};
     }
 
     [[nodiscard]] bool writeDefaultFile(){
-        const auto executableDirectory = ::GetExecutableDirectory(m_arena);
+        Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
+        const auto executableDirectory = ::GetExecutableDirectory(scratchArena);
         if(!executableDirectory)
             return false;
 
-        const auto executableName = ::GetExecutableName(m_arena);
+        const auto executableName = ::GetExecutableName(scratchArena);
         if(!executableName)
             return false;
 
-        ::Path<SymbolArena> outputPath = *executableDirectory / *executableName;
+        ::Path<Alloc::ScratchArena> outputPath = *executableDirectory / *executableName;
         outputPath.replaceExtension(NameSymbols::s_FileExtension);
-        return writeFile(outputPath);
+        return writeFile(outputPath, scratchArena);
     }
 
-    [[nodiscard]] bool loadLine(const AStringView line){
+    [[nodiscard]] bool loadLine(const AStringView line, Alloc::ScratchArena& scratchArena){
         if(line.empty())
             return false;
 
@@ -209,7 +238,7 @@ public:
         if(!hash)
             return false;
 
-        const auto unescapedText = unescapeNamesymText(line.substr(sourceEnd + 1u));
+        const auto unescapedText = unescapeNamesymText(line.substr(sourceEnd + 1u), scratchArena);
         if(!unescapedText)
             return false;
 
@@ -218,31 +247,34 @@ public:
 
 
 private:
-    void recordArenaOwnerSymbols(){
+    [[nodiscard]] Expected<void> recordArenaOwnerSymbols(){
 #if defined(NWB_BUILDMODE)
         const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
         while(owner){
             ArenaMemoryOwnerSnapshot snapshot;
             owner = ReadArenaMemoryOwnerRecord(*owner, snapshot);
             const AStringView text(snapshot.ownerName.logText());
-            const NameHash hash = ComputeNameHash(text);
+            const auto hash = ComputeNameHash(text);
+            if(!hash)
+                return MakeUnexpected(Failure{});
             // Verify stored text first; insert after the census releases its lock.
-            if(snapshot.ownerName == Name(hash))
-                NWB_FATAL_ASSERT(insert(hash, text));
+            if(snapshot.ownerName == Name(*hash))
+                NWB_FATAL_ASSERT(insert(*hash, text));
         }
 #endif
+        return {};
     }
 
-    [[nodiscard]] bool writeFile(const ::Path<SymbolArena>& path){
-        Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
-        recordArenaOwnerSymbols();
-        SymbolString fileText(m_arena);
+    [[nodiscard]] bool writeFile(const ::Path<Alloc::ScratchArena>& path, Alloc::ScratchArena& scratchArena){
+        if(!recordArenaOwnerSymbols())
+            return false;
+        AString<Alloc::ScratchArena> fileText(scratchArena);
         m_symbols.appendFileText(scratchArena, fileText);
         return ::WriteTextFile(path, AStringView(fileText.data(), fileText.size()));
     }
 
-    [[nodiscard]] Expected<SymbolString> unescapeNamesymText(const AStringView text){
-        SymbolString unescapedText(m_arena);
+    [[nodiscard]] Expected<AString<Alloc::ScratchArena>> unescapeNamesymText(const AStringView text, Alloc::ScratchArena& scratchArena){
+        AString<Alloc::ScratchArena> unescapedText(scratchArena);
         unescapedText.reserve(text.size());
 
         for(usize i = 0u; i < text.size(); ++i){
@@ -327,8 +359,8 @@ usize EntryCount(){
     return __hidden_common_name_symbols::Registry().size();
 }
 
-void Serialize(AString<Alloc::GlobalArena>& outText){
-    __hidden_common_name_symbols::Registry().serialize(outText);
+Expected<void> Serialize(AString<Alloc::GlobalArena>& outText){
+    return __hidden_common_name_symbols::Registry().serialize(outText);
 }
 
 void InstallRuntimeRegistry(){
@@ -337,7 +369,7 @@ void InstallRuntimeRegistry(){
     SetNameSymbolResolveCallback(&__hidden_common_name_symbols::ResolveSymbol, &registry);
 }
 
-void UninstallRuntimeRegistry(){
+void UninstallRuntimeRegistry()noexcept{
     SetNameSymbolRecordCallback(nullptr, nullptr);
     SetNameSymbolResolveCallback(nullptr, nullptr);
 }
@@ -346,7 +378,7 @@ void ClearRuntimeSymbols(){
     __hidden_common_name_symbols::Registry().clear();
 }
 
-bool LoadFromMemory(const AStringView text){
+bool LoadFromMemory(const AStringView text, Alloc::ScratchArena& scratchArena){
     const usize headerEnd = text.find('\n');
     AStringView header = text.substr(0u, headerEnd);
     if(!header.empty() && header.back() == '\r')
@@ -363,11 +395,57 @@ bool LoadFromMemory(const AStringView text){
         if(!line.empty() && line.back() == '\r')
             line.remove_suffix(1u);
         lineBegin = lineEnd == AStringView::npos ? text.size() : lineEnd + 1u;
-        if(!registry.loadLine(line))
+        if(!registry.loadLine(line, scratchArena))
             continue;
     }
 
     return true;
+}
+
+bool LoadFromMemory(const AStringView text){
+    Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
+    return LoadFromMemory(text, scratchArena);
+}
+
+Expected<bool, DefaultFileLoadFailure> LoadDefaultFile(){
+    Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
+    const auto executableDirectory = ::GetExecutableDirectory(scratchArena);
+    if(!executableDirectory)
+        return MakeUnexpected(DefaultFileLoadFailure{ executableDirectory.error(), false });
+
+    bool loadedAny = false;
+    ErrorCode firstError;
+
+    const auto directory = ::DirectoryIterator<Alloc::ScratchArena>::Create(*executableDirectory);
+    if(!directory)
+        return MakeUnexpected(DefaultFileLoadFailure{ directory.error(), loadedAny });
+
+    for(const ::DirectoryEntry<Alloc::ScratchArena>& entry : *directory){
+        const auto isRegularFile = entry.isRegularFile();
+        if(!isRegularFile){
+            if(!firstError)
+                firstError = isRegularFile.error();
+            continue;
+        }
+        if(!*isRegularFile)
+            continue;
+
+        const ::Path<Alloc::ScratchArena> extensionPath = entry.path().extension();
+        if(extensionPath.native() != s_FileExtension)
+            continue;
+
+        const auto loaded = LoadFile(entry.path(), scratchArena);
+        if(!loaded){
+            if(!firstError)
+                firstError = loaded.error();
+            continue;
+        }
+        loadedAny = *loaded || loadedAny;
+    }
+
+    if(firstError)
+        return MakeUnexpected(DefaultFileLoadFailure{ firstError, loadedAny });
+    return loadedAny;
 }
 
 bool WriteDefaultFile(){

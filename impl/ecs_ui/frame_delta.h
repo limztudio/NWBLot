@@ -24,6 +24,7 @@ public:
     [[nodiscard]] f32 consume()noexcept;
     void clear()noexcept{ m_pendingSeconds = 0.0; }
 
+
 private:
     f64 m_pendingSeconds = 0.0;
 };

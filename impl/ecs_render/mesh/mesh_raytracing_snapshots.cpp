@@ -311,10 +311,14 @@ Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSys
             NWB_LOGGER_WARNING(NWB_TEXT("RendererMeshSystem: incomplete software BVH state for a live mesh"));
             return MakeUnexpected(Failure{});
         }
+        const auto identity = DeriveName(mesh.meshName, AStringView(":shadow_trace_sw_parent"));
+        if(!identity)
+            return MakeUnexpected(Failure{});
         states.push_back({
             .buffer = mesh.swBvhParentBuffer,
-            .identity = DeriveName(mesh.meshName, AStringView(":shadow_trace_sw_parent")),
-        });
+            .identity = *identity,
+        }
+        );
     }
     return states;
 }
@@ -355,7 +359,8 @@ void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphSt
             .blas = mesh.blas,
             .backingFresh = mesh.blasBackingFresh,
             .nativeBuildsBlas = RequiresMeshBlasUpdate(snapshot),
-        });
+        }
+        );
     }
 }
 

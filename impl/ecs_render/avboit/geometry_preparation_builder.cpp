@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitGeometryPreparationBuilder::AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)
+AvboitGeometryPreparationBuilder::AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_scratchArena(scratchArena){
@@ -36,9 +36,9 @@ namespace __hidden_geometry_preparation{
 
 
 struct PhaseIdentities{
-    AStringView geometryIdentity;
+    NameText<char> geometryIdentity;
     AStringView geometryLabel;
-    AStringView sampledIdentity;
+    NameText<char> sampledIdentity;
     AStringView sampledLabel;
 };
 

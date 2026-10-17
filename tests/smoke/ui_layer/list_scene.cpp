@@ -124,7 +124,7 @@ Array<u64, 12u> UiListSmokeScene::values()const{
         m_source.removedKey(), static_cast<u64>(m_visible), m_commits, m_underlying };
 }
 
-Impl::Ui::Rect UiListSmokeScene::selectedRow()const{
+Impl::Ui::Rect UiListSmokeScene::selectedRow()const noexcept{
     const auto& placement = m_state.placement();
     if(!m_visible)
         return {};

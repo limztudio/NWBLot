@@ -10,6 +10,8 @@
 
 #include <impl/ecs_ui/toolkit/widgets/combo.h>
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,7 +24,7 @@ TESTBED_BEGIN
 
 class UiComboGallery final : NoCopy{
 public:
-    void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
+    void paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, f32 x, f32 y);
 
 
 private:

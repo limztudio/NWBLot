@@ -37,6 +37,8 @@ private:
     struct KeyEqual{
         using is_transparent = void;
 
+
+    public:
         [[nodiscard]] bool operator()(const Key& lhs, const Key& rhs)const noexcept;
         [[nodiscard]] bool operator()(const Key& lhs, const Lookup& rhs)const noexcept;
     };
@@ -44,6 +46,9 @@ private:
         Key key;
         bool found;
     };
+
+
+private:
     using Index = HashMap<Key, bool, Core::Alloc::ScratchArena, KeyHash, KeyEqual>;
 
 

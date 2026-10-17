@@ -49,7 +49,7 @@ inline VmaAllocationCreateInfo BuildCpuAccessAllocationInfo(const CpuAccessMode:
     return BuildMappedHostAllocationInfo(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 }
 
-inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc, const VkDeviceSize bufferSize){
+inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc, const VkDeviceSize bufferSize)noexcept{
     VmaAllocationCreateInfo allocInfo{};
     if(desc.isVolatile || desc.cpuAccess == CpuAccessMode::Write)
         allocInfo = BuildCpuAccessAllocationInfo(CpuAccessMode::Write);

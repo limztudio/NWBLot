@@ -21,7 +21,7 @@ namespace __hidden_ui_wheel_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-HitTarget WheelHost(){
+HitTarget WheelHost()noexcept{
     HitTarget target;
     target.id = { 1u };
     target.declarationGeneration = 7u;
@@ -37,7 +37,7 @@ HitTarget WheelHost(){
     return target;
 }
 
-HitTarget WheelPart(const HitTarget& host){
+HitTarget WheelPart(const HitTarget& host)noexcept{
     HitTarget part;
     part.id = { 2u };
     part.declarationGeneration = host.declarationGeneration;

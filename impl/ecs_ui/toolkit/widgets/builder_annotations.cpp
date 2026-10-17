@@ -15,7 +15,10 @@ NWB_IMPL_UI_BEGIN
 
 
 Builder::Item* Builder::annotationAnchor(const AStringView stableKey)noexcept{
-    const WidgetId id = MakeWidgetId(m_context.scopeId(), stableKey);
+    const auto idResult = MakeWidgetId(m_context.scopeId(), stableKey);
+    if(!idResult)
+        return nullptr;
+    const WidgetId id = *idResult;
     for(auto& item : m_scope->m_items){
         if(item.state.id == id && item.state.kind != WidgetKind::Separator)
             return &item;

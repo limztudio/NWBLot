@@ -97,8 +97,10 @@ private:
     void promoteIndex(){
         NWB_ASSERT(!m_index && m_inlineCount == s_InlineTextureCount);
         TextureIndex index(s_InlineTextureCount * 4u, m_scratchArena);
-        for(Core::Texture* const identity : m_inlineTextures)
-            index.insert(identity);
+        for(Core::Texture* const identity : m_inlineTextures){
+            if(!index.insert(identity).second)
+                TerminateInvariant();
+        }
         static_assert(IsNothrowMoveConstructible_V<TextureIndex>);
         m_index.emplace(Move(index));
     }
@@ -143,7 +145,9 @@ private:
         Vector<Core::TextureHandle, Core::Alloc::ScratchArena> textures;
         MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector;
 
-        explicit PendingTextures(Core::Alloc::ScratchArena& scratchArena)
+
+    public:
+        explicit PendingTextures(Core::Alloc::ScratchArena& scratchArena)noexcept
             : textures(scratchArena)
             , collector(textures, scratchArena)
         {}

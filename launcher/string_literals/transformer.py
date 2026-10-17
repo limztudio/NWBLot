@@ -188,7 +188,7 @@ def transform_bitcode(input_path: Path, output_path: Path, llvm_library: Path, e
     context = api.LLVMContextCreate()
     module = None
     target_data = None
-    temporary_path = None
+    temporary_name = None
     try:
         module = api.read_module(context, input_path)
         api.verify_module(module)
@@ -238,15 +238,18 @@ def transform_bitcode(input_path: Path, output_path: Path, llvm_library: Path, e
         if api.LLVMWriteBitcodeToFile(module, os.fsencode(temporary_path)):
             raise OSError(f"LLVM cannot write transformed bitcode {output_path}")
         os.replace(temporary_path, output_path)
-        temporary_path = None
+        temporary_name = None
         return { "llvm_version": api.version, "target": triple, "format": image_format, "section": section.decode("ascii"), "byte_order": target_order, "transformed_globals": transformed, "pooled_records": len(records), "raw_literal_bytes": raw_bytes,
             "record_bytes": sum(record["record_stride"] for record in records), "skipped_globals": dict(sorted(skipped.items())), "records": records, }
     finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
         if target_data:
             api.LLVMDisposeTargetData(target_data)
         if module:
             api.LLVMDisposeModule(module)
         api.LLVMContextDispose(context)
+        if temporary_name is not None:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
 

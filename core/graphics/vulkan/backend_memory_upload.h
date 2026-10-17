@@ -9,6 +9,9 @@
 #include "backend_core_context.h"
 #include "backend_queue.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -16,8 +19,6 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
-
-#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,11 +121,18 @@ private:
         GpuPhysicalQueueId physicalQueue;
 
 
-        BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz);
+    public:
+        BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept;
         ~BufferChunk();
     };
+
+
+private:
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
+
+
+private:
     // The owning list keeps every chunk address stable.
     // Accepted submissions traverse only this intrusive active chain, so accumulated retired storage cannot increase the post-native-accept commit cost.
     struct QueueChunkLedger{
@@ -132,6 +140,8 @@ private:
         BufferChunkList chunks;
         BufferChunk* firstActiveChunk = nullptr;
 
+
+    public:
         QueueChunkLedger(GraphicsArena& arena, GpuPhysicalQueueId value)
             : queue(value)
             , chunks(arena)
@@ -191,15 +201,6 @@ class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(Buffer* bufferResource, u64 offset)noexcept;
 
 
-private:
-    struct BufferViewEntry{
-        u64 byteOffset = 0;
-        u64 byteSize = 0;
-        VkBufferView view = VK_NULL_HANDLE;
-        Format::Enum format = Format::UNKNOWN;
-    };
-
-
 public:
     Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, bool initialStateKnown);
     ~Buffer();
@@ -226,7 +227,6 @@ public:
 
 
 private:
-    [[nodiscard]] VkBufferView getView(Format::Enum format, u64 byteOffset, u64 byteSize);
     [[nodiscard]] bool isRetainedStateKnown()const noexcept;
     void setRetainedStateKnown(bool known)noexcept;
 
@@ -247,8 +247,6 @@ private:
     Atomic<bool> m_retainedStateKnown = false;
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
-    Vector<BufferViewEntry, Alloc::GlobalArena> m_bufferViews;
-    Futex m_bufferViewsMutex;
 
     const bool m_creationInitialStateKnown;
     bool m_persistentlyMapped = false;
@@ -259,7 +257,7 @@ private:
 };
 
 
-inline UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)
+inline UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept
     : RefCounter<GraphicsResource>(pool)
     , buffer(Move(buf))
     , owner(chunkOwner)
@@ -333,9 +331,9 @@ public:
     // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
     [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const;
     Object getNativeHandle(ObjectType objectType);
-    Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
+    [[nodiscard]] Expected<Object> getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
 
-    [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
+    [[nodiscard]] Expected<VkImageView> getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
 
 
 private:
@@ -384,7 +382,7 @@ class StagingTexture final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    StagingTexture(const VulkanContext& context, VulkanAllocator& allocator);
+    StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)noexcept;
     ~StagingTexture();
 
 

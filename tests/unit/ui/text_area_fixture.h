@@ -58,7 +58,7 @@ public:
 struct AreaResolution{
     AString<Core::Alloc::GlobalArena> text;
     EditNavigationSnapshot preferred;
-    EditNavigationResult result;
+    Expected<EditNavigationResult> result = MakeUnexpected(Failure{});
     usize caret = 0u;
 
 
@@ -115,7 +115,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{
         ++actionLoans;
@@ -158,8 +158,12 @@ public:
                     call.caret = model.caret();
                     call.preferred = navigation.snapshot();
                     call.result = resolver.resolve(model, *direction, call.preferred, viewportHeight);
-                    const usize targetAnchor = event.intent.extend ? model.anchor() : call.result.committedByte;
-                    result.valid = call.result.resolved && model.setSelection(targetAnchor, call.result.committedByte) && navigation.setPreferredX(call.result.preferredX);
+                    if(call.result){
+                        const usize targetAnchor = event.intent.extend ? model.anchor() : call.result->committedByte;
+                        result.valid = model.setSelection(targetAnchor, call.result->committedByte) && navigation.setPreferredX(call.result->preferredX);
+                    }
+                    else
+                        result.valid = false;
                 }
                 else if(!vertical){
                     const EditCommandRequest request = TranslateEditCommand(event.intent, false, model.textMode());
@@ -272,7 +276,7 @@ protected:
         return m_result.valid && acceptArea();
     }
 
-    void useHost(){ m_builder.setEditHost(&m_host); }
+    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
 
 
 protected:
@@ -297,12 +301,6 @@ protected:
         return options;
     }
 
-    [[nodiscard]] static PopupOptions ParentOptions(){ return UiWidgetTests::LargeLoanParentOptions(); }
-
-    [[nodiscard]] static PopupOptions ChildOptions(){ return UiWidgetTests::LargeLoanChildOptions(); }
-
-    [[nodiscard]] static ListOptions ListOptions(){ return UiWidgetTests::LargeLoanListOptions(); }
-
 
 protected:
     [[nodiscard]] bool acceptBaseline(){
@@ -316,12 +314,12 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
     }
 
     [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
 
-    [[nodiscard]] AcceptedAreaFrame accepted()const{
+    [[nodiscard]] AcceptedAreaFrame accepted()const noexcept{
         AcceptedAreaFrame frame;
         frame.count = m_context.input().targets().size();
         frame.popupCount = m_context.input().popupCount();

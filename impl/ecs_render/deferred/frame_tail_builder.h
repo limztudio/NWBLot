@@ -47,7 +47,7 @@ struct DeferredFrameTailResult{
 
 class DeferredFrameTailBuilder final : NoCopy{
 public:
-    explicit DeferredFrameTailBuilder(Core::GpuTaskGraph& graph);
+    explicit DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)noexcept;
 
 
 public:

@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/task_graph_suffix_builder.h>
+#include "task_graph_suffix_builder.h"
+
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/deferred/task_graph_present_task.h>
 #include <impl/ecs_render/kernel/task_graph_frame_timing_end_task.h>
@@ -26,7 +27,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     Core::GraphicsRuntime& graphics,
     Core::IGpuTaskGraphPresentationContributor* presentationContributor,
     Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
-)
+)noexcept
     : m_graph(graph)
     , m_deferredSystem(deferredSystem)
     , m_graphics(graphics)
@@ -106,12 +107,13 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         desc.setInitialState(Core::ResourceStates::Unknown);
         return m_graph.importTexture(texture, desc);
     };
-    const Core::GpuGraphResourceId compositeColor = importFirstWriteTexture(targets.compositeColor, Name("render.deferred_composite.composite_color"), "Composite Color");
+    const auto compositeColorResult = importFirstWriteTexture(targets.compositeColor, Name("render.deferred_composite.composite_color"), "Composite Color");
     const Core::GpuGraphResourceId compositeBindlessSlots = inputs.currentBindlessSlots;
-    if(!compositeColor.valid() || !compositeBindlessSlots.valid()){
+    if(!compositeColorResult || !compositeBindlessSlots.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
         return MakeUnexpected(Failure{});
     }
+    const Core::GpuGraphResourceId compositeColor = *compositeColorResult;
 
     const Core::GpuTaskResourceUse compositeResourceUses[] = {
         ReadUse(inputs.opaqueColor),
@@ -141,15 +143,17 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
     // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
-    result.compositeTask = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, targets, compositeTimingTicket, compositeInputs);
-    if(!result.compositeTask.valid()){
+    const auto resultCompositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, targets, compositeTimingTicket, compositeInputs);
+    if(!resultCompositeTaskResult){
+        result.compositeTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
         return MakeUnexpected(Failure{});
     }
+    result.compositeTask = *resultCompositeTaskResult;
 
     const Core::AcquiredPresentationFrame& presentationFrame = *inputs.presentationFrame;
     const Core::FramebufferDesc& presentationFramebufferDesc = *inputs.presentationFramebufferDesc;
-    const Core::GpuExternalCompletionId backBufferAvailability =
+    const auto backBufferAvailabilityResult =
         m_graph.importExternalCompletion(
             Core::GpuExternalCompletionDesc{}
                 .setIdentity(Name("render.deferred_present.backbuffer_availability"))
@@ -157,18 +161,20 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
                 .setToken(presentationFrame.backBuffer.availabilityCompletion)
         )
     ;
-    if(!backBufferAvailability.valid()){
+    if(!backBufferAvailabilityResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import presentation back-buffer availability"));
         return MakeUnexpected(Failure{});
     }
+    const Core::GpuExternalCompletionId backBufferAvailability = *backBufferAvailabilityResult;
 
     Core::GpuGraphResourceDesc backBufferDesc = TextureResourceDesc(Name("render.deferred_present.backbuffer"), "Presentation Back Buffer");
     backBufferDesc.setInitialState(presentationFrame.backBuffer.nativeInitialState).setInitialAvailabilityCompletion(backBufferAvailability).setExternalFinalState(Core::ResourceStates::Present);
-    const Core::GpuGraphResourceId backbuffer = m_graph.importTexture(presentationFrame.backBuffer.texture, backBufferDesc);
-    if(!backbuffer.valid()){
+    const auto backbufferResult = m_graph.importTexture(presentationFrame.backBuffer.texture, backBufferDesc);
+    if(!backbufferResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-present graph resources"));
         return MakeUnexpected(Failure{});
     }
+    const Core::GpuGraphResourceId backbuffer = *backbufferResult;
 
     Core::GpuTaskResourceUse presentResourceUses[4u] = {
         ReadUse(compositeColor),
@@ -204,7 +210,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(presentResourceUses, presentResourceUseCount)
         .setResourceVersionUses(&outputLayerVersionUse, outputLayer.color.valid() ? 1u : 0u)
     ;
-    result.presentTask = m_graph.addTask<DeferredPresentGraphTask>(
+    const auto resultPresentTaskResult = m_graph.addTask<DeferredPresentGraphTask>(
         presentDesc,
         DeferredPresentGraphTask::Payload{
             .deferredSystem = m_deferredSystem,
@@ -219,19 +225,23 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             .shadowVisibilityTask = shadowVisibilityTask,
         }
     );
-    if(!result.presentTask.valid()){
+    if(!resultPresentTaskResult){
+        result.presentTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
         return MakeUnexpected(Failure{});
     }
+    result.presentTask = *resultPresentTaskResult;
 
     // UI/overlay declares before diagnostic tails so timing follows the final contributor.
     result.overlayRequired = m_presentationContributor && m_presentationContributor->hasTaskGraphPresentationWork();
     if(result.overlayRequired){
-        result.overlayTask = m_presentationContributor->declareTaskGraphPresentation(m_graph, presentationFrame, backbuffer, result.presentTask);
-        if(!result.overlayTask.valid()){
+        const auto resultOverlayTaskResult = m_presentationContributor->declareTaskGraphPresentation(m_graph, presentationFrame, backbuffer, result.presentTask);
+        if(!resultOverlayTaskResult){
+            result.overlayTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
             return MakeUnexpected(Failure{});
         }
+        result.overlayTask = *resultOverlayTaskResult;
     }
 
     const Core::GpuTaskId frameTimingEndDependency = result.overlayTask.valid() ? result.overlayTask : result.presentTask;
@@ -241,11 +251,13 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     frameTimingEndScheduling.allowPacketMerge = false;
     Core::GpuTaskDesc frameTimingEndDesc;
     frameTimingEndDesc.setIdentity(Name("render.frame_timing_end")).setMarkerLabel("Frame Timing End").setScheduling(frameTimingEndScheduling).setDependencies(&frameTimingEndDependency, 1u);
-    result.frameTimingEndTask = m_graph.addTask<FrameTimingEndGraphTask>(frameTimingEndDesc, FrameTimingEndGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, });
-    if(!result.frameTimingEndTask.valid()){
+    const auto resultFrameTimingEndTaskResult = m_graph.addTask<FrameTimingEndGraphTask>(frameTimingEndDesc, FrameTimingEndGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, });
+    if(!resultFrameTimingEndTaskResult){
+        result.frameTimingEndTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
         return MakeUnexpected(Failure{});
     }
+    result.frameTimingEndTask = *resultFrameTimingEndTaskResult;
     if(!m_graph.declarePresentEndpoint(Core::GpuPresentEndpoint{ .producer = result.frameTimingEndTask, .backBuffer = backbuffer, })){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graph presentation endpoint"));
         return MakeUnexpected(Failure{});

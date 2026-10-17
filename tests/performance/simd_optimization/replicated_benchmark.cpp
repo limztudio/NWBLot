@@ -68,9 +68,12 @@ NWB_INLINE SIMDVectorDouble ReplicatedATan2(const SIMDVectorDouble y, const SIMD
 
 template<u32 Dimension>
 NWB_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(Dimension == 2u) return VectorDouble2Dot(lhs, rhs);
-    else if constexpr(Dimension == 3u) return VectorDouble3Dot(lhs, rhs);
-    else return VectorDouble4Dot(lhs, rhs);
+    if constexpr(Dimension == 2u)
+        return VectorDouble2Dot(lhs, rhs);
+    else if constexpr(Dimension == 3u)
+        return VectorDouble3Dot(lhs, rhs);
+    else
+        return VectorDouble4Dot(lhs, rhs);
 }
 
 template<u32 Dimension>
@@ -84,8 +87,10 @@ NWB_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDo
     if constexpr(Vectors)
         cosine = VectorDoubleMultiply(cosine, VectorDoubleMultiply(ReciprocalLength<Dimension>(lhs), ReciprocalLength<Dimension>(rhs)));
     cosine = VectorDoubleClamp(cosine, s_DoubleSIMDNegativeOne, s_DoubleSIMDOne);
-    if constexpr(Candidate) return ReplicatedACos(cosine);
-    else return VectorDoubleACos(cosine);
+    if constexpr(Candidate)
+        return ReplicatedACos(cosine);
+    else
+        return VectorDoubleACos(cosine);
 }
 
 template<bool Candidate>
@@ -154,9 +159,12 @@ NWB_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
     if constexpr(Reciprocal)
         return ReciprocalLength<Dimension>(value);
     else{
-        if constexpr(Dimension == 2u) return VectorDouble2Length(value);
-        else if constexpr(Dimension == 3u) return VectorDouble3Length(value);
-        else return VectorDouble4Length(value);
+        if constexpr(Dimension == 2u)
+            return VectorDouble2Length(value);
+        else if constexpr(Dimension == 3u)
+            return VectorDouble3Length(value);
+        else
+            return VectorDouble4Length(value);
     }
 }
 
@@ -199,38 +207,66 @@ NWB_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const
 // Switch only accepted candidates to production after their implementations are applied.
 inline constexpr bool s_ProductionCandidate[Operation::Count]{ true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, false, false, false, false, false, false };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<Operation::Enum Kind, bool Estimate = false>
 NWB_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(Kind == Operation::Ln) return QuaternionDoubleLn(lhs);
-    else if constexpr(Kind == Operation::Exp) return QuaternionDoubleExp(lhs);
+    if constexpr(Kind == Operation::Ln)
+        return QuaternionDoubleLn(lhs);
+    else if constexpr(Kind == Operation::Exp)
+        return QuaternionDoubleExp(lhs);
     else if constexpr(Kind == Operation::Normals2){
-        if constexpr(Estimate) return VectorDouble2AngleBetweenNormalsEst(lhs, rhs);
-        else return VectorDouble2AngleBetweenNormals(lhs, rhs);
+        if constexpr(Estimate)
+            return VectorDouble2AngleBetweenNormalsEst(lhs, rhs);
+        else
+            return VectorDouble2AngleBetweenNormals(lhs, rhs);
     }
     else if constexpr(Kind == Operation::Normals3){
-        if constexpr(Estimate) return VectorDouble3AngleBetweenNormalsEst(lhs, rhs);
-        else return VectorDouble3AngleBetweenNormals(lhs, rhs);
+        if constexpr(Estimate)
+            return VectorDouble3AngleBetweenNormalsEst(lhs, rhs);
+        else
+            return VectorDouble3AngleBetweenNormals(lhs, rhs);
     }
     else if constexpr(Kind == Operation::Normals4){
-        if constexpr(Estimate) return VectorDouble4AngleBetweenNormalsEst(lhs, rhs);
-        else return VectorDouble4AngleBetweenNormals(lhs, rhs);
+        if constexpr(Estimate)
+            return VectorDouble4AngleBetweenNormalsEst(lhs, rhs);
+        else
+            return VectorDouble4AngleBetweenNormals(lhs, rhs);
     }
-    else if constexpr(Kind == Operation::Vectors2) return VectorDouble2AngleBetweenVectors(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors3) return VectorDouble3AngleBetweenVectors(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors4) return VectorDouble4AngleBetweenVectors(lhs, rhs);
-    else if constexpr(Kind == Operation::Slerp) return QuaternionDoubleSlerp(lhs, rhs, 0.375);
-    else if constexpr(Kind == Operation::Length2) return VectorDouble2Length(lhs);
-    else if constexpr(Kind == Operation::Length3) return VectorDouble3Length(lhs);
-    else if constexpr(Kind == Operation::Length4) return VectorDouble4Length(lhs);
-    else if constexpr(Kind == Operation::Reciprocal2) return VectorDouble2ReciprocalLength(lhs);
-    else if constexpr(Kind == Operation::Reciprocal3) return VectorDouble3ReciprocalLength(lhs);
-    else if constexpr(Kind == Operation::Reciprocal4) return VectorDouble4ReciprocalLength(lhs);
-    else if constexpr(Kind == Operation::Normalize2) return VectorDouble2NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(Kind == Operation::Normalize3) return VectorDouble3NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(Kind == Operation::Normalize4) return VectorDouble4NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(Kind == Operation::Clamp2) return VectorDouble2ClampLength(lhs, 0.5, 2.0);
-    else if constexpr(Kind == Operation::Clamp3) return VectorDouble3ClampLength(lhs, 0.5, 2.0);
-    else return VectorDouble4ClampLength(lhs, 0.5, 2.0);
+    else if constexpr(Kind == Operation::Vectors2)
+        return VectorDouble2AngleBetweenVectors(lhs, rhs);
+    else if constexpr(Kind == Operation::Vectors3)
+        return VectorDouble3AngleBetweenVectors(lhs, rhs);
+    else if constexpr(Kind == Operation::Vectors4)
+        return VectorDouble4AngleBetweenVectors(lhs, rhs);
+    else if constexpr(Kind == Operation::Slerp)
+        return QuaternionDoubleSlerp(lhs, rhs, 0.375);
+    else if constexpr(Kind == Operation::Length2)
+        return VectorDouble2Length(lhs);
+    else if constexpr(Kind == Operation::Length3)
+        return VectorDouble3Length(lhs);
+    else if constexpr(Kind == Operation::Length4)
+        return VectorDouble4Length(lhs);
+    else if constexpr(Kind == Operation::Reciprocal2)
+        return VectorDouble2ReciprocalLength(lhs);
+    else if constexpr(Kind == Operation::Reciprocal3)
+        return VectorDouble3ReciprocalLength(lhs);
+    else if constexpr(Kind == Operation::Reciprocal4)
+        return VectorDouble4ReciprocalLength(lhs);
+    else if constexpr(Kind == Operation::Normalize2)
+        return VectorDouble2NormalizeOr(lhs, rhs, 0.0);
+    else if constexpr(Kind == Operation::Normalize3)
+        return VectorDouble3NormalizeOr(lhs, rhs, 0.0);
+    else if constexpr(Kind == Operation::Normalize4)
+        return VectorDouble4NormalizeOr(lhs, rhs, 0.0);
+    else if constexpr(Kind == Operation::Clamp2)
+        return VectorDouble2ClampLength(lhs, 0.5, 2.0);
+    else if constexpr(Kind == Operation::Clamp3)
+        return VectorDouble3ClampLength(lhs, 0.5, 2.0);
+    else
+        return VectorDouble4ClampLength(lhs, 0.5, 2.0);
 }
 
 template<Operation::Enum Kind, bool Estimate = false>
@@ -241,44 +277,68 @@ NWB_NOINLINE SIMDVectorDouble Production(const SIMDVectorDouble lhs, const SIMDV
 
 template<Operation::Enum Kind, bool Candidate>
 NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(Candidate && s_ProductionCandidate[Kind]) return ProductionValue<Kind>(lhs, rhs);
-    else if constexpr(Kind == Operation::Ln) return QuaternionLn<Candidate>(lhs);
-    else if constexpr(Kind == Operation::Exp) return QuaternionExp<Candidate>(lhs);
-    else if constexpr(Kind == Operation::Normals2) return Angle<2u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normals3) return Angle<3u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normals4) return Angle<4u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors2) return Angle<2u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors3) return Angle<3u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Vectors4) return Angle<4u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Slerp) return QuaternionSlerp<Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Length2) return Length<2u, false, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Length3) return Length<3u, false, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Length4) return Length<4u, false, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Reciprocal2) return Length<2u, true, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Reciprocal3) return Length<3u, true, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Reciprocal4) return Length<4u, true, Candidate>(lhs);
-    else if constexpr(Kind == Operation::Normalize2) return ControlledLength<2u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normalize3) return ControlledLength<3u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Normalize4) return ControlledLength<4u, false, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Clamp2) return ControlledLength<2u, true, Candidate>(lhs, rhs);
-    else if constexpr(Kind == Operation::Clamp3) return ControlledLength<3u, true, Candidate>(lhs, rhs);
-    else return ControlledLength<4u, true, Candidate>(lhs, rhs);
+    if constexpr(Candidate && s_ProductionCandidate[Kind])
+        return ProductionValue<Kind>(lhs, rhs);
+    else if constexpr(Kind == Operation::Ln)
+        return QuaternionLn<Candidate>(lhs);
+    else if constexpr(Kind == Operation::Exp)
+        return QuaternionExp<Candidate>(lhs);
+    else if constexpr(Kind == Operation::Normals2)
+        return Angle<2u, false, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Normals3)
+        return Angle<3u, false, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Normals4)
+        return Angle<4u, false, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Vectors2)
+        return Angle<2u, true, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Vectors3)
+        return Angle<3u, true, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Vectors4)
+        return Angle<4u, true, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Slerp)
+        return QuaternionSlerp<Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Length2)
+        return Length<2u, false, Candidate>(lhs);
+    else if constexpr(Kind == Operation::Length3)
+        return Length<3u, false, Candidate>(lhs);
+    else if constexpr(Kind == Operation::Length4)
+        return Length<4u, false, Candidate>(lhs);
+    else if constexpr(Kind == Operation::Reciprocal2)
+        return Length<2u, true, Candidate>(lhs);
+    else if constexpr(Kind == Operation::Reciprocal3)
+        return Length<3u, true, Candidate>(lhs);
+    else if constexpr(Kind == Operation::Reciprocal4)
+        return Length<4u, true, Candidate>(lhs);
+    else if constexpr(Kind == Operation::Normalize2)
+        return ControlledLength<2u, false, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Normalize3)
+        return ControlledLength<3u, false, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Normalize4)
+        return ControlledLength<4u, false, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Clamp2)
+        return ControlledLength<2u, true, Candidate>(lhs, rhs);
+    else if constexpr(Kind == Operation::Clamp3)
+        return ControlledLength<3u, true, Candidate>(lhs, rhs);
+    else
+        return ControlledLength<4u, true, Candidate>(lhs, rhs);
 }
 
 template<Operation::Enum Kind, bool Candidate>
 NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
-    if constexpr(Candidate && s_ProductionCandidate[Kind]) return Production<Kind>(lhs, rhs);
-    else return Reduce<Kind, Candidate>(lhs, rhs);
+    if constexpr(Candidate && s_ProductionCandidate[Kind])
+        return Production<Kind>(lhs, rhs);
+    else
+        return Reduce<Kind, Candidate>(lhs, rhs);
 }
 
 template<Operation::Enum Kind>
-u32 VerifyReduction(u64& seed)noexcept{
+u32 VerifyReduction(u64& seed){
 #pragma STDC FENV_ACCESS ON
     return SimdOptimizationBenchmark::VerifyReductionCases(s_OperationNames[Kind], seed,
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); },
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, const SimdOptimizationBenchmark::Observation& expected, const SimdOptimizationBenchmark::Observation& actual, const usize index, u32& failures)noexcept{
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, const SimdOptimizationBenchmark::Observation& expected, const SimdOptimizationBenchmark::Observation& actual, const usize index, u32& failures){
             const auto production = SimdOptimizationBenchmark::Observe([&]()noexcept{ return Production<Kind>(lhs, rhs); });
             if(!production)
                 return false;
@@ -299,9 +359,9 @@ u32 VerifyReduction(u64& seed)noexcept{
     );
 }
 
-u32 Verify()noexcept{
+u32 Verify(){
 #pragma STDC FENV_ACCESS ON
-    const auto verification = SimdOptimizationBenchmark::VerifyRoundingModes([](u64& seed)noexcept{
+    const auto verification = SimdOptimizationBenchmark::VerifyRoundingModes([](u64& seed){
         u32 failures = 0u;
         failures += VerifyReduction<Operation::Ln>(seed);
         failures += VerifyReduction<Operation::Exp>(seed);
@@ -325,7 +385,8 @@ u32 Verify()noexcept{
         failures += VerifyReduction<Operation::Clamp3>(seed);
         failures += VerifyReduction<Operation::Clamp4>(seed);
         return failures;
-    });
+    }
+    );
     if(!verification.environmentAvailable)
         return verification.failures;
     const u32 failures = verification.failures;
@@ -359,7 +420,8 @@ template<Operation::Enum Kind, bool Candidate>
 void Measure(const Dataset& data, const usize iterations, const bool latency){
     const usize operations = iterations * 4u;
     SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations,
-        [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); });
+        [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); }
+    );
 }
 
 template<Operation::Enum Kind>

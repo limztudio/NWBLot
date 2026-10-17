@@ -32,24 +32,26 @@ namespace __hidden_texture_cook{
 
 
 [[nodiscard]] static Expected<Texture::MipLevelVector> BuildMipLevels(const TextureCookEntry& entry, Core::Assets::AssetArena& arena){
-    if(!IsValidTexturePayloadFormat(entry.payloadFormat) || !IsValidTextureDimension(entry.dimension) || entry.width == 0u || entry.height == 0u || entry.depth == 0u
-        || (entry.dimension != TextureDimension::Texture3D && entry.depth != 1u) || (entry.dimension == TextureDimension::TextureCube && entry.width != entry.height)){
+    if(
+        !IsValidTexturePayloadFormat(entry.payloadFormat) || !IsValidTextureDimension(entry.dimension) || entry.width == 0u || entry.height == 0u || entry.depth == 0u
+        || (entry.dimension != TextureDimension::Texture3D && entry.depth != 1u) || (entry.dimension == TextureDimension::TextureCube && entry.width != entry.height)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: invalid texture format or resolution."));
         return MakeUnexpected(Failure{});
     }
     const auto completeMipCount = TextureFormat::ComputeCompleteMipCount(entry.dimension, entry.width, entry.height, entry.depth);
-    if(!completeMipCount || entry.mipCount != *completeMipCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: mip_count must describe a complete mip chain."));
+    if(!completeMipCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: resolution cannot describe a complete mip chain."));
         return MakeUnexpected(Failure{});
     }
 
     Texture::MipLevelVector levels(arena);
-    levels.reserve(entry.mipCount);
+    levels.reserve(*completeMipCount);
     u32 width = entry.width;
     u32 height = entry.height;
     u32 depth = entry.depth;
     u64 offset = 0u;
-    for(u32 level = 0u; level < entry.mipCount; ++level){
+    for(u32 level = 0u; level < *completeMipCount; ++level){
         const auto layout = TextureFormat::ComputeMipPlaneBlockLayout(entry.payloadFormat, width, height);
         const auto slices = TextureFormat::ComputeMipSliceCount(entry.dimension, depth);
         if(!layout || !slices || layout->planeByteCount > Limit<u64>::s_Max / *slices){
@@ -147,6 +149,9 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, texture.payloadBytes().data(), texture.payloadBytes().size());
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena){

@@ -41,29 +41,33 @@ namespace __hidden_gpu_timing_tests{
 using TestArena = ::NWB::Tests::TestArena<struct GpuTimingTestsTag>;
 inline constexpr Name s_GpuTimingMetricScratchArena("tests.gpu_timing.metric_scratch");
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static_assert(IsNothrowDestructible_V<Core::GpuTimingFrameTransaction>, "GPU timing frame transactions must unwind without throwing");
 static_assert(IsNothrowDestructible_V<Core::GpuTimingMeasure>, "GPU timing measures stored in Optional must unwind without throwing");
 
 
 class FailOnceTimingSink final : public Core::Perf::TimingSink, NoCopy{
 public:
-    explicit FailOnceTimingSink(const usize failureAttempt)
+    explicit FailOnceTimingSink(const usize failureAttempt)noexcept
         : m_failureAttempt(failureAttempt)
     {}
 
 
 public:
     [[nodiscard]] virtual bool enabled()const noexcept override{ return true; }
-    [[nodiscard]] virtual Core::Perf::TimingScopeId registerScope(const Name& scopeName)override{
+    [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope(const Name& scopeName)noexcept override{
         static_cast<void>(scopeName);
         const usize attempt = m_registrationAttempt;
         ++m_registrationAttempt;
         if(attempt == m_failureAttempt)
-            return {};
+            return MakeUnexpected(Failure{});
 
         const u32 index = m_nextScopeIndex;
         ++m_nextScopeIndex;
-        return { .index = index, .generation = 1u };
+        return Core::Perf::TimingScopeId{ .index = index, .generation = 1u };
     }
     virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)noexcept override{
         static_cast<void>(scope);
@@ -124,8 +128,12 @@ TEST(GpuTimingSampleSubscriptions, ScopedDemandsReplaceAtomicallyAndRemainSubscr
     const Name secondScopes[] = { sharedScope, secondScope };
     const Name invalidScopes[] = { firstScope, s_NameNone };
     const Name duplicateScopes[] = { firstScope, firstScope };
-    const Core::GpuTimingSampleSubscription first = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = &firstCapture, .invoke = &GpuTimingSubscriptionCapture::Invoke, });
-    const Core::GpuTimingSampleSubscription second = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = &secondCapture, .invoke = &GpuTimingSubscriptionCapture::Invoke, });
+    const auto firstResult = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = &firstCapture, .invoke = &GpuTimingSubscriptionCapture::Invoke, });
+    ASSERT_TRUE(firstResult);
+    const Core::GpuTimingSampleSubscription first = *firstResult;
+    const auto secondResult = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = &secondCapture, .invoke = &GpuTimingSubscriptionCapture::Invoke, });
+    ASSERT_TRUE(secondResult);
+    const Core::GpuTimingSampleSubscription second = *secondResult;
 
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
@@ -171,11 +179,19 @@ TEST(GpuTimingSampleAttribution, IssuesUniqueProcessIdentitiesAcrossRecorderRese
     Core::GpuTimingRecorder firstRecorder(testArena.arena, firstSink);
     Core::GpuTimingRecorder secondRecorder(testArena.arena, secondSink);
 
-    const Core::GpuTimingSampleAttribution first = firstRecorder.allocateSampleAttribution();
-    const Core::GpuTimingSampleAttribution second = firstRecorder.allocateSampleAttribution();
-    const Core::GpuTimingSampleAttribution recreated = secondRecorder.allocateSampleAttribution();
+    const auto firstResult = firstRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(firstResult);
+    const Core::GpuTimingSampleAttribution first = *firstResult;
+    const auto secondResult = firstRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(secondResult);
+    const Core::GpuTimingSampleAttribution second = *secondResult;
+    const auto recreatedResult = secondRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(recreatedResult);
+    const Core::GpuTimingSampleAttribution recreated = *recreatedResult;
     firstRecorder.resetQueries();
-    const Core::GpuTimingSampleAttribution afterReset = firstRecorder.allocateSampleAttribution();
+    const auto afterResetResult = firstRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(afterResetResult);
+    const Core::GpuTimingSampleAttribution afterReset = *afterResetResult;
 
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());

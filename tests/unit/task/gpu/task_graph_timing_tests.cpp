@@ -47,7 +47,7 @@ namespace Graphics = Core;
 using TaskGraphResourceVersionTestUtils::GraphicsQueue;
 
 
-[[nodiscard]] Graphics::GpuTaskId AddTask(Graphics::GpuTaskGraph& graph, const Name& identity, const Graphics::GpuTaskId dependency = {}, const Graphics::GpuTaskSchedulingHint& scheduling = {}, const Graphics::GpuTaskTimingMetadata& timing = {}){
+[[nodiscard]] Expected<Graphics::GpuTaskId> AddTask(Graphics::GpuTaskGraph& graph, const Name& identity, const Graphics::GpuTaskId dependency = {}, const Graphics::GpuTaskSchedulingHint& scheduling = {}, const Graphics::GpuTaskTimingMetadata& timing = {}){
     Graphics::GpuTaskDesc desc;
     desc.setIdentity(identity).setMarkerLabel("Task Graph Timing Test").setScheduling(scheduling).setTimingMetadata(timing);
     if(dependency.valid())
@@ -55,10 +55,10 @@ using TaskGraphResourceVersionTestUtils::GraphicsQueue;
     return graph.addTask(desc);
 }
 
-[[nodiscard]] bool Compile(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, const Graphics::GpuTaskGraphCompileOptions& options = {}){
+[[nodiscard]] bool Compile(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, const Graphics::GpuTaskGraphCompileOptions& options = {}){
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
-    return TaskGraphTestUtils::Compile(graph, analysis, topology, assignments, compiledGraph, options);
+    return TaskGraphTestUtils::Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
 }
 
 
@@ -66,27 +66,43 @@ using TaskGraphResourceVersionTestUtils::GraphicsQueue;
 
 
 TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolicies){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId prefix = AddTask(graph, Name("tests/task_graph_timing/envelope_prefix"));
+    const auto prefixResult = AddTask(graph, Name("tests/task_graph_timing/envelope_prefix"));
+    ASSERT_TRUE(prefixResult);
+    const Graphics::GpuTaskId prefix = *prefixResult;
     ASSERT_TRUE(prefix.valid());
-    const Graphics::GpuTaskId firstPacketPrefix = AddTask(graph, Name("tests/task_graph_timing/envelope_first_packet_prefix"), prefix);
+    const auto firstPacketPrefixResult = AddTask(graph, Name("tests/task_graph_timing/envelope_first_packet_prefix"), prefix);
+    ASSERT_TRUE(firstPacketPrefixResult);
+    const Graphics::GpuTaskId firstPacketPrefix = *firstPacketPrefixResult;
     ASSERT_TRUE(firstPacketPrefix.valid());
 
     Graphics::GpuTaskSchedulingHint mergedScheduling;
     mergedScheduling.mergeWithPrevious = true;
-    const Graphics::GpuTaskId firstEndpoint = AddTask(graph, Name("tests/task_graph_timing/envelope_first_endpoint"), firstPacketPrefix, mergedScheduling);
+    const auto firstEndpointResult = AddTask(graph, Name("tests/task_graph_timing/envelope_first_endpoint"), firstPacketPrefix, mergedScheduling);
+    ASSERT_TRUE(firstEndpointResult);
+    const Graphics::GpuTaskId firstEndpoint = *firstEndpointResult;
     ASSERT_TRUE(firstEndpoint.valid());
-    const Graphics::GpuTaskId middle = AddTask(graph, Name("tests/task_graph_timing/envelope_middle"), firstEndpoint);
+    const auto middleResult = AddTask(graph, Name("tests/task_graph_timing/envelope_middle"), firstEndpoint);
+    ASSERT_TRUE(middleResult);
+    const Graphics::GpuTaskId middle = *middleResult;
     ASSERT_TRUE(middle.valid());
-    const Graphics::GpuTaskId lastEndpoint = AddTask(graph, Name("tests/task_graph_timing/envelope_last_endpoint"), middle);
+    const auto lastEndpointResult = AddTask(graph, Name("tests/task_graph_timing/envelope_last_endpoint"), middle);
+    ASSERT_TRUE(lastEndpointResult);
+    const Graphics::GpuTaskId lastEndpoint = *lastEndpointResult;
     ASSERT_TRUE(lastEndpoint.valid());
-    const Graphics::GpuTaskId lastPacketSuffix = AddTask(graph, Name("tests/task_graph_timing/envelope_last_packet_suffix"), lastEndpoint, mergedScheduling);
+    const auto lastPacketSuffixResult = AddTask(graph, Name("tests/task_graph_timing/envelope_last_packet_suffix"), lastEndpoint, mergedScheduling);
+    ASSERT_TRUE(lastPacketSuffixResult);
+    const Graphics::GpuTaskId lastPacketSuffix = *lastPacketSuffixResult;
     ASSERT_TRUE(lastPacketSuffix.valid());
 
     Graphics::GpuTaskTimingMetadata packetOnlyTiming;
     packetOnlyTiming.policy = Graphics::GpuTaskTimingPolicy::PacketOnly;
-    const Graphics::GpuTaskId timedTail = AddTask(graph, Name("tests/task_graph_timing/envelope_timed_tail"), lastPacketSuffix, {}, packetOnlyTiming);
+    const auto timedTailResult = AddTask(graph, Name("tests/task_graph_timing/envelope_timed_tail"), lastPacketSuffix, {}, packetOnlyTiming);
+    ASSERT_TRUE(timedTailResult);
+    const Graphics::GpuTaskId timedTail = *timedTailResult;
     ASSERT_TRUE(timedTail.valid());
 
     Graphics::GpuTaskGraphCompileOptions options;
@@ -96,7 +112,7 @@ TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolic
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     Graphics::GpuSubmissionPacketRange expectedRange;
     Graphics::GpuSubmissionPacketRange oldRange;
     u64 oldPlanGeneration = 0u;
@@ -149,7 +165,7 @@ TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolic
         oldRange = compiledRange;
         oldPlanGeneration = views.compiled.planGeneration();
     }
-    ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     u64 recompiledPlanGeneration = 0u;
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
@@ -161,7 +177,7 @@ TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolic
         EXPECT_FALSE(views.compiled.validPacketRange(oldRange));
         recompiledPlanGeneration = views.compiled.planGeneration();
     }
-    ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
@@ -186,11 +202,19 @@ TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolic
 }
 
 TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph_timing/invalid_first"));
-    const Graphics::GpuTaskId second = AddTask(graph, Name("tests/task_graph_timing/invalid_second"), first);
-    const Graphics::GpuTaskId third = AddTask(graph, Name("tests/task_graph_timing/invalid_third"), second);
+    const auto firstResult = AddTask(graph, Name("tests/task_graph_timing/invalid_first"));
+    ASSERT_TRUE(firstResult);
+    const Graphics::GpuTaskId first = *firstResult;
+    const auto secondResult = AddTask(graph, Name("tests/task_graph_timing/invalid_second"), first);
+    ASSERT_TRUE(secondResult);
+    const Graphics::GpuTaskId second = *secondResult;
+    const auto thirdResult = AddTask(graph, Name("tests/task_graph_timing/invalid_third"), second);
+    ASSERT_TRUE(thirdResult);
+    const Graphics::GpuTaskId third = *thirdResult;
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
@@ -202,7 +226,7 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
 
     options.packetTimingEnvelope.firstTask = first;
     EXPECT_FALSE(options.packetTimingEnvelope.enabled());
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
@@ -211,32 +235,34 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     options.packetTimingEnvelope = {};
     options.packetTimingEnvelope.lastTask = third;
     EXPECT_FALSE(options.packetTimingEnvelope.enabled());
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
     }
 
     Graphics::GpuTaskGraph foreignGraph(testArena.arena);
-    const Graphics::GpuTaskId foreign = AddTask(foreignGraph, Name("tests/task_graph_timing/invalid_foreign"));
+    const auto foreignResult = AddTask(foreignGraph, Name("tests/task_graph_timing/invalid_foreign"));
+    ASSERT_TRUE(foreignResult);
+    const Graphics::GpuTaskId foreign = *foreignResult;
     ASSERT_TRUE(foreign.valid());
     options.packetTimingEnvelope = { .firstTask = first, .lastTask = foreign };
     ASSERT_TRUE(options.packetTimingEnvelope.enabled());
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
     }
 
     options.packetTimingEnvelope = { .firstTask = third, .lastTask = first };
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
     }
 
     options.packetTimingEnvelope = { .firstTask = second, .lastTask = second };
-    ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
@@ -246,25 +272,31 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     }
 
     Graphics::GpuTaskGraph mergedGraph(testArena.arena);
-    const Graphics::GpuTaskId mergedFirst = AddTask(mergedGraph, Name("tests/task_graph_timing/invalid_merged_first"));
+    const auto mergedFirstResult = AddTask(mergedGraph, Name("tests/task_graph_timing/invalid_merged_first"));
+    ASSERT_TRUE(mergedFirstResult);
+    const Graphics::GpuTaskId mergedFirst = *mergedFirstResult;
     Graphics::GpuTaskSchedulingHint mergedScheduling;
     mergedScheduling.mergeWithPrevious = true;
-    const Graphics::GpuTaskId mergedLast = AddTask(mergedGraph, Name("tests/task_graph_timing/invalid_merged_last"), mergedFirst, mergedScheduling);
+    const auto mergedLastResult = AddTask(mergedGraph, Name("tests/task_graph_timing/invalid_merged_last"), mergedFirst, mergedScheduling);
+    ASSERT_TRUE(mergedLastResult);
+    const Graphics::GpuTaskId mergedLast = *mergedLastResult;
     ASSERT_TRUE(mergedFirst.valid());
     ASSERT_TRUE(mergedLast.valid());
     options.packetTimingEnvelope = { .firstTask = mergedLast, .lastTask = mergedFirst };
-    EXPECT_FALSE(Compile(mergedGraph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, mergedGraph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(mergedGraph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
     }
 
     Graphics::GpuTaskGraph staleGraph(testArena.arena);
-    const Graphics::GpuTaskId staleEndpoint = AddTask(staleGraph, Name("tests/task_graph_timing/invalid_stale"));
+    const auto staleEndpointResult = AddTask(staleGraph, Name("tests/task_graph_timing/invalid_stale"));
+    ASSERT_TRUE(staleEndpointResult);
+    const Graphics::GpuTaskId staleEndpoint = *staleEndpointResult;
     ASSERT_TRUE(staleEndpoint.valid());
     options.packetTimingEnvelope = { .firstTask = staleEndpoint, .lastTask = staleEndpoint };
     staleGraph.reset();
-    EXPECT_FALSE(Compile(staleGraph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, staleGraph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(staleGraph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
@@ -272,6 +304,8 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
 }
 
 TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskSchedulingHint scheduling;
@@ -285,9 +319,15 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
         graphGeneration = declarations.generation();
     }
     const Graphics::GpuTaskId futureEarly{ .generation = graphGeneration, .index = s_ExpectedDualCount };
-    const Graphics::GpuTaskId late = AddTask(graph, Name("tests/task_graph_timing/topological_late"), futureEarly, scheduling);
-    const Graphics::GpuTaskId prefix = AddTask(graph, Name("tests/task_graph_timing/topological_prefix"), {}, scheduling);
-    const Graphics::GpuTaskId early = AddTask(graph, Name("tests/task_graph_timing/topological_early"), prefix, scheduling);
+    const auto lateResult = AddTask(graph, Name("tests/task_graph_timing/topological_late"), futureEarly, scheduling);
+    ASSERT_TRUE(lateResult);
+    const Graphics::GpuTaskId late = *lateResult;
+    const auto prefixResult = AddTask(graph, Name("tests/task_graph_timing/topological_prefix"), {}, scheduling);
+    ASSERT_TRUE(prefixResult);
+    const Graphics::GpuTaskId prefix = *prefixResult;
+    const auto earlyResult = AddTask(graph, Name("tests/task_graph_timing/topological_early"), prefix, scheduling);
+    ASSERT_TRUE(earlyResult);
+    const Graphics::GpuTaskId early = *earlyResult;
     ASSERT_TRUE(late.valid());
     ASSERT_TRUE(prefix.valid());
     ASSERT_TRUE(early.valid());
@@ -297,7 +337,7 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetTimingEnvelope = { .firstTask = early, .lastTask = late };
-    ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], prefix);
     EXPECT_EQ(analysis.topologicalOrder()[1u], early);
@@ -312,7 +352,7 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
     }
 
     options.packetTimingEnvelope = { .firstTask = late, .lastTask = early };
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
@@ -320,18 +360,26 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
 }
 
 TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPackets){
+    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph_timing/frontier_first"));
+    const auto firstResult = AddTask(graph, Name("tests/task_graph_timing/frontier_first"));
+    ASSERT_TRUE(firstResult);
+    const Graphics::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
 
     Graphics::GpuTaskSchedulingHint frontierScheduling;
     frontierScheduling.forceSubmissionBoundary = true;
     frontierScheduling.allowPacketMerge = false;
     frontierScheduling.joinsAcceptedQueueFrontier = true;
-    const Graphics::GpuTaskId recovery = AddTask(graph, Name("tests/task_graph_timing/frontier_recovery"), {}, frontierScheduling);
+    const auto recoveryResult = AddTask(graph, Name("tests/task_graph_timing/frontier_recovery"), {}, frontierScheduling);
+    ASSERT_TRUE(recoveryResult);
+    const Graphics::GpuTaskId recovery = *recoveryResult;
     ASSERT_TRUE(recovery.valid());
-    const Graphics::GpuTaskId last = AddTask(graph, Name("tests/task_graph_timing/frontier_last"), recovery);
+    const auto lastResult = AddTask(graph, Name("tests/task_graph_timing/frontier_last"), recovery);
+    ASSERT_TRUE(lastResult);
+    const Graphics::GpuTaskId last = *lastResult;
     ASSERT_TRUE(last.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -339,7 +387,7 @@ TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPack
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetTimingEnvelope = { .firstTask = first, .lastTask = first };
-    ASSERT_TRUE(Compile(graph, analysis, assignments, compiledGraph, options));
+    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
@@ -347,19 +395,19 @@ TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPack
     }
 
     options.packetTimingEnvelope = { .firstTask = first, .lastTask = last };
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
     }
     options.packetTimingEnvelope = { .firstTask = recovery, .lastTask = recovery };
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());
     }
     options.packetTimingEnvelope = { .firstTask = last, .lastTask = last };
-    EXPECT_FALSE(Compile(graph, analysis, assignments, compiledGraph, options));
+    EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph, options));
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         EXPECT_FALSE(views.compiled.valid());

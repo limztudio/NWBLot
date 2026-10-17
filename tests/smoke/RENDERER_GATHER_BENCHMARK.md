@@ -42,4 +42,6 @@ The primary useful-reduction gate is `max(0.02 ms, 3% of baseline graphics.rende
 
 ## Memory observations
 
+Current capture schema 2 records the three caller-owned arenas `impl/ecs_render/prepare`, `impl/ecs_render/render`, and `impl/ecs_render/task_graph`. Preparation and graph owners are required; the record owner remains optional for workloads that do not allocate from it. Lower helpers borrow those arenas. Schema 1 captures used retired helper-owner fields and are rejected by the current analyzer; retain their matching frozen source/analyzer for historical comparisons.
+
 Use another output directory with `--mode memory`. This enables per-owner allocation/reallocation/deallocation counters, used/reserved bytes and historical individual-arena peaks. Counters use the end-of-warm-up baseline rather than process-lifetime totals. Required owners must be present; unavailable optional owners are null, not zero savings. Historical arena peaks are neither per-frame nor concurrent process peaks. Memory instrumentation changes the workload, so its CPU/GPU timings must never be pooled with a timing campaign or presented as a measured CPU gain.

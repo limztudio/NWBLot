@@ -36,7 +36,8 @@ bool BackendContext::createInstance(){
         m_enabledExtensions.layers.emplace("VK_LAYER_KHRONOS_validation", m_arena);
     }
 
-    return createVulkanInstance();
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InstanceCreateArena, s_DeviceSetupScratchArenaBytes);
+    return createVulkanInstance(scratchArena);
 }
 
 bool BackendContext::createDevice(){
@@ -100,14 +101,14 @@ bool BackendContext::createDevice(){
         if(!createWindowSurface())
             return false;
     }
-    if(!pickPhysicalDevice())
-        return false;
-    if(!findQueueFamilies(m_vulkanPhysicalDevice))
-        return false;
-    if(!createVulkanDevice())
-        return false;
-
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceExtensionSetupArena, s_DeviceSetupScratchArenaBytes);
+
+    if(!pickPhysicalDevice(scratchArena))
+        return false;
+    if(!findQueueFamilies(scratchArena, m_vulkanPhysicalDevice))
+        return false;
+    if(!createVulkanDevice(scratchArena))
+        return false;
 
     Vector<AStringView, Alloc::ScratchArena> vecInstanceExt(scratchArena);
     Vector<AStringView, Alloc::ScratchArena> vecDeviceExt(scratchArena);
@@ -176,7 +177,8 @@ bool BackendContext::createDevice(){
         .capabilities = graphicsQueueCapabilities,
         .dedicated = false,
         .primaryForClass = true,
-    });
+    }
+    );
     appendSameClassQueues(CommandQueue::Graphics);
     if(m_computeQueueEnabled){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
@@ -186,7 +188,8 @@ bool BackendContext::createDevice(){
             .capabilities = computeQueueCapabilities,
             .dedicated = true,
             .primaryForClass = true,
-        });
+        }
+        );
         appendSameClassQueues(CommandQueue::Compute);
     }
     if(m_transferQueueEnabled){
@@ -197,7 +200,8 @@ bool BackendContext::createDevice(){
             .capabilities = transferQueueCapabilities,
             .dedicated = true,
             .primaryForClass = true,
-        });
+        }
+        );
         appendSameClassQueues(CommandQueue::Transfer);
     }
     deviceDesc.nativeQueues = m_nativeQueues.data();
@@ -239,11 +243,13 @@ bool BackendContext::createDevice(){
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;
     deviceDesc.filesystemFactory = m_deviceParams.filesystemFactory;
 
-    m_rhiDevice = CreateDevice(deviceDesc);
-    if(!m_rhiDevice){
+    auto deviceResult = CreateDevice(deviceDesc);
+    if(!deviceResult){
+        m_rhiDevice = nullptr;
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI device wrapper."));
         return false;
     }
+    m_rhiDevice = Move(*deviceResult);
     if(!m_rhiDevice->getDescriptorHeap().isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required descriptor-buffer heap initialization failed."));
         m_rhiDevice = nullptr;
@@ -280,7 +286,9 @@ bool BackendContext::createSwapChain(){
         return false;
     }
 
-    if(createSwapChainResources())
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
+
+    if(createSwapChainResources(scratchArena))
         return true;
 
     if(m_rhiDevice && !m_lifecycleDrainActive){
@@ -454,7 +462,9 @@ bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
     clearSemaphores(m_presentSemaphores);
     clearAcquireSyncSlots();
 
-    if(!createSwapChainResources()){
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
+
+    if(!createSwapChainResources(scratchArena)){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         return false;
     }
@@ -524,8 +534,8 @@ bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
     return true;
 }
 
-bool BackendContext::createSwapChainResources(){
-    if(!createVulkanSwapChain())
+bool BackendContext::createSwapChainResources(Alloc::ScratchArena& scratchArena){
+    if(!createVulkanSwapChain(scratchArena))
         return false;
 
     usize const numPresentSemaphores = m_swapChainImages.size();

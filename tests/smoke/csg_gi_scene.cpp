@@ -11,6 +11,8 @@
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 
+#include <core/alloc/scratch.h>
+
 #include <global/simdmath.h>
 
 
@@ -176,7 +178,8 @@ CsgGiScene::CsgGiScene(ProjectRuntimeContext& context, Core::ECS::World& world)n
 {}
 
 Expected<bool> CsgGiScene::start(){
-    const auto configuredArm = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GI_CSG_ARM");
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+    const auto configuredArm = ReadSmokeEnvironmentText(scratchArena, "NWB_GI_CSG_ARM");
     if(!configuredArm)
         return false;
     const AStringView arm(configuredArm->data(), configuredArm->size());
@@ -184,7 +187,7 @@ Expected<bool> CsgGiScene::start(){
         NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: invalid NWB_GI_CSG_ARM"));
         return MakeUnexpected(Failure{});
     }
-    if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT")){
+    if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT")){
         const auto count = ParseU64(AStringView(value->data(), value->size()));
         if(!count || *count < 360u || *count > Limit<u32>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: CSG GI warmup requires at least 360 successful presentations"));
@@ -193,18 +196,18 @@ Expected<bool> CsgGiScene::start(){
         m_requiredPresentations = *count;
     }
 
-    auto* renderer = m_world.getSystem<Impl::RendererSystem>();
-    if(!renderer)
-        return MakeUnexpected(Failure{});
+    auto* const rendererPtr = m_world.getSystem<Impl::RendererSystem>();
+    NWB_ASSERT(rendererPtr);
+    Impl::RendererSystem& renderer = *rendererPtr;
     if(ReadSmokeEnvironmentFlag("NWB_GI_CSG_LAGGED_LIGHTING"))
-        renderer->setFrameLaggedAsyncLightingEnabled(true);
+        renderer.setFrameLaggedAsyncLightingEnabled(true);
     Impl::ReflectionSettings reflection;
     reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
     Impl::PresentationSettings presentation;
     presentation.toneMap = Impl::PresentationToneMap::LinearClamp;
-    if(!renderer->setReflectionSettings(reflection) || !renderer->setPresentationSettings(presentation))
+    if(!renderer.setReflectionSettings(reflection) || !renderer.setPresentationSettings(presentation))
         return MakeUnexpected(Failure{});
-    renderer->setRefractionEnabled(false);
+    renderer.setRefractionEnabled(false);
 
     const auto camera = CreateSmokeCamera(m_world, 1.3f, 5.5f, 0.0f);
     const auto light = Impl::Scene::CreatePointLightEntity(m_world, Float4(0.0f, 1.3f, -3.0f, 0.0f), __hidden_csg_gi_scene::s_White, 20.0f, 15.0f);
@@ -241,7 +244,7 @@ Expected<bool> CsgGiScene::start(){
         return MakeUnexpected(Failure{});
 
     const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
-    auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("GiTestSmokeProject"), 360u, options);
+    auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("GiTestSmokeProject"), 360u, options);
     if(!capture)
         return MakeUnexpected(Failure{});
     m_capture = Move(*capture);

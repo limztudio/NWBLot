@@ -29,6 +29,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
+    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
@@ -162,13 +163,13 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const Core::GpuGraphResourceId sceneGeometryDomain = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), "Scene Acceleration and Geometry"));
-    if(!sceneGeometryDomain.valid()){
+    const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), "Scene Acceleration and Geometry"));
+    if(!sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
         return false;
     }
+    const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
     constexpr usize s_ShadowVisibilityResourceUseCapacity = 40u;
@@ -185,18 +186,20 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const auto appendOptionalWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         if(!texture)
             return true;
-        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importTexture(texture, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));
         return true;
     };
     const auto appendOptionalOpaqueTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const bool isInput){
         if(!texture)
             return true;
-        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importTexture(texture, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         if(graphOwnsOpaqueTemporalMergeEntryStates)
             resourceUses.push_back(isInput ? ReadUse(resource, Core::ResourceStates::ShaderResource) : WriteUse(resource, Core::ResourceStates::UnorderedAccess));
         else if(!splitSoftTransparentFold){
@@ -214,9 +217,10 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const auto appendOptionalOpaqueTemporalStaticReadTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         if(!texture)
             return true;
-        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importTexture(texture, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         if(softShadowHistoryReadable)
             resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         else if(splitSoftTransparentFold && !graphOwnsOpaqueTemporalMergeEntryStates)
@@ -226,9 +230,10 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const auto appendOptionalTransparentTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const bool isInput){
         if(!texture)
             return true;
-        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importTexture(texture, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         if(rayTracingPlan.transparentTemporalMergeReady){
             if(isInput){
                 if(softShadowHistoryReadable)
@@ -242,9 +247,10 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const auto appendOptionalReadWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
             return true;
-        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
-        if(!resource.valid())
+        const auto resourceResult = importBuffer(buffer, identity, label);
+        if(!resourceResult)
             return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         resourceUses.push_back(ReadWriteUse(resource, state));
         return true;
     };
@@ -282,12 +288,14 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     ;
     Core::GpuGraphResourceId sceneTlas;
     if(rayTracingShadowResources.sceneTlas){
-        sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
+        const auto sceneTlasResult = m_deferredLightingTaskGraph.importAccelStruct(
             rayTracingShadowResources.sceneTlas,
             AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)
                 .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
         );
-        optionalResourcesImported = optionalResourcesImported && sceneTlas.valid();
+        if(sceneTlasResult)
+            sceneTlas = *sceneTlasResult;
+        optionalResourcesImported = optionalResourcesImported && sceneTlasResult.has_value();
         if(sceneTlas.valid() && !hardwareTransparentTrace){
             resourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
         }
@@ -302,9 +310,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             const Core::BufferDesc& bufferDesc = buffer->getCreationDescription();
             if(!bufferDesc.debugName)
                 return false;
-            hardwareTransparentScratch[index] = m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(bufferDesc.debugName, "Hardware Transparent Shadow Scratch").setInitialState(bufferDesc.initialState));
-            if(!hardwareTransparentScratch[index].valid())
+            const auto hardwareTransparentScratchIndexResult = m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(bufferDesc.debugName, "Hardware Transparent Shadow Scratch").setInitialState(bufferDesc.initialState));
+            if(!hardwareTransparentScratchIndexResult){
+                hardwareTransparentScratch[index] = {};
                 return false;
+            }
+            hardwareTransparentScratch[index] = *hardwareTransparentScratchIndexResult;
             resourceUses.push_back(ReadWriteUse(hardwareTransparentScratch[index], Core::ResourceStates::UnorderedAccess));
         }
         for(const Core::GpuTaskResourceUse& use : hardwareSceneReads.uses)
@@ -316,11 +327,13 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     }
     Core::GpuGraphResourceId adaptiveEdgeCounter;
     if(graphOwnedAdaptivePlan.compact){
-        adaptiveEdgeCounter = importBuffer(rayTracingShadowResources.swShadowEdgeCounterBuffer, Name("render.shadow_visibility.edge_counter"), "Shadow Edge Counter");
-        if(!adaptiveEdgeCounter.valid()){
+        const auto adaptiveEdgeCounterResult = importBuffer(rayTracingShadowResources.swShadowEdgeCounterBuffer, Name("render.shadow_visibility.edge_counter"), "Shadow Edge Counter");
+        if(!adaptiveEdgeCounterResult){
+            adaptiveEdgeCounter = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
             return false;
         }
+        adaptiveEdgeCounter = *adaptiveEdgeCounterResult;
     }
     resourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
     resourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
@@ -351,50 +364,78 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueResourceUses{ scratchArena };
     bool graphOwnsTransparentTemporalMergeEntryStates = false;
     if(splitSoftTransparentFold){
-        const Core::GpuGraphResourceId shadowSoftHalfA = importTexture(deferredTargets.shadowSoftHalfA, Name("render.shadow_visibility.soft_half_a"), "Shadow Soft Half A");
-        const Core::GpuGraphResourceId shadowSoftHalfB = importTexture(deferredTargets.shadowSoftHalfB, Name("render.shadow_visibility.soft_half_b"), "Shadow Soft Half B");
-        const Core::GpuGraphResourceId shadowSoftGeometry = importTexture(deferredTargets.shadowSoftGeometry, Name("render.shadow_visibility.soft_geometry"), "Shadow Soft Geometry");
-        const Core::GpuGraphResourceId shadowSoftGeometryPrevious = importTexture(deferredTargets.shadowSoftGeometryPrev, Name("render.shadow_visibility.soft_geometry_previous"), "Previous Shadow Soft Geometry");
-        const Core::GpuGraphResourceId opaqueHistoryA = importTexture(deferredTargets.shadowHistA, Name("render.shadow_visibility.history_a"), "Shadow History A");
-        const Core::GpuGraphResourceId opaqueHistoryB = importTexture(deferredTargets.shadowHistB, Name("render.shadow_visibility.history_b"), "Shadow History B");
-        const Core::GpuGraphResourceId opaqueMomentsA = importTexture(deferredTargets.shadowMomentsA, Name("render.shadow_visibility.moments_a"), "Shadow Moments A");
-        const Core::GpuGraphResourceId opaqueMomentsB = importTexture(deferredTargets.shadowMomentsB, Name("render.shadow_visibility.moments_b"), "Shadow Moments B");
-        const Core::GpuGraphResourceId transparentSoftHalf = importTexture(deferredTargets.transparentSoftHalf, Name("render.shadow_visibility.transparent_soft_half"), "Transparent Shadow Soft Half");
-        const Core::GpuGraphResourceId transparentHistoryA = importTexture(deferredTargets.transparentHistA, Name("render.shadow_visibility.transparent_history_a"), "Transparent Shadow History A");
-        const Core::GpuGraphResourceId transparentHistoryB = importTexture(deferredTargets.transparentHistB, Name("render.shadow_visibility.transparent_history_b"), "Transparent Shadow History B");
-        const Core::GpuGraphResourceId transparentMomentsA = importTexture(deferredTargets.transparentMomentsA, Name("render.shadow_visibility.transparent_moments_a"), "Transparent Shadow Moments A");
-        const Core::GpuGraphResourceId transparentMomentsB = importTexture(deferredTargets.transparentMomentsB, Name("render.shadow_visibility.transparent_moments_b"), "Transparent Shadow Moments B");
-        const Core::GpuGraphResourceId sceneBvhNodes = hardwareTransparentTrace ? Core::GpuGraphResourceId{} : importBuffer(rayTracingResources.sceneBvhNodeBuffer, Name("render.shadow_visibility.scene_bvh_nodes"), "Scene BVH Nodes");
-        const Core::GpuGraphResourceId sceneInstances = hardwareTransparentTrace ? Core::GpuGraphResourceId{} : importBuffer(rayTracingResources.sceneInstanceBuffer, Name("render.shadow_visibility.scene_instances"), "Scene Instances");
-        const Core::GpuGraphResourceId shadowInstanceMaterials = importBuffer(
-            rayTracingResources.shadowInstanceMaterialBuffer,
-            Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
-            RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel
-        );
-        const Core::GpuGraphResourceId shadowTypedMaterials = importBuffer(rayTracingResources.shadowMaterialTypedBuffer, Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName), RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel);
-        const Core::GpuGraphResourceId shadowInstances = importBuffer(rayTracingResources.shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel);
+        const auto shadowSoftHalfAResult = importTexture(deferredTargets.shadowSoftHalfA, Name("render.shadow_visibility.soft_half_a"), "Shadow Soft Half A");
+        const auto shadowSoftHalfBResult = importTexture(deferredTargets.shadowSoftHalfB, Name("render.shadow_visibility.soft_half_b"), "Shadow Soft Half B");
+        const auto shadowSoftGeometryResult = importTexture(deferredTargets.shadowSoftGeometry, Name("render.shadow_visibility.soft_geometry"), "Shadow Soft Geometry");
+        const auto shadowSoftGeometryPreviousResult = importTexture(deferredTargets.shadowSoftGeometryPrev, Name("render.shadow_visibility.soft_geometry_previous"), "Previous Shadow Soft Geometry");
+        const auto opaqueHistoryAResult = importTexture(deferredTargets.shadowHistA, Name("render.shadow_visibility.history_a"), "Shadow History A");
+        const auto opaqueHistoryBResult = importTexture(deferredTargets.shadowHistB, Name("render.shadow_visibility.history_b"), "Shadow History B");
+        const auto opaqueMomentsAResult = importTexture(deferredTargets.shadowMomentsA, Name("render.shadow_visibility.moments_a"), "Shadow Moments A");
+        const auto opaqueMomentsBResult = importTexture(deferredTargets.shadowMomentsB, Name("render.shadow_visibility.moments_b"), "Shadow Moments B");
+        const auto transparentSoftHalfResult = importTexture(deferredTargets.transparentSoftHalf, Name("render.shadow_visibility.transparent_soft_half"), "Transparent Shadow Soft Half");
+        const auto transparentHistoryAResult = importTexture(deferredTargets.transparentHistA, Name("render.shadow_visibility.transparent_history_a"), "Transparent Shadow History A");
+        const auto transparentHistoryBResult = importTexture(deferredTargets.transparentHistB, Name("render.shadow_visibility.transparent_history_b"), "Transparent Shadow History B");
+        const auto transparentMomentsAResult = importTexture(deferredTargets.transparentMomentsA, Name("render.shadow_visibility.transparent_moments_a"), "Transparent Shadow Moments A");
+        const auto transparentMomentsBResult = importTexture(deferredTargets.transparentMomentsB, Name("render.shadow_visibility.transparent_moments_b"), "Transparent Shadow Moments B");
+        Expected<Optional<Core::GpuGraphResourceId>> sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{};
+        if(!(hardwareTransparentTrace)){
+            const auto importedResource = importBuffer(rayTracingResources.sceneBvhNodeBuffer, Name("render.shadow_visibility.scene_bvh_nodes"), "Scene BVH Nodes");
+            if(!importedResource)
+                sceneBvhNodesResult = MakeUnexpected(importedResource.error());
+            else
+                sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+        }
+        Expected<Optional<Core::GpuGraphResourceId>> sceneInstancesResult = Optional<Core::GpuGraphResourceId>{};
+        if(!(hardwareTransparentTrace)){
+            const auto importedResource = importBuffer(rayTracingResources.sceneInstanceBuffer, Name("render.shadow_visibility.scene_instances"), "Scene Instances");
+            if(!importedResource)
+                sceneInstancesResult = MakeUnexpected(importedResource.error());
+            else
+                sceneInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
+        }
+        const auto shadowInstanceMaterialsResult = importBuffer(rayTracingResources.shadowInstanceMaterialBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName), RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel);
+        const auto shadowTypedMaterialsResult = importBuffer(rayTracingResources.shadowMaterialTypedBuffer, Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName), RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel);
+        const auto shadowInstancesResult = importBuffer(rayTracingResources.shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel);
         if(
-            !shadowSoftHalfA.valid()
-            || !shadowSoftHalfB.valid()
-            || !shadowSoftGeometry.valid()
-            || !shadowSoftGeometryPrevious.valid()
-            || !opaqueHistoryA.valid()
-            || !opaqueHistoryB.valid()
-            || !opaqueMomentsA.valid()
-            || !opaqueMomentsB.valid()
-            || !transparentSoftHalf.valid()
-            || !transparentHistoryA.valid()
-            || !transparentHistoryB.valid()
-            || !transparentMomentsA.valid()
-            || !transparentMomentsB.valid()
-            || (hardwareTransparentTrace ? !sceneTlas.valid() : (!sceneBvhNodes.valid() || !sceneInstances.valid()))
-            || !shadowInstanceMaterials.valid()
-            || !shadowTypedMaterials.valid()
-            || !shadowInstances.valid()
+            !shadowSoftHalfAResult
+            || !shadowSoftHalfBResult
+            || !shadowSoftGeometryResult
+            || !shadowSoftGeometryPreviousResult
+            || !opaqueHistoryAResult
+            || !opaqueHistoryBResult
+            || !opaqueMomentsAResult
+            || !opaqueMomentsBResult
+            || !transparentSoftHalfResult
+            || !transparentHistoryAResult
+            || !transparentHistoryBResult
+            || !transparentMomentsAResult
+            || !transparentMomentsBResult
+            || (hardwareTransparentTrace ? !sceneTlas.valid() : (!sceneBvhNodesResult || !sceneInstancesResult))
+            || !shadowInstanceMaterialsResult
+            || !shadowTypedMaterialsResult
+            || !shadowInstancesResult
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
             return false;
         }
+        const Core::GpuGraphResourceId sceneInstances = sceneInstancesResult->value_or(Core::GpuGraphResourceId{});
+        const Core::GpuGraphResourceId sceneBvhNodes = sceneBvhNodesResult->value_or(Core::GpuGraphResourceId{});
+        const Core::GpuGraphResourceId shadowSoftHalfA = *shadowSoftHalfAResult;
+        const Core::GpuGraphResourceId shadowSoftHalfB = *shadowSoftHalfBResult;
+        const Core::GpuGraphResourceId shadowSoftGeometry = *shadowSoftGeometryResult;
+        const Core::GpuGraphResourceId shadowSoftGeometryPrevious = *shadowSoftGeometryPreviousResult;
+        const Core::GpuGraphResourceId opaqueHistoryA = *opaqueHistoryAResult;
+        const Core::GpuGraphResourceId opaqueHistoryB = *opaqueHistoryBResult;
+        const Core::GpuGraphResourceId opaqueMomentsA = *opaqueMomentsAResult;
+        const Core::GpuGraphResourceId opaqueMomentsB = *opaqueMomentsBResult;
+        const Core::GpuGraphResourceId transparentSoftHalf = *transparentSoftHalfResult;
+        const Core::GpuGraphResourceId transparentHistoryA = *transparentHistoryAResult;
+        const Core::GpuGraphResourceId transparentHistoryB = *transparentHistoryBResult;
+        const Core::GpuGraphResourceId transparentMomentsA = *transparentMomentsAResult;
+        const Core::GpuGraphResourceId transparentMomentsB = *transparentMomentsBResult;
+        const Core::GpuGraphResourceId shadowInstanceMaterials = *shadowInstanceMaterialsResult;
+        const Core::GpuGraphResourceId shadowTypedMaterials = *shadowTypedMaterialsResult;
+        const Core::GpuGraphResourceId shadowInstances = *shadowInstancesResult;
 
         // The opaque callback has no temporal or coarse scratch access. Keep its direct serial writes separate from the unsplit adaptive declaration so a fresh retained target never becomes a synthetic first read.
         constexpr usize s_OpaqueResourceUseCapacity = 18u;
@@ -631,8 +672,14 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
                 resource = declarations.findImportedBuffer(buffer);
             }
-            if(!resource.valid())
-                resource = importBuffer(buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
+            if(!resource.valid()){
+                const auto importedResource = importBuffer(buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
+                if(!importedResource){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
+                    return false;
+                }
+                resource = *importedResource;
+            }
             if(!resource.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
                 return false;
@@ -644,7 +691,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             opaqueResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
             transparentTraceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
-        const LightSpaceShadowGraph maps = DeclareLightSpaceShadowMaps(m_deferredLightingTaskGraph, LightSpaceShadowGraphInputs{
+        auto mapsResult = DeclareLightSpaceShadowMaps(m_deferredLightingTaskGraph, LightSpaceShadowGraphInputs{
             .graphics = m_graphics,
             .arena = m_arena,
             .scratchArena = scratchArena,
@@ -657,11 +704,13 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .sceneReadSetCount = traceResourceSetUseCount,
             .stateSources = shadowVisibilityStateSourceData,
             .stateSourceCount = shadowVisibilityStateSourceCount,
-        });
-        if(!maps.valid()){
+        }
+        );
+        if(!mapsResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
             return false;
         }
+        const LightSpaceShadowGraph maps = Move(*mapsResult);
         const Core::GpuGraphResourceId mapBuffers[] = { maps.counts, maps.events, maps.views };
         for(const auto resource : mapBuffers){
             opaqueResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
@@ -703,7 +752,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 hardwareCsgShadow ? traceResourceSetUseCount : (!hardwareShadowSupported && traceGeometryStatesGraphOwned ? 1u : 0u)
             )
         ;
-        m_deferredShadowVisibilityOpaqueTask = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
+        const auto mDeferredShadowVisibilityOpaqueTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
             m_deferredLightingTaskGraph,
             opaqueDesc,
             deferredTargets,
@@ -718,10 +767,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             graphOwnsOpaqueTemporalMergeEntryStates,
             &rayTracingPlan.lightSpace
         );
-        if(!m_deferredShadowVisibilityOpaqueTask.valid()){
+        if(!mDeferredShadowVisibilityOpaqueTaskResult){
+            m_deferredShadowVisibilityOpaqueTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
             return false;
         }
+        m_deferredShadowVisibilityOpaqueTask = *mDeferredShadowVisibilityOpaqueTaskResult;
 
         Core::GpuTaskSchedulingHint tailScheduling;
         tailScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -742,7 +793,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
                 .setResourceUses(opaqueFirstWaveletResourceUses.data(), opaqueFirstWaveletResourceUses.size())
             ;
-            m_deferredShadowVisibilityOpaqueFirstWaveletTask = m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
+            const auto mDeferredShadowVisibilityOpaqueFirstWaveletTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
                 m_deferredLightingTaskGraph,
                 opaqueFirstWaveletDesc,
                 deferredTargets,
@@ -758,10 +809,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 combinedSoftUpsample,
                 combinedSoftWavelet
             );
-            if(!m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()){
+            if(!mDeferredShadowVisibilityOpaqueFirstWaveletTaskResult){
+                m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
                 return false;
             }
+            m_deferredShadowVisibilityOpaqueFirstWaveletTask = *mDeferredShadowVisibilityOpaqueFirstWaveletTaskResult;
         }
 
         if(!combinedSoftUpsample){
@@ -774,7 +827,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 .setDependencies(opaqueResolveDependencies, LengthOf(opaqueResolveDependencies))
                 .setResourceUses(opaqueResolveResourceUses.data(), opaqueResolveResourceUses.size())
             ;
-            m_deferredShadowVisibilityOpaqueResolveTask = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTailTask(
+            const auto mDeferredShadowVisibilityOpaqueResolveTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTailTask(
                 m_deferredLightingTaskGraph,
                 opaqueResolveDesc,
                 deferredTargets,
@@ -787,10 +840,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 opaqueFrameIndex,
                 hardwareShadowSupported
             );
-            if(!m_deferredShadowVisibilityOpaqueResolveTask.valid()){
+            if(!mDeferredShadowVisibilityOpaqueResolveTaskResult){
+                m_deferredShadowVisibilityOpaqueResolveTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
                 return false;
             }
+            m_deferredShadowVisibilityOpaqueResolveTask = *mDeferredShadowVisibilityOpaqueResolveTaskResult;
         }
 
         const Core::GpuTaskId opaqueCompletionTask = combinedSoftTemporal ? m_deferredShadowVisibilityOpaqueTask : combinedSoftUpsample ? m_deferredShadowVisibilityOpaqueFirstWaveletTask : m_deferredShadowVisibilityOpaqueResolveTask;
@@ -805,7 +860,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .setResourceUses(transparentTraceResourceUses.data(), transparentTraceResourceUses.size())
             .setResourceSetUses(traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, traceResourceSetUseCount)
         ;
-        m_deferredShadowVisibilityTransparentTraceTask = m_raytracingSystem.declareShadowTransparentSoftTraceTask(
+        const auto mDeferredShadowVisibilityTransparentTraceTaskResult = m_raytracingSystem.declareShadowTransparentSoftTraceTask(
             m_deferredLightingTaskGraph,
             traceDesc,
             deferredTargets,
@@ -816,10 +871,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             transparentTraceProduced,
             &rayTracingPlan.lightSpace
         );
-        if(!m_deferredShadowVisibilityTransparentTraceTask.valid()){
+        if(!mDeferredShadowVisibilityTransparentTraceTaskResult){
+            m_deferredShadowVisibilityTransparentTraceTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));
             return false;
         }
+        m_deferredShadowVisibilityTransparentTraceTask = *mDeferredShadowVisibilityTransparentTraceTaskResult;
 
         Core::GpuTaskId transparentFirstWaveletDependency = m_deferredShadowVisibilityTransparentTraceTask;
         if(graphOwnsTransparentTemporalMergeEntryStates){
@@ -833,8 +890,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
                 .setResourceUses(transparentTemporalMergeResourceUses.data(), transparentTemporalMergeResourceUses.size())
             ;
-            m_deferredShadowVisibilityTransparentTemporalMergeTask =
-                m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
+            const auto mDeferredShadowVisibilityTransparentTemporalMergeTaskResult = m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
                     m_deferredLightingTaskGraph,
                     transparentTemporalMergeDesc,
                     deferredTargets,
@@ -847,12 +903,13 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                     true,
                     combinedSoftTemporal,
                     hardwareShadowSupported
-                )
-            ;
-            if(!m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()){
+                );
+            if(!mDeferredShadowVisibilityTransparentTemporalMergeTaskResult){
+                m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
                 return false;
             }
+            m_deferredShadowVisibilityTransparentTemporalMergeTask = *mDeferredShadowVisibilityTransparentTemporalMergeTaskResult;
             transparentFirstWaveletDependency = m_deferredShadowVisibilityTransparentTemporalMergeTask;
         }
 
@@ -865,7 +922,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .setDependencies(transparentFirstWaveletDependencies, LengthOf(transparentFirstWaveletDependencies))
             .setResourceUses(transparentFirstWaveletResourceUses.data(), transparentFirstWaveletResourceUses.size())
         ;
-        m_deferredShadowVisibilityTransparentFirstWaveletTask = m_raytracingSystem.declareShadowTransparentSoftFirstWaveletTask(
+        const auto mDeferredShadowVisibilityTransparentFirstWaveletTaskResult = m_raytracingSystem.declareShadowTransparentSoftFirstWaveletTask(
             m_deferredLightingTaskGraph,
             transparentFirstWaveletDesc,
             deferredTargets,
@@ -879,10 +936,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             !graphOwnsTransparentTemporalMergeEntryStates,
             combinedSoftWavelet
         );
-        if(!m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()){
+        if(!mDeferredShadowVisibilityTransparentFirstWaveletTaskResult){
+            m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
             return false;
         }
+        m_deferredShadowVisibilityTransparentFirstWaveletTask = *mDeferredShadowVisibilityTransparentFirstWaveletTaskResult;
 
         const Core::GpuTaskId foldDependencies[] = { m_deferredShadowVisibilityTransparentFirstWaveletTask };
         Core::GpuTaskDesc foldDesc;
@@ -894,7 +953,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .setResourceUses(transparentFoldResourceUses.data(), transparentFoldResourceUses.size())
         ;
         // The terminal fold owns effect completion, so lighting, recovery and acceptance observe fully folded visibility.
-        m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowTransparentSoftFoldTask(
+        const auto mDeferredShadowVisibilityTaskResult = m_raytracingSystem.declareShadowTransparentSoftFoldTask(
             m_deferredLightingTaskGraph,
             foldDesc,
             deferredTargets,
@@ -908,12 +967,14 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             opaqueFrameIndex,
             combinedSoftUpsample
         );
-        if(!m_deferredShadowVisibilityTask.valid()){
+        if(!mDeferredShadowVisibilityTaskResult){
+            m_deferredShadowVisibilityTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
             return false;
         }
+        m_deferredShadowVisibilityTask = *mDeferredShadowVisibilityTaskResult;
         if(rayTracingPlan.lightSpace.diagnosticReadback){
-            m_deferredShadowVisibilityDiagnosticsTask = DeclareLightSpaceShadowDiagnostics(m_deferredLightingTaskGraph, LightSpaceShadowGraphInputs{
+            const auto mDeferredShadowVisibilityDiagnosticsTaskResult = DeclareLightSpaceShadowDiagnostics(m_deferredLightingTaskGraph, LightSpaceShadowGraphInputs{
                 .graphics = m_graphics,
                 .arena = m_arena,
                 .scratchArena = scratchArena,
@@ -922,11 +983,14 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 .dependency = m_deferredShadowVisibilityTask,
                 .stateSources = shadowVisibilityStateSourceData,
                 .stateSourceCount = shadowVisibilityStateSourceCount,
-            }, csgShadowContext);
-            if(!m_deferredShadowVisibilityDiagnosticsTask.valid()){
+            }, csgShadowContext
+            );
+            if(!mDeferredShadowVisibilityDiagnosticsTaskResult){
+                m_deferredShadowVisibilityDiagnosticsTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare CSG shadow diagnostics readback"));
                 return false;
             }
+            m_deferredShadowVisibilityDiagnosticsTask = *mDeferredShadowVisibilityDiagnosticsTaskResult;
         }
         return true;
     }
@@ -949,19 +1013,21 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             EnableSameFamilyComputeEffectRouting(counterClearScheduling, adaptivePrimitivePrecedesVisibility);
             Core::GpuTaskDesc counterClearDesc;
             counterClearDesc.setIdentity(Name("render.shadow_visibility.adaptive_counter_clear")).setMarkerLabel("Shadow Adaptive Counter Clear").setScheduling(counterClearScheduling).setDependencies(&shadowVisibilityDependency, 1u);
-            m_deferredShadowVisibilityAdaptiveCounterClearTask = m_deferredLightingTaskGraph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u, });
-            if(!m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()){
+            const auto mDeferredShadowVisibilityAdaptiveCounterClearTaskResult = m_deferredLightingTaskGraph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u, });
+            if(!mDeferredShadowVisibilityAdaptiveCounterClearTaskResult){
+                m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
                 return false;
             }
+            m_deferredShadowVisibilityAdaptiveCounterClearTask = *mDeferredShadowVisibilityAdaptiveCounterClearTaskResult;
             shadowVisibilityDependency = m_deferredShadowVisibilityAdaptiveCounterClearTask;
             adaptivePrimitivePrecedesVisibility = true;
         }
     }
 
 
-// Preparedness is established while Shadow Prepare records, after this graph is declared.  The normal
-    // monolithic path therefore begins with an unconditional all-lit clear: real shadow producers overwrite it, while a missing producer retains the same white fallback without a callback-local native state bridge.
+    // Preparedness is established while Shadow Prepare records, after this graph is declared.
+    // The normal monolithic path therefore begins with an unconditional all-lit clear: real shadow producers overwrite it, while a missing producer retains the same white fallback without a callback-local native state bridge.
     // Keep this Compute-native clear on the selected Compute packet with Shadow Visibility.
     Core::GpuTaskSchedulingHint allLitClearScheduling;
     allLitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -980,13 +1046,15 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         .setExternalDependencies(laggedLightingHistoryWriterDrainDependencies, laggedLightingHistoryWriterDrainDependencyCount)
         .setResourceUses(&allLitClearResourceUse, 1u)
     ;
-    m_deferredShadowVisibilityAllLitClearTask = m_deferredLightingTaskGraph.addTask<
+    const auto mDeferredShadowVisibilityAllLitClearTaskResult = m_deferredLightingTaskGraph.addTask<
         ECSRenderDetail::FloatTextureClearGraphTask
     >(allLitClearDesc, ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = shadowVisibility, .subresources = ECSRenderDetail::s_ShadowVisibilitySubresources, .floatValue = ECSRenderDetail::s_ShadowVisibilityAllLitClearColor, });
-    if(!m_deferredShadowVisibilityAllLitClearTask.valid()){
+    if(!mDeferredShadowVisibilityAllLitClearTaskResult){
+        m_deferredShadowVisibilityAllLitClearTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
         return false;
     }
+    m_deferredShadowVisibilityAllLitClearTask = *mDeferredShadowVisibilityAllLitClearTaskResult;
     shadowVisibilityDependency = m_deferredShadowVisibilityAllLitClearTask;
 
     Core::GpuTaskSchedulingHint scheduling;
@@ -1006,11 +1074,22 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, traceResourceSetUseCount)
     ;
-    m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowVisibilityTask(m_deferredLightingTaskGraph, desc, deferredTargets, deferredLightingResources, m_shadowPreparationOutcome.ready, hardwareShadowSupported, timingTicket, graphOwnedAdaptivePlan);
-    if(!m_deferredShadowVisibilityTask.valid()){
+    const auto mDeferredShadowVisibilityTaskResult2 = m_raytracingSystem.declareShadowVisibilityTask(
+        m_deferredLightingTaskGraph,
+        desc,
+        deferredTargets,
+        deferredLightingResources,
+        m_shadowPreparationOutcome.ready,
+        hardwareShadowSupported,
+        timingTicket,
+        graphOwnedAdaptivePlan
+    );
+    if(!mDeferredShadowVisibilityTaskResult2){
+        m_deferredShadowVisibilityTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
         return false;
     }
+    m_deferredShadowVisibilityTask = *mDeferredShadowVisibilityTaskResult2;
     return true;
 }
 

@@ -83,7 +83,7 @@ bool BackendContext::createWindowSurface(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::createVulkanSwapChain(){
+bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
     VkResult res = VK_SUCCESS;
 
     if(m_swapChain || !m_swapChainImages.empty()){
@@ -99,8 +99,6 @@ bool BackendContext::createVulkanSwapChain(){
 
     const bool hdr10ExtensionEnabled = m_hdr10ColorSpaceExtensionEnabled;
     const bool hdr10Allowed = m_deviceParams.enableHDR10Output && hdr10ExtensionEnabled;
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
 
     uint32_t surfaceFormatCount = 0u;
     res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceFormatCount, nullptr);
@@ -344,13 +342,14 @@ bool BackendContext::createVulkanSwapChain(){
             .initialStateKnown = false,
         };
 
-        sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(ObjectTypes::s_Image, Object(sci.image), textureDesc, nativeProvenance);
-        if(!sci.rhiHandle){
+        auto imageHandle = m_rhiDevice->createHandleForNativeTexture(ObjectTypes::s_Image, Object(sci.image), textureDesc, nativeProvenance);
+        if(!imageHandle){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
             if(!destroySwapChainAfterCreateFailure())
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete swapchain after image import failure."));
             return false;
         }
+        sci.rhiHandle = Move(*imageHandle);
         m_swapChainImages.push_back(Move(sci));
     }
 
@@ -379,7 +378,6 @@ bool BackendContext::createVulkanSwapChain(){
 
     return true;
 }
-
 
 bool BackendContext::prepareSwapChainImageRevocation(){
     for(SwapChainImage& swapChainImage : m_swapChainImages){
@@ -428,6 +426,7 @@ void BackendContext::commitPreparedSwapChainDestruction()noexcept{
 
     m_swapChainImages.clear();
 }
+
 
 bool BackendContext::destroySwapChainAfterCreateFailure(){
     if(!prepareSwapChainImageRevocation())

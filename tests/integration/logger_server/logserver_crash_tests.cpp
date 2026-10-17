@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <core/crash/module.h>
+#include <core/crash/package_internal.h>
 #include <core/crash/package_names.h>
 #include <core/common/log.h>
 
@@ -67,6 +68,7 @@ using NWB::Tests::WaitForDirectory;
 using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
+inline constexpr Name s_ArchiveScratch("tests/integration/logger_server/archive_scratch");
 inline constexpr Name s_AssertChildInstallArena("tests/integration/logger_server/assert_child_install");
 inline constexpr Name s_RecoverableErrorInstallArena("tests/integration/logger_server/recoverable_error_install");
 #if defined(_MSC_VER)
@@ -103,13 +105,20 @@ static void AppendDecimalText(CrashTestText& outText, const u64 value){
 }
 
 
-[[nodiscard]] static bool LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
+[[nodiscard]] static Expected<bool, ErrorCode> LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
     const auto pathText = ReadEnvironmentVariable(arena, "PATH");
-    if(!pathText || pathText->empty())
+    if(!pathText)
+        return MakeUnexpected(pathText.error());
+    if(!*pathText || (*pathText)->empty())
         return false;
 
-    const AStringView searchPath(pathText->data(), pathText->size());
-    return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer") || ExecutableAvailableInPath(arena, searchPath, "addr2line");
+    const AStringView searchPath((*pathText)->data(), (*pathText)->size());
+    const auto llvmAvailable = ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer");
+    if(!llvmAvailable)
+        return MakeUnexpected(llvmAvailable.error());
+    if(*llvmAvailable)
+        return true;
+    return ExecutableAvailableInPath(arena, searchPath, "addr2line");
 }
 
 static void LinuxSilenceExpectedCrashChildConsole(){
@@ -176,7 +185,8 @@ NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservati
         .message = message.data(),
         .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
         .line = __LINE__,
-    });
+    }
+    );
 }
 #endif
 
@@ -234,7 +244,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
         config.buildId = AStringView("linux-assert-observe-test");
         config.spoolDirectory = spoolDirectory;
 
-        if(!NWB::Core::Crash::InstallCrashHandler(installArena, config))
+        if(!NWB::Core::Crash::InstallCrashHandler(config))
             _exit(121);
 
         LinuxSilenceExpectedCrashChildConsole();
@@ -253,7 +263,11 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_EQ(WTERMSIG(status), SIGABRT);
 
     const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
-    EXPECT_TRUE(WaitForDirectory(pendingDirectory, 3000u));
+    {
+        const auto directoryReady = WaitForDirectory(pendingDirectory, 3000u);
+        ASSERT_TRUE(directoryReady);
+        EXPECT_TRUE(*directoryReady);
+    }
 
     CrashTestText expectedAbortCode(arena);
     expectedAbortCode += "\"reason_code\": ";
@@ -264,7 +278,8 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_TRUE(assertPackageDirectory);
 
     ASSERT_TRUE(assertPackageDirectory);
-    const auto archive = BuildArchiveFromPackageDirectory(arena, *assertPackageDirectory);
+    NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
+    const auto archive = NWB::Core::Crash::Detail::BuildPackageArchive(arena, archiveScratch, *assertPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);
@@ -281,7 +296,9 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_TRUE(Contains(report, s_CALLSTACK));
     EXPECT_EQ(FindText(report, "false\nat "), 0u);
     EXPECT_TRUE(Contains(report, s_TESTS_INTEGRATION_LOGGER_SERVER_LOGSERVE));
-    if(LinuxExternalSymbolizerAvailable(arena)){
+    const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
+    ASSERT_TRUE(externalSymbolizer);
+    if(*externalSymbolizer){
         EXPECT_TRUE(Contains(report, "LinuxForceAssertFalseForCrashObservation"));
     }
 
@@ -309,7 +326,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     crashConfig.buildId = AStringView("recoverable-error-observe-test");
     crashConfig.spoolDirectory = spoolDirectory;
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, crashConfig);
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(crashConfig);
     EXPECT_TRUE(installed);
 
     bool continuedAfterError = false;
@@ -325,7 +342,8 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     NWB::Core::Crash::UninstallCrashHandler();
 
     ASSERT_TRUE(errorPackageDirectory);
-    const auto archive = BuildArchiveFromPackageDirectory(arena, *errorPackageDirectory);
+    NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
+    const auto archive = NWB::Core::Crash::Detail::BuildPackageArchive(arena, archiveScratch, *errorPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);
@@ -342,7 +360,9 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     EXPECT_TRUE(Contains(report, s_PLATFORM_LINUX));
     EXPECT_TRUE(Contains(report, s_STATUS_CALLSTACK_CAPTURED));
     EXPECT_TRUE(Contains(report, s_CALLSTACK));
-    if(LinuxExternalSymbolizerAvailable(arena))
+    const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
+    ASSERT_TRUE(externalSymbolizer);
+    if(*externalSymbolizer)
         EXPECT_TRUE(Contains(report, "CaptureRecoverableErrorForCrashObservation"));
 #elif defined(NWB_PLATFORM_WINDOWS)
     EXPECT_TRUE(Contains(report, "platform=windows"));
@@ -510,7 +530,11 @@ TEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected){
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("Crash upload rejected")));
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("invalid crash archive header")));
 
-    EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem)));
+    {
+        const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -529,7 +553,11 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("manifest.json is missing required fields")));
-    EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem)));
+    {
+        const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -559,8 +587,16 @@ TEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemai
     const auto invalidResult = ProcessCrashArchive(arena, s_Group, s_InvalidStem, invalidArchive);
     EXPECT_FALSE(invalidResult.accepted);
     EXPECT_TRUE(ContainsMessage(invalidResult.message, NWB_TEXT("manifest.json is missing required fields")));
-    EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_InvalidStem)));
-    EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_ValidStem)));
+    {
+        const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_InvalidStem));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(ExtractedPackageDirectory(arena, s_Group, s_ValidStem));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -598,12 +634,36 @@ TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
         EXPECT_TRUE(result.accepted);
     }
 
-    EXPECT_TRUE(PathIsMissing(ExtractedPackageDirectory(arena, s_Group, s_Stem0)));
-    EXPECT_TRUE(PathIsMissing(RawArchivePath(arena, s_Group, s_Stem0)));
-    EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem1)));
-    EXPECT_TRUE(PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem1)));
-    EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem2)));
-    EXPECT_TRUE(PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem2)));
+    {
+        const auto pathQuery = FileExists(ExtractedPackageDirectory(arena, s_Group, s_Stem0));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(RawArchivePath(arena, s_Group, s_Stem0));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem1));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsRegularFile(RawArchivePath(arena, s_Group, s_Stem1));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem2));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsRegularFile(RawArchivePath(arena, s_Group, s_Stem2));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -627,8 +687,16 @@ TEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Warning);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("raw upload archive could not be retained")));
-    EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem)));
-    EXPECT_TRUE(PathIsMissing(ArchivePath(arena, s_Group, s_Stem)));
+    {
+        const auto pathQuery = IsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
+    {
+        const auto pathQuery = FileExists(ArchivePath(arena, s_Group, s_Stem));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -659,8 +727,16 @@ TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
         EXPECT_FALSE(result.accepted);
     }
 
-    EXPECT_TRUE(PathIsMissing(InvalidArchivePath(arena, s_Group, s_Stem0)));
-    EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem1)));
+    {
+        const auto pathQuery = FileExists(InvalidArchivePath(arena, s_Group, s_Stem0));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_FALSE(*pathQuery);
+    }
+    {
+        const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem1));
+        ASSERT_TRUE(pathQuery);
+        EXPECT_TRUE(*pathQuery);
+    }
 
     RemoveTestArtifacts(arena, s_Group);
 }

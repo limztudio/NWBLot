@@ -24,9 +24,7 @@ namespace NWB::Tests::Smoke{
 class FpsProbe final{
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
-
     static constexpr f64 s_ReportIntervalSeconds = 0.5;
-
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
 
@@ -75,7 +73,6 @@ public:
 
 
 private:
-
     TStringView m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;

@@ -58,7 +58,7 @@ struct SurfelGiLifecycleResult{
 
 class SurfelGiLifecycleBuilder final : NoCopy{
 public:
-    SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem);
+    SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept;
 
 
 public:

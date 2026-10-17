@@ -56,15 +56,20 @@ class ProcessLauncher:
         if process is None or process.poll() is not None:
             return
 
-        print(MSG_STOPPING.format(label=label, process=process), flush=True)
-        process.terminate()
+        forced = False
         try:
-            process.wait(timeout=timeout_seconds)
-            return
-        except subprocess.TimeoutExpired:
-            print(MSG_KILLING.format(label=label, process=process), flush=True)
-            process.kill()
-            process.wait()
+            if sys.exc_info()[0] is None:
+                print(MSG_STOPPING.format(label=label, process=process), flush=True)
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                forced = True
+            if forced and sys.exc_info()[0] is None:
+                print(MSG_KILLING.format(label=label, process=process), flush=True)
 
     @staticmethod
     def wait_for_process_exit(process: subprocess.Popen, timeout_seconds: float) -> Optional[int]:
@@ -83,6 +88,8 @@ class ProcessLauncher:
     def launch_process(args, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str], profile_session: Optional[ProfileSession] = None, paths_validated: bool = False,) -> int:
         import launcher as _facade
         process: Optional[subprocess.Popen] = None
+        retain_processes = False
+        process_completed = False
         try:
             run_seconds = getattr(args, "run_seconds", None)
             if run_seconds is not None and (not math.isfinite(run_seconds) or run_seconds <= 0.0):
@@ -107,11 +114,13 @@ class ProcessLauncher:
             process = subprocess.Popen(launch, cwd=working_directory, env=env, stdout=sys.stdout, stderr=sys.stderr)
             print(MSG_LAUNCHED_APP.format(executable=executable, process=process), flush=True)
             if args.detach:
+                retain_processes = True
                 return 0
 
             if run_seconds is not None:
                 if _facade.host_platform_name() == PLATFORM_WINDOWS:
                     run_result = repository_windows_process.run_bounded_process(process, run_seconds, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,)
+                    process_completed = True
                     if run_result.deadline_reached:
                         print(MSG_RUN_GRACEFUL.format(run_seconds=run_seconds), flush=True)
                     if run_result.forced:
@@ -130,14 +139,19 @@ class ProcessLauncher:
 
             return process.wait()
         except KeyboardInterrupt:
+            retain_processes = process is not None and (args.detach or process.poll() is None)
             if profile_session is not None and profile_session.process is not None:
                 print(MSG_LEAVING_BOTH, flush=True)
             else:
                 print(MSG_LEAVING_APP, flush=True)
             return 0
         finally:
-            if (profile_session is not None and profile_session.process is not None and (process is None or (not args.detach and process.poll() is not None))):
-                _facade.terminate_process(profile_session.process, LOGSERVER_LABEL)
+            try:
+                if process is not None and not retain_processes and not process_completed and process.poll() is None:
+                    _facade.terminate_process(process, executable.name)
+            finally:
+                if profile_session is not None and profile_session.process is not None and not retain_processes:
+                    _facade.terminate_process(profile_session.process, LOGSERVER_LABEL)
 
     @staticmethod
     def launch_with_optional_profile(args, settings: LaunchSettings, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str],) -> int:

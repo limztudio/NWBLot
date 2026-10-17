@@ -6,8 +6,8 @@
 
 #include <global/blocking_io.h>
 #include <global/process_execution.h>
+#include <global/scope_exit.h>
 
-#include <exception>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -47,16 +47,40 @@ inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
 inline constexpr int s_HandlerExecFailureExitCode = 127;
 inline constexpr u64 s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr usize s_AArch64FramePointerRegisterIndex = 29u;
-inline constexpr usize s_FileDescriptorPairCount = 2u;
-inline constexpr usize s_ParentEndIndex = 0u;
-inline constexpr usize s_ChildEndIndex = 1u;
 inline constexpr usize s_MaxFramePointerWalkBytes = 8u * 1024u * 1024u;
+
+alignas(MaxAlign) static u8 g_SignalStack[s_SignalStackSize] = {};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct FramePointerRecord{
     const FramePointerRecord* previous = nullptr;
     const void* returnAddress = nullptr;
 };
 
+
+[[nodiscard]] static Detail::PlatformFailure NativeFailure(const Detail::PlatformOperation::Enum operation, const int code)noexcept{
+    return { operation, Detail::PlatformErrorDomain::Posix, static_cast<u64>(code) };
+}
+
+[[nodiscard]] static Expected<void, Detail::PlatformFailure> ReleaseOwnedDescriptor(int& descriptor)noexcept{
+    const int owned = descriptor;
+    descriptor = -1;
+    if(owned < 0)
+        return {};
+    // Linux/Android release the descriptor even on EINTR: retrying could close a reused descriptor.
+    if(close(owned) != 0)
+        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::CloseDescriptor, errno));
+    return {};
+}
+
+static void CleanupOwnedDescriptor(int& descriptor, Detail::PlatformCleanupObservations& observations)noexcept{
+    const auto released = ReleaseOwnedDescriptor(descriptor);
+    if(!released)
+        observations.record(released.error());
+}
 
 [[nodiscard]] static bool IsAlignedPointer(const u64 address)noexcept{
     return (address & (sizeof(void*) - 1u)) == 0u;
@@ -199,100 +223,117 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
     abort();
 }
 
-static void InstallSignalHandlers(){
-    static u8 s_signalStack[s_SignalStackSize] = {};
-
+[[nodiscard]] static Expected<void, Detail::PlatformFailure> InstallSignalHandlers()noexcept{
     stack_t stack = {};
-    stack.ss_sp = s_signalStack;
-    stack.ss_size = sizeof(s_signalStack);
-    stack.ss_flags = 0;
-    sigaltstack(&stack, &Detail::g_State.previousSignalStack);
+    stack.ss_sp = g_SignalStack;
+    stack.ss_size = sizeof(g_SignalStack);
+    if(sigaltstack(&stack, &Detail::g_State.previousSignalStack) != 0)
+        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::InstallSignalStack, errno));
+    Detail::g_State.signalStackInstalled = true;
+    Detail::g_State.signalStackOwner = QueryCurrentThreadId();
 
     struct sigaction action = {};
     action.sa_sigaction = SignalHandler;
-    sigemptyset(&action.sa_mask);
+    if(sigemptyset(&action.sa_mask) != 0)
+        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::InstallSignalAction, errno));
     action.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
-
-    sigaction(SIGSEGV, &action, nullptr);
-    sigaction(SIGABRT, &action, nullptr);
-    sigaction(SIGFPE, &action, nullptr);
-    sigaction(SIGILL, &action, nullptr);
+    constexpr int s_Signals[] = {
+        SIGSEGV, SIGABRT, SIGFPE, SIGILL,
 #if defined(SIGBUS)
-    sigaction(SIGBUS, &action, nullptr);
+        SIGBUS,
 #endif
 #if defined(SIGTRAP)
-    sigaction(SIGTRAP, &action, nullptr);
+        SIGTRAP,
 #endif
+    };
+    for(usize index = 0u; index < sizeof(s_Signals) / sizeof(s_Signals[0u]); ++index){
+        if(sigaction(s_Signals[index], &action, &Detail::g_State.previousSignalActions[index]) != 0)
+            return MakeUnexpected(NativeFailure(Detail::PlatformOperation::InstallSignalAction, errno));
+        Detail::g_State.installedSignals[index] = s_Signals[index];
+        Detail::g_State.signalActionInstalled[index] = true;
+    }
+    return {};
 }
 
 #if defined(NWB_PLATFORM_ANDROID)
-static void OpenAndroidEmergencyFile(){
-    if(Detail::g_State.spoolDirectoryText[0] == 0)
-        return;
-
-    char emergencyPath[Detail::s_MaxPathText];
-    CopyFixedBuffer(emergencyPath, Detail::g_State.spoolDirectoryText);
+[[nodiscard]] static Expected<void, Detail::PlatformFailure> OpenAndroidEmergencyFile()noexcept{
+    const AStringView directory(Detail::g_State.spoolDirectoryText);
+    const AStringView filename(PackageNames::s_AndroidEmergencyRequestFileName);
+    char emergencyPath[Detail::s_MaxPathText] = {};
+    if(directory.empty() || directory.size() + 1u + filename.size() >= sizeof(emergencyPath))
+        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::OpenEmergencyFile, ENAMETOOLONG));
+    CopyFixedBuffer(emergencyPath, directory);
     AppendFixedBuffer(emergencyPath, "/");
-    AppendFixedBuffer(emergencyPath, PackageNames::s_AndroidEmergencyRequestFileName);
-    Detail::g_State.emergencyWriteFd = open(emergencyPath, O_CREAT | O_APPEND | O_WRONLY, s_AndroidEmergencyFileMode);
+    AppendFixedBuffer(emergencyPath, filename);
+    const int descriptor = open(emergencyPath, O_CREAT | O_APPEND | O_WRONLY | O_CLOEXEC, s_AndroidEmergencyFileMode);
+    if(descriptor < 0)
+        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::OpenEmergencyFile, errno));
+    Detail::g_State.emergencyWriteFd = descriptor;
+    return {};
 }
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static bool MoveFdAboveStdio(int& inOutFd)noexcept{
-    if(inOutFd > STDERR_FILENO)
+[[nodiscard]] static bool MoveFdAboveStdio(int& descriptor)noexcept{
+    if(descriptor > STDERR_FILENO)
         return true;
-
-    const int duplicatedFd = fcntl(inOutFd, F_DUPFD, s_FirstNonStdioFileDescriptor);
-    if(duplicatedFd < 0)
+    const int duplicated = fcntl(descriptor, F_DUPFD, s_FirstNonStdioFileDescriptor);
+    if(duplicated < 0)
         return false;
-
-    close(inOutFd);
-    inOutFd = duplicatedFd;
+    const auto released = ReleaseOwnedDescriptor(descriptor);
+    descriptor = duplicated;
+    if(!released){
+        errno = static_cast<int>(released.error().code);
+        return false;
+    }
     return true;
 }
 
-[[nodiscard]] static bool SetCloseOnExec(const int fd)noexcept{
-    const int flags = fcntl(fd, F_GETFD, 0);
-    if(flags < 0)
-        return false;
-    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+[[nodiscard]] static bool SetCloseOnExec(const int descriptor)noexcept{
+    const int flags = fcntl(descriptor, F_GETFD, 0);
+    return flags >= 0 && fcntl(descriptor, F_SETFD, flags | FD_CLOEXEC) == 0;
 }
 
-[[nodiscard]] static bool SendAllSocketNoSigpipe(const int fd, const void* const data, const usize byteCount)noexcept{
-    return TransferAllPosix(static_cast<const u8*>(data), byteCount, [fd](const u8* const cursor, const usize remaining)noexcept{
-            return send(fd, cursor, remaining, MSG_NOSIGNAL);
+[[nodiscard]] static bool SendAllSocketNoSigpipe(const int descriptor, const void* const data, const usize byteCount)noexcept{
+    return TransferAllPosix(static_cast<const u8*>(data), byteCount, [descriptor](const u8* const cursor, const usize remaining)noexcept{
+            return send(descriptor, cursor, remaining, MSG_NOSIGNAL);
         }
     );
 }
 
-static void RedirectStdioToNull()noexcept{
-    const int nullFd = open("/dev/null", O_RDWR);
-    if(nullFd < 0)
-        return;
-
-    if(dup2(nullFd, STDIN_FILENO) < 0)
-        return;
-    if(dup2(nullFd, STDOUT_FILENO) < 0)
-        return;
-    if(dup2(nullFd, STDERR_FILENO) < 0)
-        return;
-    if(nullFd > STDERR_FILENO && close(nullFd) != 0)
-        return;
+[[noreturn]] static void FailChild(const int startupDescriptor, const int error)noexcept{
+    const auto* cursor = reinterpret_cast<const u8*>(&error);
+    usize remaining = sizeof(error);
+    while(remaining != 0u){
+        const ssize_t written = write(startupDescriptor, cursor, remaining);
+        if(written < 0 && errno == EINTR)
+            continue;
+        if(written <= 0)
+            _exit(s_HandlerExecFailureExitCode);
+        cursor += static_cast<usize>(written);
+        remaining -= static_cast<usize>(written);
+    }
+    _exit(s_HandlerExecFailureExitCode);
 }
 
-static void SilenceChildProcess(int& requestReadFd, int& ackWriteFd)noexcept{
-    if(!MoveFdAboveStdio(requestReadFd))
-        return;
-    if(!MoveFdAboveStdio(ackWriteFd))
-        return;
-
-    const pid_t sessionId = setsid();
-    if(sessionId < 0){
-        RedirectStdioToNull();
-        return;
+[[nodiscard]] static bool SilenceChildProcess(int& requestRead, int& ackWrite, int& startupWrite)noexcept{
+    if(!MoveFdAboveStdio(requestRead) || !MoveFdAboveStdio(ackWrite) || !MoveFdAboveStdio(startupWrite) || !SetCloseOnExec(startupWrite))
+        return false;
+    if(setsid() < 0)
+        return false;
+    int nullDescriptor = open("/dev/null", O_RDWR);
+    if(nullDescriptor < 0)
+        return false;
+    if(dup2(nullDescriptor, STDIN_FILENO) < 0 || dup2(nullDescriptor, STDOUT_FILENO) < 0 || dup2(nullDescriptor, STDERR_FILENO) < 0)
+        return false;
+    if(nullDescriptor > STDERR_FILENO){
+        const auto released = ReleaseOwnedDescriptor(nullDescriptor);
+        if(!released){
+            errno = static_cast<int>(released.error().code);
+            return false;
+        }
     }
-    RedirectStdioToNull();
+    return true;
 }
 
 static void DrainPendingAcks(const int ackReadFd)noexcept{
@@ -320,15 +361,20 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
     if(ackReadFd < 0 || waitMilliseconds == 0u)
         return Detail::CrashDumpTransportStatus::Sent;
 
-    const u64 now = ProcessExecutionDetail::MonotonicMilliseconds();
-    const u64 deadline = now == 0u ? 0u : now + waitMilliseconds;
+    const auto now = ProcessExecutionDetail::MonotonicMilliseconds();
+    if(!now || static_cast<u64>(waitMilliseconds) > Limit<u64>::s_Max - *now)
+        return Detail::CrashDumpTransportStatus::Failed;
+    const u64 deadline = *now + waitMilliseconds;
 
     for(;;){
         pollfd pollFd = {};
         pollFd.fd = ackReadFd;
         pollFd.events = POLLIN;
 
-        const int pollResult = poll(&pollFd, 1u, ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadline));
+        const auto remainingTimeout = ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadline);
+        if(!remainingTimeout)
+            return Detail::CrashDumpTransportStatus::Failed;
+        const int pollResult = poll(&pollFd, 1u, *remainingTimeout);
         if(pollResult == 0)
             return Detail::CrashDumpTransportStatus::TimedOut;
         if(pollResult < 0){
@@ -348,20 +394,57 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
             return Detail::CrashDumpTransportStatus::Failed;
         if(Detail::CrashAckMatchesRequest(ack, request))
             return ack.packageWritten ? Detail::CrashDumpTransportStatus::PackageWritten : Detail::CrashDumpTransportStatus::PackageWriteFailed;
-        if(ProcessExecutionDetail::TimeoutExpired(deadline))
+        const auto expired = ProcessExecutionDetail::TimeoutExpired(deadline);
+        if(!expired)
+            return Detail::CrashDumpTransportStatus::Failed;
+        if(*expired)
             return Detail::CrashDumpTransportStatus::TimedOut;
     }
 }
 
-static void WaitForChildProcess(const pid_t pid)noexcept{
-    if(pid <= 0)
+static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, Detail::PlatformCleanupObservations& observations)noexcept{
+    if(child <= 0)
         return;
-
-    const u64 now = ProcessExecutionDetail::MonotonicMilliseconds();
-    const u64 deadline = now == 0u ? 0u : now + s_HandlerExitWaitMilliseconds;
-    if(!ProcessExecutionDetail::WaitForProcessSuccess(pid, deadline))
-        return;
+    constexpr u32 s_WaitPollCount = 300u;
+    constexpr int s_WaitPollMilliseconds = 10;
+    bool terminated = terminateImmediately;
+    for(u32 phase = 0u; phase < 2u; ++phase){
+        if(phase != 0u || terminateImmediately){
+            if(kill(child, SIGKILL) != 0 && errno != ESRCH){
+                observations.record(NativeFailure(Detail::PlatformOperation::KillChild, errno));
+                return;
+            }
+            terminated = true;
+        }
+        for(u32 attempt = 0u; attempt < s_WaitPollCount; ++attempt){
+            int status = 0;
+            const pid_t waited = waitpid(child, &status, WNOHANG);
+            if(waited == child){
+                child = -1;
+                if(!terminated && WIFEXITED(status) && WEXITSTATUS(status) != 0)
+                    observations.record({ Detail::PlatformOperation::WaitChild, Detail::PlatformErrorDomain::ExitCode, static_cast<u64>(WEXITSTATUS(status)) });
+                else if(!terminated && WIFSIGNALED(status))
+                    observations.record({ Detail::PlatformOperation::WaitChild, Detail::PlatformErrorDomain::Signal, static_cast<u64>(WTERMSIG(status)) });
+                return;
+            }
+            if(waited < 0 && errno != EINTR){
+                const int error = errno;
+                if(error == ECHILD)
+                    child = -1;
+                observations.record(NativeFailure(Detail::PlatformOperation::WaitChild, error));
+                return;
+            }
+            if(poll(nullptr, 0u, s_WaitPollMilliseconds) < 0 && errno != EINTR){
+                observations.record(NativeFailure(Detail::PlatformOperation::WaitChild, errno));
+                break;
+            }
+        }
+        observations.record(NativeFailure(Detail::PlatformOperation::WaitChild, ETIMEDOUT));
+        if(terminated)
+            return;
+    }
 }
+
 #endif
 
 
@@ -430,106 +513,210 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 }
 
 template<typename ArenaT>
-bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
+Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations)noexcept{
+    static_cast<void>(scratchArena);
 #if defined(NWB_PLATFORM_ANDROID)
     static_cast<void>(handlerExecutablePath);
-    return true;
+    static_cast<void>(observations);
+    return {};
 #elif defined(NWB_PLATFORM_LINUX)
+    using namespace __hidden_crash_posix;
     if(g_State.handlerStarted)
-        return true;
+        return {};
     if(handlerExecutablePath.empty())
-        return false;
+        return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, EINVAL));
     if(access(handlerExecutablePath.c_str(), X_OK) != 0)
-        return false;
-
-    int requestChannelFds[__hidden_crash_posix::s_FileDescriptorPairCount] = { -1, -1 };
-    int ackPipeFds[__hidden_crash_posix::s_FileDescriptorPairCount] = { -1, -1 };
-    if(socketpair(AF_UNIX, SOCK_STREAM, 0, requestChannelFds) != 0)
-        return false;
-    if(pipe(ackPipeFds) != 0){
-        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
-        close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
-        return false;
+        return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, errno));
+    int request[2u] = { -1, -1 };
+    int ack[2u] = { -1, -1 };
+    int startup[2u] = { -1, -1 };
+    pid_t child = -1;
+    ScopeExit rollback([&]()noexcept{
+        for(int& descriptor : request)
+            CleanupOwnedDescriptor(descriptor, observations);
+        for(int& descriptor : ack)
+            CleanupOwnedDescriptor(descriptor, observations);
+        for(int& descriptor : startup)
+            CleanupOwnedDescriptor(descriptor, observations);
+        WaitForOwnedChild(child, true, observations);
+        if(child > 0){
+            g_State.handlerPid = child;
+            g_State.platformRestorePending = true;
+        }
     }
-    if(!__hidden_crash_posix::SetCloseOnExec(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]) || !__hidden_crash_posix::SetCloseOnExec(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex])){
-        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
-        close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
-        close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
-        close(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
-        return false;
+    );
+    if(socketpair(AF_UNIX, SOCK_STREAM, 0, request) != 0)
+        return MakeUnexpected(NativeFailure(PlatformOperation::CreateRequestChannel, errno));
+    if(pipe(ack) != 0)
+        return MakeUnexpected(NativeFailure(PlatformOperation::CreateAckChannel, errno));
+    if(pipe(startup) != 0)
+        return MakeUnexpected(NativeFailure(PlatformOperation::CreateStartupChannel, errno));
+    if(!SetCloseOnExec(request[0u]) || !SetCloseOnExec(ack[0u]) || !SetCloseOnExec(startup[0u]) || !SetCloseOnExec(startup[1u]))
+        return MakeUnexpected(NativeFailure(PlatformOperation::SetDescriptorFlags, errno));
+    child = fork();
+    if(child < 0)
+        return MakeUnexpected(NativeFailure(PlatformOperation::CreateProcess, errno));
+    if(child == 0){
+        for(int* descriptor : { &request[0u], &ack[0u], &startup[0u] }){
+            const auto released = ReleaseOwnedDescriptor(*descriptor);
+            if(!released)
+                FailChild(startup[1u], static_cast<int>(released.error().code));
+        }
+        if(!SilenceChildProcess(request[1u], ack[1u], startup[1u]))
+            FailChild(startup[1u], errno);
+        char requestText[s_HandlerArgumentTextCapacity] = {};
+        char ackText[s_HandlerArgumentTextCapacity] = {};
+        AppendUnsignedToFixedBuffer(requestText, static_cast<u64>(request[1u]));
+        AppendUnsignedToFixedBuffer(ackText, static_cast<u64>(ack[1u]));
+        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument.data(), requestText, s_AckFdArgument.data(), ackText, nullptr);
+        FailChild(startup[1u], errno);
     }
-
-    const pid_t pid = fork();
-    if(pid < 0){
-        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
-        close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
-        close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
-        close(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
-        return false;
+    for(int* descriptor : { &request[1u], &ack[1u], &startup[1u] }){
+        const auto released = ReleaseOwnedDescriptor(*descriptor);
+        if(!released)
+            return MakeUnexpected(released.error());
     }
-
-    if(pid == 0){
-        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
-        close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
-
-        __hidden_crash_posix::SilenceChildProcess(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex], ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
-
-        char fdText[s_HandlerArgumentTextCapacity] = {};
-        char ackFdText[s_HandlerArgumentTextCapacity] = {};
-        AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]));
-        AppendUnsignedToFixedBuffer(ackFdText, static_cast<u64>(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]));
-        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument.data(), fdText, s_AckFdArgument.data(), ackFdText, nullptr);
-        _exit(__hidden_crash_posix::s_HandlerExecFailureExitCode);
+    const auto started = ProcessExecutionDetail::MonotonicMilliseconds();
+    if(!started || s_HandlerExitWaitMilliseconds > Limit<u64>::s_Max - *started)
+        return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, !started ? static_cast<int>(started.error()) : EOVERFLOW));
+    const u64 deadline = *started + s_HandlerExitWaitMilliseconds;
+    int childError = 0;
+    usize received = 0u;
+    for(;;){
+        pollfd ready = { startup[0u], POLLIN, 0 };
+        const auto remaining = ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadline);
+        if(!remaining)
+            return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, static_cast<int>(remaining.error())));
+        const int polled = poll(&ready, 1u, *remaining);
+        if(polled < 0 && errno == EINTR)
+            continue;
+        if(polled <= 0)
+            return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, polled == 0 ? ETIMEDOUT : errno));
+        if((ready.revents & POLLNVAL) != 0)
+            return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, EBADF));
+        const ssize_t count = read(startup[0u], reinterpret_cast<u8*>(&childError) + received, sizeof(childError) - received);
+        if(count < 0 && errno == EINTR)
+            continue;
+        if(count < 0)
+            return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, errno));
+        if(count == 0){
+            if(received != 0u)
+                return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, EIO));
+            break;
+        }
+        received += static_cast<usize>(count);
+        if(received == sizeof(childError))
+            return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, childError));
     }
-
-    close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
-    close(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
-    g_State.requestWriteFd = requestChannelFds[__hidden_crash_posix::s_ParentEndIndex];
-    g_State.ackReadFd = ackPipeFds[__hidden_crash_posix::s_ParentEndIndex];
-    g_State.handlerPid = pid;
+    const auto startupReleased = ReleaseOwnedDescriptor(startup[0u]);
+    if(!startupReleased)
+        return MakeUnexpected(startupReleased.error());
+    int childStatus = 0;
+    const pid_t earlyExit = waitpid(child, &childStatus, WNOHANG);
+    if(earlyExit == child){
+        child = -1;
+        if(WIFSIGNALED(childStatus))
+            return MakeUnexpected(PlatformFailure{ PlatformOperation::ExecHandler, PlatformErrorDomain::Signal, static_cast<u64>(WTERMSIG(childStatus)) });
+        return MakeUnexpected(PlatformFailure{ PlatformOperation::ExecHandler, PlatformErrorDomain::ExitCode, WIFEXITED(childStatus) ? static_cast<u64>(WEXITSTATUS(childStatus)) : 0u });
+    }
+    if(earlyExit < 0){
+        const int error = errno;
+        if(error == ECHILD)
+            child = -1;
+        return MakeUnexpected(NativeFailure(PlatformOperation::WaitChild, error));
+    }
+    g_State.requestWriteFd = request[0u];
+    g_State.ackReadFd = ack[0u];
+    g_State.handlerPid = child;
     g_State.handlerStarted = true;
-    return true;
+    rollback.release();
+    return {};
 #else
-    return false;
+    static_cast<void>(handlerExecutablePath);
+    static_cast<void>(observations);
+    return MakeUnexpected(PlatformFailure{ PlatformOperation::CreateProcess, PlatformErrorDomain::Contract, 1u });
 #endif
 }
 
-template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
+template Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<Alloc::ScratchArena>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations)noexcept;
 
-void InstallPlatformHandlers(){
+Expected<void, PlatformFailure> InstallPlatformHandlers()noexcept{
 #if defined(NWB_PLATFORM_ANDROID)
-    __hidden_crash_posix::OpenAndroidEmergencyFile();
+    const auto emergency = __hidden_crash_posix::OpenAndroidEmergencyFile();
+    if(!emergency)
+        return MakeUnexpected(emergency.error());
 #elif defined(NWB_PLATFORM_LINUX)
-    // Force libgcc_s to load now so the crash-time backtrace() is allocation-free and async-signal-safe.
     __hidden_crash_posix::WarmUpUnwinder();
 #endif
-
-    __hidden_crash_posix::InstallSignalHandlers();
-    std::set_terminate(__hidden_crash_posix::TerminateHandler);
+    const auto signals = __hidden_crash_posix::InstallSignalHandlers();
+    if(!signals)
+        return MakeUnexpected(signals.error());
+    g_State.previousTerminateHandler = ExchangeTerminateHandler(__hidden_crash_posix::TerminateHandler);
+    g_State.terminateHandlerInstalled = true;
+    return {};
 }
 
-void UninstallPlatformResources(){
+void UninstallPlatformResources(PlatformCleanupObservations& observations)noexcept{
+    using namespace __hidden_crash_posix;
 #if defined(NWB_PLATFORM_ANDROID)
-    if(g_State.emergencyWriteFd >= 0){
-        close(g_State.emergencyWriteFd);
-        g_State.emergencyWriteFd = -1;
-    }
+    CleanupOwnedDescriptor(g_State.emergencyWriteFd, observations);
 #elif defined(NWB_PLATFORM_LINUX)
-    const pid_t handlerPid = g_State.handlerPid;
-    if(g_State.requestWriteFd >= 0){
-        close(g_State.requestWriteFd);
-        g_State.requestWriteFd = -1;
-    }
-    __hidden_crash_posix::WaitForChildProcess(handlerPid);
-    if(g_State.ackReadFd >= 0){
-        close(g_State.ackReadFd);
-        g_State.ackReadFd = -1;
-    }
-    g_State.handlerPid = -1;
+    CleanupOwnedDescriptor(g_State.requestWriteFd, observations);
+    WaitForOwnedChild(g_State.handlerPid, false, observations);
+    CleanupOwnedDescriptor(g_State.ackReadFd, observations);
 #endif
-
-    if(g_State.previousSignalStack.ss_sp)
-        sigaltstack(&g_State.previousSignalStack, nullptr);
+    g_State.handlerStarted = false;
+    if(g_State.terminateHandlerInstalled){
+        if(QueryTerminateHandler() == TerminateHandler)
+            ExchangeTerminateHandler(g_State.previousTerminateHandler);
+        g_State.terminateHandlerInstalled = false;
+        g_State.previousTerminateHandler = nullptr;
+    }
+    bool pending = false;
+    for(usize remaining = 6u; remaining != 0u; --remaining){
+        const usize index = remaining - 1u;
+        if(!g_State.signalActionInstalled[index])
+            continue;
+        struct sigaction current = {};
+        if(sigaction(g_State.installedSignals[index], nullptr, &current) != 0){
+            observations.record(NativeFailure(PlatformOperation::RestoreSignalAction, errno));
+            pending = true;
+            continue;
+        }
+        if((current.sa_flags & SA_SIGINFO) != 0 && current.sa_sigaction == SignalHandler){
+            if(sigaction(g_State.installedSignals[index], &g_State.previousSignalActions[index], nullptr) != 0){
+                observations.record(NativeFailure(PlatformOperation::RestoreSignalAction, errno));
+                pending = true;
+                continue;
+            }
+        }
+        g_State.signalActionInstalled[index] = false;
+    }
+    if(g_State.signalStackInstalled){
+        stack_t current = {};
+        if(g_State.signalStackOwner != QueryCurrentThreadId()){
+            observations.record(NativeFailure(PlatformOperation::RestoreSignalStack, EXDEV));
+            pending = true;
+        }
+        else if(sigaltstack(nullptr, &current) != 0){
+            observations.record(NativeFailure(PlatformOperation::RestoreSignalStack, errno));
+            pending = true;
+        }
+        else if((current.ss_flags & SS_DISABLE) == 0 && current.ss_sp == g_SignalStack){
+            if(sigaltstack(&g_State.previousSignalStack, nullptr) != 0){
+                observations.record(NativeFailure(PlatformOperation::RestoreSignalStack, errno));
+                pending = true;
+            }
+            else
+                g_State.signalStackInstalled = false;
+        }
+        else
+            g_State.signalStackInstalled = false;
+    }
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    pending = pending || g_State.handlerPid > 0;
+#endif
+    g_State.platformRestorePending = pending;
 }
 
 

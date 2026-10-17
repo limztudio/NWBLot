@@ -22,7 +22,7 @@ UiSearchComboGallery::UiSearchComboGallery(NWB::Core::Alloc::GlobalArena& arena)
     , m_state(arena)
 {}
 
-void UiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("search_combo_gallery", { x, y, 280.0f, 130.0f }))
@@ -35,7 +35,6 @@ void UiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     const SearchComboResult result = ui.searchComboBox("choice", m_source, m_state, options);
     if(result.combo.committed)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom searchable combo selected key={}"), m_state.combo().selectedKey());
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/search_combo_caption"));
     const auto text = StringFormat(scratchArena, "Selected: {}", m_state.combo().selectedKey());
     valid = ui.label("selected", { text.data(), text.size() }) && result.combo.valid && valid;
     valid = ui.endPanel() && valid;

@@ -35,7 +35,8 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
-    NWB::Core::Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
+    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/reflection_frame_graph"));
+    NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
     const bool graphAvailable = renderer.appendFrameGraph(builder);
     const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
     u64 planGeneration = 0u;
@@ -49,13 +50,22 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
         }
     }
     const u32 expectedSlices = csg ? (rayCapacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
-    Core::Alloc::ScratchArena scratchArena(Name("tests/reflection_slice_packets/scratch"));
     Vector<u32, Core::Alloc::ScratchArena> uniquePackets(scratchArena);
     uniquePackets.reserve(expectedSlices);
     Vector<Name, Core::Alloc::ScratchArena> sliceIdentities(scratchArena);
     sliceIdentities.reserve(expectedSlices);
-    for(u32 slice = 0u; slice < expectedSlices; ++slice)
-        sliceIdentities.push_back(csg ? NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice) : Name("render.reflection.hardware"));
+    for(u32 slice = 0u; slice < expectedSlices; ++slice){
+        if(!csg){
+            sliceIdentities.push_back(Name("render.reflection.hardware"));
+            continue;
+        }
+        const auto sliceIdentity = NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);
+        if(!sliceIdentity){
+            NWB_LOGGER_ERROR(NWB_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), StringConvert(sliceIdentity.error().message()));
+            return;
+        }
+        sliceIdentities.push_back(*sliceIdentity);
+    }
     Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
     observedSlices.resize(expectedSlices, 0u);
     u32 hardwareNodes = 0u;
@@ -129,8 +139,8 @@ ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& cont
     , m_output(context.objectArena)
 {}
 
-bool ReflectionCsgContextProbe::create(){
-    const auto output = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
+    const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
     if(!output){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: application framebuffer capture is required"));
         return false;
@@ -138,7 +148,7 @@ bool ReflectionCsgContextProbe::create(){
     const auto scene = CreateReflectionCsgContextScene(m_context, m_world);
     if(!scene)
         return false;
-    m_output = *output;
+    m_output.assign(output->data(), output->size());
     m_entities = *scene;
     return beginPhase();
 }

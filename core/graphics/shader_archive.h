@@ -7,6 +7,8 @@
 
 #include "rhi/foundation.h"
 
+#include <core/alloc/scratch.h>
+
 #include <global/binary.h>
 #include <global/expected.h>
 #include <global/span.h>
@@ -38,7 +40,8 @@ public:
         NameHash virtualPathHash = {};
 
 
-        explicit Record(GraphicsArena& arena)
+    public:
+        explicit Record(GraphicsArena& arena)noexcept
             : variantName(arena)
         {}
     };
@@ -47,7 +50,7 @@ public:
 public:
     [[nodiscard]] static const Name& IndexVirtualPathName()noexcept;
     [[nodiscard]] static Name BuildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
-    static Expected<GraphicsBytes> SerializeIndex(GraphicsArena& arena, Span<const Record> records);
+    [[nodiscard]] static Expected<GraphicsBytes> SerializeIndex(GraphicsArena& arena, Span<const Record> records, Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static Expected<GraphicsVector<Record>> DeserializeIndex(GraphicsArena& arena, BinaryByteView binary);
     [[nodiscard]] static Expected<Name> FindVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName);
 };

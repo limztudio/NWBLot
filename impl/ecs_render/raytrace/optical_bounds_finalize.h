@@ -46,11 +46,12 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 
 struct RayTracingOpticalRuntimeInputGpu{
-    Float34U objectToWorld = {};
+    Float34 objectToWorld = {};
     u32 localBoundsSlot = Limit<u32>::s_Max;
     u32 instanceIndex = 0u;
     u32 reserved[2] = {};
 };
+static_assert(alignof(RayTracingOpticalRuntimeInputGpu) >= 16u);
 static_assert(sizeof(RayTracingOpticalRuntimeInputGpu) == NWB_OPTICAL_BOUNDS_RUNTIME_INPUT_BYTES);
 static_assert(offsetof(RayTracingOpticalRuntimeInputGpu, localBoundsSlot) == NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET);
 static_assert(offsetof(RayTracingOpticalRuntimeInputGpu, instanceIndex) == NWB_OPTICAL_BOUNDS_RUNTIME_INSTANCE_OFFSET);
@@ -70,22 +71,25 @@ struct RayTracingOpticalBoundsFinalizeSnapshot{
     u32 instanceCount = 0u;
     bool staticBoundsComplete = false;
 
-    RayTracingOpticalBoundsFinalizeSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+
+public:
+    RayTracingOpticalBoundsFinalizeSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
 };
 using RayTracingOpticalBoundsFinalizeControl = RefCounter<RayTracingOpticalBoundsFinalizeSnapshot>;
 using RayTracingOpticalBoundsFinalizeHandle = RefCountPtr<RayTracingOpticalBoundsFinalizeControl, ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>>;
 
 class RayTracingOpticalBoundsFinalizeResources final : NoCopy{
 public:
-    RayTracingOpticalBoundsFinalizeResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+    RayTracingOpticalBoundsFinalizeResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
 
 
 public:
     void invalidate();
-    [[nodiscard]] RayTracingOpticalBoundsFinalizeHandle prepare(const RayTracingOpticalSceneGather& gather, Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem);
+    [[nodiscard]] Expected<RayTracingOpticalBoundsFinalizeHandle> prepare(const RayTracingOpticalSceneGather& gather, Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem);
 
 private:
     [[nodiscard]] bool ensurePipeline(RendererShaderSystem& shaderSystem);
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

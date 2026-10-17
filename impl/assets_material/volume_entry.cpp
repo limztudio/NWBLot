@@ -37,7 +37,7 @@ static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry)
         registry,
         NWB_TEXT("material"),
         &ParseMaterialDocument,
-        [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena){ return BuildMaterialAsset(entry, arena); },
+        [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildMaterialAsset(entry, arena); },
         false
     );
 }

@@ -430,15 +430,19 @@ Object Texture::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-Object Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool){
-    if(objectType == ObjectTypes::s_ImageView)
-        return getView(subresources, dimension, format);
+Expected<Object> Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool){
+    if(objectType == ObjectTypes::s_ImageView){
+        const auto view = getView(subresources, dimension, format);
+        if(!view)
+            return MakeUnexpected(view.error());
+        return Object(*view);
+    }
     if(objectType == ObjectTypes::s_Image)
         return getNativeHandle(objectType);
-    return nullptr;
+    return Object(nullptr);
 }
 
-VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format){
+Expected<VkImageView> Texture::getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format){
     if(dimension == TextureDimension::Unknown)
         dimension = m_creationDesc.dimension;
 
@@ -449,34 +453,34 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
-        return VK_NULL_HANDLE;
+        return MakeUnexpected(Failure{});
     }
 
     TextureViewKey key{ resolvedSubresources, dimension, format };
 
     ScopedLock lock(m_viewsMutex);
     if(m_image == VK_NULL_HANDLE)
-        return VK_NULL_HANDLE;
+        return MakeUnexpected(Failure{});
     auto it = m_views.find(key);
     if(it != m_views.end())
         return it.value();
 
     const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(*this, resolvedSubresources, dimension, format, NWB_TEXT("image view"), true);
     if(!viewInfo)
-        return VK_NULL_HANDLE;
+        return MakeUnexpected(Failure{});
 
     VkImageView view = VK_NULL_HANDLE;
     const VkResult res = m_context.deviceDispatch.vkCreateImageView(m_context.device, &*viewInfo, m_context.allocationCallbacks, &view);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));
-        return VK_NULL_HANDLE;
+        return MakeUnexpected(Failure{});
     }
 
     ScopeExit destroyView([&]()noexcept{ m_context.deviceDispatch.vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks); });
     if(!m_views.emplace(key, view).second){
         NWB_ASSERT(false);
-        return VK_NULL_HANDLE;
+        return MakeUnexpected(Failure{});
     }
     destroyView.release();
     return view;
@@ -562,7 +566,7 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
+StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_mipLayouts(context.objectArena)
     , m_admittedQueueFamilies(context.objectArena)

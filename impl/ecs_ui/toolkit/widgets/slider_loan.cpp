@@ -25,7 +25,17 @@ void Builder::publishSliderResults(const bool valid)noexcept{
         if(valid && frame->m_result.valid && sliderMatches(*frame)){
             result = frame->m_result;
             result.focused = frame->m_interactive && input.focus() == frame->m_widget.id;
-            result.dragging = frame->m_interactive && input.primaryDown() && (input.capture() == MakeWidgetId(frame->m_widget.id, "track") || input.capture() == MakeWidgetId(frame->m_widget.id, "thumb"));
+            result.dragging = false;
+            if(frame->m_interactive && input.primaryDown()){
+                const auto track = MakeWidgetId(frame->m_widget.id, "track");
+                const auto thumb = MakeWidgetId(frame->m_widget.id, "thumb");
+                if(!track || !thumb){
+                    m_context.fail();
+                    frame->m_state.m_result = {};
+                    continue;
+                }
+                result.dragging = input.capture() == *track || input.capture() == *thumb;
+            }
         }
         frame->m_state.m_result = result;
     }

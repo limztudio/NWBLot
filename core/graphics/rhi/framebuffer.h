@@ -23,6 +23,8 @@ struct FramebufferAttachment{
     Format::Enum format = Format::UNKNOWN;
     bool isReadOnly = false;
 
+
+public:
     constexpr FramebufferAttachment& setTexture(Texture* t)noexcept{ texture = t; return *this; }
     constexpr FramebufferAttachment& setSubresources(TextureSubresourceSet value)noexcept{ subresources = value; return *this; }
     constexpr FramebufferAttachment& setArraySlice(ArraySlice index)noexcept{ subresources.baseArraySlice = index; subresources.numArraySlices = 1; return *this; }
@@ -39,6 +41,8 @@ struct FramebufferDesc{
     FramebufferAttachment depthAttachment;
     FramebufferAttachment shadingRateAttachment;
 
+
+public:
     constexpr FramebufferDesc& addColorAttachment(const FramebufferAttachment& a){ colorAttachments.push_back(a); return *this; }
     constexpr FramebufferDesc& addColorAttachment(Texture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
     constexpr FramebufferDesc& addColorAttachment(Texture* texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
@@ -56,6 +60,8 @@ struct FramebufferInfo{
     u32 sampleQuality = 0;
     Format::Enum depthFormat = Format::UNKNOWN;
 
+
+public:
     FramebufferInfo() = default;
     FramebufferInfo(const FramebufferDesc& desc);
 
@@ -88,6 +94,8 @@ struct FramebufferInfoEx : FramebufferInfo{
     u32 height = 0;
     u32 arraySize = 1;
 
+
+public:
     FramebufferInfoEx() = default;
     FramebufferInfoEx(const FramebufferDesc& desc);
 

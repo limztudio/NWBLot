@@ -59,7 +59,7 @@ TEST(RenderableMeshResolution, SkinnedAttachmentWithoutProviderIsUnavailable){
 TEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices){
     Name names[40u];
     for(usize index = 0u; index < 40u; ++index){
-        NameHash hash = ComputeNameHash("tests/runtime_mesh_pruning/full_identity");
+        NameHash hash = ComputeNameHash(MakeNotNull("tests/runtime_mesh_pruning/full_identity"));
         hash.qwords[s_NameHashLaneCount - 1u] ^= index + 1u;
         names[index] = Name(hash);
     }

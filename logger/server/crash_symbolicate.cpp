@@ -27,9 +27,19 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, const Path& packageDirectory, const AStringView fileName, const AStringView label){
-    CrashReportText text{arena};
-    if(!ReadTextFile(packageDirectory / fileName, text) || text.empty())
+static void AppendOptionalTextFile(Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport, const CrashScratchPath& packageDirectory, const AStringView fileName, const AStringView label){
+    AString<Core::Alloc::ScratchArena> text{scratchArena};
+    const auto read = ReadTextFile(packageDirectory / fileName, text);
+    if(!read){
+        if(read.error() != ErrorCondition::no_such_file_or_directory){
+            outReport += "\n[";
+            outReport += label;
+            outReport += "]\nstatus=read_failed\n";
+            AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = fileName, .code = read.error(), });
+        }
+        return;
+    }
+    if(text.empty())
         return;
 
     outReport += "\n[";
@@ -40,20 +50,25 @@ static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, 
         outReport += '\n';
 }
 
-void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const u64 address){
-    outReport += s_HexAddressPrefix;
-    outReport += FormatHex64A(arena, address);
+void AppendNativeFailure(CrashReportText& outReport, const CrashSymbolicationFailure& failure){
+    const DiagnosticEventText detail = MakeDiagnosticEventText("operation={}\nnative_category={}\nnative_code={}\n", failure.operation, failure.code.category().name(), failure.code.value());
+    outReport += detail.view();
 }
 
-Path EffectiveSymbolStoreDirectory(LogArena& arena, const CrashSymbolicationConfig& config){
+void AppendHexAddress(CrashReportText& outReport, const u64 address){
+    outReport += s_HexAddressPrefix;
+    AppendHexU64(address, outReport);
+}
+
+CrashScratchPath EffectiveSymbolStoreDirectory(Core::Alloc::ScratchArena& arena, const CrashSymbolicationConfig& config){
     if(!config.symbolStoreDirectory.empty())
-        return Path(arena, config.symbolStoreDirectory);
+        return CrashScratchPath(arena, config.symbolStoreDirectory);
 
     return CrashDefaultRootDirectory(arena) / s_CrashSymbolStoreDirectoryName;
 }
 
-static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport, const CrashSymbolicationConfig& config){
-    const Path symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
+static void AppendSymbolStoreStatus(Core::Alloc::ScratchArena& arena, CrashReportText& outReport, const CrashSymbolicationConfig& config){
+    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
     outReport += "symbol_store=";
     outReport += PathToString<char>(arena, symbolStoreDirectory);
     outReport += "\nsymbol_store_status=";
@@ -66,7 +81,7 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     outReport += "\n";
 }
 
-static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, const CrashPackageSummary& summary){
+static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackageSummary& summary){
     if(summary.reasonKind == s_SignalReasonKind){
         outReport += "exception=";
         outReport += Core::Crash::PosixSignalName(summary.reasonCode);
@@ -80,7 +95,7 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
         outReport += "exception=";
         outReport += Core::Crash::WindowsExceptionName(summary.reasonCode);
         outReport += " ";
-        AppendHexAddress(arena, outReport, summary.reasonCode);
+        AppendHexAddress(outReport, summary.reasonCode);
         outReport += "\n";
         return;
     }
@@ -102,14 +117,14 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
     outReport += "\n";
 }
 
-static void AppendEventSummary(LogArena& arena, const CrashPackageSummary& summary, CrashReportText& outReport){
+static void AppendEventSummary(const CrashPackageSummary& summary, CrashReportText& outReport){
     outReport += "\n[event]\n";
     outReport += "event=";
     outReport += summary.event;
     outReport += "\n";
 
     if(summary.triggerExpression.empty() && summary.triggerMessage.empty() && summary.triggerFile.empty() && summary.triggerLine == 0u)
-        AppendExceptionSummary(arena, outReport, summary);
+        AppendExceptionSummary(outReport, summary);
 }
 
 struct ReportSectionRange{
@@ -118,6 +133,8 @@ struct ReportSectionRange{
     usize contentBegin = AStringView::npos;
     usize contentEnd = AStringView::npos;
 
+
+public:
     [[nodiscard]] bool found()const noexcept{ return removeBegin != AStringView::npos; }
 };
 
@@ -158,7 +175,7 @@ struct ReportSectionRange{
     return TrimView(AStringView(report.data() + range.contentBegin, range.contentEnd - range.contentBegin));
 }
 
-static void AppendReportWithoutSection(CrashReportText& outReport, const AStringView report, const ReportSectionRange& range){
+static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outReport, const AStringView report, const ReportSectionRange& range){
     if(!range.found()){
         outReport.append(report.data(), report.size());
         return;
@@ -212,21 +229,23 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
         outReport += "\n";
 }
 
-[[nodiscard]] static CrashReportText BuildOrderedCrashReport(LogArena& arena, const CrashPackageSummary& summary, const CrashReportText& detailReport){
-    const AStringView detailReportView(detailReport.data(), detailReport.size());
+[[nodiscard]] static CrashReportText BuildOrderedCrashReport(Core::Alloc::ScratchArena& scratchArena, const CrashPackageSummary& summary, CrashReportText&& detailReport){
+    CrashReportText report(Move(detailReport));
+    const AStringView detailReportView(report.data(), report.size());
     const ReportSectionRange callstackSection = FindCallstackSection(detailReportView);
     const AStringView callstack = ReportSectionContent(detailReportView, callstackSection);
 
-    CrashReportText details(arena);
-    details.reserve(detailReport.size());
+    AString<Core::Alloc::ScratchArena> details(scratchArena);
+    details.reserve(report.size());
     AppendReportWithoutSection(details, detailReportView, callstackSection);
     const AStringView detailsView = TrimView(AStringView(details.data(), details.size()));
 
-    CrashReportText report(arena);
-    report.reserve(detailsView.size() + callstack.size() + s_CrashReportReserveBytes);
+    const AString<Core::Alloc::ScratchArena> callstackCopy(callstack.data(), callstack.size(), scratchArena);
+    report.clear();
+    report.reserve(AddSize(AddSize(detailsView.size(), callstackCopy.size()), s_CrashReportReserveBytes));
     if(AppendCrashHeadline(report, summary))
         report += "\n";
-    AppendVisibleCallstack(report, callstack);
+    AppendVisibleCallstack(report, AStringView(callstackCopy.data(), callstackCopy.size()));
     report += "\ndetails:\n";
     if(!detailsView.empty()){
         report.append(detailsView.data(), detailsView.size());
@@ -246,14 +265,14 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena){
+CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena){
     namespace Symbolicate = LoggerCrashSymbolicateDetail;
 
     CrashReportText detailReport{arena};
     detailReport.reserve(Symbolicate::s_CrashReportReserveBytes);
 
     detailReport += "package=";
-    detailReport += PathToString<char>(arena, packageDirectory);
+    detailReport += PathToString<char>(scratchArena, packageDirectory);
     detailReport += "\ncrash_id=";
     detailReport += summary.crashId;
     detailReport += "\nplatform=";
@@ -263,36 +282,39 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     detailReport += "\nartifact_strategy=";
     detailReport += summary.artifactStrategy;
     detailReport += "\n";
-    Symbolicate::AppendSymbolStoreStatus(arena, detailReport, config);
-    Symbolicate::AppendEventSummary(arena, summary, detailReport);
+    Symbolicate::AppendSymbolStoreStatus(scratchArena, detailReport, config);
+    Symbolicate::AppendEventSummary(summary, detailReport);
 
     if(summary.platform == LoggerCrashSymbolicateDetail::s_WindowsPlatformName){
 #if defined(NWB_PLATFORM_WINDOWS)
-        if(!Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, config, detailReport, scratchArena))
-            NWB_LOGGER_WARNING(NWB_TEXT("Windows minidump stack could not be fully decoded"));
+        const auto decoded = Symbolicate::AppendWindowsMinidumpStack(scratchArena, packageDirectory, summary, config, detailReport);
+        if(!decoded)
+            Symbolicate::AppendNativeFailure(detailReport, decoded.error());
+        else if(!*decoded)
+            detailReport += "stack_decode=unavailable\n";
 #else
         detailReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=Windows minidump resolver is only available on Windows logserver builds\n";
 #endif
     }
     else if(summary.platform == LoggerCrashSymbolicateDetail::s_LinuxPlatformName){
-        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, detailReport, scratchArena);
+        Symbolicate::AppendLinuxArtifactSummary(scratchArena, packageDirectory, config, detailReport);
     }
     else if(summary.platform == LoggerCrashSymbolicateDetail::s_AndroidPlatformName){
-        Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, detailReport);
+        Symbolicate::AppendAndroidTombstoneSummary(scratchArena, packageDirectory, detailReport);
     }
     else{
         detailReport += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";
     }
 
-    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash");
-    Symbolicate::AppendRadeonGpuDetectiveSummary(arena, packageDirectory, config, detailReport);
-    Symbolicate::AppendAftermathGpuDumpSummary(arena, packageDirectory, config, detailReport, scratchArena);
-    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
-    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata");
-    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs");
-    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note");
-    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection");
-    return Symbolicate::BuildOrderedCrashReport(arena, summary, detailReport);
+    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash");
+    Symbolicate::AppendRadeonGpuDetectiveSummary(scratchArena, packageDirectory, config, detailReport);
+    Symbolicate::AppendAftermathGpuDumpSummary(scratchArena, packageDirectory, config, detailReport);
+    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
+    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata");
+    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs");
+    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note");
+    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection");
+    return Symbolicate::BuildOrderedCrashReport(scratchArena, summary, Move(detailReport));
 }
 
 

@@ -211,7 +211,8 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
 
     m_meshSystem.pruneRuntimeMeshResources();
     m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
-    m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+    m_materialSystem.prepareVisibleMaterialInstanceMutableCache(scratchArena);
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
 
@@ -220,7 +221,6 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     DeferredFrameTargets& deferredTargets = m_frameTargets;
 
     m_reflectionSystem.pollStatistics();
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     if(m_preparedHasTransparentRenderers)
         m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
     else
@@ -237,10 +237,10 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete renderer view is the safe prepass capacity bound for either material pass.
     const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
 
-    if(!m_materialSystem.prepareMaterialPassResources(deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
+    if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
         return false;
 
-    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState))
+    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, deferredTargets, m_preparedCsgFrameState))
         return false;
 
     // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
@@ -501,7 +501,7 @@ void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{
 }
 
 
-void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
+void RendererFramePipeline::resetSharedDeferredFrameTaskState()noexcept{
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};

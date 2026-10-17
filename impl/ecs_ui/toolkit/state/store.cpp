@@ -25,14 +25,14 @@ WidgetStateStore::WidgetStateStore(Core::Alloc::GlobalArena& arena)
     m_index.reserve(s_RetainedCapacity);
 }
 
-WidgetState* WidgetStateStore::touch(const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
+Expected<NotNull<WidgetState*>> WidgetStateStore::touch(const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
     if(!id.valid() || root.generation == 0u || frameGeneration == 0u || kind > WidgetKind::Image)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     const usize index = findIndex(id);
     if(index != m_entries.size()){
         WidgetState& entry = m_entries[index];
         if(!(entry.root == root) || entry.lastSeenFrame == frameGeneration)
-            return nullptr;
+            return MakeUnexpected(Failure{});
         if(entry.kind != kind){
             if(m_nextDeclarationGeneration == Limit<u64>::s_Max)
                 TerminateInvariant();
@@ -41,10 +41,10 @@ WidgetState* WidgetStateStore::touch(const WidgetId id, const WidgetRoot& root, 
             entry.kind = kind;
         }
         entry.lastSeenFrame = frameGeneration;
-        return &entry;
+        return MakeNotNull(&entry);
     }
     if(m_entries.size() >= s_RetainedCapacity)
-        return nullptr;
+        return MakeUnexpected(Failure{});
     if(m_nextDeclarationGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     const usize newIndex = m_entries.size();
@@ -54,7 +54,7 @@ WidgetState* WidgetStateStore::touch(const WidgetId id, const WidgetRoot& root, 
         TerminateInvariant();
     }
     ++m_nextDeclarationGeneration;
-    return &m_entries.back();
+    return MakeNotNull(&m_entries.back());
 }
 
 WidgetState* WidgetStateStore::find(const WidgetId id){

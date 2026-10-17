@@ -114,11 +114,11 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     mesh.entry.rayQuery = true;
     mesh.entry.entryPoint = "authoredEntry";
     mesh.entry.includeRoots.emplace_back("engine/graphics", testArena.arena);
-    mesh.entry.implicitDefines.emplace(Impl::ShaderCook::CookString("NWB_CSG_ENABLED", testArena.arena), Impl::ShaderCook::CookString("1", testArena.arena));
+    ASSERT_TRUE(mesh.entry.implicitDefines.emplace(Impl::ShaderCook::CookString("NWB_CSG_ENABLED", testArena.arena), Impl::ShaderCook::CookString("1", testArena.arena)).second);
     Impl::ShaderCook::DefineEntry authoredDefine(testArena.arena);
     authoredDefine.values.emplace_back("0", testArena.arena);
     authoredDefine.values.emplace_back("1", testArena.arena);
-    mesh.entry.defineValues.emplace(Impl::ShaderCook::CookString("AUTHORED_OPTION", testArena.arena), Move(authoredDefine));
+    ASSERT_TRUE(mesh.entry.defineValues.emplace(Impl::ShaderCook::CookString("AUTHORED_OPTION", testArena.arena), Move(authoredDefine)).second);
     mesh.sourcePath = meshRoot / "shared_ms.slang";
     mesh.includeDirectories.push_back(meshRoot);
     mesh.variantCount = s_ExpectedDualCount;

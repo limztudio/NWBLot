@@ -45,6 +45,10 @@ namespace __hidden_assets_graphics_volume_prepare{
 inline constexpr Name s_GraphicsVolumeMetadataExtensionName("assets_graphics/volume_metadata");
 inline constexpr Name s_IncludeAssetTypeName("include");
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using MaterialBindEntryVector = ShaderCook::CookVector<MaterialBindEntry>;
 using CsgShapeEntryVector = ShaderCook::CookVector<AssetsCsgCook::CsgShapeCookEntry>;
 
@@ -57,6 +61,8 @@ struct GraphicsVolumeMetadata{
     AssetsGraphicsCookDetail::PreparedShaderPlan preparedPlan;
     HashSet<AssetsGraphicsCookDetail::ShaderStageKey, ShaderCook::CookArena, AssetsGraphicsCookDetail::ShaderStageKeyHasher, EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>> seenShaderIdentityKeys;
 
+
+public:
     explicit GraphicsVolumeMetadata(ShaderCook::CookArena& arena)
         : shaderCook(arena)
         , includeMetadata(arena)
@@ -76,7 +82,17 @@ static bool AppendUniqueShaderEntry(ShaderCook::ShaderEntry& shaderEntry, const 
     if(shaderEntry.name.empty())
         return true;
 
-    const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ ToName(shaderEntry.name), ToName(shaderEntry.archiveStage.view()) };
+    const auto shaderName = ToName(shaderEntry.name);
+    const auto stageName = ToName(shaderEntry.archiveStage.view());
+    if(!shaderName){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid shader identity in meta '{}' (failure {})"), PathToString<tchar>(nwbFilePath), static_cast<u32>(shaderName.error()));
+        return false;
+    }
+    if(!stageName){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid shader stage in meta '{}' (failure {})"), PathToString<tchar>(nwbFilePath), static_cast<u32>(stageName.error()));
+        return false;
+    }
+    const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
     if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader identity '{}' for stage '{}' from meta '{}'"), StringConvert(shaderEntry.name), StringConvert(shaderEntry.archiveStage.view()), PathToString<tchar>(nwbFilePath));
         return false;
@@ -96,7 +112,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             return AssetMetadataParseResult::Error;
         ShaderCook::ShaderEntry& shaderEntry = *shaderEntryResult;
 
-        auto shaderName = Core::Assets::BuildDerivedAssetVirtualPath(context.cookArena, context.discoveredNwbFile.assetRoot, context.discoveredNwbFile.virtualRoot.view(), Path(context.cookArena, shaderEntry.source));
+        auto shaderName = Core::Assets::BuildDerivedAssetVirtualPath(context.cookArena, context.discoveredNwbFile.assetRoot, context.discoveredNwbFile.virtualRoot.view(), ::Path<ScratchArena>(context.scratchArena, shaderEntry.source), context.scratchArena);
         if(!shaderName)
             return AssetMetadataParseResult::Error;
         shaderEntry.name = Move(*shaderName);
@@ -114,7 +130,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
         ShaderCook::IncludeEntry& includeEntry = *includeEntryResult;
 
         if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
-            const Path sourcePath(context.cookArena, includeEntry.source);
+            const ::Path<ScratchArena> sourcePath(context.scratchArena, includeEntry.source);
             auto absSourceResult = AbsolutePath(sourcePath);
             if(!absSourceResult){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve include metadata source '{}' from '{}': {}")
@@ -124,10 +140,12 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
                 );
                 return AssetMetadataParseResult::Error;
             }
-            const Path absSource = absSourceResult->lexicallyNormal();
+            const ::Path<ScratchArena> absSource = absSourceResult->lexicallyNormal();
 
             ScratchString key = PathToString(context.scratchArena, absSource);
+#if defined(NWB_PLATFORM_WINDOWS)
             CanonicalizeTextInPlace(key);
+#endif
             CookString cookKey(key, context.cookArena);
             if(!graphicsMetadata.includeMetadata.emplace(Move(cookKey), Move(includeEntry)).second){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate include metadata for source '{}'"), PathToString<tchar>(absSource));
@@ -163,7 +181,7 @@ static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVo
             return false;
         MaterialBindEntry& bindEntry = *bindResult;
 
-        auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(context.arena, discoveredBindFile.assetRoot, discoveredBindFile.virtualRoot.view(), discoveredBindFile.filePath);
+        auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(context.arena, discoveredBindFile.assetRoot, discoveredBindFile.virtualRoot.view(), discoveredBindFile.filePath, context.scratchArena);
         if(!virtualPath)
             return false;
         bindEntry.virtualPath = Move(*virtualPath);
@@ -321,7 +339,17 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(s_EngineGraphicsIncludeRoot, shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;
 
-        const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ ToName(pixelShaderEntry.name), ToName(pixelShaderEntry.archiveStage.view()) };
+        const auto shaderName = ToName(pixelShaderEntry.name);
+        const auto stageName = ToName(pixelShaderEntry.archiveStage.view());
+        if(!shaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: generated shader name has invalid text (failure {})"), static_cast<u32>(shaderName.error()));
+            return false;
+        }
+        if(!stageName){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: generated shader stage has invalid text (failure {})"), static_cast<u32>(stageName.error()));
+            return false;
+        }
+        const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
         if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate generated pixel shader identity '{}'"), StringConvert(pixelShaderEntry.name));
             return false;
@@ -379,7 +407,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             seenVirtualPathHashes,
             writeScratchArena
         );
-    });
+    }
+    );
     return true;
 }
 
@@ -387,8 +416,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
-Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
+static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
+static Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

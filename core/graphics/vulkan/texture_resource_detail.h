@@ -43,6 +43,11 @@ inline constexpr ResourceStates::Mask s_ValidTextureResourceStates =
     | ResourceStates::Present
     | ResourceStates::ShadingRateSurface
 ;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TextureCreateMetadata{
     VkFormat format = VK_FORMAT_UNDEFINED;
     VulkanDetail::TextureFormatBlockLayout formatLayout;
@@ -138,17 +143,10 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc)noexcept{
         dimensionValid = desc.depth == 1u;
         break;
     case TextureDimension::TextureCube:
-        dimensionValid = desc.depth == 1u
-            && desc.width == desc.height
-            && desc.arraySize == s_TextureCubeLayerCount
-        ;
+        dimensionValid = desc.depth == 1u && desc.width == desc.height && desc.arraySize == s_TextureCubeLayerCount;
         break;
     case TextureDimension::TextureCubeArray:
-        dimensionValid = desc.depth == 1u
-            && desc.width == desc.height
-            && desc.arraySize >= s_TextureCubeLayerCount
-            && (desc.arraySize % s_TextureCubeLayerCount) == 0u
-        ;
+        dimensionValid = desc.depth == 1u && desc.width == desc.height && desc.arraySize >= s_TextureCubeLayerCount && (desc.arraySize % s_TextureCubeLayerCount) == 0u;
         break;
     case TextureDimension::Texture3D:
         dimensionValid = desc.arraySize == 1u;

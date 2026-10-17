@@ -52,14 +52,16 @@ public:
         return m_snapshot.commands().size() == m_commands && m_snapshot.indices().size() == static_cast<usize>(m_commands) * 6u && m_snapshot.vertices().size() == static_cast<usize>(m_commands) * 4u;
     }
 
-    [[nodiscard]] u64 checksum()const noexcept{
+    [[nodiscard]] Expected<u64> checksum()const noexcept{
+        if(m_snapshot.commands().size() != m_commands || m_snapshot.indices().size() != static_cast<usize>(m_commands) * 6u || m_snapshot.vertices().size() != static_cast<usize>(m_commands) * 4u)
+            return MakeUnexpected(Failure{});
         u64 hash = MixChecksum(1469598103934665603u, m_commands);
         for(u32 index = 0u; index < m_commands; ++index){
             const DrawCommand& command = m_snapshot.commands()[index];
             const u32 expectedLayer = m_descending ? index + 1u : 0u;
             const u32 expectedFirst = (m_descending ? m_commands - index - 1u : index) * 6u;
             if(command.layer != expectedLayer || command.firstIndex != expectedFirst || command.indexCount != 6u || command.material != PaintMaterial::Solid)
-                return 0u;
+                return MakeUnexpected(Failure{});
             hash = MixChecksum(hash, command.layer);
             hash = MixChecksum(hash, command.firstIndex);
             hash = MixChecksum(hash, command.indexCount);
@@ -101,7 +103,7 @@ bool RunPaintBenchmarks(){
     for(usize index = 0u; index < 3u; ++index){
         for(const bool descending : { false, true }){
             __hidden_ui_paint_benchmark::PaintCase benchmark(s_Counts[index], descending);
-            if(!benchmark.operation() || benchmark.checksum() == 0u)
+            if(!benchmark.operation() || !benchmark.checksum())
                 return false;
             const u64 setup = MixChecksum(MixChecksum(1469598103934665603u, s_Counts[index]), descending ? 1u : 0u);
             if(!Measure(descending ? s_DescendingNames[index] : s_MonotonicNames[index], setup, [&benchmark](){ return benchmark.operation(); }, [&benchmark](){ return benchmark.checksum(); }))

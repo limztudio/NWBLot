@@ -133,11 +133,11 @@ namespace TriangleDoubleTests{
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble TriangleAreaNormalLengthSquared(SIMDVectorDouble areaNormal)noexcept{
 #if defined(NWB_HAS_AVX2)
-    // Retain the original AVX2 reduction order: (x squared + z squared) + y squared.
+    // Retain the AVX2 reduction order: (x squared + z squared) + y squared.
     areaNormal = VectorDoubleSwizzle<0, 2, 1, 3>(areaNormal);
 #endif
 #if defined(NWB_HAS_NEON64)
-    // The previous ARM64 final multiply-add followed the compiler's contraction policy.
+    // The ARM64 final multiply-add follows the compiler's contraction policy.
     const SIMDVectorDouble z = VectorDoubleSplatZ(areaNormal);
     return VectorDoubleMultiplyAddExpression(z, z, VectorDouble2LengthSq(areaNormal));
 #else

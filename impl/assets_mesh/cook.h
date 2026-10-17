@@ -53,6 +53,8 @@ struct MeshCookEntry{
     Core::Assets::AssetVector<MeshletLocalVertexRef> meshletLocalVertexRefs;
     Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
 
+
+public:
     explicit MeshCookEntry(Core::Assets::AssetArena& arena)noexcept
         : positions(arena)
         , normals(arena)
@@ -82,7 +84,7 @@ struct MeshCookEntry{
 );
 [[nodiscard]] Expected<MeshCookEntry> ParseMeshCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 
-[[nodiscard]] Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

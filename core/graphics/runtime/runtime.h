@@ -114,21 +114,25 @@ public:
         u32 indexCount = 0;
         Format::Enum indexFormat = Format::UNKNOWN;
 
+
+    public:
         [[nodiscard]] bool valid()const noexcept{
             return vertexBuffer != nullptr;
         }
     };
 
+
+public:
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
     // A synchronous caller may declare one isolated graph through this callback.
     // The graph owns all native command recording and submission; the callback must only retain declaration-time inputs and return its terminal task.
     // `userData` remains caller-owned for the duration of this synchronous call.
-    using StandaloneTaskGraphDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
+    using StandaloneTaskGraphDeclaration = Expected<GpuTaskId>(*)(void* userData, GpuTaskGraph& graph);
 
 
 private:
     // runFrame creates this on the stack only for a capture-enabled normal frame.
-    // It stages phase values without touching the TimingSink, so a failed frame cannot make a partial phase scope observable.
+    // It stages phase durations and registers scope identities; only successful frames flush sample values.
     struct CpuTimingPhaseBatch;
 
 
@@ -260,11 +264,11 @@ public:
     [[nodiscard]] u32 getBackBufferCount()const noexcept;
     [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const noexcept;
 
-    [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
-    [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const;
+    [[nodiscard]] Expected<BufferHandle> createBuffer(const BufferDesc& desc)const;
+    [[nodiscard]] Expected<TextureHandle> createTexture(const TextureDesc& desc)const;
 
-    [[nodiscard]] BufferHandle setupBuffer(const BufferSetupDesc& desc)const;
-    [[nodiscard]] TextureHandle setupTexture(const TextureSetupDesc& desc)const;
+    [[nodiscard]] Expected<BufferHandle> setupBuffer(const BufferSetupDesc& desc)const;
+    [[nodiscard]] Expected<TextureHandle> setupTexture(const TextureSetupDesc& desc)const;
     [[nodiscard]] bool uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
     // Compiles, records, and submits an isolated graph synchronously.
     // This is the graph-owned escape hatch for a standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
@@ -275,10 +279,10 @@ public:
         GpuTimingRecorder* timingRecorder = nullptr,
         GpuTimingFrameTransaction* frameTimingTransaction = nullptr
     )const;
-    [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
+    [[nodiscard]] Expected<MeshResource> setupMesh(const MeshSetupDesc& desc)const;
 
-    [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
-    [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
+    [[nodiscard]] Expected<CooperativeVectorDeviceFeatures> queryCoopVecFeatures()const;
+    [[nodiscard]] Expected<usize> getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
     [[nodiscard]] Expected<SwapChainTransitionTicket> backBufferResizing();
     [[nodiscard]] bool backBufferResized();
@@ -290,11 +294,11 @@ public:
     // Runs the allocation/submission work that must precede every frame's render-pass preparation.
     // Call this after the backend has acquired a frame and before render(); direct headless callers use it to establish the same ordering without a swap-chain beginFrame().
     [[nodiscard]] bool prepareFramePreamble();
-    void render();
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render();
 
 
 private:
-    void renderWithPhaseTiming(CpuTimingPhaseBatch* phaseTiming);
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> renderWithPhaseTiming(CpuTimingPhaseBatch* phaseTiming);
 
 
 public:

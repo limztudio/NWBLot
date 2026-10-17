@@ -54,7 +54,7 @@ namespace GlobalFilesystemDetail{
 
 
 template<typename Container>
-[[nodiscard]] inline char* MutableReadBuffer(Container& outData)noexcept{
+[[nodiscard]] inline char* MutableReadBuffer(Container& outData)noexcept(noexcept(reinterpret_cast<char*>(outData.data()))){
     return reinterpret_cast<char*>(outData.data());
 }
 

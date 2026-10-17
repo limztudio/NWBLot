@@ -48,6 +48,8 @@ struct CsgShapeCookEntry{
     CookString evalInclude;
     CookString moduleInclude;
 
+
+public:
     explicit CsgShapeCookEntry(CookArena& arena)noexcept
         : evalInclude(arena)
         , moduleInclude(arena)

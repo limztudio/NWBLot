@@ -117,9 +117,10 @@ bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandL
     const Core::GpuCommandIrOwnerAnchor descriptorOwner = Core::MakeGpuCommandIrOwnerAnchor(frame->m_arena, GpuFrame(frame));
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target);
-    GpuPaintPushConstants push;
-    if(!geometry.initializePushConstants(push, frame->m_resources->m_samplerDescriptor.slot()))
+    const auto initialPush = geometry.initializePushConstants(frame->m_resources->m_samplerDescriptor.slot());
+    if(!initialPush)
         return false;
+    GpuPaintPushConstants push = *initialPush;
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     Core::Rect boundScissor;
     bool hasRasterState = false;

@@ -17,9 +17,12 @@ NWB_IMPL_UI_BEGIN
 bool InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{
     if(!source.valid() || (m_activePointerSource.valid() && m_activePointerSource != source))
         return false;
-    return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
+    return
+        FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
         return held.source == source && held.inert;
-    }) == m_pointerSources.end();
+    }
+    ) == m_pointerSources.end()
+    ;
 }
 
 bool InputRouter::ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
@@ -29,9 +32,12 @@ bool InputRouter::ownsPointerSource(const InputSource& source, const PointerInte
 
 bool InputRouter::wantsPointer()const noexcept{
     if(!m_pointerSources.empty()){
-        return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [](const PointerSource& held)noexcept{
+        return
+            FindIf(m_pointerSources.begin(), m_pointerSources.end(), [](const PointerSource& held)noexcept{
             return held.consumed;
-        }) != m_pointerSources.end();
+        }
+        ) != m_pointerSources.end()
+        ;
     }
     return hasPopup() || m_hover.valid();
 }
@@ -39,14 +45,16 @@ bool InputRouter::wantsPointer()const noexcept{
 InputRouter::PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)noexcept{
     const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
         return current.source == source && current.intent == intent;
-    });
+    }
+    );
     return found == m_pointerSources.end() ? nullptr : &*found;
 }
 
 const InputRouter::PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
     const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
         return current.source == source && current.intent == intent;
-    });
+    }
+    );
     return found == m_pointerSources.end() ? nullptr : &*found;
 }
 
@@ -152,7 +160,8 @@ void InputRouter::terminatePointerSource(const InputSource source)noexcept{
     const bool active = m_activePointerSource == source;
     const bool unfinished = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
         return held.source == source;
-    }) != m_pointerSources.end();
+    }
+    ) != m_pointerSources.end();
     if(active){
         cancelPointerPress();
         m_primaryDown = false;

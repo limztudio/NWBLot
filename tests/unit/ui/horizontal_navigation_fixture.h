@@ -28,8 +28,8 @@ namespace UiHorizontalNavigationTests{
 using namespace Impl::Ui;
 
 
-HitTarget Part(const HitTarget& host);
-PopupScope Popup(const HitTarget& owner, u64 openGeneration = 7u);
+HitTarget Part(const HitTarget& host)noexcept;
+PopupScope Popup(const HitTarget& owner, u64 openGeneration = 7u)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +48,7 @@ protected:
     void focusTarget(usize index = 0u);
     [[nodiscard]] bool publish(usize count = 2u, const PopupScope* popups = nullptr, usize popupCount = 0u);
     [[nodiscard]] Expected<ControlAction> take(usize index = 0u)noexcept;
-    void bindEditor(usize hostIndex = 0u);
+    void bindEditor(usize hostIndex = 0u)noexcept;
 
 
 protected:

@@ -64,7 +64,7 @@ ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedb
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackState::ReflectionFeedbackState(const u16 deviceGeneration)
+ReflectionFeedbackState::ReflectionFeedbackState(const u16 deviceGeneration)noexcept
     : m_deviceGeneration(deviceGeneration)
 {}
 

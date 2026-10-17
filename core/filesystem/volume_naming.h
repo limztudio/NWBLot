@@ -35,7 +35,7 @@ NWB_FILESYSTEM_BEGIN
     return true;
 }
 
-[[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
+[[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex)noexcept{
     char segmentIndexBuffer[TextDetail::s_DecimalTextBufferBytes];
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);
     NWB_ASSERT(!segmentIndexText.empty());
@@ -48,7 +48,7 @@ NWB_FILESYSTEM_BEGIN
     return hash;
 }
 
-[[nodiscard]] inline ACompactString MakeVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
+[[nodiscard]] inline ACompactString MakeVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex)noexcept{
     const u64 hash = HashVolumeSegmentFileName(volumeName, segmentIndex);
 
     ACompactString fileName;

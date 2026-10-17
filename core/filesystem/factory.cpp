@@ -15,14 +15,17 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<IFilesystem> CreateFilesystem(Alloc::GlobalArena& arena, const VolumeMountDesc& desc, const FilesystemFactory& factory){
-    UniquePtr<IFilesystem> filesystem = factory ? factory(arena, desc) : MakeUnique<VolumeFileSystem>(arena);
+Expected<UniquePtr<IFilesystem>> CreateFilesystem(Alloc::GlobalArena& arena, const VolumeMountDesc& desc, const FilesystemFactory& factory){
+    auto created = factory ? factory(arena, desc) : Expected<UniquePtr<IFilesystem>>(MakeUnique<VolumeFileSystem>(arena));
+    if(!created)
+        return MakeUnexpected(created.error());
+    UniquePtr<IFilesystem> filesystem = Move(*created);
     if(!filesystem){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem: project factory did not create a filesystem"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!filesystem->mount(desc))
-        return nullptr;
+        return MakeUnexpected(Failure{});
     return filesystem;
 }
 

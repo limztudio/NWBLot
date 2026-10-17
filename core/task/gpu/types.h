@@ -118,6 +118,8 @@ struct GpuTaskId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{
@@ -129,6 +131,8 @@ struct GpuGraphResourceId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{
@@ -140,6 +144,8 @@ struct GpuGraphResourceVersionId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
@@ -155,6 +161,8 @@ struct GpuGraphResourceSetId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{
@@ -168,6 +176,8 @@ struct GpuUploadBlobId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
@@ -194,6 +204,8 @@ struct GpuGraphPipelineId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuGraphPipelineId& lhs, const GpuGraphPipelineId& rhs)noexcept{
@@ -207,6 +219,8 @@ struct GpuExternalCompletionId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuExternalCompletionId& lhs, const GpuExternalCompletionId& rhs)noexcept{
@@ -222,6 +236,8 @@ struct GpuSubmissionPacketId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 inline constexpr bool operator==(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
@@ -237,6 +253,8 @@ struct GpuSubmissionPacketRange{
     GpuSubmissionPacketId first;
     usize packetCount = 0u;
 
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return first.valid() && packetCount != 0u; }
 };
 

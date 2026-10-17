@@ -35,7 +35,8 @@ TEST(MathBoxNormal, FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes){
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             __builtin_trap();
-    });
+    }
+    );
 
     // Z squared is finite but exceeds half the maximum float; doubling it in a dead reduction lane raises a spurious overflow.
     volatile u32 inputBits[]{ 0xc6ab1d80u, 0x51272bbbu, 0x5f60eb2cu, 0x677561fau, 0xc1aeb5b9u, 0x7213a692u, 0xd272655fu, 0xdd4e3655u, 0xa3419f79u, 0xb181e207u, 0xcedc8003u, 0x65e759c3u, 0x86a287b0u };

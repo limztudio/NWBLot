@@ -30,7 +30,6 @@ bool BackendContext::InvokeFramePresentationSignalResolution(void* const context
     return static_cast<BackendContext*>(context)->resolveFramePresentationSignal(identity, token);
 }
 
-
 Texture* BackendContext::getBackBuffer(u32 index)const noexcept{
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
@@ -62,7 +61,8 @@ QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexc
 
 bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
     NothrowScopedLock presentationLock(m_framePresentationMutex);
-    return m_framePresentationClaimsEnabled
+    return
+        m_framePresentationClaimsEnabled
         && claim.context == this
         && claim.identity != 0u
         && claim.identity == m_framePresentationClaimIdentity
@@ -152,7 +152,8 @@ bool BackendContext::recreateAcquireSyncSlots(const usize count){
                 m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
             if(slot.semaphore)
                 m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
-        });
+        }
+        );
 
         VkResult result = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &slot.semaphore);
         if(result == VK_SUCCESS)
@@ -219,13 +220,13 @@ bool BackendContext::createFrameSyncQueries(){
     m_queryPool.reserve(m_maxFramesInFlight);
 
     for(u32 index = 0u; index < m_maxFramesInFlight; ++index){
-        EventQueryHandle query = m_rhiDevice->createEventQuery();
+        auto query = m_rhiDevice->createEventQuery();
         if(!query){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create frame synchronization query {} of {}"), index + 1u, m_maxFramesInFlight);
             m_queryPool.clear();
             return false;
         }
-        m_queryPool.push_back(Move(query));
+        m_queryPool.push_back(Move(*query));
     }
 
     return true;
@@ -360,7 +361,8 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
         return false;
     m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
-    });
+    }
+    );
     if(claim && (claim->identity != m_framePresentationClaimIdentity || claim->invoke != &BackendContext::InvokeFramePresentationSignalPreparation || claim->resolved != &BackendContext::InvokeFramePresentationSignalResolution))
         return false;
     if(m_framePresentationSignalState == FramePresentationSignalState::Idle)

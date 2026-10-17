@@ -79,6 +79,8 @@ struct BlendState{
         ColorMask::Mask colorWriteMask = ColorMask::All;
         bool blendEnable = false;
 
+
+    public:
         constexpr RenderTarget& setBlendEnable(bool enable)noexcept{ blendEnable = enable; return *this; }
         constexpr RenderTarget& enableBlend()noexcept{ blendEnable = true; return *this; }
         constexpr RenderTarget& disableBlend()noexcept{ blendEnable = false; return *this; }
@@ -96,6 +98,8 @@ struct BlendState{
     RenderTarget targets[s_MaxRenderTargets];
     bool alphaToCoverageEnable = false;
 
+
+public:
     constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target)noexcept{ targets[index] = target; return *this; }
     constexpr BlendState& setAlphaToCoverageEnable(bool enable)noexcept{ alphaToCoverageEnable = enable; return *this; }
     constexpr BlendState& enableAlphaToCoverage()noexcept{ alphaToCoverageEnable = true; return *this; }
@@ -157,6 +161,8 @@ struct RasterState{
     f32 depthBiasClamp = 0.f;
     f32 slopeScaledDepthBias = 0.f;
 
+
+public:
     constexpr RasterState& setFillMode(RasterFillMode::Enum value)noexcept{ fillMode = value; return *this; }
     constexpr RasterState& setFillSolid()noexcept{ fillMode = RasterFillMode::Solid; return *this; }
     constexpr RasterState& setFillWireframe()noexcept{ fillMode = RasterFillMode::Wireframe; return *this; }
@@ -214,6 +220,8 @@ struct DepthStencilState{
         StencilOp::Enum passOp = StencilOp::Keep;
         ComparisonFunc::Enum stencilFunc = ComparisonFunc::Always;
 
+
+    public:
         constexpr StencilOpDesc& setFailOp(StencilOp::Enum value)noexcept{ failOp = value; return *this; }
         constexpr StencilOpDesc& setDepthFailOp(StencilOp::Enum value)noexcept{ depthFailOp = value; return *this; }
         constexpr StencilOpDesc& setPassOp(StencilOp::Enum value)noexcept{ passOp = value; return *this; }
@@ -231,6 +239,8 @@ struct DepthStencilState{
     StencilOpDesc frontFaceStencil;
     StencilOpDesc backFaceStencil;
 
+
+public:
     constexpr DepthStencilState& setDepthTestEnable(bool value)noexcept{ depthTestEnable = value; return *this; }
     constexpr DepthStencilState& enableDepthTest()noexcept{ depthTestEnable = true; return *this; }
     constexpr DepthStencilState& disableDepthTest()noexcept{ depthTestEnable = false; return *this; }
@@ -261,6 +271,8 @@ struct ViewportState{
     FixedVector<Viewport, s_MaxViewports> viewports;
     FixedVector<Rect, s_MaxViewports> scissorRects;
 
+
+public:
     constexpr ViewportState& addViewport(const Viewport& v){ viewports.push_back(v); return *this; }
     constexpr ViewportState& addScissorRect(const Rect& r){ scissorRects.push_back(r); return *this; }
     constexpr ViewportState& addViewportAndScissorRect(const Viewport& v){ return addViewport(v).addScissorRect(Rect(v)); }
@@ -302,6 +314,8 @@ struct SamplerDesc{
     SamplerAddressMode::Enum addressW = SamplerAddressMode::Clamp;
     SamplerReductionType::Enum reductionType = SamplerReductionType::Standard;
 
+
+public:
     constexpr SamplerDesc& setBorderColor(const Color& color)noexcept{ borderColor = color; return *this; }
     constexpr SamplerDesc& setMaxAnisotropy(f32 value)noexcept{ maxAnisotropy = value; return *this; }
     constexpr SamplerDesc& setMipBias(f32 value)noexcept{ mipBias = value; return *this; }

@@ -11,6 +11,8 @@
 #include <core/alloc/general.h>
 
 #include <global/frame_data.h>
+#include <global/scope_exit.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,28 +37,7 @@ public:
 
 public:
     virtual bool initialize() = 0;
-    virtual void finalize() = 0;
-};
-class FunctionalInitializerable final : public BaseInitializerable{
-public:
-    template<typename INIT, typename FIN>
-    FunctionalInitializerable(INIT&& init, FIN&& fin)
-        : m_init(Forward<INIT>(init))
-        , m_fin(Forward<FIN>(fin))
-    {}
-
-
-public:
-    inline virtual bool initialize()override{ return m_init ? m_init() : true; }
-    inline virtual void finalize()override{
-        if(m_fin)
-            m_fin();
-    }
-
-
-private:
-    Function<bool()> m_init;
-    Function<void()> m_fin;
+    virtual void finalize()noexcept = 0;
 };
 
 
@@ -76,24 +57,20 @@ public:
 
 
 class Initializer{
-public:
-    static Initializer& Instance();
-
-
 private:
     struct InitializerItem{
         NotNull<CommonDetail::BaseInitializerable*> item;
-        UniquePtr<CommonDetail::BaseInitializerable> ownedItem;
 
-        explicit InitializerItem(CommonDetail::BaseInitializerable& value)
+
+    public:
+        explicit InitializerItem(CommonDetail::BaseInitializerable& value)noexcept
             : item(MakeNotNull(&value))
         {}
-        template<typename T>
-        explicit InitializerItem(UniquePtr<T>&& value)
-            : item(MakeNotNull(value.get()))
-            , ownedItem(Move(value))
-        {}
     };
+
+
+public:
+    static Initializer& Instance();
 
 
 private:
@@ -108,17 +85,17 @@ public:
     inline bool initialize(){
         m_initializedItemCount = 0u;
         usize initializedItemCount = 0u;
+        ScopeExit rollback([&]()noexcept{ finalizeInitialized(initializedItemCount); });
         for(auto& cur : m_items){
-            if(!cur.item->initialize()){
-                finalizeInitialized(initializedItemCount);
+            if(!cur.item->initialize())
                 return false;
-            }
             ++initializedItemCount;
         }
         m_initializedItemCount = initializedItemCount;
+        rollback.release();
         return true;
     }
-    inline void finalize(){
+    inline void finalize()noexcept{
         finalizeInitialized(m_initializedItemCount);
         m_initializedItemCount = 0u;
     }
@@ -134,10 +111,9 @@ public:
         m_activeCount = 1u;
         return true;
     }
-    inline void release(){
-        NWB_ASSERT(m_activeCount > 0u);
+    inline void release()noexcept{
         if(m_activeCount == 0u)
-            return;
+            TerminateInvariant();
 
         --m_activeCount;
         if(m_activeCount == 0u)
@@ -147,15 +123,10 @@ public:
 
 public:
     inline void enqueue(Initializerable& item){ m_cursor = m_items.emplace_after(m_cursor, item); }
-    template<typename INITIALIZE, typename FINALIZE>
-    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){
-        auto item = MakeUnique<CommonDetail::FunctionalInitializerable>(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize));
-        m_cursor = m_items.emplace_after(m_cursor, Move(item));
-    }
 
 
 private:
-    inline void finalizeInitialized(const usize initializedItemCount){
+    inline void finalizeInitialized(const usize initializedItemCount)noexcept{
         usize itemIndex = 0u;
         for(auto& cur : m_items){
             if(itemIndex >= initializedItemCount)
@@ -177,31 +148,33 @@ private:
 
 class InitializerGuard : NoCopy{
 public:
-    ~InitializerGuard(){ finalize(); }
+    ~InitializerGuard()noexcept{ finalize(); }
 
 
 public:
     [[nodiscard]] bool initialize(){
-        if(m_active)
+        if(m_initializer)
             return true;
 
-        if(!Initializer::Instance().acquire())
+        Initializer& initializer = Initializer::Instance();
+        if(!initializer.acquire())
             return false;
 
-        m_active = true;
+        m_initializer = &initializer;
         return true;
     }
-    void finalize(){
-        if(!m_active)
+    void finalize()noexcept{
+        if(!m_initializer)
             return;
 
-        Initializer::Instance().release();
-        m_active = false;
+        Initializer* initializer = m_initializer;
+        m_initializer = nullptr;
+        initializer->release();
     }
 
 
 private:
-    bool m_active = false;
+    Initializer* m_initializer = nullptr;
 };
 
 
@@ -228,6 +201,7 @@ private:
     static constexpr usize s_ActiveFlagByteIndex = sizeof(u16) * 2u;
     static constexpr usize s_InstancePointerSlot = 1u;
     static constexpr usize s_WindowPointerSlot = 2u;
+    static constexpr usize s_WindowClassSlot = 3u;
 
 
 public:
@@ -239,6 +213,9 @@ public:
 
     inline HWND hwnd()const noexcept{ return static_cast<HWND>(m_data.ptr[s_WindowPointerSlot]); }
     inline void setHwnd(HWND value)noexcept{ m_data.ptr[s_WindowPointerSlot] = value; }
+
+    inline ATOM windowClass()const noexcept{ return static_cast<ATOM>(m_data.u64[s_WindowClassSlot]); }
+    inline void setWindowClass(ATOM value)noexcept{ m_data.u64[s_WindowClassSlot] = value; }
 };
 #elif defined(NWB_PLATFORM_LINUX)
 namespace LinuxFrameBackend{

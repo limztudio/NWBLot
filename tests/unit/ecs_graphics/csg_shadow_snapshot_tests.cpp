@@ -2,11 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/frame_state_cache.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/shadow/light_space_csg.h>
 #include <impl/ecs_render/shadow/light_space_capture_history.h>
 #include <impl/ecs_render/raytrace/instance_material.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/components.h>
+#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_scene/components.h>
 
 #include <core/ecs/entity.h>
 
@@ -32,6 +36,28 @@ inline constexpr Name s_ReceiverGroup("tests/csg_shadow/group");
 inline constexpr Name s_OtherGroup("tests/csg_shadow/other");
 inline constexpr Name s_CustomShape("tests/csg_shadow/custom");
 inline constexpr u32 s_OpenTriangleWords[] = {0u};
+inline constexpr i32 s_FrameCacheBindingFailure = 43;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct FrameCacheRuntimeProvider final : IRuntimeMeshProvider{
+    Core::ECS::EntityID receiver = Core::ECS::s_InvalidEntityId;
+    bool attached = false;
+    bool throwOnQuery = false;
+
+
+public:
+    [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID)noexcept override{ return MakeUnexpected(Failure{}); }
+    [[nodiscard]] virtual bool hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
+        if(throwOnQuery)
+            throw s_FrameCacheBindingFailure;
+        return attached && entity == receiver;
+    }
+    virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet&)noexcept override{}
+};
+
 
 struct SnapshotContext{
     Tests::EcsTestWorld testWorld;
@@ -454,7 +480,8 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     expectRefresh([&](){ mesh.meshName = Name("tests/csg_shadow/replacement_mesh"); });
     expectRefresh([&](){
         mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 17u);
-    });
+    }
+    );
     expectRefresh([&](){ materials[0].surfaceDispatchId = 5u; });
     expectRefresh([&](){ materials[0].positionSlot = 9u; });
     expectRefresh([&](){ materials[0].flags = RtInstanceMaterialFlag::Transparent; });
@@ -537,6 +564,42 @@ TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrd
     ASSERT_TRUE(context.build(inputs, LengthOf(inputs)));
     EXPECT_FALSE(context.snapshot.hasCsg);
     EXPECT_EQ(context.snapshot.identity, 0u);
+}
+
+
+TEST(CsgShadowSnapshot, FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedStaticInputs){
+    SnapshotContext context;
+    MeshSystem meshSystem(context.testWorld.arena, context.testWorld.world);
+    auto entity = context.testWorld.world.createEntity();
+    entity.addComponent<StaticCsgMeshComponent>().receiverGroup = s_ReceiverGroup;
+    entity.addComponent<RendererComponent>();
+    entity.addComponent<MeshComponent>().mesh.virtualPath = Name("tests/csg_shadow/static_cache_mesh");
+    entity.addComponent<Scene::TransformComponent>();
+    FrameCacheRuntimeProvider provider;
+    provider.receiver = entity.id();
+    meshSystem.registerRuntimeMeshProvider(provider);
+
+    const auto original = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(original);
+    const auto staticMesh = meshSystem.resolveRenderableMeshStatus(entity.id());
+    ASSERT_TRUE(staticMesh);
+    EXPECT_FALSE(staticMesh->runtime);
+
+    provider.attached = true;
+    EXPECT_TRUE(meshSystem.hasRuntimeMeshBinding(entity.id()));
+    EXPECT_FALSE(CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem));
+    provider.attached = false;
+    const auto restored = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(restored);
+    EXPECT_EQ(*original, *restored);
+
+    provider.throwOnQuery = true;
+    EXPECT_THROW({ const auto throwingSignature = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem); EXPECT_FALSE(throwingSignature); }, i32);
+    provider.throwOnQuery = false;
+    const auto afterFailure = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+    ASSERT_TRUE(afterFailure);
+    EXPECT_EQ(*original, *afterFailure);
+    meshSystem.unregisterRuntimeMeshProvider(provider);
 }
 
 

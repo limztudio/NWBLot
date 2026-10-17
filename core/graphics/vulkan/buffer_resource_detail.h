@@ -43,6 +43,10 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     | static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput)
 );
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool BufferDescriptionsEqual(const BufferDesc& lhs, const BufferDesc& rhs)noexcept{
     return
         lhs.debugName == rhs.debugName

@@ -13,6 +13,7 @@
 
 #include <global/assert.h>
 #include <global/auto_registration.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,8 +50,38 @@ CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFuncti
     ::RegisterAutoFactory(__hidden_cook_entry_registry::QueryAutoRegistrationQueue(), function);
 }
 
-bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
-    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterAutoCollectedScratch);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
+    if(!owner){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: bucket allocation returned null for '{}'"), StringConvert(assetType.resolvedText()));
+        return false;
+    }
+
+    const NotNull<ICookEntryBucket*> bucket(owner.get());
+    m_buckets.push_back(Move(owner));
+    {
+        ScopeExit rollback([&]()noexcept{
+            owner = Move(m_buckets.back());
+            m_buckets.pop_back();
+        });
+        if(m_lookup.emplace(assetType, bucket).second){
+            rollback.release();
+            return true;
+        }
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'"), StringConvert(assetType.resolvedText()));
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena){
     Vector<CookEntryRegistrationFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     return RunAutoCollectedFunctions(__hidden_cook_entry_registry::QueryAutoRegistrationQueue(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }

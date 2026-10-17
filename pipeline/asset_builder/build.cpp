@@ -64,7 +64,7 @@ bool BuildAssets(const AssetBuildOptions& options){
         return false;
 
     Assets::ParsedAssetMetadata parsedMetadata(arena);
-    if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry))
+    if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry, scratchArena))
         return false;
     if(!Assets::ParseAssetMetadata(arena, nwbFiles, parsedMetadata, options.services.cpuScheduler, scratchArena))
         return false;
@@ -96,7 +96,7 @@ bool BuildAssets(const AssetBuildOptions& options){
     if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, resolvedPaths, configurationSafeName, parsedMetadata, manifest, seenVirtualPathHashes, scratchArena))
         return false;
 
-    if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest))
+    if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest, scratchArena))
         return false;
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), StringConvert(options.outputDirectory));

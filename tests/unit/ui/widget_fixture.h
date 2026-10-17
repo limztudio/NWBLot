@@ -6,6 +6,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include "widget_id_assertion.h"
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
@@ -102,28 +103,28 @@ void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>&
     ExpectAcceptedTargets(input, saved.targets, saved.count, true);
 }
 
-[[nodiscard]] inline PopupOptions NestedParentOptions(){
+[[nodiscard]] inline PopupOptions NestedParentOptions()noexcept{
     PopupOptions options;
     options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 300.0f, 380.0f };
     return options;
 }
 
-[[nodiscard]] inline PopupOptions NestedChildOptions(){
+[[nodiscard]] inline PopupOptions NestedChildOptions()noexcept{
     PopupOptions options;
     options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
     options.size = { 340.0f, 380.0f };
     return options;
 }
 
-[[nodiscard]] inline PopupOptions LargeLoanParentOptions(){
+[[nodiscard]] inline PopupOptions LargeLoanParentOptions()noexcept{
     PopupOptions options;
     options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 340.0f, 420.0f };
     return options;
 }
 
-[[nodiscard]] inline PopupOptions LargeLoanChildOptions(){
+[[nodiscard]] inline PopupOptions LargeLoanChildOptions()noexcept{
     PopupOptions options;
     options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 340.0f, 420.0f };
@@ -137,7 +138,7 @@ void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>&
 }
 
 template<typename KeyLookup>
-[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const bool backwards, const u64 disabled, KeyLookup&& rawKey)noexcept(noexcept(rawKey(start) != disabled)){
+[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const bool backwards, const u64 disabled, KeyLookup&& rawKey)noexcept(noexcept(static_cast<bool>(rawKey(DeclVal<u64&>()) != disabled))){
     u64 index = 0u;
     if(start >= count)
         return MakeUnexpected(Failure{});
@@ -164,7 +165,7 @@ struct SkinPaintSample{
     usize quads = 0u;
 };
 
-[[nodiscard]] bool InstallLatinFixtureFont(Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
+[[nodiscard]] bool InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
 
 class WidgetFixture : public testing::Test{
 public:
@@ -181,7 +182,8 @@ public:
 
 protected:
     virtual void SetUp()override{
-        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
+        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text));
         configureSkin();
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
@@ -196,7 +198,9 @@ protected:
             if(names[index] == omitted)
                 continue;
             UiSkinRegion region;
-            region.name = Name(names[index]);
+            const auto regionName = Name::FromText(names[index]);
+            ASSERT_TRUE(regionName);
+            region.name = *regionName;
             region.rectangle = { index * 8u, 0u, 8u, 8u };
             if(index == 0u || index == 5u)
                 region.padding = { 3.0f, 4.0f, 5.0f, 6.0f };
@@ -231,8 +235,8 @@ protected:
         return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const noexcept{
-        return MakeWidgetId(MakeWidgetId(MakeRootId(m_root), parent), child);
+    [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), parent)), child));
     }
 
     [[nodiscard]] const HitTarget* target(const WidgetId widget)const noexcept{

@@ -41,6 +41,12 @@ NWB_IMPL_UI_BEGIN
 // Transient declarations shape text, arrange a panel, then freeze paint and hit targets in the same order.
 class Builder final : NoCopy{
 private:
+    struct ItemDeclarationFailure{
+        TextLayoutStatus::Enum textLayout = TextLayoutStatus::Success;
+    };
+
+
+private:
     using Item = BuilderScopeFrame::Item;
     using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
     using NumericEditFrame = BuilderScopeFrame::NumericEditFrame;
@@ -51,6 +57,11 @@ private:
     using ComboFrame = BuilderScopeFrame::ComboFrame;
     using TooltipFrame = BuilderScopeFrame::TooltipFrame;
     using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
+
+
+private:
+    [[nodiscard]] static SIMDVectorSingle LoadRectangle(const Rect& rectangle)noexcept{ return VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height); }
+    [[nodiscard]] static Rect StoreRectangle(const SIMDVectorSingle rectangle)noexcept{ return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) }; }
 
 
 public:
@@ -113,33 +124,28 @@ public:
     void setSkin(const UiSkin& skin)noexcept;
     // One explicit left-to-right script/language policy applies to every widget declaration and its deferred paint.
     [[nodiscard]] bool setTextShaping(u32 scriptTag, StringView language);
-    [[nodiscard]] WidgetStyle& style()noexcept{ if(declarationBlocked()) m_context.fail(); return m_style; }
-    [[nodiscard]] ScrollbarStyle& scrollbarStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_scrollbarStyle; }
-    [[nodiscard]] EditBoxStyle& editStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_editStyle; }
-    [[nodiscard]] PopupStyle& popupStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_popupStyle; }
-    [[nodiscard]] ListStyle& listStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_listStyle; }
-    [[nodiscard]] RadioGroupStyle& radioGroupStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_radioGroupStyle; }
-    [[nodiscard]] SliderStyle& sliderStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_sliderStyle; }
-    [[nodiscard]] ProgressStyle& progressStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_progressStyle; }
-    [[nodiscard]] ComboStyle& comboStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_comboStyle; }
-    [[nodiscard]] TooltipStyle& tooltipStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_tooltipStyle; }
-    void setEditHost(IEditBoxHost* host)noexcept{ if(declarationBlocked()) m_context.fail(); else m_editHost = host; }
-    void setDeltaSeconds(f32 delta)noexcept{ if(declarationBlocked()) m_context.fail(); else m_deltaSeconds = delta; }
-    void setPointerBusy(bool busy)noexcept{ if(declarationBlocked()) m_context.fail(); else m_pointerBusy = busy; }
+    [[nodiscard]] WidgetStyle& style()noexcept;
+    [[nodiscard]] ScrollbarStyle& scrollbarStyle()noexcept;
+    [[nodiscard]] EditBoxStyle& editStyle()noexcept;
+    [[nodiscard]] PopupStyle& popupStyle()noexcept;
+    [[nodiscard]] ListStyle& listStyle()noexcept;
+    [[nodiscard]] RadioGroupStyle& radioGroupStyle()noexcept;
+    [[nodiscard]] SliderStyle& sliderStyle()noexcept;
+    [[nodiscard]] ProgressStyle& progressStyle()noexcept;
+    [[nodiscard]] ComboStyle& comboStyle()noexcept;
+    [[nodiscard]] TooltipStyle& tooltipStyle()noexcept;
+    void setEditHost(IEditBoxHost* host)noexcept;
+    void setDeltaSeconds(f32 delta)noexcept;
+    void setPointerBusy(bool busy)noexcept;
     // Valid while a window scope is open, including a collapsed window.
     [[nodiscard]] const WindowMetrics& windowMetrics()const noexcept{ return m_scope->m_window.metrics; }
-
-
-private:
-    [[nodiscard]] static SIMDVectorSingle LoadRectangle(const Rect& rectangle)noexcept{ return VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height); }
-    [[nodiscard]] static Rect StoreRectangle(const SIMDVectorSingle rectangle)noexcept{ return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) }; }
 
 
 private:
     [[nodiscard]] bool declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
     [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const noexcept;
     [[nodiscard]] bool beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
-    [[nodiscard]] Item* addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
+    [[nodiscard]] Expected<NotNull<Item*>, ItemDeclarationFailure> addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
     void loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept;
     [[nodiscard]] bool paintPanel();
@@ -166,15 +172,15 @@ private:
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool prepareListMetrics(ListFrame& frame);
-    [[nodiscard]] bool prepareListRow(const ListFrame& frame, u64 index, ListRow& row);
-    [[nodiscard]] bool measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip, ScrollPlacement& placement);
+    [[nodiscard]] Expected<ListRow> prepareListRow(const ListFrame& frame, u64 index);
+    [[nodiscard]] Expected<ScrollPlacement> measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip);
     [[nodiscard]] bool paintList(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
     [[nodiscard]] bool paintRadioGroup(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept;
     [[nodiscard]] bool radioGroupMatches(const RadioGroupFrame& frame)const;
     [[nodiscard]] bool prepareRadioGroup(RadioGroupFrame& frame);
-    [[nodiscard]] bool prepareSlider(SliderFrame& frame);
+    [[nodiscard]] bool prepareSlider(SliderFrame& frame)noexcept;
     [[nodiscard]] bool paintSlider(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintProgress(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintImage(const Item& item, const LayoutBox& box);
@@ -186,7 +192,8 @@ private:
     [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
     [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source,
         ComboState& state, const ComboOptions& options, SearchComboState* search = nullptr,
-        ISearchableListDataSource* searchSource = nullptr, const SearchComboOptions* searchOptions = nullptr);
+        ISearchableListDataSource* searchSource = nullptr, const SearchComboOptions* searchOptions = nullptr
+    );
     [[nodiscard]] bool paintCombo(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintCombos();
     [[nodiscard]] bool paintComboPopup(ComboFrame& frame);

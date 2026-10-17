@@ -32,26 +32,32 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     }
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::VirtualList);
+    const auto widget = m_context.declare(stableKey, WidgetKind::VirtualList);
     if(!widget)
         return result;
-    const bool previouslyFocused = m_context.input().focus() == widget->id;
+    const bool previouslyFocused = m_context.input().focus() == (*widget)->id;
     const u64 previousSelection = state.selectedKey();
     if(!ListBehavior::Reconcile(state, source)){
         m_context.fail();
         return result;
     }
     const ControlToken token{ state.inputGeneration(), source.instanceGeneration(), source.revision() };
-    m_context.input().fenceControl(widget->id, widget->declarationGeneration, token);
+    m_context.input().fenceControl((*widget)->id, (*widget)->declarationGeneration, token);
     if(!options.enabled)
-        m_context.input().invalidateTarget(widget->id);
+        m_context.input().invalidateTarget((*widget)->id);
     result.valid = true;
     result.selectionChanged = previousSelection != state.selectedKey();
-    result.focused = options.enabled && m_context.input().focus() == widget->id;
-    const WidgetId thumb = MakeWidgetId(widget->id, "scrollbar");
-    auto gesture = m_context.takePartPointerGesture(*widget, thumb, options.enabled);
+    result.focused = options.enabled && m_context.input().focus() == (*widget)->id;
+    const auto thumbResult = MakeWidgetId((*widget)->id, "scrollbar");
+    if(!thumbResult){
+        m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    const WidgetId thumb = *thumbResult;
+    auto gesture = m_context.takePartPointerGesture(**widget, thumb, options.enabled);
     bool haveGesture = gesture && gesture->control == token;
-    auto action = m_context.takeControlAction(*widget, options.enabled, token);
+    auto action = m_context.takeControlAction(**widget, options.enabled, token);
     bool haveAction = action.has_value();
     while(haveGesture || haveAction){
         if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
@@ -60,7 +66,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
                 result.valid = false;
                 return result;
             }
-            gesture = m_context.takePartPointerGesture(*widget, thumb, options.enabled);
+            gesture = m_context.takePartPointerGesture(**widget, thumb, options.enabled);
             haveGesture = gesture && gesture->control == token;
         }
         else{
@@ -69,7 +75,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
                 result.valid = false;
                 return result;
             }
-            action = m_context.takeControlAction(*widget, options.enabled, token);
+            action = m_context.takeControlAction(**widget, options.enabled, token);
             haveAction = action.has_value();
         }
     }
@@ -108,20 +114,20 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
             const SIMDVectorSingle probeSize = VectorMax(probeMinimum, probeWidth);
             provisional.rectangle = { 0.0f, 0.0f, VectorGetX(probeSize), VectorGetY(probeSize) };
             provisional.clip = provisional.rectangle;
-            ScrollPlacement placement;
-            if(!measureListPlacement(frame, provisional, provisional.clip, placement)){
+            const auto placement = measureListPlacement(frame, provisional, provisional.clip);
+            if(!placement){
                 m_context.fail();
                 result.valid = false;
                 return result;
             }
             const SIMDVectorSingle measuredSize = VectorAdd(VectorAdd(VectorSet(0.0f, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
             const f32 height = VectorGetY(VectorMax(VectorSet(0.0f, background->minimumHeight, 0.0f, 0.0f), measuredSize));
-            if(height == provisional.rectangle.height)
+            if(height == placement->bounds.height)
                 break;
         }
     }
     Item item(m_arena);
-    item.state = *widget;
+    item.state = **widget;
     item.enabled = options.enabled;
     item.list = static_cast<u32>(m_scope->m_lists.size());
     LayoutNodeDesc description;

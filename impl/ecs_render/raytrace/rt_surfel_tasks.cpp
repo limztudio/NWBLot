@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/rt_surfel_tasks.h>
+#include "rt_surfel_tasks.h"
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
@@ -19,11 +19,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc){
     return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(desc, SurfelGiInitializationLifecycleGraphTask::Payload{ .raytracingSystem = *this, });
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -37,7 +37,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelGiHashBuildTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -51,7 +51,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelGiSpawnTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -65,7 +65,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -79,7 +79,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelGiTraceTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -93,7 +93,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelGiResolveTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
@@ -108,7 +108,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
 }
 
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelGiTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,

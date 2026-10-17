@@ -58,7 +58,7 @@ namespace __hidden_x11_preedit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-X11PreeditBuffer::X11PreeditBuffer(Alloc::GlobalArena& arena)
+X11PreeditBuffer::X11PreeditBuffer(Alloc::GlobalArena& arena)noexcept
     : m_text(arena)
     , m_candidate(arena)
 {}

@@ -25,7 +25,7 @@ UiNumericEditGallery::UiNumericEditGallery(NWB::Core::Alloc::GlobalArena& arena)
     NWB_FATAL_ASSERT(initialized);
 }
 
-void UiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("numeric_edit_gallery", { x, y, 280.0f, 200.0f }))
@@ -38,7 +38,6 @@ void UiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     FloatEditOptions floating;
     floating.bounds = { -10.0, 10.0, NumericBoundsPolicy::Clamp };
     const NumericEditBoxResult second = ui.floatEdit("float", m_float, m_floatState, floating);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/numeric_edit_caption"));
     const auto text = StringFormat(scratchArena, "Committed: {} / {}", m_integer.value(), m_float.value());
     valid = ui.label("committed", { text.data(), text.size() }) && first.edit.valid && second.edit.valid && valid;
     valid = ui.label("hint", "Enter: commit, Escape: restore") && valid;

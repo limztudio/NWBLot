@@ -64,7 +64,9 @@ private:
         Perf::TimingScopeId outputScope;
         Vector<PendingOverlapFrame, Alloc::GlobalArena> pendingFrames;
 
-        explicit OverlapRecord(Alloc::GlobalArena& arena)
+
+    public:
+        explicit OverlapRecord(Alloc::GlobalArena& arena)noexcept
             : pendingFrames(arena)
         {}
     };
@@ -98,6 +100,8 @@ private:
         Vector<PacketEnvelopeMetricQueueOutputRecord, Alloc::GlobalArena> queueOutputs;
         usize remainingScopeCount = 0u;
 
+
+    public:
         explicit PendingPacketEnvelopeMetric(Alloc::GlobalArena& arena)
             : scopes(arena)
             , scopeIndices(arena)
@@ -105,13 +109,15 @@ private:
         {}
     };
 
+
+private:
     using OverlapVector = Vector<OverlapRecord, Alloc::GlobalArena>;
     using PendingPacketEnvelopeMetricVector = Vector<PendingPacketEnvelopeMetric, Alloc::GlobalArena>;
     using PacketEnvelopeMetricOutputRoleVector = Vector<PacketEnvelopeMetricOutputRoleRecord, Alloc::GlobalArena>;
 
 
 public:
-    GpuTimingMetricCorrelator(Alloc::GlobalArena& arena, Perf::TimingSink& timing);
+    GpuTimingMetricCorrelator(Alloc::GlobalArena& arena, Perf::TimingSink& timing)noexcept;
 
 
 public:

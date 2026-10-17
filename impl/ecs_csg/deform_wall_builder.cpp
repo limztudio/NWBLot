@@ -7,6 +7,8 @@
 #include "deform_cutter_field.h"
 #include "deform_validator.h"
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -81,7 +83,12 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(CsgDeformVertexVector<Scratc
     StoreFloat(color, mixed.color);
     const u32 created = static_cast<u32>(vertices.size());
     vertices.push_back(mixed);
-    edgeSplits.emplace(edge, created);
+    ScopeExit discardVertex([&]()noexcept{ vertices.pop_back(); });
+    if(!edgeSplits.emplace(edge, created).second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    discardVertex.release();
     return created;
 }
 

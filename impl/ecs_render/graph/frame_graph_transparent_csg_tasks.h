@@ -87,11 +87,12 @@ struct FrameGraphTransparentCsgTaskResult{
 
 class FrameGraphTransparentCsgTasks final : NoCopy{
 public:
-    FrameGraphTransparentCsgTasks(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem);
+    FrameGraphTransparentCsgTasks(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept;
 
 
 public:
     [[nodiscard]] Expected<FrameGraphTransparentCsgTaskResult> declare(
+        Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphTransparentCsgTaskInputs& inputs,
         ObjectGeometryCacheGraph& objectGeometry,
         RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,

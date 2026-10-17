@@ -39,6 +39,8 @@ struct CopyBufferCopy{
 struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBufferCopy>{
     using Copy = CopyBufferCopy;
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy)noexcept{ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
@@ -63,21 +65,21 @@ struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBuf
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc){
+Expected<GpuTaskId> GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc){
     if(copyDesc.acceptedToken)
         *copyDesc.acceptedToken = {};
 
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !copyDesc.regions || copyDesc.regionCount == 0u || copyDesc.regionCount > Limit<u32>::s_Max || copyDesc.regionCount > Limit<usize>::s_Max / 2u)
-        return {};
+        return MakeUnexpected(Failure{});
 
     using CopyTask = __hidden_gpu_task_graph_builtin_buffer_copy::CopyBufferTask;
     CopyTask::Payload* const payloadObject = NewArenaObject<CopyTask::Payload>(m_arena, m_arena);
     if(!payloadObject)
-        return {};
+        return MakeUnexpected(Failure{});
     ProvisionalPayloadOwner<CopyTask::Payload> payload(m_arena, payloadObject);
     payload->copies.reserve(copyDesc.regionCount);
     payload->acceptedToken = copyDesc.acceptedToken;
@@ -131,7 +133,8 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
                 .destination = destinationResource.buffer,
                 .destinationOffsetBytes = region.destinationOffsetBytes,
                 .dataSizeBytes = region.dataSizeBytes,
-            });
+            }
+            );
         }
     }
     if(!valid)

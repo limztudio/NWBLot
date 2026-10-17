@@ -32,7 +32,7 @@ class CaptureSession final : NoCopy{
 
 
 public:
-    explicit CaptureSession(TelemetryArena& arena)
+    explicit CaptureSession(TelemetryArena& arena)noexcept
         : m_recorder(arena)
         , m_textLogCapture(m_recorder)
     {}
@@ -48,30 +48,31 @@ public:
         m_streamId = streamId;
         m_textLogCapture.setStreamId(streamId);
     }
-    void clear(){ m_recorder.clear(); }
+    void clear()noexcept{ m_recorder.clear(); }
 
     [[nodiscard]] Recorder& recorder()noexcept{ return m_recorder; }
     [[nodiscard]] const Recorder& recorder()const noexcept{ return m_recorder; }
-    [[nodiscard]] CaptureOptions captureOptions()const{ return m_recorder.captureOptions(); }
-    [[nodiscard]] bool enabled()const{ return m_recorder.enabled(); }
+    [[nodiscard]] CaptureOptions captureOptions()const noexcept{ return m_recorder.captureOptions(); }
+    [[nodiscard]] bool enabled()const noexcept{ return m_recorder.enabled(); }
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
     [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
-    [[nodiscard]] usize eventCount()const{ return m_recorder.eventCount(); }
+    [[nodiscard]] usize eventCount()const noexcept{ return m_recorder.eventCount(); }
     [[nodiscard]] EventView view()const noexcept{ return m_recorder.view(); }
 
-    [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
-        return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, m_streamId);
+    [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
+        return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, m_streamId);
     }
-    [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics){
-        return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, m_streamId);
+    [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics){
+        return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, m_streamId);
     }
     [[nodiscard]] bool recordFrameGraph(
+        Alloc::ScratchArena& scratchArena,
         const FrameGraphNodeDescs& nodes,
         const FrameGraphEdgeDescs& edges,
         const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
         const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
     ){
-        return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, m_streamId);
+        return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, m_streamId);
     }
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
         return RecordPerfSessionReport(m_recorder, report, streamId);
@@ -108,7 +109,7 @@ public:
         m_diagnostic.setStreamId(session.streamId());
     }
     CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;
-    ~CaptureSessionCaptureScope(){
+    ~CaptureSessionCaptureScope()noexcept{
         m_session.setForwardLogger(m_previousForwardLogger);
     }
 

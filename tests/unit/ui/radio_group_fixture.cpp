@@ -91,7 +91,7 @@ bool RadioSource::enabled(const u64 index)const{
     return index < rawCount() && !m_allDisabled && rawKey(index) != m_disabled;
 }
 
-void RadioSource::resetCounters()const{
+void RadioSource::resetCounters()const noexcept{
     m_calls = 0u;
     m_textCalls = 0u;
     m_mutations = 0u;
@@ -100,25 +100,25 @@ void RadioSource::resetCounters()const{
     m_endAccepted = false;
 }
 
-void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site, const u64 keyValue, const bool awayAndBack){
+void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site, const u64 keyValue, const bool awayAndBack)noexcept{
     m_state = &state;
     m_selected = keyValue;
     m_site = site;
     m_mutation = awayAndBack ? RadioMutation::SelectAwayBack : RadioMutation::Select;
 }
 
-void RadioSource::armSource(const RadioCallbackSite::Enum site, const bool replacement){
+void RadioSource::armSource(const RadioCallbackSite::Enum site, const bool replacement)noexcept{
     m_site = site;
     m_mutation = replacement ? RadioMutation::Replacement : RadioMutation::Revision;
 }
 
-void RadioSource::armReentry(Builder& builder, const RadioCallbackSite::Enum site, const bool panel){
+void RadioSource::armReentry(Builder& builder, const RadioCallbackSite::Enum site, const bool panel)noexcept{
     m_builder = &builder;
     m_site = site;
     m_mutation = panel ? RadioMutation::PanelBuilder : RadioMutation::ResetBuilder;
 }
 
-void RadioSource::armClose(PopupState& popup, const RadioCallbackSite::Enum site){
+void RadioSource::armClose(PopupState& popup, const RadioCallbackSite::Enum site)noexcept{
     m_popup = &popup;
     m_site = site;
     m_mutation = RadioMutation::ClosePopup;
@@ -128,7 +128,7 @@ u64 RadioSource::rawCount()const noexcept{
     return m_count - static_cast<u64>(m_removed != 0u);
 }
 
-u64 RadioSource::rawKey(const u64 index)const{
+u64 RadioSource::rawKey(const u64 index)const noexcept{
     const u64 count = rawCount();
     if(index >= count)
         return 0u;
@@ -198,7 +198,9 @@ void RadioGroupFixture::configureRadioSkin(const bool fallbackOnly){
         if(fallbackOnly && index < 3u)
             continue;
         UiSkinRegion region;
-        region.name = Name(s_Names[index]);
+        const auto regionName = Name::FromText(s_Names[index]);
+        ASSERT_TRUE(regionName);
+        region.name = *regionName;
         region.rectangle = { 88u + index * 8u, 0u, 8u, 8u };
         if(index % 3u != 2u){
             region.minimumWidth = 24.0f;
@@ -228,7 +230,7 @@ bool RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& op
     return prepare(generation, options, bounds) && m_context.commitFrame(generation);
 }
 
-WidgetId RadioGroupFixture::host()const noexcept{
+WidgetId RadioGroupFixture::host()const{
     return id("radio", "panel");
 }
 
@@ -246,7 +248,7 @@ Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcept{
     return item ? UiWidgetTests::Center(item->rectangle) : Point{};
 }
 
-RadioAcceptedFrame RadioGroupFixture::accepted()const{
+RadioAcceptedFrame RadioGroupFixture::accepted()const noexcept{
     RadioAcceptedFrame saved;
     saved.count = m_context.input().targets().size();
     saved.popupCount = m_context.input().popupCount();
@@ -268,7 +270,7 @@ void RadioGroupFixture::expectAccepted(const RadioAcceptedFrame& saved, const bo
     ExpectAcceptedTargets(m_context.input(), saved.targets, saved.count);
 }
 
-usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const{
+usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept{
     const UiSkinRegion* region = m_skin.findRegion(name);
     if(!region)
         return 0u;

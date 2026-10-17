@@ -7,6 +7,9 @@
 
 #include "module.h"
 #include "backend_forward.h"
+
+#include <core/task/cpu/scheduler.h>
+
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -14,8 +17,6 @@
 #include "native_queue_state.h"
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
-
-#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,6 +107,8 @@ struct DescriptorBufferSegment{
     u32 sizeBytes = 0;
     DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler) && sizeBytes > 0 && storageIdentity != 0u && allocationSerial != 0u;
     }
@@ -136,7 +139,7 @@ private:
 
     // Host-mapped descriptor segment with synchronized free ranges and live-allocation tracking.
     struct SegmentStorage{
-        const u64 storageIdentity;
+        const Expected<u64> storageIdentity;
         VkBuffer buffer = VK_NULL_HANDLE;
         VulkanAllocationHandle allocation = nullptr;
         void* mappedMemory = nullptr;
@@ -151,8 +154,9 @@ private:
         Vector<DescriptorBufferSegment, Alloc::GlobalArena> liveAllocations;
 
 
-        SegmentStorage(Alloc::GlobalArena& arena, const u64 storageIdentityValue)
-            : storageIdentity(storageIdentityValue)
+    public:
+        SegmentStorage(Alloc::GlobalArena& arena, Expected<u64> storageIdentityValue)noexcept
+            : storageIdentity(Move(storageIdentityValue))
             , freeRanges(arena)
             , liveAllocations(arena)
         {}
@@ -167,7 +171,7 @@ private:
 
 
 public:
-    DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator);
+    DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator)noexcept;
     ~DescriptorBufferManager()noexcept;
 
 
@@ -255,6 +259,15 @@ private:
         [[nodiscard]] static usize RequiredBytes(usize count){
             return count == 0u ? 0u : Alloc::PersistentArena::StructureAlignedSize(SizeOf<sizeof(T)>(count), alignof(T));
         }
+
+
+    public:
+        [[nodiscard]] T& operator[](usize index)noexcept{ return m_storage[index]; }
+
+        [[nodiscard]] const T& operator[](usize index)const noexcept{ return m_storage[index]; }
+
+
+    public:
         [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, usize count){
             clear();
             if(count == 0u)
@@ -274,8 +287,6 @@ private:
         [[nodiscard]] const T* begin()const noexcept{ return m_storage.get(); }
         [[nodiscard]] T* end()noexcept{ return m_count == 0u ? begin() : begin() + m_count; }
         [[nodiscard]] const T* end()const noexcept{ return m_count == 0u ? begin() : begin() + m_count; }
-        [[nodiscard]] T& operator[](usize index)noexcept{ return m_storage[index]; }
-        [[nodiscard]] const T& operator[](usize index)const noexcept{ return m_storage[index]; }
 
 
     private:
@@ -302,6 +313,8 @@ private:
         // Keeps the allocated class authoritative while a slot is live or quarantined.
         FixedTable<u8> allocatedClasses;
 
+
+    public:
         [[nodiscard]] static usize RequiredBytes(u32 capacity);
         [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, u32 newCapacity);
         void clear()noexcept;
@@ -326,12 +339,13 @@ public:
 
     private:
         explicit PendingRecordingLease(GpuDescriptorHeap& heap);
-
-
     public:
         ~PendingRecordingLease()noexcept;
         PendingRecordingLease(const PendingRecordingLease&) = delete;
         PendingRecordingLease(PendingRecordingLease&&) = delete;
+
+
+    public:
         PendingRecordingLease& operator=(const PendingRecordingLease&) = delete;
         PendingRecordingLease& operator=(PendingRecordingLease&&) = delete;
 
@@ -347,7 +361,7 @@ public:
 
 
 public:
-    explicit GpuDescriptorHeap(Device& device);
+    explicit GpuDescriptorHeap(Device& device)noexcept;
     ~GpuDescriptorHeap()noexcept;
 
 
@@ -472,7 +486,7 @@ class GraphicsPipeline final : public RefCounter<GraphicsResource>, public Pipel
 
 
 public:
-    GraphicsPipeline(const VulkanContext& context);
+    GraphicsPipeline(const VulkanContext& context)noexcept;
     ~GraphicsPipeline();
 
 
@@ -501,7 +515,7 @@ class ComputePipeline final : public RefCounter<GraphicsResource>, public Pipeli
 
 
 public:
-    ComputePipeline(const VulkanContext& context);
+    ComputePipeline(const VulkanContext& context)noexcept;
     ~ComputePipeline();
 
 
@@ -528,7 +542,7 @@ class MeshletPipeline final : public RefCounter<GraphicsResource>, public Pipeli
 
 
 public:
-    MeshletPipeline(const VulkanContext& context);
+    MeshletPipeline(const VulkanContext& context)noexcept;
     ~MeshletPipeline();
 
 
@@ -568,7 +582,9 @@ struct ShaderTableGroupMetadata{
     ShaderTableRecordKind::Enum kind = ShaderTableRecordKind::Invalid;
     u32 groupIndex = 0u;
 
-    explicit ShaderTableGroupMetadata(GraphicsArena& arena)
+
+public:
+    explicit ShaderTableGroupMetadata(GraphicsArena& arena)noexcept
         : exportName(arena)
     {}
 };
@@ -580,7 +596,7 @@ class RayTracingPipeline final : public RefCounter<GraphicsResource>, public Pip
 
 
 public:
-    RayTracingPipeline(const VulkanContext& context, Device& device, bool allowClusterAccelerationStructures);
+    RayTracingPipeline(const VulkanContext& context, Device& device, bool allowClusterAccelerationStructures)noexcept;
     ~RayTracingPipeline();
 
 
@@ -588,7 +604,7 @@ public:
     [[nodiscard]] const RayTracingPipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] bool allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
-    [[nodiscard]] RayTracingShaderTableHandle createShaderTable();
+    [[nodiscard]] Expected<RayTracingShaderTableHandle> createShaderTable();
     Object getNativeHandle(ObjectType objectType);
 
 
@@ -646,15 +662,15 @@ private:
 
 
 public:
-    ShaderTable(const VulkanContext& context, Device& device);
+    ShaderTable(const VulkanContext& context, Device& device)noexcept;
     ~ShaderTable();
 
 
 public:
     [[nodiscard]] bool setRayGenerationShader(AStringView exportName);
-    [[nodiscard]] u32 addMissShader(AStringView exportName);
-    [[nodiscard]] u32 addHitGroup(AStringView exportName);
-    [[nodiscard]] u32 addCallableShader(AStringView exportName);
+    [[nodiscard]] Expected<u32> addMissShader(AStringView exportName);
+    [[nodiscard]] Expected<u32> addHitGroup(AStringView exportName);
+    [[nodiscard]] Expected<u32> addCallableShader(AStringView exportName);
     void clearMissShaders();
     void clearHitShaders();
     void clearCallableShaders();
@@ -667,7 +683,7 @@ private:
     [[nodiscard]] Expected<u32> findGroupIndex(AStringView exportName, ShaderTableRecordKind::Enum expectedKind, TStringView operationName, TStringView exportKind)const;
     [[nodiscard]] Expected<ShaderRecordPreflight> preflightShaderRecord(AStringView exportName, ShaderTableRecordKind::Enum expectedKind, u32 recordCount, TStringView operationName, TStringView exportKind)const;
     [[nodiscard]] Expected<ShaderTableAllocation> allocateSBTBuffer(const ShaderRecordPreflight& preflight, TStringView operationName, TStringView recordName);
-    [[nodiscard]] u32 appendShaderRecord(
+    [[nodiscard]] Expected<u32> appendShaderRecord(
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,
         GraphicsVector<u32>& groupIndices,

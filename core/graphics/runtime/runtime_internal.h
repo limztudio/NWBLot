@@ -39,7 +39,7 @@ struct SetupUploadSameClassRouting{
 };
 
 
-using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
+using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
 
 
 [[nodiscard]] SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(GraphicsBackend::Device& device, CommandQueue::Enum consumerQueue, usize uploadBytes)noexcept;

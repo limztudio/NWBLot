@@ -35,7 +35,8 @@ namespace GpuCommandIrDetail{
     case GpuCommandIrOpcode::ClearBuffer:
         return true;
     case GpuCommandIrOpcode::ClearTexture:
-        return record.clearTextureValueType < GpuClearTextureTaskValueType::kCount
+        return
+            record.clearTextureValueType < GpuClearTextureTaskValueType::kCount
             && record.destinationSubresources.numMipLevels != 0u
             && record.destinationSubresources.numArraySlices != 0u
             && (record.clearTextureValueType != GpuClearTextureTaskValueType::DepthStencil || record.clearDepth || record.clearStencil)
@@ -43,14 +44,16 @@ namespace GpuCommandIrDetail{
     case GpuCommandIrOpcode::ClearTextureRectUInt:
         return record.destinationSubresources.numMipLevels != 0u && record.destinationSubresources.numArraySlices != 0u && record.clearRect.maxX > record.clearRect.minX && record.clearRect.maxY > record.clearRect.minY;
     case GpuCommandIrOpcode::UploadBuffer:
-        return record.sourceUploadBlob.valid()
+        return
+            record.sourceUploadBlob.valid()
             && record.sourceUploadBlob.generation == record.task.generation
             && record.blobSizeBytes != 0u
             && record.finalState != ResourceStates::Unknown
             && (static_cast<u32>(record.finalState) & ~s_AllowedResourceStates) == 0u
         ;
     case GpuCommandIrOpcode::UploadTexture:
-        return record.sourceUploadBlob.valid()
+        return
+            record.sourceUploadBlob.valid()
             && record.sourceUploadBlob.generation == record.task.generation
             && record.blobSizeBytes != 0u
             && record.finalState != ResourceStates::Unknown
@@ -142,7 +145,11 @@ template<typename RecordT>
 }
 
 template<typename RecordT>
-static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode)noexcept{
+static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode)noexcept(
+    noexcept(NWB_MEMSET(&DeclVal<RecordT&>(), 0, sizeof(RecordT)))
+    && noexcept(DeclVal<RecordT&>().header.opcode = DeclVal<const GpuCommandIrWireOpcode::Enum&>())
+    && noexcept(DeclVal<RecordT&>().header.byteSize = static_cast<u16>(sizeof(RecordT)))
+){
     static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
     NWB_MEMSET(&record, 0, sizeof(record));
     record.header.opcode = opcode;
@@ -159,7 +166,7 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCommandIrOwnedStream::GpuCommandIrOwnedStream(GraphicsArena& arena)
+GpuCommandIrOwnedStream::GpuCommandIrOwnedStream(GraphicsArena& arena)noexcept
     : m_arena(arena)
     , m_bytes(arena)
 {}
@@ -187,7 +194,6 @@ GpuCommandIrCapture::GpuCommandIrCapture(GraphicsArena& arena)
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
     writeStreamHeader();
 }
-
 
 void GpuCommandIrCapture::reset()noexcept{
     static_assert(noexcept(m_recordEndOffsets.clear()));

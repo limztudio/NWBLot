@@ -33,7 +33,7 @@ using namespace UiWidgetTests;
 class PopupToolsSource final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         if(closeComboOnRevision){
             ComboState* state = closeComboOnRevision;
             closeComboOnRevision = nullptr;
@@ -72,7 +72,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         if(changeRevisionOnText){
             changeRevisionOnText = false;
             ++contentRevision;
@@ -162,7 +162,7 @@ protected:
         return m_builder.tooltip("tip", "anchor", "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId anchor(const AStringView parent = "panel")const noexcept{ return id("anchor", parent); }
+    [[nodiscard]] WidgetId anchor(const AStringView parent = "panel")const{ return id("anchor", parent); }
 
     [[nodiscard]] const HitTarget* menuHost()const noexcept{
         for(const HitTarget& entry : m_context.input().targets()){

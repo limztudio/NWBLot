@@ -60,11 +60,11 @@ NWB_IMPL_BEGIN
 
 class RendererShaderSystem final : NoCopy{
 public:
-    RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver);
+    RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)noexcept;
 
 
 public:
-    void invalidateResources();
+    void invalidateResources()noexcept;
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
     [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Name& shaderName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
@@ -78,6 +78,7 @@ public:
     [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{
         return m_deferredCompositeVertexShader;
     }
+
 
 private:
     Core::GraphicsRuntime& m_graphics;

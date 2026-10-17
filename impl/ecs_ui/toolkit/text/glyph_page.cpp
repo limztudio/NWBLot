@@ -33,15 +33,18 @@ GlyphPage::GlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& bi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedGlyphPage CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels){
+Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels){
     if(
         !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
         || binding.index >= s_GlyphAtlasMaxPages || binding.width == 0u || binding.height == 0u
         || binding.width > s_GlyphAtlasPageExtent || binding.height > s_GlyphAtlasPageExtent
         || pixels.size() != static_cast<usize>(binding.width) * binding.height
     )
-        return {};
-    return SharedGlyphPage(NewArenaObject<RefCounter<GlyphPage>>(arena, arena, binding, Move(pixels)), ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+        return MakeUnexpected(Failure{});
+    auto* const page = NewArenaObject<RefCounter<GlyphPage>>(arena, arena, binding, Move(pixels));
+    if(!page)
+        return MakeUnexpected(Failure{});
+    return SharedGlyphPage(page, ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

@@ -310,18 +310,21 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
             const SharedSdfAtlasPage& page = *glyph.sdfPage;
             const auto existing = FindIf(m_sdfPages.begin(), m_sdfPages.end(), [&page](const SharedSdfAtlasPage& item)noexcept{
                 return item.get() == page.get();
-            });
+            }
+            );
             glyph.pageIndex = static_cast<u32>(existing - m_sdfPages.begin());
             if(existing == m_sdfPages.end())
                 m_sdfPages.push_back(page);
         }
         else{
-            SharedGlyphPage page = m_atlas->page(glyph.pageIndex);
-            if(!page)
+            auto pageResult = m_atlas->page(glyph.pageIndex);
+            if(!pageResult)
                 return false;
+            SharedGlyphPage page = Move(*pageResult);
             const auto existing = FindIf(m_pages.begin(), m_pages.end(), [&page](const SharedGlyphPage& item)noexcept{
                 return item.get() == page.get();
-            });
+            }
+            );
             glyph.pageIndex = static_cast<u32>(existing - m_pages.begin());
             if(existing == m_pages.end())
                 m_pages.push_back(Move(page));

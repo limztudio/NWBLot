@@ -61,7 +61,8 @@ void GpuTimingAccumulator::collect(
                 completedSamples.push_back(SampleDispatch{
                     .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
                     .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
-                });
+                }
+                );
                 record.attribution = s_NoGpuTimingSampleAttribution;
                 record.retirementSubscriptionIdentityLimit = 0u;
                 record.retirementNotificationPending = false;
@@ -77,7 +78,8 @@ void GpuTimingAccumulator::collect(
                 completedSamples.push_back(SampleDispatch{
                     .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, .published = false, },
                     .subscriptionIdentityLimit = subscriptionIdentityLimit,
-                });
+                }
+                );
             }
             releaseQuery(record);
             ++m_unpublishedSampleCount;
@@ -110,7 +112,8 @@ void GpuTimingAccumulator::collect(
                     .published = publishSample,
                 },
                 .subscriptionIdentityLimit = subscriptionIdentityLimit,
-            });
+            }
+            );
         }
         if(publishPerformanceSample){
             performanceSamples.push_back(GpuTimingSinkSample{ .scope = m_timingScope, .durationSeconds = durationSeconds, .sourceFrameIndex = sourceFrameIndex, });
@@ -429,7 +432,7 @@ bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
     // Quarantine never makes an accepted begin-only native query available again.
     // Preserve that object until every command buffer retaining it is gone, and materialize replacement capacity for the next frame preamble instead.
     while(usableQueryCount < queryCount){
-        if(appendQuery(device) == Limit<u32>::s_Max)
+        if(!appendQuery(device))
             return false;
         ++usableQueryCount;
     }
@@ -445,14 +448,15 @@ u32 GpuTimingAccumulator::findAvailableQuery()const noexcept{
     return Limit<u32>::s_Max;
 }
 
-u32 GpuTimingAccumulator::appendQuery(Device& device){
+bool GpuTimingAccumulator::appendQuery(Device& device){
     QueryRecord record;
-    record.query = device.createTimerQuery();
-    if(!record.query)
-        return Limit<u32>::s_Max;
+    auto query = device.createTimerQuery();
+    if(!query)
+        return false;
+    record.query = Move(*query);
 
     m_queries.push_back(Move(record));
-    return static_cast<u32>(m_queries.size() - 1u);
+    return true;
 }
 
 void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
@@ -535,7 +539,8 @@ void GpuTimingAccumulator::retireMarkedAttributions(SampleDispatchVector& outSam
         outSamples.push_back(SampleDispatch{
             .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
             .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
-        });
+        }
+        );
         record.attribution = s_NoGpuTimingSampleAttribution;
         record.retirementSubscriptionIdentityLimit = 0u;
         record.retirementNotificationPending = false;
@@ -570,7 +575,8 @@ void GpuTimingAccumulator::retireAttributions(SampleDispatchVector& outSamples, 
             .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
             .subscriptionIdentityLimit = record.retirementNotificationPending ? record.retirementSubscriptionIdentityLimit : subscriptionIdentityLimit
             ,
-        });
+        }
+        );
         record.attribution = s_NoGpuTimingSampleAttribution;
         record.retirementSubscriptionIdentityLimit = 0u;
         record.retirementNotificationPending = false;

@@ -25,7 +25,6 @@ namespace AssetsSkeletonArenaScope{
 
 inline constexpr Name s_LoadBinaryArena("impl/assets_skeleton/load_binary");
 inline constexpr Name s_SerializeArena("impl/assets_skeleton/serialize");
-inline constexpr Name s_BuildAssetArena("impl/assets_skeleton/build_asset");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

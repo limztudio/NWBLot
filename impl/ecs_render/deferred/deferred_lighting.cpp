@@ -44,7 +44,6 @@ struct DeferredLightingGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The deferred system, the frame targets, and the timing ticket are required: the pass always records against this frame's targets.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         DeferredFrameTargets& targets;
@@ -52,6 +51,8 @@ struct DeferredLightingGraphTask{
         bool useLaggedLightingHistory = false;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
@@ -146,8 +147,12 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        m_deferredState.m_sceneShadingBuffer = m_graphics.createBuffer(sceneShadingBufferDesc);
-        if(!m_deferredState.m_sceneShadingBuffer){
+        auto sceneShadingBufferResult = m_graphics.createBuffer(sceneShadingBufferDesc);
+        if(sceneShadingBufferResult)
+            m_deferredState.m_sceneShadingBuffer = Move(*sceneShadingBufferResult);
+        else
+            m_deferredState.m_sceneShadingBuffer.reset();
+        if(!sceneShadingBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene shading buffer"));
             return false;
         }
@@ -162,8 +167,12 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        m_deferredState.m_lightBuffer = m_graphics.createBuffer(lightBufferDesc);
-        if(!m_deferredState.m_lightBuffer){
+        auto lightBufferResult = m_graphics.createBuffer(lightBufferDesc);
+        if(lightBufferResult)
+            m_deferredState.m_lightBuffer = Move(*lightBufferResult);
+        else
+            m_deferredState.m_lightBuffer.reset();
+        if(!lightBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene light buffer"));
             return false;
         }
@@ -175,8 +184,12 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         // Local layout carries the heap slot plus the swap-chain mode.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
 
-        m_deferredState.m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_deferredState.m_lightingBindingLayout){
+        auto lightingBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(lightingBindingLayoutResult)
+            m_deferredState.m_lightingBindingLayout = Move(*lightingBindingLayoutResult);
+        else
+            m_deferredState.m_lightingBindingLayout.reset();
+        if(!lightingBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
             return false;
         }
@@ -206,8 +219,12 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(){
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc.setComputeShader(m_deferredState.m_lightingComputeShader).addBindingLayout(m_deferredState.m_lightingBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
-    m_deferredState.m_lightingPipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_deferredState.m_lightingPipeline){
+    auto lightingPipelineResult = device.createComputePipeline(pipelineDesc);
+    if(lightingPipelineResult)
+        m_deferredState.m_lightingPipeline = Move(*lightingPipelineResult);
+    else
+        m_deferredState.m_lightingPipeline.reset();
+    if(!lightingPipelineResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
     }
@@ -215,7 +232,7 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(){
     return true;
 }
 
-Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool useLaggedLightingHistory, Core::GpuTimingSubmissionTicket& timingTicket){
+Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool useLaggedLightingHistory, Core::GpuTimingSubmissionTicket& timingTicket){
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
         desc,
         __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .useLaggedLightingHistory = useLaggedLightingHistory, }

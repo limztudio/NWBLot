@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererDeferredState::invalidateResources(){
+void RendererDeferredState::invalidateResources()noexcept{
     m_lightingBindingLayout.reset();
     m_sceneShadingBuffer.reset();
     m_lightBuffer.reset();

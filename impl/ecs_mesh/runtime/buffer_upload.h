@@ -47,11 +47,15 @@ namespace BufferSetupFailure{
 // ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
 inline constexpr usize s_RawByteLoadAlignmentBytes = sizeof(u32);
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename PayloadT>
-[[nodiscard]] inline Core::BufferHandle SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const BufferFlags flags = {}){
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const BufferFlags flags = {}){
     const auto payloadBytes = TryMultiply<usize>(count, sizeof(PayloadT));
     if(!payloadBytes)
-        return {};
+        return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 
     Core::GraphicsRuntime::BufferSetupDesc setup;
     setup.bufferDesc
@@ -66,11 +70,14 @@ template<typename PayloadT>
     ;
     setup.data = payload;
     setup.dataSize = *payloadBytes;
-    return graphics.setupBuffer(setup);
+    auto buffer = graphics.setupBuffer(setup);
+    if(!buffer)
+        return MakeUnexpected(BufferSetupFailure::CreateFailed);
+    return Move(*buffer);
 }
 
 template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] inline Core::BufferHandle SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadVector& payload, const BufferFlags flags = {}){
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadVector& payload, const BufferFlags flags = {}){
     return SetupBuffer<PayloadT>(graphics, debugName, payload.data(), payload.size(), flags);
 }
 
@@ -81,10 +88,7 @@ template<typename PayloadT, typename PayloadVector>
     if(MultiplyOverflows<usize>(payload.size(), sizeof(PayloadT)))
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 
-    auto buffer = SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
-    if(!buffer)
-        return MakeUnexpected(BufferSetupFailure::CreateFailed);
-    return Move(buffer);
+    return SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
 }
 
 template<typename PayloadVector>
@@ -99,10 +103,7 @@ template<typename PayloadVector>
 
     const usize paddedByteCount = logicalByteCount + trailingByteCount;
     if(trailingByteCount == 0u){
-        auto buffer = SetupBuffer<u8>(graphics, debugName, payload, flags);
-        if(!buffer)
-            return MakeUnexpected(BufferSetupFailure::CreateFailed);
-        return Move(buffer);
+        return SetupBuffer<u8>(graphics, debugName, payload, flags);
     }
 
     // Upload records before payload dies; explicitly zero the allocated tail.
@@ -110,10 +111,7 @@ template<typename PayloadVector>
     paddedPayload.reserve(paddedByteCount);
     paddedPayload.assign(payload.begin(), payload.end());
     paddedPayload.resize(paddedByteCount, 0u);
-    auto buffer = SetupBuffer<u8>(graphics, debugName, paddedPayload, flags);
-    if(!buffer)
-        return MakeUnexpected(BufferSetupFailure::CreateFailed);
-    return Move(buffer);
+    return SetupBuffer<u8>(graphics, debugName, paddedPayload, flags);
 }
 
 

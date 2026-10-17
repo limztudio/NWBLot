@@ -43,7 +43,8 @@ namespace TaskGraphTestUtils{
     clearTexture.clearDepth = true;
     clearTexture.clearStencil = true;
 
-    return capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 16u, s_CommandIrDestination, 32u, 64u)
+    return
+        capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 16u, s_CommandIrDestination, 32u, 64u)
         && capture.captureCopyTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, sourceSlice, s_CommandIrDestination, destinationSlice)
         && capture.captureClearBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, 0xdecafbadU)
         && capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture)

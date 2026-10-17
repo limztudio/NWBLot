@@ -7,12 +7,17 @@
 #include <impl/assets_font/font_validation.h>
 #include <impl/assets_font/source_directory.h>
 
+#include <core/alloc/scratch.h>
+
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
 
 #include <global/binary.h>
 #include <global/filesystem.h>
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 #include <gtest/gtest.h>
 
@@ -80,7 +85,7 @@ static void WriteBigU32(u8* bytes, const u32 value)noexcept{
     bytes[3u] = static_cast<u8>(value);
 }
 
-[[nodiscard]] static usize FindTableRecord(const Core::Assets::AssetBytes& bytes, const u32 tag){
+[[nodiscard]] static usize FindTableRecord(const Core::Assets::AssetBytes& bytes, const u32 tag)noexcept{
     const u32 tableCount = (static_cast<u32>(bytes[4u]) << 8u) | bytes[5u];
     for(u32 index = 0u; index < tableCount; ++index){
         const usize record = 12u + static_cast<usize>(index) * 16u;
@@ -333,6 +338,51 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
         }
         EXPECT_FALSE(ValidateFontSource(bytes, 0u)) << variant;
     }
+}
+
+
+TEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocations){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    FontTestArena testArena;
+    auto fontResult = LoadLatin(testArena);
+    ASSERT_TRUE(fontResult);
+    const Font& font = *fontResult;
+    Core::Assets::AssetBytes bytes(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
+    const usize head = FindTableRecord(bytes, s_FontSfntHeadTag);
+    ASSERT_NE(head, 0u);
+    const u32 offset = ReadBigU32(bytes.data() + head + 8u);
+    ASSERT_LE(static_cast<usize>(offset) + 20u, bytes.size());
+    bytes[offset + 18u] = 0u;
+    bytes[offset + 19u] = 0u;
+
+    FT_Library library = nullptr;
+    ASSERT_EQ(FT_Init_FreeType(&library), 0);
+    FT_Face nativeFace = nullptr;
+    const FT_Error expectedNativeError = FT_New_Memory_Face(library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &nativeFace);
+    const FT_Error faceClosed = nativeFace ? FT_Done_Face(nativeFace) : 0;
+    const FT_Error libraryClosed = FT_Done_FreeType(library);
+    ASSERT_EQ(faceClosed, 0);
+    ASSERT_EQ(libraryClosed, 0);
+    ASSERT_NE(expectedNativeError, 0);
+
+    const u64 baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
+    EXPECT_FALSE(ValidateFontSource(bytes, 0u));
+    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("native_operation=FT_New_Memory_Face native_domain=FreeType")));
+    char expectedCode[64u] = {};
+    CopyFixedBuffer(expectedCode, "native_code=");
+    if(expectedNativeError < 0)
+        AppendFixedBuffer(expectedCode, "-");
+    const i64 signedCode = expectedNativeError;
+    AppendUnsignedToFixedBuffer(expectedCode, static_cast<u64>(signedCode < 0 ? -signedCode : signedCode));
+    constexpr Name s_DiagnosticScratch("tests/assets_font/native_validation_diagnostic");
+    Core::Alloc::ScratchArena scratchArena(s_DiagnosticScratch);
+    const auto expectedDiagnostic = StringConvert(scratchArena, AStringView(expectedCode));
+    EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
+    EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(ValidateFontSource(font.fontBytes(), 0u));
+    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
 }
 
 

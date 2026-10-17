@@ -45,7 +45,7 @@ bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
         sources.push_back({ m_fontRefs[index].font, *assets[index], 1u, atlas });
     }
     // TextService owns the exact font bytes and immutable baked atlas versions; loaded asset objects can be released here.
-    m_fontsReady = m_text.setFonts(sources.data(), sources.size());
+    m_fontsReady = m_text.setFonts(scratchArena, sources.data(), sources.size());
     return m_fontsReady;
 }
 

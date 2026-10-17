@@ -32,6 +32,10 @@ inline constexpr usize s_SpirvEntryPointNameWordIndex = s_SpirvEntryPointFixedWo
 inline constexpr u32 s_SpirvInstructionOpcodeBitMask = 0xffffu;
 inline constexpr u32 s_SpirvInstructionWordCountBitShift = 16u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace SpirvExecutionModel{
     enum Enum : u32{
         Vertex = 0u,
@@ -62,6 +66,8 @@ struct SpirvWordSource{
     const u32* words;
     usize wordCount;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return words != nullptr; }
     [[nodiscard]] usize size()const noexcept{ return wordCount; }
     [[nodiscard]] u32 word(const usize index)const noexcept{ return words[index]; }
@@ -73,6 +79,8 @@ struct SpirvWordSource{
 struct SpirvByteSource{
     BinaryByteView bytecode;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return bytecode.data() != nullptr && bytecode.size() % sizeof(u32) == 0u; }
     [[nodiscard]] usize size()const noexcept{ return bytecode.size() / sizeof(u32); }
     [[nodiscard]] u32 word(const usize index)const noexcept{

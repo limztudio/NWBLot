@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "crash_paths.h"
+
 #include <logger/common.h>
 
 #include <core/alloc/scratch.h>
@@ -24,7 +26,9 @@ using CrashReportText = AString<LogArena>;
 struct CrashSymbolicationConfig{
     Path symbolStoreDirectory;
 
-    explicit CrashSymbolicationConfig(LogArena& arena)
+
+public:
+    explicit CrashSymbolicationConfig(LogArena& arena)noexcept
         : symbolStoreDirectory(arena)
     {}
 };
@@ -42,7 +46,9 @@ struct CrashPackageSummary{
     u64 threadId = 0u;
     u64 triggerLine = 0u;
 
-    explicit CrashPackageSummary(LogArena& arena)
+
+public:
+    explicit CrashPackageSummary(LogArena& arena)noexcept
         : crashId(arena)
         , platform(arena)
         , reasonKind(arena)
@@ -55,7 +61,7 @@ struct CrashPackageSummary{
 };
 
 
-[[nodiscard]] CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

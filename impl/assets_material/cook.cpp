@@ -67,14 +67,14 @@ static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry,
     if(shaderNameText.empty())
         return true;
 
-    const Name shaderName = ToName(shaderNameText);
-    if(!shaderName){
+    const auto shaderName = ToName(shaderNameText);
+    if(!shaderName || !*shaderName){
         NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(passLabel));
         return false;
     }
 
     Core::Assets::AssetRef<PixelShader> shaderRef;
-    shaderRef.virtualPath = shaderName;
+    shaderRef.virtualPath = **shaderName;
     (outMaterial.*setter)(shaderRef);
     return true;
 }
@@ -97,9 +97,19 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
         return MakeUnexpected(Failure{});
     }
 
-    Material asset(arena, Name(AStringView(materialEntry.virtualPath)));
+    const auto virtualPath = Name::FromText(AStringView(materialEntry.virtualPath));
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: virtual path contains an embedded null"));
+        return MakeUnexpected(Failure{});
+    }
+    Material asset(arena, *virtualPath);
     asset.setShaderVariant(materialEntry.shaderVariant);
-    asset.setMaterialInterface(Name(AStringView(materialEntry.materialInterface)));
+    const auto materialInterface = Name::FromText(AStringView(materialEntry.materialInterface));
+    if(!materialInterface){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: interface contains an embedded null"));
+        return MakeUnexpected(Failure{});
+    }
+    asset.setMaterialInterface(*materialInterface);
     asset.setShadingModelId(materialEntry.shadingModelId);
     asset.setSurfaceDispatchId(materialEntry.surfaceDispatchId);
     if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitAccumulatePixelShaderName, AStringView("accumulate"), &Material::setAvboitAccumulatePixelShader, asset))

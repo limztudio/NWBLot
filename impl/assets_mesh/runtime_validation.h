@@ -41,6 +41,7 @@ public:
     const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateMeshletAttributeSkinSharing(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
@@ -48,6 +49,7 @@ public:
     const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateMeshletPayload(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<u8>& attributeRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
@@ -65,6 +67,7 @@ public:
     const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateSharedMeshPayload(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::Assets::AssetVector<Float3U>& positions,
     const Core::Assets::AssetVector<Half4U>& normals,
     const Core::Assets::AssetVector<Half4U>& tangents,
@@ -82,7 +85,7 @@ public:
     const TStringView meshPathText
     );
     template<typename MeshGeometryPayloadT>
-    [[nodiscard]] static bool ValidateSharedMeshPayload(const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText);
+    [[nodiscard]] static bool ValidateSharedMeshPayload(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText);
 
 
 public:
@@ -94,8 +97,9 @@ public:
 
 
 template<typename MeshGeometryPayloadT>
-[[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText){
+[[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText){
     return ValidateSharedMeshPayload(
+        scratchArena,
         payload.positionStream(),
         payload.normalStream(),
         payload.tangentStream(),

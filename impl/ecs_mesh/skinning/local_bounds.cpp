@@ -57,25 +57,27 @@ bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshS
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime local bounds partial count is empty or exceeds shader addressing"));
         return false;
     }
-    const Name partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "meshlet_local_bounds");
-    const Name outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "local_bounds");
+    const auto partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "meshlet_local_bounds");
+    const auto outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "local_bounds");
     if(!partialName || !outputName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
         return false;
     }
     Core::BufferDesc desc;
-    desc.setByteSize(static_cast<u64>(instance.meshlets.size()) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(partialName);
-    Core::BufferHandle partials = graphics.createBuffer(desc);
-    if(!partials){
+    desc.setByteSize(static_cast<u64>(instance.meshlets.size()) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(*partialName);
+    auto partialsResult = graphics.createBuffer(desc);
+    if(!partialsResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
         return false;
     }
-    desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(outputName);
-    Core::BufferHandle output = graphics.createBuffer(desc);
-    if(!output){
+    Core::BufferHandle partials = Move(*partialsResult);
+    desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(*outputName);
+    auto outputResult = graphics.createBuffer(desc);
+    if(!outputResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
         return false;
     }
+    Core::BufferHandle output = Move(*outputResult);
     instance.meshletLocalBoundsBuffer = Move(partials);
     instance.localBoundsBuffer = Move(output);
     return true;
@@ -85,7 +87,7 @@ bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningLocalBoundsTask::Payload::Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket)
+MeshSkinningLocalBoundsTask::Payload::Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket)noexcept
     : graphics(graphics)
     , timingTicket(timingTicket)
     , dispatches(arena)

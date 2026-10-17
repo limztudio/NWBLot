@@ -3,6 +3,7 @@
 
 
 #include "widget_fixture.h"
+#include "widget_id_assertion.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,8 +128,8 @@ protected:
         return declareList(1u) && finishPanel() && m_context.commitFrame(1u);
     }
 
-    [[nodiscard]] WidgetId firstRow()const noexcept{
-        return MakeWidgetPartId(MakeWidgetId(id("list", "panel"), "rows"), 1u);
+    [[nodiscard]] WidgetId firstRow()const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id("list", "panel"), "rows")), 1u));
     }
 
     [[nodiscard]] AcceptedState accepted()const{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }

@@ -36,7 +36,10 @@ using ResourceIds = Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena>;
 static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
 
 
-[[nodiscard]] static ArenaMemoryStats ScratchOwnerStats(){
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static ArenaMemoryStats ScratchOwnerStats()noexcept{
     const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
     while(record){
         ArenaMemoryOwnerSnapshot snapshot;
@@ -52,8 +55,14 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     members.reserve(count);
     for(usize index = 0u; index < count; ++index){
         char text[32u] = {};
-        const Name identity = DeriveName(Name("tests/resource_set_memory/resource/"), FormatDecimal(index, text));
-        const Core::GpuGraphResourceId resource = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Input").setType(Core::GpuGraphResourceType::Buffer));
+        const auto derivedNameAt58Col30 = DeriveName(Name("tests/resource_set_memory/resource/"), FormatDecimal(index, text));
+        if(!derivedNameAt58Col30)
+            return false;
+        const Name identity = *derivedNameAt58Col30;
+        const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Input").setType(Core::GpuGraphResourceType::Buffer));
+        if(!resourceResult)
+            return false;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         if(!resource.valid())
             return false;
         members.push_back(resource);
@@ -86,8 +95,12 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
         Core::GpuGraphResourceSetId lastSet;
         for(const usize count : { 0u, 1u, 8u, 32u }){
             char text[32u] = {};
-            const Name identity = DeriveName(Name("tests/resource_set_memory/small_set/"), FormatDecimal(count, text));
-            lastSet = graph.importResourceSet(SetDescription(identity, members, count));
+            const auto derivedNameAt95Col34 = DeriveName(Name("tests/resource_set_memory/small_set/"), FormatDecimal(count, text));
+            ASSERT_TRUE(derivedNameAt95Col34);
+            const Name identity = *derivedNameAt95Col34;
+            const auto gpuAdmissionAt93 = graph.importResourceSet(SetDescription(identity, members, count));
+            ASSERT_TRUE(gpuAdmissionAt93);
+            lastSet = *gpuAdmissionAt93;
             ASSERT_TRUE(lastSet.valid());
         }
         {
@@ -95,8 +108,8 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
             ASSERT_TRUE(declarations.valid());
             const u64 revision = declarations.declarationRevision();
             const Core::GpuTaskGraphResourceSetView last = declarations.resourceSetAt(lastSet.index);
-            EXPECT_FALSE(graph.importResourceSet(SetDescription(Name("tests/resource_set_memory/blocked_large"), members, members.size())).valid());
-            EXPECT_FALSE(graph.importResourceSet(SetDescription(last.identity, members, last.memberCount)).valid());
+            EXPECT_FALSE(graph.importResourceSet(SetDescription(Name("tests/resource_set_memory/blocked_large"), members, members.size())).has_value());
+            EXPECT_FALSE(graph.importResourceSet(SetDescription(last.identity, members, last.memberCount)).has_value());
             EXPECT_EQ(declarations.declarationRevision(), revision);
         }
         const ArenaMemoryStats after = ScratchOwnerStats();
@@ -125,8 +138,12 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
             usize phase = 0u;
             for(const usize count : { 4096u, 33u, 4096u }){
                 char text[32u] = {};
-                const Name identity = DeriveName(Name("tests/resource_set_memory/phase/"), FormatDecimal(phase, text));
-                const Core::GpuGraphResourceSetId set = graph.importResourceSet(SetDescription(identity, members, count));
+                const auto derivedNameAt136Col38 = DeriveName(Name("tests/resource_set_memory/phase/"), FormatDecimal(phase, text));
+                ASSERT_TRUE(derivedNameAt136Col38);
+                const Name identity = *derivedNameAt136Col38;
+                const auto setResult = graph.importResourceSet(SetDescription(identity, members, count));
+                ASSERT_TRUE(setResult);
+                const Core::GpuGraphResourceSetId set = *setResult;
                 ASSERT_TRUE(set.valid());
                 EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
                 const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -182,23 +199,30 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
                 revision = declarations.declarationRevision();
             }
             members.back() = members.front();
-            EXPECT_FALSE(graph.importResourceSet(rejected).valid());
+            EXPECT_FALSE(graph.importResourceSet(rejected).has_value());
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
             EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
             members.back() = saved;
             ++members.back().generation;
-            EXPECT_FALSE(graph.importResourceSet(rejected).valid());
+            EXPECT_FALSE(graph.importResourceSet(rejected).has_value());
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
             EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
             members.back() = saved;
             members.back().index = static_cast<u32>(members.size());
-            EXPECT_FALSE(graph.importResourceSet(rejected).valid());
+            EXPECT_FALSE(graph.importResourceSet(rejected).has_value());
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
             EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
             members.back() = saved;
             char text[32u] = {};
-            const Name acceptedIdentity = DeriveName(Name("tests/resource_set_memory/accepted/"), FormatDecimal(cycle, text));
-            EXPECT_TRUE(graph.importResourceSet(SetDescription(acceptedIdentity, members, members.size())).valid());
+            const auto derivedNameAt210Col42 = DeriveName(Name("tests/resource_set_memory/accepted/"), FormatDecimal(cycle, text));
+            ASSERT_TRUE(derivedNameAt210Col42);
+            const Name acceptedIdentity = *derivedNameAt210Col42;
+            {
+                const auto gpuAdmissionAt204 = graph.importResourceSet(SetDescription(acceptedIdentity, members, members.size()));
+                EXPECT_TRUE(gpuAdmissionAt204);
+                if(gpuAdmissionAt204)
+                    EXPECT_TRUE(gpuAdmissionAt204->valid());
+            }
             const ArenaMemoryStats after = ScratchOwnerStats();
             EXPECT_EQ(after.usedBytes, before.usedBytes);
             if(cycle == 0u){

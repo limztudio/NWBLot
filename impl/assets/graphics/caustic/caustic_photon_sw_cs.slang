@@ -26,6 +26,10 @@
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.w
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCausticSwMaterialContextSlots.sceneSlots.w;
 }
@@ -72,6 +76,10 @@ uint nwbMeshFrameViewHeapSlot(){
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapCausticSwInstanceBuffers[];
 #pragma warning(pop)
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapCausticSwInstances(const uint slot){
     return g_NwbHeapCausticSwInstanceBuffers[slot];
 }
@@ -82,6 +90,10 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapCausticSwInstances(c
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticSwEmissionTargets[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticSwViews[];
 #pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Texture2D<float4> nwbCausticSwGbufferDepth(){
     return nwbHeapSampledImage2D(g_NwbCausticSwPushConstants.depthSlot);

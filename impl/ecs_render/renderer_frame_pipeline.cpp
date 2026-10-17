@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/renderer_frame_pipeline.h>
+#include "renderer_frame_pipeline.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -87,7 +87,7 @@ RendererFramePipeline::~RendererFramePipeline(){
 }
 
 
-bool RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings){
+bool RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings)noexcept{
     if(!ValidateReflectionSettings(settings))
         return false;
     m_reflectionSettings = settings;
@@ -98,7 +98,7 @@ Expected<ReflectionStatistics> RendererFramePipeline::tryGetLatestReflectionStat
     return m_reflectionSystem.tryGetLatestStatistics();
 }
 
-bool RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings){
+bool RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings)noexcept{
     return m_deferredSystem.setPresentationSettings(settings);
 }
 

@@ -126,7 +126,7 @@ u64 Device::getMaxStorageBufferRange()const noexcept{
     return static_cast<u64>(m_context.physicalDeviceProperties.limits.maxStorageBufferRange);
 }
 
-FormatSupport::Mask Device::queryFormatSupport(const Format::Enum format){
+FormatSupport::Mask Device::queryFormatSupport(const Format::Enum format)noexcept{
     if(Format::IsBlockCompressedFormat(format))
         return m_compressedFormatSupport[static_cast<usize>(format)];
 
@@ -146,7 +146,7 @@ Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& q
 }
 
 void Device::probeCompressedTextureFormats(){
-    constexpr FormatSupport::Mask requiredReadableSupport = FormatSupport::Texture | FormatSupport::ShaderSample;
+    constexpr FormatSupport::Mask s_RequiredReadableSupport = FormatSupport::Texture | FormatSupport::ShaderSample;
 
     u32 readableAstcLdrFormatCount = 0u;
     u32 readableAstcHdrFormatCount = 0u;
@@ -158,11 +158,11 @@ void Device::probeCompressedTextureFormats(){
         const Format::Enum format = static_cast<Format::Enum>(formatValue);
         FormatSupport::Mask support = queryFormatSupportUncached(format);
         if((support & FormatSupport::Texture) == FormatSupport::Texture && !canCreateSampledTextureFormat(format)){
-            support &= ~(requiredReadableSupport | FormatSupport::ShaderLoad);
+            support &= ~(s_RequiredReadableSupport | FormatSupport::ShaderLoad);
         }
         m_compressedFormatSupport[formatValue] = support;
 
-        const bool readable = (support & requiredReadableSupport) == requiredReadableSupport;
+        const bool readable = (support & s_RequiredReadableSupport) == s_RequiredReadableSupport;
         if(Format::IsASTCCompressedFormat(format)){
             if(Format::IsASTCHdrFormat(format)){
                 ++astcHdrFormatCount;
@@ -183,18 +183,17 @@ void Device::probeCompressedTextureFormats(){
         }
     }
 
-    NWB_LOGGER_INFO(
-        NWB_TEXT("Vulkan: compressed texture probe found {}/{} readable ASTC LDR formats, {}/{} readable ASTC HDR formats, and {}/{} readable BC formats."),
-        readableAstcLdrFormatCount,
-        astcLdrFormatCount,
-        readableAstcHdrFormatCount,
-        astcHdrFormatCount,
-        readableBcFormatCount,
-        bcFormatCount
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: compressed texture probe found {}/{} readable ASTC LDR formats, {}/{} readable ASTC HDR formats, and {}/{} readable BC formats.")
+        , readableAstcLdrFormatCount
+        , astcLdrFormatCount
+        , readableAstcHdrFormatCount
+        , astcHdrFormatCount
+        , readableBcFormatCount
+        , bcFormatCount
     );
 }
 
-FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format)const{
+FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format)const noexcept{
     const VulkanDetail::CompressedTextureFeatureState compressedTextureFeatures{
         .bcEnabled = m_context.textureCompressionBcFeatureEnabled,
         .astcLdrEnabled = m_context.textureCompressionAstcLdrFeatureEnabled,

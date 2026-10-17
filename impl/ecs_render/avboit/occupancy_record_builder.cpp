@@ -2,11 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/occupancy_record_builder.h>
+#include "occupancy_record_builder.h"
+
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/csg/task_graph_resource_utils.h>
@@ -48,7 +48,7 @@ static constexpr usize s_SharedGenerateUseCount = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)
+AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept
     : m_graph(graph)
     , m_graphics(graphics)
     , m_materialSystem(materialSystem)
@@ -60,6 +60,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
 
 
 [[nodiscard]] Expected<AvboitOccupancyRecordResult> AvboitOccupancyRecordBuilder::declare(
+    Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -90,17 +91,10 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     occupancyPayload.occupancyMaterialFrameStatesGraphOwned = occupancyPayload.occupancyStreamsUploaded;
     occupancyPayload.occupancyMaterialGeometryStatesGraphOwned = occupancyPayload.occupancyStreamsUploaded && occupancyPayload.occupancyMaterialGeometryStatesGraphOwned;
     Core::GpuGraphResourceSetId occupancyComputeEmulationOutputSet;
-    Core::Alloc::ScratchArena occupancyComputeEmulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     const bool occupancyComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
     bool occupancyComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.regularComputeEmulationPlanCaptured){
-        const auto occupancyComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-            m_graph,
-            computeEmulationPayload.plan,
-            occupancyComputeEmulationResourceScratch,
-            Name("render.avboit.occupancy.compute_emulation.outputs"),
-            "AVBOIT Occupancy Compute Emulation Outputs"
-        );
+        const auto occupancyComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(m_graph, computeEmulationPayload.plan, scratchArena, Name("render.avboit.occupancy.compute_emulation.outputs"), "AVBOIT Occupancy Compute Emulation Outputs");
         occupancyComputeEmulationOutputStatesGraphOwned = occupancyComputeEmulationOutputSetResult.has_value();
         if(occupancyComputeEmulationOutputSetResult)
             occupancyComputeEmulationOutputSet = *occupancyComputeEmulationOutputSetResult;
@@ -109,7 +103,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         const auto occupancyComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
                 m_graph,
                 computeEmulationPayload.csgPlan,
-                occupancyComputeEmulationResourceScratch,
+                scratchArena,
                 Name("render.avboit.occupancy.csg_compute_emulation.outputs"),
                 "AVBOIT Occupancy CSG Compute Emulation Outputs"
             );
@@ -146,8 +140,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     inputs.receiverRange = occupancyReceiverRange;
     inputs.cutterRange = occupancyCutterRange;
 
-    Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ scratchArena };
     avboitPreResourceUses.reserve(
         __hidden_avboit_occupancy_record::s_ResourceBaseCount
         + (occupancyPayload.occupancyStreamsUploaded ? __hidden_avboit_occupancy_record::s_StreamUseCount : 0u)
@@ -213,13 +206,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems.data(),
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, avboitPreResourceScratch, inputs.preTimingTicket
+        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, inputs.preTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems.data(),
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, avboitPreResourceScratch, inputs.preTimingTicket
+        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, inputs.preTimingTicket
     ))
         return MakeUnexpected(Failure{});
 
@@ -240,7 +233,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         computeEmulationPayload.materialFrameStatesGraphOwned = occupancyPayload.occupancyMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = occupancyPayload.occupancyMaterialGeometryStatesGraphOwned;
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancyComputeEmulationResourceUses{ occupancyComputeEmulationResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancyComputeEmulationResourceUses{ scratchArena };
         occupancyComputeEmulationResourceUses.reserve(__hidden_avboit_occupancy_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_occupancy_record::s_EmulationPlanUseCount : 0u));
         occupancyComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         occupancyComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, occupancyInstanceRange));
@@ -285,11 +278,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             .setResourceUses(occupancyComputeEmulationResourceUses.data(), occupancyComputeEmulationResourceUses.size())
             .setResourceSetUses(occupancyComputeEmulationResourceSetUses, occupancyComputeEmulationResourceSetUseCount)
         ;
-        m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = m_graph.addTask< AvboitOccupancyComputeEmulationGraphTask >(occupancyComputeEmulationDesc, Move(computeEmulationPayload));
-        if(!m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask.valid()){
+        const auto mAvboitSystemTaskGraphStageMOccupancyComputeEmulationTaskResult = m_graph.addTask< AvboitOccupancyComputeEmulationGraphTask >(occupancyComputeEmulationDesc, Move(computeEmulationPayload));
+        if(!mAvboitSystemTaskGraphStageMOccupancyComputeEmulationTaskResult){
+            m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Occupancy compute-emulation producer"));
             return MakeUnexpected(Failure{});
         }
+        m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = *mAvboitSystemTaskGraphStageMOccupancyComputeEmulationTaskResult;
         occupancyDependency = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
         avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     }
@@ -307,7 +302,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
 
     if(occupancySharedComputeEmulationOutputStatesGraphOwned){
         // Retained output appears in every phase; keep it exact to preserve alternating uses.
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedGenerateResourceUses{ avboitPreResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedGenerateResourceUses{ scratchArena };
         occupancySharedGenerateResourceUses.reserve(__hidden_avboit_occupancy_record::s_SharedGenerateUseCount);
         occupancySharedGenerateResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         occupancySharedGenerateResourceUses.push_back(ReadBufferUse(materialInstances, occupancyInstanceRange));
@@ -315,7 +310,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         occupancySharedGenerateResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
         occupancySharedGenerateResourceUses.push_back(WriteUse(occupancySharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess));
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedRasterResourceUses{ avboitPreResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedRasterResourceUses{ scratchArena };
         occupancySharedRasterResourceUses.reserve(avboitPreResourceUses.size() + 1u);
         occupancySharedRasterResourceUses.assign(avboitPreResourceUses.begin(), avboitPreResourceUses.end());
         occupancySharedRasterResourceUses.push_back(ReadUse(occupancySharedComputeEmulationOutput, ECSRenderDetail::s_GeneratedGeometryRasterState));
@@ -397,8 +392,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         Core::GpuTaskId occupancySharedComputeEmulationDependency = occupancyDependency;
         for(usize phaseIndex = 0u; phaseIndex < occupancySharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] =
-                addOccupancySharedComputeEmulationPhase(
+            const auto mAvboitSystemTaskGraphStageMOccupancySharedComputeEmulationTasksPhaseIndexResult = addOccupancySharedComputeEmulationPhase(
                     occupancySharedComputeEmulationPhaseIdentities[phaseIndex],
                     occupancySharedComputeEmulationPhaseMarkers[phaseIndex],
                     occupancySharedComputeEmulationDependency,
@@ -409,12 +403,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
                     isRasterPhase ? occupancySharedRasterResourceUses : occupancySharedGenerateResourceUses,
                     occupancyMaterialResourceSetUses,
                     occupancyMaterialResourceSetUseCount
-                )
-            ;
-            if(!m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex].valid()){
+                );
+            if(!mAvboitSystemTaskGraphStageMOccupancySharedComputeEmulationTasksPhaseIndexResult){
+                m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Occupancy shared compute-emulation phase"));
                 return MakeUnexpected(Failure{});
             }
+            m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] = *mAvboitSystemTaskGraphStageMOccupancySharedComputeEmulationTasksPhaseIndexResult;
             occupancySharedComputeEmulationDependency = m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex];
         }
         m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTaskCount = occupancySharedComputeEmulationPhaseCount;
@@ -433,11 +428,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
             .setResourceSetUses(occupancyMaterialResourceSetUseCount != 0u ? occupancyMaterialResourceSetUses : nullptr, occupancyMaterialResourceSetUseCount)
         ;
-        m_avboitSystem.taskGraphStage().m_occupancyTask = m_graph.addTask<AvboitOccupancyGraphTask>(avboitOccupancyDesc, Move(occupancyPayload));
-        if(!m_avboitSystem.taskGraphStage().m_occupancyTask.valid()){
+        const auto mAvboitSystemTaskGraphStageMOccupancyTaskResult = m_graph.addTask<AvboitOccupancyGraphTask>(avboitOccupancyDesc, Move(occupancyPayload));
+        if(!mAvboitSystemTaskGraphStageMOccupancyTaskResult){
+            m_avboitSystem.taskGraphStage().m_occupancyTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
             return MakeUnexpected(Failure{});
         }
+        m_avboitSystem.taskGraphStage().m_occupancyTask = *mAvboitSystemTaskGraphStageMOccupancyTaskResult;
     }
 
     result.occupancyTask = m_avboitSystem.taskGraphStage().m_occupancyTask;

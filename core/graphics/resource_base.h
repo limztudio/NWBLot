@@ -27,6 +27,7 @@ struct Object{
     u64 integer;
 
 
+public:
     constexpr Object(u64 i)noexcept
         : integer(i)
     {}
@@ -36,10 +37,12 @@ struct Object{
 
 
 public:
-    [[nodiscard]] void* pointer()const noexcept{ return reinterpret_cast<void*>(static_cast<usize>(integer)); }
-
     template<typename T>
     explicit operator T*()const noexcept{ return static_cast<T*>(pointer()); }
+
+
+public:
+    [[nodiscard]] void* pointer()const noexcept{ return reinterpret_cast<void*>(static_cast<usize>(integer)); }
 };
 
 static_assert(sizeof(void*) == sizeof(usize), "Object pointer conversion requires usize to preserve the complete pointer representation");
@@ -66,11 +69,12 @@ protected:
         : m_cpuScheduler(scheduler)
     {}
     virtual ~GraphicsResource()noexcept = default;
-
-
 public:
     GraphicsResource(const GraphicsResource&) = delete;
     GraphicsResource(GraphicsResource&&) = delete;
+
+
+public:
     GraphicsResource& operator=(const GraphicsResource&) = delete;
     GraphicsResource& operator=(GraphicsResource&&) = delete;
 

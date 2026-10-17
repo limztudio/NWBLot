@@ -142,7 +142,8 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
             }
         }
         return true;
-    }))
+    }
+    ))
         return MakeUnexpected(Failure{});
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
@@ -168,7 +169,8 @@ bool FbxMeshBuild::AppendInstanceMesh(
     FbxSkinDetail::ExportContext& inOutSkinContext,
     bool& inOutSawVertexColors,
     bool& inOutSawVertexUvs,
-    bool& inOutUsedDefaultUvs
+    bool& inOutUsedDefaultUvs,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
@@ -191,22 +193,22 @@ bool FbxMeshBuild::AppendInstanceMesh(
     const bool importTangents = normalMode == NormalMode::Imported && mesh->vertex_tangent.exists;
     const SIMDVectorSingle defaultColorVector = LoadFloat(defaultColor);
     ufbx_skin_deformer* skin = nullptr;
-    UtilityVector<u16> clusterJoints;
+    ::Vector<u16, Core::Alloc::ScratchArena> clusterJoints(scratchArena);
     if(wantsSkinning){
         if(mesh->skin_deformers.count != 1u){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh"));
             return false;
         }
         skin = mesh->skin_deformers.data[0u];
-        auto jointMap = FbxSkinDetail::BuildClusterJointMap(instance, options, skin, inOutSkinContext);
+        auto jointMap = FbxSkinDetail::BuildClusterJointMap(instance, options, skin, inOutSkinContext, scratchArena);
         if(!jointMap)
             return false;
         clusterJoints = Move(*jointMap);
     }
 
-    PositionNormalMap smoothNormals(inOutMesh.scratchArena);
+    PositionNormalMap smoothNormals(scratchArena);
     if(normalMode == NormalMode::Smooth){
-        auto normals = BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, inOutMesh.scratchArena);
+        auto normals = BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, scratchArena);
         if(!normals)
             return false;
         smoothNormals = Move(*normals);
@@ -318,7 +320,8 @@ bool FbxMeshBuild::AppendInstanceMesh(
             inOutMesh.mesh.indices.push_back(*vertexRefIndex);
         }
         return true;
-    });
+    }
+    );
 }
 
 

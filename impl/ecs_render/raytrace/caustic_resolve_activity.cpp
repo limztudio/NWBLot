@@ -86,10 +86,14 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
         desc.setByteSize(layout->bufferByteSize).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common).setDebugName(names[index]);
-        activity.buffers[index] = m_graphics.createBuffer(desc);
-        if(activity.buffers[index])
+        auto buffersResult = m_graphics.createBuffer(desc);
+        if(buffersResult)
+            activity.buffers[index] = Move(*buffersResult);
+        else
+            activity.buffers[index].reset();
+        if(buffersResult)
             activity.descriptors[index] = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!activity.buffers[index] || !activity.descriptors[index].valid() || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))){
+        if(!buffersResult || !activity.descriptors[index].valid() || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))){
             releaseCausticResolveActivity();
             return false;
         }

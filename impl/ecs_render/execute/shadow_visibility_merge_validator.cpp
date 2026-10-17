@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
+#include "shadow_visibility_merge_validator.h"
+
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 
@@ -42,7 +43,7 @@ bool PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::Read
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShadowVisibilityMergeValidator::ShadowVisibilityMergeValidator(NotNull<RendererFramePipeline*> pipeline)
+ShadowVisibilityMergeValidator::ShadowVisibilityMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
     : m_pipeline(pipeline){
 }
 

@@ -21,7 +21,9 @@ namespace UiPaintImageTests{
 
 
 TEST_F(PaintImageFixture, CropAndNestedClipTrimFullImageGeometryAndUv){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     m_builder.pushClip({ 10.0f, 8.0f, 60.0f, 35.0f });
     m_builder.pushClip({ 20.0f, 10.0f, 25.0f, 20.0f });
@@ -41,8 +43,12 @@ TEST_F(PaintImageFixture, CropAndNestedClipTrimFullImageGeometryAndUv){
 }
 
 TEST_F(PaintImageFixture, AdjacentBatchingIncludesImmutableImageIndexAndPreservesDeclarationOrder){
-    const SharedImageSource first = makeImage("tests/ui/same_image", 37u);
-    const SharedImageSource second = makeImage("tests/ui/same_image", 73u);
+    auto firstResult = makeImage("tests/ui/same_image", 37u);
+    ASSERT_TRUE(firstResult);
+    const SharedImageSource first = Move(*firstResult);
+    auto secondResult = makeImage("tests/ui/same_image", 73u);
+    ASSERT_TRUE(secondResult);
+    const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
     ASSERT_NE(first->generation(), second->generation());
     const Rect rectangle{ 1.0f, 1.0f, 8.0f, 4.0f };
@@ -66,9 +72,15 @@ TEST_F(PaintImageFixture, AdjacentBatchingIncludesImmutableImageIndexAndPreserve
 }
 
 TEST_F(PaintImageFixture, ImageCommandsKeepDistinctClipsMaterialsAndOverlayLayers){
-    const SharedImageSource image = makeImage();
-    const SharedGlyphPage glyph = makeGlyph();
-    const SharedSdfAtlasPage sdf = makeSdf();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
+    auto glyphCreationResult = makeGlyph();
+    ASSERT_TRUE(glyphCreationResult);
+    const SharedGlyphPage glyph = Move(*glyphCreationResult);
+    auto sdfCreationResult = makeSdf();
+    ASSERT_TRUE(sdfCreationResult);
+    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
     ASSERT_TRUE(image && glyph && sdf);
     const Rect rectangle{ 0.0f, 0.0f, 20.0f, 20.0f };
     ASSERT_TRUE(m_builder.drawImage(image, rectangle));
@@ -101,7 +113,9 @@ TEST_F(PaintImageFixture, ImageCommandsKeepDistinctClipsMaterialsAndOverlayLayer
 }
 
 TEST_F(PaintImageFixture, FrozenAndMovedSnapshotsRetainExactSourceVersionsAcrossHandleReleaseAndBuilderReuse){
-    SharedImageSource original = makeImage("tests/ui/replacement", 37u, 9u, 5u);
+    auto originalResult = makeImage("tests/ui/replacement", 37u, 9u, 5u);
+    ASSERT_TRUE(originalResult);
+    SharedImageSource original = Move(*originalResult);
     ASSERT_TRUE(original);
     const u64 originalGeneration = original->generation();
     const u8 originalByte = original->texture().payloadBytes()[0u];
@@ -110,7 +124,9 @@ TEST_F(PaintImageFixture, FrozenAndMovedSnapshotsRetainExactSourceVersionsAcross
     DrawSnapshot retained(Move(frozen));
     original.reset();
     beginPaint(m_builder, 2u);
-    SharedImageSource replacement = makeImage("tests/ui/replacement", 73u, 4u, 4u);
+    auto replacementResult = makeImage("tests/ui/replacement", 73u, 4u, 4u);
+    ASSERT_TRUE(replacementResult);
+    SharedImageSource replacement = Move(*replacementResult);
     ASSERT_TRUE(replacement);
     ASSERT_NE(replacement->generation(), originalGeneration);
     ASSERT_TRUE(m_builder.drawImage(replacement, { 4.0f, 5.0f, 8.0f, 8.0f }));
@@ -131,7 +147,9 @@ TEST_F(PaintImageFixture, FrozenAndMovedSnapshotsRetainExactSourceVersionsAcross
 }
 
 TEST_F(PaintImageFixture, InvalidRectangleUvTintAndNullSourcePreserveEarlierBindingsAndGeometry){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     PaintBuilder reference(m_arena);
     beginPaint(reference);
@@ -176,11 +194,15 @@ TEST_F(PaintImageFixture, InvalidRectangleUvTintAndNullSourcePreserveEarlierBind
 }
 
 TEST_F(PaintImageFixture, InvisibleAndTransparentDrawsRemainValidAtCapacityWithoutAdmittingTheSource){
-    const SharedImageSource image = makeImage();
+    auto imageResult = makeImage();
+    ASSERT_TRUE(imageResult);
+    const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
     FixedVector<SharedGlyphPage, s_PaintMaxImages> pages;
     for(usize index = 0u; index < pages.max_size(); ++index){
-        SharedGlyphPage page = makeGlyph(100u + index);
+        auto pageCreationResult = makeGlyph(100u + index);
+        ASSERT_TRUE(pageCreationResult);
+        SharedGlyphPage page = Move(*pageCreationResult);
         ASSERT_TRUE(page);
         pages.push_back(Move(page));
     }

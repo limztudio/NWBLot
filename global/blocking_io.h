@@ -8,6 +8,7 @@
 #include "limit.h"
 #include "platform.h"
 #include "type.h"
+#include "type_properties.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -23,7 +24,8 @@
 
 #if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID) || defined(NWB_PLATFORM_APPLE) || defined(NWB_PLATFORM_UNIX)
 template<typename PointerT, typename OperationT>
-[[nodiscard]] inline bool TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept{
+    requires((IsSame_V<PointerT, u8*> || IsSame_V<PointerT, const u8*>) && IsSame_V<decltype(DeclVal<OperationT&>()(DeclVal<PointerT&>(), DeclVal<usize&>())), ssize_t>)
+[[nodiscard]] inline bool TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept(noexcept(DeclVal<OperationT&>()(DeclVal<PointerT&>(), DeclVal<usize&>())) && IsNothrowDestructible_V<OperationT>){
     usize remaining = byteCount;
     while(remaining > 0u){
         const ssize_t bytesTransferred = operation(cursor, remaining);

@@ -9,6 +9,7 @@
 #include <core/common/name_symbols.h>
 
 #include <global/json_text.h>
+#include <global/overflow.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,8 +73,13 @@ void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Tele
         source.maxUsedBytes = payload.snapshot.usedBytes;
     if(payload.snapshot.peakUsedBytes > source.maxPeakUsedBytes)
         source.maxPeakUsedBytes = payload.snapshot.peakUsedBytes;
-    if(payload.delta.hasSamples)
-        source.totalUsedDeltaBytes += payload.delta.usedBytes;
+    if(payload.delta.hasSamples && source.totalUsedDeltaValid){
+        const auto total = AddNoOverflow<i64>(source.totalUsedDeltaBytes, payload.delta.usedBytes);
+        if(total)
+            source.totalUsedDeltaBytes = *total;
+        else
+            source.totalUsedDeltaValid = false;
+    }
 }
 
 void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& out, const TelemetryReportSummary& summary){
@@ -85,15 +91,13 @@ void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& 
         out += TelemetryMemoryReportDetail::s_PeakBasisKeyPrefix;
         AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(memorySource));
         const TelemetryMemorySummary& source = summary.memorySources[sourceIndex];
-        StringAppendFormat(
-            out,
-            TelemetryMemoryReportDetail::s_MemorySourceMetricsFormat,
-            source.eventCount,
-            source.maxUsedBytes,
-            source.maxPeakUsedBytes,
-            source.totalUsedDeltaBytes,
-            sourceIndex + 1u == s_TelemetryMemorySourceCount ? TelemetryMemoryReportDetail::s_JsonEntryTerminator : TelemetryMemoryReportDetail::s_JsonEntrySeparator
-        );
+        StringAppendFormat(out, TelemetryMemoryReportDetail::s_MemorySourceMetricsFormat, source.eventCount, source.maxUsedBytes, source.maxPeakUsedBytes);
+        if(source.totalUsedDeltaValid)
+            StringAppendFormat(out, TelemetryMemoryReportDetail::s_MemorySourceDeltaFormat, source.totalUsedDeltaBytes);
+        else
+            out += TelemetryMemoryReportDetail::s_JsonNullText;
+        out += TelemetryMemoryReportDetail::s_JsonRecordClose;
+        out += sourceIndex + 1u == s_TelemetryMemorySourceCount ? TelemetryMemoryReportDetail::s_JsonEntryTerminator : TelemetryMemoryReportDetail::s_JsonEntrySeparator;
     }
     out += TelemetryMemoryReportDetail::s_MemorySourcesSectionFooter;
 }

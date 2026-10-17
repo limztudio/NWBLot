@@ -2,11 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/deferred_descriptor_register.h>
+#include "deferred_descriptor_register.h"
 
 #include <core/graphics/backend_selection/backend.h>
-
-#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +33,7 @@ namespace DeferredDescriptorRegisterDetail{
     const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(heap.write(handle, Core::DescriptorWriteItem::TextureSrv(0u, texture, format, subresources, dimension))){
         retireUnpublished.release();
@@ -48,7 +46,7 @@ namespace DeferredDescriptorRegisterDetail{
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(heap.write(handle, Core::DescriptorWriteItem::TextureUav(0u, texture, format, Core::s_AllSubresources, dimension))){
         retireUnpublished.release();
@@ -61,7 +59,7 @@ namespace DeferredDescriptorRegisterDetail{
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(heap.write(handle, Core::DescriptorWriteItem::Sampler(0u, sampler))){
         retireUnpublished.release();
@@ -74,7 +72,7 @@ namespace DeferredDescriptorRegisterDetail{
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(heap.write(handle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, buffer))){
         retireUnpublished.release();
@@ -87,7 +85,7 @@ namespace DeferredDescriptorRegisterDetail{
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     if(!handle.valid())
         return MakeUnexpected(Failure{});
-    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, buffer))){
         retireUnpublished.release();

@@ -37,6 +37,8 @@ struct SoftShadowCombinedWaveletInputs{
     Core::Texture* opaqueOutput = nullptr;
     Core::Texture* transparentOutput = nullptr;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept;
 };
 

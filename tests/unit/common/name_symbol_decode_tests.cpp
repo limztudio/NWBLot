@@ -7,6 +7,7 @@
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
+#include <global/scope_exit.h>
 
 #include <gtest/gtest.h>
 
@@ -46,7 +47,7 @@ static void VerifyUnknownAndBoundaryTokens(){
     char knownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     char unknownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(known.identityHash(), knownToken, sizeof(knownToken));
-    NameDetail::HashToDebugString(ComputeNameHash("decode/unknown"), unknownToken, sizeof(unknownToken));
+    NameDetail::HashToDebugString(ComputeNameHash(MakeNotNull("decode/unknown")), unknownToken, sizeof(unknownToken));
     AString<Arena> source(arena);
     source.append(unknownToken).append(" !").append(knownToken).append("_ !a").append(knownToken).append(" !");
     knownToken[0u] = 'g';
@@ -73,13 +74,15 @@ static void VerifyResolvedSpans(){
     AString<Arena> expanded(arena);
     expanded.assign(300u, 'z');
     const Name shortName(AStringView("decode/short"));
-    const Name longName(AStringView(expanded.data(), expanded.size()));
+    const auto longNameResult = Name::FromText(AStringView(expanded.data(), expanded.size()));
+    ASSERT_TRUE(longNameResult);
+    const Name longName = *longNameResult;
     char shortToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     char longToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     char unknownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(shortName.identityHash(), shortToken, sizeof(shortToken));
     NameDetail::HashToDebugString(longName.identityHash(), longToken, sizeof(longToken));
-    NameDetail::HashToDebugString(ComputeNameHash("decode/unresolved"), unknownToken, sizeof(unknownToken));
+    NameDetail::HashToDebugString(ComputeNameHash(MakeNotNull("decode/unresolved")), unknownToken, sizeof(unknownToken));
     AString<Arena> source(arena);
     source.append(shortToken).append(" !").append(unknownToken).append(" !").append(longToken).append(" !").append(shortToken);
     AString<Arena> expectedSource(arena);
@@ -128,7 +131,7 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
     NameSymbols::ClearRuntimeSymbols();
     NWB::Core::Alloc::GlobalArena arena("Tests/NameSymbols/DocumentAdmission");
     const Name retained(AStringView("admission/retained"));
-    const NameHash incomingHash = ComputeNameHash("admission/incoming");
+    const NameHash incomingHash = ComputeNameHash(MakeNotNull("admission/incoming"));
     char incomingToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(incomingHash, incomingToken, sizeof(incomingToken));
     AString<NWB::Core::Alloc::GlobalArena> record(arena);
@@ -156,6 +159,40 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
 }
 
 
+TEST(NameSymbolDecodeTests, FileLoadSeparatesHeaderAnswerFromNativeReadFailure){
+    namespace NameSymbols = NWB::Core::Common::NameSymbols;
+    NWB::Core::Alloc::GlobalArena arena("Tests/NameSymbols/FileAdmission");
+    const ::Path<NWB::Core::Alloc::GlobalArena> path(arena, "name_symbol_expected_file_unit.namesym");
+    ASSERT_TRUE(RemoveAllIfExists(path));
+    ScopeExit cleanup([&]()noexcept{
+        if(const auto removed = RemoveFile(path); !removed)
+            CaptureDiagnosticEvent("name_symbol_file_admission", "Failed to remove unit name-symbol fixture", __FILE__, __LINE__);
+    });
+
+    ASSERT_TRUE(WriteTextFile(path, "nwb_namesym_v1\n"));
+    const auto accepted = NameSymbols::LoadFile(path);
+    ASSERT_TRUE(accepted);
+    EXPECT_TRUE(*accepted);
+
+    ASSERT_TRUE(WriteTextFile(path, "nwb_namesym_v2\n"));
+    const auto rejectedHeader = NameSymbols::LoadFile(path);
+    ASSERT_TRUE(rejectedHeader);
+    EXPECT_FALSE(*rejectedHeader);
+
+    const auto removed = RemoveFile(path);
+    ASSERT_TRUE(removed);
+    ASSERT_TRUE(*removed);
+    const auto missingFileSize = FileSize(path);
+    ASSERT_FALSE(missingFileSize);
+    const auto missing = NameSymbols::LoadFile(path);
+    ASSERT_FALSE(missing);
+    EXPECT_EQ(missing.error(), missingFileSize.error());
+    EXPECT_EQ(missing.error().value(), missingFileSize.error().value());
+    EXPECT_EQ(&missing.error().category(), &missingFileSize.error().category());
+    EXPECT_TRUE(RemoveFile(path));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -178,9 +215,9 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     namespace NameSymbols = NWB::Core::Common::NameSymbols;
     constexpr Name s_LiveOwner{"Tests/NameSymbols/Before_Registry_Live"};
     constexpr Name s_RetiredOwner{"Tests/NameSymbols/Before_Registry_Retired"};
-    constexpr NameHash s_LiveHash = ComputeNameHash("tests/namesymbols/before_registry_live");
-    constexpr NameHash s_RetiredHash = ComputeNameHash("tests/namesymbols/before_registry_retired");
-    constexpr NameHash s_HeapHash = ComputeNameHash("core/alloc/heap_backing");
+    constexpr NameHash s_LiveHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_live"));
+    constexpr NameHash s_RetiredHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_retired"));
+    constexpr NameHash s_HeapHash = ComputeNameHash(MakeNotNull("core/alloc/heap_backing"));
     NameSymbols::UninstallRuntimeRegistry();
     NWB::Core::Alloc::GlobalArena liveOwner(s_LiveOwner);
     {
@@ -195,7 +232,7 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     EXPECT_FALSE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
 
     ::AString<NWB::Core::Alloc::GlobalArena> namesymText(liveOwner);
-    NameSymbols::Serialize(namesymText);
+    ASSERT_TRUE(NameSymbols::Serialize(namesymText));
 #if defined(NWB_BUILD_SYMBOLS)
     EXPECT_TRUE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data());

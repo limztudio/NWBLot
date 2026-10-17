@@ -32,13 +32,17 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
     using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
     using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
 
+
+public:
     DrawItemVector drawItems;
     BufferVector outputBuffers;
     OutputLayoutVector outputLayouts;
     HeapSlotVector outputHeapSlots;
     bool captured = false;
 
-    explicit AvboitAliasFreeComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
+
+public:
+    explicit AvboitAliasFreeComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
         : drawItems(arena)
         , outputBuffers(arena)
         , outputLayouts(arena)

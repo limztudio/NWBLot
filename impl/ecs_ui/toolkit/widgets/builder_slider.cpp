@@ -61,8 +61,8 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
         return true;
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::Slider);
-    if(!widget || !m_context.claimState(*widget, state.instanceGeneration()))
+    const auto widget = m_context.declare(stableKey, WidgetKind::Slider);
+    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
         return false;
     // Attempt diagnostics retire immediately; invalid policy leaves semantic state and accepted geometry untouched.
     state.m_result = {};
@@ -70,7 +70,7 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
     frame->m_options = options;
     frame->m_style = m_sliderStyle;
     frame->m_snapshot = state.snapshot();
-    frame->m_widget = *widget;
+    frame->m_widget = **widget;
     if(!SliderBehavior::Validate(options)){
         m_context.fail();
         return false;
@@ -86,7 +86,7 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
         return false;
     }
     Item item(m_arena);
-    item.state = *widget;
+    item.state = **widget;
     item.enabled = options.enabled;
     item.slider = static_cast<u32>(m_scope->m_sliders.size());
     LayoutNodeDesc description;
@@ -103,7 +103,7 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
     return true;
 }
 
-bool Builder::prepareSlider(SliderFrame& frame){
+bool Builder::prepareSlider(SliderFrame& frame)noexcept{
     if(!sliderMatches(frame) || !m_skin || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
         return false;
     const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);

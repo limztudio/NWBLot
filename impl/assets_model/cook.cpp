@@ -89,7 +89,8 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     header.skinnedMeshObjectCount = static_cast<u64>(skinnedMeshObjectBinaries.size());
     AppendPOD(outBinary, header);
 
-    return Core::Assets::AppendVectorPayload(outBinary, skeletonObjectBinaries, NWB_TEXT("ModelAssetCodec::serialize"), NWB_TEXT("skeleton objects"))
+    return
+        Core::Assets::AppendVectorPayload(outBinary, skeletonObjectBinaries, NWB_TEXT("ModelAssetCodec::serialize"), NWB_TEXT("skeleton objects"))
         && Core::Assets::AppendVectorPayload(outBinary, staticMeshObjectBinaries, NWB_TEXT("ModelAssetCodec::serialize"), NWB_TEXT("static mesh objects"))
         && Core::Assets::AppendVectorPayload(outBinary, skinnedMeshObjectBinaries, NWB_TEXT("ModelAssetCodec::serialize"), NWB_TEXT("skinned mesh objects"))
     ;
@@ -152,11 +153,12 @@ template<typename ObjectT, typename ParseObjectFn>
     const auto& map = fieldValue->asMap();
     objects.reserve(map.size());
     for(const auto& [objectName, objectValue] : map){
-        const Name name(AStringView(objectName.data(), objectName.size()));
-        if(!name){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': object name must not be empty"), StringConvert(objectKind), PathToString<tchar>(nwbFilePath));
+        const auto nameResult = Name::FromText(AStringView(objectName.data(), objectName.size()));
+        if(!nameResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': object name contains an embedded null"), StringConvert(objectKind), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
+        const Name name = *nameResult;
         auto object = parseObject(objectValue);
         if(!object)
             return MakeUnexpected(Failure{});
@@ -306,7 +308,7 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
 
 Expected<ModelCookEntry> ParseModelCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;

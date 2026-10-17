@@ -102,7 +102,8 @@ private:
         GpuRecordedGraph& outRecordedGraph,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess,
-        const GpuRecordedGraph::ArtifactOperation& artifactAccess
+        const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+        Alloc::ScratchArena& scratchArena
     )const;
     [[nodiscard]] bool preflightPacketResources(
         const GpuTaskGraph& graph,

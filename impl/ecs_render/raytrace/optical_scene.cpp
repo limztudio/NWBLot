@@ -64,7 +64,7 @@ void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, cons
     instances.push_back(instance);
 }
 
-void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, const Core::GpuDescriptorHandle boundsDescriptor, const Float34U& objectToWorld){
+void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, const Core::GpuDescriptorHandle boundsDescriptor, const Float34& objectToWorld){
     const bool staticComplete = boundsCompleteExceptRuntime;
     const u32 instanceIndex = static_cast<u32>(instances.size());
     append(entity, renderer, true, {}, {}, false);
@@ -145,7 +145,6 @@ Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDM
         return MakeUnexpected(Failure{});
     return OpticalWorldBounds{ VectorAndInt(minimum, s_SIMDMask3), VectorAndInt(maximum, s_SIMDMask3) };
 }
-
 
 
 NWB_IMPL_END

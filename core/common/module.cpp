@@ -18,6 +18,10 @@ Initializerable::Initializerable(){
     Initializer::Instance().enqueue(*this);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Initializer& Initializer::Instance(){
     static Initializer s_Instance;
     return s_Instance;

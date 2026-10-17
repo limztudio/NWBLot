@@ -44,7 +44,7 @@ public:
 
 
 public:
-    explicit GraphicsPrefixTimingResolver(NotNull<RendererFramePipeline*> pipeline);
+    explicit GraphicsPrefixTimingResolver(NotNull<RendererFramePipeline*> pipeline)noexcept;
 
 
 public:

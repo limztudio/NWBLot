@@ -148,8 +148,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
     if(!alphaMode)
         return MakeUnexpected(Failure{});
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, [alphaMode = *alphaMode](const AStringView fieldName)noexcept{
-        return fieldName == s_FormatField || fieldName == s_DimensionField || fieldName == s_ResolutionField || fieldName == s_AlphaModeField
-            || (alphaMode == TextureAlphaMode::ConstantUnorm8 && fieldName == s_AlphaConstantField);
+        return fieldName == s_FormatField || fieldName == s_DimensionField || fieldName == s_ResolutionField || fieldName == s_AlphaModeField || (alphaMode == TextureAlphaMode::ConstantUnorm8 && fieldName == s_AlphaConstantField);
     }))
         return MakeUnexpected(Failure{});
 
@@ -172,7 +171,6 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
     entry.depth = resolution->depth;
     entry.dimension = *dimension;
     entry.payloadFormat = *format;
-    entry.mipCount = *completeMipCount;
     entry.alphaMode = *alphaMode;
     if(entry.alphaMode == TextureAlphaMode::ConstantUnorm8){
         const auto constant = ReadUnsignedField(nwbFilePath, asset, s_AlphaConstantField, 0u, TextureFormat::s_MaxConstantAlphaUnorm8);
@@ -181,11 +179,11 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
         entry.alphaConstantUnorm8 = static_cast<u8>(*constant);
     }
 
-    const auto virtualPath = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    const auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
     if(!virtualPath)
         return MakeUnexpected(Failure{});
     entry.virtualPath = *virtualPath;
-    Path dataPath(nwbFilePath);
+    ::Path<Core::Alloc::ScratchArena> dataPath(scratchArena, nwbFilePath);
     dataPath.replaceExtension(TextureFormat::s_TextureDataExtension);
     const auto readResult = ReadBinaryFile(dataPath, entry.payloadBytes);
     if(!readResult){

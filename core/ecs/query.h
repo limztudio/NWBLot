@@ -40,7 +40,7 @@ struct ViewTupleAccess{
         return &Get<I>(pools)->m_dense;
     }
 
-    static EntityID EntityAt(const ViewEntityVector& entities, const usize denseIndex){
+    static EntityID EntityAt(const ViewEntityVector& entities, const usize denseIndex)noexcept{
         NWB_ASSERT(denseIndex < entities.size());
         return entities[denseIndex];
     }
@@ -72,6 +72,8 @@ struct ViewIterator{
     using ValueTuple = Tuple<EntityID, Ts&...>;
     using DenseIndexTuple = ViewDenseIndexTuple<Ts...>;
 
+
+public:
     ComponentTuple pools;
     const ViewEntityVector* anchorEntities;
     usize anchorPoolIndex;
@@ -80,7 +82,9 @@ struct ViewIterator{
     DenseIndexTuple denseIndices;
     EntityID entity;
 
-    ViewIterator(ComponentTuple poolsValue, const ViewEntityVector* anchorEntitiesValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)
+
+public:
+    ViewIterator(ComponentTuple poolsValue, const ViewEntityVector* anchorEntitiesValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)noexcept
         : pools(Move(poolsValue))
         , anchorEntities(anchorEntitiesValue)
         , anchorPoolIndex(anchorPoolIndexValue)
@@ -96,7 +100,19 @@ struct ViewIterator{
 
 
 public:
-    void skipInvalid(){
+    ValueTuple operator*()const noexcept{
+        return deref(IndexSequenceFor<Ts...>{});
+    }
+
+    ViewIterator& operator++()noexcept{
+        ++index;
+        skipInvalid();
+        return *this;
+    }
+
+
+public:
+    void skipInvalid()noexcept{
         if constexpr(sizeof...(Ts) == 1u){
             if(index < count){
                 entity = entityAt(index);
@@ -138,23 +154,17 @@ public:
         return (resolveDenseIndex<Is>(entityId, anchorDenseIndex) && ...);
     }
 
-    EntityID entityAt(usize denseIndex)const{
+    EntityID entityAt(usize denseIndex)const noexcept{
         return ViewTupleAccess::EntityAt(*anchorEntities, denseIndex);
     }
 
-    ValueTuple operator*()const{
-        return deref(IndexSequenceFor<Ts...>{});
-    }
+
     template<usize... Is>
-    ValueTuple deref(IndexSequence<Is...>)const{
+    ValueTuple deref(IndexSequence<Is...>)const noexcept{
         return ::ForwardAsTuple(entity, ViewTupleAccess::ComponentAtDense<Is>(pools, Get<Is>(denseIndices))...);
     }
 
-    ViewIterator& operator++(){
-        ++index;
-        skipInvalid();
-        return *this;
-    }
+
 };
 template<typename... Ts>
 inline bool operator==(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index == b.index; }
@@ -182,7 +192,7 @@ public:
 
 
 public:
-    View(ComponentTuple pools)
+    View(ComponentTuple pools)noexcept
         : m_pools(pools)
     {
         initializeAnchor();
@@ -190,10 +200,10 @@ public:
 
 
 public:
-    IteratorType begin()const{
+    IteratorType begin()const noexcept{
         return IteratorType(m_pools, m_anchorEntities, m_anchorPoolIndex, 0, m_count, m_valid);
     }
-    IteratorType end()const{
+    IteratorType end()const noexcept{
         return IteratorType(m_pools, m_anchorEntities, m_anchorPoolIndex, m_count, m_count, false);
     }
 
@@ -204,7 +214,7 @@ public:
 
 public:
     template<typename Func>
-    void each(Func&& func)const{
+    void each(Func&& func)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<Conditional_T<sizeof...(Ts) == 1u, const EntityID&, EntityID&>>(), DeclVal<Ts&>()...))){
         if(!m_valid)
             return;
 
@@ -213,23 +223,25 @@ public:
     }
 
     template<typename Func>
-    void parallelEach(CpuTaskScope& tasks, Func&& func)const{
-        parallelEachImpl(func, [this, &tasks](const auto& apply){
-            tasks.parallelFor(static_cast<usize>(0), m_count, apply);
-        });
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelEach(CpuTaskScope& tasks, Func&& func)const{
+        return parallelEachImpl(func, [this, &tasks](const auto& apply){
+            return tasks.parallelFor(static_cast<usize>(0), m_count, apply);
+        }
+        );
     }
 
     template<typename Func>
-    void parallelEach(CpuTaskScope& tasks, usize grainSize, Func&& func, CpuTaskOptions options = {})const{
-        parallelEachImpl(func, [this, &tasks, grainSize, options](const auto& apply){
-            tasks.parallelFor(static_cast<usize>(0), m_count, grainSize, apply, options);
-        });
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelEach(CpuTaskScope& tasks, usize grainSize, Func&& func, CpuTaskOptions options = {})const{
+        return parallelEachImpl(func, [this, &tasks, grainSize, options](const auto& apply){
+            return tasks.parallelFor(static_cast<usize>(0), m_count, grainSize, apply, options);
+        }
+        );
     }
 
 
 private:
     template<typename Func>
-    void applyFunc(Func& func, const usize denseIndex)const{
+    void applyFunc(Func& func, const usize denseIndex)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<Conditional_T<sizeof...(Ts) == 1u, const EntityID&, EntityID&>>(), DeclVal<Ts&>()...))){
         const EntityID entityId = entityAt(denseIndex);
         if constexpr(sizeof...(Ts) == 1u){
             auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<0>(m_pools, static_cast<u32>(denseIndex));
@@ -241,17 +253,18 @@ private:
     }
 
     template<typename Func, typename DispatchT>
-    void parallelEachImpl(Func&& func, DispatchT&& dispatch)const{
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelEachImpl(Func&& func, DispatchT&& dispatch)const{
         if(!m_valid)
-            return;
+            return {};
 
-        dispatch([this, &func](const usize denseIndex){
+        return dispatch([this, &func](const usize denseIndex)noexcept(noexcept(applyFunc(func, denseIndex))){
             applyFunc(func, denseIndex);
-        });
+        }
+        );
     }
 
 
-    void initializeAnchor(){
+    void initializeAnchor()noexcept{
         m_valid = true;
         m_anchorEntities = nullptr;
         m_anchorPoolIndex = 0;
@@ -266,12 +279,12 @@ private:
     }
 
     template<usize... Is>
-    void initializeAnchorImpl(ECSDetail::IndexSequence<Is...>){
+    void initializeAnchorImpl(ECSDetail::IndexSequence<Is...>)noexcept{
         (updateAnchor<Is>(), ...);
     }
 
     template<usize I>
-    void updateAnchor(){
+    void updateAnchor()noexcept{
         auto* pool = Get<I>(m_pools);
         if(!pool){
             m_valid = false;
@@ -286,12 +299,12 @@ private:
         }
     }
 
-    EntityID entityAt(usize denseIndex)const{
+    EntityID entityAt(usize denseIndex)const noexcept{
         return ECSDetail::ViewTupleAccess::EntityAt(*m_anchorEntities, denseIndex);
     }
 
     template<usize I = 0, typename Func, typename... Args>
-    void tryApplyFunc(Func& func, EntityID entityId, usize denseIndex, Args&... args)const{
+    void tryApplyFunc(Func& func, EntityID entityId, usize denseIndex, Args&... args)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
         if constexpr(I < sizeof...(Ts)){
             const auto componentDenseIndex = ECSDetail::ViewTupleAccess::FindDenseIndex<I>(m_pools, m_anchorPoolIndex, denseIndex, entityId);
             if(!componentDenseIndex)

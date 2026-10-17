@@ -4,6 +4,8 @@
 
 #include "clipboard_service.h"
 
+#include <core/common/log.h>
+
 #include <X11/Xatom.h>
 
 
@@ -51,6 +53,7 @@ void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
     const auto property = ReadX11Property(m_display, m_operationWindow, m_propertyAtom, false, s_ClipboardMaxTextBytes);
     if(!property){
         finishOperation(ClipboardStatus::NativeFailure);
+        NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: property read failed; native_domain=X11 native_status={} error_code={}"), property.error().nativeStatus, property.error().errorCode);
         return;
     }
     if(property->type == m_incrementalAtom){
@@ -88,6 +91,7 @@ void X11ClipboardService::receiveChunk(){
     const auto property = ReadX11Property(m_display, m_operationWindow, m_propertyAtom, true, s_ClipboardMaxTextBytes);
     if(!property){
         finishOperation(ClipboardStatus::NativeFailure);
+        NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: property read failed; native_domain=X11 native_status={} error_code={}"), property.error().nativeStatus, property.error().errorCode);
         return;
     }
     if(property->type != m_operationTarget || property->format != 8){

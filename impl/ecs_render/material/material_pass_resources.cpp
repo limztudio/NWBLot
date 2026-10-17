@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/mesh/mesh_compute_push_constants.h>
-#include <impl/ecs_render/material/material_pass_csg_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
@@ -34,9 +33,14 @@ Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassB
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::All)
             // Every material pass uses this push-only layout; transparent consumes the full payload.
-            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
-        m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
-        if(!m_materialState.m_materialPassBindingLayout){
+            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
+        ;
+        auto materialPassBindingLayoutResult = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
+        if(materialPassBindingLayoutResult)
+            m_materialState.m_materialPassBindingLayout = Move(*materialPassBindingLayoutResult);
+        else
+            m_materialState.m_materialPassBindingLayout.reset();
+        if(!materialPassBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
             return MakeUnexpected(Failure{});
         }
@@ -53,8 +57,12 @@ bool RendererMaterialSystem::prepareMeshComputeBindingLayout(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::MeshComputePushConstants)));
 
         auto& device = m_graphics.getDevice();
-        m_materialState.m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
-        if(!m_materialState.m_computeBindingLayout){
+        auto computeBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
+        if(computeBindingLayoutResult)
+            m_materialState.m_computeBindingLayout = Move(*computeBindingLayoutResult);
+        else
+            m_materialState.m_computeBindingLayout.reset();
+        if(!computeBindingLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
             return false;
         }
@@ -82,8 +90,12 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION], Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "POSITION1");
 
         auto& device = m_graphics.getDevice();
-        m_materialState.m_emulationInputLayout = device.createInputLayout(attributes, NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT, m_materialState.m_emulationVertexShader.get());
-        if(!m_materialState.m_emulationInputLayout){
+        auto emulationInputLayoutResult = device.createInputLayout(attributes, NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT, m_materialState.m_emulationVertexShader.get());
+        if(emulationInputLayoutResult)
+            m_materialState.m_emulationInputLayout = Move(*emulationInputLayoutResult);
+        else
+            m_materialState.m_emulationInputLayout.reset();
+        if(!emulationInputLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
         }
@@ -127,11 +139,12 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
         .setDebugName(ECSRenderDetail::s_InstanceBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
-    if(!instanceBuffer){
+    auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
+    if(!instanceBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create instance data buffer"));
         return false;
     }
+    Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
 
     m_materialState.m_instanceBuffer = Move(instanceBuffer);
     m_materialState.m_instanceBufferCapacity = capacity;
@@ -166,11 +179,12 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
         .setDebugName(ECSRenderDetail::s_MaterialTypedBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle materialTypedBuffer = m_graphics.createBuffer(materialTypedBufferDesc);
-    if(!materialTypedBuffer){
+    auto materialTypedBufferResult = m_graphics.createBuffer(materialTypedBufferDesc);
+    if(!materialTypedBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material typed buffer"));
         return false;
     }
+    Core::BufferHandle materialTypedBuffer = Move(*materialTypedBufferResult);
 
     m_materialState.m_materialTypedBuffer = Move(materialTypedBuffer);
     m_materialState.m_materialTypedBufferCapacity = capacity;

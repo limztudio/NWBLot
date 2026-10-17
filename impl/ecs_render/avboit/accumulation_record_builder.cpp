@@ -2,11 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/accumulation_record_builder.h>
+#include "accumulation_record_builder.h"
+
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/csg/task_graph_resource_utils.h>
@@ -48,7 +48,7 @@ static constexpr usize s_SharedGenerateUseCount = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)
+AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept
     : m_graph(graph)
     , m_graphics(graphics)
     , m_materialSystem(materialSystem)
@@ -60,6 +60,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
 
 
 [[nodiscard]] Expected<AvboitAccumulationRecordResult> AvboitAccumulationRecordBuilder::declare(
+    Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -91,14 +92,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     accumulationPayload.accumulationMaterialFrameStatesGraphOwned = inputs.streamsUploaded;
     accumulationPayload.accumulationMaterialGeometryStatesGraphOwned = inputs.streamsUploaded && accumulationPayload.accumulationMaterialGeometryStatesGraphOwned;
     Core::GpuGraphResourceSetId accumulationComputeEmulationOutputSet;
-    Core::Alloc::ScratchArena accumulationComputeEmulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     const bool accumulationComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
     bool accumulationComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.regularComputeEmulationPlanCaptured){
         const auto accumulationComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_graph,
             computeEmulationPayload.plan,
-            accumulationComputeEmulationResourceScratch,
+            scratchArena,
             Name("render.avboit.accumulation.compute_emulation.outputs"),
             "AVBOIT Accumulation Compute Emulation Outputs"
         );
@@ -110,7 +110,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         const auto accumulationComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
                 m_graph,
                 computeEmulationPayload.csgPlan,
-                accumulationComputeEmulationResourceScratch,
+                scratchArena,
                 Name("render.avboit.accumulation.csg_compute_emulation.outputs"),
                 "AVBOIT Accumulation CSG Compute Emulation Outputs"
             );
@@ -147,8 +147,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     inputs.receiverRange = receiverRangeValue;
     inputs.cutterRange = cutterRangeValue;
 
-    Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ scratchArena };
     accumulationResourceUses.reserve(
         __hidden_avboit_accumulation_record::s_ResourceBaseCount
         + (inputs.streamsUploaded ? __hidden_avboit_accumulation_record::s_StreamUseCount : 0u)
@@ -232,13 +231,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.data(),
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, accumulationResourceScratch, inputs.accumulationTimingTicket
+        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.data(),
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, accumulationResourceScratch, inputs.accumulationTimingTicket
+        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
 
@@ -249,7 +248,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         computeEmulationPayload.materialFrameStatesGraphOwned = accumulationPayload.accumulationMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = accumulationPayload.accumulationMaterialGeometryStatesGraphOwned;
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationComputeEmulationResourceUses{ accumulationResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationComputeEmulationResourceUses{ scratchArena };
         accumulationComputeEmulationResourceUses.reserve(__hidden_avboit_accumulation_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_accumulation_record::s_EmulationPlanUseCount : 0u));
         accumulationComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         accumulationComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, inputs.instanceRange));
@@ -294,17 +293,19 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
             .setResourceUses(accumulationComputeEmulationResourceUses.data(), accumulationComputeEmulationResourceUses.size())
             .setResourceSetUses(accumulationComputeEmulationResourceSetUses, accumulationComputeEmulationResourceSetUseCount)
         ;
-        m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask = m_graph.addTask< AvboitAccumulationComputeEmulationGraphTask >(accumulationComputeEmulationDesc, Move(computeEmulationPayload));
-        if(!m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask.valid()){
+        const auto mAvboitSystemTaskGraphStageMAccumulationComputeEmulationTaskResult = m_graph.addTask< AvboitAccumulationComputeEmulationGraphTask >(accumulationComputeEmulationDesc, Move(computeEmulationPayload));
+        if(!mAvboitSystemTaskGraphStageMAccumulationComputeEmulationTaskResult){
+            m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Accumulation compute-emulation producer"));
             return MakeUnexpected(Failure{});
         }
+        m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask = *mAvboitSystemTaskGraphStageMAccumulationComputeEmulationTaskResult;
         accumulationDependency = m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask;
         avboitAccumulationScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(accumulationSharedComputeEmulationOutputStatesGraphOwned){
         // Retained output appears in every phase; keep it exact to preserve alternating uses.
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedGenerateResourceUses{ accumulationResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedGenerateResourceUses{ scratchArena };
         accumulationSharedGenerateResourceUses.reserve(__hidden_avboit_accumulation_record::s_SharedGenerateUseCount);
         accumulationSharedGenerateResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         accumulationSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialInstances, inputs.instanceRange));
@@ -312,7 +313,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         accumulationSharedGenerateResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
         accumulationSharedGenerateResourceUses.push_back(WriteUse(accumulationSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess));
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedRasterResourceUses{ accumulationResourceScratch };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedRasterResourceUses{ scratchArena };
         accumulationSharedRasterResourceUses.reserve(accumulationResourceUses.size() + 1u);
         accumulationSharedRasterResourceUses.assign(accumulationResourceUses.begin(), accumulationResourceUses.end());
         accumulationSharedRasterResourceUses.push_back(ReadUse(accumulationSharedComputeEmulationOutput, ECSRenderDetail::s_GeneratedGeometryRasterState));
@@ -388,8 +389,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         Core::GpuTaskId accumulationSharedComputeEmulationDependency = accumulationDependency;
         for(usize phaseIndex = 0u; phaseIndex < accumulationSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] =
-                addAccumulationSharedComputeEmulationPhase(
+            const auto mAvboitSystemTaskGraphStageMAccumulationSharedComputeEmulationTasksPhaseIndexResult = addAccumulationSharedComputeEmulationPhase(
                     accumulationSharedComputeEmulationPhaseIdentities[phaseIndex],
                     accumulationSharedComputeEmulationPhaseMarkers[phaseIndex],
                     accumulationSharedComputeEmulationDependency,
@@ -400,12 +400,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
                     isRasterPhase ? accumulationSharedRasterResourceUses : accumulationSharedGenerateResourceUses,
                     accumulationMaterialResourceSetUses,
                     accumulationMaterialResourceSetUseCount
-                )
-            ;
-            if(!m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex].valid()){
+                );
+            if(!mAvboitSystemTaskGraphStageMAccumulationSharedComputeEmulationTasksPhaseIndexResult){
+                m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Accumulation shared compute-emulation phase"));
                 return MakeUnexpected(Failure{});
             }
+            m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] = *mAvboitSystemTaskGraphStageMAccumulationSharedComputeEmulationTasksPhaseIndexResult;
             accumulationSharedComputeEmulationDependency = m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex];
         }
         m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTaskCount = accumulationSharedComputeEmulationPhaseCount;
@@ -424,11 +425,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
             .setResourceUses(accumulationResourceUses.data(), accumulationResourceUses.size())
             .setResourceSetUses(accumulationMaterialResourceSetUseCount != 0u ? accumulationMaterialResourceSetUses : nullptr, accumulationMaterialResourceSetUseCount)
         ;
-        m_avboitSystem.taskGraphStage().m_accumulationTask = m_graph.addTask<AvboitAccumulationGraphTask>(accumulationDesc, Move(accumulationPayload));
-        if(!m_avboitSystem.taskGraphStage().m_accumulationTask.valid()){
+        const auto mAvboitSystemTaskGraphStageMAccumulationTaskResult = m_graph.addTask<AvboitAccumulationGraphTask>(accumulationDesc, Move(accumulationPayload));
+        if(!mAvboitSystemTaskGraphStageMAccumulationTaskResult){
+            m_avboitSystem.taskGraphStage().m_accumulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
             return MakeUnexpected(Failure{});
         }
+        m_avboitSystem.taskGraphStage().m_accumulationTask = *mAvboitSystemTaskGraphStageMAccumulationTaskResult;
     }
     const Core::GpuTaskResourceUse accumulationFinalizeResourceUses[] = {
         ReadUse(inputs.avboitAccumColor, Core::ResourceStates::ShaderResource),
@@ -452,11 +455,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         .setDependencies(&m_avboitSystem.taskGraphStage().m_accumulationTask, 1u)
         .setResourceUses(accumulationFinalizeResourceUses, LengthOf(accumulationFinalizeResourceUses))
     ;
-    m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask = m_graph.addTask<AvboitAccumulationFinalizeGraphTask>(accumulationFinalizeDesc, AvboitAccumulationFinalizeGraphTask::Payload{});
-    if(!m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask.valid()){
+    const auto mAvboitSystemTaskGraphStageMAccumulationFinalizeTaskResult = m_graph.addTask<AvboitAccumulationFinalizeGraphTask>(accumulationFinalizeDesc, AvboitAccumulationFinalizeGraphTask::Payload{});
+    if(!mAvboitSystemTaskGraphStageMAccumulationFinalizeTaskResult){
+        m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
         return MakeUnexpected(Failure{});
     }
+    m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask = *mAvboitSystemTaskGraphStageMAccumulationFinalizeTaskResult;
 
     result.accumulationTask = m_avboitSystem.taskGraphStage().m_accumulationTask;
     result.declared = true;

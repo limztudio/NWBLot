@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySettings& settings){
+bool RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
     if(!ValidateShadowQualitySettings(settings))
         return false;
     if(m_shadowQualitySettings.transparentSampling == settings.transparentSampling && m_shadowQualitySettings.receiverResolution == settings.receiverResolution)

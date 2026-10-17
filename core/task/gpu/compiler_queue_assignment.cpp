@@ -152,7 +152,8 @@ bool GpuTaskGraphCompiler::assignQueues(
                 .reason = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics) ? GpuTaskQueueAssignmentReason::RequiredGraphics : GpuTaskQueueAssignmentReason::Scored,
                 .dedicated = selectedQueue->dedicated,
                 .modifiers = group.diagnosticOverrideQueue.valid() ? GpuTaskQueueAssignmentModifier::DiagnosticQueueOverride : GpuTaskQueueAssignmentModifier::None,
-            });
+            }
+            );
             outAssignments.m_assignmentIndicesByTask[taskID.index] = assignmentIndex;
         }
     }

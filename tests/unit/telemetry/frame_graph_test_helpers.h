@@ -19,15 +19,15 @@ namespace TelemetryTestDetail{
 
 void BuildTestFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges);
 
-Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment();
+Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment()noexcept;
 
-Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment();
+Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment()noexcept;
 
 Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision)noexcept;
 
-Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics();
+Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics()noexcept;
 
-Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex);
+Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex)noexcept;
 
 void BuildTestPhysicalQueueRuntimeStatistics(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& records);
 

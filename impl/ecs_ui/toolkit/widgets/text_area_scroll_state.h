@@ -28,16 +28,6 @@ class TextAreaScrollState final{
 
 
 private:
-    [[nodiscard]] ControlToken prepare(const WidgetState& widget, const PopupToken& popup, u64 stateGeneration, u64 stateRevision, const EditModel& model, bool enabled, bool readOnly, const ScrollViewportPlacement& placement, Point step)noexcept;
-    [[nodiscard]] bool updateOffsets(Point scroll)noexcept;
-    void retire()noexcept;
-
-
-private:
-    void advanceRevision()noexcept;
-
-
-private:
     struct Snapshot{
         WidgetId owner;
         PopupToken popup;
@@ -53,6 +43,20 @@ private:
         bool enabled = false;
         bool readOnly = false;
     };
+
+
+private:
+    [[nodiscard]] ControlToken prepare(const WidgetState& widget, const PopupToken& popup, u64 stateGeneration, u64 stateRevision, const EditModel& model, bool enabled, bool readOnly, const ScrollViewportPlacement& placement, Point step)noexcept;
+    [[nodiscard]] bool updateOffsets(Point scroll)noexcept;
+    void retire()noexcept;
+
+
+private:
+    void advanceRevision()noexcept;
+
+
+private:
+
     Snapshot m_snapshot;
     ScrollViewportPlacement m_placement;
     Point m_step;

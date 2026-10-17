@@ -8,6 +8,7 @@
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_skeleton/components.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
@@ -59,7 +60,10 @@ public:
             // Hardware-only reflection has no depth pyramid, temporal pass or spatial filter.
             if(scope == "render.reflection_depth_pyramid")
                 continue;
-            if(!graphics.gpuTiming().prepareScopeQueries(Name(scope), graphics.getDevice(), s_InFlightRanges))
+            const auto scopeName = Name::FromText(scope);
+            if(!scopeName)
+                return false;
+            if(!graphics.gpuTiming().prepareScopeQueries(*scopeName, graphics.getDevice(), s_InFlightRanges))
                 return false;
         }
         return true;
@@ -88,6 +92,7 @@ public:
 
 public:
     virtual bool onStartup()override{
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
         auto requestedWorkload = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_WORKLOAD");
         if(!requestedWorkload)
             return false;
@@ -99,7 +104,7 @@ public:
         const AStringView workload(m_workload.data(), m_workload.size());
         if(workload != "opaque" && workload != "hybrid" && workload != "shared" && workload != "unique" && workload != "overrides" && workload != "runtime")
             return false;
-        const auto mode = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_MODE");
+        const auto mode = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_BENCHMARK_MODE");
         if(!mode || (*mode != "timing" && *mode != "memory"))
             return false;
         m_memoryEnabled = *mode == "memory";
@@ -150,10 +155,16 @@ public:
             SmokeMeshRef mesh = s_Mesh;
             SmokeMaterialRef material = opaque ? s_Opaque : s_Glass;
             if(workload == "unique"){
-                const auto meshPath = StringFormat(m_context.objectArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
-                const auto materialPath = StringFormat(m_context.objectArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
-                mesh = SmokeMeshRef(AStringView(meshPath));
-                material = SmokeMaterialRef(AStringView(materialPath));
+                const auto meshPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
+                const auto materialPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
+                const auto meshReference = SmokeMeshRef::FromText(AStringView(meshPath));
+                if(!meshReference)
+                    return false;
+                mesh = *meshReference;
+                const auto materialReference = SmokeMaterialRef::FromText(AStringView(materialPath));
+                if(!materialReference)
+                    return false;
+                material = *materialReference;
             }
             auto entity = m_world->createEntity();
             auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
@@ -181,7 +192,7 @@ public:
             return false;
         m_context.graphics.addRenderPassToBack(m_timingPass);
         m_timingRegistered = true;
-        const auto compilerOutput = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_COMPILER_STATISTICS_FILE");
+        const auto compilerOutput = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_COMPILER_STATISTICS_FILE");
         if(compilerOutput){
             if(!m_compilerProbe.start(renderer, AStringView(*compilerOutput)))
                 return false;
@@ -223,7 +234,11 @@ public:
                 return false;
             m_actualCountsRead = true;
         }
-        m_world->tick(s_FixedDelta);
+        const auto updated = m_world->tick(s_FixedDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
         return true;
     }
 

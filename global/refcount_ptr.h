@@ -63,6 +63,7 @@ inline constexpr AdoptRefT s_AdoptRef{};
 
 template<RefCountClass T, typename Deleter = DefaultDeleter<T>>
 class RefCountPtr{
+private:
     static_assert(!IsRValueReference<Deleter>::value, "The supplied Deleter cannot be a r-value reference.");
 
 
@@ -188,7 +189,6 @@ public:
     {
         InternalAddRef(m_pair.first());
     }
-
     ~RefCountPtr()noexcept{ reset(); }
 
 
@@ -201,6 +201,7 @@ public:
         }
         return *this;
     }
+
     template<typename U, typename E>
     typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(RefCountPtr<U, E>&& u)noexcept{
         reset();
@@ -208,6 +209,7 @@ public:
         m_pair.second() = Move(Forward<E>(u.getDeleter()));
         return *this;
     }
+
     this_type& operator=(const this_type& x)noexcept{
         if(this != &x){
             pointer newp = x.get();
@@ -220,6 +222,7 @@ public:
         }
         return *this;
     }
+
     template<typename U, typename E>
     typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsAssignable<deleter_type&, const E&>::value, this_type&>::type operator=(const RefCountPtr<U, E>& u)noexcept{
         pointer newp = u.get();
@@ -231,24 +234,28 @@ public:
         m_pair.second() = u.getDeleter();
         return *this;
     }
+
     this_type& operator=(T* newp)noexcept(noexcept(reset(newp))){
         reset(newp);
         return *this;
     }
+
     template<typename U>
     typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value, this_type&>::type operator=(U* newp)noexcept(noexcept(reset(newp))){
         reset(newp);
         return *this;
     }
+
     this_type& operator=(std::nullptr_t)noexcept{
         reset();
         return *this;
     }
 
     typename AddLValueReference<T>::type operator*()const noexcept(IsPointer_V<pointer>){ return *m_pair.first(); }
-    pointer operator->()const noexcept{ return m_pair.first(); }
 
-    explicit operator bool()const noexcept{ return (m_pair.first() != pointer()); }
+    pointer operator->()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
+
+    explicit operator bool()const noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((m_pair.first() != pointer())))){ return (m_pair.first() != pointer()); }
 
 
 public:
@@ -262,6 +269,7 @@ public:
         }
         return ref;
     }
+
     u32 resetAdopt(pointer pValue)noexcept{
         u32 ref = 0;
         if(pValue != m_pair.first()){
@@ -274,17 +282,20 @@ public:
     pointer release()noexcept{
         return Exchange(m_pair.first(), pointer());
     }
+
     u32 drop()noexcept{
         pointer oldp = Exchange(m_pair.first(), pointer());
         return internalRelease(oldp);
     }
+
     pointer detach()noexcept{ return release(); }
 
     void swap(this_type& x)noexcept{ m_pair.swap(x.m_pair); }
 
-    pointer get()const noexcept{ return m_pair.first(); }
+    pointer get()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
 
     deleter_type& getDeleter()noexcept{ return m_pair.second(); }
+
     const deleter_type& getDeleter()const noexcept{ return m_pair.second(); }
 
 
@@ -316,7 +327,7 @@ template<typename T>
 class RefCounter : public T{
 public:
     template<typename... Args>
-    explicit RefCounter(Args&&... args)
+    explicit RefCounter(Args&&... args)noexcept(IsNothrowConstructible_V<T, Args&&...>)
         : T(Forward<Args>(args)...)
     {}
 
@@ -348,8 +359,7 @@ inline typename EnableIf<!IsArray<T>::value, RefCountPtr<T>>::type MakeRefCount(
     return RefCountPtr<T>(new T(Forward<Args>(args)...), s_AdoptRef);
 }
 template<typename T, typename... Args>
-typename EnableIf<IsBoundedArray<T>::value>::type
-MakeRefCount(Args&&...) = delete;
+typename EnableIf<IsBoundedArray<T>::value>::type MakeRefCount(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -363,7 +373,7 @@ namespace std{
 
 template<typename T, typename D>
 struct hash<RefCountPtr<T, D>>{
-    size_t operator()(const RefCountPtr<T, D>& x)const noexcept{ return std::hash<typename RefCountPtr<T, D>::pointer>()(x.get()); }
+    size_t operator()(const RefCountPtr<T, D>& x)const noexcept(noexcept(DeclVal<void(*)(size_t)noexcept>()(std::hash<typename RefCountPtr<T, D>::pointer>()(x.get())))){ return std::hash<typename RefCountPtr<T, D>::pointer>()(x.get()); }
 };
 
 template<typename T, typename D>

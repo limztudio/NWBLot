@@ -92,7 +92,10 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
 bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
     InputRouter& input = m_context.input();
     ComboState& state = *frame.state;
-    const WidgetId thumb = MakeWidgetId(frame.rows.id, "scrollbar");
+    const auto thumbResult = MakeWidgetId(frame.rows.id, "scrollbar");
+    if(!thumbResult)
+        return false;
+    const WidgetId thumb = *thumbResult;
     auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
     bool haveGesture = gesture && gesture->control == frame.listToken && gesture->popup == frame.popupToken;
     auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);

@@ -31,7 +31,7 @@ protected:
         return { origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
     }
 
-    [[nodiscard]] static Rect RasterFringe(const Rect& raster, const Rect& outline){
+    [[nodiscard]] static Rect RasterFringe(const Rect& raster, const Rect& outline)noexcept{
         if(raster.x + 0.001f < outline.x)
             return { raster.x, raster.y, Min(0.05f, (outline.x - raster.x) * 0.5f), raster.height };
         if(raster.y + 0.001f < outline.y)
@@ -341,7 +341,9 @@ TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisible
     ASSERT_EQ(m_layout.lines().size(), 2u);
     Array<SharedGlyphPage, s_PaintMaxImages - 1u> prior{};
     for(usize index = 0u; index < prior.size(); ++index){
-        prior[index] = makePage(Limit<u64>::s_Max - index);
+        auto pageResult = makePage(Limit<u64>::s_Max - index);
+        ASSERT_TRUE(pageResult);
+        prior[index] = Move(*pageResult);
         ASSERT_TRUE(prior[index]);
     }
     beginPaint(1u);
@@ -406,7 +408,6 @@ TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAn
         }
     }
 }
-
 
 
 [[nodiscard]] static f32 SampleSdfDistance(const SdfAtlasPage& page, const u32 channel, const f32 texelX, const f32 texelY)noexcept{
@@ -475,7 +476,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
     Core::Alloc::ScratchArena scratch(Name("tests/ui/text/measure_sdf"));
     ASSERT_TRUE(baked.validatePayload(scratch));
     const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u, &baked };
-    ASSERT_TRUE(m_text.setFonts(&source, 1u));
+    ASSERT_TRUE(m_text.setFonts(scratch, &source, 1u));
     usize visibleSamples = 0u;
     for(const f32 fontSize : { 16.0f, 24.0f, 32.0f }){
         const auto layout = m_text.layout({ .text = "A", .fontSize = fontSize });

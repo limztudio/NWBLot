@@ -24,31 +24,31 @@ namespace ECSRenderDetail{
 
 
 inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { Core::Format::RGBA16_FLOAT, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
-    return SelectSupportedFormat(device, candidates, requiredSupport);
+    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 inline Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { Core::Format::RGBA16_FLOAT, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
+    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
 
-    return SelectSupportedFormat(device, candidates, requiredSupport);
+    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 inline Core::Format::Enum SelectGBufferVectorFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { Core::Format::RGBA16_FLOAT, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
-    return SelectSupportedFormat(device, candidates, requiredSupport);
+    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 inline Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device){
-    constexpr Core::Format::Enum candidates[] = { Core::Format::D32, Core::Format::D24S8, Core::Format::D16, };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::DepthStencil;
+    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::D32, Core::Format::D24S8, Core::Format::D16, };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::DepthStencil;
 
-    return SelectSupportedFormat(device, candidates, requiredSupport);
+    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
 

@@ -62,7 +62,8 @@ bool GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView&
         return false;
 
     const GpuPresentEndpoint* const graphEndpoint = graph.presentEndpoint();
-    return m_graph->valid()
+    return
+        m_graph->valid()
         && m_graph->m_generation == graph.generation()
         && m_graph->m_declarationRevision == graph.declarationRevision()
         && m_graph->m_graphTaskCount == graph.taskCount()

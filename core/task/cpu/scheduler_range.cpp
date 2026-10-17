@@ -4,8 +4,6 @@
 
 #include "scheduler.h"
 
-#include <global/exception.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,7 +14,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const void* const context, const RangeFunction invoke){
+Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const void* const context, const RangeFunction invoke){
     CpuTaskScope chunks(*this);
     chunks.m_allowCallerWork = true;
     const usize count = end - begin;
@@ -37,19 +35,23 @@ void CpuTaskScheduler::parallelRange(const usize begin, const usize end, const u
             }
             releaseReservation(handle);
         }
-    });
+    }
+    );
 
     TaskHandle inlineTask;
     u32 wakeMask;
     bool wakeJoiners;
     {
         ScopedLock lock(m_mutex);
-        if(m_aborting || options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
-            throw RuntimeException("CPU task scheduler rejected a parallel range");
+        if(m_aborting)
+            return MakeUnexpected(CpuTaskAdmissionError::Aborting);
+        if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
+            return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
         for(usize chunk = 0u; chunk < chunkCount; ++chunk){
-            const TaskHandle handle = reserveTaskLocked();
-            if(!handle.valid())
-                throw RuntimeException("CPU task scheduler rejected a parallel range");
+            const auto reserved = reserveTaskLocked();
+            if(!reserved)
+                return MakeUnexpected(reserved.error());
+            const TaskHandle handle = *reserved;
             if(reservedTail != TaskHandle::s_InvalidIndex)
                 m_nodes[reservedTail].next = handle.index;
             else
@@ -103,6 +105,7 @@ void CpuTaskScheduler::parallelRange(const usize begin, const usize end, const u
     if(inlineTask.valid())
         execute(inlineTask, currentWorkerIndex(), currentWorkerAffinity(), true);
     chunks.wait();
+    return {};
 }
 
 

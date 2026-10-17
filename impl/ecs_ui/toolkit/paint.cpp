@@ -124,7 +124,8 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
     NWB_ASSERT(m_recording);
     const auto region = FindIf(m_regions.begin(), m_regions.end(), [&regionName](const UiSkinRegion& value)noexcept{
         return value.name == regionName;
-    });
+    }
+    );
     if(region == m_regions.end())
         return false;
     if(region->drawMode == UiSkinDrawMode::NineSlice)
@@ -145,7 +146,8 @@ DrawSnapshot PaintBuilder::freeze(){
     if(!m_commandsOrdered){
         Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
             return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
-        });
+        }
+        );
     }
     m_recording = false;
     m_clips.clear();
@@ -213,7 +215,8 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     }
     m_snapshot.m_commands.push_back({
         firstIndex, 6u, clip, material, glyphPageIndex, sdfPageIndex, sdfChannel, m_layer, textureImageIndex
-    });
+    }
+    );
 }
 
 void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint){

@@ -49,9 +49,11 @@ struct TaskSubmissionBindings : NoCopy{
     u64 packetGeneration = 0u;
 
 
-    explicit TaskSubmissionBindings(Alloc::ScratchArena& scratchArena);
+public:
+    explicit TaskSubmissionBindings(Alloc::ScratchArena& scratchArena)noexcept;
 
 
+public:
     // The caller holds validated declaration and compiled-plan views for the admitted packet range.
 
 

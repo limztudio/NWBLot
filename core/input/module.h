@@ -8,6 +8,8 @@
 #include <core/global.h>
 #include <core/alloc/module.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -242,6 +244,8 @@ private:
         HandlerMutationType::Enum type = HandlerMutationType::Remove;
     };
 
+
+private:
     using HandlerList = List<IInputEventHandler*, Alloc::GlobalArena>;
     using HandlerMutationVector = Vector<HandlerMutation, Alloc::GlobalArena>;
 
@@ -276,17 +280,18 @@ public:
 private:
     template<typename DispatchFunc>
     void dispatchToHandlers(DispatchFunc&& dispatchFunc){
-        ++m_dispatchDepth;
+        {
+            ++m_dispatchDepth;
+            ScopeExit restoreDispatchDepth([this]()noexcept{ --m_dispatchDepth; });
 
-        for(auto it = m_handlers.crbegin(); it != m_handlers.crend(); ++it){
-            IInputEventHandler* handler = *it;
-            if(m_pendingHandlerRemovalCount > 0 && isHandlerPendingRemoval(*handler))
-                continue;
-            if(dispatchFunc(*handler))
-                break;
+            for(auto it = m_handlers.crbegin(); it != m_handlers.crend(); ++it){
+                IInputEventHandler* handler = *it;
+                if(m_pendingHandlerRemovalCount > 0 && isHandlerPendingRemoval(*handler))
+                    continue;
+                if(dispatchFunc(*handler))
+                    break;
+            }
         }
-
-        --m_dispatchDepth;
         if(m_dispatchDepth == 0 && !m_pendingHandlerMutations.empty())
             applyPendingHandlerMutations();
     }

@@ -32,13 +32,15 @@ NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const bool c
     return result;
 }
 
-Expected<bool> FloatEditModel::canonicalize(const f64 value){
+Expected<bool, ErrorCode> FloatEditModel::canonicalize(const f64 value){
     char buffer[s_NumericEditMaxBytes];
-    const AStringView formatted = FormatF64(value, buffer);
-    const bool changed = formatted != m_draft.text();
-    if(formatted.empty() || !m_draft.setText(formatted))
-        return MakeUnexpected(Failure{});
-    m_acceptedDraft.assign(formatted.data(), formatted.size());
+    const auto formatted = FormatF64(value, buffer);
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    const bool changed = *formatted != m_draft.text();
+    if(!m_draft.setText(*formatted))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    m_acceptedDraft.assign(formatted->data(), formatted->size());
     return changed;
 }
 

@@ -18,9 +18,10 @@ NWB_FILESYSTEM_BEGIN
 
 
 Expected<VolumeBuildInfo> BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const VolumeBuildFileMap& files){
+    Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_BuildVolumeScratch);
     VolumeBuildInfo buildInfo;
 
-    const StagedDirectoryPaths stagedVolumePaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, config.volumeName.view());
+    const StagedDirectoryPaths stagedVolumePaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, config.volumeName.view(), scratchArena);
     if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "stage directory"))
         return MakeUnexpected(Failure{});
     StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix);
@@ -48,7 +49,12 @@ Expected<VolumeBuildInfo> BuildVolume(const Path& outputDirectory, const VolumeB
                 NWB_LOGGER_ERROR(NWB_TEXT("BuildVolume: virtual path is empty"));
                 return MakeUnexpected(Failure{});
             }
-            if(!filesystem.writeFileDeferred(Name(AStringView(virtualPath.data(), virtualPath.size())), payloadBytes))
+            const auto name = Name::FromText(AStringView(virtualPath.data(), virtualPath.size()));
+            if(!name){
+                NWB_LOGGER_ERROR(NWB_TEXT("BuildVolume: virtual path contains an embedded null"));
+                return MakeUnexpected(Failure{});
+            }
+            if(!filesystem.writeFileDeferred(*name, payloadBytes))
                 return MakeUnexpected(Failure{});
         }
         if(!filesystem.flush())
@@ -60,7 +66,7 @@ Expected<VolumeBuildInfo> BuildVolume(const Path& outputDirectory, const VolumeB
             return MakeUnexpected(Failure{});
     }
 
-    if(!FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedVolumePaths, outputDirectory, config.volumeName.view(), static_cast<usize>(buildInfo.segmentCount))){
+    if(!FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedVolumePaths, outputDirectory, config.volumeName.view(), static_cast<usize>(buildInfo.segmentCount), scratchArena)){
         return MakeUnexpected(Failure{});
     }
     stageDirectoryCleanup.dismiss();

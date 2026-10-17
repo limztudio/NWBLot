@@ -7,7 +7,6 @@
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/generated_geometry_state.h>
-#include <impl/ecs_render/material/material_pass_csg_private.h>
 #include <impl/ecs_render/mesh/mesh_compute_push_constants.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
@@ -113,7 +112,8 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(const MaterialPas
     if(!context.materialGeometryStatesGraphOwned){
         ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
             context.commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
-        });
+        }
+        );
     }
     if(!context.materialFrameStatesGraphOwned){
         NWB_ASSERT(context.frameBindings.bindingValid());

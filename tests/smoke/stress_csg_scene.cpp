@@ -10,6 +10,7 @@
 
 #include <impl/ecs_csg/module.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 #include <global/simdmath.h>
@@ -48,8 +49,8 @@ static constexpr f32 s_RowDepth[] = { -0.55f, 0.55f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const Core::ECS::EntityID* const owners, const usize ownerCount, const bool opaqueOnly){
-    const auto value = ReadSmokeEnvironmentText(arena, "NWB_STRESS_CSG_PROFILE");
+bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* const owners, const usize ownerCount, const bool opaqueOnly){
+    const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CSG_PROFILE");
     if(!value || AStringView(value->data(), value->size()) == "none")
         return true;
     if(AStringView(value->data(), value->size()) != "waist_bands"){
@@ -85,8 +86,7 @@ bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::GlobalAren
     m_enabled = true;
     if(!update(world, 0.0f))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}")
-        NWB_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}") NWB_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
         , ownerCount
         , ownerCount / LengthOf(m_cutters)
         , ownerCount / LengthOf(m_cutters)

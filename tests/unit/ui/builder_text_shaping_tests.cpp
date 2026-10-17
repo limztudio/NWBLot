@@ -27,9 +27,7 @@ static constexpr StringView s_Jamo = "\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB";
 
 class UiBuilderTextShapingTests : public WidgetFixture{
 protected:
-
-
-    [[nodiscard]] static u32 GlyphQuads(const DrawSnapshot& snapshot){
+    [[nodiscard]] static u32 GlyphQuads(const DrawSnapshot& snapshot)noexcept{
         u32 count = 0u;
         for(const DrawCommand& command : snapshot.commands()){
             if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
@@ -51,7 +49,6 @@ protected:
         m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
         m_builder.setSkin(m_skin);
     }
-
 };
 
 

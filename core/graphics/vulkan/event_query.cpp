@@ -41,11 +41,11 @@ EventQuery::~EventQuery(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EventQueryHandle Device::createEventQuery(){
+Expected<EventQueryHandle> Device::createEventQuery(){
     auto* query = NewArenaObject<EventQuery>(m_context.objectArena, m_context);
     if(!query || !query->m_fence){
         DestroyArenaObject(m_context.objectArena, query);
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     return EventQueryHandle(query, EventQueryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
@@ -54,7 +54,7 @@ bool Device::setEventQuery(EventQuery& query, CommandQueue::Enum queue){
     return setEventQueryInternal(query, queue, DeviceLossDiagnosticPolicy::Capture);
 }
 
-bool Device::pollEventQuery(EventQuery& query){
+Expected<bool> Device::pollEventQuery(EventQuery& query){
     return pollEventQueryInternal(query, DeviceLossDiagnosticPolicy::Capture);
 }
 
@@ -124,9 +124,9 @@ bool Device::setEventQueryInternal(EventQuery& query, const CommandQueue::Enum q
     return true;
 }
 
-bool Device::pollEventQueryInternal(EventQuery& query, const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy){
+Expected<bool> Device::pollEventQueryInternal(EventQuery& query, const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy){
     if(query.m_fence == VK_NULL_HANDLE || &query.m_context != &m_context)
-        return false;
+        return MakeUnexpected(Failure{});
 
     VkResult res = VK_SUCCESS;
     {
@@ -142,6 +142,10 @@ bool Device::pollEventQueryInternal(EventQuery& query, const DeviceLossDiagnosti
     }
     if(res == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
         captureDeviceLoss("event query poll");
+    if(res != VK_SUCCESS && res != VK_NOT_READY){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to poll event query fence: {}"), ResultToString(res));
+        return MakeUnexpected(Failure{});
+    }
     return res == VK_SUCCESS;
 }
 

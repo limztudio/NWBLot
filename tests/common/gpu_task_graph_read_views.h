@@ -35,6 +35,9 @@ public:
     {}
     GpuTaskGraphReadViews(const GpuTaskGraphReadViews&) = delete;
     GpuTaskGraphReadViews(GpuTaskGraphReadViews&&) = delete;
+
+
+public:
     GpuTaskGraphReadViews& operator=(const GpuTaskGraphReadViews&) = delete;
     GpuTaskGraphReadViews& operator=(GpuTaskGraphReadViews&&) = delete;
 

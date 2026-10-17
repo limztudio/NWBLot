@@ -41,7 +41,6 @@ struct DeferredPresentGraphTask{
 
     // The deferred system, the graphics runtime, the frame targets, the async-final timing slot, the timing ticket, and the shadow-visibility task are required: present always closes the async-final range when shadow visibility runs on compute.
     // Only the output-layer contributor stays optional.
-    // Required bindings are references (not nullable pointers), so a missing binding fails at declaration time.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         Core::GraphicsRuntime& graphics;
@@ -55,9 +54,11 @@ struct DeferredPresentGraphTask{
         const Core::GpuTaskId& shadowVisibilityTask;
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
-    // Narrow output-layer acceptance: the only optional coupling inside Accepted. Unit tests cover this helper directly so they never need a full frame Payload for the handshake contract.
+    // Narrow output-layer acceptance: the only optional coupling inside Accepted.
     static void AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* contributor, u64 frameGeneration, const Core::QueueSubmissionToken& token);
 };
 

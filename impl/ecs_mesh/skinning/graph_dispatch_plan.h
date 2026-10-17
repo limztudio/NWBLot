@@ -50,6 +50,8 @@ struct MeshSkinningBindlessResourceSlots{
     u32 reserved0 = 0u;
     u32 reserved1 = 0u;
 
+
+public:
     [[nodiscard]] constexpr bool operator==(const MeshSkinningBindlessResourceSlots&)const = default;
 };
 static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");

@@ -58,8 +58,12 @@ TEST(GpuCommandIrReplay, RequiresExactPhysicalQueueBeyondBroadQueueClass){
 TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLowering){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId source = AddBufferMetadata(graph, Name("tests/command_ir_replay/source"), "Replay Source");
-    const Graphics::GpuGraphResourceId destination = AddBufferMetadata(graph, Name("tests/command_ir_replay/destination"), "Replay Destination");
+    const auto sourceResult = AddBufferMetadata(graph, Name("tests/command_ir_replay/source"), "Replay Source");
+    ASSERT_TRUE(sourceResult);
+    const Graphics::GpuGraphResourceId source = *sourceResult;
+    const auto destinationResult = AddBufferMetadata(graph, Name("tests/command_ir_replay/destination"), "Replay Destination");
+    ASSERT_TRUE(destinationResult);
+    const Graphics::GpuGraphResourceId destination = *destinationResult;
     ASSERT_TRUE(source.valid());
     ASSERT_TRUE(destination.valid());
 
@@ -69,12 +73,16 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     };
     Graphics::GpuTaskDesc desc;
     desc.setIdentity(Name("tests/command_ir_replay/copy")).setMarkerLabel("Replay Copy").setResourceUses(uses, LengthOf(uses));
-    const Graphics::GpuTaskId task = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer });
+    const auto taskResult = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer });
+    ASSERT_TRUE(taskResult);
+    const Graphics::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
     const Graphics::GpuTaskId secondDependencies[] = { task };
     Graphics::GpuTaskDesc secondDesc = desc;
     secondDesc.setIdentity(Name("tests/command_ir_replay/copy_second")).setMarkerLabel("Replay Copy Second").setDependencies(secondDependencies, LengthOf(secondDependencies));
-    const Graphics::GpuTaskId secondTask = graph.addTask(secondDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer });
+    const auto secondTaskResult = graph.addTask(secondDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer });
+    ASSERT_TRUE(secondTaskResult);
+    const Graphics::GpuTaskId secondTask = *secondTaskResult;
     ASSERT_TRUE(secondTask.valid());
 
     SingleQueueCompile singleQueueCompile(testArena);

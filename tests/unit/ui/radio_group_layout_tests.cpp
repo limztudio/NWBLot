@@ -28,7 +28,7 @@ namespace __hidden_ui_radio_group_layout_tests{
 using namespace Impl::Ui;
 
 
-[[nodiscard]] static RadioGroupChoices Choices(const u32 count){
+[[nodiscard]] static RadioGroupChoices Choices(const u32 count)noexcept{
     RadioGroupChoices choices;
     choices.sourceGeneration = 41u;
     choices.sourceRevision = 7u;

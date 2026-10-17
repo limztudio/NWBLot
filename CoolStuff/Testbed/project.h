@@ -31,19 +31,6 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
 
 
-private:
-    void drawUiControls(NWB::Impl::UiPaintContext& context);
-    void drawCustomUiControls(NWB::Impl::UiPaintContext& context);
-    [[nodiscard]] bool createDefaultScene();
-    void registerInputHandler();
-    void unregisterInputHandler();
-    void clearInputState()noexcept;
-    void setKeyState(i32 key, bool pressed)noexcept;
-    [[nodiscard]] bool keyPressed(i32 key)const noexcept;
-    void updateMainCamera(f32 delta);
-    void destroyWorld();
-
-
 public:
     explicit Project(NWB::ProjectRuntimeContext& context);
     virtual ~Project()override;
@@ -62,6 +49,19 @@ public:
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
     virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
+
+
+private:
+    void drawUiControls(NWB::Impl::UiPaintContext& context);
+    void drawCustomUiControls(NWB::Impl::UiPaintContext& context);
+    [[nodiscard]] bool createDefaultScene();
+    void registerInputHandler();
+    void unregisterInputHandler();
+    void clearInputState()noexcept;
+    void setKeyState(i32 key, bool pressed)noexcept;
+    [[nodiscard]] bool keyPressed(i32 key)const noexcept;
+    void updateMainCamera(f32 delta);
+    void destroyWorld();
 
 
 private:

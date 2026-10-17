@@ -50,9 +50,12 @@ public:
     Value(i64 val, MetaArena& arena)noexcept;
     Value(f64 val, MetaArena& arena)noexcept;
     Value(MStringView val, MetaArena& arena);
-    ~Value()noexcept;
     Value(const Value& other);
     Value(Value&& other)noexcept;
+    ~Value()noexcept;
+
+
+public:
     Value& operator=(const Value& other);
     Value& operator=(Value&& other);
 
@@ -103,7 +106,50 @@ public:
     [[nodiscard]] MString copyString()const;
 
     template<typename Container>
-    [[nodiscard]] bool copyStringList(Container& outList)const{
+    [[nodiscard]] bool copyStringList(Container& outList)const noexcept([]()consteval noexcept{
+        constexpr bool s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
+            && requires(Container& c, const MStringView text){ c.emplace_back(text); }
+        ;
+        constexpr bool s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
+            && requires(Container& c){ c.get_allocator().arena(); }
+            && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
+                c.emplace_back(text, allocator);
+            }
+        ;
+        using SourceIterator = typename ListType::const_iterator;
+        constexpr bool s_ReadSourceNoThrow = noexcept(DeclVal<const Value&>().isList())
+            && noexcept(DeclVal<const Value&>().asList())
+            && noexcept(DeclVal<const ListType&>().begin())
+            && noexcept(DeclVal<const ListType&>().end())
+            && IsNothrowDestructible_V<SourceIterator>
+            && noexcept(static_cast<bool>(DeclVal<SourceIterator&>() != DeclVal<SourceIterator&>()))
+            && noexcept(++DeclVal<SourceIterator&>())
+            && noexcept(*DeclVal<SourceIterator&>())
+            && noexcept(DeclVal<const Value&>().isString())
+            && noexcept(DeclVal<const Value&>().asString())
+            && IsNothrowDestructible_V<MStringView>
+        ;
+        constexpr bool s_ReadOffsetNoThrow = noexcept(DeclVal<void(*)(usize)noexcept>()(DeclVal<Container&>().size()));
+        if constexpr(s_CanAppendArenaString){
+            using ArenaReference = decltype(DeclVal<Container&>().get_allocator().arena());
+            return
+                s_ReadSourceNoThrow && s_ReadOffsetNoThrow
+                && noexcept(DeclVal<Container&>().get_allocator().arena())
+                && noexcept(DeclVal<Container&>().reserve(DeclVal<const usize&>() + DeclVal<const ListType&>().size()))
+                && noexcept(DeclVal<Container&>().emplace_back(DeclVal<const MStringView&>(), DeclVal<ArenaReference>()))
+            ;
+        }
+        else if constexpr(s_CanAppendString){
+            return s_ReadSourceNoThrow && s_ReadOffsetNoThrow && noexcept(DeclVal<Container&>().reserve(DeclVal<const usize&>() + DeclVal<const ListType&>().size())) && noexcept(DeclVal<Container&>().emplace_back(DeclVal<const MStringView&>()));
+        }
+        else{
+            return
+                s_ReadSourceNoThrow && s_ReadOffsetNoThrow
+                && noexcept(DeclVal<Container&>().resize(DeclVal<const usize&>() + DeclVal<const ListType&>().size()))
+                && noexcept(DeclVal<Container&>()[DeclVal<const usize&>() + DeclVal<usize&>()].assign(DeclVal<const MStringView&>()))
+            ;
+        }
+    }()){
         if(!isList())
             return false;
         const auto& list = asList();
@@ -156,8 +202,8 @@ private:
     void appendListCopy(const Value& val);
     void appendListCopies(const ListType& values, usize count);
 
-    [[nodiscard]] ListType* allocList()const;
-    [[nodiscard]] MapType* allocMap()const;
+    [[nodiscard]] NotNull<ListType*> allocList()const;
+    [[nodiscard]] NotNull<MapType*> allocMap()const;
 
 
 private:
@@ -177,7 +223,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const Value* FindField(const Value& map, const AStringView fieldName){
+[[nodiscard]] inline const Value* FindField(const Value& map, const AStringView fieldName)noexcept{
     return map.findField(MStringView(fieldName.data(), fieldName.size()));
 }
 

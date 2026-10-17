@@ -36,6 +36,8 @@ struct FloatTextureClearGraphTask{
         Core::Color floatValue = {};
     };
 
+
+public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 

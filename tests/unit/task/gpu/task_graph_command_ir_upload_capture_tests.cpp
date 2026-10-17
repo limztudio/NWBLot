@@ -47,7 +47,9 @@ TEST(GpuCommandIrUploadCapture, OwnsLargeGraphBlobAfterCallerMutationAndGraphRes
         expected[index] = caller[index];
     }
 
-    const Graphics::GpuUploadBlobId blob = graph.copyUploadData(caller.data(), s_ByteCount, alignof(u32));
+    const auto blobResult = graph.copyUploadData(caller.data(), s_ByteCount, alignof(u32));
+    ASSERT_TRUE(blobResult);
+    const Graphics::GpuUploadBlobId blob = *blobResult;
     ASSERT_TRUE(blob.valid());
     const Graphics::GpuTaskId task{ .generation = blob.generation, .index = 4u };
     const Graphics::GpuSubmissionPacketId packet{ .generation = 19u, .index = 2u };

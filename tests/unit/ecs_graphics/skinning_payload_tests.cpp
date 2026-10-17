@@ -3,13 +3,18 @@
 
 
 #include <impl/ecs_mesh/skinning/skin_payload.h>
+#include <impl/ecs_mesh/skinning/deformation_state.h>
+
+#include <core/alloc/general.h>
+
+#include <global/bit.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
-#include <global/bit.h>
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -421,6 +426,22 @@ TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers)
     EXPECT_EQ(logger.errorCount(), 6u);
 }
 #endif
+
+TEST(SkinningDeformation, MissingResourceRejectsWithoutCandidateOrArenaPublication){
+    NWB::Tests::CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistration(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    NWB::Core::Alloc::GlobalArena arena{ Name("tests/skinning_deformation/rejected_candidate") };
+    NWB::Impl::MeshSkinningDeformationState state(arena);
+    const auto before = arena.memoryStats();
+    const auto rejected = state.stage(NWB::Impl::MeshSkinningDeformationInputs{}, nullptr, 0u);
+    ASSERT_FALSE(rejected.has_value());
+    EXPECT_FALSE(state.accept(1u));
+    EXPECT_EQ(state.contentRevision(), 0u);
+    const auto after = arena.memoryStats();
+    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

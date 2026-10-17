@@ -41,9 +41,9 @@ private:
     static void OnDelete(void* data, zwp_text_input_v3* input, u32 before, u32 after);
     static void OnDone(void* data, zwp_text_input_v3* input, u32 serial);
 #if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
-    static void OnAction(void* data, zwp_text_input_v3* input, u32 action, u32 serial);
-    static void OnLanguage(void* data, zwp_text_input_v3* input, const char* language);
-    static void OnPreeditHint(void* data, zwp_text_input_v3* input, u32 start, u32 end, u32 hint);
+    static void OnAction(void* data, zwp_text_input_v3* input, u32 action, u32 serial)noexcept;
+    static void OnLanguage(void* data, zwp_text_input_v3* input, const char* language)noexcept;
+    static void OnPreeditHint(void* data, zwp_text_input_v3* input, u32 start, u32 end, u32 hint)noexcept;
 #endif
 #endif
 
@@ -71,7 +71,7 @@ protected:
 
 private:
     void releaseDevice();
-    void clearPending();
+    void clearPending()noexcept;
     void nativeFailure();
     [[nodiscard]] bool flush();
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)

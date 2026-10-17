@@ -22,9 +22,10 @@ constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_ThirdElementIndex = 2u;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 using namespace TelemetryTestDetail;
-
 
 
 TEST(Telemetry, PacketSubmissionStatisticsRejectInconsistentCountsAndNonfiniteTime){
@@ -80,9 +81,9 @@ TEST(Telemetry, InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTotals)
     ++packetSubmissionStatistics[s_ThirdElementIndex].inheritedTimelineWaitElisionCount;
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
     EXPECT_EQ(parsed->nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount, 1u);
     EXPECT_EQ(parsed->physicalQueueRuntimeStatistics[1u].statistics.submission.inheritedTimelineWaitElisionCount, 1u);
     EXPECT_EQ(parsed->packetSubmissionStatistics[1u].inheritedTimelineWaitElisionCount, 1u);
@@ -97,12 +98,12 @@ TEST(Telemetry, InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTotals)
     NWB_MEMCPY(&encoded, sizeof(encoded), payload.data() + computePacketOffset, sizeof(encoded));
     encoded.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
     NWB_MEMCPY(payload.data() + computePacketOffset, payload.size() - computePacketOffset, &encoded, sizeof(encoded));
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 
     nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 0u;
     ++nodes[0u].runtimeStatistics.submission.timelineWaitCount;
     ASSERT_TRUE(Telemetry::IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     EXPECT_TRUE(payload.empty());
 
     nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 1u;
@@ -110,14 +111,14 @@ TEST(Telemetry, InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTotals)
     physicalQueueRuntimeStatistics[0u].statistics.submission.inheritedTimelineWaitElisionCount = 0u;
     ++physicalQueueRuntimeStatistics[0u].statistics.submission.timelineWaitCount;
     ASSERT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(physicalQueueRuntimeStatistics[0u].statistics));
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     EXPECT_TRUE(payload.empty());
 
     physicalQueueRuntimeStatistics.clear();
     packetSubmissionStatistics[s_ThirdElementIndex].inheritedTimelineWaitElisionCount = 0u;
     ++packetSubmissionStatistics[s_ThirdElementIndex].timelineWaitCount;
     ASSERT_TRUE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(packetSubmissionStatistics[s_ThirdElementIndex]));
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     EXPECT_TRUE(payload.empty());
 }
 
@@ -130,7 +131,7 @@ TEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder){
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord firstPhysicalQueue = physicalQueueRuntimeStatistics[0u];
     physicalQueueRuntimeStatistics[0u] = physicalQueueRuntimeStatistics[1u];
     physicalQueueRuntimeStatistics[1u] = firstPhysicalQueue;
@@ -142,7 +143,7 @@ TEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder){
     packetSubmissionStatistics[s_ThirdElementIndex] = packetTwo;
 
     Telemetry::TelemetryBytes reorderedPayload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, reorderedPayload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, reorderedPayload));
     ASSERT_EQ(payload.size(), reorderedPayload.size());
     EXPECT_EQ(NWB_MEMCMP(payload.data(), reorderedPayload.data(), payload.size()), 0);
 }
@@ -159,14 +160,14 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPreservesExactEmptyAndAbsent
     packetSubmissionStatistics.clear();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 919u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 919u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
     EXPECT_TRUE(parsed->packetSubmissionStatisticsPresent);
     EXPECT_TRUE(parsed->packetSubmissionStatistics.empty());
 
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 919u, nodes, edges, payload));
-    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 919u, nodes, edges, payload));
+    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
     EXPECT_FALSE(parsed->packetSubmissionStatisticsPresent);
     EXPECT_TRUE(parsed->packetSubmissionStatistics.empty());
 }
@@ -181,26 +182,26 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     packetSubmissionStatistics[0u].joinsAcceptedQueueFrontier = false;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].packetGeneration = 99u;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].packetIndex = packetSubmissionStatistics[s_ThirdElementIndex].packetIndex;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[s_ThirdElementIndex].commandListCount = 1u;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].submissionSeconds += 0.01;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].queue = { .index = 3u, .deviceGeneration = 17u };
     packetSubmissionStatistics[1u].queueClass = Telemetry::FrameGraphQueueClass::Compute;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
 
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
         + sizeof(Telemetry::EncodedFrameGraphNode)
         + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics)
@@ -211,42 +212,42 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
     encodedStatistics.reserved = 1u;
     NWB_MEMCPY(payload.data() + packetSubmissionStatisticsOffset, payload.size() - packetSubmissionStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
     Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + packetSubmissionStatisticsOffset, sizeof(encodedStatistics));
     encodedStatistics.submissionSeconds += 0.01;
     NWB_MEMCPY(payload.data() + packetSubmissionStatisticsOffset, payload.size() - packetSubmissionStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     const usize secondPacketSubmissionStatisticsOffset = packetSubmissionStatisticsOffset + sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics);
     NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + secondPacketSubmissionStatisticsOffset, sizeof(encodedStatistics));
     encodedStatistics.packetIndex = 0u;
     NWB_MEMCPY(payload.data() + secondPacketSubmissionStatisticsOffset, payload.size() - secondPacketSubmissionStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     Telemetry::EncodedFrameGraphPayloadHeader header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     ++header.packetSubmissionStatisticsCount;
     NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     header.packetSubmissionStatisticsPresent = 0u;
     NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     header.reservedTail[1u] = 1u;
     NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
-    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size() - 1u)));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size() - 1u)));
 }
 
 

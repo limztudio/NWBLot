@@ -55,49 +55,62 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
     ReleaseSamplerAssetCache(graphics, resources);
 }
 
-template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, typename ReleaseFn>
-[[nodiscard]] static ResourceT* FindOrCreateCachedAsset(CacheT& cache, const Core::Assets::AssetRef<AssetT>& assetRef, const AStringView emptyKindText, LoadFn&& loadResource, ReleaseFn&& releaseResource){
+template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
+[[nodiscard]] static Expected<ResourceT*> FindOrCreateCachedAsset(
+    CacheT& cache,
+    const Core::Assets::AssetRef<AssetT>& assetRef,
+    const AStringView emptyKindText,
+    Core::GpuDescriptorHeap& heap,
+    Core::GpuDescriptorHandle ResourceT::* descriptorMember,
+    LoadFn&& loadResource
+){
     if(!assetRef.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
-
     const Name& assetPath = assetRef.name();
     auto assetIt = cache.find(assetPath);
     if(assetIt == cache.end()){
         UniquePtr<ResourceT> resource = MakeUnique<ResourceT>();
+        if(!resource)
+            return MakeUnexpected(Failure{});
+        Core::GpuDescriptorRetirementGuard retireLoading(heap, resource.get()->*descriptorMember);
         if(!loadResource(*resource, assetRef, assetPath))
-            return nullptr;
-
+            return MakeUnexpected(Failure{});
+        const Core::GpuDescriptorHandle pendingDescriptor = resource.get()->*descriptorMember;
+        Core::GpuDescriptorRetirementGuard retireUnpublished(heap, pendingDescriptor);
+        retireLoading.release();
         auto insertResult = cache.try_emplace(assetPath, Move(resource));
         assetIt = insertResult.first;
-        if(!insertResult.second && resource)
-            releaseResource(*resource);
+        if(insertResult.second)
+            retireUnpublished.release();
     }
-
     NWB_ASSERT(assetIt.value());
+    if(!assetIt.value())
+        return MakeUnexpected(Failure{});
     return assetIt.value().get();
 }
 
 [[nodiscard]] static Expected<u32> ResolveTextureAssetSlot(RendererMaterialResourceState& resources, const Core::Assets::AssetRef<Texture>& textureAsset, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager){
-    TextureGpuResource* const textureResource = FindOrCreateCachedAsset<Texture, TextureGpuResource>(
+    const auto textureResourceResult = FindOrCreateCachedAsset<Texture, TextureGpuResource>(
         resources.textureAssetCache,
         textureAsset,
         "Texture2D",
+        graphics.getDevice().getDescriptorHeap(),
+        &TextureGpuResource::sampledImageHeapHandle,
         [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
             if(!TextureAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, NWB_TEXT("RendererSystem")))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension"), StringConvert(assetPath.resolvedText()));
-                TextureAssetLoader::Release(outResource, graphics);
                 return false;
             }
             return true;
-        },
-        [&](TextureGpuResource& liveResource){ TextureAssetLoader::Release(liveResource, graphics); }
+        }
     );
-    if(!textureResource)
-        return MakeUnexpected(Failure{});
+    if(!textureResourceResult)
+        return MakeUnexpected(textureResourceResult.error());
+    TextureGpuResource* const textureResource = *textureResourceResult;
 
     const Name& texturePath = textureAsset.name();
     if(!textureResource->valid() || textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
@@ -109,17 +122,19 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
 }
 
 [[nodiscard]] static Expected<u32> ResolveSamplerAssetSlot(RendererMaterialResourceState& resources, const Core::Assets::AssetRef<Sampler>& samplerAsset, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager){
-    SamplerGpuResource* const samplerResource = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
+    const auto samplerResourceResult = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
         resources.samplerAssetCache,
         samplerAsset,
         Sampler::s_AssetTypeText,
+        graphics.getDevice().getDescriptorHeap(),
+        &SamplerGpuResource::samplerHeapHandle,
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
             return SamplerAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, NWB_TEXT("RendererSystem"));
-        },
-        [&](SamplerGpuResource& liveResource){ SamplerAssetLoader::Release(liveResource, graphics); }
+        }
     );
-    if(!samplerResource)
-        return MakeUnexpected(Failure{});
+    if(!samplerResourceResult)
+        return MakeUnexpected(samplerResourceResult.error());
+    SamplerGpuResource* const samplerResource = *samplerResourceResult;
 
     const Name& samplerPath = samplerAsset.name();
     if(!samplerResource->valid() || samplerResource->samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler){
@@ -341,7 +356,7 @@ bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     return hasTransparentRenderers;
 }
 
-void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
+void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(Core::Alloc::ScratchArena& scratchArena){
     pruneMaterialInstanceMutableCache();
 
     auto rendererView = m_world.view<RendererComponent>();
@@ -358,7 +373,7 @@ void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
             continue;
         MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
 
-        if(!prepareMaterialInstanceMutableTypedBytes(entity, *materialInfo, materialInstance))
+        if(!prepareMaterialInstanceMutableTypedBytes(scratchArena, entity, *materialInfo, materialInstance))
             continue;
     }
 }

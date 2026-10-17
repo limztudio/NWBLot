@@ -57,7 +57,7 @@ struct ShadowVisibilityMergeValidationResult{
 
 class ShadowVisibilityMergeValidator final : NoCopy{
 public:
-    explicit ShadowVisibilityMergeValidator(NotNull<RendererFramePipeline*> pipeline);
+    explicit ShadowVisibilityMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept;
 
 
 public:

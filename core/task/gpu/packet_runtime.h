@@ -111,6 +111,8 @@ struct GpuTaskGraphRecordingStatistics{
     f64 readyFrontierWorkerBusySeconds = 0.0;
     f64 readyFrontierWorkerCapacitySeconds = 0.0;
 
+
+public:
     [[nodiscard]] f64 readyFrontierWorkerUtilization()const noexcept{
         if(!(readyFrontierWorkerCapacitySeconds > 0.0))
             return 0.0;
@@ -141,6 +143,8 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     f64 taskRecordSeconds = 0.0;
     f64 recordingSeconds = 0.0;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
@@ -156,18 +160,11 @@ class GpuRecordedGraph final : NoCopy{
 
 private:
     struct ArtifactStorage;
-
-    static constexpr u32 s_ArtifactOperationWriterBit = 1u << 31u;
-    static constexpr u32 s_ArtifactOperationReaderMask = s_ArtifactOperationWriterBit - 1u;
-
-
-private:
     enum class ArtifactOperationMode : u8{
         Read,
         WaitRead,
         Exclusive,
     };
-
     class ArtifactOperation final : NoCopy{
     private:
         static thread_local ArtifactOperation* s_ActiveOperation;
@@ -212,9 +209,6 @@ private:
         bool m_exclusive = false;
         bool m_ownsAdmission = false;
     };
-
-
-private:
     // Every ready-frontier worker receives isolated state-handoff scratch.
     // This is separate from the per-packet final-state slots, are written only by the packet's own recording worker and read by later frontiers.
     struct PacketRecordingScratch final : NoCopy{
@@ -226,7 +220,8 @@ private:
         CommandListResourceStateHandoff externalMergedStateSeed;
 
 
-        explicit PacketRecordingScratch(GraphicsArena& arena)
+    public:
+        explicit PacketRecordingScratch(GraphicsArena& arena)noexcept
             : initialStateSeed(arena)
             , stateSubsetScratch(arena)
             , stateMergeScratch(arena)
@@ -243,11 +238,16 @@ private:
 
 
 private:
+    static constexpr u32 s_ArtifactOperationWriterBit = 1u << 31u;
+    static constexpr u32 s_ArtifactOperationReaderMask = s_ArtifactOperationWriterBit - 1u;
+
+
+private:
     static void RetireStorageWithoutCallbacks(ArtifactStorage& storage)noexcept;
 
 
 public:
-    explicit GpuRecordedGraph(GraphicsArena& arena);
+    explicit GpuRecordedGraph(GraphicsArena& arena)noexcept;
     ~GpuRecordedGraph()noexcept;
 
 
@@ -292,7 +292,7 @@ private:
     void discardPacketTimingTicket(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess);
     void abandonPacketTimingTicketWithoutCallbacks(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] GpuTimingSubmissionTicket* packetTimingTicket(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept;
-    [[nodiscard]] bool buildPacketInitialStateSeed(
+    [[nodiscard]] Expected<const CommandListResourceStateHandoff*> buildPacketInitialStateSeed(
         PacketRecordingScratch& scratch,
         Alloc::ScratchArena& stateFanInScratchArena,
         const GpuTaskGraph& graph,
@@ -300,8 +300,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const ArtifactOperation& artifactAccess,
-        const GpuSubmissionPacketId& packet,
-        const CommandListResourceStateHandoff*& outInitialStates
+        const GpuSubmissionPacketId& packet
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] const CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept;
@@ -405,6 +404,8 @@ struct GpuTaskGraphSubmissionStatistics{
     usize timelineWaitCountByQueueClass[s_QueueClassCount] = {};
     f64 submissionSeconds = 0.0;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
@@ -430,8 +431,11 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     usize inheritedTimelineWaitElisionCount = 0u;
     f64 submissionSeconds = 0.0;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
-        return graphGeneration != 0u
+        return
+            graphGeneration != 0u
             && planGeneration != 0u
             && recordingAttemptGeneration != 0u
             && deviceGeneration != 0u
@@ -470,6 +474,8 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     usize recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
@@ -522,7 +528,6 @@ private:
         bool nativeSubmissionRejected = false;
     };
 
-
 private:
     class SubmissionWriterReservation final : NoCopy{
     public:
@@ -572,7 +577,6 @@ private:
         bool m_composite = false;
     };
 
-
 private:
     struct NativeSubmissionInfo{
         usize commandListCount = 0u;
@@ -592,11 +596,17 @@ private:
 
 
 private:
+    // Wait for in-flight recording claims; false requires terminal handling of the unresolved exception close.
+
+
+private:
     struct SubmissionExceptionClosing{
         u64 recordingAttemptGeneration = 0u;
         GpuGraphSubmissionBinding submissionBinding;
     };
 
+
+private:
     struct LatestAcceptedQueueToken{
         GpuPhysicalQueueId queue;
         QueueSubmissionToken token;
@@ -604,7 +614,6 @@ private:
 
 
 private:
-    // Wait for in-flight recording claims; false requires terminal handling of the unresolved exception close.
     [[nodiscard]] static bool WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
         if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
             return true;
@@ -615,6 +624,28 @@ private:
         }
         return transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding);
     }
+
+
+public:
+    // Declare this operation owner after every object borrowed by task payloads, and end all recording/submission calls before it leaves scope.
+    // Unaccepted packets finish before payload destruction; accepted resources, tokens, frontiers and diagnostic metadata remain owned by their existing graph/native storage.
+    class PayloadLifetimeScope final : NoCopy{
+    public:
+        PayloadLifetimeScope(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept
+            : m_transaction(transaction)
+            , m_graph(graph)
+            , m_compiledGraph(compiledGraph)
+            , m_payloadLifetime(graph)
+        {}
+        ~PayloadLifetimeScope()noexcept(false);
+
+
+    private:
+        GpuGraphSubmissionTransaction& m_transaction;
+        GpuTaskGraph& m_graph;
+        const GpuCompiledGraph& m_compiledGraph;
+        GpuTaskGraph::PayloadLifetimeScope m_payloadLifetime;
+    };
 
 
 public:
@@ -678,9 +709,12 @@ private:
 
 
 private:
+    void finishPayloadLifetime(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph);
     [[nodiscard]] bool allPacketsTerminalLocked()const noexcept;
     [[nodiscard]] bool bindRecordingAttemptWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuTaskGraph::RecordingAttemptScope* preparationAttempt = nullptr)noexcept;
     [[nodiscard]] bool matchesRecordingAttemptBinding(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+
+
     [[nodiscard]] Expected<SubmissionExceptionClosing> beginSubmissionExceptionClosingWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
     [[nodiscard]] bool submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept;
     void completeSubmissionExceptionClosingWithinSubmissionOperation(
@@ -754,8 +788,11 @@ struct GpuTaskGraphRuntimeStatistics{
     GpuTaskGraphRecordingStatistics recording;
     GpuTaskGraphSubmissionStatistics submission;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{
-        return compile.valid()
+        return
+            compile.valid()
             && recording.valid()
             && submission.valid()
             && compile.graphGeneration == recording.graphGeneration

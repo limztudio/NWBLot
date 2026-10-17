@@ -86,8 +86,11 @@ void MeshSkinningStateBufferCollector::retainBuffer(const Core::BufferHandle& bu
 void MeshSkinningStateBufferCollector::promoteBufferIndex(){
     NWB_ASSERT(!m_index && m_inlineCount == s_InlineBufferCount && m_buffers.size() == m_inlineCount);
     BufferIndex index(s_InlineBufferCount * 4u, m_scratchArena);
-    for(Core::Buffer* const identity : m_inlineBuffers)
-        index.insert(identity);
+    for(Core::Buffer* const identity : m_inlineBuffers){
+        const auto [found, inserted] = index.insert(identity);
+        if(!inserted)
+            TerminateInvariant();
+    }
     static_assert(IsNothrowMoveConstructible_V<BufferIndex>);
     m_index.emplace(Move(index));
 }

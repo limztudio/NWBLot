@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererDeferredSystem::RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem)
+RendererDeferredSystem::RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem)noexcept
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
@@ -38,7 +38,7 @@ void RendererDeferredSystem::invalidateResources(){
     m_deferredState.invalidateResources();
 }
 
-bool RendererDeferredSystem::setPresentationSettings(const PresentationSettings& settings){
+bool RendererDeferredSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
     if(!ValidatePresentationSettings(settings))
         return false;
     m_deferredState.m_presentationSettings = settings;

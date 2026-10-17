@@ -37,6 +37,8 @@ constexpr Graphics::GpuTaskTimingFeedbackPolicy s_TimingPolicy{ .minimumAbsolute
 
 
 TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears){
+    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GraphicsVector<Graphics::GpuTaskQueueAssignment> assignments(testArena.arena);
@@ -51,19 +53,23 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     Graphics::GpuTaskId target;
     for(usize taskIndex = 0u; taskIndex < LengthOf(costs); ++taskIndex){
         char identityText[32u] = {};
-        const Name identity = DeriveName(Name("tests/timing_scaling/tied/"), FormatDecimal(taskIndex, identityText));
+        const auto derivedNameAt54Col30 = DeriveName(Name("tests/timing_scaling/tied/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(derivedNameAt54Col30);
+        const Name identity = *derivedNameAt54Col30;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = costs[taskIndex];
         scheduling.allowSameClassQueueRouting = true;
         scheduling.allowTimingFeedbackRouting = true;
-        target = AddTaskWithCommands(graph, identity, "Tied Duration Timing Task", GraphicsCommands(), scheduling);
+        const auto gpuAdmissionAt59 = AddTaskWithCommands(graph, identity, "Tied Duration Timing Task", GraphicsCommands(), scheduling);
+        ASSERT_TRUE(gpuAdmissionAt59);
+        target = *gpuAdmissionAt59;
         ASSERT_TRUE(target.valid());
         const Graphics::GpuPhysicalQueueId queue = queues[assignedQueues[taskIndex]].id;
         assignments.push_back({ .task = target, .initialQueue = queue, .queue = queue, .score = {} });
         assignmentIndices.push_back(static_cast<u32>(taskIndex));
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Analyze(scratch, graph, analysis));
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Graphics::GpuTaskGraphTaskView task = declarations.taskAt(target.index);
     const Graphics::GpuTaskTimingKey historyKey{ .task = task.identity, .queue = Graphics::CommandQueue::Graphics };
@@ -76,7 +82,6 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     Graphics::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
     history.snapshot(snapshot);
     ASSERT_TRUE(snapshot.valid());
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     GpuTaskSchedulingReachability reachability(scratch);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
     GpuTaskQueueScoringData scoringData(declarations, analysis, reachability, {}, scratch);

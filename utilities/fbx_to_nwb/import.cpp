@@ -21,16 +21,23 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection, const ImportOptions& options, const bool wantsSkinning, const Vec4& defaultColor, Core::CpuTaskScheduler& cpuScheduler){
-    Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_MeshBuildScratch);
+Expected<MeshBuildResult> BuildMesh(
+    const UtilityVector<MeshInstance>& instances,
+    const UtilityVector<usize>& selection,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    const Vec4& defaultColor,
+    Core::CpuTaskScheduler& cpuScheduler,
+    Core::Alloc::ScratchArena& scratchArena
+){
     MeshBuildResult result;
     const auto estimatedTriangleCorners = FbxMeshBuild::EstimateSelectedTriangleCorners(instances, selection);
     if(!estimatedTriangleCorners)
         return MakeUnexpected(Failure{});
 
-    const auto normalMode = ParseNormalModeText(options.normalMode);
+    const auto normalMode = ParseNormalModeText(options.normalMode, scratchArena);
     if(!normalMode){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText(scratchArena)));
         return MakeUnexpected(Failure{});
     }
 
@@ -49,9 +56,22 @@ Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances
     }
     UtilityScratchVector<u32> triangleIndices(*triangleIndexCapacity, scratchArena);
     FbxSkinDetail::ExportContext skinContext(scratchArena);
+    usize jointCapacity = 0u;
+    if(wantsSkinning){
+        for(const usize instanceIndex : selection){
+            NWB_ASSERT(instanceIndex < instances.size());
+            const ufbx_mesh* mesh = instances[instanceIndex].mesh;
+            if(mesh && mesh->skin_deformers.count == 1u && mesh->skin_deformers.data[0u]){
+                const usize clusterCount = mesh->skin_deformers.data[0u]->clusters.count;
+                const usize remaining = s_MaxSkeletonJointCount - jointCapacity;
+                jointCapacity += clusterCount < remaining ? clusterCount : remaining;
+            }
+        }
+    }
+    skinContext.jointLookup.reserve(jointCapacity);
     for(const usize instanceIndex : selection){
         NWB_ASSERT(instanceIndex < instances.size());
-        if(!FbxMeshBuild::AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs)){
+        if(!FbxMeshBuild::AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs, scratchArena)){
             return MakeUnexpected(Failure{});
         }
     }
@@ -61,7 +81,8 @@ Expected<MeshBuildResult> BuildMesh(const UtilityVector<MeshInstance>& instances
         return MakeUnexpected(Failure{});
     }
     if(*normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(result.mesh)){
-        FbxSourceMeshStreams::DropSourceMeshTangents(result.mesh, scratchArena);
+        if(!FbxSourceMeshStreams::DropSourceMeshTangents(result.mesh, scratchArena))
+            return MakeUnexpected(Failure{});
         const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(result.mesh, usedDefaultUvs, scratchArena);
         if(!tangentReport)
             return MakeUnexpected(Failure{});

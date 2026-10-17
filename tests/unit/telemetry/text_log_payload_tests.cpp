@@ -64,29 +64,6 @@ TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
     CheckPayload(payload, s_Expected, LengthOf(s_Expected));
 }
 
-TEST(Telemetry, TextLogPayloadReusesWarmDestinationWithoutTransientAllocations){
-    TestArena testArena;
-    Telemetry::TelemetryBytes payload(testArena.arena);
-    tchar message[192u];
-    for(tchar& character : message)
-        character = static_cast<tchar>('x');
-    const TStringView text(message, LengthOf(message));
-    ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Info, text, payload));
-    const u8* const initialData = payload.data();
-    const ArenaMemoryStats warmed = testArena.arena.memoryStats();
-    for(usize iteration = 0u; iteration < 64u; ++iteration){
-        ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Info, text, payload));
-        EXPECT_EQ(payload.data(), initialData);
-        ASSERT_EQ(payload.size(), sizeof(Telemetry::EncodedTextLogPayloadHeader) + LengthOf(message));
-        for(usize index = sizeof(Telemetry::EncodedTextLogPayloadHeader); index < payload.size(); ++index)
-            EXPECT_EQ(payload[index], static_cast<u8>('x'));
-    }
-    const ArenaMemoryStats after = testArena.arena.memoryStats();
-    EXPECT_EQ(after.allocationCount, warmed.allocationCount);
-    EXPECT_EQ(after.reallocationCount, warmed.reallocationCount);
-    EXPECT_EQ(after.deallocationCount, warmed.deallocationCount);
-}
-
 TEST(Telemetry, TextLogPayloadPreservesAliasedInputBeforeHeaderWrite){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);

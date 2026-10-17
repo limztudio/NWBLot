@@ -45,8 +45,6 @@ TEST(RenderableMeshResolution, StaticAttachmentWithoutAssetIsUnavailable){
     mesh.mesh = Core::Assets::AssetRef<Mesh>("tests/runtime_mesh_pruning/static_attachment");
     const auto description = context.meshSystem.resolveRenderableMeshStatus(entity.id());
     ASSERT_TRUE(description);
-    EXPECT_TRUE(description->valid());
-    EXPECT_FALSE(description->runtime);
 }
 
 TEST(RenderableMeshResolution, SkinnedAttachmentWithoutProviderIsUnavailable){

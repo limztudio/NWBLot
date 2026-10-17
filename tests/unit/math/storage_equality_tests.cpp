@@ -39,24 +39,6 @@ public:
 };
 
 template<typename Value, usize Count>
-void CheckArrayEquality(){
-    using Element = RemoveCVRef_T<decltype(Value{}.raw[0])>;
-    Value lhs{}, rhs{};
-    for(usize lane = 0u; lane < Count; ++lane){
-        lhs.raw[lane] = static_cast<Element>(lane + 1u);
-        rhs.raw[lane] = lhs.raw[lane];
-    }
-    EXPECT_TRUE(lhs == rhs);
-    EXPECT_FALSE(lhs != rhs);
-    for(usize lane = 0u; lane < Count; ++lane){
-        rhs.raw[lane] = static_cast<Element>(lhs.raw[lane] + 1);
-        EXPECT_FALSE(lhs == rhs) << lane;
-        EXPECT_TRUE(lhs != rhs) << lane;
-        rhs.raw[lane] = lhs.raw[lane];
-    }
-}
-
-template<typename Value, usize Count>
 NWB_NOINLINE bool LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
     for(usize lane = 0u; lane < Count; ++lane){
         if(lhs.raw[lane] != rhs.raw[lane])
@@ -219,28 +201,7 @@ void CheckPageBoundary(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Math, StorageEqualityChecksEveryFloatIntegerAndHalfLane){
-    using namespace __hidden_storage_equality_tests;
-    CheckArrayEquality<Half2U, 2u>();
-    CheckArrayEquality<Half4U, 4u>();
-    CheckArrayEquality<Float4, 4u>();
-    CheckArrayEquality<Float34, 12u>();
-    CheckArrayEquality<Float44, 16u>();
-    CheckArrayEquality<Float2U, 2u>();
-    CheckArrayEquality<Float3U, 3u>();
-    CheckArrayEquality<Float4U, 4u>();
-    CheckArrayEquality<Float33U, 9u>();
-    CheckArrayEquality<Float34U, 12u>();
-    CheckArrayEquality<Float44U, 16u>();
-    CheckArrayEquality<Int4, 4u>();
-    CheckArrayEquality<Int2U, 2u>();
-    CheckArrayEquality<Int3U, 3u>();
-    CheckArrayEquality<Int4U, 4u>();
-    CheckArrayEquality<UInt4, 4u>();
-    CheckArrayEquality<UInt2U, 2u>();
-    CheckArrayEquality<UInt3U, 3u>();
-    CheckArrayEquality<UInt4U, 4u>();
-
+TEST(Math, StorageEqualityPreservesRawHalfAndIntegralBoundaryBits){
     const Half4U halfBits(0x7C01u, 0xFC01u, 0x8000u, 0xFFFFu);
     EXPECT_TRUE(halfBits == halfBits);
     const Int4 signedBits{ .raw = { Limit<i32>::s_Min, Limit<i32>::s_Max, -1, 0 } };

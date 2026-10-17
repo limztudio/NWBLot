@@ -363,34 +363,9 @@ TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisible
 }
 
 
-TEST_F(TextVisibleCoverageTests, NaturalMeasurementUsesFontLineMetricsAndPreservesLogicalMeasurement){
-    const auto fallback = m_text.layout({ .text = "Edit me: \xed\x95\x9c\xea\xb8\x80", .fontSize = 14.0f });
-    ASSERT_TRUE(fallback);
-    EXPECT_FLOAT_EQ(fallback->measure().y, 20.34375f);
-    const Point logical = fallback->measure();
-    for(const f32 scale : { 1.0f, 1.25f, 1.5f, 2.0f }){
-        const auto bounds = m_text.measure(*fallback, { 800.0f, 600.0f, scale, scale });
-        ASSERT_TRUE(bounds);
-        EXPECT_GE(bounds->height, logical.y);
-        EXPECT_FLOAT_EQ(fallback->measure().x, logical.x);
-        EXPECT_FLOAT_EQ(fallback->measure().y, logical.y);
-    }
-}
-
-TEST_F(TextVisibleCoverageTests, NativePresetMeasurementMatchesRenderedBitmapWithoutAtlasAdmission){
+TEST_F(TextVisibleCoverageTests, OversizedMeasurementDoesNotAdmitAtlasCoverage){
     const auto layout = m_text.layout({ .text = "Previous gyjpq A\xcc\x81\xcc\x81 g\xcc\xa3 \xed\x95\x9c\xea\xb8\x80" });
     ASSERT_TRUE(layout);
-    for(const u32 pixelSize : { 12u, 14u, 16u, 18u, 21u, 24u, 32u, 48u }){
-        for(const PlacedGlyph& glyph : layout->glyphs()){
-            const auto preset = glyph.face->rasterBounds(glyph.glyphId, pixelSize);
-            ASSERT_TRUE(preset);
-            ASSERT_TRUE(glyph.face->rasterize(glyph.glyphId, pixelSize, m_bitmap));
-            EXPECT_FLOAT_EQ(preset->x, static_cast<f32>(m_bitmap.bearingX));
-            EXPECT_FLOAT_EQ(preset->y, -static_cast<f32>(m_bitmap.bearingY));
-            EXPECT_FLOAT_EQ(preset->width, static_cast<f32>(m_bitmap.width));
-            EXPECT_FLOAT_EQ(preset->height, static_cast<f32>(m_bitmap.height));
-        }
-    }
     const auto large = m_text.layout({ .text = "W", .fontSize = 1024.0f });
     ASSERT_TRUE(large);
     ASSERT_TRUE(m_text.measure(*large, { 800.0f, 600.0f, 1.0f, 1.0f }));

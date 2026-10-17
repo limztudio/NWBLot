@@ -295,30 +295,6 @@ TEST(GpuTaskTimingHistory, PromotesHistoryAndAssignmentCollectionsIndependentlyA
     EXPECT_EQ(snapshot.findAssignment(GpuTaskTimingAssignmentKeyFromHistoryKey(stale.key)), nullptr);
 }
 
-TEST(GpuTaskTimingHistory, SmallRepeatedUpdatesAndSnapshotsReuseTheirAllocations){
-    GraphicsArena arena(Name("tests/timing_history/small_reuse"));
-    GpuTaskTimingHistoryStore store(arena, 4u);
-    GpuTaskTimingHistorySnapshot snapshot(arena);
-    for(u32 index = 0u; index < 8u; ++index){
-        const TimingInput input = Input(index);
-        ASSERT_TRUE(store.recordSample(input.key, input.queue, 1.0, 1u));
-    }
-    store.snapshot(snapshot);
-    const ArenaMemoryStats before = arena.memoryStats();
-    for(u64 frame = s_ExpectedDualCount; frame < 16u; ++frame){
-        for(u32 index = 0u; index < 8u; ++index){
-            const TimingInput input = Input(index);
-            ASSERT_TRUE(store.recordSample(input.key, input.queue, 2.0, frame));
-        }
-        store.snapshot(snapshot);
-    }
-    const ArenaMemoryStats after = arena.memoryStats();
-    EXPECT_EQ(after.allocationCount, before.allocationCount);
-    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

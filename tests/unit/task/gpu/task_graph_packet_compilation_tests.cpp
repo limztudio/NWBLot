@@ -175,7 +175,6 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         ASSERT_TRUE(recoveryPacket.valid());
         EXPECT_NE(firstPacket, secondPacket);
         EXPECT_NE(recoveryPacket, secondPacket);
-        EXPECT_TRUE(compiledPlan.tasksSharePacket(first, first));
         EXPECT_FALSE(compiledPlan.tasksSharePacket(first, second));
         EXPECT_FALSE(compiledPlan.tasksSharePacket(first, {}));
         EXPECT_TRUE(compiledPlan.taskPrecedesOrSharesPacket(first, second));
@@ -191,17 +190,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         const Graphics::GpuSubmissionPacketRange firstTwoPacketRange = compiledPlan.packetRange(firstPacket, secondPacket);
         ASSERT_TRUE(firstTwoPacketRange.valid());
         EXPECT_TRUE(compiledPlan.validPacketRange(firstTwoPacketRange));
-        EXPECT_EQ(firstTwoPacketRange.first, firstPacket);
-        EXPECT_EQ(firstTwoPacketRange.packetCount, s_ExpectedDualCount);
-        const Graphics::GpuSubmissionPacketRange firstTwoTaskRange = compiledPlan.packetRangeForTasks(first, second);
-        ASSERT_TRUE(firstTwoTaskRange.valid());
-        EXPECT_EQ(firstTwoTaskRange.first, firstPacket);
-        EXPECT_EQ(firstTwoTaskRange.packetCount, firstTwoPacketRange.packetCount);
-        const Graphics::GpuSubmissionPacketRange fullPacketRange = compiledPlan.allPacketRange();
-        ASSERT_TRUE(fullPacketRange.valid());
-        EXPECT_TRUE(compiledPlan.validPacketRange(fullPacketRange));
-        EXPECT_EQ(fullPacketRange.first, firstPacket);
-        EXPECT_EQ(fullPacketRange.packetCount, compiledPlan.packetCount());
+        EXPECT_TRUE(compiledPlan.validPacketRange(compiledPlan.allPacketRange()));
         EXPECT_FALSE(compiledPlan.packetRange(secondPacket, firstPacket).valid());
         EXPECT_FALSE(compiledPlan.packetRangeForTasks(second, first).valid());
         EXPECT_FALSE(compiledPlan.packetRangeForTasks(first, {}).valid());

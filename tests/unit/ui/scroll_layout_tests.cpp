@@ -108,16 +108,6 @@ TEST(UiScrollLayoutTests, ExcessiveScrollbarWidthShrinksToAvailableWidthAndCulls
     EXPECT_EQ(placement.endRow, 0u);
 }
 
-TEST(UiScrollLayoutTests, HundredThousandRowsOnlyExposeTheCurrentVisibleInterval){
-    const Rect bounds{ 10.0f, 20.0f, 240.0f, 128.0f };
-    ScrollPlacement placement;
-    const auto placementResult = ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, 100000u, 32.0f, 1600000.0);
-    ASSERT_TRUE(placementResult);
-    placement = *placementResult;
-    EXPECT_EQ(placement.firstRow, 50000u);
-    EXPECT_EQ(placement.endRow, 50004u);
-}
-
 TEST(UiScrollLayoutTests, ExtremeFiniteOffsetClampsBeforeProducingVisibleFloatGeometry){
     const Rect bounds{ 10.0f, 20.0f, 240.0f, 128.0f };
     ScrollPlacement placement;

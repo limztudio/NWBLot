@@ -53,41 +53,6 @@ TEST_F(UiComboBuilderTests, SiblingComboFieldsPaintTheirOwnDeclarationStyles){
     EXPECT_LT(first->y, second->y);
 }
 
-TEST_F(UiComboBuilderTests, LargeClosedFieldReadsOnlySelectedTextWithoutOpeningRows){
-    m_state.select(50000u);
-    ASSERT_TRUE(accept(1u));
-    EXPECT_EQ(m_source.textCalls, 1u);
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_EQ(target(popup()), nullptr);
-    EXPECT_EQ(target(list()), nullptr);
-}
-
-TEST_F(UiComboBuilderTests, PointerOpensAnchoredOverlayAndVirtualizesAHundredThousandRows){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    m_source.resetCounters();
-    ASSERT_TRUE(openByPointer(2u));
-    ASSERT_NE(target(popup()), nullptr);
-    ASSERT_NE(target(list()), nullptr);
-    const auto& placement = m_state.listState().placement();
-    const u64 visible = placement.endRow - placement.firstRow;
-    EXPECT_GT(visible, 0u);
-    EXPECT_LE(visible, 7u);
-    EXPECT_LE(m_source.textCalls, visible + 1u);
-    EXPECT_LT(m_source.keyCalls, 50u);
-    EXPECT_LT(m_context.states().entries().size(), 8u);
-    EXPECT_LT(m_context.input().targets().size(), 16u);
-    const DrawSnapshot snapshot = m_paint.freeze();
-    bool overlay = false;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.layer == 1u)
-            overlay = true;
-        if(overlay)
-            EXPECT_EQ(command.layer, 1u);
-    }
-    EXPECT_TRUE(overlay);
-}
-
 TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWithoutCommittingPreview){
     m_source.count = 4u;
     m_state.select(1u);

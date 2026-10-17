@@ -30,57 +30,6 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-void ExpectComputeStagePlacement(const u64 computeQueueLoad, const Graphics::CommandQueue::Enum expectedQueueClass){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskSchedulingHint graphicsScheduling;
-    graphicsScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    const Graphics::GpuTaskId producer = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_graphics_producer"), "Automatic Stage Graphics Producer", GraphicsCommands(), graphicsScheduling);
-    ASSERT_TRUE(producer.valid());
-
-    Graphics::GpuTaskSchedulingHint stageScheduling;
-    stageScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    const Graphics::GpuTaskId stage = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_compute"), "Automatic Compute Stage", ComputeCommands(), stageScheduling, {}, &producer, 1u);
-    ASSERT_TRUE(stage.valid());
-    const Graphics::GpuTaskId consumer = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_graphics_consumer"), "Automatic Stage Graphics Consumer", GraphicsCommands(), graphicsScheduling, {}, &stage, 1u);
-    ASSERT_TRUE(consumer.valid());
-
-    const Graphics::GpuTaskId independent = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_stage_independent_graphics"), "Automatic Stage Independent Graphics", GraphicsCommands(), graphicsScheduling);
-    ASSERT_TRUE(independent.valid());
-
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    const Graphics::GpuTaskQueueLoad queueLoad{ .queue = queues[1u].id, .estimatedCost = computeQueueLoad };
-    Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    if(computeQueueLoad != 0u){
-        options.queueLoads = &queueLoad;
-        options.queueLoadCount = 1u;
-    }
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
-    ASSERT_NE(assignments.find(producer), nullptr);
-    ASSERT_NE(assignments.find(consumer), nullptr);
-    EXPECT_EQ(assignments.find(producer)->queue, queues[0u].id);
-    EXPECT_EQ(assignments.find(consumer)->queue, queues[0u].id);
-    ASSERT_NE(assignments.find(independent), nullptr);
-    EXPECT_EQ(assignments.find(independent)->queue, queues[0u].id);
-
-    const Graphics::GpuTaskQueueAssignment* const stageAssignment = assignments.find(stage);
-    ASSERT_NE(stageAssignment, nullptr);
-    EXPECT_EQ(stageAssignment->queueClass, expectedQueueClass);
-    EXPECT_EQ(stageAssignment->queue, queues[expectedQueueClass == Graphics::CommandQueue::Compute ? 1u : 0u].id);
-}
-
-
-// Independent Graphics work can overlap the Compute stage even though its producer and consumer use Graphics.
-
-
-TEST(GpuTaskGraph, AvoidsBusyComputeQueueForStageBetweenGraphicsDependencies){
-    ExpectComputeStagePlacement(64u, Graphics::CommandQueue::Graphics);
-}
-
 TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGroup){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

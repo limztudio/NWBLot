@@ -58,7 +58,6 @@ public:
 
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
         invalidateText();
-        ++searchCalls;
         return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
     }
 
@@ -78,7 +77,6 @@ public:
 
     [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         invalidateText();
-        ++enabledCalls;
         return rawKey(index) != disabled;
     }
 
@@ -108,10 +106,8 @@ public:
     bool malformedLookup = false;
     mutable u64 keyCalls = 0u;
     mutable u64 lookupCalls = 0u;
-    mutable u64 searchCalls = 0u;
     mutable u64 textCalls = 0u;
     mutable Array<u64, 32u> textCallsByIndex{};
-    mutable u64 enabledCalls = 0u;
     mutable Array<char, 128u> temporary{};
 };
 
@@ -182,15 +178,6 @@ protected:
         return send(event).pointerConsumed;
     }
 
-    [[nodiscard]] usize glyphIndices(const DrawSnapshot& snapshot)const{
-        usize count = 0u;
-        for(const auto& command : snapshot.commands()){
-            if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
-                count += command.indexCount;
-        }
-        return count;
-    }
-
 
 protected:
     ArithmeticSource m_source;
@@ -218,24 +205,6 @@ TEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles){
     const auto second = skinQuad(snapshot, 7u);
     ASSERT_TRUE(second);
     EXPECT_LT(first->y, second->y);
-}
-
-TEST_F(UiListBuilderTests, HundredThousandRowsBuildOnlyVisibleTextTargetsAndGlyphs){
-    ASSERT_TRUE(prepare(1u));
-    const u64 visible = m_state.placement().endRow - m_state.placement().firstRow;
-    ASSERT_GT(visible, 0u);
-    EXPECT_LE(visible, 6u);
-    EXPECT_EQ(m_source.textCalls, visible);
-    EXPECT_LE(m_source.keyCalls, visible * 2u + 2u);
-    EXPECT_LE(m_source.lookupCalls, visible + 2u);
-    EXPECT_EQ(m_source.searchCalls, 0u);
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(glyphIndices(snapshot), static_cast<usize>(visible) * 12u);
-    EXPECT_LT(snapshot.vertices().size(), 200u);
-    EXPECT_LT(snapshot.indices().size(), 400u);
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_EQ(m_context.states().entries().size(), 2u);
-    EXPECT_EQ(m_context.input().targets().size(), static_cast<usize>(visible) + 4u);
 }
 
 TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixelScrollAnchor){

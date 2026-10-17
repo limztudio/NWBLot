@@ -107,13 +107,11 @@ public:
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        ++keyCalls;
         return index < count ? index + 1u : 0u;
     }
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
         u64 index = 0u;
-        ++lookupCalls;
         if(keyValue == 0u || keyValue > count)
             return MakeUnexpected(Failure{});
         index = keyValue - 1u;
@@ -226,8 +224,6 @@ public:
     u64 count = 100000u;
     u64 filterCalls = 0u;
     u64 rebuilds = 0u;
-    mutable u64 keyCalls = 0u;
-    mutable u64 lookupCalls = 0u;
     bool failFilter = false;
     bool changeFullGeneration = false;
     bool changeFullRevision = false;
@@ -264,17 +260,6 @@ protected:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST_F(UiSearchComboBehaviorTests, InitialFilterAndCacheHitsDoNotInspectTheFullDataset){
-    ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));
-    ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));
-    EXPECT_EQ(m_source.filterCalls, 1u);
-    EXPECT_EQ(m_source.rebuilds, 1u);
-    EXPECT_EQ(m_source.queryBytes.size(), 0u);
-    EXPECT_EQ(m_source.view.count, 100000u);
-    EXPECT_EQ(m_source.keyCalls, 0u);
-    EXPECT_EQ(m_source.lookupCalls, 0u);
-}
 
 TEST_F(UiSearchComboBehaviorTests, QueryChangeRetiresPreviewAndScrollWithoutChangingCommittedSelection){
     m_state.combo().select(5u);

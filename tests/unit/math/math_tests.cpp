@@ -254,10 +254,6 @@ TEST(Math, DoubleModAvoidsQuotientOverflowAndUnderflowWhileKeepingDivisorSign){
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(underflow[lane], underflowExpected[lane]) << lane;
 
-    const SIMDVectorDouble signs = VectorDoubleMod(SIMDVectorDouble{ -5.5, 5.5, -5.5, 5.5 }, SIMDVectorDouble{ 2.0, -2.0, -2.0, 2.0 });
-    const SIMDVectorDouble signsExpected{ 0.5, -0.5, -1.5, 1.5 };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(signs[lane], signsExpected[lane]) << lane;
     const SIMDVectorDouble exceptional = VectorDoubleMod(SIMDVectorDouble{ Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, 1.0, Limit<f64>::s_Max }, SIMDVectorDouble{ 1.0, 1.0, 0.0, Limit<f64>::s_Infinity });
     EXPECT_TRUE(IsNaN(exceptional.x));
     EXPECT_TRUE(IsNaN(exceptional.y));

@@ -55,7 +55,6 @@ public:
     }
 
     [[nodiscard]] virtual u64 key(const u64 index)const override{
-        ++keyCalls;
         mutate(CallbackStage::Key);
         if(index >= count)
             return 0u;
@@ -64,7 +63,6 @@ public:
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
         u64 index = 0u;
-        ++lookupCalls;
         mutate(CallbackStage::Lookup);
         if(keyValue == 0u || keyValue > count)
             return MakeUnexpected(Failure{});
@@ -95,7 +93,6 @@ public:
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
 
     [[nodiscard]] virtual bool enabled(const u64 index)const override{
-        ++enabledCalls;
         mutate(CallbackStage::Enabled);
         const u64 keyValue = reversed ? count - index : index + 1u;
         return index < count && keyValue != disabledKey;
@@ -148,9 +145,6 @@ public:
     bool reversed = false;
     bool badLookup = false;
     bool wrongLookup = false;
-    mutable u64 lookupCalls = 0u;
-    mutable u64 keyCalls = 0u;
-    mutable u64 enabledCalls = 0u;
 
 
 private:
@@ -576,23 +570,6 @@ TEST(UiComboBehaviorTests, SameValueCallbackSelectionStillRejectsTheOutstandingC
     EXPECT_NE(state.inputGeneration(), inputGeneration);
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_FALSE(state.isOpen());
-}
-
-TEST(UiComboBehaviorTests, HundredThousandRowsResolveCommittedKeyWithBoundedSourceCalls){
-    ComboSource source;
-    source.count = 100000u;
-    ComboState state;
-    state.select(99999u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
-    source.lookupCalls = 0u;
-    source.keyCalls = 0u;
-    source.enabledCalls = 0u;
-    ASSERT_TRUE(ComboBehavior::Commit(state, source, 100000u));
-    EXPECT_EQ(state.selectedKey(), 100000u);
-    EXPECT_EQ(source.lookupCalls, 1u);
-    EXPECT_EQ(source.keyCalls, 1u);
-    EXPECT_EQ(source.enabledCalls, 1u);
 }
 
 

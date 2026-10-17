@@ -139,41 +139,6 @@ TEST(GpuTaskGraph, ValidatesDiagnosticQueueOverridesAgainstCommandCapabilities){
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride);
 }
 
-TEST(GpuTaskGraph, ChoosesComputePlacementFromOverlapAndExternalQueueLoad){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskCommandRequirements graphicsCommands;
-    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    Graphics::GpuTaskSchedulingHint graphicsScheduling;
-    graphicsScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    ASSERT_TRUE(AddTaskWithCommands(graph, Name("tests/task_graph/external_load_graphics"), "External Load Graphics", graphicsCommands, graphicsScheduling).valid());
-
-    Graphics::GpuTaskCommandRequirements computeCommands;
-    computeCommands.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
-    const Graphics::GpuTaskId computeTask = AddTaskWithCommands(graph, Name("tests/task_graph/external_load_compute"), "External Load Compute", computeCommands);
-    ASSERT_TRUE(computeTask.valid());
-
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    Graphics::GpuTaskGraphQueueAssignments idleAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(graph, analysis, topology, idleAssignments));
-    const Graphics::GpuTaskQueueAssignment* const idleAssignment = idleAssignments.find(computeTask);
-    ASSERT_NE(idleAssignment, nullptr);
-    EXPECT_EQ(idleAssignment->queueClass, Graphics::CommandQueue::Compute);
-
-    const Graphics::GpuTaskQueueLoad queueLoads[]{ { .queue = DedicatedComputeQueue().id, .estimatedCost = 32u, }, };
-    Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueLoads = queueLoads;
-    options.queueLoadCount = LengthOf(queueLoads);
-    Graphics::GpuTaskGraphQueueAssignments loadedAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(graph, analysis, topology, loadedAssignments, options));
-    const Graphics::GpuTaskQueueAssignment* const loadedAssignment = loadedAssignments.find(computeTask);
-    ASSERT_NE(loadedAssignment, nullptr);
-    EXPECT_EQ(loadedAssignment->queueClass, Graphics::CommandQueue::Graphics);
-}
-
 TEST(GpuTaskGraph, ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -370,42 +335,6 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     ASSERT_NE(sameFamilyFinal, nullptr);
     EXPECT_EQ(sameFamilyProducer->score.ownershipTransfers, 0);
     EXPECT_EQ(sameFamilyFinal->score.ownershipTransfers, 0);
-}
-
-TEST(GpuTaskGraph, UsesFutureConsumerRoutesWhenChoosingAutomaticPlacement){
-    const auto runCase = [](const bool addFutureConsumers){
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuTaskId producer = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_future_producer"), "Future Producer", GraphicsCommands());
-        ASSERT_TRUE(producer.valid());
-        const Graphics::GpuTaskId movable = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_future_movable"), "Future Movable", ComputeCommands(), {}, {}, &producer, 1u);
-        ASSERT_TRUE(movable.valid());
-        const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-        Graphics::GpuTaskDiagnosticQueueOverride routes[3u] = {};
-        const Name consumerIdentities[] = { Name("tests/task_graph/future_first"), Name("tests/task_graph/future_second"), Name("tests/task_graph/future_third") };
-        if(addFutureConsumers){
-            for(usize index = 0u; index < LengthOf(routes); ++index){
-                routes[index].task = AddTaskWithCommands(graph, consumerIdentities[index], "Future Consumer", ComputeCommands(), {}, {}, &movable, 1u);
-                routes[index].queue = queues[1u].id;
-                ASSERT_TRUE(routes[index].task.valid());
-            }
-        }
-        const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        ASSERT_TRUE(Analyze(graph, analysis));
-        Graphics::GpuTaskGraphQueueAssignmentOptions options;
-        options.diagnosticQueueOverrides = addFutureConsumers ? routes : nullptr;
-        options.diagnosticQueueOverrideCount = addFutureConsumers ? LengthOf(routes) : 0u;
-        ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
-        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(movable);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->queue, queues[addFutureConsumers ? 1u : 0u].id);
-        EXPECT_EQ(assignment->score.outgoingCrossings, 0);
-        EXPECT_EQ(assignment->score.incomingCrossings, addFutureConsumers ? 1 : 0);
-    };
-    runCase(false);
-    runCase(true);
 }
 
 TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically){

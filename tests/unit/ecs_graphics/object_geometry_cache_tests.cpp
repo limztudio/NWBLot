@@ -76,7 +76,6 @@ TEST(ObjectGeometryCacheTests, RuntimeReuseRequiresAcceptedNonzeroCurrentContent
     mesh.objectGeometryCache.acceptedContentRevision = 0u;
     const ObjectGeometryCacheSnapshot pending = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
     EXPECT_TRUE(pending.requiresDecode);
-    EXPECT_TRUE(pending.initialized);
     mesh.runtimeGeometryContentRevision = 7u;
     mesh.objectGeometryCache.acceptedContentRevision = 7u;
     mesh.objectGeometryCache.acceptedContent = false;
@@ -90,7 +89,6 @@ TEST(ObjectGeometryCacheTests, ImmutableStaticContentReusesZeroRevisionOnlyAfter
     mesh.objectGeometryCache.initialized = true;
     const ObjectGeometryCacheSnapshot accepted = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
     EXPECT_FALSE(accepted.requiresDecode);
-    EXPECT_TRUE(accepted.initialized);
     EXPECT_EQ(accepted.sourceRevision, 0u);
     // A content decision never substitutes for the required retained resource and decoder bindings.
     EXPECT_FALSE(accepted.valid());

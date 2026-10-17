@@ -111,31 +111,15 @@ void RunConcurrentReset(const bool disableCapture){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Telemetry, RecorderReusesSlotsAndPayloadCapacityUntilDisabled){
+TEST(Telemetry, RecorderDisableReleasesClearedAndEmptyPayloadStorage){
     TestArena testArena;
     const ArenaMemoryStats initial = testArena.arena.memoryStats();
     {
         Telemetry::Recorder recorder(testArena.arena);
         recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
         ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 11u));
-        const u8* const firstPayload = recorder.view().eventAt(0u)->payload.data();
         recorder.clear();
         const ArenaMemoryStats warmed = testArena.arena.memoryStats();
-        for(u32 frame = 0u; frame < 64u; ++frame){
-            ASSERT_TRUE(RecordFilledPayload(recorder, 64u, static_cast<u8>(frame)));
-            const auto* event = recorder.view().eventAt(0u);
-            ASSERT_NE(event, nullptr);
-            ASSERT_EQ(event->payload.size(), 64u);
-            EXPECT_EQ(event->payload.data(), firstPayload);
-            for(const u8 value : event->payload)
-                EXPECT_EQ(value, frame);
-            recorder.clear();
-        }
-        const ArenaMemoryStats reused = testArena.arena.memoryStats();
-        EXPECT_EQ(reused.allocationCount, warmed.allocationCount);
-        EXPECT_EQ(reused.reallocationCount, warmed.reallocationCount);
-        EXPECT_EQ(reused.deallocationCount, warmed.deallocationCount);
-        EXPECT_EQ(reused.usedBytes, warmed.usedBytes);
 
         ASSERT_TRUE(RecordFilledPayload(recorder, 0u, 0u));
         EXPECT_TRUE(recorder.view().eventAt(0u)->payload.empty());

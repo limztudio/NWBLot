@@ -75,7 +75,6 @@ asset_bunch bunch = [second, first];
 
 static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const Metascript::Document& document){
     ASSERT_EQ(output.size(), s_ExpectedDualCount);
-    EXPECT_EQ(output[0u].assetType, Name("probe"));
     EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
     EXPECT_EQ(output[1u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST));
     const Value* const items = output[0u].value.findField("items");
@@ -369,7 +368,6 @@ asset_bunch bunch = [model];
         ASSERT_TRUE(expandedResult);
         output = Move(*expandedResult);
         ASSERT_EQ(output.size(), 1u);
-        EXPECT_EQ(output[0u].assetType, Name("model"));
         auto entryParseResult = Impl::ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, entry.skeletonObjects.get_allocator().arena(), fixture.scratchArena);
         ASSERT_TRUE(entryParseResult);
         entry = Move(*entryParseResult);

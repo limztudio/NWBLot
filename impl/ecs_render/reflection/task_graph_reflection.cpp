@@ -70,7 +70,7 @@ inline constexpr TStringView s_DisabledReflectionRoute = NWB_TEXT("disabled");
     return graph.importBuffer(buffer, BufferResourceDesc(buffer->getCreationDescription().debugName, "Reflection Buffer"));
 }
 
-[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name identity, const AStringView label, const Core::GpuTaskId& dependency){
+[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name identity, const AStringView label, const Core::GpuTaskId& dependency)noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.allowPacketMerge = true;
@@ -254,7 +254,7 @@ public:
         }
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         payload.feedbackReservation.discard();
     }
 };
@@ -354,7 +354,7 @@ public:
         return !commandList.commandRecordingFailed();
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         const bool hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(payload.history, hardwareReady);
         ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(payload.feedback, hardwareReady);
@@ -365,7 +365,7 @@ public:
         payload.reservation.accept(token, hardwareReady, &history, &feedback);
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         payload.reservation.discard();
     }
 };
@@ -530,7 +530,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
     constexpr usize s_ReflectionUseCapacity = 12u;
     uses.reserve(inputs.surfaceReadCount + inputs.hardwareReadCount + s_ReflectionUseCapacity);
-    const auto appendSurfaceReads = [&](){
+    const auto appendSurfaceReads = [&]()noexcept{
         uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
         uses.push_back(ReadUse(result.frameParameters, Core::ResourceStates::ConstantBuffer));
     };

@@ -30,18 +30,18 @@ namespace Tests::Smoke{
 class UiPopupSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiPopupSmokeScene()override;
+    virtual ~UiPopupSmokeScene()noexcept override;
 
 
 public:
     [[nodiscard]] bool paint(Impl::UiPaintContext& context);
     [[nodiscard]] bool paintLaterRoot(Impl::UiPaintContext& context)const;
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    [[nodiscard]] Array<u32, 12u> values()const;
+    [[nodiscard]] Array<u32, 12u> values()const noexcept;
     void observeState();
     void paintMarkers(Impl::UiPaintContext& context)const;
 

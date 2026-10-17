@@ -21,10 +21,10 @@ using namespace NWB::Impl;
 
 class FixtureShaper final : public Ui::ITextShaper{
 public:
-    explicit FixtureShaper(Alloc::GlobalArena& arena)
+    explicit FixtureShaper(Alloc::GlobalArena& arena)noexcept
         : m_arena(arena)
     {}
-    virtual ~FixtureShaper()override = default;
+    virtual ~FixtureShaper()noexcept override = default;
 
 
 public:

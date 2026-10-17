@@ -32,12 +32,12 @@ namespace Tests::Smoke{
 class UiRadioGroupSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiRadioGroupSmokeScene()override;
+    virtual ~UiRadioGroupSmokeScene()noexcept override;
 
 
 public:
     [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:

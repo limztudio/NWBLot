@@ -31,7 +31,7 @@ void OpaqueEmulationMergeValidator::validate(
     bool timingBindingsValid,
     bool hasOpaqueCsgFrameWork,
     OpaqueEmulationMergeValidationResult& outResult
-)const{
+)const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;
     outResult = OpaqueEmulationMergeValidationResult{};
     const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{

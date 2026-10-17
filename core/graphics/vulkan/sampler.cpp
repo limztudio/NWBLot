@@ -71,7 +71,7 @@ Sampler::Sampler(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
-Sampler::~Sampler(){
+Sampler::~Sampler()noexcept{
     if(m_sampler != VK_NULL_HANDLE){
         m_context.deviceDispatch.vkDestroySampler(m_context.device, m_sampler, m_context.allocationCallbacks);
         m_sampler = VK_NULL_HANDLE;

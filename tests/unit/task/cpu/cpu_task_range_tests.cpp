@@ -98,7 +98,7 @@ TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
     Atomic<bool> done{ false };
     usize worker = 0u;
     Thread producer([&](){
-        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){ worker = scheduler.currentWorkerIndex(); })));
+        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize)noexcept{ worker = scheduler.currentWorkerIndex(); })));
         done.store(true, MemoryOrder::release);
     }
     );

@@ -82,7 +82,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         indexObjects(m_staticMeshObjects, 0u);
         indexObjects(m_skinnedMeshObjects, 0u);
     }
-    const auto nameIsUnique = [&objectNames](const Name name){
+    const auto nameIsUnique = [&objectNames](const Name name)noexcept{
         return !objectNames || (objectNames->at(name) & __hidden_model_runtime::s_DuplicateObjectName) == 0u;
     };
 

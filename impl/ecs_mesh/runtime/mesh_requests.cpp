@@ -81,7 +81,7 @@ void RuntimeMeshRequestSet::promoteIndex(){
     m_index.emplace(Move(index));
 }
 
-void RuntimeMeshRequestSet::markIndexedLive(const Name& meshKey, const u64 version){
+void RuntimeMeshRequestSet::markIndexedLive(const Name& meshKey, const u64 version)noexcept{
     const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
     if(found != m_index->end() && !found.value()){
         found.value() = true;
@@ -89,7 +89,7 @@ void RuntimeMeshRequestSet::markIndexedLive(const Name& meshKey, const u64 versi
     }
 }
 
-bool RuntimeMeshRequestSet::containsIndexedLive(const Name& meshKey, const u64 version)const{
+bool RuntimeMeshRequestSet::containsIndexedLive(const Name& meshKey, const u64 version)const noexcept{
     const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
     return found != m_index->end() && found.value();
 }

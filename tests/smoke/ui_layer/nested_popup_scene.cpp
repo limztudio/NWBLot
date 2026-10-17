@@ -68,7 +68,7 @@ UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena
     m_input.addHandlerToBack(*this);
 }
 
-UiNestedPopupSmokeScene::~UiNestedPopupSmokeScene(){
+UiNestedPopupSmokeScene::~UiNestedPopupSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -95,7 +95,7 @@ bool UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F8)
@@ -303,7 +303,7 @@ void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     }
 }
 
-Array<u64, 29u> UiNestedPopupSmokeScene::values()const{
+Array<u64, 29u> UiNestedPopupSmokeScene::values()const noexcept{
     const bool parent = m_parent.isOpen();
     return { static_cast<u64>(parent), static_cast<u64>(parent && m_childDeclared && m_child.isOpen()), m_focusScope, m_focusCode,
         m_beforeClicks, m_afterClicks, m_childClicks, m_outside, static_cast<u64>(m_beforeText.text().size()),

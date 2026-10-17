@@ -61,7 +61,7 @@ struct UiTextEditResult{
 class UiTextEditSession final : NoCopy{
 public:
     UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept;
-    ~UiTextEditSession();
+    ~UiTextEditSession()noexcept;
 
 
 public:

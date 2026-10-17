@@ -39,7 +39,12 @@ static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
 
 template<typename Payload>
-static void ConfirmCausticAccumulatorClears(Payload& payload){
+static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
+    noexcept(static_cast<bool>(payload.graphOwnsNonTemporalAccumulatorClear))
+    && noexcept(payload.raytracingSystem.confirmCausticAccumulatorNonTemporalClear())
+    && noexcept(static_cast<bool>(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched))
+    && noexcept(payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear())
+){
     if(payload.graphOwnsNonTemporalAccumulatorClear)
         payload.raytracingSystem.confirmCausticAccumulatorNonTemporalClear();
     if(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched)
@@ -145,7 +150,7 @@ public:
         return true;
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         ConfirmCausticAccumulatorClears(payload);
         if(payload.causticProducerDispatched)
             payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);

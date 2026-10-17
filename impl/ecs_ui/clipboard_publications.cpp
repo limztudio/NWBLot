@@ -52,7 +52,7 @@ UiClipboardPublications::UiClipboardPublications(Core::Alloc::GlobalArena& arena
     m_requests.reserve(s_UiClipboardMaxPublications);
 }
 
-UiClipboardPublications::~UiClipboardPublications(){
+UiClipboardPublications::~UiClipboardPublications()noexcept{
     if(!cancel())
         TerminateInvariant();
 }

@@ -57,7 +57,7 @@ void CollectUniquePhysicalQueueFamilyIndices(const GpuPhysicalQueueTopology& top
 class HostReadbackBarrierTracker final : NoCopy{
 public:
     explicit HostReadbackBarrierTracker(Alloc::GlobalArena& arena)noexcept;
-    ~HostReadbackBarrierTracker() = default;
+    ~HostReadbackBarrierTracker()noexcept = default;
 
 
 public:

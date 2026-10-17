@@ -185,7 +185,7 @@ struct MeasureOptions{
     usize iterations;
 };
 
-[[nodiscard]] inline Expected<MeasureOptions> ParseMeasureOptions(const char* const* argv, const usize maximumIterations, const bool allowLatency){
+[[nodiscard]] inline Expected<MeasureOptions> ParseMeasureOptions(const char* const* argv, const usize maximumIterations, const bool allowLatency)noexcept{
     const bool candidate = StringView(argv[3]) == "candidate";
     if(!candidate && StringView(argv[3]) != "baseline")
         return MakeUnexpected(Failure{});

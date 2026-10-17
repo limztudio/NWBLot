@@ -69,7 +69,7 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     return result;
 }
 
-[[nodiscard]] static VkBufferCreateInfo RetainBufferCreateInfo(const VkBufferCreateInfo& bufferInfo, const BufferQueueFamilyVector& queueFamilyIndices){
+[[nodiscard]] static VkBufferCreateInfo RetainBufferCreateInfo(const VkBufferCreateInfo& bufferInfo, const BufferQueueFamilyVector& queueFamilyIndices)noexcept{
     NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkBufferCreateInfo result = bufferInfo;
     result.pNext = nullptr;
@@ -100,7 +100,7 @@ Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator, const B
     , m_context(context)
     , m_allocator(allocator)
 {}
-Buffer::~Buffer(){
+Buffer::~Buffer()noexcept{
     const VkBuffer registeredNativeBuffer = m_buffer;
 
     {
@@ -147,7 +147,7 @@ ResourceStates::Mask Buffer::resolveTaskGraphImportInitialState()const noexcept{
     return isRetainedStateKnown() ? m_creationDesc.initialState : ResourceStates::Unknown;
 }
 
-Object Buffer::getNativeHandle(ObjectType objectType){
+Object Buffer::getNativeHandle(ObjectType objectType)noexcept{
     if(objectType != ObjectTypes::s_Buffer)
         return nullptr;
 

@@ -352,7 +352,7 @@ TEST(Telemetry, ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt){
     constexpr usize s_AttemptsPerThread = 256u;
     const DiagnosticEventRecord source{ .event = "error", .message = "concurrent bounded observer", };
     AtomicFlag start;
-    const auto capture = [&](){
+    const auto capture = [&]()noexcept{
         while(!start.test(MemoryOrder::acquire))
             start.wait(false, MemoryOrder::acquire);
         for(usize attempt = 0u; attempt < s_AttemptsPerThread; ++attempt)
@@ -385,7 +385,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
 
     AtomicFlag captureThreadStarted;
     AtomicFlag stopCaptureThread;
-    Thread captureThread([&captureThreadStarted, &stopCaptureThread](){
+    Thread captureThread([&captureThreadStarted, &stopCaptureThread]()noexcept{
         captureThreadStarted.testAndSet(MemoryOrder::release);
         captureThreadStarted.notifyAll();
         while(!stopCaptureThread.test(MemoryOrder::acquire)){

@@ -44,7 +44,7 @@ void MakeSharedComputeEmulationPhaseTaskDesc(
     const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
     const Core::GpuTaskResourceSetUse* const resourceSetUses,
     const usize resourceSetUseCount
-){
+)noexcept{
     desc
         .setIdentity(identity)
         .setMarkerLabel(markerLabel)

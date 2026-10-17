@@ -170,7 +170,7 @@ namespace __hidden_lighting{
 
 };
 
-usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, SceneLight* outLights, const usize maxLights){
+usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, SceneLight* outLights, const usize maxLights)noexcept{
     if(maxLights == 0u)
         return 0u;
 

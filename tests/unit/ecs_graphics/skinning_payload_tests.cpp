@@ -40,7 +40,7 @@ using NWB::Impl::MeshSkinningPayload::BuildRuntimeSkinPayload;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::Impl::SkeletonJointMatrix MakeTranslationJoint(const f32 x, const f32 y, const f32 z){
+NWB::Impl::SkeletonJointMatrix MakeTranslationJoint(const f32 x, const f32 y, const f32 z)noexcept{
     NWB::Impl::SkeletonJointMatrix joint = MatrixIdentity<Float34>();
     joint.rows[0].w = x;
     joint.rows[1].w = y;
@@ -48,7 +48,7 @@ NWB::Impl::SkeletonJointMatrix MakeTranslationJoint(const f32 x, const f32 y, co
     return joint;
 }
 
-NWB::Impl::SkinInfluence4 MakeSkinInfluence(const u16 joint){
+NWB::Impl::SkinInfluence4 MakeSkinInfluence(const u16 joint)noexcept{
     NWB::Impl::SkinInfluence4 influence{};
     influence.joint[0] = joint;
     influence.weight.x = 1.0f;

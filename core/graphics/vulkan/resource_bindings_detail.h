@@ -60,7 +60,7 @@ struct DescriptorBufferStartupPrerequisites{
     };
 }
 
-[[nodiscard]] bool IsDescriptorBufferBackendReady(const VulkanContext& context);
+[[nodiscard]] bool IsDescriptorBufferBackendReady(const VulkanContext& context)noexcept;
 [[nodiscard]] inline constexpr bool IsSupportedDescriptorBindingType(const ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::Texture_SRV:

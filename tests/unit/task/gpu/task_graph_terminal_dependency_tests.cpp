@@ -79,7 +79,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         ASSERT_TRUE(resource.valid());
         resources.push_back(resource);
     }
-    const auto resourceUse = [&](const usize resourceIndex){
+    const auto resourceUse = [&](const usize resourceIndex)noexcept{
         return Graphics::GpuTaskResourceUse{
             .resource = resources[resourceIndex],
             .range = { .bufferRange = Graphics::BufferRange(0u, 64u) },

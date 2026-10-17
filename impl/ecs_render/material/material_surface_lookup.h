@@ -28,7 +28,7 @@ struct MaterialSurfaceInfo;
 
 class IMaterialSurfaceLookup{
 public:
-    virtual ~IMaterialSurfaceLookup() = default;
+    virtual ~IMaterialSurfaceLookup()noexcept = default;
 
 
 public:

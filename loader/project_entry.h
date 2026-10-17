@@ -117,7 +117,7 @@ public:
 
 interface IProjectEntryCallbacks{
 public:
-    virtual ~IProjectEntryCallbacks() = default;
+    virtual ~IProjectEntryCallbacks()noexcept = default;
 
 
 public:
@@ -136,7 +136,7 @@ public:
 
 ProjectFrameClientSize QueryProjectFrameClientSize();
 TStringView QueryProjectWindowTitle()noexcept;
-bool ConfigureProjectRuntime(ProjectStartupContext& context);
+bool ConfigureProjectRuntime(ProjectStartupContext& context)noexcept;
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 
 Expected<UniquePtr<Core::ECS::World>, TStringView> CreateInitialProjectWorld(ProjectRuntimeContext& context);

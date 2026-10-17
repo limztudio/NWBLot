@@ -95,7 +95,7 @@ public:
     {
         m_captureConfigurationValid = configureFramebufferCapture();
     }
-    virtual ~TextureSmokeProject()override{
+    virtual ~TextureSmokeProject()noexcept override{
         DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture);
     }
 

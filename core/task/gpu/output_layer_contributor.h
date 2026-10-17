@@ -43,7 +43,7 @@ public:
 
 interface IGpuTaskGraphOutputLayerContributor{
 public:
-    virtual ~IGpuTaskGraphOutputLayerContributor() = default;
+    virtual ~IGpuTaskGraphOutputLayerContributor()noexcept = default;
 
 
 public:

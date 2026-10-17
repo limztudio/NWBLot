@@ -297,7 +297,7 @@ Expected<NotNull<WidgetState*>> Context::declareId(const WidgetId id, const Widg
     return state;
 }
 
-bool Context::currentDeclaration(const WidgetState& state)const{
+bool Context::currentDeclaration(const WidgetState& state)const noexcept{
     if(!m_rootActive || !(state.root == m_root) || state.lastSeenFrame != m_frameGeneration)
         return false;
     const WidgetState* current = m_states.find(state.id);

@@ -70,7 +70,7 @@ public:
     return ready;
 }
 
-[[nodiscard]] static Core::RenderState PaintRenderState(){
+[[nodiscard]] static Core::RenderState PaintRenderState()noexcept{
     Core::RenderState state;
     state.depthStencilState.disableDepthTest().disableDepthWrite();
     state.rasterState.enableDepthClip().setCullNone();

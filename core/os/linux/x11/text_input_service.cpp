@@ -69,7 +69,7 @@ X11TextInputService::X11TextInputService(Alloc::GlobalArena& arena, Display& dis
     , m_lookup(arena)
 {}
 
-X11TextInputService::~X11TextInputService(){
+X11TextInputService::~X11TextInputService()noexcept{
     m_shuttingDown = true;
     if(m_context)
         endNativeSession(m_nativeToken);
@@ -187,7 +187,7 @@ TextInputAdmission::Enum X11TextInputService::startNativeSession(const TextInput
     return m_nativeToken == token && activeSession() == token ? TextInputAdmission::Accepted : TextInputAdmission::Unavailable;
 }
 
-void X11TextInputService::endNativeSession(const TextInputSessionToken token){
+void X11TextInputService::endNativeSession(const TextInputSessionToken token)noexcept{
     if(m_nativeToken != token)
         return;
     m_nativeToken = {};

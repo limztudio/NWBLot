@@ -196,7 +196,7 @@ bool GpuCompiledGraph::tryReset()noexcept{
 }
 
 
-void GpuCompiledGraph::reset(){
+void GpuCompiledGraph::reset()noexcept{
     if(tryReset())
         return;
 

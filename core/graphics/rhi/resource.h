@@ -226,7 +226,7 @@ struct TextureSlice{
 
 
 public:
-    [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const;
+    [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const noexcept;
     [[nodiscard]] TextureSlice resolve(u32 mipWidth, u32 mipHeight, u32 mipDepth)const noexcept;
 
     constexpr TextureSlice& setOrigin(u32 vx = 0, u32 vy = 0, u32 vz = 0)noexcept{ x = vx; y = vy; z = vz; return *this; }
@@ -266,7 +266,7 @@ public:
 
 
 public:
-    constexpr TextureSubresourceSet() = default;
+    constexpr TextureSubresourceSet()noexcept = default;
     constexpr TextureSubresourceSet(MipLevel baseMipLevelValue, MipLevel numMipLevelsValue, ArraySlice baseArraySliceValue, ArraySlice numArraySlicesValue)noexcept
         : baseMipLevel(baseMipLevelValue)
         , numMipLevels(numMipLevelsValue)
@@ -423,7 +423,7 @@ struct BufferRange{
 
 
 public:
-    BufferRange() = default;
+    BufferRange()noexcept = default;
     constexpr BufferRange(u64 byteOffsetValue, u64 byteSizeValue)noexcept
         : byteOffset(byteOffsetValue)
         , byteSize(byteSizeValue)

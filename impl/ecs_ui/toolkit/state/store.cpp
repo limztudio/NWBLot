@@ -57,17 +57,17 @@ Expected<NotNull<WidgetState*>> WidgetStateStore::touch(const WidgetId id, const
     return MakeNotNull(&m_entries.back());
 }
 
-WidgetState* WidgetStateStore::find(const WidgetId id){
+WidgetState* WidgetStateStore::find(const WidgetId id)noexcept{
     const usize index = findIndex(id);
     return index == m_entries.size() ? nullptr : &m_entries[index];
 }
 
-const WidgetState* WidgetStateStore::find(const WidgetId id)const{
+const WidgetState* WidgetStateStore::find(const WidgetId id)const noexcept{
     const usize index = findIndex(id);
     return index == m_entries.size() ? nullptr : &m_entries[index];
 }
 
-void WidgetStateStore::erase(const usize index){
+void WidgetStateStore::erase(const usize index)noexcept{
     if(index >= m_entries.size())
         return;
     m_entries.erase(m_entries.begin() + index);
@@ -75,7 +75,7 @@ void WidgetStateStore::erase(const usize index){
     m_indexDirty = true;
 }
 
-usize WidgetStateStore::findIndex(const WidgetId id)const{
+usize WidgetStateStore::findIndex(const WidgetId id)const noexcept{
     if(m_indexDirty)
         rebuildIndex();
     const auto found = m_index.find(id.value);
@@ -86,7 +86,7 @@ usize WidgetStateStore::findIndex(const WidgetId id)const{
     return index;
 }
 
-void WidgetStateStore::rebuildIndex()const{
+void WidgetStateStore::rebuildIndex()const noexcept{
     m_index.clear();
     for(usize index = 0u; index < m_entries.size(); ++index){
         if(!m_index.emplace(m_entries[index].id.value, index).second)

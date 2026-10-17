@@ -43,7 +43,7 @@ namespace RadioMutation{
 // Mutable callbacks model explicit application intents; temporary labels expire at every later source call.
 class RadioSource final : public IListDataSource{
 public:
-    virtual ~RadioSource()override = default;
+    virtual ~RadioSource()noexcept override = default;
 
 
 public:

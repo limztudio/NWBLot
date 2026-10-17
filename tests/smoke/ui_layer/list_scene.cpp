@@ -50,7 +50,7 @@ UiListSmokeScene::UiListSmokeScene(Core::InputDispatcher& input)
     m_input.addHandlerToBack(*this);
 }
 
-UiListSmokeScene::~UiListSmokeScene(){
+UiListSmokeScene::~UiListSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -93,7 +93,7 @@ bool UiListSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiListSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiListSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
@@ -117,7 +117,7 @@ void UiListSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiListSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
-Array<u64, 12u> UiListSmokeScene::values()const{
+Array<u64, 12u> UiListSmokeScene::values()const noexcept{
     const auto& placement = m_state.placement();
     return { m_state.selectedKey(), m_state.cursorKey(), m_source.rowCount(), placement.firstRow, placement.endRow,
         m_source.labelReads(), static_cast<u64>(m_focused), static_cast<u64>(m_source.reversed()),

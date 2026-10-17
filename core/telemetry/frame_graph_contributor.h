@@ -117,7 +117,7 @@ private:
 
 class IFrameGraphContributor{
 public:
-    virtual ~IFrameGraphContributor() = default;
+    virtual ~IFrameGraphContributor()noexcept = default;
 
 
 public:

@@ -131,7 +131,7 @@ bool ReflectionCsgContextProbe::ShouldCapture(void* owner, const u64 sourceFrame
     return sourceFrame == static_cast<ReflectionCsgContextProbe*>(owner)->m_targetSource;
 }
 
-ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer, const u32 rayCapacity)
+ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer, const u32 rayCapacity)noexcept
     : m_context(context)
     , m_world(world)
     , m_renderer(renderer)

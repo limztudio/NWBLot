@@ -96,7 +96,7 @@ public:
         m_ownerEntryMask = tableCapacity - 1u;
         m_indexed = true;
     }
-    void add(TrackedCommandBuffer& owner, const u64 nativeRecordingID){
+    void add(TrackedCommandBuffer& owner, const u64 nativeRecordingID)noexcept{
         if(!m_indexed || nativeRecordingID == 0u)
             return;
 

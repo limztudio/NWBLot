@@ -62,8 +62,8 @@ struct FramebufferInfo{
 
 
 public:
-    FramebufferInfo() = default;
-    FramebufferInfo(const FramebufferDesc& desc);
+    FramebufferInfo()noexcept = default;
+    FramebufferInfo(const FramebufferDesc& desc)noexcept;
 
 
 public:
@@ -96,8 +96,8 @@ struct FramebufferInfoEx : FramebufferInfo{
 
 
 public:
-    FramebufferInfoEx() = default;
-    FramebufferInfoEx(const FramebufferDesc& desc);
+    FramebufferInfoEx()noexcept = default;
+    FramebufferInfoEx(const FramebufferDesc& desc)noexcept;
 
 
 public:

@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-WaylandClipboardService::Offer::~Offer(){
+WaylandClipboardService::Offer::~Offer()noexcept{
     if(!handle)
         return;
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
@@ -33,7 +33,7 @@ WaylandClipboardService::Offer::~Offer(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-WaylandClipboardService::Source::~Source(){
+WaylandClipboardService::Source::~Source()noexcept{
     if(!handle)
         return;
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
@@ -60,7 +60,7 @@ WaylandClipboardService::WaylandClipboardService(Alloc::GlobalArena& arena, wl_d
     m_writers.reserve(s_MaxWriters);
 }
 
-WaylandClipboardService::~WaylandClipboardService(){
+WaylandClipboardService::~WaylandClipboardService()noexcept{
     releaseDevices();
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(m_primaryManager)
@@ -82,13 +82,13 @@ bool WaylandClipboardService::initialize(){
     return true;
 }
 
-void WaylandClipboardService::observeSerial(const u32 serial){
+void WaylandClipboardService::observeSerial(const u32 serial)noexcept{
     NWB_ASSERT(isOwnerThread());
     if(m_seat && serial)
         m_serial = serial;
 }
 
-void WaylandClipboardService::setKeyboardFocus(const bool focused){
+void WaylandClipboardService::setKeyboardFocus(const bool focused)noexcept{
     NWB_ASSERT(isOwnerThread());
     m_focused = focused && m_seat;
     if(!m_focused){
@@ -145,7 +145,7 @@ void WaylandClipboardService::startNativeRequest(const ClipboardRequestToken tok
         finishRead(ClipboardStatus::NativeFailure);
 }
 
-void WaylandClipboardService::cancelNativeRequest(const ClipboardRequestToken token){
+void WaylandClipboardService::cancelNativeRequest(const ClipboardRequestToken token)noexcept{
     if(m_readToken != token)
         return;
     m_readToken = {};
@@ -217,7 +217,7 @@ WaylandClipboardService::Offer* WaylandClipboardService::findOffer(void* const h
     return nullptr;
 }
 
-void WaylandClipboardService::selectOffer(void* const handle, const ClipboardChannel::Enum channel){
+void WaylandClipboardService::selectOffer(void* const handle, const ClipboardChannel::Enum channel)noexcept{
     const usize index = channel == ClipboardChannel::Clipboard ? 0u : 1u;
     Offer* const previous = m_selected[index];
     m_selected[index] = handle ? findOffer(handle, channel) : nullptr;
@@ -259,11 +259,11 @@ void AttachWaylandClipboardSeat(IClipboardService& service, wl_seat* const seat,
     checked_cast<WaylandClipboardService*>(&service)->attachSeat(seat, seatGlobalName);
 }
 
-void ObserveWaylandClipboardInputSerial(IClipboardService& service, const u32 serial){
+void ObserveWaylandClipboardInputSerial(IClipboardService& service, const u32 serial)noexcept{
     checked_cast<WaylandClipboardService*>(&service)->observeSerial(serial);
 }
 
-void SetWaylandClipboardKeyboardFocus(IClipboardService& service, const bool focused){
+void SetWaylandClipboardKeyboardFocus(IClipboardService& service, const bool focused)noexcept{
     checked_cast<WaylandClipboardService*>(&service)->setKeyboardFocus(focused);
 }
 

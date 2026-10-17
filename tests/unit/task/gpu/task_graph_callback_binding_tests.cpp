@@ -146,7 +146,11 @@ bool InvokeAccepted(void* const context, const Graphics::QueueSubmissionToken& t
 }
 
 template<typename Callback>
-[[nodiscard]] Callback MakeCallback(const Graphics::GpuTaskId task, CallbackContext& context){
+[[nodiscard]] Callback MakeCallback(const Graphics::GpuTaskId task, CallbackContext& context)noexcept(noexcept(Callback{
+    .task = task,
+    .context = &context,
+    .invoke = DeclVal<Conditional_T<IsSame_V<Callback, Graphics::GpuTaskGraphTaskRecordedCallback>, decltype(&InvokeRecorded), decltype(&InvokeAccepted)>>(),
+})){
     if constexpr(IsSame_V<Callback, Graphics::GpuTaskGraphTaskRecordedCallback>)
         return { .task = task, .context = &context, .invoke = InvokeRecorded };
     else
@@ -154,7 +158,9 @@ template<typename Callback>
 }
 
 template<typename Callback>
-[[nodiscard]] bool InvokeBoundCallback(const Callback& callback){
+[[nodiscard]] bool InvokeBoundCallback(const Callback& callback)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(
+    callback.invoke(callback.context, DeclVal<Conditional_T<IsSame_V<Callback, Graphics::GpuTaskGraphTaskRecordedCallback>, decltype(nullptr), const Graphics::QueueSubmissionToken&>>())
+))){
     if constexpr(IsSame_V<Callback, Graphics::GpuTaskGraphTaskRecordedCallback>)
         return callback.invoke(callback.context, nullptr);
     else{

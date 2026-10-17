@@ -215,7 +215,7 @@ constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(Resou
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
 }
 
-bool IsDescriptorBufferBackendReady(const VulkanContext& context){
+bool IsDescriptorBufferBackendReady(const VulkanContext& context)noexcept{
     return context.descriptorBufferManager && context.descriptorBufferManager->isEnabled();
 }
 
@@ -346,7 +346,7 @@ BindingLayout::BindingLayout(const VulkanContext& context)
     , m_descriptorBufferBindingOffsets(0, Hasher<u32>(), EqualTo<u32>(), context.objectArena)
     , m_context(context)
 {}
-BindingLayout::~BindingLayout(){
+BindingLayout::~BindingLayout()noexcept{
     if(m_pipelineLayout){
         m_context.deviceDispatch.vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
         m_pipelineLayout = VK_NULL_HANDLE;

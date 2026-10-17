@@ -77,11 +77,11 @@ RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& dev
     , m_context(context)
     , m_device(device)
 {}
-RayTracingPipeline::~RayTracingPipeline(){
+RayTracingPipeline::~RayTracingPipeline()noexcept{
     VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
 
-Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
+Object RayTracingPipeline::getNativeHandle(ObjectType objectType)noexcept{
     return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 
@@ -178,7 +178,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
     specInfos.reserve(maxShaderStages);
     pso->m_shaderGroups.reserve(desc.shaders.size() + desc.hitGroups.size());
 
-    auto addShaderSpecialization = [&](Shader& s, VkPipelineShaderStageCreateInfo& stageInfo){
+    auto addShaderSpecialization = [&](Shader& s, VkPipelineShaderStageCreateInfo& stageInfo)noexcept{
         if(s.m_specializationEntries.empty())
             return;
 

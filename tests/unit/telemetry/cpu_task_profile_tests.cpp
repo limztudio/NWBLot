@@ -193,7 +193,7 @@ TEST(CpuTaskProfileIntegration, NativeWorkerSamplesAreRecordedOnTheCollectorThre
     const CpuTaskProfileLabel label = scheduler.registerProfileLabel(taskName);
     ASSERT_TRUE(label.valid());
     scheduler.setProfiling(true, 19u);
-    const auto cpuAdmission209 = scheduler.submit([&](){ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
+    const auto cpuAdmission209 = scheduler.submit([&]()noexcept{ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
     ASSERT_TRUE(cpuAdmission209);
     const CpuTaskHandle task = *cpuAdmission209;
     ASSERT_TRUE(task.valid());

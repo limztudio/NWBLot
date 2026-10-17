@@ -104,15 +104,15 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     return true;
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems){
+bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems)noexcept{
     return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
 }
 
-bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
+bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems)noexcept{
     return prepareMaterialPassResourceBindingsImpl(drawItems, false);
 }
 
-bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
+bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems)noexcept{
     return prepareMaterialPassResourceBindingsImpl(drawItems, true);
 }
 
@@ -197,13 +197,13 @@ bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(const InstanceGpuDat
     return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
 }
 
-bool RendererMaterialSystem::materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const{
+bool RendererMaterialSystem::materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const noexcept{
     const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return materialPassDrawBuffersReady(instanceData.size(), uploadBytes);
 }
 
-bool RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCount, const usize materialTypedByteCount)const{
+bool RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
     if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
         return false;
 
@@ -222,14 +222,14 @@ ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPass
     };
 }
 
-void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept{
     // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
     const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
     for(InstanceGpuData& instance : instanceData)
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, const bool computeEmulation){
+bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, const bool computeEmulation)noexcept{
     if(drawItems.empty())
         return true;
 

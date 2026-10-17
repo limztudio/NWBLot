@@ -27,8 +27,8 @@ NWB_CORE_BEGIN
 // Borrow the Frame connection and selected seat; the service must be destroyed before either native object.
 [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandClipboardService(Alloc::GlobalArena& arena, wl_display& display);
 void AttachWaylandClipboardSeat(IClipboardService& service, wl_seat* seat, u32 seatGlobalName);
-void ObserveWaylandClipboardInputSerial(IClipboardService& service, u32 serial);
-void SetWaylandClipboardKeyboardFocus(IClipboardService& service, bool focused);
+void ObserveWaylandClipboardInputSerial(IClipboardService& service, u32 serial)noexcept;
+void SetWaylandClipboardKeyboardFocus(IClipboardService& service, bool focused)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

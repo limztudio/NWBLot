@@ -278,7 +278,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         && (hardwareTransparentTrace || RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
             rayTracingResources,
             importBuffer,
-            [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){
+            [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
                 resourceUses.push_back(ReadUse(resource, state));
             }
         ))
@@ -650,7 +650,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
         constexpr usize s_LightSpaceReadCapacity = 9u;
         lightSpaceReads.reserve(s_LightSpaceReadCapacity + rayTracingPlan.lightSpace.csgDynamicBoundsCount + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
-        if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(rayTracingResources, importBuffer, [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){
+        if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(rayTracingResources, importBuffer, [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
                 lightSpaceReads.push_back(ReadUse(resource, state));
             }
         ))

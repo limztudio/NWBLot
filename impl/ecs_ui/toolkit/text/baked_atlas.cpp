@@ -26,7 +26,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NewIdentity(){
+[[nodiscard]] static u64 NewIdentity()noexcept{
     const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
     NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("Baked font atlas identity overflow"));
     return identity;
@@ -61,7 +61,7 @@ BakedFontAtlas::BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas&
     m_ready = true;
 }
 
-const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const{
+const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const noexcept{
     NWB_FATAL_ASSERT(group < m_pages.size());
     return m_pages[group];
 }

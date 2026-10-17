@@ -31,7 +31,7 @@ X11ClipboardService::X11ClipboardService(Alloc::GlobalArena& arena, Display& dis
     m_outgoing.reserve(s_MaxTransfers);
 }
 
-X11ClipboardService::~X11ClipboardService(){
+X11ClipboardService::~X11ClipboardService()noexcept{
     releaseOperation();
     while(!m_outgoing.empty())
         releaseTransfer(m_outgoing.size() - 1u, true);

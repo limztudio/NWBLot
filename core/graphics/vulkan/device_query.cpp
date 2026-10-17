@@ -133,11 +133,11 @@ FormatSupport::Mask Device::queryFormatSupport(const Format::Enum format)noexcep
     return queryFormatSupportUncached(format);
 }
 
-Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
+Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)noexcept{
     return getNativeQueue(objectType, getPrimaryPhysicalQueue(queue));
 }
 
-Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue){
+Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue)noexcept{
     if(objectType == ObjectTypes::s_Queue){
         Queue* q = getQueue(queue);
         return q ? Object(q->m_nativeQueue.queue) : Object(nullptr);

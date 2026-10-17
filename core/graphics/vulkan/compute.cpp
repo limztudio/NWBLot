@@ -21,11 +21,11 @@ ComputePipeline::ComputePipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
-ComputePipeline::~ComputePipeline(){
+ComputePipeline::~ComputePipeline()noexcept{
     VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
 
-Object ComputePipeline::getNativeHandle(ObjectType objectType){
+Object ComputePipeline::getNativeHandle(ObjectType objectType)noexcept{
     return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 

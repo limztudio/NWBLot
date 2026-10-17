@@ -40,7 +40,7 @@ namespace __hidden_ui_gpu_texture_images{
     ;
 }
 
-[[nodiscard]] static bool ValidVersion(const GpuTextureImageVersion& version){
+[[nodiscard]] static bool ValidVersion(const GpuTextureImageVersion& version)noexcept{
     if(!ValidSource(version.m_source) || !version.m_texture.valid())
         return false;
     const TextureGpuResource& resource = version.m_texture;

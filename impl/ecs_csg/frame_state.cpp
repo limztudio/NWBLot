@@ -40,7 +40,7 @@ namespace __hidden_frame_state{
 }
 
 template<typename ComponentT>
-[[nodiscard]] bool HasComponentCandidates(Core::ECS::World& world){
+[[nodiscard]] bool HasComponentCandidates(Core::ECS::World& world)noexcept{
     return world.view<ComponentT>().candidateCount() > 0u;
 }
 
@@ -131,7 +131,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
 }
 
 
-Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(const Core::ECS::EntityID entity, const CsgReceiverPass::Enum receiverPass)const{
+Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(const Core::ECS::EntityID entity, const CsgReceiverPass::Enum receiverPass)const noexcept{
     if(m_cutterRanges.empty())
         return MakeUnexpected(Failure{});
 
@@ -154,7 +154,7 @@ Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(
     return state;
 }
 
-Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(const Core::ECS::EntityID entity)const{
+Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(const Core::ECS::EntityID entity)const noexcept{
     if(m_cutterRanges.empty())
         return MakeUnexpected(Failure{});
 
@@ -176,11 +176,11 @@ Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool HasCsgFrameCandidates(Core::ECS::World& world){
+bool HasCsgFrameCandidates(Core::ECS::World& world)noexcept{
     return __hidden_frame_state::HasComponentCandidates<CsgCutterComponent>(world) && (__hidden_frame_state::HasComponentCandidates<StaticCsgMeshComponent>(world) || __hidden_frame_state::HasComponentCandidates<SkinnedCsgMeshComponent>(world));
 }
 
-Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity){
+Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
     if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity))
         return CsgResolvedReceiver{ receiver, CsgReceiverKind::Static };
     if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity))

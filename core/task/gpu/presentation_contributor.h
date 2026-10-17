@@ -26,7 +26,7 @@ class GpuTaskGraph;
 // The contributor owns its payload and CPU-side acceptance lifecycle; Graphics only keeps this non-owning registration seam so renderer and UI modules stay independent.
 interface IGpuTaskGraphPresentationContributor{
 public:
-    virtual ~IGpuTaskGraphPresentationContributor() = default;
+    virtual ~IGpuTaskGraphPresentationContributor()noexcept = default;
 
 
 public:

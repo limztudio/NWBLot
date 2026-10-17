@@ -42,7 +42,7 @@ struct AreaEvent{
 
 
 public:
-    explicit AreaEvent(Core::Alloc::GlobalArena& arena) : text(arena){}
+    explicit AreaEvent(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
 };
 
 struct AreaPublication{
@@ -52,7 +52,7 @@ struct AreaPublication{
 
 
 public:
-    explicit AreaPublication(Core::Alloc::GlobalArena& arena) : text(arena){}
+    explicit AreaPublication(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
 };
 
 struct AreaResolution{
@@ -63,7 +63,7 @@ struct AreaResolution{
 
 
 public:
-    explicit AreaResolution(Core::Alloc::GlobalArena& arena) : text(arena){}
+    explicit AreaResolution(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
 };
 
 class TextAreaHost final : public IEditBoxHost{
@@ -77,7 +77,7 @@ public:
         , m_events(arena)
         , m_bindings(arena)
     {}
-    virtual ~TextAreaHost()override = default;
+    virtual ~TextAreaHost()noexcept override = default;
 
 
 public:

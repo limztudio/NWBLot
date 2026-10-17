@@ -110,7 +110,11 @@ struct AssetPayloadView{
 
 // The result borrows the serialized payload, which must outlive both views.
 template<typename PayloadContainer>
-[[nodiscard]] inline Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(const PayloadContainer& payload){
+[[nodiscard]] inline Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(const PayloadContainer& payload)noexcept(
+    noexcept(ReadPOD<u32>(payload, DeclVal<usize&>()))
+    && noexcept(ReadString(payload, DeclVal<usize&>()))
+    && noexcept(BinaryByteView{ payload.data() + DeclVal<usize&>(), payload.size() - DeclVal<usize&>() })
+){
     usize cursor = 0u;
     const auto magic = ReadPOD<u32>(payload, cursor);
     const auto version = ReadPOD<u32>(payload, cursor);

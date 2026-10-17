@@ -236,7 +236,7 @@ Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-)const{
+)const noexcept{
     CsgClipContextSlots contextSlots{};
     if(!csgFrameData.hasWork())
         return contextSlots;

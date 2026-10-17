@@ -155,7 +155,7 @@ public:
     // Caller joins submitted work and discards snapshots before teardown.
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, bool prepareCsgHardware, const ReflectionSettings& settings);
-    [[nodiscard]] Expected<ReflectionCsgDispatchHandle> createCsgDispatchState(const ReflectionFrameSnapshot& resources)const;
+    [[nodiscard]] Expected<ReflectionCsgDispatchHandle> createCsgDispatchState(const ReflectionFrameSnapshot& resources)const noexcept;
     void pollStatistics();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
@@ -165,7 +165,7 @@ public:
         const ReflectionSettings& settings,
         u32 frameIndex,
         const ReflectionSceneContentStamp& stamp
-    )const;
+    )const noexcept;
 
 
 private:

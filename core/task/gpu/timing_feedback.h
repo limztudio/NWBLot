@@ -93,7 +93,7 @@ struct RouteKey{
 
 
 public:
-    [[nodiscard]] constexpr bool operator==(const RouteKey&)const = default;
+    [[nodiscard]] constexpr bool operator==(const RouteKey&)const noexcept = default;
 };
 
 struct AssignmentKey{
@@ -103,7 +103,7 @@ struct AssignmentKey{
 
 
 public:
-    [[nodiscard]] constexpr bool operator==(const AssignmentKey&)const = default;
+    [[nodiscard]] constexpr bool operator==(const AssignmentKey&)const noexcept = default;
 };
 
 struct RouteLookup{
@@ -321,7 +321,7 @@ private:
 
 
 public:
-    explicit GpuTaskTimingHistoryStore(GraphicsArena& arena, u32 maximumSamplesPerHistory = s_DefaultGpuTaskTimingHistorySampleCount);
+    explicit GpuTaskTimingHistoryStore(GraphicsArena& arena, u32 maximumSamplesPerHistory = s_DefaultGpuTaskTimingHistorySampleCount)noexcept;
 
 
 public:

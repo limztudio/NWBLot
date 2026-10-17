@@ -36,7 +36,7 @@ static constexpr Graphics::GpuGraphPipelineId s_Pipeline{ .generation = s_Comman
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::GpuCommandIrRasterStateDesc RasterState(){
+Graphics::GpuCommandIrRasterStateDesc RasterState()noexcept{
     Graphics::GpuCommandIrRasterStateDesc state;
     state.pipeline = s_Pipeline;
     state.colorAttachment = s_CommandIrDestination;

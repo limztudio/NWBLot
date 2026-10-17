@@ -242,7 +242,7 @@ public:
     {
         m_obj.acquire();
     }
-    ~ScopedLock(){ m_obj.release(); }
+    ~ScopedLock()noexcept{ m_obj.release(); }
 
 
 public:

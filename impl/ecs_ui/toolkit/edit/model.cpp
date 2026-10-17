@@ -102,7 +102,7 @@ bool EditModel::setSelection(const usize anchor, const usize caret)noexcept{
     return true;
 }
 
-bool EditModel::selectAll(){
+bool EditModel::selectAll()noexcept{
     return setSelection(0u, m_text.size());
 }
 

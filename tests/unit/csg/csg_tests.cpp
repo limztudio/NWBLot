@@ -345,7 +345,7 @@ TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
 
-    auto makeVertex = [](const f32 x, const f32 y, const f32 z){
+    auto makeVertex = [](const f32 x, const f32 y, const f32 z)noexcept{
         NWB::Impl::CsgDeformVertex vertex;
         vertex.position = Float3U(x, y, z);
         vertex.normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);

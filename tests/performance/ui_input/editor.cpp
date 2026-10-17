@@ -64,7 +64,7 @@ public:
 
 
 protected:
-    virtual void startNativeRequest(const ClipboardRequestToken token, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)override{
+    virtual void startNativeRequest(const ClipboardRequestToken token, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{
         const bool completed = completeNativeRequest(token, ClipboardStatus::Unsupported);
         NWB_FATAL_ASSERT(completed);
     }
@@ -247,12 +247,12 @@ bool RunEditBenchmarks(){
         __hidden_ui_editor_benchmark::PublicationCase publication(s_StopCounts[index]);
         if(!publication.setup() || !publication.operation() || !publication.checksum())
             return false;
-        if(!Measure(s_PublicationNames[index], s_StopCounts[index], [&publication](){ return publication.operation(); }, [&publication](){ return publication.checksum(); }))
+        if(!Measure(s_PublicationNames[index], s_StopCounts[index], [&publication](){ return publication.operation(); }, [&publication]()noexcept{ return publication.checksum(); }))
             return false;
         __hidden_ui_editor_benchmark::EmptySelectionCase selection(s_LineCounts[index]);
         if(!selection.setup() || !selection.operation() || !selection.checksum())
             return false;
-        if(!Measure(s_SelectionNames[index], s_LineCounts[index], [&selection](){ return selection.operation(); }, [&selection](){ return selection.checksum(); }))
+        if(!Measure(s_SelectionNames[index], s_LineCounts[index], [&selection](){ return selection.operation(); }, [&selection]()noexcept{ return selection.checksum(); }))
             return false;
     }
     return true;

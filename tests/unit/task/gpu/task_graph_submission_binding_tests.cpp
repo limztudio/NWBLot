@@ -105,7 +105,7 @@ SubmissionBindingFixture::SubmissionBindingFixture()
     Graphics::QueueSubmissionPreSubmitHook result;
     result.context = &hookInvocationCount;
     result.identity = identity;
-    result.invoke = [](void* const context, u64, const Graphics::GpuPhysicalQueueId&)->Expected<Graphics::QueueSubmissionNativeSignal>{
+    result.invoke = [](void* const context, u64, const Graphics::GpuPhysicalQueueId&)noexcept ->Expected<Graphics::QueueSubmissionNativeSignal>{
         ++*static_cast<u32*>(context);
         return MakeUnexpected(Failure{});
     };

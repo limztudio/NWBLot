@@ -31,7 +31,7 @@ using namespace UiWidgetTests;
 // Keys remain stable through reorder and removal; the large source needs no row allocation.
 class ComboSource : public IListDataSource{
 public:
-    virtual ~ComboSource()override = default;
+    virtual ~ComboSource()noexcept override = default;
 
 
 public:

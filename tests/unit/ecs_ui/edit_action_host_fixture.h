@@ -25,7 +25,7 @@ struct ActionRecord{
 
 
 public:
-    explicit ActionRecord(Alloc::GlobalArena& arena) : text(arena){}
+    explicit ActionRecord(Alloc::GlobalArena& arena)noexcept : text(arena){}
 };
 
 class RecordingActions final : public Ui::IEditActionSink{
@@ -37,7 +37,7 @@ public:
     {
         committed.assign("0");
     }
-    virtual ~RecordingActions()override = default;
+    virtual ~RecordingActions()noexcept override = default;
 
 
 public:
@@ -61,7 +61,7 @@ public:
         return draft.setText(committed);
     }
 
-    void clear(){ records.clear(); }
+    void clear()noexcept{ records.clear(); }
 
 
 private:

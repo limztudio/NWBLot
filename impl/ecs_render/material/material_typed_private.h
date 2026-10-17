@@ -262,7 +262,7 @@ inline InstanceGpuData BuildInstanceGpuData(const Core::ECS::EntityID entity, co
 }
 
 template<typename MaterialTypedByteVector>
-[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(const MaterialTypedByteVector& materialTypedBytes){
+[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(const MaterialTypedByteVector& materialTypedBytes)noexcept(noexcept(DeclVal<void(*)(usize)noexcept>()(materialTypedBytes.size()))){
     const usize uploadByteCount = materialTypedBytes.size();
     NWB_ASSERT_MSG(uploadByteCount != 0u, NWB_TEXT("RendererSystem: material typed data upload is empty"));
     NWB_ASSERT_MSG((uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u, NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
@@ -280,7 +280,7 @@ template<typename MaterialTypedByteVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void AssertMaterialTypedUploadRange(const MaterialTypedByteRange& range, const usize uploadByteCount, [[maybe_unused]] const TStringView rangeName){
+inline void AssertMaterialTypedUploadRange(const MaterialTypedByteRange& range, const usize uploadByteCount, [[maybe_unused]] const TStringView rangeName)noexcept{
     if(range.byteCount == 0u){
         NWB_ASSERT_MSG(MaterialTypedByteRangeEmptyOffsetValid(range), NWB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"), rangeName);
         return;
@@ -293,7 +293,7 @@ inline void AssertMaterialTypedUploadRange(const MaterialTypedByteRange& range, 
     NWB_ASSERT_MSG(byteOffset <= uploadByteCount && static_cast<usize>(range.byteCount) <= uploadByteCount - byteOffset, NWB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"), rangeName);
 }
 
-inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& ranges, const usize uploadByteCount){
+inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& ranges, const usize uploadByteCount)noexcept{
     AssertMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, NWB_TEXT("constant"));
     AssertMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, NWB_TEXT("mutable"));
 }
@@ -301,7 +301,7 @@ inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& 
 using MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena>;
 
 template<typename MaterialTypedByteVector>
-inline void AssertMaterialTypedUploadRanges(const MaterialTypedInstanceRangeVector& instanceRanges, const MaterialTypedByteVector& materialTypedBytes){
+inline void AssertMaterialTypedUploadRanges(const MaterialTypedInstanceRangeVector& instanceRanges, const MaterialTypedByteVector& materialTypedBytes)noexcept(noexcept(DeclVal<void(*)(usize)noexcept>()(materialTypedBytes.size()))){
     if(instanceRanges.empty())
         return;
 

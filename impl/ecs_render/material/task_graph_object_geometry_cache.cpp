@@ -32,7 +32,7 @@ namespace __hidden_task_graph_object_geometry_cache{
 
 using namespace RendererTaskGraphDetail;
 
-[[nodiscard]] bool SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right){
+[[nodiscard]] bool SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
     const auto& leftCache = left.meshResources.objectGeometryCache;
     const auto& rightCache = right.meshResources.objectGeometryCache;
     if(left.meshKey != right.meshKey || left.meshResources.runtimeMesh != right.meshResources.runtimeMesh
@@ -60,7 +60,7 @@ using namespace RendererTaskGraphDetail;
     return same;
 }
 
-[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name identity, const AStringView label){
+[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name identity, const AStringView label)noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.forceSubmissionBoundary = false;
@@ -102,7 +102,7 @@ public:
         return true;
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken&){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept{
         // A replaced generation may reject content publication after accepted work; its output state still belongs to the mesh owner.
         if(!payload.meshSystem.confirmObjectGeometryCache(payload.draw.meshKey, payload.draw.meshResources.sourceBuffers, payload.draw.meshResources.objectGeometryCache, payload.draw.meshResources.runtimeMesh))
             return;

@@ -112,7 +112,7 @@ bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& decla
 }
 
 
-bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList){
+bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept{
     if(!declarationAccess.validResource(barrier.resource))
         return false;
 

@@ -19,7 +19,7 @@ namespace CpuTaskTestSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool WaitUntil(const Atomic<bool>& condition, const u32 timeoutMS){
+[[nodiscard]] inline bool WaitUntil(const Atomic<bool>& condition, const u32 timeoutMS)noexcept{
     const Timer begin = TimerNow();
     while(!condition.load(MemoryOrder::acquire)){
         if(DurationInMS<u64>(TimerNow(), begin) >= timeoutMS)

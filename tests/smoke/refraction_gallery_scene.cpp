@@ -56,7 +56,7 @@ constexpr f32 s_IdentityNearPlane = s_GalleryCameraDistance - 0.00025f;
 
 class GalleryBuilder final{
 public:
-    GalleryBuilder(ProjectRuntimeContext& context, Core::ECS::World& world, const bool preview)
+    GalleryBuilder(ProjectRuntimeContext& context, Core::ECS::World& world, const bool preview)noexcept
         : m_context(context)
         , m_world(world)
         , m_preview(preview)

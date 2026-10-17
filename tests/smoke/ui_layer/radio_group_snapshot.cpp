@@ -52,7 +52,7 @@ static constexpr Array<TStringView, 41u> s_RectNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void CopyChoices(UiRadioGroupSnapshot& snapshot, const Impl::Ui::RadioGroupPlacement& placement, const u32 offset){
+static void CopyChoices(UiRadioGroupSnapshot& snapshot, const Impl::Ui::RadioGroupPlacement& placement, const u32 offset)noexcept{
     for(u32 index = 0u; index < placement.count; ++index){
         const Impl::Ui::RadioGroupChoicePlacement& row = placement.rows[index];
         if(row.key < 10u || row.key > 50u || row.key % 10u != 0u)

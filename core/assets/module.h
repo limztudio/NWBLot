@@ -47,7 +47,7 @@ public: \
 #define NWB_DEFINE_ASSET_CODEC(codecType, assetType) \
     class codecType final : public Core::Assets::AssetCodec<assetType>{ \
     public: \
-        codecType() = default; \
+        codecType()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(assetType::AssetTypeName()))) = default; \
         \
         \
         NWB_ASSET_CODEC_SERIALIZE_DECL() \

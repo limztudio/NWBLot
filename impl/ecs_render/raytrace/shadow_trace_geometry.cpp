@@ -70,7 +70,7 @@ public:
             record.firstMesh[memberIndex] = meshIndex;
     }
 
-    [[nodiscard]] BufferRecord* find(Core::Buffer* const buffer){
+    [[nodiscard]] BufferRecord* find(Core::Buffer* const buffer)noexcept{
         if(m_map){
             const auto found = m_map->find(buffer);
             return found == m_map->end() ? nullptr : &found.value();

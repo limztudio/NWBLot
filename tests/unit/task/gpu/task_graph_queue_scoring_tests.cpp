@@ -139,7 +139,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
                 EXPECT_EQ(scoringData.assignedQueueLoad(candidate.id), assignedCost);
                 for(const auto& range : ignoredRanges){
                     GpuTaskQueueScoreExclusions exclusions{ .assignmentOffset = range[0u], .assignmentCount = range[1u] };
-                    const auto ignored = [&](const usize row){ return row >= range[0u] && row - range[0u] < range[1u]; };
+                    const auto ignored = [&](const usize row)noexcept{ return row >= range[0u] && row - range[0u] < range[1u]; };
                     for(usize row = 0u; row < assignments.size(); ++row){
                         if(!ignored(row))
                             continue;

@@ -35,7 +35,7 @@ inline constexpr u32 s_GateTimeoutMS = 4000u;
 class DeadlineGuard final{
 public:
     DeadlineGuard()
-        : m_watchdog([](const StopToken& stop){
+        : m_watchdog([](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= 12000u)
@@ -53,7 +53,7 @@ private:
 
 
 template<typename Predicate>
-[[nodiscard]] bool WaitUntil(const Predicate& predicate){
+[[nodiscard]] bool WaitUntil(const Predicate& predicate)noexcept(noexcept(static_cast<bool>(!predicate()))){
     const Timer begin = TimerNow();
     while(!predicate()){
         if(DurationInMS<u64>(TimerNow(), begin) >= s_GateTimeoutMS)
@@ -79,7 +79,7 @@ struct ProducerState{
 
 
 void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& state, u32 producer){
-    if(!WaitUntil([&](){ return state.start.load(MemoryOrder::acquire); })){
+    if(!WaitUntil([&]()noexcept{ return state.start.load(MemoryOrder::acquire); })){
         state.expired.store(true, MemoryOrder::release);
         return;
     }
@@ -89,7 +89,7 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
             state.visits[slot].fetch_add(1u, MemoryOrder::relaxed);
             const auto cpuAdmission45 = scheduler.submit([&scheduler, &state, slot](){
                 state.visits[slot + 1u].fetch_add(1u, MemoryOrder::relaxed);
-                const auto cpuAdmission46 = scheduler.submit([&state, slot](){
+                const auto cpuAdmission46 = scheduler.submit([&state, slot]()noexcept{
                     state.visits[slot + 2u].fetch_add(1u, MemoryOrder::relaxed);
                 }
                 );
@@ -126,14 +126,14 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
     }
     state.published[producer].store(true, MemoryOrder::release);
     const u32 predecessor = (producer + 1u) % s_ProducerCount;
-    if(!WaitUntil([&](){ return state.published[predecessor].load(MemoryOrder::acquire); })){
+    if(!WaitUntil([&]()noexcept{ return state.published[predecessor].load(MemoryOrder::acquire); })){
         state.expired.store(true, MemoryOrder::release);
         return;
     }
     for(u32 task = 0u; task < s_TasksPerProducer; ++task){
         const u32 slot = (producer * s_TasksPerProducer + task) * 4u;
         const u32 precedingSlot = (predecessor * s_TasksPerProducer + task) * 4u;
-        const auto cpuAdmission49 = scope.submit([&state, slot, precedingSlot](){
+        const auto cpuAdmission49 = scope.submit([&state, slot, precedingSlot]()noexcept{
             for(u32 descendant = 0u; descendant < 3u; ++descendant){
                 if(state.visits[precedingSlot + descendant].load(MemoryOrder::acquire) != 1u)
                     state.invalidOrder.store(true, MemoryOrder::release);
@@ -251,13 +251,13 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
         producers[producer] = JoiningThread([&, producer](){
             ScopeExit finish([&]()noexcept{ finished.fetch_add(1u, MemoryOrder::release); });
             ready.fetch_add(1u, MemoryOrder::release);
-            if(!WaitUntil([&](){ return start.load(MemoryOrder::acquire); })){
+            if(!WaitUntil([&]()noexcept{ return start.load(MemoryOrder::acquire); })){
                 expired.store(true, MemoryOrder::release);
                 return;
             }
             for(u32 task = 0u; task < s_TasksPerProducer; ++task){
                 const u32 slot = producer * s_TasksPerProducer + task;
-                auto callback = [&, slot](){
+                auto callback = [&, slot]()noexcept{
                     if(QueryCurrentThreadId() != owner || scheduler.currentWorkerIndex() != 0u)
                         wrongThread.store(true, MemoryOrder::release);
                     visits[slot].fetch_add(1u, MemoryOrder::relaxed);
@@ -348,7 +348,7 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
         );
         for(u32 kind = 0u; kind < s_JoinKinds; ++kind){
             waiters[kind] = JoiningThread([&, kind](){
-                if(!WaitUntil([&](){ return start.load(MemoryOrder::acquire); })){
+                if(!WaitUntil([&]()noexcept{ return start.load(MemoryOrder::acquire); })){
                     expired.store(true, MemoryOrder::release);
                     return;
                 }

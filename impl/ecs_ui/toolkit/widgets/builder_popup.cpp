@@ -136,7 +136,7 @@ bool Builder::endPopup(){
     return finished;
 }
 
-bool Builder::synchronizePopup(){
+bool Builder::synchronizePopup()noexcept{
     for(const BuilderScopeFrame* frame = m_scope.get(); frame; frame = frame->m_parent){
         if(frame->m_popupState && !popupFrameVisible(*frame)){
             m_context.input().closePopup(frame->m_popupToken);

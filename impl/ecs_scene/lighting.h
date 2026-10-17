@@ -47,7 +47,7 @@ static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to 
 static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
 
 
-[[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, SIMDVectorSingle defaultForward, SceneLight* outLights, usize maxLights);
+[[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, SIMDVectorSingle defaultForward, SceneLight* outLights, usize maxLights)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -26,7 +26,7 @@ void PaintUiLayerSmokeScene(Impl::UiPaintContext& context){
     Impl::Ui::PaintBuilder& paint = context.paint;
     const f32 width = context.display.logicalWidth;
     const f32 height = context.display.logicalHeight;
-    const auto rectangle = [width, height](const f32 x, const f32 y, const f32 w, const f32 h){
+    const auto rectangle = [width, height](const f32 x, const f32 y, const f32 w, const f32 h)noexcept{
         return Impl::Ui::Rect{ x * width, y * height, w * width, h * height };
     };
 

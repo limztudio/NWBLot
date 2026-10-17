@@ -668,7 +668,7 @@ Expected<GpuTaskGraph::MarkerLabelRange> GpuTaskGraph::appendMarkerLabel(const A
     return range;
 }
 
-AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{
+AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const noexcept{
     NWB_ASSERT(offset <= m_markerText.size());
     NWB_ASSERT(size <= m_markerText.size() - offset);
     return AStringView(reinterpret_cast<const char*>(m_markerText.data() + offset), size);

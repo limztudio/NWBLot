@@ -85,7 +85,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
 
-    const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
+    const auto passState = [&](const Core::ComputePipelineHandle& pipeline)noexcept{
         Core::ComputeState state;
         state.setPipeline(pipeline.get());
         // Set 0 is push-only; keep it so heap sets retain layout indices.

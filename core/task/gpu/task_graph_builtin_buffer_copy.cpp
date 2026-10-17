@@ -86,7 +86,7 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, con
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(copyDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const BufferRange range, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
+    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const BufferRange range, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;

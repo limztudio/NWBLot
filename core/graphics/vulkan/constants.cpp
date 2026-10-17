@@ -402,7 +402,7 @@ VkFormat ConvertFormat(Format::Enum format)noexcept{
     return VulkanDetail::ConvertFormat(format);
 }
 
-TStringView ResultToString(VkResult result){
+TStringView ResultToString(VkResult result)noexcept{
     switch(result){
     case VK_SUCCESS: return NWB_TEXT("VK_SUCCESS");
     case VK_NOT_READY: return NWB_TEXT("VK_NOT_READY");

@@ -43,13 +43,13 @@ public:
     explicit CommandListResourceSelection(Alloc::ScratchArena& scratchArena)noexcept
         : m_scratchArena(scratchArena)
     {}
-    ~CommandListResourceSelection();
+    ~CommandListResourceSelection()noexcept;
     CommandListResourceSelection(CommandListResourceSelection&&) = delete;
 
 
 public:
-    [[nodiscard]] bool addTexture(Texture* texture, usize inputIndex);
-    [[nodiscard]] bool addBuffer(Buffer* buffer, usize inputIndex);
+    [[nodiscard]] bool addTexture(Texture* texture, usize inputIndex)noexcept;
+    [[nodiscard]] bool addBuffer(Buffer* buffer, usize inputIndex)noexcept;
     [[nodiscard]] bool containsTexture(Texture* texture)const noexcept{ return texture && containsResource(texture, true); }
     [[nodiscard]] bool containsBuffer(Buffer* buffer)const noexcept{ return buffer && containsResource(buffer, false); }
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
@@ -60,7 +60,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool addResource(void* resource, usize inputIndex, bool texture);
+    [[nodiscard]] bool addResource(void* resource, usize inputIndex, bool texture)noexcept;
     [[nodiscard]] bool containsResource(void* resource, bool texture)const noexcept{
         if(m_storage)
             return containsIndexedResource(resource, texture);
@@ -73,7 +73,7 @@ private:
         return false;
     }
     [[nodiscard]] bool containsIndexedResource(void* resource, bool texture)const noexcept;
-    [[nodiscard]] bool grow();
+    [[nodiscard]] bool grow()noexcept;
 
 
 private:

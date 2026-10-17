@@ -23,7 +23,7 @@ RendererMaterialState::RendererMaterialState(Core::Alloc::GlobalArena& arena)
 {}
 
 
-void RendererMaterialState::invalidateResources(){
+void RendererMaterialState::invalidateResources()noexcept{
     m_pipelines.clear();
     m_materialPassBindingLayout.reset();
     m_computeBindingLayout.reset();

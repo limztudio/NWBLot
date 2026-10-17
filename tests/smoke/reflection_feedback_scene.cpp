@@ -47,7 +47,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackScene::ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world)
+ReflectionFeedbackScene::ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept
     : m_context(context)
     , m_world(world){}
 
@@ -80,7 +80,7 @@ bool ReflectionFeedbackScene::create(const AStringView caseName, const bool fina
     return !finalState || applyMutation();
 }
 
-bool ReflectionFeedbackScene::applyMutation(){
+bool ReflectionFeedbackScene::applyMutation()noexcept{
     if(m_case != ReflectionFeedbackCase::Mutation)
         return false;
     if(m_finalState)

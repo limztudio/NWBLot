@@ -112,7 +112,7 @@ inline void BuildMeshViewFrustumVectors(
     outFrustumPlanes[5] = PlaneTests::FromPointNormal(VectorNegate(forward), farPoint, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
-inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
+inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio)noexcept{
     MeshViewGpuData state;
     SIMDMatrix viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
     NWB::Impl::Scene::CameraProjection projection = NWB::Impl::Scene::StoreDefaultCameraProjection(fallbackAspectRatio);

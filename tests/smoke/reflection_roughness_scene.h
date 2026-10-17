@@ -33,7 +33,7 @@ namespace ReflectionRoughnessCase{
 
 class ReflectionRoughnessScene final{
 public:
-    ReflectionRoughnessScene(ProjectRuntimeContext& context, Core::ECS::World& world, Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness);
+    ReflectionRoughnessScene(ProjectRuntimeContext& context, Core::ECS::World& world, Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness)noexcept;
 
 
 public:

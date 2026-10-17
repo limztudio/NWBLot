@@ -73,7 +73,7 @@ static void ExpectPayload(const Texture& texture, const u8 initialValue){
 
 class MemoryImageBinarySource final : public IAssetBinarySource{
 public:
-    explicit MemoryImageBinarySource(AssetArena& arena)
+    explicit MemoryImageBinarySource(AssetArena& arena)noexcept
         : m_binary(arena)
     {}
 
@@ -99,7 +99,7 @@ public:
 // An application codec can violate its declared type or return a different path; the loader must fence both.
 class MisdirectedImageCodec final : public IAssetCodec{
 public:
-    explicit MisdirectedImageCodec(const bool wrongType)
+    explicit MisdirectedImageCodec(const bool wrongType)noexcept
         : IAssetCodec(Texture::AssetTypeName())
         , m_wrongType(wrongType)
     {}

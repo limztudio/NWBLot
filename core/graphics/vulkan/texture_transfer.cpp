@@ -48,7 +48,7 @@ struct TextureUploadCopyAspect{
     VulkanDetail::TextureFormatBlockLayout formatLayout;
 };
 
-[[nodiscard]] inline Expected<TextureUploadCopyAspect> ResolveTextureUploadCopyAspect(const TextureDesc& textureDesc, const VkImageAspectFlags textureAspectMask, const TextureUploadAspect::Enum requestedAspect){
+[[nodiscard]] inline Expected<TextureUploadCopyAspect> ResolveTextureUploadCopyAspect(const TextureDesc& textureDesc, const VkImageAspectFlags textureAspectMask, const TextureUploadAspect::Enum requestedAspect)noexcept{
     TextureUploadCopyAspect result{};
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);

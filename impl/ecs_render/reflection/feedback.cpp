@@ -177,7 +177,7 @@ bool ReflectionFeedbackState::accept(const ReflectionFeedbackPlan& plan, const C
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration){
+ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
     return ReflectionFeedbackControlHandle(NewArenaObject<ReflectionFeedbackControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
@@ -185,7 +185,7 @@ ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::Glo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackReservation::ReflectionFeedbackReservation(ReflectionFeedbackControlHandle control, const ReflectionFeedbackPlan& plan)
+ReflectionFeedbackReservation::ReflectionFeedbackReservation(ReflectionFeedbackControlHandle control, const ReflectionFeedbackPlan& plan)noexcept
     : m_control(Move(control))
     , m_plan(plan)
 {

@@ -71,7 +71,12 @@ struct AcceptedInputState{
 };
 
 template<usize Capacity, typename Input>
-[[nodiscard]] AcceptedInputState<Capacity> CaptureAcceptedInput(const Input& input){
+[[nodiscard]] AcceptedInputState<Capacity> CaptureAcceptedInput(const Input& input)noexcept(
+    noexcept(DeclVal<usize&>() = input.targets().size())
+    && noexcept(DeclVal<u64&>() = input.layoutGeneration())
+    && noexcept(DeclVal<WidgetId&>() = input.capture())
+    && noexcept(DeclVal<HitTarget&>() = input.targets()[DeclVal<usize&>()])
+){
     AcceptedInputState<Capacity> saved;
     saved.count = input.targets().size();
     saved.layoutGeneration = input.layoutGeneration();

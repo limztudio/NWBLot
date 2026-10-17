@@ -204,7 +204,7 @@ public:
 
 
 public:
-    ResolvedMarker resolveMarker(usize markerHash);
+    ResolvedMarker resolveMarker(usize markerHash)noexcept;
 
 
 private:

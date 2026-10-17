@@ -72,7 +72,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(const f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput){
+SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(const f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept{
     NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
     NWB_ASSERT(m_deferredState.m_lightBuffer);
     SceneShadingBufferUploads uploads{};
@@ -113,7 +113,7 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     const bool lightUploadRequired,
     const ECSRenderDetail::SceneShadingGpuData& sceneShadingState,
     const bool sceneShadingUploadRequired
-){
+)noexcept{
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
     // Commit the empty mirror on accept so later diffs stay correct.
     if(lightUploadRequired || lightCount == 0u){

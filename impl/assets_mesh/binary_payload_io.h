@@ -43,7 +43,36 @@ inline constexpr TStringView s_ColorsStreamLabel = NWB_TEXT("colors");
 
 
 template<typename HeaderT>
-[[nodiscard]] bool MeshBaseHeaderComplete(const HeaderT& header){
+[[nodiscard]] bool MeshBaseHeaderComplete(const HeaderT& header)noexcept(
+    noexcept(
+        header.positionCount != 0u
+        && header.normalCount != 0u
+        && header.tangentCount != 0u
+        && header.uv0Count != 0u
+        && header.colorCount != 0u
+        && header.meshletCount != 0u
+        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE)
+        && header.meshletBoundCount == header.meshletCount
+        && header.meshletPositionRefDeltaByteCount != 0u
+        && header.meshletAttributeRefDeltaByteCount != 0u
+        && header.meshletLocalVertexRefCount != 0u
+        && header.meshletPrimitiveIndexCount != 0u
+    )
+    && IsNothrowConvertible_V<decltype(
+        header.positionCount != 0u
+        && header.normalCount != 0u
+        && header.tangentCount != 0u
+        && header.uv0Count != 0u
+        && header.colorCount != 0u
+        && header.meshletCount != 0u
+        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE)
+        && header.meshletBoundCount == header.meshletCount
+        && header.meshletPositionRefDeltaByteCount != 0u
+        && header.meshletAttributeRefDeltaByteCount != 0u
+        && header.meshletLocalVertexRefCount != 0u
+        && header.meshletPrimitiveIndexCount != 0u
+    ), bool>
+){
     return
         header.positionCount != 0u
         && header.normalCount != 0u
@@ -170,7 +199,20 @@ template<typename MeshT>
 }
 
 template<typename HeaderT, typename MeshT>
-void FillMeshBaseHeader(HeaderT& header, const MeshT& mesh){
+void FillMeshBaseHeader(HeaderT& header, const MeshT& mesh)noexcept(
+    noexcept(header.meshClass = mesh.meshClass())
+    && noexcept(header.positionCount = static_cast<u64>(mesh.positionStream().size()))
+    && noexcept(header.normalCount = static_cast<u64>(mesh.normalStream().size()))
+    && noexcept(header.tangentCount = static_cast<u64>(mesh.tangentStream().size()))
+    && noexcept(header.uv0Count = static_cast<u64>(mesh.uv0Stream().size()))
+    && noexcept(header.colorCount = static_cast<u64>(mesh.colorStream().size()))
+    && noexcept(header.meshletCount = static_cast<u64>(mesh.meshlets().size()))
+    && noexcept(header.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size()))
+    && noexcept(header.meshletPositionRefDeltaByteCount = static_cast<u64>(mesh.meshletPositionRefDeltas().size()))
+    && noexcept(header.meshletAttributeRefDeltaByteCount = static_cast<u64>(mesh.meshletAttributeRefDeltas().size()))
+    && noexcept(header.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size()))
+    && noexcept(header.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size()))
+){
     header.meshClass = mesh.meshClass();
     header.positionCount = static_cast<u64>(mesh.positionStream().size());
     header.normalCount = static_cast<u64>(mesh.normalStream().size());

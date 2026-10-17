@@ -31,7 +31,7 @@ namespace Tests::Smoke{
 class UiImageSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiImageSmokeScene()override;
+    virtual ~UiImageSmokeScene()noexcept override;
 
 
 public:

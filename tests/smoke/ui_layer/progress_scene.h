@@ -31,7 +31,7 @@ namespace Tests::Smoke{
 class UiProgressSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiProgressSmokeScene()override;
+    virtual ~UiProgressSmokeScene()noexcept override;
 
 
 public:

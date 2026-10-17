@@ -40,7 +40,7 @@ struct NumericEvent{
 
 
 public:
-    explicit NumericEvent(Core::Alloc::GlobalArena& arena) : text(arena){}
+    explicit NumericEvent(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
 };
 
 class NumericHost final : public IEditBoxHost{
@@ -51,7 +51,7 @@ public:
         , m_bindings(arena)
         , displayed(arena)
     {}
-    virtual ~NumericHost()override = default;
+    virtual ~NumericHost()noexcept override = default;
 
 
 public:

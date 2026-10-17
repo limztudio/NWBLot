@@ -25,10 +25,10 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShadowTimingRenderPass::ShadowTimingRenderPass(Core::GraphicsRuntime& graphics)
+ShadowTimingRenderPass::ShadowTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept
     : IRenderPass(graphics){}
 
-ShadowTimingRenderPass::~ShadowTimingRenderPass(){
+ShadowTimingRenderPass::~ShadowTimingRenderPass()noexcept{
     stop();
 }
 

@@ -67,7 +67,7 @@ static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void StoreObjectWorldTransform(Core::ECS::World& world, const Core::ECS::EntityID owner, const SkeletonJointMatrix& localTransform, Scene::TransformComponent& transform){
+void StoreObjectWorldTransform(Core::ECS::World& world, const Core::ECS::EntityID owner, const SkeletonJointMatrix& localTransform, Scene::TransformComponent& transform)noexcept{
     const Scene::TransformComponent* ownerTransform = world.tryGetComponent<Scene::TransformComponent>(owner);
     const SIMDMatrix ownerMatrix = ownerTransform ? MatrixAffineTransformation(LoadFloat(ownerTransform->scale), VectorZero(), LoadFloat(ownerTransform->rotation), LoadFloat(ownerTransform->position)) : MatrixIdentity();
 
@@ -155,18 +155,18 @@ void ModelSystem::syncModelRuntimes(){
 void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena){
     const auto objects = m_world.view<ModelObjectComponent>();
     const auto runtimes = m_world.view<ModelRuntimeComponent>();
-    const auto objectIsInactive = [&](const ModelObjectComponent& object){
+    const auto objectIsInactive = [&](const ModelObjectComponent& object)noexcept{
         return !m_world.tryGetComponent<ModelRuntimeComponent>(object.owner) || !m_world.tryGetComponent<ModelComponent>(object.owner);
     };
     usize inactiveObjectCount = 0u;
-    objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
+    objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
             static_cast<void>(entity);
             if(objectIsInactive(object))
                 ++inactiveObjectCount;
         }
     );
     usize inactiveRuntimeCount = 0u;
-    runtimes.each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
+    runtimes.each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime)noexcept{
             static_cast<void>(runtime);
             if(!m_world.tryGetComponent<ModelComponent>(entity))
                 ++inactiveRuntimeCount;
@@ -178,7 +178,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> inactiveEntities(scratchArena);
     inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
     if(inactiveObjectCount != 0u){
-        objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object){
+        objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
                 if(objectIsInactive(object))
                     inactiveEntities.push_back(entity);
             }
@@ -190,7 +190,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     if(inactiveRuntimeCount != 0u){
         // Destroying objects can also remove runtime components, so take a fresh view after that batch completes.
         inactiveEntities.clear();
-        m_world.view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime){
+        m_world.view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime)noexcept{
                 static_cast<void>(runtime);
                 if(!m_world.tryGetComponent<ModelComponent>(entity))
                     inactiveEntities.push_back(entity);
@@ -238,7 +238,7 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
     if(ownedCount != 0u){
         Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> ownedEntities(scratchArena);
         ownedEntities.reserve(ownedCount);
-        objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object){
+        objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
                 if(object.owner == entity)
                     ownedEntities.push_back(objectEntity);
             }
@@ -390,7 +390,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObject
     return m_world.view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
         m_world.taskScope(),
         __hidden_model_system::s_ParallelModelObjectTransformGrainSize,
-        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform){
+        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform)noexcept{
             static_cast<void>(entity);
             if(object.kind == ModelObjectKind::StaticMesh)
                 return;
@@ -421,7 +421,7 @@ void ModelSystem::updateStaticMeshAttachments(){
     if(queryCount > 1u){
         jointQueries.reserve(queryCount);
         bool sharedParent = true;
-        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
+        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform)noexcept{
                 static_cast<void>(entity);
                 static_cast<void>(object);
                 static_cast<void>(transform);
@@ -492,7 +492,7 @@ void ModelSystem::updateStaticMeshAttachments(){
     );
 }
 
-Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const{
+Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const noexcept{
     const auto objects = m_world.view<ModelObjectComponent>();
     for(auto it = objects.begin(); it != objects.end(); ++it){
         auto&& [entity, object] = *it;

@@ -49,7 +49,7 @@ struct MaterialInstanceParameterNames{
     return MaterialInstanceParameterNames{ *name, *blockName, *fieldName };
 }
 
-[[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount){
+[[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount)noexcept{
     UInt4U packed = {};
     NWB_ASSERT(byteCount <= sizeof(packed.raw));
     NWB_MEMCPY(packed.raw, sizeof(packed.raw), bytes, byteCount);
@@ -65,7 +65,7 @@ struct MaterialInstanceValueTraits<f32>{
 
 
 public:
-    [[nodiscard]] static UInt4U Pack(const f32 value){
+    [[nodiscard]] static UInt4U Pack(const f32 value)noexcept{
         return PackMaterialInstanceBytes(&value, sizeof(value));
     }
 };
@@ -76,7 +76,7 @@ struct MaterialInstanceValueTraits<Float4>{
 
 
 public:
-    [[nodiscard]] static UInt4U Pack(const Float4& value){
+    [[nodiscard]] static UInt4U Pack(const Float4& value)noexcept{
         return PackMaterialInstanceBytes(value.raw, sizeof(f32) * 4u);
     }
 };
@@ -87,7 +87,7 @@ struct MaterialInstanceValueTraits<Half4U>{
 
 
 public:
-    [[nodiscard]] static UInt4U Pack(const Half4U& value){
+    [[nodiscard]] static UInt4U Pack(const Half4U& value)noexcept{
         return PackMaterialInstanceBytes(value.raw, sizeof(Half) * 4u);
     }
 };

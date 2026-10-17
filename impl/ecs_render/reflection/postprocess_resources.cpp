@@ -97,7 +97,7 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
     return true;
 }
 
-ReflectionPostprocessSnapshot RendererReflectionPostprocess::snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const u64 graphicsFrameIndex)const{
+ReflectionPostprocessSnapshot RendererReflectionPostprocess::snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const u64 graphicsFrameIndex)const noexcept{
     ReflectionPostprocessSnapshot result;
     if(!m_control)
         return result;

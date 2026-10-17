@@ -133,7 +133,7 @@ Expected<ClusterOperationInput> BuildClusterOperationInputInfo(const RayTracingC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AccelStruct::AccelStruct(const VulkanContext& context, const ResourceQueueSharing::Mask creationQueueSharing)
+AccelStruct::AccelStruct(const VulkanContext& context, const ResourceQueueSharing::Mask creationQueueSharing)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_context(context)
@@ -156,7 +156,7 @@ AccelStruct::~AccelStruct()noexcept{
     m_buffer.reset();
 }
 
-Object AccelStruct::getNativeHandle(ObjectType objectType){
+Object AccelStruct::getNativeHandle(ObjectType objectType)noexcept{
     if(objectType == ObjectTypes::s_AccelerationStructureKHR)
         return Object(m_accelStruct);
     return Object(nullptr);

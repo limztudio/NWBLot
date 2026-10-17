@@ -121,7 +121,7 @@ struct GraphicsPipelineDesc{
 
 
 public:
-    ~GraphicsPipelineDesc();
+    ~GraphicsPipelineDesc()noexcept;
 
 
 public:
@@ -150,7 +150,7 @@ struct ComputePipelineDesc{
 
 
 public:
-    ~ComputePipelineDesc();
+    ~ComputePipelineDesc()noexcept;
 
 
 public:
@@ -173,7 +173,7 @@ struct MeshletPipelineDesc{
 
 
 public:
-    ~MeshletPipelineDesc();
+    ~MeshletPipelineDesc()noexcept;
 
 
 public:
@@ -197,7 +197,7 @@ struct RayTracingPipelineShaderDesc{
 
 
 public:
-    ~RayTracingPipelineShaderDesc();
+    ~RayTracingPipelineShaderDesc()noexcept;
 
 
 public:
@@ -217,7 +217,7 @@ struct RayTracingPipelineHitGroupDesc{
 
 
 public:
-    ~RayTracingPipelineHitGroupDesc();
+    ~RayTracingPipelineHitGroupDesc()noexcept;
 
 
 public:
@@ -248,7 +248,7 @@ public:
         : shaders(arena)
         , hitGroups(arena)
     {}
-    ~RayTracingPipelineDesc();
+    ~RayTracingPipelineDesc()noexcept;
 
 
 public:

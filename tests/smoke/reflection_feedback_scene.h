@@ -31,13 +31,13 @@ namespace ReflectionFeedbackCase{
 
 class ReflectionFeedbackScene final{
 public:
-    ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world);
+    ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept;
 
 
 public:
     [[nodiscard]] bool create(AStringView caseName, bool finalState);
     [[nodiscard]] bool mutationCase()const noexcept{ return m_case == ReflectionFeedbackCase::Mutation; }
-    [[nodiscard]] bool applyMutation();
+    [[nodiscard]] bool applyMutation()noexcept;
 
 private:
     [[nodiscard]] Core::ECS::EntityID createPanel(const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, bool horizontal = false);

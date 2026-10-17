@@ -56,7 +56,7 @@ public:
         Core::GpuTaskId* timingTasks,
         bool& asyncSpansOnePacket,
         GraphicsPrefixTimingResolutionResult& outResult
-    )const;
+    )const noexcept;
 
 
 private:

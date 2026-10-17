@@ -68,7 +68,7 @@ using MStringMap = HashMap<MString, V, MetaArena, MStringHash, MStringEqual>;
 
 class IMetaReader{
 public:
-    virtual ~IMetaReader() = default;
+    virtual ~IMetaReader()noexcept = default;
 
 
 public:

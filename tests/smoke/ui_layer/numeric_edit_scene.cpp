@@ -35,7 +35,7 @@ UiNumericEditSmokeScene::UiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena
     m_input.addHandlerToBack(*this);
 }
 
-UiNumericEditSmokeScene::~UiNumericEditSmokeScene(){
+UiNumericEditSmokeScene::~UiNumericEditSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -113,7 +113,7 @@ void UiNumericEditSmokeScene::resetModels(){
     m_clamp = true;
 }
 
-void UiNumericEditSmokeScene::count(const Impl::Ui::NumericEditResult& result){
+void UiNumericEditSmokeScene::count(const Impl::Ui::NumericEditResult& result)noexcept{
     m_commits += result.committed ? 1u : 0u;
     m_cancels += result.cancelled ? 1u : 0u;
     m_rejects += result.rejected ? 1u : 0u;

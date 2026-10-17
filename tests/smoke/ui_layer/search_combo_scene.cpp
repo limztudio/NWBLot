@@ -54,7 +54,7 @@ UiSearchComboSmokeScene::UiSearchComboSmokeScene(Core::Alloc::GlobalArena& arena
     m_input.addHandlerToBack(*this);
 }
 
-UiSearchComboSmokeScene::~UiSearchComboSmokeScene(){
+UiSearchComboSmokeScene::~UiSearchComboSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -136,7 +136,7 @@ void UiSearchComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& dis
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiSearchComboSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
-Array<u64, 22u> UiSearchComboSmokeScene::values()const{
+Array<u64, 22u> UiSearchComboSmokeScene::values()const noexcept{
     const auto& combo = m_state.combo();
     const auto& list = combo.listState();
     const auto& placement = list.placement();
@@ -152,7 +152,7 @@ Array<u64, 22u> UiSearchComboSmokeScene::values()const{
         static_cast<u64>(m_enabled), m_source.revision(), m_underlying, static_cast<u64>(query.composition().active) };
 }
 
-Impl::Ui::Rect UiSearchComboSmokeScene::cursorRow()const{
+Impl::Ui::Rect UiSearchComboSmokeScene::cursorRow()const noexcept{
     const auto& list = m_state.combo().listState();
     const auto& placement = list.placement();
     if(!m_state.combo().isOpen())

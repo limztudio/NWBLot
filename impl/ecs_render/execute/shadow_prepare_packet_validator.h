@@ -49,7 +49,7 @@ public:
 
 
 public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowPreparePacketValidationResult& outResult)const;
+    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowPreparePacketValidationResult& outResult)const noexcept;
 
 
 private:

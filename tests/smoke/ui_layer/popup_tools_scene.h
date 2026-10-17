@@ -33,17 +33,17 @@ namespace Tests::Smoke{
 class UiPopupToolsSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiPopupToolsSmokeScene()override;
+    virtual ~UiPopupToolsSmokeScene()noexcept override;
 
 
 public:
     [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    [[nodiscard]] Array<u64, 15u> values()const;
+    [[nodiscard]] Array<u64, 15u> values()const noexcept;
     [[nodiscard]] Impl::Ui::Rect rowBounds(u64 key)const noexcept;
     void observeState();
 

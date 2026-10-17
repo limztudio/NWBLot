@@ -65,7 +65,7 @@ struct ReportFixture{
 
 
 public:
-    explicit ReportFixture(Telemetry::TelemetryArena& arena)
+    explicit ReportFixture(Telemetry::TelemetryArena& arena)noexcept
         : nodes(arena)
         , edges(arena)
         , queues(arena)

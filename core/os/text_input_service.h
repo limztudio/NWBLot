@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 class QueuedTextInputService : public ITextInputService{
 public:
     explicit QueuedTextInputService(Alloc::GlobalArena& arena);
-    virtual ~QueuedTextInputService()override;
+    virtual ~QueuedTextInputService()noexcept override;
 
 
 public:

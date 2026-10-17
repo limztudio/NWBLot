@@ -255,7 +255,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
     GpuTaskGraphExternalResourceHandoffSnapshot::Storage& candidate = *outSnapshot.m_candidateStorage;
     candidate.prepare(exportInfo.sourceCount);
 
-    const auto appendProducer = [&](const GpuCompiledExternalResourceExportSource& source){
+    const auto appendProducer = [&](const GpuCompiledExternalResourceExportSource& source)noexcept{
         const GpuSubmissionPacketId packet = planAccess.packetForTask(source.producerTask);
         const QueueSubmissionToken producerToken = taskTokenLocked(planAccess, source.producerTask);
         if(

@@ -89,7 +89,7 @@ public:
     }
 };
 
-[[nodiscard]] CsgShadowReceiverInput ReceiverInput(const Core::ECS::EntityID entity){
+[[nodiscard]] CsgShadowReceiverInput ReceiverInput(const Core::ECS::EntityID entity)noexcept{
     CsgShadowReceiverInput input;
     input.entity = entity;
     input.worldMin = Float3U(-2.f, -2.f, -2.f);
@@ -452,7 +452,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
             AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
         return FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch);
     };
-    const auto identity = [&](){
+    const auto identity = [&]()noexcept{
         return LightSpaceCaptureIdentity{ BuildLightSpaceCsgCaptureIdentity(state, materials, instances, LengthOf(receivers), materialBytes, sizeof(materialBytes), nullptr, 0u), 11u, 13u, state.captureGeometryTrusted, };
     };
     const auto expectRefresh = [&](const auto& change){
@@ -474,24 +474,24 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
             EXPECT_FALSE(histories[index].prepare(identity(), cadences[index]).reuse);
         }
     };
-    expectRefresh([&](){ ++mesh.runtimeGeometryContentRevision; });
-    expectRefresh([&](){ ++mesh.runtimeMeshVersion; });
-    expectRefresh([&](){ mesh.meshletPrimitiveIndexCount += 3u; });
-    expectRefresh([&](){ mesh.meshName = Name("tests/csg_shadow/replacement_mesh"); });
-    expectRefresh([&](){
+    expectRefresh([&]()noexcept{ ++mesh.runtimeGeometryContentRevision; });
+    expectRefresh([&]()noexcept{ ++mesh.runtimeMeshVersion; });
+    expectRefresh([&]()noexcept{ mesh.meshletPrimitiveIndexCount += 3u; });
+    expectRefresh([&]()noexcept{ mesh.meshName = Name("tests/csg_shadow/replacement_mesh"); });
+    expectRefresh([&]()noexcept{
         mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 17u);
     }
     );
-    expectRefresh([&](){ materials[0].surfaceDispatchId = 5u; });
-    expectRefresh([&](){ materials[0].positionSlot = 9u; });
-    expectRefresh([&](){ materials[0].flags = RtInstanceMaterialFlag::Transparent; });
-    expectRefresh([&](){ ++instances[0].translation.w; });
-    expectRefresh([&](){ ++instances[0].geometryHeapSlots[0]; });
-    expectRefresh([&](){ ++materialBytes[0]; });
+    expectRefresh([&]()noexcept{ materials[0].surfaceDispatchId = 5u; });
+    expectRefresh([&]()noexcept{ materials[0].positionSlot = 9u; });
+    expectRefresh([&]()noexcept{ materials[0].flags = RtInstanceMaterialFlag::Transparent; });
+    expectRefresh([&]()noexcept{ ++instances[0].translation.w; });
+    expectRefresh([&]()noexcept{ ++instances[0].geometryHeapSlots[0]; });
+    expectRefresh([&]()noexcept{ ++materialBytes[0]; });
     expectRefresh([&](){ SetParameters(*cutter, Float4(0.5f, 1.f, 1.f, 0.f)); });
-    expectRefresh([&](){ Swap(receivers[0], receivers[1]); });
+    expectRefresh([&]()noexcept{ Swap(receivers[0], receivers[1]); });
     expectRefresh([&](){ ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry)); });
-    expectRefresh([&](){ cutter->active = false; });
+    expectRefresh([&]()noexcept{ cutter->active = false; });
 }
 
 TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture){

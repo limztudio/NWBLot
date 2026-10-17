@@ -32,14 +32,14 @@ StateTracker::StateTracker(const VulkanContext& context)
     , m_bufferUavBarriers(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
     , m_context(context)
 {}
-StateTracker::~StateTracker(){}
+StateTracker::~StateTracker()noexcept{}
 
 void StateTracker::reset()noexcept{
     m_textureStates.clear();
     m_bufferStates.clear();
 }
 
-void StateTracker::beginRecordingAttempt(){
+void StateTracker::beginRecordingAttempt()noexcept{
     NWB_ASSERT(!m_recordingAttemptActive);
     m_attemptPermanentTextures.clear();
     m_attemptPermanentBuffers.clear();
@@ -113,15 +113,15 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     }
 }
 
-bool StateTracker::isPermanentTexture(Texture& texture)const{
+bool StateTracker::isPermanentTexture(Texture& texture)const noexcept{
     return m_permanentTextureStates.find(&texture) != m_permanentTextureStates.end();
 }
 
-bool StateTracker::isPermanentBuffer(Buffer& buffer)const{
+bool StateTracker::isPermanentBuffer(Buffer& buffer)const noexcept{
     return m_permanentBufferStates.find(&buffer) != m_permanentBufferStates.end();
 }
 
-ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)const{
+ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)const noexcept{
     if(!texture)
         return ResourceStates::Unknown;
 
@@ -129,7 +129,7 @@ ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)con
     return existing != m_permanentTextureStates.end() ? existing.value().state : ResourceStates::Unknown;
 }
 
-ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const{
+ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const noexcept{
     if(!buffer)
         return ResourceStates::Unknown;
 
@@ -137,7 +137,7 @@ ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const{
     return existing != m_permanentBufferStates.end() ? existing.value().state : ResourceStates::Unknown;
 }
 
-ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const{
+ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept{
     if(!texture)
         return ResourceStates::Unknown;
 
@@ -149,7 +149,7 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
     return state ? *state : ResourceStates::Unknown;
 }
 
-bool StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const{
+bool StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
     if(!texture)
         return false;
     if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
@@ -215,12 +215,12 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
     }
 }
 
-bool StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const{
+bool StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const noexcept{
     const auto found = m_textureUavBarriers.find(&texture);
     return found == m_textureUavBarriers.end() || found.value().enableBarriers;
 }
 
-bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const{
+bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept{
     const auto found = m_bufferUavBarriers.find(&buffer);
     return found == m_bufferUavBarriers.end() || found.value().enableBarriers;
 }
@@ -247,7 +247,7 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
         NWB_ASSERT(false);
 }
 
-Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
+Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept{
     const TextureDesc& desc = texture.getCreationDescription();
     if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
         return MakeUnexpected(Failure{});
@@ -255,7 +255,7 @@ Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& t
     return getResolvedTransientTextureState(texture, arraySlice, mipLevel);
 }
 
-ResourceStates::Mask StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const{
+ResourceStates::Mask StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept{
     const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
     const auto existing = m_textureStates.find(key);
     if(existing != m_textureStates.end())
@@ -337,28 +337,28 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
     retainResource(texture);
 }
 
-ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel){
+ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return ResourceStates::Unknown;
     return m_stateTracker.getTextureState(texture, arraySlice, mipLevel);
 }
 
-ResourceStates::Mask CommandList::getPermanentTextureState(Texture* texture)const{
+ResourceStates::Mask CommandList::getPermanentTextureState(Texture* texture)const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return ResourceStates::Unknown;
     return m_stateTracker.getPermanentTextureState(texture);
 }
 
-ResourceStates::Mask CommandList::getPermanentBufferState(Buffer* buffer)const{
+ResourceStates::Mask CommandList::getPermanentBufferState(Buffer* buffer)const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return ResourceStates::Unknown;
     return m_stateTracker.getPermanentBufferState(buffer);
 }
 
-bool CommandList::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const{
+bool CommandList::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return false;

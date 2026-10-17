@@ -33,7 +33,7 @@ inline constexpr u32 s_TimeoutMS = 30000u;
 class Deadline final{
 public:
     Deadline()
-        : m_watchdog([](const StopToken& stop){
+        : m_watchdog([](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TimeoutMS)
@@ -86,7 +86,7 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
                 releaser.join();
         }
         );
-        const auto cpuAdmission67 = scheduler.submit([&](){
+        const auto cpuAdmission67 = scheduler.submit([&]()noexcept{
             workerEntered.store(true, MemoryOrder::release);
             workerEntered.notify_one();
             release.wait(false, MemoryOrder::acquire);
@@ -104,7 +104,7 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
         ASSERT_TRUE(cpuAdmission69);
         if(cpuAdmission69)
             ASSERT_TRUE(cpuAdmission69->valid());
-        releaser = JoiningThread([&](){
+        releaser = JoiningThread([&]()noexcept{
             joining.wait(false, MemoryOrder::acquire);
             if(round % s_ReleaseSchedules == 0u)
                 SleepMS(1u);

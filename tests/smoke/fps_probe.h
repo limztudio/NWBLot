@@ -29,7 +29,7 @@ private:
 
 
 public:
-    explicit FpsProbe(TStringView label)
+    explicit FpsProbe(TStringView label)noexcept
         : m_label(label)
     {}
 

@@ -179,7 +179,7 @@ public:
 
 
 public:
-    [[nodiscard]] LightSpaceShadowSnapshot frozenSnapshot()const{
+    [[nodiscard]] LightSpaceShadowSnapshot frozenSnapshot()const noexcept{
         LightSpaceShadowSnapshot result = snapshot;
         result.casters = casters.data();
         result.casterCount = casters.size();

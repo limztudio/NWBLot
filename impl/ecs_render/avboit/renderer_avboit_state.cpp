@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererAvboitState::invalidateResources(){
+void RendererAvboitState::invalidateResources()noexcept{
     m_linearSampler.reset();
     m_depthWarpComputeShader.reset();
     m_integrateComputeShader.reset();

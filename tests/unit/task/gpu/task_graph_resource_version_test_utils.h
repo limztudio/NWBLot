@@ -164,7 +164,7 @@ inline void ExpectClosedCycle(const Graphics::GpuTaskGraphAnalysis& analysis){
     const Graphics::GpuGraphResourceId resource,
     const Graphics::GpuGraphResourceVersionId version,
     const Graphics::GpuTaskHazardType::Enum hazard
-){
+)noexcept{
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
         if(edge.producer == producer && edge.consumer == consumer && edge.resource == resource && edge.resourceVersion == version && edge.hazard == hazard)
             return true;

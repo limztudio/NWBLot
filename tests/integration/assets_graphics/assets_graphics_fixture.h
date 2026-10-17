@@ -763,7 +763,7 @@ public:
 #endif
     static bool PrepareCleanDirectory(const Path& directory);
     static bool WriteTextFile(const Path& filePath, const AStringView text);
-    static AStringView AssetsGraphicsTestConfigurationName();
+    static AStringView AssetsGraphicsTestConfigurationName()noexcept;
     static Path AssetsGraphicsTestRepoRoot(TestArena& testArena);
     static Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName);
     static Expected<Path> PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName);
@@ -863,7 +863,7 @@ public:
         const bool skinRequired
     );
     [[nodiscard]] static Expected<MaterialBinaryTypedLayoutOffsets> FindMaterialBinaryTypedLayoutOffsets(const NWB::Core::Assets::AssetBytes& binary)noexcept;
-    static Expected<u64> FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName);
+    static Expected<u64> FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName)noexcept;
     template<typename CodecT>
     static void CheckCodecRejectsBinary(TestArena& testArena, const CodecT& codec, const Name& virtualPath, const NWB::Core::Assets::AssetBytes& binary){
         EXPECT_FALSE(codec.deserialize(testArena.arena, virtualPath, binary));

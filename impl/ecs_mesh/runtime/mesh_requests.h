@@ -63,7 +63,7 @@ public:
 
 public:
     void add(const Name& meshKey, u64 version);
-    void markLive(const Name& meshKey, u64 version){
+    void markLive(const Name& meshKey, u64 version)noexcept{
         if(!meshKey)
             return;
         if(m_index){
@@ -76,7 +76,7 @@ public:
             --m_remainingCount;
         }
     }
-    [[nodiscard]] bool containsLive(const Name& meshKey, u64 version)const{
+    [[nodiscard]] bool containsLive(const Name& meshKey, u64 version)const noexcept{
         if(!meshKey)
             return false;
         if(m_index)
@@ -97,8 +97,8 @@ private:
         return m_inlineCount;
     }
     void promoteIndex();
-    void markIndexedLive(const Name& meshKey, u64 version);
-    [[nodiscard]] bool containsIndexedLive(const Name& meshKey, u64 version)const;
+    void markIndexedLive(const Name& meshKey, u64 version)noexcept;
+    [[nodiscard]] bool containsIndexedLive(const Name& meshKey, u64 version)const noexcept;
 
 
 private:

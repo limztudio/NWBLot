@@ -33,12 +33,12 @@ namespace Tests::Smoke{
 class UiNestedPopupSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiNestedPopupSmokeScene()override;
+    virtual ~UiNestedPopupSmokeScene()noexcept override;
 
 
 public:
     [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
@@ -49,7 +49,7 @@ private:
     // Copies accepted observations during this callback; no target or popup-scope pointer survives publication.
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
-    [[nodiscard]] Array<u64, 29u> values()const;
+    [[nodiscard]] Array<u64, 29u> values()const noexcept;
     [[nodiscard]] Impl::Ui::Rect rowBounds(const Impl::Ui::ListState& state, const Impl::Ui::IListDataSource& source, u64 key)const;
 
 

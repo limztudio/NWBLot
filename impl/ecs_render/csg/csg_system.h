@@ -97,13 +97,13 @@ public:
         const CsgFrameGpuData& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-    )const;
+    )const noexcept;
     [[nodiscard]] Expected<CsgIntervalSampleStateGpuData> prepareCsgIntervalSampleStateData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-    )const;
+    )const noexcept;
     [[nodiscard]] Expected<CsgReceiverClipDrawInfo> resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
         const CsgReceiverDrawState& receiverDrawState,

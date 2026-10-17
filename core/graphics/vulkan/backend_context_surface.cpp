@@ -225,7 +225,7 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
     const GpuPhysicalQueueTopology topology = m_rhiDevice->getPhysicalQueueTopology();
     Vector<u32, Alloc::ScratchArena> queueFamilyIndices(scratchArena);
     queueFamilyIndices.reserve(topology.queueCount + 1u);
-    const auto appendQueueFamily = [&queueFamilyIndices](const u32 familyIndex){
+    const auto appendQueueFamily = [&queueFamilyIndices](const u32 familyIndex)noexcept{
         for(const u32 existingFamilyIndex : queueFamilyIndices){
             if(existingFamilyIndex == familyIndex)
                 return;

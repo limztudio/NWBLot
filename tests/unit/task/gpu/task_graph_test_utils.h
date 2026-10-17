@@ -205,7 +205,7 @@ public:
     const Graphics::GpuQueueCapability::Mask first,
     const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,
     const Graphics::GpuQueueCapability::Mask third = Graphics::GpuQueueCapability::None
-){
+)noexcept{
     return static_cast<Graphics::GpuQueueCapability::Mask>(static_cast<u8>(first) | static_cast<u8>(second) | static_cast<u8>(third));
 }
 
@@ -214,9 +214,9 @@ public:
     const Graphics::GpuQueueCapability::Mask capabilities = QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Transfer)
 )noexcept;
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index = 1u);
+[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index = 1u)noexcept;
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u);
+[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u)noexcept;
 
 [[nodiscard]] inline Graphics::GpuTaskCommandRequirements GraphicsCommands()noexcept{
     return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics };

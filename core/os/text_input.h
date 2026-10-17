@@ -133,7 +133,7 @@ public:
 // Stale/foreign native delivery is rejected.
 interface ITextInputService : private NoCopy{
 public:
-    virtual ~ITextInputService() = default;
+    virtual ~ITextInputService()noexcept = default;
 
 
 public:

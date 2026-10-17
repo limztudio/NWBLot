@@ -54,7 +54,7 @@ void WaylandTextInputService::OnRegistryRemove(void* const data, wl_registry*, c
     service.m_managerName = 0u;
 }
 
-void WaylandTextInputService::OnEnter(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
+void WaylandTextInputService::OnEnter(void* const data, zwp_text_input_v3* const input, wl_surface* const surface)noexcept{
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input != service.m_input)
         return;
@@ -106,7 +106,7 @@ void WaylandTextInputService::OnCommit(void* const data, zwp_text_input_v3* cons
     service.m_hasCommit = true;
 }
 
-void WaylandTextInputService::OnDelete(void* const data, zwp_text_input_v3* const input, const u32 before, const u32 after){
+void WaylandTextInputService::OnDelete(void* const data, zwp_text_input_v3* const input, const u32 before, const u32 after)noexcept{
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input != service.m_input || !service.m_enabled)
         return;

@@ -493,7 +493,7 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core
     return true;
 }
 
-bool RendererRayTracingSystem::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle){
+bool RendererRayTracingSystem::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle)noexcept{
     return
         nodeBuffer
         && parentBuffer

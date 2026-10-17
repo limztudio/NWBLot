@@ -49,7 +49,7 @@ inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOff
 void CopyCommandIrBytes(Graphics::GraphicsBytes& outBytes, const BinaryByteView source);
 
 template<typename PodT>
-inline void WriteCommandIrPod(Graphics::GraphicsBytes& bytes, const usize byteOffset, const PodT& value){
+inline void WriteCommandIrPod(Graphics::GraphicsBytes& bytes, const usize byteOffset, const PodT& value)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
     NWB_ASSERT(byteOffset <= bytes.size());
     NWB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
     NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));

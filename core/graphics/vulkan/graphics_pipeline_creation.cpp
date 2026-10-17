@@ -40,10 +40,10 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
-GraphicsPipeline::~GraphicsPipeline(){
+GraphicsPipeline::~GraphicsPipeline()noexcept{
     VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
-Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
+Object GraphicsPipeline::getNativeHandle(ObjectType objectType)noexcept{
     return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 

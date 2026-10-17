@@ -82,7 +82,7 @@ public:
 
 
 public:
-    void reset(){
+    void reset()noexcept{
         meshDrawItems.clear();
         indexedDrawItems.clear();
         drawItems.clear();
@@ -224,7 +224,7 @@ public:
 
 
 public:
-    void reset(){
+    void reset()noexcept{
         meshDrawItems.clear();
         indexedDrawItems.clear();
         drawItems.clear();
@@ -259,7 +259,7 @@ public:
         return captured;
     }
 
-    [[nodiscard]] bool matches()const{
+    [[nodiscard]] bool matches()const noexcept{
         return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
     }
 

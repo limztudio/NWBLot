@@ -28,7 +28,7 @@ namespace Tests::Smoke{
 class UiTextAreaSmokeScene : NoCopy{
 public:
     UiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard);
-    ~UiTextAreaSmokeScene();
+    ~UiTextAreaSmokeScene()noexcept;
 
 
 public:

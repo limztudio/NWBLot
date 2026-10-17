@@ -44,7 +44,7 @@ struct StatisticsFixture{
 
 
 public:
-    explicit StatisticsFixture(Telemetry::TelemetryArena& arena)
+    explicit StatisticsFixture(Telemetry::TelemetryArena& arena)noexcept
         : nodes(arena)
         , edges(arena)
         , pendingEdges(arena)

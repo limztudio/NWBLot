@@ -25,7 +25,7 @@ class Shader final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     Shader(const VulkanContext& context)noexcept;
-    ~Shader();
+    ~Shader()noexcept;
 
 
 public:
@@ -83,7 +83,7 @@ class ShaderLibrary final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     ShaderLibrary(const VulkanContext& context);
-    ~ShaderLibrary();
+    ~ShaderLibrary()noexcept;
 
 
 public:

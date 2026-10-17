@@ -301,8 +301,8 @@ public:
     [[nodiscard]] Expected<usize> getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
     // Borrowed interoperability identity only.
     // External queue operations remain the caller's responsibility and must not overlap engine submission, presentation, idle, or teardown.
-    [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
-    [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue);
+    [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)noexcept;
+    [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue)noexcept;
     bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
     bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
@@ -310,7 +310,7 @@ public:
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker()noexcept{ return m_gpuCrashTracker; }
     void captureDeviceLoss(AStringView context);
 
-    [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, usize markerHash);
+    [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, usize markerHash)noexcept;
 
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
@@ -348,7 +348,7 @@ private:
     [[nodiscard]] Expected<QueueSubmissionToken> consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] Expected<VkResult> presentNativeQueue(u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo);
     [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue);
-    void configureQueueSharingContext();
+    void configureQueueSharingContext()noexcept;
     void releaseOwnedResources()noexcept;
     // Probed once at device initialization so compressed texture selection does not rely on a later optimistic format-property query.
     void probeCompressedTextureFormats();

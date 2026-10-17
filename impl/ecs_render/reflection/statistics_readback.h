@@ -102,12 +102,12 @@ private:
 using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;
 using ReflectionStatisticsControlHandle = RefCountPtr< ReflectionStatisticsControl, ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration);
+[[nodiscard]] ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
 // Destruction releases only an unaccepted reservation.
 class ReflectionStatisticsReservation final : NoCopy{
 public:
-    ReflectionStatisticsReservation(ReflectionStatisticsControlHandle control, const ReflectionStatistics& metadata);
+    ReflectionStatisticsReservation(ReflectionStatisticsControlHandle control, const ReflectionStatistics& metadata)noexcept;
     ReflectionStatisticsReservation(ReflectionStatisticsReservation&& other)noexcept;
     ~ReflectionStatisticsReservation()noexcept;
 
@@ -140,7 +140,7 @@ public:
 
 
 public:
-    void invalidateResources();
+    void invalidateResources()noexcept;
     [[nodiscard]] bool prepareResources();
     void pollCompleted();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;

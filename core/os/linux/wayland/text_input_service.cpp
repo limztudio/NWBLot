@@ -33,7 +33,7 @@ WaylandTextInputService::WaylandTextInputService(Alloc::GlobalArena& arena, wl_d
 #endif
 }
 
-WaylandTextInputService::~WaylandTextInputService(){
+WaylandTextInputService::~WaylandTextInputService()noexcept{
     releaseDevice();
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     if(m_manager)

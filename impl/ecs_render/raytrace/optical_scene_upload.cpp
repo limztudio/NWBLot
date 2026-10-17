@@ -118,7 +118,7 @@ bool RayTracingOpticalUploadState::matchesBuffer(const RayTracingOpticalUploadPl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, const Core::GpuPhysicalQueueId primaryQueue){
+Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, const Core::GpuPhysicalQueueId primaryQueue)noexcept{
     if(!buffer || !primaryQueue.valid() || primaryQueue.deviceGeneration != buffer->getDeviceGeneration())
         return MakeUnexpected(Failure{});
     auto control = RayTracingOpticalUploadControlHandle(NewArenaObject<RayTracingOpticalUploadControl>(arena, buffer, primaryQueue), ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
@@ -131,7 +131,7 @@ Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadCont
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalUploadReservation::RayTracingOpticalUploadReservation(RayTracingOpticalUploadControlHandle control, const RayTracingOpticalUploadPlan& plan)
+RayTracingOpticalUploadReservation::RayTracingOpticalUploadReservation(RayTracingOpticalUploadControlHandle control, const RayTracingOpticalUploadPlan& plan)noexcept
     : m_control(Move(control))
     , m_plan(plan)
 {

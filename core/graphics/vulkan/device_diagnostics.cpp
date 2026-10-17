@@ -259,7 +259,7 @@ void Device::captureDeviceLoss(const AStringView context){
     DispatchGpuCrash(report);
 }
 
-Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, const usize markerHash){
+Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, const usize markerHash)noexcept{
     AmdBreadcrumbWrite write;
     const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
     if(

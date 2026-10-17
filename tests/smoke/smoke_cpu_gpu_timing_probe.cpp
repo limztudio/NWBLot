@@ -24,7 +24,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SmokeCpuGpuTimingProbe::SmokeCpuGpuTimingProbe(const TStringView owner, Core::Alloc::GlobalArena& arena)
+SmokeCpuGpuTimingProbe::SmokeCpuGpuTimingProbe(const TStringView owner, Core::Alloc::GlobalArena& arena)noexcept
     : m_owner(owner)
     , m_outputPath(arena)
     , m_records(arena)

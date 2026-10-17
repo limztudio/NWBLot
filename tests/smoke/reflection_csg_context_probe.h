@@ -45,7 +45,7 @@ private:
 
 
 public:
-    ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer, u32 rayCapacity);
+    ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer, u32 rayCapacity)noexcept;
     ~ReflectionCsgContextProbe()noexcept = default;
 
 

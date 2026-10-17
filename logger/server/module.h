@@ -47,7 +47,7 @@ private:
 
 public:
     Server();
-    virtual ~Server()override;
+    virtual ~Server()noexcept override;
 
 
 public:

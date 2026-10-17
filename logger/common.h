@@ -34,7 +34,7 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline MessageType MakeMessageType(LogArena& arena){
+[[nodiscard]] inline MessageType MakeMessageType(LogArena& arena)noexcept{
     return MakeTuple(Timer{}, Core::Common::LogType::Info, LogString(arena));
 }
 
@@ -187,7 +187,7 @@ public:
         : m_arena(arena)
         , m_filePath(arena)
     {}
-    ~ProcessedMessageFile(){ close(); }
+    ~ProcessedMessageFile()noexcept{ close(); }
 
 
 public:
@@ -266,7 +266,7 @@ public:
         , m_messageQueue(m_arena)
         , m_exit(false)
     {}
-    virtual ~LoggerWorkerBase(){
+    virtual ~LoggerWorkerBase()noexcept{
         stopWorker();
     }
 
@@ -419,7 +419,7 @@ public:
 
 protected:
     [[nodiscard]] inline bool workerCanExit()const noexcept{ return true; }
-    void internalDestroy(){ m_semaphore.release(); }
+    void internalDestroy()noexcept{ m_semaphore.release(); }
 
 
 protected:

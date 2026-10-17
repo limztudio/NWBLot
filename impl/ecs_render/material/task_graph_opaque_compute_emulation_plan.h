@@ -47,7 +47,7 @@ public:
 
 
 public:
-    void reset(){
+    void reset()noexcept{
         meshDrawItems.clear();
         indexedDrawItems.clear();
         drawItems.clear();
@@ -90,7 +90,7 @@ public:
         return captured;
     }
 
-    [[nodiscard]] bool matches(const MaterialPassDrawItemVector& currentDrawItems)const{
+    [[nodiscard]] bool matches(const MaterialPassDrawItemVector& currentDrawItems)const noexcept{
         if(!captured || currentDrawItems.size() != drawItems.size() || outputBuffers.size() != drawItems.size())
             return false;
 

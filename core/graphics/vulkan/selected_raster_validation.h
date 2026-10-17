@@ -30,7 +30,7 @@ NWB_VULKAN_BEGIN
 
 [[nodiscard]] inline bool IsImplicitScissorValid(const Viewport& viewport)noexcept{ return VulkanDetail::IsImplicitScissorValid(viewport); }
 
-[[nodiscard]] inline bool IsGraphicsPipelineReady(GraphicsPipeline& pipeline, const Device& device){
+[[nodiscard]] inline bool IsGraphicsPipelineReady(GraphicsPipeline& pipeline, const Device& device)noexcept{
     return pipeline.getDeviceGeneration() == device.getDeviceGeneration() && pipeline.getNativeHandle(ObjectTypes::s_Pipeline).integer != 0u && pipeline.m_pipelineLayout != VK_NULL_HANDLE;
 }
 

@@ -81,17 +81,17 @@ public:
     // Collect identities without reading graph state; size outputs from distinct buffers.
     void prepareStorage(bool blasInputStatesGraphOwned);
     [[nodiscard]] bool gatherBuildInputs(const Core::GpuTaskGraph& graph);
-    [[nodiscard]] bool gatherRemainingTraceResources();
+    [[nodiscard]] bool gatherRemainingTraceResources()noexcept;
     [[nodiscard]] bool isPreparedMeshBlasBuild(const Name& meshName)const;
 
 
 private:
     void addRequest(const Core::BufferHandle& buffer);
-    [[nodiscard]] BufferRequest* findRequest(Core::Buffer* buffer);
+    [[nodiscard]] BufferRequest* findRequest(Core::Buffer* buffer)noexcept;
     void promoteRequests();
     [[nodiscard]] bool resolveRequests(const Core::GpuTaskGraph& graph);
-    [[nodiscard]] BufferRequest* findResolvedRequest(Core::GpuGraphResourceId resource);
-    [[nodiscard]] bool appendBuildInput(const Core::BufferHandle& buffer);
+    [[nodiscard]] BufferRequest* findResolvedRequest(Core::GpuGraphResourceId resource)noexcept;
+    [[nodiscard]] bool appendBuildInput(const Core::BufferHandle& buffer)noexcept;
     void clearBuildInputs()noexcept;
     void prepareNames()const;
 

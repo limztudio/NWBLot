@@ -28,7 +28,7 @@ static Atomic<u64> s_NextAtlasIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NewIdentity(){
+[[nodiscard]] static u64 NewIdentity()noexcept{
     const u64 identity = s_NextAtlasIdentity.fetch_add(1u, MemoryOrder::relaxed);
     NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("UI glyph atlas identity overflow"));
     return identity;
@@ -75,7 +75,7 @@ GlyphAtlas::GlyphAtlas(Core::Alloc::GlobalArena& arena)
     m_pages.reserve(s_GlyphAtlasMaxPages);
 }
 
-void GlyphAtlas::reset(){
+void GlyphAtlas::reset()noexcept{
     m_index.clear();
     m_glyphs.clear();
     m_pages.clear();

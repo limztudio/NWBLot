@@ -207,7 +207,7 @@ struct StringConvertArg{
 };
 
 template<typename Out>
-inline void WriteUtf8CodePoint(Out& out, u32 codePoint){
+inline void WriteUtf8CodePoint(Out& out, u32 codePoint)noexcept(noexcept(*out++ = char{})){
     if(codePoint <= s_Utf8OneByteMaxCodePoint){
         *out++ = static_cast<char>(codePoint);
         return;
@@ -238,7 +238,7 @@ inline void WriteUtf8CodePoint(Out& out, u32 codePoint){
 }
 
 template<typename Out>
-inline void WriteWideCodePoint(Out& out, u32 codePoint){
+inline void WriteWideCodePoint(Out& out, u32 codePoint)noexcept(noexcept(*out++ = wchar{})){
     if(codePoint > s_UnicodeMaxCodePoint)
         codePoint = s_InvalidCodePointReplacement;
 
@@ -255,7 +255,7 @@ inline void WriteWideCodePoint(Out& out, u32 codePoint){
 }
 
 template<typename Out>
-inline void WriteWStringAsUtf8(Out& out, const WStringView src){
+inline void WriteWStringAsUtf8(Out& out, const WStringView src)noexcept(noexcept(WriteUtf8CodePoint(out, u32{}))){
     for(usize i = 0u; i < src.size(); ++i){
         u32 codePoint = static_cast<u32>(src[i]);
 
@@ -291,7 +291,7 @@ template<typename ArenaT>
 }
 
 template<typename Out>
-inline void WriteUtf8AsWString(Out& out, const AStringView src){
+inline void WriteUtf8AsWString(Out& out, const AStringView src)noexcept(noexcept(WriteWideCodePoint(out, u32{}))){
     usize i = 0u;
     while(i < src.size()){
         const u8 first = static_cast<u8>(src[i++]);
@@ -339,7 +339,25 @@ inline void WriteUtf8AsWString(Out& out, const AStringView src){
 }
 
 template<typename CharT, typename Out, typename In>
-inline void WriteConvertedText(Out& out, const In& input){
+[[nodiscard]] inline constexpr bool ConvertedTextIsNothrow()noexcept{
+    if constexpr(CanMakeCharView<In>){
+        if constexpr(IsSame_V<CharT, char>)
+            return noexcept(AStringView(DeclVal<const In&>())) && noexcept(*DeclVal<Out&>()++ = DeclVal<const char&>());
+        else
+            return noexcept(AStringView(DeclVal<const In&>())) && noexcept(WriteUtf8AsWString(DeclVal<Out&>(), DeclVal<AStringView>()));
+    }
+    else if constexpr(CanMakeWCharView<In>){
+        if constexpr(IsSame_V<CharT, wchar>)
+            return noexcept(WStringView(DeclVal<const In&>())) && noexcept(*DeclVal<Out&>()++ = DeclVal<const wchar&>());
+        else
+            return noexcept(WStringView(DeclVal<const In&>())) && noexcept(WriteWStringAsUtf8(DeclVal<Out&>(), DeclVal<WStringView>()));
+    }
+    else
+        return true;
+}
+
+template<typename CharT, typename Out, typename In>
+inline void WriteConvertedText(Out& out, const In& input)noexcept(ConvertedTextIsNothrow<CharT, Out, In>()){
     if constexpr(CanMakeCharView<In>){
         const AStringView text(input);
         if constexpr(IsSame_V<CharT, char>){

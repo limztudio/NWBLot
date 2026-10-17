@@ -54,15 +54,15 @@ public:
 
 public:
     [[nodiscard]] Expected<NotNull<WidgetState*>> touch(WidgetId id, const WidgetRoot& root, WidgetKind::Enum kind, u64 frameGeneration);
-    [[nodiscard]] WidgetState* find(WidgetId id);
-    [[nodiscard]] const WidgetState* find(WidgetId id)const;
+    [[nodiscard]] WidgetState* find(WidgetId id)noexcept;
+    [[nodiscard]] const WidgetState* find(WidgetId id)const noexcept;
     [[nodiscard]] const PaintVector<WidgetState>& entries()const noexcept{ return m_entries; }
-    void erase(usize index);
+    void erase(usize index)noexcept;
 
 
 private:
-    [[nodiscard]] usize findIndex(WidgetId id)const;
-    void rebuildIndex()const;
+    [[nodiscard]] usize findIndex(WidgetId id)const noexcept;
+    void rebuildIndex()const noexcept;
 
 
 private:

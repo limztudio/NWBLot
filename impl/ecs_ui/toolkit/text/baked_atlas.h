@@ -36,7 +36,7 @@ public:
     [[nodiscard]] u32 unitsPerEm()const noexcept{ return m_unitsPerEm; }
     [[nodiscard]] u32 bakePpem()const noexcept{ return m_bakePpem; }
     [[nodiscard]] const FontAtlasGlyph* glyph(const u32 glyphId)const noexcept{ return glyphId < m_glyphs.size() ? &m_glyphs[glyphId] : nullptr; }
-    [[nodiscard]] const SharedSdfAtlasPage& page(u32 group)const;
+    [[nodiscard]] const SharedSdfAtlasPage& page(u32 group)const noexcept;
 
 
 private:

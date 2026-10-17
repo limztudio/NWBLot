@@ -329,7 +329,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
                 m_deferredLightingTaskGraph, rayTracingResources.csgTraceContextBuffer,
                 rayTracingResources.csgTraceBoundsBuffers, rayTracingResources.csgTraceBoundsBufferCount,
-                [&](const Core::GpuGraphResourceId resource){ traceResourceUses.push_back(ReadUse(resource)); }
+                [&](const Core::GpuGraphResourceId resource)noexcept{ traceResourceUses.push_back(ReadUse(resource)); }
             ))
                 return false;
             traceResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));

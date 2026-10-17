@@ -60,7 +60,7 @@ X11CheckedOperation::X11CheckedOperation(Display& display)
     m_previous = XSetErrorHandler(&X11CheckedOperation::OnError);
 }
 
-X11CheckedOperation::~X11CheckedOperation(){
+X11CheckedOperation::~X11CheckedOperation()noexcept{
     XSync(&m_display, False);
     XSetErrorHandler(m_previous);
     __hidden_x11_checked::g_Operation = nullptr;

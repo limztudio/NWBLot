@@ -190,7 +190,7 @@ public:
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-    static void Discarded(Payload& payload);
+    static void Discarded(Payload& payload)noexcept;
 };
 
 

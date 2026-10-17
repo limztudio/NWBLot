@@ -32,7 +32,7 @@ UiRadioGroupSmokeScene::UiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, 
     m_input.addHandlerToBack(*this);
 }
 
-UiRadioGroupSmokeScene::~UiRadioGroupSmokeScene(){
+UiRadioGroupSmokeScene::~UiRadioGroupSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -48,7 +48,7 @@ bool UiRadioGroupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiRadioGroupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiRadioGroupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F4 || key > Core::Key::F9)

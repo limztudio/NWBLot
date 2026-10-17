@@ -86,7 +86,7 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
 }
 
 
-RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const{
+RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const noexcept{
     return RayTracingShadowPreparationResourceSnapshot{
         .sceneTlas = m_rayTracingState.m_tlas,
         .sceneTlasBackingBuffer = m_rayTracingState.m_tlas ? m_rayTracingState.m_tlas->getBackingBufferHandle() : nullptr,

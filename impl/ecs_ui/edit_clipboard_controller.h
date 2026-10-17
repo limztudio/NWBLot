@@ -41,7 +41,7 @@ struct UiEditClipboardResult{
 class UiEditClipboardController final : NoCopy{
 public:
     UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)noexcept;
-    ~UiEditClipboardController();
+    ~UiEditClipboardController()noexcept;
 
 
 public:

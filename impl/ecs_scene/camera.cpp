@@ -56,7 +56,7 @@ namespace __hidden_camera{
     return SceneCameraView{ entity, &transform, &camera, StoreCameraProjection(*projection) };
 }
 
-[[nodiscard]] Core::ECS::EntityID ResolveActiveCamera(Core::ECS::World& world){
+[[nodiscard]] Core::ECS::EntityID ResolveActiveCamera(Core::ECS::World& world)noexcept{
     const auto activeCameraView = world.view<ActiveCameraComponent>();
     for(auto it = activeCameraView.begin(); it != activeCameraView.end(); ++it){
         auto&& [entity, activeCamera] = *it;
@@ -89,7 +89,7 @@ Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio){
+SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio)noexcept{
     const Core::ECS::EntityID activeCamera = __hidden_camera::ResolveActiveCamera(world);
     if(activeCamera.valid()){
         auto* transform = world.tryGetComponent<TransformComponent>(activeCamera);

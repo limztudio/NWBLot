@@ -84,7 +84,7 @@ struct MeshViewUploadCommitGraphTask{
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };
 

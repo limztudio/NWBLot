@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 namespace __hidden_avboit_compute_effect_chain{
 
 
-[[nodiscard]] static Core::GpuTaskSchedulingHint ComputeEffectScheduling(){
+[[nodiscard]] static Core::GpuTaskSchedulingHint ComputeEffectScheduling()noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Medium;
     scheduling.forceSubmissionBoundary = false;

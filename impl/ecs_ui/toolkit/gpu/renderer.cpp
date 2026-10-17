@@ -148,7 +148,7 @@ GpuRenderer::GpuRenderer(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime&
     : m_state(MakeNotNullUnique(__hidden_ui_gpu::CreateState(arena, graphics, assetManager, Move(shaderPathResolver))))
 {}
 
-GpuRenderer::~GpuRenderer(){
+GpuRenderer::~GpuRenderer()noexcept{
     invalidateResources();
 }
 
@@ -180,7 +180,7 @@ bool GpuRenderer::validateResources(const u32 width, const u32 height){
     return true;
 }
 
-void GpuRenderer::invalidateResources(){
+void GpuRenderer::invalidateResources()noexcept{
     m_state->m_pending.reset();
     for(auto& slot : m_state->m_slots)
         slot = {};
@@ -228,7 +228,7 @@ bool GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const 
     return true;
 }
 
-bool GpuRenderer::submit(DrawSnapshot&& snapshot){
+bool GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
     if(m_state->m_pending || !m_state->m_resources || !m_state->m_skin || snapshot.generation() == 0u)
         return false;
     const SkinBinding& binding = snapshot.skinBinding();
@@ -267,7 +267,7 @@ u64 GpuRenderer::lastAcceptedGeneration()const noexcept{
     return m_state->m_lastAcceptedGeneration;
 }
 
-Core::PresentationReceiptStatus::Enum GpuRenderer::lastAcceptedPresentationStatus()const{
+Core::PresentationReceiptStatus::Enum GpuRenderer::lastAcceptedPresentationStatus()const noexcept{
     return m_state->m_graphics.lastPresentationReceipt().status(m_state->m_lastAcceptedAcquired.backBuffer);
 }
 
@@ -279,7 +279,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRenderer::declareTaskGraphOutputLayer
     return m_state->declare(graph, true);
 }
 
-void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken){
+void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken)noexcept{
     if(!m_state->m_pending || m_state->m_pending->m_snapshot.generation() != frameGeneration)
         return;
     NWB_FATAL_ASSERT(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity());

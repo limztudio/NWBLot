@@ -33,7 +33,7 @@ public:
     explicit FakeTextInput(Alloc::GlobalArena& arena)
         : QueuedTextInputService(arena)
     {}
-    virtual ~FakeTextInput()override = default;
+    virtual ~FakeTextInput()noexcept override = default;
 
 
 public:
@@ -46,7 +46,7 @@ public:
     [[nodiscard]] TextInputAdmission::Enum erase(usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis){
         return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
     }
-    [[nodiscard]] TextInputRect nativeCaret()const{ return caretRect(); }
+    [[nodiscard]] TextInputRect nativeCaret()const noexcept{ return caretRect(); }
 };
 
 class FakeClipboard final : public QueuedClipboardService{
@@ -56,7 +56,7 @@ public:
         , document(arena)
         , startedText(arena)
     {}
-    virtual ~FakeClipboard()override = default;
+    virtual ~FakeClipboard()noexcept override = default;
 
 
 public:

@@ -33,7 +33,7 @@ UiProgressSmokeScene::UiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core
     m_input.addHandlerToBack(*this);
 }
 
-UiProgressSmokeScene::~UiProgressSmokeScene(){
+UiProgressSmokeScene::~UiProgressSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 

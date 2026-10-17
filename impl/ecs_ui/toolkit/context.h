@@ -108,7 +108,7 @@ public:
 
 private:
     [[nodiscard]] Expected<NotNull<WidgetState*>> declareId(WidgetId id, WidgetKind::Enum kind);
-    [[nodiscard]] bool currentDeclaration(const WidgetState& state)const;
+    [[nodiscard]] bool currentDeclaration(const WidgetState& state)const noexcept;
     void retireUnseenStates();
 
 

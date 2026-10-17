@@ -26,7 +26,7 @@ class UiPopupToolsLoanTests : public PopupToolsFixture{};
 
 class RevisionArmingComboSource final : public IListDataSource{
 public:
-    RevisionArmingComboSource(PopupToolsSource& menuSource, ComboState& combo)
+    RevisionArmingComboSource(PopupToolsSource& menuSource, ComboState& combo)noexcept
         : m_menuSource(menuSource)
         , m_combo(combo)
     {

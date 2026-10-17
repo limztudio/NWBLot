@@ -40,7 +40,7 @@ UiTextAreaSmokeScene::UiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core
     resetModel();
 }
 
-UiTextAreaSmokeScene::~UiTextAreaSmokeScene(){
+UiTextAreaSmokeScene::~UiTextAreaSmokeScene()noexcept{
     if(m_clipboardToken.valid() && !m_clipboard.cancel(m_clipboardToken))
         TerminateInvariant();
 }

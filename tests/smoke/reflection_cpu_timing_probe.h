@@ -31,7 +31,7 @@ private:
 
 
 public:
-    explicit ReflectionCpuTimingProbe(ProjectRuntimeContext& context);
+    explicit ReflectionCpuTimingProbe(ProjectRuntimeContext& context)noexcept;
 
 
 public:

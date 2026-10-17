@@ -21,7 +21,7 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_queueChunkLedgers(m_device.m_context.objectArena)
     , m_isScratchBuffer(isScratchBuffer)
 {}
-UploadManager::~UploadManager(){
+UploadManager::~UploadManager()noexcept{
     clear();
 }
 
@@ -121,7 +121,7 @@ void UploadManager::submitChunks(
     retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedCommandListCount, submittedOwners);
 }
 
-void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const u64 reusableVersion){
+void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const u64 reusableVersion)noexcept{
     if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
         return;
 
@@ -147,7 +147,7 @@ void UploadManager::collectCompletedChunks(){
     }
 }
 
-void UploadManager::trimRetiredChunksLocked(const GpuPhysicalQueueId queue, const u64 completedVersion){
+void UploadManager::trimRetiredChunksLocked(const GpuPhysicalQueueId queue, const u64 completedVersion)noexcept{
     if(m_memoryLimit == 0 || m_retiredChunkBytes <= m_memoryLimit)
         return;
 

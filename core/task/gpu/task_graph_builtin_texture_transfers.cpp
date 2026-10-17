@@ -165,7 +165,7 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, co
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(copyDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
+    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
@@ -254,7 +254,7 @@ Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc,
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(resolveDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
+    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;

@@ -68,7 +68,7 @@ class FontFaceState;
 class FontFace : NoCopy{
 public:
     FontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source);
-    ~FontFace();
+    ~FontFace()noexcept;
 
 
 public:

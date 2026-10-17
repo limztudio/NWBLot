@@ -78,7 +78,7 @@ private:
 using SharedSdfAtlasPage = RefCountPtr<RefCounter<SdfAtlasPage>, ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>>;
 
 // The factory calculates pixelsSha256 from the exact immutable bytes; callers need not supply it.
-[[nodiscard]] Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels);
+[[nodiscard]] Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels)noexcept;
 [[nodiscard]] Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration, u64 atlasIdentity, u32 groupIndex);
 
 

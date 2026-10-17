@@ -22,7 +22,7 @@ namespace __hidden_gpu_persistent_resource_state_cache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BuildSelection(CommandListResourceSelection& selection, const TextureHandle* const textures, const usize textureCount, const BufferHandle* const buffers, const usize bufferCount){
+[[nodiscard]] bool BuildSelection(CommandListResourceSelection& selection, const TextureHandle* const textures, const usize textureCount, const BufferHandle* const buffers, const usize bufferCount)noexcept{
     for(usize index = 0u; index < textureCount; ++index){
         if(!selection.addTexture(textures[index].get(), index))
             return false;

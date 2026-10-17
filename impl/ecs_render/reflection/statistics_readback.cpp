@@ -167,7 +167,7 @@ ReflectionStatisticsState::Slot* ReflectionStatisticsState::matchingSlot(const R
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration){
+ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
     return ReflectionStatisticsControlHandle(NewArenaObject<ReflectionStatisticsControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
@@ -175,7 +175,7 @@ ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionStatisticsReservation::ReflectionStatisticsReservation(ReflectionStatisticsControlHandle control, const ReflectionStatistics& metadata)
+ReflectionStatisticsReservation::ReflectionStatisticsReservation(ReflectionStatisticsControlHandle control, const ReflectionStatistics& metadata)noexcept
     : m_control(Move(control))
 {
     if(m_control)
@@ -226,7 +226,7 @@ ReflectionStatisticsReadback::ReflectionStatisticsReadback(Core::Alloc::GlobalAr
     , m_graphics(graphics)
 {}
 
-void ReflectionStatisticsReadback::invalidateResources(){
+void ReflectionStatisticsReadback::invalidateResources()noexcept{
     if(m_control)
         m_control->reset(0u);
     for(Core::BufferHandle& buffer : m_buffers)

@@ -109,7 +109,7 @@ private:
 
         new(storagePtr()) FuncType(Forward<Func>(func));
 
-        m_invoke = [](void* storage){
+        m_invoke = [](void* storage)noexcept(noexcept((*static_cast<FuncType*>(storage))())){
             FuncType* f = static_cast<FuncType*>(storage);
             (*f)();
         };

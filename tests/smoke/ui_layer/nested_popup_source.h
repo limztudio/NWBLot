@@ -28,7 +28,7 @@ class UiNestedPopupSmokeSource final : public Impl::Ui::ISearchableListDataSourc
 private:
     class View final : public Impl::Ui::IListDataSource, NoCopy{
     public:
-        explicit View(const UiNestedPopupSmokeSource& source) : m_source(source){}
+        explicit View(const UiNestedPopupSmokeSource& source)noexcept : m_source(source){}
 
 
     public:
@@ -48,7 +48,7 @@ private:
 
 
 public:
-    explicit UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& arena);
+    explicit UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& arena)noexcept;
 
 
 public:

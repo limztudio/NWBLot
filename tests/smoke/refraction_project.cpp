@@ -84,7 +84,7 @@ private:
 public:
     explicit RefractionSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context), m_world(CreateWorldOrDie(context)){}
-    virtual ~RefractionSmokeProject()override{ DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture); }
+    virtual ~RefractionSmokeProject()noexcept override{ DestroyCapturedSmokeRenderWorld(m_context, m_world, m_framebufferCapture); }
 
 
 public:

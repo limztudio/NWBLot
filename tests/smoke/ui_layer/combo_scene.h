@@ -32,17 +32,17 @@ namespace Tests::Smoke{
 class UiComboSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     explicit UiComboSmokeScene(Core::InputDispatcher& input);
-    virtual ~UiComboSmokeScene()override;
+    virtual ~UiComboSmokeScene()noexcept override;
 
 
 public:
     [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    [[nodiscard]] Array<u64, 16u> values()const;
+    [[nodiscard]] Array<u64, 16u> values()const noexcept;
     [[nodiscard]] Impl::Ui::Rect cursorRow()const noexcept;
     void observeState();
 

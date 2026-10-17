@@ -46,7 +46,7 @@ struct FramebufferAttachmentExtent{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
+FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc)noexcept{
     const usize colorAttachmentCount = desc.colorAttachments.size();
     for(usize i = 0u; i < colorAttachmentCount; ++i){
         const FramebufferAttachment& attachment = desc.colorAttachments[i];
@@ -71,7 +71,7 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)
+FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)noexcept
     : FramebufferInfo(desc)
 {
     const FramebufferAttachment* attachment = nullptr;

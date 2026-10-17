@@ -173,7 +173,7 @@ public:
 };
 
 
-[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio);
+[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio)noexcept;
 [[nodiscard]] Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position);
 
 

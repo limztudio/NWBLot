@@ -194,7 +194,7 @@ public:
             payload.timing->confirmFrameReset(token);
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         if(payload.timing)
             payload.timing->discardFrameReset();
     }

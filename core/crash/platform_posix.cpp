@@ -212,7 +212,7 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
     raise(signalNumber);
 }
 
-[[noreturn]] static void TerminateHandler(){
+[[noreturn]] static void TerminateHandler()noexcept{
     Detail::CrashDumpRequestOptions options;
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the follow-up SIGABRT to carry it.

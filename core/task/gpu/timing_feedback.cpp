@@ -267,7 +267,7 @@ void GpuTaskTimingHistorySnapshot::reset()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskTimingHistoryStore::GpuTaskTimingHistoryStore(GraphicsArena& arena, const u32 maximumSamplesPerHistory)
+GpuTaskTimingHistoryStore::GpuTaskTimingHistoryStore(GraphicsArena& arena, const u32 maximumSamplesPerHistory)noexcept
     : m_arena(arena)
     , m_histories(arena)
     , m_assignments(arena)

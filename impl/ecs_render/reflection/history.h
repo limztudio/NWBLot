@@ -93,11 +93,11 @@ private:
 using ReflectionHistoryControl = RefCounter<ReflectionHistoryState>;
 using ReflectionHistoryControlHandle = RefCountPtr< ReflectionHistoryControl, ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] ReflectionHistoryControlHandle CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration);
+[[nodiscard]] ReflectionHistoryControlHandle CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
 class ReflectionHistoryReservation final : NoCopy{
 public:
-    ReflectionHistoryReservation(ReflectionHistoryControlHandle control, const ReflectionHistoryPlan& plan);
+    ReflectionHistoryReservation(ReflectionHistoryControlHandle control, const ReflectionHistoryPlan& plan)noexcept;
     ReflectionHistoryReservation(ReflectionHistoryReservation&& other)noexcept;
     ~ReflectionHistoryReservation()noexcept;
 

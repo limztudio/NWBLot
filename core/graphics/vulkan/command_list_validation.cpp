@@ -25,7 +25,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::beginTaskCapabilityTracking(const GpuQueueCapability::Mask declaredCapabilities){
+void CommandList::beginTaskCapabilityTracking(const GpuQueueCapability::Mask declaredCapabilities)noexcept{
     if(!publicCommandStateAccessible())
         return;
     NWB_ASSERT(!m_taskCapabilityTracking);
@@ -34,7 +34,7 @@ void CommandList::beginTaskCapabilityTracking(const GpuQueueCapability::Mask dec
     m_taskCapabilityTracking = true;
 }
 
-GpuQueueCapability::Mask CommandList::endTaskCapabilityTracking(){
+GpuQueueCapability::Mask CommandList::endTaskCapabilityTracking()noexcept{
     if(!publicCommandStateAccessible())
         return GpuQueueCapability::None;
     NWB_ASSERT(m_taskCapabilityTracking);
@@ -43,7 +43,7 @@ GpuQueueCapability::Mask CommandList::endTaskCapabilityTracking(){
     return m_taskCapabilitiesUsed;
 }
 
-void CommandList::cancelTaskCapabilityTracking(){
+void CommandList::cancelTaskCapabilityTracking()noexcept{
     if(!publicCommandStateAccessible())
         return;
     m_taskCapabilitiesUsed = GpuQueueCapability::None;

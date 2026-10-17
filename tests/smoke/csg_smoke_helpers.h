@@ -40,7 +40,7 @@ inline void AssignCsgCutterParameters(Impl::CsgCutterComponent& cutter, const Pa
     NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
 
-inline void AssignCsgCutterTransform(Impl::CsgCutterComponent& cutter, const SIMDVectorSingle center, const SIMDVectorSingle rotation){
+inline void AssignCsgCutterTransform(Impl::CsgCutterComponent& cutter, const SIMDVectorSingle center, const SIMDVectorSingle rotation)noexcept{
     const SIMDMatrix shapeToWorld = MatrixAffineTransformation(s_SIMDOne, VectorZero(), rotation, center);
     SIMDVectorSingle determinant;
     const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);

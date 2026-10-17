@@ -121,7 +121,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static AStringView BenchmarkModeName(const BenchmarkMode::Enum mode){
+[[nodiscard]] static AStringView BenchmarkModeName(const BenchmarkMode::Enum mode)noexcept{
     switch(mode){
     case BenchmarkMode::NoCulling: return "no_culling";
     case BenchmarkMode::FrustumOnly: return "frustum_only";
@@ -130,7 +130,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     }
 }
 
-[[nodiscard]] static AStringView BenchmarkViewName(const BenchmarkView::Enum view){
+[[nodiscard]] static AStringView BenchmarkViewName(const BenchmarkView::Enum view)noexcept{
     switch(view){
     case BenchmarkView::Front: return "front";
     case BenchmarkView::Back: return "back";
@@ -169,7 +169,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return EnvironmentFlagEnabled(s_FastSmokeEnv);
 }
 
-static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const u32 characterIndex, const f32 timeSeconds, const bool staticPreview, SIMDMatrix& outMatrix){
+static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const u32 characterIndex, const f32 timeSeconds, const bool staticPreview, SIMDMatrix& outMatrix)noexcept{
     outMatrix = bindJoint;
     if(!ShouldAnimateJoint(jointIndex, characterIndex, staticPreview))
         return;
@@ -205,8 +205,8 @@ static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 join
 
 class BenchmarkRuntimeMeshProvider final : public NWB::Impl::IRuntimeMeshProvider{
 public:
-    BenchmarkRuntimeMeshProvider() = default;
-    ~BenchmarkRuntimeMeshProvider(){
+    BenchmarkRuntimeMeshProvider()noexcept = default;
+    ~BenchmarkRuntimeMeshProvider()noexcept{
         uninstall();
     }
 
@@ -365,7 +365,7 @@ private:
         return !m_bindJoints.empty();
     }
 
-    void configureCamera(const BenchmarkView::Enum view){
+    void configureCamera(const BenchmarkView::Enum view)noexcept{
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_cameraEntity);
         if(!transform)
             return;
@@ -456,7 +456,7 @@ private:
         configureCase();
     }
 
-    void animatePoses(){
+    void animatePoses()noexcept{
         const f32 timeSeconds = static_cast<f32>(m_totalTimeSeconds);
         for(usize entityIndex = 0u; entityIndex < m_entities.size(); ++entityIndex){
             auto* pose = m_world->tryGetComponent<NWB::Impl::SkeletonPoseComponent>(m_entities[entityIndex]);
@@ -481,7 +481,7 @@ public:
         , m_staticPreview(StaticPreviewEnabled())
         , m_fastSmoke(!m_staticPreview && FastSmokeEnabled())
     {}
-    virtual ~SkinningCullingBenchmarkProject()override{
+    virtual ~SkinningCullingBenchmarkProject()noexcept override{
         destroyWorld();
     }
 

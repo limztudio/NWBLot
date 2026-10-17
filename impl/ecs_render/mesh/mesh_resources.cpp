@@ -92,7 +92,7 @@ private:
     ;
 }
 
-static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc& desc){
+static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc& desc)noexcept{
     mesh.runtimeGeometryContentRevision = desc.geometryContentRevision;
     mesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
     mesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
@@ -186,7 +186,26 @@ template<typename PayloadVector>
 }
 
 template<typename PositionVector>
-[[nodiscard]] static Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(const PositionVector& positions){
+[[nodiscard]] static Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(const PositionVector& positions)noexcept([]()constexpr noexcept{
+    using Range = PositionVector;
+    if constexpr(IsArray_V<Range>)
+        return noexcept(DeclVal<void(*)(const Float3U&)noexcept>()(DeclVal<const RemoveExtent_T<Range>&>()));
+    else if constexpr(requires(const Range& values){ values.begin(); values.end(); }){
+        using Iterator = RemoveCVRef_T<decltype(DeclVal<const Range&>().begin())>;
+        using Sentinel = RemoveCVRef_T<decltype(DeclVal<const Range&>().end())>;
+        return
+            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<const Range&>().begin()))
+            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<const Range&>().end()))
+            && IsNothrowDestructible_V<Iterator>
+            && IsNothrowDestructible_V<Sentinel>
+            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+            && noexcept(++DeclVal<Iterator&>())
+            && noexcept(DeclVal<void(*)(const Float3U&)noexcept>()(*DeclVal<Iterator&>()))
+        ;
+    }
+    else
+        return false;
+}() && noexcept(static_cast<bool>(positions.empty()))){
     CsgReceiverCpuBounds bounds;
     if(positions.empty())
         return MakeUnexpected(Failure{});
@@ -413,13 +432,13 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     return &it.value();
 }
 
-Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset){
+Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept{
 
     const Name meshPath = meshAsset.name();
     return findMeshResources(meshPath);
 }
 
-Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshKey){
+Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshKey)noexcept{
     if(!meshKey)
         return MakeUnexpected(Failure{});
 
@@ -511,7 +530,7 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
     return &it.value();
 }
 
-Expected<MeshResources*> RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc){
+Expected<MeshResources*> RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept{
     NWB_ASSERT(desc.valid());
 
     const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);

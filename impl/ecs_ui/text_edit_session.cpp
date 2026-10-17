@@ -23,7 +23,7 @@ UiTextEditSession::UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITex
     , m_publishedText(arena)
 {}
 
-UiTextEditSession::~UiTextEditSession(){
+UiTextEditSession::~UiTextEditSession()noexcept{
     if(!release())
         TerminateInvariant();
 }

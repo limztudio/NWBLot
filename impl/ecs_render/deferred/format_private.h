@@ -23,28 +23,28 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device){
+inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
     return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
-inline Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device){
+inline Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
 
     return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
-inline Core::Format::Enum SelectGBufferVectorFormat(Core::Device& device){
+inline Core::Format::Enum SelectGBufferVectorFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
     return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
-inline Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device){
+inline Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { Core::Format::D32, Core::Format::D24S8, Core::Format::D16, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::DepthStencil;
 

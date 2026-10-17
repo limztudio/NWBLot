@@ -105,7 +105,7 @@ public:
     constexpr BlendState& enableAlphaToCoverage()noexcept{ alphaToCoverageEnable = true; return *this; }
     constexpr BlendState& disableAlphaToCoverage()noexcept{ alphaToCoverageEnable = false; return *this; }
 
-    [[nodiscard]] bool usesConstantColor(u32 numTargets)const;
+    [[nodiscard]] bool usesConstantColor(u32 numTargets)const noexcept;
 };
 constexpr bool operator==(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{
     return

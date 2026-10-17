@@ -95,7 +95,7 @@ ShaderTable::ShaderTable(const VulkanContext& context, Device& device)noexcept
     , m_context(context)
     , m_device(device)
 {}
-ShaderTable::~ShaderTable(){}
+ShaderTable::~ShaderTable()noexcept{}
 
 bool ShaderTable::setRayGenerationShader(const AStringView exportName){
     ScopedLock lock(m_mutex);
@@ -141,7 +141,7 @@ Expected<u32> ShaderTable::addCallableShader(const AStringView exportName){
     return appendShaderRecord(exportName, ShaderTableRecordKind::Callable, m_callableGroupIndices, m_callableBuffer, m_callableOffset, m_callableCount, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("callable shader"));
 }
 
-void ShaderTable::clearMissShaders(){
+void ShaderTable::clearMissShaders()noexcept{
     ScopedLock lock(m_mutex);
     m_missBuffer.reset();
     m_missGroupIndices.clear();
@@ -149,7 +149,7 @@ void ShaderTable::clearMissShaders(){
     m_missCount = 0u;
 }
 
-void ShaderTable::clearHitShaders(){
+void ShaderTable::clearHitShaders()noexcept{
     ScopedLock lock(m_mutex);
     m_hitBuffer.reset();
     m_hitGroupIndices.clear();
@@ -157,7 +157,7 @@ void ShaderTable::clearHitShaders(){
     m_hitCount = 0u;
 }
 
-void ShaderTable::clearCallableShaders(){
+void ShaderTable::clearCallableShaders()noexcept{
     ScopedLock lock(m_mutex);
     m_callableBuffer.reset();
     m_callableGroupIndices.clear();
@@ -165,14 +165,14 @@ void ShaderTable::clearCallableShaders(){
     m_callableCount = 0u;
 }
 
-Object ShaderTable::getNativeHandle(const ObjectType objectType){
+Object ShaderTable::getNativeHandle(const ObjectType objectType)noexcept{
     ScopedLock lock(m_mutex);
     if(objectType == ObjectTypes::s_Buffer && m_raygenBuffer)
         return Object(m_raygenBuffer->m_buffer);
     return Object(nullptr);
 }
 
-ShaderTable::DispatchSnapshot ShaderTable::captureDispatchSnapshot()const{
+ShaderTable::DispatchSnapshot ShaderTable::captureDispatchSnapshot()const noexcept{
     DispatchSnapshot snapshot;
 
     ScopedLock lock(m_mutex);

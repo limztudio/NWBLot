@@ -31,12 +31,12 @@ namespace Tests::Smoke{
 class UiSliderSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiSliderSmokeScene()override;
+    virtual ~UiSliderSmokeScene()noexcept override;
 
 
 public:
     [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:

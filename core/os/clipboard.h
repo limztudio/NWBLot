@@ -93,7 +93,7 @@ public:
 // Tokens never reference client objects and stale/foreign tokens are rejected.
 interface IClipboardService : private NoCopy{
 public:
-    virtual ~IClipboardService() = default;
+    virtual ~IClipboardService()noexcept = default;
 
 
 public:

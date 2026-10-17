@@ -158,7 +158,7 @@ static void LinuxSilenceExpectedCrashChildConsole(){
     return false;
 }
 
-[[nodiscard]] static AStringView LinuxObservableAssertCategory(){
+[[nodiscard]] static AStringView LinuxObservableAssertCategory()noexcept{
 #if NWB_OCCUR_ASSERT
     return DiagnosticEventCategory::s_Assert.data();
 #else
@@ -178,11 +178,11 @@ NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation
 
 // Shared by Windows and Linux; match the test guard to avoid an unused Android helper.
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message){
+NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error.data(),
-        .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError.data(),
-        .message = message.data(),
+        .event = DiagnosticEventName::s_Error,
+        .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
+        .message = message,
         .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
         .line = __LINE__,
     }

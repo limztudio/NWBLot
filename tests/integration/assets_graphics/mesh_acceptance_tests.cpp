@@ -76,6 +76,12 @@ static bool TestMeshletHasPositionNormalValue(
     const LocalRefVectorT& localRefs,
     const Float3U& expectedPosition,
     const Float4U& expectedNormal
+)noexcept(
+    noexcept(DeclVal<void(*)(const NWB::Impl::MeshletLocalVertexRef&)noexcept>()(localRefs[DeclVal<u32>()]))
+    && noexcept(TestDecodeMeshletPositionRef(mesh, meshlet, DeclVal<u32>()))
+    && noexcept(TestDecodeMeshletAttributeRef(mesh, meshlet, DeclVal<u32>()))
+    && noexcept(DeclVal<void(*)(const Float3U&)noexcept>()(positions[DeclVal<u32>()]))
+    && noexcept(LoadHalf4U(normals[DeclVal<u32>()]))
 ){
     for(u32 localVertexIndex = 0u; localVertexIndex < NWB::Impl::MeshletVertexCount(meshlet); ++localVertexIndex){
         const NWB::Impl::MeshletLocalVertexRef& localRef = localRefs[meshlet.localVertexOffset + localVertexIndex];
@@ -94,7 +100,26 @@ static bool TestMeshletHasPositionNormalValue(
 }
 
 template<typename MeshT>
-[[nodiscard]] static usize TestMeshletLogicalPositionRefCount(const MeshT& mesh){
+[[nodiscard]] static usize TestMeshletLogicalPositionRefCount(const MeshT& mesh)noexcept([]()constexpr noexcept{
+    using Range = RemoveReference_T<decltype(DeclVal<const MeshT&>().meshlets())>;
+    if constexpr(IsArray_V<Range>)
+        return noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(DeclVal<RemoveExtent_T<Range>&>()));
+    else if constexpr(requires(Range& values){ values.begin(); values.end(); }){
+        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
+        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
+        return
+            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
+            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
+            && IsNothrowDestructible_V<Iterator>
+            && IsNothrowDestructible_V<Sentinel>
+            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+            && noexcept(++DeclVal<Iterator&>())
+            && noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(*DeclVal<Iterator&>()))
+        ;
+    }
+    else
+        return false;
+}() && noexcept(mesh.meshlets())){
     usize count = 0u;
     for(const NWB::Impl::MeshletDesc& meshlet : mesh.meshlets())
         count += NWB::Impl::MeshletPositionCount(meshlet);
@@ -102,7 +127,26 @@ template<typename MeshT>
 }
 
 template<typename MeshT>
-[[nodiscard]] static usize TestMeshletLogicalAttributeRefCount(const MeshT& mesh){
+[[nodiscard]] static usize TestMeshletLogicalAttributeRefCount(const MeshT& mesh)noexcept([]()constexpr noexcept{
+    using Range = RemoveReference_T<decltype(DeclVal<const MeshT&>().meshlets())>;
+    if constexpr(IsArray_V<Range>)
+        return noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(DeclVal<RemoveExtent_T<Range>&>()));
+    else if constexpr(requires(Range& values){ values.begin(); values.end(); }){
+        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
+        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
+        return
+            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
+            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
+            && IsNothrowDestructible_V<Iterator>
+            && IsNothrowDestructible_V<Sentinel>
+            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+            && noexcept(++DeclVal<Iterator&>())
+            && noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(*DeclVal<Iterator&>()))
+        ;
+    }
+    else
+        return false;
+}() && noexcept(mesh.meshlets())){
     usize count = 0u;
     for(const NWB::Impl::MeshletDesc& meshlet : mesh.meshlets())
         count += NWB::Impl::MeshletAttributeCount(meshlet);

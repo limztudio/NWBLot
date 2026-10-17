@@ -84,12 +84,12 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
     return resetRecorded;
 }
 
-bool CommandList::canRecordTimerQueryHere()const{
+bool CommandList::canRecordTimerQueryHere()const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     return ownership.m_readable && canRecordTimerQueryHereUnchecked();
 }
 
-bool CommandList::canResetTimerQueryHere()const{
+bool CommandList::canResetTimerQueryHere()const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     return ownership.m_readable && canResetTimerQueryHereUnchecked();
 }

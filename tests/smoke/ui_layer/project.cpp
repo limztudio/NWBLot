@@ -32,7 +32,7 @@ UiLayerSmokeProject::UiLayerSmokeProject(ProjectRuntimeContext& context, NotNull
     , m_world(Move(world))
 {}
 
-UiLayerSmokeProject::~UiLayerSmokeProject(){
+UiLayerSmokeProject::~UiLayerSmokeProject()noexcept{
     destroyRuntime();
 }
 

@@ -471,7 +471,7 @@ Frame::Frame(void* inst){
     data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 
-Frame::~Frame(){
+Frame::~Frame()noexcept{
     const HWND hwnd = data<FrameDetail::WinFrame>().hwnd();
     if(hwnd && !DestroyWindow(hwnd))
         CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "logger_window_lifecycle", .message = "Log server: failed to destroy its window during shutdown", .file = __FILE__, .line = __LINE__, });

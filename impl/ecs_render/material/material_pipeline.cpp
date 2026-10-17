@@ -140,11 +140,11 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
         break;
     }
 
-    auto removeFailedEntry = [&](){
+    auto removeFailedEntry = [&]()noexcept{
         if(inserted)
             m_materialState.m_pipelines.erase(it);
     };
-    auto failMaterialPipeline = [&](){
+    auto failMaterialPipeline = [&]()noexcept{
         removeFailedEntry();
         return MakeUnexpected(Failure{});
     };
@@ -417,7 +417,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     return &resources;
 }
 
-Expected<MaterialPipelineResources*> RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pipelineKey){
+Expected<MaterialPipelineResources*> RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pipelineKey)noexcept{
     const auto foundPipeline = m_materialState.m_pipelines.find(pipelineKey);
     if(foundPipeline == m_materialState.m_pipelines.end())
         return MakeUnexpected(Failure{});
@@ -443,7 +443,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::findRendererPipelin
     return &resources;
 }
 
-void RendererMaterialSystem::invalidateRendererPipelines(){
+void RendererMaterialSystem::invalidateRendererPipelines()noexcept{
     m_materialState.m_pipelines.clear();
     m_materialState.m_objectGeometryDecodeShader.reset();
     m_materialState.m_objectGeometryDecodePipeline.reset();

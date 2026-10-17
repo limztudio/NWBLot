@@ -32,7 +32,7 @@ namespace __hidden_texture_transfer_staging{
     const u64 stagingArrayByteSize,
     const u64 stagingTotalByteSize,
     const u32 requiredOffsetAlignment
-){
+)noexcept{
     const auto range = VulkanDetail::BuildStagingTextureRange(stagingSlice, stagingMipLayout, stagingFormatLayout, stagingArrayByteSize, stagingTotalByteSize, requiredOffsetAlignment, false);
     if(!range)
         return MakeUnexpected(Failure{});
@@ -223,7 +223,7 @@ bool CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTex
     return true;
 }
 
-Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const{
+Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const noexcept{
     const TextureDesc& stagingDesc = stagingResource.m_creationDesc;
     const TextureDesc& textureDesc = textureResource.m_creationDesc;
     if(textureDesc.sampleCount != 1)

@@ -24,7 +24,7 @@ namespace EpochMutation{
 
 class SelectionEpochSource final : public ComboSource{
 public:
-    SelectionEpochSource(){ count = 5u; }
+    SelectionEpochSource()noexcept{ count = 5u; }
 
 
 public:

@@ -62,25 +62,25 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
         callback(CallbackPhase::Generation);
         return generation;
     }
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         callback(CallbackPhase::Revision);
         return revisionValue;
     }
-    [[nodiscard]] virtual u64 rowCount()const override{
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{
         ++countCalls;
         callback(CallbackPhase::Count);
         return count;
     }
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         callback(CallbackPhase::Key);
         ++keyCalls;
         return index < s_RadioGroupMaxChoices ? rows[static_cast<usize>(index)].key : 0u;
     }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
         u64 index = 0u;
         callback(CallbackPhase::Lookup);
         for(u32 candidate = 0u; candidate < Min<u64>(count, s_RadioGroupMaxChoices); ++candidate){
@@ -114,14 +114,14 @@ public:
         return MakeUnexpected(Failure{});
     }
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "choice"; }
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         callback(CallbackPhase::Enabled);
         return index < s_RadioGroupMaxChoices && rows[static_cast<usize>(index)].enabled;
     }
 
 
 private:
-    void callback(const CallbackPhase::Enum current)const{
+    void callback(const CallbackPhase::Enum current)const noexcept{
         ++callbackCalls;
         if(!armed || phase != current || (triggerCount != 0u && countCalls != triggerCount))
             return;

@@ -39,7 +39,7 @@ static constexpr Array<StringView, 5u> s_Labels{ "Alpha", "Beta", "Gamma (disabl
     return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
 }
 
-[[nodiscard]] static bool Matches(const StringView text, const AStringView query){
+[[nodiscard]] static bool Matches(const StringView text, const AStringView query)noexcept{
     if(query.size() > text.size())
         return false;
     for(usize start = 0u; start <= text.size() - query.size(); ++start){
@@ -108,7 +108,7 @@ bool UiNestedPopupSmokeSource::View::enabled(const u64 index)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiNestedPopupSmokeSource::UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& arena)
+UiNestedPopupSmokeSource::UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& arena)noexcept
     : m_query(arena)
     , m_view(*this)
 {

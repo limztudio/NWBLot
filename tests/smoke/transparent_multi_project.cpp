@@ -136,7 +136,7 @@ private:
 // The target-hardware lifecycle needs actual post-bootstrap submissions, so use Graphics' existing render-pass opt-in only in this dedicated smoke executable; production projects retain their normal focus throttling policy.
 class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass{
 public:
-    explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::GraphicsRuntime& graphics)
+    explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::GraphicsRuntime& graphics)noexcept
         : IRenderPass(graphics)
     {}
 
@@ -168,7 +168,7 @@ public:
 #endif
 
 
-[[nodiscard]] static TStringView TransparentMultiFpsLabel(){
+[[nodiscard]] static TStringView TransparentMultiFpsLabel()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     return NWB_TEXT("FrameLaggedAsyncLightingSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
@@ -181,7 +181,7 @@ public:
 }
 
 
-[[nodiscard, maybe_unused]] static Name TransparentCenterCsgReceiverGroup(){
+[[nodiscard, maybe_unused]] static Name TransparentCenterCsgReceiverGroup()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return s_TransparentCsgReceiverGroup;
 #else
@@ -219,7 +219,7 @@ public:
     return Vector3Rotate(basePosition, sceneRotation);
 }
 
-static void ApplyTransparentSceneTransform(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle basePosition, const SIMDVectorSingle sceneRotation, const SIMDVectorSingle localRotation){
+static void ApplyTransparentSceneTransform(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle basePosition, const SIMDVectorSingle sceneRotation, const SIMDVectorSingle localRotation)noexcept{
     auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
     if(!transform)
         return;
@@ -242,7 +242,7 @@ static void ApplyTransparentCsgSceneTransform(
     const SIMDVectorSingle receiverBasePosition,
     const SIMDVectorSingle sceneRotation,
     const SIMDVectorSingle localRotation
-){
+)noexcept{
     const SIMDVectorSingle receiverPosition = RotateTransparentBasePosition(receiverBasePosition, sceneRotation);
     const SIMDVectorSingle receiverRotation = QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation));
 
@@ -435,7 +435,7 @@ public:
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
     {}
-    virtual ~TransparentMultiSmokeProject()override{
+    virtual ~TransparentMultiSmokeProject()noexcept override{
         m_timingRenderPass.stop();
         m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
@@ -673,7 +673,7 @@ public:
 
 
 private:
-    void updateTransparentSceneTransforms(){
+    void updateTransparentSceneTransforms()noexcept{
         const f32 sceneYaw = m_sceneYaw.yaw();
         const SIMDVectorSingle sceneRotation = BuildTransparentSceneRotation(sceneYaw);
         ApplyTransparentSceneTransform(*m_world, m_leftShape, LoadFloat(TransparentLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());

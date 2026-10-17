@@ -57,7 +57,7 @@ UiEditSmokeScene::UiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputD
     m_input.addHandlerToBack(*this);
 }
 
-UiEditSmokeScene::~UiEditSmokeScene(){
+UiEditSmokeScene::~UiEditSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -129,7 +129,7 @@ void UiEditSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiEditSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
-Array<u32, 12u> UiEditSmokeScene::values()const{
+Array<u32, 12u> UiEditSmokeScene::values()const noexcept{
     return { static_cast<u32>(m_primary.text().size()), HashSmokeText32(m_primary.text()),
         static_cast<u32>(m_primary.anchor()), static_cast<u32>(m_primary.caret()), static_cast<u32>(m_primaryFocused),
         static_cast<u32>(m_secondary.text().size()), HashSmokeText32(m_secondary.text()),

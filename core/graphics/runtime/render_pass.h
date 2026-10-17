@@ -24,7 +24,7 @@ public:
     explicit IRenderPass(GraphicsRuntime& graphics)noexcept
         : m_graphics(graphics)
     {}
-    virtual ~IRenderPass() = default;
+    virtual ~IRenderPass()noexcept = default;
 
 
 public:

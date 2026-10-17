@@ -64,7 +64,12 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 }
 
 template<typename JointMatrixVector>
-[[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, JointMatrixVector& outJointPalette){
+[[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, JointMatrixVector& outJointPalette)noexcept(
+    noexcept(outJointPalette.clear())
+    && noexcept(outJointPalette.reserve(DeclVal<const usize&>()))
+    && noexcept(DeclVal<SIMDMatrix&>() = LoadFloat(outJointPalette[DeclVal<const u32&>()]))
+    && noexcept(outJointPalette.push_back(DeclVal<SkeletonJointMatrix&>()))
+){
     outJointPalette.clear();
 
     if(!HasSkeletonPose(&pose))

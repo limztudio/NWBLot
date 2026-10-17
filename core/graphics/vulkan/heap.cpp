@@ -24,7 +24,7 @@ Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)noexcept
     , m_context(context)
     , m_allocator(allocator)
 {}
-Heap::~Heap(){
+Heap::~Heap()noexcept{
     {
         ScopedLock lock(m_bindingMutex);
         if(!m_bindingReservations.empty()){
@@ -36,13 +36,13 @@ Heap::~Heap(){
     m_allocator.freeHeap(*this);
 }
 
-Object Heap::getNativeHandle(ObjectType objectType){
+Object Heap::getNativeHandle(ObjectType objectType)noexcept{
     if(objectType == ObjectTypes::s_DeviceMemory)
         return Object(m_memory);
     return Object(nullptr);
 }
 
-void Heap::eraseBindingReservationLocked(const void* owner){
+void Heap::eraseBindingReservationLocked(const void* owner)noexcept{
     for(auto reservation = m_bindingReservations.begin(); reservation != m_bindingReservations.end(); ++reservation){
         if(reservation->owner != owner)
             continue;

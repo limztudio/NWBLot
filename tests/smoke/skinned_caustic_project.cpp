@@ -98,7 +98,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 
 // Oscillate each joint around its bind pose so the skinned surface deforms every frame.
 // The root joint (index 0) is left at bind so the body stays planted over the ground while the limbs/torso undulate -- enough deformation to move the refractive shadow + caustic footprint visibly.
-[[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const f32 timeSeconds){
+[[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const f32 timeSeconds)noexcept{
     if(jointIndex == 0u)
         return bindJoint;
 
@@ -368,7 +368,7 @@ private:
         return entity;
     }
 
-    void animatePoses(){
+    void animatePoses()noexcept{
         auto* pose = m_world->tryGetComponent<NWB::Impl::SkeletonPoseComponent>(m_skeletonEntity);
         if(!pose)
             return;
@@ -388,7 +388,7 @@ public:
         , m_bindJoints(context.objectArena)
         , m_transitionOutput(context.objectArena)
     {}
-    virtual ~SkinnedCausticSmokeProject()override{
+    virtual ~SkinnedCausticSmokeProject()noexcept override{
         destroyWorld();
     }
 

@@ -31,17 +31,17 @@ struct NavigationCall{
 
 
 public:
-    explicit NavigationCall(Alloc::GlobalArena& arena) : text(arena){}
+    explicit NavigationCall(Alloc::GlobalArena& arena)noexcept : text(arena){}
 };
 
 class RecordingNavigationResolver final : public Ui::IEditNavigationResolver{
 public:
-    RecordingNavigationResolver(Alloc::GlobalArena& arena, Ui::TextLayoutBuilder& layoutBuilder)
+    RecordingNavigationResolver(Alloc::GlobalArena& arena, Ui::TextLayoutBuilder& layoutBuilder)noexcept
         : records(arena)
         , m_arena(arena)
         , m_layoutBuilder(layoutBuilder)
     {}
-    virtual ~RecordingNavigationResolver()override = default;
+    virtual ~RecordingNavigationResolver()noexcept override = default;
 
 
 public:
@@ -104,16 +104,16 @@ struct NavigationAction{
 
 
 public:
-    explicit NavigationAction(Alloc::GlobalArena& arena) : text(arena){}
+    explicit NavigationAction(Alloc::GlobalArena& arena)noexcept : text(arena){}
 };
 
 class AcceptingNavigationActions final : public Ui::IEditActionSink{
 public:
-    explicit AcceptingNavigationActions(Alloc::GlobalArena& arena)
+    explicit AcceptingNavigationActions(Alloc::GlobalArena& arena)noexcept
         : records(arena)
         , m_arena(arena)
     {}
-    virtual ~AcceptingNavigationActions()override = default;
+    virtual ~AcceptingNavigationActions()noexcept override = default;
 
 
 public:

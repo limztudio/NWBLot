@@ -146,7 +146,7 @@ TEST(UiClipboardPublications, AnotherThreadCannotRequestDrainOrCancelOwnedPublic
     UiClipboardPublicationStatus::Enum requested = UiClipboardPublicationStatus::Idle;
     UiClipboardPublicationStatus::Enum drained = UiClipboardPublicationStatus::Idle;
     bool cancelled = true;
-    Thread other([&](){
+    Thread other([&]()noexcept{
         requested = publications.request("other");
         drained = publications.drain().status;
         cancelled = publications.cancel();

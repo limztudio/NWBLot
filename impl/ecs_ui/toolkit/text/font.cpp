@@ -95,7 +95,7 @@ class FontFaceState final : NoCopy{
 
 
 private:
-    [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size){
+    [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size)noexcept{
         if(size <= 0)
             return nullptr;
         auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
@@ -109,7 +109,7 @@ private:
         }
     }
 
-    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block){
+    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block)noexcept{
         static_cast<void>(oldSize);
         if(newSize <= 0){
             Release(memory, block);
@@ -272,7 +272,7 @@ FontFace::FontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalA
     : m_state(Core::MakeGlobalUnique<FontFaceState>(arena, scratchArena, arena, source))
 {}
 
-FontFace::~FontFace() = default;
+FontFace::~FontFace()noexcept = default;
 
 bool FontFace::valid()const noexcept{ return m_state->m_ready; }
 

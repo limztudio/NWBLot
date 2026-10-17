@@ -41,7 +41,7 @@ const MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)const
     return m_world.tryGetComponent<MeshComponent>(entity);
 }
 
-Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(const Core::ECS::EntityID entity)const{
+Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(const Core::ECS::EntityID entity)const noexcept{
     const MeshComponent* mesh = findMesh(entity);
     if(!mesh || !mesh->mesh.valid())
         return MakeUnexpected(Failure{});

@@ -93,12 +93,44 @@ static void SymmetrizeTaskRelations(Vector<u64, Alloc::ScratchArena>& words, con
 
 
 template<typename RowRanges>
-static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const Vector<usize, Alloc::ScratchArena>& offsets, const RowRanges& ranges, const usize taskCount, const usize wordsPerRow){
-    const auto readWord = [&](const usize task, const usize word)noexcept(noexcept(word < ranges[task].m_begin || word >= ranges[task].m_end ? static_cast<u64>(0u) : words[offsets[task] + word - ranges[task].m_begin])){
+static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const Vector<usize, Alloc::ScratchArena>& offsets, const RowRanges& ranges, const usize taskCount, const usize wordsPerRow)noexcept(
+    []()constexpr noexcept{
+        using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
+        return
+            noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
+            && noexcept(static_cast<bool>(DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end))
+            && noexcept(DeclVal<Vector<u64, Alloc::ScratchArena>&>()[DeclVal<const Vector<usize, Alloc::ScratchArena>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin])
+            && noexcept(static_cast<bool>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
+            && noexcept(DeclVal<usize&>() = Max(DeclVal<usize&>(), DeclVal<const RowRanges&>()[DeclVal<usize>()].m_end))
+        ;
+    }()
+){
+    const auto readWord = [&](const usize task, const usize word)noexcept(
+        []()constexpr noexcept{
+            using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
+            return
+                noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
+                && noexcept(
+                    DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end
+                    ? static_cast<u64>(0u)
+                    : DeclVal<Vector<u64, Alloc::ScratchArena>&>()[DeclVal<const Vector<usize, Alloc::ScratchArena>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin]
+                )
+            ;
+        }()
+    ){
         const auto& range = ranges[task];
         return word < range.m_begin || word >= range.m_end ? static_cast<u64>(0u) : words[offsets[task] + word - range.m_begin];
     };
-    const auto appendWord = [&](const usize task, const usize word, const u64 bits){
+    const auto appendWord = [&](const usize task, const usize word, const u64 bits)noexcept(
+        []()constexpr noexcept{
+            using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
+            return
+                noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
+                && noexcept(static_cast<bool>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
+                && noexcept(DeclVal<Vector<u64, Alloc::ScratchArena>&>()[DeclVal<const Vector<usize, Alloc::ScratchArena>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin] |= DeclVal<const u64&>())
+            ;
+        }()
+    ){
         if(bits == 0u)
             return;
         const auto& range = ranges[task];

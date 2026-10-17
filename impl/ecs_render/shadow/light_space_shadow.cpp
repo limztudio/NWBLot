@@ -76,7 +76,7 @@ bool RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSet
     return true;
 }
 
-LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()const{
+LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()const noexcept{
     LightSpaceShadowSnapshot result = m_lightSpaceShadow.m_snapshot;
     result.casters = m_lightSpaceShadow.m_casters.data();
     result.casterCount = m_lightSpaceShadow.m_casters.size();
@@ -148,7 +148,7 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     state.m_resourcesPrepared = ensureLightSpaceShadowPipelines() && ensureLightSpaceShadowStorage(plan);
 }
 
-Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount)const{
+Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount)const noexcept{
     const auto& state = m_lightSpaceShadow;
     if(
         (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))

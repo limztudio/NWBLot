@@ -22,7 +22,7 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB UI Layer Smoke");
 }
 
-bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
+bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
     return context.graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && context.graphics.setHDR10OutputEnabled(false) && context.graphics.setSwapChainReadbackEnabled(true);
 }
 

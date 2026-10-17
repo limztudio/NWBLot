@@ -158,7 +158,7 @@ private:
 
     public:
         [[nodiscard]] bool usesSkinning()const noexcept{ return skinCount != 0u && jointCount != 0u; }
-        [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const{
+        [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const noexcept{
             const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
             };
@@ -225,7 +225,7 @@ public:
     virtual void invalidateResources()override;
 
     virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity)override;
-    [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const override;
+    [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const noexcept override;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
 

@@ -28,7 +28,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionSpatialOwnerProbe::ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer)
+ReflectionSpatialOwnerProbe::ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer)noexcept
     : m_context(context)
     , m_renderer(renderer)
 {}
@@ -97,7 +97,7 @@ bool ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& stati
     return true;
 }
 
-bool ReflectionSpatialOwnerProbe::canFinish(const Impl::ReflectionStatistics& statistics, const u64 capturedSource)const{
+bool ReflectionSpatialOwnerProbe::canFinish(const Impl::ReflectionStatistics& statistics, const u64 capturedSource)const noexcept{
     return
         m_finalReset && capturedSource == m_finalSource && m_captureWork.valid()
         && statistics.hardwareReady && statistics.historyEligible && statistics.samplingSeed == 0u

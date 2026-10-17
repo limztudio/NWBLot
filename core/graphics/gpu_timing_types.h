@@ -58,7 +58,7 @@ public:
 
 
 public:
-    constexpr GpuTimingScopeDefinition() = default;
+    constexpr GpuTimingScopeDefinition()noexcept = default;
     template<usize LabelSize>
     constexpr explicit GpuTimingScopeDefinition(const char (&label)[LabelSize])noexcept
         : identity(label)
@@ -86,7 +86,7 @@ class GpuTimingSampleAttribution final{
 
 
 public:
-    constexpr GpuTimingSampleAttribution() = default;
+    constexpr GpuTimingSampleAttribution()noexcept = default;
 private:
     constexpr explicit GpuTimingSampleAttribution(const u64 identity)noexcept
         : m_identity(identity)
@@ -148,7 +148,7 @@ class GpuTimingSampleSubscription final{
 
 
 public:
-    constexpr GpuTimingSampleSubscription() = default;
+    constexpr GpuTimingSampleSubscription()noexcept = default;
 private:
     constexpr explicit GpuTimingSampleSubscription(const u64 identity)noexcept
         : m_identity(identity)

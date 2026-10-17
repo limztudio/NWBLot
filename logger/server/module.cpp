@@ -475,7 +475,7 @@ Server::Server()
     , m_crashIngestSemaphore(0)
     , m_crashIngestExit(false)
 {}
-Server::~Server(){
+Server::~Server()noexcept{
     if(m_daemon){
         MHD_stop_daemon(m_daemon);
         m_daemon = nullptr;

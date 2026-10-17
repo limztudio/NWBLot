@@ -38,7 +38,7 @@ inline constexpr u32 s_TestTimeoutMS = 15000u;
 
 
 struct ThrowingMoveTask{
-    ThrowingMoveTask() = default;
+    ThrowingMoveTask()noexcept = default;
     ThrowingMoveTask(ThrowingMoveTask&&){ throw s_ConstructionException; }
 
 
@@ -47,7 +47,7 @@ public:
 };
 
 struct ThrowingCopyTask{
-    ThrowingCopyTask() = default;
+    ThrowingCopyTask()noexcept = default;
     ThrowingCopyTask(const ThrowingCopyTask&){ throw s_ConstructionException; }
     ThrowingCopyTask(ThrowingCopyTask&&)noexcept = default;
 
@@ -67,7 +67,7 @@ static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
 class DeadlineGuard final{
 public:
     DeadlineGuard()
-        : m_watchdog([](const StopToken& stop){
+        : m_watchdog([](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 // A watchdog timeout must fail the death test instead of passing as an unexpected worker failure.
@@ -78,7 +78,7 @@ public:
         }
         )
     {}
-    ~DeadlineGuard() = default;
+    ~DeadlineGuard()noexcept = default;
 
 
 private:
@@ -182,7 +182,7 @@ TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCalle
                 return 0;
             scheduler.wait(task);
             return 0;
-        }, [](const u32){ return 0; }, []()noexcept{ return 0; }
+        }, [](const u32)noexcept{ return 0; }, []()noexcept{ return 0; }
         );
         ExitTestProcess(static_cast<u32>(result));
     }, ""
@@ -209,7 +209,7 @@ TEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferred
             }
             )));
             return 0;
-        }, [](const u32){ return 0; }, []()noexcept{ return 0; }
+        }, [](const u32)noexcept{ return 0; }, []()noexcept{ return 0; }
         );
         ExitTestProcess(static_cast<u32>(result));
     }, ""

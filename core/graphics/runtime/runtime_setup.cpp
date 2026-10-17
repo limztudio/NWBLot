@@ -33,7 +33,7 @@ inline constexpr Name s_SetupTextureUploadIdentity("graphics.setup_texture.uploa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<usize> ComputeTextureUploadByteSize(const GraphicsRuntime::TextureSetupDesc& desc){
+[[nodiscard]] static Expected<usize> ComputeTextureUploadByteSize(const GraphicsRuntime::TextureSetupDesc& desc)noexcept{
     const TextureDesc& textureDesc = desc.textureDesc;
     if(textureDesc.width == 0 || textureDesc.height == 0 || textureDesc.depth == 0 || textureDesc.mipLevels == 0 || textureDesc.arraySize == 0)
         return MakeUnexpected(Failure{});

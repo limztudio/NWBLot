@@ -50,7 +50,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     return Vector3LessOrEqual(VectorSubtract(maxScale, minScale), tolerance);
 }
 
-[[nodiscard]] static MaterialPassMeshResourceSnapshot CaptureMeshResourceSnapshot(const MeshResources& mesh){
+[[nodiscard]] static MaterialPassMeshResourceSnapshot CaptureMeshResourceSnapshot(const MeshResources& mesh)noexcept{
     MaterialPassMeshResourceSnapshot snapshot;
     snapshot.sourceBuffers = mesh;
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)

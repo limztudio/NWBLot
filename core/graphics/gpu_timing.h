@@ -130,7 +130,7 @@ public:
     [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const noexcept;
     [[nodiscard]] bool confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, bool publishSample)noexcept;
-    [[nodiscard]] bool prepareQueryForRecovery(const GpuTimingScope& scope);
+    [[nodiscard]] bool prepareQueryForRecovery(const GpuTimingScope& scope)noexcept;
     [[nodiscard]] bool discardQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit);
     [[nodiscard]] bool abandonQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit)noexcept;
     [[nodiscard]] bool quarantineQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit)noexcept;
@@ -283,7 +283,7 @@ public:
     // confirmFrameReset() only after successful submit.
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
-    void discardFrameReset();
+    void discardFrameReset()noexcept;
 
 
 private:
@@ -297,9 +297,9 @@ private:
     void endScope(CommandList& commandList, GpuTimingScope& scope);
     void endScopeFromOpeningCommandList(CommandList& commandList, GpuTimingScope& scope)noexcept;
     [[nodiscard]] bool recordDeferredScopeEnd(CommandList& commandList, const GpuTimingScope& scope);
-    [[nodiscard]] bool validateScopeSubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token);
+    [[nodiscard]] bool validateScopeSubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] bool confirmScope(const GpuTimingScope& scope, const QueueSubmissionToken& token, bool publishSample)noexcept;
-    [[nodiscard]] bool prepareDeferredScopeForRecovery(const GpuTimingScope& scope);
+    [[nodiscard]] bool prepareDeferredScopeForRecovery(const GpuTimingScope& scope)noexcept;
     void discardScope(GpuTimingScope& scope);
     void abandonScopeWithoutCallbacks(GpuTimingScope& scope)noexcept;
     void quarantineScope(const GpuTimingScope& scope)noexcept;
@@ -319,7 +319,7 @@ private:
     void retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples);
     void discardMarkedPendingAttributionsLocked()noexcept;
     void retirePendingAttributionsLocked(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
-    void discardFrameResetLocked();
+    void discardFrameResetLocked()noexcept;
     void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason)noexcept;
     void syncActiveState(u64 subscriptionIdentityLimit)noexcept;
     void syncActiveState()noexcept;
@@ -505,11 +505,11 @@ public:
     // Records the end timestamp but deliberately keeps the query reservation private until the containing submission is accepted.
     // This permits a replacement recovery endpoint when a pre-recorded final packet is rejected.
     [[nodiscard]] bool recordEnd(CommandList& commandList);
-    [[nodiscard]] bool confirmBeginSubmission(const QueueSubmissionToken& token);
-    [[nodiscard]] bool confirmEndSubmission(const QueueSubmissionToken& token, bool publishSample);
+    [[nodiscard]] bool confirmBeginSubmission(const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] bool confirmEndSubmission(const QueueSubmissionToken& token, bool publishSample)noexcept;
     [[nodiscard]] bool needsRetirement()const noexcept;
     // Discards the endpoint recorded in a packet that will not be submitted, allowing a recovery command list to write the replacement endpoint after the accepted begin.
-    [[nodiscard]] bool prepareForRecovery();
+    [[nodiscard]] bool prepareForRecovery()noexcept;
     void discard();
 
 

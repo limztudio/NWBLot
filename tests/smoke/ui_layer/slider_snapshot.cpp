@@ -47,7 +47,7 @@ static constexpr Array<TStringView, 29u> s_RectNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void CopyPlacement(UiSliderSnapshot& snapshot, const Impl::Ui::SliderPlacement& placement, const u32 offset){
+static void CopyPlacement(UiSliderSnapshot& snapshot, const Impl::Ui::SliderPlacement& placement, const u32 offset)noexcept{
     snapshot.rectangles[offset] = placement.bounds;
     snapshot.rectangles[offset + 1u] = placement.clip;
     snapshot.rectangles[offset + 2u] = placement.travelBounds;

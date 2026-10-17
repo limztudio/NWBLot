@@ -63,7 +63,7 @@ bool MeshViewUploadCommitGraphTask::Record(const Payload& payload, Core::Command
 }
 
 
-void MeshViewUploadCommitGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void MeshViewUploadCommitGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     if(payload.uploadRequired)
         payload.meshSystem.confirmMeshViewBufferUpload(payload.viewState);

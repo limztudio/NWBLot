@@ -119,7 +119,7 @@ void AvboitIntegrationGraphTask::Accepted(Payload& payload, const Core::QueueSub
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
 }
 
-void AvboitIntegrationGraphTask::Discarded(Payload& payload){
+void AvboitIntegrationGraphTask::Discarded(Payload& payload)noexcept{
     if(payload.timingFeedback)
         payload.timingFeedback->discardRecording(payload.timingAttribution);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

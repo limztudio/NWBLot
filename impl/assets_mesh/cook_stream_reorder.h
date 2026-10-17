@@ -67,7 +67,13 @@ public:
     template<typename CookEntryT, typename SkinRemapperT>
     [[nodiscard]] static bool RemapMeshletPositionRefs(CookEntryT& entry, const TStringView metaKind, MeshCookCommonStreamReorder& reorder, SkinRemapperT remapSkin);
     template<typename CookEntryT>
-    static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
+    static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder)noexcept(
+        noexcept(entry.positions = Move(reorder.positions))
+        && noexcept(entry.normals = Move(reorder.normals))
+        && noexcept(entry.tangents = Move(reorder.tangents))
+        && noexcept(entry.uv0 = Move(reorder.uv0))
+        && noexcept(entry.colors = Move(reorder.colors))
+    );
     [[nodiscard]] static bool ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena);
 
 
@@ -164,7 +170,13 @@ bool MeshCookStreamReorder::RemapMeshletPositionRefs(CookEntryT& entry, const TS
 
 
 template<typename CookEntryT>
-void MeshCookStreamReorder::CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
+void MeshCookStreamReorder::CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder)noexcept(
+    noexcept(entry.positions = Move(reorder.positions))
+    && noexcept(entry.normals = Move(reorder.normals))
+    && noexcept(entry.tangents = Move(reorder.tangents))
+    && noexcept(entry.uv0 = Move(reorder.uv0))
+    && noexcept(entry.colors = Move(reorder.colors))
+){
     entry.positions = Move(reorder.positions);
     entry.normals = Move(reorder.normals);
     entry.tangents = Move(reorder.tangents);

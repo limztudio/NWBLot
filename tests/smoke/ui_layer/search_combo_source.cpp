@@ -82,7 +82,7 @@ bool UiSearchComboSmokeSource::View::enabled(const u64 index)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiSearchComboSmokeSource::UiSearchComboSmokeSource(Core::Alloc::GlobalArena& arena)
+UiSearchComboSmokeSource::UiSearchComboSmokeSource(Core::Alloc::GlobalArena& arena)noexcept
     : m_query(arena)
     , m_view(*this)
 {
@@ -130,7 +130,7 @@ bool UiSearchComboSmokeSource::filter(const AStringView query){
     return true;
 }
 
-void UiSearchComboSmokeSource::addRange(const u64 first, const u64 past){
+void UiSearchComboSmokeSource::addRange(const u64 first, const u64 past)noexcept{
     if(first >= past || m_rangeCount >= m_ranges.size())
         return;
     m_ranges[m_rangeCount] = { first, past };

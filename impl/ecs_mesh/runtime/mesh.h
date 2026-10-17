@@ -149,7 +149,7 @@ public:
 
 class IRuntimeMeshProvider{
 public:
-    virtual ~IRuntimeMeshProvider() = default;
+    virtual ~IRuntimeMeshProvider()noexcept = default;
 
 
 public:
@@ -184,7 +184,7 @@ public:
 
 class IRuntimeMeshRegistry{
 public:
-    virtual ~IRuntimeMeshRegistry() = default;
+    virtual ~IRuntimeMeshRegistry()noexcept = default;
 
 
 public:

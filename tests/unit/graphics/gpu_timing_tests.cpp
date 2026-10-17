@@ -97,7 +97,7 @@ struct GpuTimingSubscriptionCapture{
 
 
 public:
-    static void Invoke(void* const context, const Core::GpuTimingSample&){
+    static void Invoke(void* const context, const Core::GpuTimingSample&)noexcept{
         GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
         if(!capture)
             return;

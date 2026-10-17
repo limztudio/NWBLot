@@ -45,7 +45,7 @@ private:
 
 public:
     UiClipboardPublications(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service);
-    ~UiClipboardPublications();
+    ~UiClipboardPublications()noexcept;
 
 
 public:

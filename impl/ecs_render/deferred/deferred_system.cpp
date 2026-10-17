@@ -34,7 +34,7 @@ void RendererDeferredSystem::invalidateSceneLightingUploadMirrors()noexcept{
     m_deferredState.m_lightGpuDataValid = false;
 }
 
-void RendererDeferredSystem::invalidateResources(){
+void RendererDeferredSystem::invalidateResources()noexcept{
     m_deferredState.invalidateResources();
 }
 

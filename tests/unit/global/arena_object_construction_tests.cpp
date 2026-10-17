@@ -48,7 +48,7 @@ public:
         bytes.resize(73u, 29u);
         ++state.liveMembers;
     }
-    ~OwnedMember(){
+    ~OwnedMember()noexcept{
         --state.liveMembers;
         ++state.memberDestructors;
     }
@@ -80,7 +80,7 @@ public:
             throw ConstructionFailure{};
         ++state.completed;
     }
-    ~ConstructionProbe(){
+    ~ConstructionProbe()noexcept{
         state.destructionOrder[state.destructors++] = index;
     }
 };
@@ -118,7 +118,7 @@ public:
     {
         throw ConstructionFailure{};
     }
-    ~NestedConstruction(){ destroyed = true; }
+    ~NestedConstruction()noexcept{ destroyed = true; }
 };
 
 struct RejectingArena{

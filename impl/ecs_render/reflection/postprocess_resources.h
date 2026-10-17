@@ -71,7 +71,7 @@ public:
 public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, const ReflectionSettings& settings);
-    [[nodiscard]] ReflectionPostprocessSnapshot snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)const;
+    [[nodiscard]] ReflectionPostprocessSnapshot snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)const noexcept;
 
 private:
     void releaseTargets();

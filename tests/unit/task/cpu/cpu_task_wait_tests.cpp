@@ -30,7 +30,7 @@ using namespace NWB::Core;
 class WaitDeadline final{
 public:
     WaitDeadline()
-        : m_watchdog([](const StopToken& stop){
+        : m_watchdog([](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= 10000u)
@@ -425,7 +425,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     ASSERT_TRUE(waiter.valid());
     while(!waiterEntered.load(MemoryOrder::acquire))
         SleepMS(1u);
-    const auto cpuAdmission173 = scheduler.submit([&](){
+    const auto cpuAdmission173 = scheduler.submit([&]()noexcept{
         blockerEntered.store(true, MemoryOrder::release);
         while(!releaseBlocker.load(MemoryOrder::acquire))
             SleepMS(1u);
@@ -436,7 +436,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
         ASSERT_TRUE(cpuAdmission173->valid());
     while(!blockerEntered.load(MemoryOrder::acquire))
         SleepMS(1u);
-    const auto cpuAdmission174 = scheduler.submit([&](){
+    const auto cpuAdmission174 = scheduler.submit([&]()noexcept{
         anchorEntered.store(true, MemoryOrder::release);
         while(!releaseAnchor.load(MemoryOrder::acquire))
             SleepMS(1u);
@@ -445,7 +445,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     ASSERT_TRUE(cpuAdmission174);
     if(cpuAdmission174)
         ASSERT_TRUE(cpuAdmission174->valid());
-    const auto cpuAdmission175 = scope.submit([&](){
+    const auto cpuAdmission175 = scope.submit([&]()noexcept{
         releaseBlocker.store(true, MemoryOrder::release);
         while(!anchorEntered.load(MemoryOrder::acquire))
             SleepMS(1u);
@@ -484,7 +484,7 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
     CpuTaskScheduler scheduler(1u);
     CpuTaskScope scope(scheduler);
     ScopeExit releaseOnFailure([&]()noexcept{ release.store(true, MemoryOrder::release); });
-    const auto cpuAdmission178 = scheduler.submit([&](){
+    const auto cpuAdmission178 = scheduler.submit([&]()noexcept{
         entered.store(true, MemoryOrder::release);
         while(!release.load(MemoryOrder::acquire))
             SleepMS(1u);
@@ -652,7 +652,7 @@ TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork)
     const auto cpuAdmission199 = scope.submit([&](){
         CpuTaskHandle recycled;
         JoiningThread producer([&](){
-            const auto cpuAdmission200 = scheduler.submit([&](){ ++unrelated; });
+            const auto cpuAdmission200 = scheduler.submit([&]()noexcept{ ++unrelated; });
             ASSERT_TRUE(cpuAdmission200);
             recycled =*cpuAdmission200;
          });

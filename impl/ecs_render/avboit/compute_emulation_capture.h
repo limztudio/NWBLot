@@ -48,7 +48,7 @@ struct AvboitComputeEmulationCaptureResult{
 
 class AvboitComputeEmulationCapture final : NoCopy{
 public:
-    AvboitComputeEmulationCapture() = default;
+    AvboitComputeEmulationCapture()noexcept = default;
 
 
 public:

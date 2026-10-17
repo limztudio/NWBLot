@@ -193,7 +193,7 @@ public:
         const RendererOpticalVolumeSelection& opticalVolumes,
         const CsgShapeRegistry& csgShapeRegistry
     )noexcept;
-    ~RendererRayTracingSystem();
+    ~RendererRayTracingSystem()noexcept;
 
 
 public:
@@ -209,10 +209,10 @@ public:
     void restoreSurfelGiPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     void restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
 
-    [[nodiscard]] RayTracingShadowPreparationResourceSnapshot snapshotShadowPreparationResources()const;
+    [[nodiscard]] RayTracingShadowPreparationResourceSnapshot snapshotShadowPreparationResources()const noexcept;
     [[nodiscard]] RayTracingDeferredGraphResourceSnapshot snapshotDeferredGraphResources()const noexcept;
     [[nodiscard]] bool prepareSceneQueryResources();
-    [[nodiscard]] RayTracingSceneGraphResources snapshotSceneGraphResources()const;
+    [[nodiscard]] RayTracingSceneGraphResources snapshotSceneGraphResources()const noexcept;
     [[nodiscard]] RayTracingSurfelPersistentResourceSnapshot snapshotSurfelPersistentResources()const noexcept;
     [[nodiscard]] RayTracingShadowVisibilityGraphPlanSnapshot snapshotShadowVisibilityGraphPlan(bool hardwareShadowSupported)const noexcept;
     [[nodiscard]] bool surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept;
@@ -222,7 +222,7 @@ public:
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
     [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
     [[nodiscard]] u32 requestedShadowReceiverFactor()const noexcept;
-    [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
+    [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const noexcept;
     void acceptLightSpaceShadowCapture(const LightSpaceCaptureTicket& ticket, bool prepared);
     void invalidateLightSpaceShadowCapture()noexcept;
 
@@ -230,7 +230,7 @@ public:
 
     [[nodiscard]] bool prepareRefractionResources();
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
-    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources()const;
+    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources()const noexcept;
     [[nodiscard]] bool recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
 
     // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before graph compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.
@@ -491,7 +491,7 @@ public:
         const bool& causticProducerDispatched,
         Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
-    [[nodiscard]] CausticResolveActivitySnapshot causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const;
+    [[nodiscard]] CausticResolveActivitySnapshot causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const noexcept;
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticResolveTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -594,8 +594,8 @@ public:
     void markSurfelCountReadbackScheduled()noexcept;
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;
     // Commit soft-shadow history only after ordered submission accepts.
-    void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets);
-    void discardSoftShadowTemporalHistory();
+    void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept;
+    void discardSoftShadowTemporalHistory()noexcept;
 
 
 private:
@@ -642,7 +642,7 @@ private:
     [[nodiscard]] bool recordPreparedMeshBlasBuilds(Core::CommandList& commandList, bool meshBlasGeometryBuildInputStatesGraphOwned);
     void clearPreparedMeshBlasBuilds()noexcept;
     [[nodiscard]] bool capturePreparedMeshSwBvhBuilds(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool preparedMeshSwBvhBuildMatchesCurrent(const PreparedMeshSwBvhBuild& build);
+    [[nodiscard]] bool preparedMeshSwBvhBuildMatchesCurrent(const PreparedMeshSwBvhBuild& build)noexcept;
     [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)const noexcept;
     void clearPreparedMeshSwBvhBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
@@ -782,14 +782,14 @@ private:
     [[nodiscard]] bool softShadowTemporalHistoryUsable()const noexcept;
     [[nodiscard]] u32 transparentShadowSampleCount()const noexcept;
     void reportTransparentShadowSampling(u32 sampleCount);
-    void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
+    void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept;
     [[nodiscard]] bool prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, bool hardware);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool prepareCausticResolveActivity(u32 halfWidth, u32 halfHeight);
     void releaseCausticResolveActivity();
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
-    [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const;
+    [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const noexcept;
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
     [[nodiscard]] bool ensureCausticRtPipeline();
     [[nodiscard]] bool ensureBvhSortPipeline();
@@ -799,7 +799,7 @@ private:
     [[nodiscard]] bool ensureBvhVisitCounterBuffer(usize primitiveCount);
     [[nodiscard]] bool createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
     [[nodiscard]] bool ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] bool meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
+    [[nodiscard]] bool meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
     [[nodiscard]] bool buildMeshSwBvhPrepared(
         Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVectorSingle aabbMin, const SIMDVectorSingle aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer,
         Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle
@@ -808,7 +808,7 @@ private:
         Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle
     );
     void preflightLightSpaceShadowResources();
-    [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)const;
+    [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)const noexcept;
     void prepareLightSpaceShadows(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount);
     [[nodiscard]] bool ensureLightSpaceShadowPipelines();
     [[nodiscard]] bool ensureLightSpaceShadowStorage(const LightSpacePlan& plan);

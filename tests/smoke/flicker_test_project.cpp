@@ -112,7 +112,7 @@ public:
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
     {}
-    virtual ~FlickerTestSmokeProject()override{
+    virtual ~FlickerTestSmokeProject()noexcept override{
         m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
         destroyWorld();
     }
@@ -123,7 +123,7 @@ private:
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
-    void spinCharacters(){
+    void spinCharacters()noexcept{
         for(const NWB::Core::ECS::EntityID owner : { m_opaqueOwner, m_transparentOwner }){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
             if(!transform)

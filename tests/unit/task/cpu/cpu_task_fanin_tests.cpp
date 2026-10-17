@@ -35,7 +35,7 @@ inline constexpr u32 s_TestTimeoutMS = 60000u;
 class DeadlineGuard final{
 public:
     DeadlineGuard()
-        : m_watchdog([](const StopToken& stop){
+        : m_watchdog([](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS)
@@ -45,7 +45,7 @@ public:
         }
         )
     {}
-    ~DeadlineGuard() = default;
+    ~DeadlineGuard()noexcept = default;
 
 
 private:
@@ -74,7 +74,7 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     ASSERT_TRUE(completed.valid());
     scheduler.wait(completed);
 
-    const auto cpuAdmission31 = scheduler.submit([&](){
+    const auto cpuAdmission31 = scheduler.submit([&]()noexcept{
         rootEntered.store(true, MemoryOrder::release);
         if(!CpuTaskTestSupport::WaitUntil(releaseRoot, s_GateTimeoutMS))
             rootExpired.store(true, MemoryOrder::release);

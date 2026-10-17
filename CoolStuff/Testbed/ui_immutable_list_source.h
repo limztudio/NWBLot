@@ -55,7 +55,9 @@ public:
         return index;
     }
 
-    virtual StringView text(const u64 index)const override{ return index < LabelCount ? Source::s_Labels[index] : StringView{}; }
+    virtual StringView text(const u64 index)const override{
+        return index < LabelCount ? Source::s_Labels[index] : StringView{};
+    }
     virtual bool enabled(const u64 index)const noexcept override final{ return index < LabelCount && index + 1u != DisabledKey; }
 };
 
@@ -137,7 +139,7 @@ private:
 
 
 public:
-    explicit UiFilteredListSource(NWB::Core::Alloc::GlobalArena& arena)
+    explicit UiFilteredListSource(NWB::Core::Alloc::GlobalArena& arena)noexcept
         : m_query(arena)
         , m_view(*this)
         , m_count(LabelCount)

@@ -21,10 +21,10 @@ using namespace NWB::Impl::Ui;
 
 class GeometryShaper final : public ITextShaper{
 public:
-    explicit GeometryShaper(Core::Alloc::GlobalArena& arena)
+    explicit GeometryShaper(Core::Alloc::GlobalArena& arena)noexcept
         : m_arena(arena)
     {}
-    virtual ~GeometryShaper()override = default;
+    virtual ~GeometryShaper()noexcept override = default;
 
 
 public:

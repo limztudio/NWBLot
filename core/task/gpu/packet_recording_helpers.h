@@ -53,7 +53,7 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
 
 [[nodiscard]] bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* const timingRecorder, Alloc::ScratchArena& scratchArena);
 
-[[nodiscard]] bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList);
+[[nodiscard]] bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept;
 
 #if defined(NWB_DEBUG)
 [[nodiscard]] inline bool HasQueueCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{

@@ -131,7 +131,7 @@ FramebufferCapture::FramebufferCapture(ProjectRuntimeContext& context, const ASt
         markFailed(NWB_TEXT("capture frame count must be greater than zero"));
 }
 
-FramebufferCapture::~FramebufferCapture(){
+FramebufferCapture::~FramebufferCapture()noexcept{
     stop();
 }
 

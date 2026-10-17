@@ -172,7 +172,7 @@ usize RendererTaskTimingFeedbackState::findPendingSample(const Core::GpuTimingSa
     return m_pendingSamples.size();
 }
 
-void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingIndex){
+void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingIndex)noexcept{
     NWB_ASSERT(pendingIndex < m_pendingSamples.size());
     m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
 }

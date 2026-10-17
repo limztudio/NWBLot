@@ -41,7 +41,7 @@ private:
 
     public:
         explicit Offer(WaylandClipboardService& owner)noexcept : service(owner){}
-        ~Offer();
+        ~Offer()noexcept;
     };
 
     struct Source{
@@ -56,7 +56,7 @@ private:
             : service(owner)
             , text(arena)
         {}
-        ~Source();
+        ~Source()noexcept;
     };
 
 
@@ -67,7 +67,7 @@ public:
 
 
 private:
-    [[nodiscard]] static NotNull<const char*> NativeMimeForRank(u8 rank);
+    [[nodiscard]] static NotNull<const char*> NativeMimeForRank(u8 rank)noexcept;
 
 
 private:
@@ -78,8 +78,8 @@ private:
     static void OnLeave(void* data, wl_data_device* device)noexcept;
     static void OnMotion(void* data, wl_data_device* device, u32 time, wl_fixed_t x, wl_fixed_t y)noexcept;
     static void OnDrop(void* data, wl_data_device* device)noexcept;
-    static void OnSelection(void* data, wl_data_device* device, wl_data_offer* offer);
-    static void OnOfferMime(void* data, wl_data_offer* offer, const char* mime);
+    static void OnSelection(void* data, wl_data_device* device, wl_data_offer* offer)noexcept;
+    static void OnOfferMime(void* data, wl_data_offer* offer, const char* mime)noexcept;
     static void OnOfferActions(void* data, wl_data_offer* offer, u32 actions)noexcept;
     static void OnOfferAction(void* data, wl_data_offer* offer, u32 action)noexcept;
     static void OnSourceTarget(void* data, wl_data_source* source, const char* mime)noexcept;
@@ -90,8 +90,8 @@ private:
     static void OnSourceAction(void* data, wl_data_source* source, u32 action)noexcept;
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     static void OnPrimaryOffer(void* data, zwp_primary_selection_device_v1* device, zwp_primary_selection_offer_v1* offer);
-    static void OnPrimarySelection(void* data, zwp_primary_selection_device_v1* device, zwp_primary_selection_offer_v1* offer);
-    static void OnPrimaryMime(void* data, zwp_primary_selection_offer_v1* offer, const char* mime);
+    static void OnPrimarySelection(void* data, zwp_primary_selection_device_v1* device, zwp_primary_selection_offer_v1* offer)noexcept;
+    static void OnPrimaryMime(void* data, zwp_primary_selection_offer_v1* offer, const char* mime)noexcept;
     static void OnPrimarySend(void* data, zwp_primary_selection_source_v1* source, const char* mime, int fd);
     static void OnPrimaryCancelled(void* data, zwp_primary_selection_source_v1* source);
 #endif
@@ -99,20 +99,20 @@ private:
 
 public:
     WaylandClipboardService(Alloc::GlobalArena& arena, wl_display& display);
-    virtual ~WaylandClipboardService()override;
+    virtual ~WaylandClipboardService()noexcept override;
 
 
 public:
     [[nodiscard]] bool initialize();
     void attachSeat(wl_seat* seat, u32 seatGlobalName);
-    void observeSerial(u32 serial);
-    void setKeyboardFocus(bool focused);
+    void observeSerial(u32 serial)noexcept;
+    void setKeyboardFocus(bool focused)noexcept;
     [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum channel)const noexcept override;
 
 
 protected:
     virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text)override;
-    virtual void cancelNativeRequest(ClipboardRequestToken token)override;
+    virtual void cancelNativeRequest(ClipboardRequestToken token)noexcept override;
     virtual void pumpNativeRequests()override;
 
 
@@ -121,7 +121,7 @@ private:
     void finishRead(ClipboardStatus::Enum status);
     [[nodiscard]] Offer* findOffer(void* handle, ClipboardChannel::Enum channel)noexcept;
     void addOffer(void* handle, ClipboardChannel::Enum channel);
-    void selectOffer(void* handle, ClipboardChannel::Enum channel);
+    void selectOffer(void* handle, ClipboardChannel::Enum channel)noexcept;
     void sendSource(Source& source, int fd);
     [[nodiscard]] ClipboardStatus::Enum writeSelection(ClipboardChannel::Enum channel, AStringView text);
 

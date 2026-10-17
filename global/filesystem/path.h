@@ -262,7 +262,7 @@ public:
     {
         assignSource(source);
     }
-    ~Path() = default;
+    ~Path()noexcept = default;
 
 
 public:

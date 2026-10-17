@@ -114,7 +114,7 @@ void RendererRayTracingSystem::setRefractionHardwareTracingEnabled(const bool en
     m_rayTracingState.m_refractionHardwareTracingEnabled = enabled;
 }
 
-RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionGraphResources()const{
+RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionGraphResources()const noexcept{
     RayTracingRefractionGraphResources resources;
     const ECSRenderDetail::MeshViewBufferSnapshot view = m_meshSystem.meshViewBufferSnapshot();
     if(!view.bindingValid())

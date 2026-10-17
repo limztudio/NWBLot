@@ -73,8 +73,8 @@ public:
     void prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena);
     // Candidates must contain each entity at most once. Null denotes an empty candidate range.
     void select(const CoincidentOpticalVolumeCandidate* candidates, usize candidateCount, Core::Alloc::ScratchArena& scratchArena);
-    void reset();
-    [[nodiscard]] bool isSuppressed(Core::ECS::EntityID entity)const;
+    void reset()noexcept;
+    [[nodiscard]] bool isSuppressed(Core::ECS::EntityID entity)const noexcept;
 
 
 private:

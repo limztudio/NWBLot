@@ -115,7 +115,7 @@ private:
 
 public:
     UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard);
-    virtual ~UiEditBoxHost()override;
+    virtual ~UiEditBoxHost()noexcept override;
 
 
 public:
@@ -131,7 +131,7 @@ public:
     void finishFrame();
     void commitFrame(u64 generation);
     void collectNative();
-    [[nodiscard]] bool prepareSubmit(const Ui::InputEvent& event);
+    [[nodiscard]] bool prepareSubmit(const Ui::InputEvent& event)noexcept;
     void input(const Ui::InputEvent& event, Ui::WidgetId previousCapture, bool submit);
     [[nodiscard]] bool character(u32 unicode);
     [[nodiscard]] bool pastePrimary(Ui::Point position);
@@ -147,7 +147,7 @@ private:
     [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
     [[nodiscard]] bool append(Event&& event);
     [[nodiscard]] bool compositionActive(const Entry& entry)const noexcept;
-    void discard(const UiTextEditOwner& owner);
+    void discard(const UiTextEditOwner& owner)noexcept;
     [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
     [[nodiscard]] bool apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
     [[nodiscard]] bool applyNavigation(Ui::EditModel& model, const Event& event, NavigationBorrow& navigation, Ui::EditNavigationDirection::Enum direction);

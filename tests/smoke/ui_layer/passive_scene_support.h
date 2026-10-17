@@ -34,6 +34,10 @@ template<typename RectanglesT, typename IncludeIndexT>
     const usize beginIndex,
     const usize endIndex,
     const IncludeIndexT& includeIndex
+)noexcept(
+    noexcept(rectangles[DeclVal<u32&>()] = DeclVal<const Impl::Ui::Rect&>())
+    && noexcept(static_cast<bool>(!includeIndex(DeclVal<usize&>()) || rectangles[DeclVal<usize&>()].width == 0.0f))
+    && noexcept(SameSmokeRect(DeclVal<const Impl::Ui::Rect&>(), rectangles[DeclVal<usize&>()]))
 ){
     PassiveSmokeTargetObservation observation;
     u32 rootButton = 0u;

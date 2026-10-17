@@ -33,7 +33,7 @@ private:
 
 public:
     explicit Project(NWB::ProjectRuntimeContext& context);
-    virtual ~Project()override;
+    virtual ~Project()noexcept override;
 
 
 public:
@@ -44,11 +44,11 @@ public:
     virtual bool onUpdate(f32 delta)override;
 
 public:
-    virtual void windowFocusUpdate(bool focused)override;
-    virtual void pointerCaptureLost()override;
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
-    virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
-    virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
+    virtual void windowFocusUpdate(bool focused)noexcept override;
+    virtual void pointerCaptureLost()noexcept override;
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    virtual bool mousePosUpdate(f64 xpos, f64 ypos)noexcept override;
+    virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)noexcept override;
 
 
 private:
@@ -60,7 +60,7 @@ private:
     void clearInputState()noexcept;
     void setKeyState(i32 key, bool pressed)noexcept;
     [[nodiscard]] bool keyPressed(i32 key)const noexcept;
-    void updateMainCamera(f32 delta);
+    void updateMainCamera(f32 delta)noexcept;
     void destroyWorld();
 
 

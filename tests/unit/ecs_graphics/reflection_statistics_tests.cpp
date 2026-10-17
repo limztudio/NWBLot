@@ -34,7 +34,7 @@ struct StatisticsContext{
     ReflectionStatisticsControlHandle control = CreateReflectionStatisticsControl(arena, 7u);
 };
 
-[[nodiscard]] ReflectionStatistics Metadata(const u32 frameIndex = 9u){
+[[nodiscard]] ReflectionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
     ReflectionStatistics value;
     value.frameIndex = frameIndex;
     value.width = 320u;
@@ -60,7 +60,7 @@ struct LeaseTask{
 
 
 public:
-    static void Discarded(Payload& payload){ payload.reservation.discard(); }
+    static void Discarded(Payload& payload)noexcept{ payload.reservation.discard(); }
 };
 
 struct DestructorLeaseTask{

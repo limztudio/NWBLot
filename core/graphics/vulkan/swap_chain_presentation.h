@@ -112,7 +112,7 @@ inline bool SurfaceFormatSupports(const VkSurfaceFormatKHR& supported, const VkF
     return supported.colorSpace == colorSpace && (supported.format == format || supported.format == VK_FORMAT_UNDEFINED);
 }
 
-[[nodiscard]] inline Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(const VkSurfaceFormatKHR* const supportedFormats, const u32 supportedFormatCount, const Format::Enum requestedSdrFormat, const bool hdr10Allowed){
+[[nodiscard]] inline Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(const VkSurfaceFormatKHR* const supportedFormats, const u32 supportedFormatCount, const Format::Enum requestedSdrFormat, const bool hdr10Allowed)noexcept{
     SwapChainSurfaceFormatSelection selection;
     if(!supportedFormats || supportedFormatCount == 0u)
         return MakeUnexpected(Failure{});

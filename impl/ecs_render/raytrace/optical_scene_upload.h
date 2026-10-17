@@ -93,11 +93,11 @@ private:
 using RayTracingOpticalUploadControl = RefCounter<RayTracingOpticalUploadState>;
 using RayTracingOpticalUploadControlHandle = RefCountPtr<RayTracingOpticalUploadControl, ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, Core::GpuPhysicalQueueId primaryQueue);
+[[nodiscard]] Expected<RayTracingOpticalUploadControlHandle> CreateRayTracingOpticalUploadControl(Core::Alloc::GlobalArena& arena, const Core::BufferHandle& buffer, Core::GpuPhysicalQueueId primaryQueue)noexcept;
 
 class RayTracingOpticalUploadReservation final : NoCopy{
 public:
-    RayTracingOpticalUploadReservation(RayTracingOpticalUploadControlHandle control, const RayTracingOpticalUploadPlan& plan);
+    RayTracingOpticalUploadReservation(RayTracingOpticalUploadControlHandle control, const RayTracingOpticalUploadPlan& plan)noexcept;
     RayTracingOpticalUploadReservation(RayTracingOpticalUploadReservation&& other)noexcept;
     ~RayTracingOpticalUploadReservation()noexcept;
 

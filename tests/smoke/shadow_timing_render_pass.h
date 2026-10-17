@@ -25,8 +25,8 @@ namespace Tests::Smoke{
 
 class ShadowTimingRenderPass final : public Core::IRenderPass{
 public:
-    explicit ShadowTimingRenderPass(Core::GraphicsRuntime& graphics);
-    virtual ~ShadowTimingRenderPass()override;
+    explicit ShadowTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept;
+    virtual ~ShadowTimingRenderPass()noexcept override;
 
 
 public:

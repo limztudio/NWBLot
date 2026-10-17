@@ -28,7 +28,12 @@ namespace __hidden_command_list_state_handoff{
 
 
 template<typename StateVector, typename Predicate>
-void RetainSelectedStates(StateVector& states, const Predicate& selected){
+void RetainSelectedStates(StateVector& states, const Predicate& selected)noexcept(
+    noexcept(static_cast<bool>(DeclVal<usize&>() < states.size()))
+    && noexcept(static_cast<bool>(!selected(states[DeclVal<usize&>()])))
+    && noexcept(states[DeclVal<usize&>()] = states[DeclVal<usize&>()])
+    && noexcept(states.resize(DeclVal<usize&>()))
+){
     usize retainedStateCount = 0u;
     for(usize stateIndex = 0u; stateIndex < states.size(); ++stateIndex){
         if(!selected(states[stateIndex]))

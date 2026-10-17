@@ -69,7 +69,7 @@ public:
 
 public:
     X11ClipboardService(Alloc::GlobalArena& arena, Display& display);
-    virtual ~X11ClipboardService()override;
+    virtual ~X11ClipboardService()noexcept override;
 
 
 public:

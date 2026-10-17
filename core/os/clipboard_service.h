@@ -42,7 +42,7 @@ private:
 
 public:
     explicit QueuedClipboardService(Alloc::GlobalArena& arena);
-    virtual ~QueuedClipboardService()override;
+    virtual ~QueuedClipboardService()noexcept override;
 
 
 public:

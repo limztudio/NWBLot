@@ -35,16 +35,16 @@ private:
 
 public:
     Heap(const VulkanContext& context, VulkanAllocator& allocator)noexcept;
-    ~Heap();
+    ~Heap()noexcept;
 
 
 public:
     [[nodiscard]] const HeapDesc& getDescription()const noexcept{ return m_desc; }
-    Object getNativeHandle(ObjectType objectType);
+    Object getNativeHandle(ObjectType objectType)noexcept;
 
 
 private:
-    void eraseBindingReservationLocked(const void* owner);
+    void eraseBindingReservationLocked(const void* owner)noexcept;
 
 
 private:

@@ -21,7 +21,7 @@ using namespace NWB::UiTextAreaTests;
 
 class AreaMutationSource final : public ComboSource{
 public:
-    explicit AreaMutationSource(const u64 instance = 4301u){
+    explicit AreaMutationSource(const u64 instance = 4301u)noexcept{
         generation = instance;
         count = 5u;
     }

@@ -223,7 +223,7 @@ TEST(UiEditClipboard, OwnerThreadViolationCannotPollApplyOrCancelAHostRequest){
     UiEditClipboardStatus::Enum requestStatus = UiEditClipboardStatus::Idle;
     UiEditClipboardStatus::Enum drainStatus = UiEditClipboardStatus::Idle;
     bool cancelled = true;
-    Thread other([&](){
+    Thread other([&]()noexcept{
         requestStatus = controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status;
         drainStatus = controller.drain(s_Owner, model).status;
         cancelled = controller.cancel();

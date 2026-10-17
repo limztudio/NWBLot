@@ -40,7 +40,7 @@ Win32TextInputService::Win32TextInputService(Alloc::GlobalArena& arena, const No
     }
 }
 
-Win32TextInputService::~Win32TextInputService(){
+Win32TextInputService::~Win32TextInputService()noexcept{
     const TextInputSessionToken token = activeSession();
     if(token.valid() && !end(token))
         NWB_FATAL_ASSERT(false);

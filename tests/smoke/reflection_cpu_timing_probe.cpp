@@ -23,7 +23,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionCpuTimingProbe::ReflectionCpuTimingProbe(ProjectRuntimeContext& context)
+ReflectionCpuTimingProbe::ReflectionCpuTimingProbe(ProjectRuntimeContext& context)noexcept
     : m_context(context)
     , m_publications(NWB_TEXT("reflection"), context.objectArena)
 {}

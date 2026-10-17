@@ -266,8 +266,8 @@ public:
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
     [[nodiscard]] bool resetTimerQuery(TimerQuery& query);
-    [[nodiscard]] bool canRecordTimerQueryHere()const;
-    [[nodiscard]] bool canResetTimerQueryHere()const;
+    [[nodiscard]] bool canRecordTimerQueryHere()const noexcept;
+    [[nodiscard]] bool canResetTimerQueryHere()const noexcept;
     [[nodiscard]] Expected<TimerQueryRecordingToken> beginTimerQuery(TimerQuery& query);
     [[nodiscard]] bool endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
     // Claim closure consumes only the beginTimerQuery() claim from this same command buffer; no retention, diagnostics, or observers.
@@ -279,9 +279,9 @@ public:
 #if defined(NWB_DEBUG)
     // Task-graph recording opens one scope around each record thunk.
     // Command methods report the capabilities they actually consume so the packet recorder can reject a declaration that is incompatible with that task.
-    void beginTaskCapabilityTracking(GpuQueueCapability::Mask declaredCapabilities);
-    [[nodiscard]] GpuQueueCapability::Mask endTaskCapabilityTracking();
-    void cancelTaskCapabilityTracking();
+    void beginTaskCapabilityTracking(GpuQueueCapability::Mask declaredCapabilities)noexcept;
+    [[nodiscard]] GpuQueueCapability::Mask endTaskCapabilityTracking()noexcept;
+    void cancelTaskCapabilityTracking()noexcept;
 #endif
 
     void setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers);
@@ -289,12 +289,12 @@ public:
     void beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
     void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
     void seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
-    ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel);
-    ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer);
-    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
-    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
-    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
-    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const;
+    ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)noexcept;
+    ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept;
+    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
+    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const noexcept;
 
     Device& getDevice()noexcept{ return m_device; }
     const CommandListParameters& getDescription()noexcept{ return m_desc; }
@@ -388,7 +388,7 @@ private:
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     [[nodiscard]] bool validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, CpuAccessMode::Enum requiredCpuAccess, VkImageUsageFlags requiredImageUsage, TStringView operationName);
-    Expected<VkBufferImageCopy> prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const;
+    Expected<VkBufferImageCopy> prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const noexcept;
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(const void* data, usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<VkDeviceAddress> suballocateBuildScratchAddress(u64 buildScratchSize, u64 scratchAlignment, TStringView operationName);
@@ -469,7 +469,7 @@ class EventQuery final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     EventQuery(const VulkanContext& context);
-    ~EventQuery();
+    ~EventQuery()noexcept;
 
 
 private:
@@ -499,7 +499,7 @@ private:
 
 public:
     TimerQuery(const VulkanContext& context, u64 incarnation);
-    ~TimerQuery();
+    ~TimerQuery()noexcept;
 
 
 public:

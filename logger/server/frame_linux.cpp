@@ -63,7 +63,7 @@ void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
 
 Frame::Frame(void*)noexcept{
 }
-Frame::~Frame() = default;
+Frame::~Frame()noexcept = default;
 
 bool Frame::init()noexcept{
     FrameDetail::s_ShouldExit = 0;

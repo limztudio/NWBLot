@@ -63,7 +63,7 @@ bool CausticResolveActivitySnapshot::matches(const CausticResolveActivitySnapsho
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const{
+CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const noexcept{
     const auto& activity = m_rayTracingState.m_causticResolve.m_activity;
     if(!activity.valid() || activity.halfWidth != DivideUp(targets.width, 2u) || activity.halfHeight != DivideUp(targets.height, 2u))
         return {};

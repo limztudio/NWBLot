@@ -65,7 +65,7 @@ public:
 
 public:
     RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver);
-    virtual ~RendererSystem()override;
+    virtual ~RendererSystem()noexcept override;
 
 
 public:

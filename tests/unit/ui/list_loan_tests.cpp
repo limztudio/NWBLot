@@ -30,7 +30,7 @@ namespace MutationKind{
 // Deliberate callback reentrancy verifies that a borrowed const source cannot overwrite an explicit host change.
 class CallbackSource final : public IListDataSource{
 public:
-    explicit CallbackSource(ListState& state)
+    explicit CallbackSource(ListState& state)noexcept
         : m_state(state)
     {}
 
@@ -132,7 +132,7 @@ protected:
         return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id("list", "panel"), "rows")), 1u));
     }
 
-    [[nodiscard]] AcceptedState accepted()const{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }
+    [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }
 
     void expectAccepted(const AcceptedState& saved)const{ UiWidgetTests::ExpectAcceptedInput(m_context.input(), saved); }
 

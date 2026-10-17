@@ -28,7 +28,11 @@ template<
     typename AttributeRefVectorT,
     typename LocalVertexRefVectorT
 >
-inline void AppendSequentialMeshletRefs(const usize vertexCount, PositionRefVectorT& outPositionStreamRefs, AttributeRefVectorT& outAttributeStreamRefs, LocalVertexRefVectorT& outLocalVertexRefs){
+inline void AppendSequentialMeshletRefs(const usize vertexCount, PositionRefVectorT& outPositionStreamRefs, AttributeRefVectorT& outAttributeStreamRefs, LocalVertexRefVectorT& outLocalVertexRefs)noexcept(
+    noexcept(outPositionStreamRefs.push_back(DeclVal<Impl::MeshletPositionStreamRef>()))
+    && noexcept(outAttributeStreamRefs.push_back(DeclVal<Impl::MeshletAttributeStreamRef>()))
+    && noexcept(outLocalVertexRefs.push_back(DeclVal<Impl::MeshletLocalVertexRef>()))
+){
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         outPositionStreamRefs.push_back(Impl::MeshletPositionStreamRef{ static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), });
         outAttributeStreamRefs.push_back(Impl::MeshletAttributeStreamRef{ static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), });

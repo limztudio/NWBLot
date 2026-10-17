@@ -24,7 +24,7 @@ ShadowPreparePacketValidator::ShadowPreparePacketValidator(NotNull<RendererFrame
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ShadowPreparePacketValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowPreparePacketValidationResult& outResult)const{
+void ShadowPreparePacketValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowPreparePacketValidationResult& outResult)const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;
     // Software clears belong to the Shadow Preparation packet; a split would omit them.
     outResult.softwareBvhBuildsMerged =

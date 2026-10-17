@@ -64,7 +64,7 @@ public:
 };
 
 
-[[nodiscard]] static Perf::MemorySnapshot MakeSnapshot(const Name& name, const Perf::MemorySource::Enum source){
+[[nodiscard]] static Perf::MemorySnapshot MakeSnapshot(const Name& name, const Perf::MemorySource::Enum source)noexcept{
     Perf::MemorySnapshot snapshot;
     snapshot.scopeName = name;
     snapshot.source = source;

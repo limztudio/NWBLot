@@ -90,13 +90,13 @@ static constexpr CountField s_Counts[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererCompilerStatisticsProbe::RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)
+RendererCompilerStatisticsProbe::RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)noexcept
     : IRenderPass(graphics)
     , m_samples(arena)
     , m_output(arena)
 {}
 
-RendererCompilerStatisticsProbe::~RendererCompilerStatisticsProbe(){ stop(); }
+RendererCompilerStatisticsProbe::~RendererCompilerStatisticsProbe()noexcept{ stop(); }
 
 bool RendererCompilerStatisticsProbe::start(Impl::RendererSystem& renderer, const AStringView path){
     if(m_enabled || path.empty())

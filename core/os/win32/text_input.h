@@ -25,7 +25,7 @@ NWB_CORE_BEGIN
 
 // Returns forwarding flags for an owned WM_IME_SETCONTEXT.
 // Forward those flags to DefWindowProc and return its result; this bridge never consumes the native context message.
-[[nodiscard]] Expected<isize> ResolveWin32TextInputContextMessage(ITextInputService& service, u32 message, usize wParam, isize lParam);
+[[nodiscard]] Expected<isize> ResolveWin32TextInputContextMessage(ITextInputService& service, u32 message, usize wParam, isize lParam)noexcept;
 
 // Scene character decoding borrows the same per-service UTF-16 state.
 // Session begin/end clear it before ownership changes.

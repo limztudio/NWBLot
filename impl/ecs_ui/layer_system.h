@@ -70,7 +70,7 @@ public:
         const FontReferences& fonts,
         UiLayerPresentation::Enum presentation
     );
-    virtual ~UiLayerSystem()override;
+    virtual ~UiLayerSystem()noexcept override;
 
 
 public:
@@ -110,9 +110,9 @@ public:
     virtual void windowFocusUpdate(bool focused)override;
     virtual void pointerLeave()override;
     virtual void pointerCaptureLost()override;
-    [[nodiscard]] bool wantsKeyboard()const;
-    [[nodiscard]] bool wantsPointer()const;
-    [[nodiscard]] bool wantsTextInput()const;
+    [[nodiscard]] bool wantsKeyboard()const noexcept;
+    [[nodiscard]] bool wantsPointer()const noexcept;
+    [[nodiscard]] bool wantsTextInput()const noexcept;
 
 
 private:

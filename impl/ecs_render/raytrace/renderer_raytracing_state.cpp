@@ -57,7 +57,7 @@ void RendererRayTracingState::restorePreparedLightingCpuState(const RayTracingFr
 }
 
 
-void RendererRayTracingState::invalidateResources(){
+void RendererRayTracingState::invalidateResources()noexcept{
     m_hardwareTransparentShadow = HardwareTransparentShadowState{};
     m_refractionBindingLayout.reset();
     m_refractionScreenShader.reset();

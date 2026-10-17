@@ -46,7 +46,7 @@ struct RegistrationSentinel{};
 
 class ThrowOnceTimingSink final : public Core::Perf::TimingSink, NoCopy{
 public:
-    explicit ThrowOnceTimingSink(Core::Perf::TimingRecorder& timing)
+    explicit ThrowOnceTimingSink(Core::Perf::TimingRecorder& timing)noexcept
         : m_timing(timing)
     {}
 
@@ -59,10 +59,10 @@ public:
             throw RegistrationSentinel{};
         return m_timing.registerScope(scopeName);
     }
-    virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)override{
+    virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)noexcept override{
         m_timing.recordSample(scope, seconds, sampleFrameIndex);
     }
-    virtual void publishFrame(const u64 publishFrameIndex)override{ m_timing.publishFrame(publishFrameIndex); }
+    virtual void publishFrame(const u64 publishFrameIndex)noexcept override{ m_timing.publishFrame(publishFrameIndex); }
 
 
 private:

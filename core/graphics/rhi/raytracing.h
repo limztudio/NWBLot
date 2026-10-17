@@ -337,7 +337,7 @@ struct RayTracingInstanceDesc{
 
 
 public:
-    RayTracingInstanceDesc()
+    RayTracingInstanceDesc()noexcept
         : instanceID(0)
         , instanceMask(0)
         , instanceContributionToHitGroupIndex(0)

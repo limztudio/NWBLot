@@ -123,7 +123,7 @@ static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo){
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-[[noreturn]] static void TerminateHandler(){
+[[noreturn]] static void TerminateHandler()noexcept{
     Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u);
     std::abort();
 }

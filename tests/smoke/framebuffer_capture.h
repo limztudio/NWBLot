@@ -65,7 +65,7 @@ private:
 
 public:
     FramebufferCapture(ProjectRuntimeContext& context, AStringView outputPath, u32 captureFrameCount, FramebufferCaptureOptions options = {});
-    virtual ~FramebufferCapture()override;
+    virtual ~FramebufferCapture()noexcept override;
 
 
 public:

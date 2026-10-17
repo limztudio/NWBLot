@@ -29,10 +29,10 @@ using namespace NWB::Impl::Ui;
 
 class FixtureShaper final : public ITextShaper{
 public:
-    explicit FixtureShaper(Core::Alloc::GlobalArena& arena)
+    explicit FixtureShaper(Core::Alloc::GlobalArena& arena)noexcept
         : m_arena(arena)
     {}
-    virtual ~FixtureShaper()override = default;
+    virtual ~FixtureShaper()noexcept override = default;
 
 
 public:

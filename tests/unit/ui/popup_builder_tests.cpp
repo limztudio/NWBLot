@@ -47,7 +47,7 @@ static WidgetOptions Control(const f32 width = 120.0f, const f32 height = 30.0f)
 
 class CountingEditHost final : public IEditBoxHost{
 public:
-    virtual ~CountingEditHost()override = default;
+    virtual ~CountingEditHost()noexcept override = default;
 
 
 public:

@@ -103,7 +103,7 @@ public:
 
 class SearchSource final : public ISearchableListDataSource{
 public:
-    explicit SearchSource(Core::Alloc::GlobalArena& arena)
+    explicit SearchSource(Core::Alloc::GlobalArena& arena)noexcept
         : m_query(arena)
     {
         view.full = &full;
@@ -167,7 +167,7 @@ public:
 
 class SearchEditHost final : public IEditBoxHost{
 public:
-    explicit SearchEditHost(Context& context)
+    explicit SearchEditHost(Context& context)noexcept
         : m_context(context)
     {}
 

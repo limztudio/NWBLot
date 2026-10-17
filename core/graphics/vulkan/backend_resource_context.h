@@ -405,7 +405,7 @@ constexpr VkBlendOp ConvertBlendOp(BlendOp::Enum blendOp)noexcept{
     }
 }
 
-constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState::RenderTarget& target){
+constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState::RenderTarget& target)noexcept{
     VkPipelineColorBlendAttachmentState state = {};
     state.blendEnable = target.blendEnable ? VK_TRUE : VK_FALSE;
     state.srcColorBlendFactor = ConvertBlendFactor(target.srcBlend);

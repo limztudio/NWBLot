@@ -78,7 +78,7 @@ private:
 
 class TimingSink{
 public:
-    virtual ~TimingSink() = default;
+    virtual ~TimingSink()noexcept = default;
 
 
 public:

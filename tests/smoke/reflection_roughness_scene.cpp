@@ -54,7 +54,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& context, NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness)
+ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& context, NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness)noexcept
     : m_context(context)
     , m_world(world)
     , m_bindJoints(context.objectArena)

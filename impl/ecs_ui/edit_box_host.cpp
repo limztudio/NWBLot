@@ -34,7 +34,7 @@ UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& conte
     m_events.reserve(Ui::s_InputMaxEvents);
 }
 
-UiEditBoxHost::~UiEditBoxHost(){ cancelTransfers(); }
+UiEditBoxHost::~UiEditBoxHost()noexcept{ cancelTransfers(); }
 
 bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
     if(rejectBorrowedMutation())
@@ -197,7 +197,7 @@ const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const 
     return nullptr;
 }
 
-void UiEditBoxHost::discard(const UiTextEditOwner& owner){
+void UiEditBoxHost::discard(const UiTextEditOwner& owner)noexcept{
     for(usize index = m_events.size(); index > 0u; --index){
         if(m_events[index - 1u].owner == owner){
             m_queuedTextBytes -= m_events[index - 1u].native.text.size();

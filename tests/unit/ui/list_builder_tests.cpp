@@ -26,7 +26,7 @@ using namespace NWB::UiWidgetTests;
 // This source represents a large dataset arithmetically; no allocation or full scan depends on rowCount().
 class ArithmeticSource final : public IListDataSource{
 public:
-    virtual ~ArithmeticSource()override = default;
+    virtual ~ArithmeticSource()noexcept override = default;
 
 
 public:

@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
+bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
     Core::GraphicsRuntime& graphics = context.graphics;
     if(!graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
         return false;

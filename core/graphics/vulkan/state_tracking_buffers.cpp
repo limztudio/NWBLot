@@ -53,7 +53,7 @@ VkBufferMemoryBarrier2 BuildBufferStateBarrier(const VkBuffer buffer, const Buff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRange range)const{
+ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRange range)const noexcept{
     if(!buffer || !VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc))
         return ResourceStates::Unknown;
 
@@ -93,7 +93,7 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRa
     return resolvedState;
 }
 
-bool StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const bool requireKnown)const{
+bool StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const bool requireKnown)const noexcept{
     if(!buffer || !VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc))
         return false;
     const BufferRange resolvedRange = range.resolve(buffer->m_creationDesc);
@@ -145,7 +145,7 @@ void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::
     }
     BufferRangeStates updated{m_context.objectArena};
     updated.reserve(found == m_bufferStates.end() ? 1u : found.value().size() * 2u + 1u);
-    const auto append = [&](const BufferRange piece, const ResourceStates::Mask pieceState){
+    const auto append = [&](const BufferRange piece, const ResourceStates::Mask pieceState)noexcept{
         if(!piece.hasExtent())
             return;
         if(!updated.empty() && updated.back().range.end() == piece.byteOffset && updated.back().state == pieceState)
@@ -384,14 +384,14 @@ void CommandList::seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits
     retainResource(buffer);
 }
 
-ResourceStates::Mask CommandList::getBufferState(Buffer* buffer, const BufferRange range){
+ResourceStates::Mask CommandList::getBufferState(Buffer* buffer, const BufferRange range)noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return ResourceStates::Unknown;
     return m_stateTracker.getBufferState(buffer, range);
 }
 
-bool CommandList::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const bool requireKnown)const{
+bool CommandList::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const bool requireKnown)const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return false;

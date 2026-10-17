@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks){
+bool PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks)noexcept{
     if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
         return false;
     if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
@@ -51,7 +51,7 @@ ShadowVisibilityMergeValidator::ShadowVisibilityMergeValidator(NotNull<RendererF
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ShadowVisibilityMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowVisibilityMergeValidationResult& outResult)const{
+void ShadowVisibilityMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowVisibilityMergeValidationResult& outResult)const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;
     outResult = ShadowVisibilityMergeValidationResult{};
     outResult.preparedTasksMerged = PreparedShadowVisibilityTasksSharePacket(

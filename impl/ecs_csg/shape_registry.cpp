@@ -77,7 +77,7 @@ template<typename ParameterT>
     return parameters;
 }
 
-[[nodiscard]] bool ValidBoundsVectors(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const bool finiteBounds){
+[[nodiscard]] bool ValidBoundsVectors(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const bool finiteBounds)noexcept{
     if(!finiteBounds)
         return true;
 
@@ -279,7 +279,7 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
 }
 
 
-CsgShapeTypeId CsgShapeRegistry::findShapeTypeId(const Name& name)const{
+CsgShapeTypeId CsgShapeRegistry::findShapeTypeId(const Name& name)const noexcept{
     if(!name)
         return s_InvalidCsgShapeTypeId;
 
@@ -305,12 +305,12 @@ Expected<CsgShapeTypeInfo> CsgShapeRegistry::findShapeType(const CsgShapeTypeId 
     return shapeTypeById(typeId);
 }
 
-usize CsgShapeRegistry::shapeTypeCount()const{
+usize CsgShapeRegistry::shapeTypeCount()const noexcept{
     ScopedLock lock(m_mutex);
     return m_shapeTypes.size();
 }
 
-u64 CsgShapeRegistry::revision()const{
+u64 CsgShapeRegistry::revision()const noexcept{
     ScopedLock lock(m_mutex);
     return m_revision;
 }

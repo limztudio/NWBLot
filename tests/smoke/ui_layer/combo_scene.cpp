@@ -50,7 +50,7 @@ UiComboSmokeScene::UiComboSmokeScene(Core::InputDispatcher& input)
     m_input.addHandlerToBack(*this);
 }
 
-UiComboSmokeScene::~UiComboSmokeScene(){
+UiComboSmokeScene::~UiComboSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -102,7 +102,7 @@ bool UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F4 || key > Core::Key::F12)
@@ -151,7 +151,7 @@ void UiComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
-Array<u64, 16u> UiComboSmokeScene::values()const{
+Array<u64, 16u> UiComboSmokeScene::values()const noexcept{
     const auto& list = m_state.listState();
     const auto& placement = list.placement();
     return { m_state.selectedKey(), list.cursorKey(), m_source.rowCount(), placement.firstRow, placement.endRow,

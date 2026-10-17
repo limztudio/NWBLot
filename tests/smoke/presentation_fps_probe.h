@@ -50,11 +50,11 @@ public:
 // No simulation-delta or GPU-query input.
 class PresentationFpsProbe final{
 public:
-    explicit PresentationFpsProbe(f64 warmupSeconds = 0.25, f64 measurementSeconds = 0.0);
+    explicit PresentationFpsProbe(f64 warmupSeconds = 0.25, f64 measurementSeconds = 0.0)noexcept;
 
 
 public:
-    [[nodiscard]] PresentationFpsStatus::Enum observe(u64 successfulPresentations, Timer now);
+    [[nodiscard]] PresentationFpsStatus::Enum observe(u64 successfulPresentations, Timer now)noexcept;
     [[nodiscard]] const PresentationFpsSample& interval()const noexcept{ return m_interval; }
     [[nodiscard]] const PresentationFpsSample& total()const noexcept{ return m_total; }
     [[nodiscard]] bool measurementStarted()const noexcept{ return m_measuring; }

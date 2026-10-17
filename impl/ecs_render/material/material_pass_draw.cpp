@@ -28,7 +28,7 @@ namespace __hidden_material_pass_draw{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<ECSRenderDetail::MeshFrameHeapSlots> ResolveMeshFrameHeapSlots(const MaterialPassDrawContext& context){
+static Expected<ECSRenderDetail::MeshFrameHeapSlots> ResolveMeshFrameHeapSlots(const MaterialPassDrawContext& context)noexcept{
     if(!context.frameBindings.bindingValid())
         return MakeUnexpected(Failure{});
     ECSRenderDetail::MeshFrameHeapSlots slots;
@@ -49,15 +49,15 @@ static Expected<ECSRenderDetail::MeshFrameHeapSlots> ResolveMeshFrameHeapSlots(c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const{
+bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept{
     return mesh.valid() && frameBindings.bindingValid();
 }
 
-bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings){
+bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
 }
 
-bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings){
+bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     for(const MaterialPassDrawItem& drawItem : drawItems){
         if(!materialPassDrawResourcesReady(drawItem.meshResources, frameBindings) || !drawItem.pipelineResources.meshletPipeline)
             return false;
@@ -65,7 +65,7 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPa
     return true;
 }
 
-bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings){
+bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     if(drawItems.empty())
         return true;
 
@@ -99,7 +99,7 @@ u32 RendererMaterialSystem::meshDispatchFlags(const MaterialPassMeshResourceSnap
     return flags;
 }
 
-u32 RendererMaterialSystem::materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const{
+u32 RendererMaterialSystem::materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const noexcept{
     u32 flags = meshDispatchFlags(mesh, context.pass, drawItem.pipelineKey.twoSided, drawItem.meshletConeCullScaleSafe);
     if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
         flags &= ~ECSRenderDetail::s_MeshDispatchFlagCsgMeshletFullyRemovedCull;

@@ -22,7 +22,7 @@ namespace __hidden_avboit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::ColorMask::Mask colorWriteMask = Core::ColorMask::All){
+static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::ColorMask::Mask colorWriteMask = Core::ColorMask::All)noexcept{
     Core::BlendState::RenderTarget target;
     target
         .enableBlend()
@@ -61,35 +61,35 @@ static void DispatchAvboitCompute(Core::CommandList& commandList, Core::ComputeP
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device){
+Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, Core::Format::RGBA8_UNORM, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
     return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
-Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device){
+Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { Core::Format::R16_FLOAT, Core::Format::R32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
     return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
-Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device){
+Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample | Core::FormatSupport::ShaderUavStore;
 
     return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
-Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device){
+Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device)noexcept{
     constexpr Core::Format::Enum s_Candidates[] = { Core::Format::R8_UNORM, Core::Format::RGBA8_UNORM, };
     constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
     return ECSRenderDetail::SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
 }
 
-Core::RenderState BuildRendererAvboitVoxelRenderState(){
+Core::RenderState BuildRendererAvboitVoxelRenderState()noexcept{
     Core::RenderState renderState;
     renderState.depthStencilState.disableDepthTest().disableDepthWrite();
     renderState.rasterState.enableDepthClip().setCullBack();
@@ -97,7 +97,7 @@ Core::RenderState BuildRendererAvboitVoxelRenderState(){
     return renderState;
 }
 
-Core::RenderState BuildRendererAvboitAccumulateRenderState(){
+Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept{
     Core::RenderState renderState;
     renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullBack();
@@ -110,7 +110,7 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
     return renderState;
 }
 
-Core::RenderState BuildRendererAvboitRefractionCaptureRenderState(){
+Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept{
     Core::RenderState renderState;
     renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullBack();
@@ -118,7 +118,7 @@ Core::RenderState BuildRendererAvboitRefractionCaptureRenderState(){
     return renderState;
 }
 
-RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, const bool hdr10OutputActive){
+RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, const bool hdr10OutputActive)noexcept{
     NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
     NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
 

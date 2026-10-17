@@ -118,7 +118,7 @@ private:
 
 public:
     TrackedCommandBuffer(Queue& queue, const VulkanContext& context, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex)noexcept;
-    ~TrackedCommandBuffer();
+    ~TrackedCommandBuffer()noexcept;
 
 
 private:
@@ -145,7 +145,7 @@ private:
     [[nodiscard]] Expected<const AccelStructBuildSignatureRole*> getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept;
     [[nodiscard]] bool validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
-    void releasePendingAccelStructBuildCommits();
+    void releasePendingAccelStructBuildCommits()noexcept;
     void abandonPendingAccelStructBuildCommits()noexcept;
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
     [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept;

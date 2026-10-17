@@ -188,7 +188,16 @@ static bool TransferVolumeBytes(const AStringView volumeName, const AStringView 
         segmentSize,
         offset,
         byteCount,
-        [&](const usize segmentIndex, const GlobalFilesystemDetail::StreamOffset streamOffset, const GlobalFilesystemDetail::StreamSize streamChunkSize, const u64 chunkBytes){
+        [&](const usize segmentIndex, const GlobalFilesystemDetail::StreamOffset streamOffset, const GlobalFilesystemDetail::StreamSize streamChunkSize, const u64 chunkBytes)noexcept(
+            noexcept(transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes))
+            && (
+                !IsReference_V<decltype(transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes))>
+                || IsNothrowConvertible_V<
+                    decltype(transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes)),
+                    Decay_T<decltype(transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes))>
+                >
+            )
+        ){
             return transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes);
         }
     );
@@ -213,7 +222,7 @@ static bool ReadSegmentBytes(
         "readBytes:open",
         "readBytes:seek",
         stream,
-        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset){ stream.seekg(offset); },
+        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset)noexcept(noexcept(stream.seekg(offset))){ stream.seekg(offset); },
         [&](auto& stream){
             stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
             if(stream.gcount() != streamChunkSize){
@@ -252,7 +261,7 @@ static bool WriteSegmentBytes(
         "writeBytes:open",
         "writeBytes:seek",
         stream,
-        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset){ stream.seekp(offset); },
+        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset)noexcept(noexcept(stream.seekp(offset))){ stream.seekp(offset); },
         [&](auto& stream){
             stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
             if(!stream.good()){

@@ -113,7 +113,7 @@ private:
 
 
 template<typename Stream>
-void WriteSkinJoints(Stream& out, const MeshSkinInfluence& skin){
+void WriteSkinJoints(Stream& out, const MeshSkinInfluence& skin)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(out << skin.joint[DeclVal<usize>()]) && noexcept(out << "]")){
     out << "[";
     for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(i != 0u)
@@ -124,7 +124,7 @@ void WriteSkinJoints(Stream& out, const MeshSkinInfluence& skin){
 }
 
 template<typename Stream>
-void WriteSkinWeights(Stream& out, const MeshSkinInfluence& skin){
+void WriteSkinWeights(Stream& out, const MeshSkinInfluence& skin)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(WriteFloat(out, skin.weight.raw[DeclVal<usize>()])) && noexcept(out << "]")){
     out << "[";
     for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(i != 0u)
@@ -135,7 +135,13 @@ void WriteSkinWeights(Stream& out, const MeshSkinInfluence& skin){
 }
 
 template<typename Stream>
-void WriteJointMatrix(Stream& out, const JointMatrix& matrix, const AStringView indent = ""){
+void WriteJointMatrix(Stream& out, const JointMatrix& matrix, const AStringView indent = "")noexcept(
+    noexcept(out << "[\n")
+    && noexcept(out << indent << "    ")
+    && noexcept(WriteVec4(out, DeclVal<const Vec4&>()))
+    && noexcept(out << ",\n")
+    && noexcept(out << indent << "]")
+){
     out << "[\n";
     for(const Vec4& row : matrix.rows){
         out << indent << "    ";
@@ -165,7 +171,7 @@ bool ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
 
 
 template<typename Stream>
-void WriteVertexRef(Stream& out, const SourceVertexRef& ref){
+void WriteVertexRef(Stream& out, const SourceVertexRef& ref)noexcept(noexcept(out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]")){
     out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]";
 }
 
@@ -184,7 +190,24 @@ bool EnsureOutputDirectory(const ScratchPath& outputPath, const AStringView asse
 
 
 template<typename Stream>
-void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStringView variableName = s_AssetVariableName, const AStringView indent = ""){
+void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStringView variableName = s_AssetVariableName, const AStringView indent = "")noexcept(
+    noexcept(file << variableName << ".positions = [\n")
+    && noexcept(file << indent << "    ")
+    && noexcept(WriteVec3(file, DeclVal<const Vec3&>()))
+    && noexcept(file << ",\n")
+    && noexcept(file << indent << "];\n\n")
+    && noexcept(file << variableName << ".normals = [\n")
+    && noexcept(file << variableName << ".tangents = [\n")
+    && noexcept(WriteVec4(file, DeclVal<const Vec4&>()))
+    && noexcept(file << variableName << ".uv0 = [\n")
+    && noexcept(WriteVec2(file, DeclVal<const Vec2&>()))
+    && noexcept(file << variableName << ".colors = [\n")
+    && noexcept(file << variableName << ".vertex_refs = [\n")
+    && noexcept(WriteVertexRef(file, DeclVal<const SourceVertexRef&>()))
+    && noexcept(file << variableName << ".indices = [\n")
+    && noexcept(file << indent << "    [" << mesh.indices[DeclVal<usize>() + 0u] << ", " << mesh.indices[DeclVal<usize>() + 1u] << ", " << mesh.indices[DeclVal<usize>() + 2u] << "],\n")
+    && noexcept(file << indent << "];\n")
+){
     file << variableName << ".positions = [\n";
     for(const Vec3& position : mesh.positions){
         file << indent << "    ";

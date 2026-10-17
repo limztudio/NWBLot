@@ -42,7 +42,7 @@ NWB_IMPL_BEGIN
 class MeshSystem final : public Core::ECS::ISystem, public IRuntimeMeshRegistry{
 public:
     MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world);
-    virtual ~MeshSystem()override = default;
+    virtual ~MeshSystem()noexcept override = default;
 
 
 public:
@@ -51,7 +51,7 @@ public:
 public:
     [[nodiscard]] MeshComponent* findMesh(Core::ECS::EntityID entity)noexcept;
     [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const noexcept;
-    [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(Core::ECS::EntityID entity)const;
+    [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(Core::ECS::EntityID entity)const noexcept;
     // Distinguish non-rendering owners from temporarily unavailable meshes.
     [[nodiscard]] Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> resolveRenderableMeshStatus(Core::ECS::EntityID entity)const;
     [[nodiscard]] bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const;

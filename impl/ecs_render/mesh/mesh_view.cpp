@@ -61,7 +61,7 @@ Expected<Float44> RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip()const
     return acceptedView.worldToClip;
 }
 
-ECSRenderDetail::MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(const f32 fallbackAspectRatio)const{
+ECSRenderDetail::MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(const f32 fallbackAspectRatio)const noexcept{
     NWB_ASSERT(m_meshState.m_meshViewBuffer);
 
     ECSRenderDetail::MeshViewBufferUpload upload;
@@ -70,7 +70,7 @@ ECSRenderDetail::MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferU
     return upload;
 }
 
-void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState){
+void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState)noexcept{
     NWB_MEMCPY(m_meshState.m_meshViewGpuData, sizeof(m_meshState.m_meshViewGpuData), &viewState, sizeof(viewState));
     m_meshState.m_meshViewGpuDataValid = true;
 }

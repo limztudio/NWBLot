@@ -123,7 +123,7 @@ private:
 
     public:
         BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept;
-        ~BufferChunk();
+        ~BufferChunk()noexcept;
     };
 
 
@@ -151,20 +151,20 @@ private:
 
 public:
     UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
-    ~UploadManager();
+    ~UploadManager()noexcept;
 
 
 public:
     void clear()noexcept;
     [[nodiscard]] Expected<BufferSuballocation> suballocateBuffer(u64 size, TrackedCommandBuffer* owner, u64 nativeRecordingID, GpuPhysicalQueueId queue, u64 completedVersion, u32 alignment = s_DefaultUploadSuballocationAlignment);
     void submitChunks(GpuPhysicalQueueId queue, u64 submittedVersion, const Queue::SubmissionCommandListIdentity* submittedCommandLists, usize submittedCommandListCount, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
-    void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID, u64 reusableVersion);
+    void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID, u64 reusableVersion)noexcept;
     void abandonChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID)noexcept;
 
 
 private:
     void collectCompletedChunks();
-    void trimRetiredChunksLocked(GpuPhysicalQueueId queue, u64 completedVersion);
+    void trimRetiredChunksLocked(GpuPhysicalQueueId queue, u64 completedVersion)noexcept;
     [[nodiscard]] QueueChunkLedger* findQueueLedgerLocked(GpuPhysicalQueueId queue)noexcept;
     [[nodiscard]] QueueChunkLedger* findOrCreateQueueLedgerLocked(GpuPhysicalQueueId queue);
     void linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
@@ -203,7 +203,7 @@ class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, bool initialStateKnown);
-    ~Buffer();
+    ~Buffer()noexcept;
 
 
 public:
@@ -223,7 +223,7 @@ public:
     }
     // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
     [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
-    virtual Object getNativeHandle(ObjectType objectType)override;
+    virtual Object getNativeHandle(ObjectType objectType)noexcept override;
 
 
 private:
@@ -269,7 +269,7 @@ inline UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHan
     , version(0)
     , physicalQueue(queue)
 {}
-inline UploadManager::BufferChunk::~BufferChunk() = default;
+inline UploadManager::BufferChunk::~BufferChunk()noexcept = default;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -311,7 +311,7 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc, const VkImageCreateInfo& imageInfo, bool initialStateKnown);
-    ~Texture();
+    ~Texture()noexcept;
 
 
 public:
@@ -329,19 +329,19 @@ public:
         };
     }
     // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
-    [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const;
-    Object getNativeHandle(ObjectType objectType);
+    [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
+    Object getNativeHandle(ObjectType objectType)noexcept;
     [[nodiscard]] Expected<Object> getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
 
     [[nodiscard]] Expected<VkImageView> getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
 
 
 private:
-    [[nodiscard]] bool canRevokeUnmanagedNativeImage(VkImage expectedNativeImage);
-    [[nodiscard]] bool prepareRevokeUnmanagedNativeImage(VkImage expectedNativeImage);
+    [[nodiscard]] bool canRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
+    [[nodiscard]] bool prepareRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void commitRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void releasePreparedRevokeUnmanagedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
-    [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
+    [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel)noexcept;
     void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known)noexcept;
 
 
@@ -383,7 +383,7 @@ class StagingTexture final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)noexcept;
-    ~StagingTexture();
+    ~StagingTexture()noexcept;
 
 
 public:

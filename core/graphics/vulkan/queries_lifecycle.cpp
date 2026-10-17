@@ -33,7 +33,7 @@ TimerQuery::TimerQuery(const VulkanContext& context, const u64 incarnation)
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery: {}"), ResultToString(res));
     }
 }
-TimerQuery::~TimerQuery(){
+TimerQuery::~TimerQuery()noexcept{
     if(m_queryPool != VK_NULL_HANDLE){
         m_context.deviceDispatch.vkDestroyQueryPool(m_context.device, m_queryPool, m_context.allocationCallbacks);
         m_queryPool = VK_NULL_HANDLE;

@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(void* const context, const u64 identity, const GpuPhysicalQueueId& executionQueue){
+Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(void* const context, const u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept{
     if(!context)
         return MakeUnexpected(Failure{});
     return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(identity, executionQueue);

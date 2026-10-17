@@ -172,7 +172,7 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     return true;
 }
 
-bool RendererMeshSystem::confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, const bool runtimeMesh){
+bool RendererMeshSystem::confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, const bool runtimeMesh)noexcept{
     const auto mesh = findMeshResources(meshKey);
     if(!mesh)
         return false;

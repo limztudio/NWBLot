@@ -66,7 +66,7 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
         const usize chainCount = taskCount / s_ChainSize;
         const usize logicalIndex = interleaved ? taskIndex % chainCount * s_ChainSize + taskIndex / chainCount : taskIndex;
         dependencies.clear();
-        const auto addDependency = [&](const usize index){
+        const auto addDependency = [&](const usize index)noexcept{
             const usize declarationIndex = interleaved ? index % s_ChainSize * chainCount + index / s_ChainSize : index;
             dependencies.push_back({ .generation = generation, .index = static_cast<u32>(declarationIndex) });
         };
@@ -162,7 +162,7 @@ void CheckIndexedScores(const Shape::Enum shape){
             EXPECT_EQ(reachability.transitivelyIndependent(view.taskAt(source).id, view.taskAt(destination).id), source != destination && !reachable[source][destination] && !reachable[destination][source]);
         }
     }
-    const auto referenceOverlap = [&](const GpuTaskQueuePlacementGroup& group, const Graphics::GpuPhysicalQueueId queue){
+    const auto referenceOverlap = [&](const GpuTaskQueuePlacementGroup& group, const Graphics::GpuPhysicalQueueId queue)noexcept{
         u64 overlap = 0u;
         for(usize row = 0u; row < assignments.size(); ++row){
             if(row >= group.assignmentOffset && row - group.assignmentOffset < group.assignmentCount)
@@ -303,7 +303,7 @@ TEST(GpuTaskQueueScoring, RebuildingRelationsClearsCompactedDenseOrderedAndFaile
         ASSERT_TRUE(Analyze(scratch, graph, analysis));
         const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
-        const auto expectedReach = [&](const usize source, const usize destination){
+        const auto expectedReach = [&](const usize source, const usize destination)noexcept{
             if(source == destination)
                 return false;
             switch(shape){
@@ -358,7 +358,7 @@ TEST(GpuTaskQueueScoring, PartialAssignmentsExcludeRelatedTasksWithoutRequiringO
         assignments.push_back({ .task = view.taskAt(taskIndex).id, .initialQueue = queues[1u].id, .queue = queues[1u].id, .score = {}, });
     }
     scoringData.rebuildAssignmentLoads(assignments, topology);
-    const auto score = [&](const usize taskIndex, const GpuTaskQueueScoreExclusions exclusions = {}){
+    const auto score = [&](const usize taskIndex, const GpuTaskQueueScoreExclusions exclusions = {})noexcept{
         return BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(taskIndex), queues[0u], exclusions);
     };
     EXPECT_EQ(score(1u).overlap, 8); // Assigned producer zero is related; task three is independent.

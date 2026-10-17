@@ -123,7 +123,7 @@ bool GpuTimingFrameTransaction::recordEnd(CommandList& commandList){
     return true;
 }
 
-bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToken& token){
+bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToken& token)noexcept{
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
 
@@ -151,7 +151,7 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
     return true;
 }
 
-bool GpuTimingFrameTransaction::confirmEndSubmission(const QueueSubmissionToken& token, const bool publishSample){
+bool GpuTimingFrameTransaction::confirmEndSubmission(const QueueSubmissionToken& token, const bool publishSample)noexcept{
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
 
@@ -180,7 +180,7 @@ bool GpuTimingFrameTransaction::needsRetirement()const noexcept{
     return m_beginSubmission.valid() && m_scope.valid();
 }
 
-bool GpuTimingFrameTransaction::prepareForRecovery(){
+bool GpuTimingFrameTransaction::prepareForRecovery()noexcept{
     if(!needsRetirement())
         return true;
 

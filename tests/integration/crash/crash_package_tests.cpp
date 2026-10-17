@@ -109,7 +109,7 @@ static void CopyPathText(NWB::Core::Alloc::GlobalArena& arena, char (&outText)[N
 }
 
 template<usize N>
-static void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, const u64 sequence){
+static void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, const u64 sequence)noexcept{
     CopyFixedBuffer(outCrashId, AStringView(CrashNames::s_CrashIdPrefix));
     AppendUnsignedToFixedBuffer(outCrashId, static_cast<u64>(processId));
     AppendFixedBuffer(outCrashId, "-");

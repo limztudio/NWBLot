@@ -356,7 +356,7 @@ TEST(Telemetry, RecorderBuilderForeignMovesKeepOwnershipWithinEachArena){
             {
                 Telemetry::TelemetryBytes foreignPayload(foreignArena.arena);
                 foreignPayload.resize(64u, 83u);
-                ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 3u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
+                ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 3u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)noexcept{
                         payload = Move(foreignPayload);
                         return true;
                     }

@@ -59,7 +59,7 @@ namespace __hidden_ui_text_paint{
     return VectorDoubleSet(x, y, roundedWidth, roundedHeight);
 }
 
-[[nodiscard]] static Expected<SIMDVectorDouble> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display){
+[[nodiscard]] static Expected<SIMDVectorDouble> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display)noexcept{
     const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, {});
     if(!plane)
         return MakeUnexpected(Failure{});

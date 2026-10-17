@@ -43,7 +43,7 @@ inline constexpr u32 s_TestTimeoutMS = 15000u;
 class DeadlineGuard final{
 public:
     explicit DeadlineGuard(bool deathTest = false)
-        : m_watchdog([deathTest](const StopToken& stop){
+        : m_watchdog([deathTest](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS){
@@ -57,7 +57,7 @@ public:
         }
         )
     {}
-    ~DeadlineGuard() = default;
+    ~DeadlineGuard()noexcept = default;
 
 
 private:
@@ -72,7 +72,7 @@ struct TaskGate{
 
 
 public:
-    void block(){
+    void block()noexcept{
         entered.store(true, MemoryOrder::release);
         if(!CpuTaskTestSupport::WaitUntil(released, s_GateTimeoutMS))
             expired.store(true, MemoryOrder::release);
@@ -131,7 +131,7 @@ TEST(CpuTaskSchedulerTests, DependencyFanInWaitsForEveryPredecessorIncludingDupl
     ScopeExit releaseRoot([&]()noexcept{ rootGate.open(); });
     Atomic<u32> completedBits{ 0u };
     Atomic<u32> observedBits{ 0u };
-    const auto cpuAdmission81 = scheduler.submit([&](){ rootGate.block(); });
+    const auto cpuAdmission81 = scheduler.submit([&]()noexcept{ rootGate.block(); });
     ASSERT_TRUE(cpuAdmission81);
     const auto root = *cpuAdmission81;
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(rootGate.entered, s_GateTimeoutMS));
@@ -216,7 +216,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
     ScopeExit releaseGrandchild([&]()noexcept{ grandchildGate.open(); });
     const auto cpuAdmission89 = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)]() mutable{
         const auto cpuAdmission90 = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, &parentCapture, childCapture = LifetimeProbe(retirements, 13u)]() mutable{
-            const auto cpuAdmission91 = scheduler.submit([&grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)](){
+            const auto cpuAdmission91 = scheduler.submit([&grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)]()noexcept{
                 grandchildGate.block();
                 total.store(parentCapture.value + childCapture.value + grandchildCapture.value, MemoryOrder::release);
             }
@@ -262,7 +262,7 @@ TEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope){
     CpuTaskScope unrelated(scheduler);
     CpuTaskScope owned(scheduler);
     ScopeExit releaseUnrelated([&]()noexcept{ unrelatedGate.open(); });
-    const auto cpuAdmission93 = unrelated.submit([&](){ unrelatedGate.block(); });
+    const auto cpuAdmission93 = unrelated.submit([&]()noexcept{ unrelatedGate.block(); });
     ASSERT_TRUE(cpuAdmission93);
     const auto unrelatedTask = *cpuAdmission93;
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(unrelatedGate.entered, s_GateTimeoutMS));
@@ -290,7 +290,7 @@ TEST(CpuTaskSchedulerTests, ScopeDestructionIncludesChildrenSubmittedDirectlyToT
     {
         CpuTaskScope scope(scheduler);
         const auto cpuAdmission95 = scope.submit([&](){
-            const auto cpuAdmission96 = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 23u)](){
+            const auto cpuAdmission96 = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 23u)]()noexcept{
                 invoked.store(capture.value, MemoryOrder::release);
             }
             );
@@ -347,7 +347,7 @@ TEST(CpuTaskSchedulerTests, MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSch
     const auto cpuAdmission98 = scheduler.submit([&](){
         CpuTaskOptions mainOptions;
         mainOptions.target = CpuTaskTarget::MainThread;
-        const auto cpuAdmission99 = scheduler.submit([&](){
+        const auto cpuAdmission99 = scheduler.submit([&]()noexcept{
             actual = QueryCurrentThreadId();
             workerIndex = scheduler.currentWorkerIndex();
             invocations.fetch_add(1u, MemoryOrder::release);
@@ -384,7 +384,7 @@ TEST(CpuTaskSchedulerTests, ZeroWorkersMakeProgressAcrossChildrenDependenciesAnd
         const auto child = *cpuAdmission101;
         CpuTaskOptions mainOptions;
         mainOptions.target = CpuTaskTarget::MainThread;
-        const auto cpuAdmission102 = scheduler.submit([&](){ value *= 3u; actual = QueryCurrentThreadId(); }, mainOptions, &child, 1u);
+        const auto cpuAdmission102 = scheduler.submit([&]()noexcept{ value *= 3u; actual = QueryCurrentThreadId(); }, mainOptions, &child, 1u);
         rejected = !cpuAdmission102 || !cpuAdmission102->valid();
     }
     );
@@ -406,7 +406,7 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     TaskGate occupied;
     CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     ScopeExit releaseWorker([&]()noexcept{ occupied.open(); });
-    const auto cpuAdmission103 = scheduler.submit([&](){ occupied.block(); });
+    const auto cpuAdmission103 = scheduler.submit([&]()noexcept{ occupied.block(); });
     EXPECT_TRUE(cpuAdmission103);
     if(cpuAdmission103)
         EXPECT_TRUE(cpuAdmission103->valid());
@@ -439,10 +439,10 @@ TEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndR
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 invoked = 0u;
-    const auto cpuAdmission105 = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)](){ invoked += capture.value; });
+    const auto cpuAdmission105 = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)]()noexcept{ invoked += capture.value; });
     ASSERT_TRUE(cpuAdmission105);
     const auto predecessor = *cpuAdmission105;
-    const auto cpuAdmission106 = scheduler.submit([&invoked, capture = LifetimeProbe(retired, s_ExpectedDualCount)](){ invoked += capture.value; }, predecessor);
+    const auto cpuAdmission106 = scheduler.submit([&invoked, capture = LifetimeProbe(retired, s_ExpectedDualCount)]()noexcept{ invoked += capture.value; }, predecessor);
     ASSERT_TRUE(cpuAdmission106);
     const auto dependent = *cpuAdmission106;
     scope.cancel();
@@ -469,7 +469,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
     Atomic<bool> childRejected{ false };
     const auto cpuAdmission108 = scope.submit([&](){
         parentGate.block();
-        const auto cpuAdmission109 = scheduler.submit([&](){ childInvocations.fetch_add(1u); });
+        const auto cpuAdmission109 = scheduler.submit([&]()noexcept{ childInvocations.fetch_add(1u); });
         if(!cpuAdmission109 || !cpuAdmission109->valid())
             childRejected.store(true, MemoryOrder::release);
     }
@@ -504,7 +504,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
         GTEST_SKIP() << "The permitted CPUs do not provide both capacity classes.";
     CpuAffinity::Enum preferredAffinity = CpuAffinity::Any;
     CpuAffinity::Enum spillAffinity = CpuAffinity::Any;
-    const auto cpuAdmission111 = scheduler.submit([&](){
+    const auto cpuAdmission111 = scheduler.submit([&]()noexcept{
         preferredAffinity = scheduler.currentWorkerAffinity();
         preferredGate.block();
     }
@@ -513,7 +513,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
     if(cpuAdmission111)
         EXPECT_TRUE(cpuAdmission111->valid());
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(preferredGate.entered, s_GateTimeoutMS));
-    const auto cpuAdmission112 = scheduler.submit([&](){
+    const auto cpuAdmission112 = scheduler.submit([&]()noexcept{
         spillAffinity = scheduler.currentWorkerAffinity();
         spillGate.block();
     }
@@ -615,7 +615,7 @@ TEST(CpuTaskSchedulerTests, DirectParallelRangeChildrenParticipateInTheReceiving
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 invocations = 0u;
-    EXPECT_TRUE((scope.parallelFor(0u, 64u, 1u, [&](usize index){
+    EXPECT_TRUE((scope.parallelFor(0u, 64u, 1u, [&](usize index)noexcept{
         ++invocations;
         if(index == 0u)
             scope.cancel();

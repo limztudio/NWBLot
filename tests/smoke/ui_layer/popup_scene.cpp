@@ -57,7 +57,7 @@ UiPopupSmokeScene::UiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::Inpu
     m_input.addHandlerToBack(*this);
 }
 
-UiPopupSmokeScene::~UiPopupSmokeScene(){
+UiPopupSmokeScene::~UiPopupSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -148,7 +148,7 @@ bool UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
     return true;
 }
 
-bool UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
@@ -175,7 +175,7 @@ void UiPopupSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
-Array<u32, 12u> UiPopupSmokeScene::values()const{
+Array<u32, 12u> UiPopupSmokeScene::values()const noexcept{
     return { static_cast<u32>(m_visible && m_popup.isOpen()), static_cast<u32>(m_modal), m_underlying, m_selected,
         static_cast<u32>(m_checked), static_cast<u32>(m_popupFocused), static_cast<u32>(m_outsideFocused),
         static_cast<u32>(m_edge), static_cast<u32>(m_right), static_cast<u32>(m_visible),

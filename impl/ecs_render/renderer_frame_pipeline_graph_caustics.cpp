@@ -180,14 +180,14 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         && RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
             rayTracingResources,
             importBuffer,
-            [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){
+            [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
                 photonResourceUses.push_back(ReadUse(resource, state));
             }
         )
         && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
             m_deferredLightingTaskGraph, rayTracingResources.csgTraceContextBuffer,
             rayTracingResources.csgTraceBoundsBuffers, rayTracingResources.csgTraceBoundsBufferCount,
-            [&](const Core::GpuGraphResourceId resource){ photonResourceUses.push_back(ReadUse(resource)); }
+            [&](const Core::GpuGraphResourceId resource)noexcept{ photonResourceUses.push_back(ReadUse(resource)); }
         );
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));

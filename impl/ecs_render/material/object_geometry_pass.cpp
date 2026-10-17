@@ -67,12 +67,12 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
     return true;
 }
 
-bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings){
+bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
 }
 
 
-bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
+bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems)noexcept{
     for(const MaterialPassDrawItem& draw : drawItems){
         const auto& cache = draw.meshResources.objectGeometryCache;
         if(!draw.meshResources.valid() || !draw.pipelineResources.indexedPipeline || !cache.valid() || cache.decoderPipeline != draw.pipelineResources.objectGeometryDecodePipeline)

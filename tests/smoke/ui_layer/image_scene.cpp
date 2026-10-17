@@ -32,7 +32,7 @@ UiImageSmokeScene::UiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::Inpu
     m_input.addHandlerToBack(*this);
 }
 
-UiImageSmokeScene::~UiImageSmokeScene(){
+UiImageSmokeScene::~UiImageSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 

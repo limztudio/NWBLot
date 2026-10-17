@@ -33,7 +33,7 @@ class RendererDeferredState final : NoCopy{
 
 
 public:
-    RendererDeferredState() = default;
+    RendererDeferredState()noexcept = default;
 
 
 public:

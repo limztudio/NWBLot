@@ -48,7 +48,7 @@ static constexpr u32 s_InFlightRanges = 32u;
 
 class TimingPass final : public NWB::Core::IRenderPass{
 public:
-    explicit TimingPass(NWB::Core::GraphicsRuntime& graphics)
+    explicit TimingPass(NWB::Core::GraphicsRuntime& graphics)noexcept
         : IRenderPass(graphics)
     {}
 
@@ -87,7 +87,7 @@ public:
         , m_workload(context.objectArena)
         , m_output(context.objectArena)
     {}
-    virtual ~RendererGatherBenchmarkProject()override{ destroyWorld(); }
+    virtual ~RendererGatherBenchmarkProject()noexcept override{ destroyWorld(); }
 
 
 public:

@@ -70,7 +70,7 @@ public:
 
 public:
     Frame(void* inst)noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
-    ~Frame();
+    ~Frame()noexcept;
 
 
 public:

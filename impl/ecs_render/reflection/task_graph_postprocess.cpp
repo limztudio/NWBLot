@@ -60,7 +60,7 @@ static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_
     return graph.importTexture(texture, TextureResourceDesc(texture->getCreationDescription().name, "Reflection History Image").setInitialState(firstWrite ? Core::ResourceStates::Unknown : Core::ResourceStates::Common));
 }
 
-[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name name, const AStringView label, const Core::GpuTaskId& dependency){
+[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name name, const AStringView label, const Core::GpuTaskId& dependency)noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.allowPacketMerge = true;
@@ -112,11 +112,11 @@ public:
         return !commandList.commandRecordingFailed();
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         payload.reservation.accept(token, payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady);
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         payload.reservation.discard();
     }
 };

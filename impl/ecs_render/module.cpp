@@ -35,7 +35,7 @@ RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World
     readAccess<SkinnedCsgMeshComponent>();
     readAccess<CsgCutterComponent>();
 }
-RendererSystem::~RendererSystem() = default;
+RendererSystem::~RendererSystem()noexcept = default;
 
 
 bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){

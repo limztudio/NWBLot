@@ -25,8 +25,8 @@ namespace Tests::Smoke{
 
 class AvboitTimingRenderPass final : public Core::IRenderPass{
 public:
-    explicit AvboitTimingRenderPass(Core::GraphicsRuntime& graphics);
-    virtual ~AvboitTimingRenderPass()override;
+    explicit AvboitTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept;
+    virtual ~AvboitTimingRenderPass()noexcept override;
 
 
 public:

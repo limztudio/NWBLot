@@ -29,7 +29,7 @@ constexpr u32 s_ThirdElementIndex = 2u;
 using namespace NWB;
 using namespace NWB::Impl;
 
-[[nodiscard]] MeshSkinningGraphDispatchPlan Plan(const u32 offset = 0u, const u64 generation = 1u){
+[[nodiscard]] MeshSkinningGraphDispatchPlan Plan(const u32 offset = 0u, const u64 generation = 1u)noexcept{
     MeshSkinningGraphDispatchPlan plan;
     plan.bindlessResourceSlotsResource = { .generation = generation, .index = static_cast<u32>(offset + 1u) };
     plan.restPositionResource = { .generation = generation, .index = static_cast<u32>(offset + s_ExpectedDualCount) };

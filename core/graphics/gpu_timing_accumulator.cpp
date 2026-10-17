@@ -336,7 +336,7 @@ bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const Queue
     return true;
 }
 
-bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope){
+bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 

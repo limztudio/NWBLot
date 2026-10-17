@@ -101,7 +101,7 @@ bool UiLayerSystem::collectRoots(){
     m_liveRoots.clear();
     m_rootIdentities.clear();
     bool overflow = false;
-    m_world.view<UiPaintComponent>().each([this, &overflow](const Core::ECS::EntityID entity, UiPaintComponent& component){
+    m_world.view<UiPaintComponent>().each([this, &overflow](const Core::ECS::EntityID entity, UiPaintComponent& component)noexcept{
         if(!component.visible || !component.paint)
             return;
         if(m_liveRoots.size() == Ui::s_InputMaxTargets){

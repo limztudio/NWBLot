@@ -35,7 +35,7 @@ private:
 
     class View final : public Impl::Ui::IListDataSource, NoCopy{
     public:
-        explicit View(const UiSearchComboSmokeSource& source) : m_source(source){}
+        explicit View(const UiSearchComboSmokeSource& source)noexcept : m_source(source){}
 
 
     public:
@@ -55,7 +55,7 @@ private:
 
 
 public:
-    explicit UiSearchComboSmokeSource(Core::Alloc::GlobalArena& arena);
+    explicit UiSearchComboSmokeSource(Core::Alloc::GlobalArena& arena)noexcept;
 
 
 public:
@@ -81,7 +81,7 @@ public:
 
 
 private:
-    void addRange(u64 first, u64 past);
+    void addRange(u64 first, u64 past)noexcept;
 
 
 private:

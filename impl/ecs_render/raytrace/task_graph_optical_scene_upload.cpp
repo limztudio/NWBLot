@@ -61,7 +61,7 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: accepted upload has invalid residency provenance"));
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         payload.reservation.discard();
     }
 };

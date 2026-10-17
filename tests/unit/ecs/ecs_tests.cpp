@@ -77,7 +77,7 @@ struct MoveOnlyMessage{
 
 
 public:
-    explicit MoveOnlyMessage(u32 v)
+    explicit MoveOnlyMessage(u32 v)noexcept
         : value(v)
     {}
     MoveOnlyMessage(const MoveOnlyMessage&) = delete;
@@ -115,7 +115,7 @@ public:
         ++prepares;
     }
 
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, const f32 delta)override{
+    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, const f32 delta)noexcept override{
         ++updates;
         lastDelta = delta;
 
@@ -572,7 +572,7 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
     i32 value = 0;
 
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 5; });
-    ScheduledSystem independent(arena, {}, [&](){
+    ScheduledSystem independent(arena, {}, [&]()noexcept{
         const Timer begin = TimerNow();
         while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
             SleepMS(1u);
@@ -694,7 +694,7 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     Atomic<bool> started{ false };
     Atomic<bool> release{ false };
     Atomic<bool> completed{ false };
-    const auto cpuAdmission4 = unrelatedTasks.submit([&](){
+    const auto cpuAdmission4 = unrelatedTasks.submit([&]()noexcept{
         started.store(true, MemoryOrder::release);
         started.notify_all();
         const Timer begin = TimerNow();

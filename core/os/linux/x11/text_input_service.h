@@ -35,7 +35,7 @@ private:
 
 public:
     X11TextInputService(Alloc::GlobalArena& arena, Display& display, Window window);
-    virtual ~X11TextInputService()override;
+    virtual ~X11TextInputService()noexcept override;
 
 
 public:
@@ -47,7 +47,7 @@ public:
 
 protected:
     [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken token, const TextInputSessionDesc& desc)override;
-    virtual void endNativeSession(TextInputSessionToken token)override;
+    virtual void endNativeSession(TextInputSessionToken token)noexcept override;
     [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(TextInputRect caret)override;
 
 

@@ -21,7 +21,7 @@ using namespace NWB::UiTextAreaTests;
 
 class AreaReentrySource final : public ComboSource{
 public:
-    AreaReentrySource(){
+    AreaReentrySource()noexcept{
         generation = 4401u;
         count = 5u;
     }
@@ -115,7 +115,7 @@ TEST_F(UiTextAreaReentryTests, HostLoanNestedDeclarationRejectsBeforeASecondLoan
     ASSERT_TRUE(otherModel.setText("other\narea"));
     usize attempts = 0u;
     EditBoxResult nested;
-    m_host.loanHook = [&](){
+    m_host.loanHook = [&]()noexcept{
         ++attempts;
         nested = m_builder.textArea("reentered", otherModel, otherState, AreaOptions());
     };
@@ -181,7 +181,7 @@ TEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPubli
     bool beginAccepted = true;
     bool endAccepted = true;
     bool failedAtAttempt = false;
-    source.rowHook = [&](){
+    source.rowHook = [&]()noexcept{
         beginAccepted = m_builder.beginPanel("reentered", { 0.0f, 0.0f, 100.0f, 80.0f });
         endAccepted = m_builder.endPanel();
         failedAtAttempt = m_builder.failed();

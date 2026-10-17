@@ -59,7 +59,7 @@ public:
         m_stalls = 0u;
     }
 
-    void record(u64 successfulPresentations, Timer now){
+    void record(u64 successfulPresentations, Timer now)noexcept{
         if(!m_started){
             m_started = true;
             m_previousCount = successfulPresentations;

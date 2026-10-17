@@ -34,11 +34,11 @@ private:
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version);
     static void OnRegistryRemove(void* data, wl_registry* registry, u32 name);
-    static void OnEnter(void* data, zwp_text_input_v3* input, wl_surface* surface);
+    static void OnEnter(void* data, zwp_text_input_v3* input, wl_surface* surface)noexcept;
     static void OnLeave(void* data, zwp_text_input_v3* input, wl_surface* surface);
     static void OnPreedit(void* data, zwp_text_input_v3* input, const char* text, i32 begin, i32 end);
     static void OnCommit(void* data, zwp_text_input_v3* input, const char* text);
-    static void OnDelete(void* data, zwp_text_input_v3* input, u32 before, u32 after);
+    static void OnDelete(void* data, zwp_text_input_v3* input, u32 before, u32 after)noexcept;
     static void OnDone(void* data, zwp_text_input_v3* input, u32 serial);
 #if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
     static void OnAction(void* data, zwp_text_input_v3* input, u32 action, u32 serial)noexcept;
@@ -50,7 +50,7 @@ private:
 
 public:
     WaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface);
-    virtual ~WaylandTextInputService()override;
+    virtual ~WaylandTextInputService()noexcept override;
 
 
 public:

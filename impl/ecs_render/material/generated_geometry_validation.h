@@ -56,7 +56,7 @@ template<typename Plan, typename AcceptMode>
     const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outputBuffers,
     const Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>& outputLayouts,
     const Vector<u32, Core::Alloc::GlobalArena>& outputHeapSlots
-){
+)noexcept{
     if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || outputHeapSlots.size() != drawItems.size())
         return false;
     for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){

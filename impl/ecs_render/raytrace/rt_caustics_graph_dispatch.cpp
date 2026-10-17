@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{
+bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const noexcept{
     return
         m_rayTracingState.m_causticResolve.m_prepare.m_pipeline
         && m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline

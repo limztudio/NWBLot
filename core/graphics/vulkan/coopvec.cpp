@@ -360,7 +360,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena> vkConvertDescs(numDescs, scratchArena);
     Vector<usize, Alloc::ScratchArena> dstSizes(numDescs, scratchArena);
 
-    const auto addRequiredBufferState = [&requiredBufferStates](Buffer& buffer, const ResourceStates::Mask requiredState) -> bool{
+    const auto addRequiredBufferState = [&requiredBufferStates](Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> bool{
         for(BufferStateEntry& state : requiredBufferStates){
             if(state.buffer == &buffer){
                 state.state |= requiredState;

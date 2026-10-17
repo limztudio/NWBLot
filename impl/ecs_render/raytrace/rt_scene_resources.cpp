@@ -35,7 +35,7 @@ bool RendererRayTracingSystem::prepareSceneQueryResources(){
     return ensureRayTraceMaterialContextSlotsHeapHandle();
 }
 
-RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResources()const{
+RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResources()const noexcept{
     const auto& state = m_rayTracingState;
     RayTracingSceneGraphResources resources;
     if(m_shadowVisibilityResourcesPreflighted && m_shadowVisibilityTraceResourcesPreflighted){

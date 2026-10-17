@@ -39,7 +39,7 @@ using CandidatePointer = NotNull<const Candidate*>;
     return scaleNonzero && rotationNonzero;
 }
 
-[[nodiscard]] bool ValidCandidate(const Candidate& candidate, const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale){
+[[nodiscard]] bool ValidCandidate(const Candidate& candidate, const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale)noexcept{
     if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
         return false;
     if(candidate.mutableTypedByteCount != 0u && !candidate.mutableTypedBytes)
@@ -49,7 +49,7 @@ using CandidatePointer = NotNull<const Candidate*>;
 
 struct CandidateHasher{
 public:
-    usize operator()(const CandidatePointer candidate)const{
+    usize operator()(const CandidatePointer candidate)const noexcept{
         usize hash = Hasher<Name>{}(candidate->mesh.name());
         HashCombine(hash, candidate->material.name());
         HashCombine(hash, candidate->group);
@@ -65,7 +65,7 @@ public:
 
 
 public:
-    usize hashTransformLanes(SIMDVectorSingle positionLanes, SIMDVectorSingle rotationLanes, SIMDVectorSingle scaleLanes, usize hash)const{
+    usize hashTransformLanes(SIMDVectorSingle positionLanes, SIMDVectorSingle rotationLanes, SIMDVectorSingle scaleLanes, usize hash)const noexcept{
         HashCombineFloating(hash, VectorGetX(positionLanes));
         HashCombineFloating(hash, VectorGetY(positionLanes));
         HashCombineFloating(hash, VectorGetZ(positionLanes));
@@ -84,7 +84,7 @@ public:
 
 struct CandidateEqual{
 public:
-    bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{
+    bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const noexcept{
         if(
             lhs->mesh != rhs->mesh || lhs->material != rhs->material || lhs->group != rhs->group
             || !equalTransformLanes(LoadFloat(lhs->position), LoadFloat(lhs->rotation), LoadFloat(lhs->scale), LoadFloat(rhs->position), LoadFloat(rhs->rotation), LoadFloat(rhs->scale))
@@ -221,11 +221,11 @@ void RendererOpticalVolumeSelection::select(const CoincidentOpticalVolumeCandida
     }
 }
 
-void RendererOpticalVolumeSelection::reset(){
+void RendererOpticalVolumeSelection::reset()noexcept{
     m_suppressed.clear();
 }
 
-bool RendererOpticalVolumeSelection::isSuppressed(const Core::ECS::EntityID entity)const{
+bool RendererOpticalVolumeSelection::isSuppressed(const Core::ECS::EntityID entity)const noexcept{
     return !m_suppressed.empty() && m_suppressed.contains(entity);
 }
 

@@ -32,7 +32,7 @@ public:
 
 
 public:
-    virtual StringView text(const u64 index)const override{
+    virtual StringView text(const u64 index)const noexcept override{
         ++m_labelReads;
         return index < rowCount() ? s_Labels[index] : StringView{};
     }

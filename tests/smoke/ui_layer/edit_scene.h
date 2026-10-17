@@ -30,7 +30,7 @@ namespace Tests::Smoke{
 class UiEditSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiEditSmokeScene()override;
+    virtual ~UiEditSmokeScene()noexcept override;
 
 
 public:
@@ -41,7 +41,7 @@ public:
 private:
     void resetModels();
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    [[nodiscard]] Array<u32, 12u> values()const;
+    [[nodiscard]] Array<u32, 12u> values()const noexcept;
     void observeState(Impl::Ui::TextService& text);
     void paintMarkers(Impl::UiPaintContext& context)const;
 

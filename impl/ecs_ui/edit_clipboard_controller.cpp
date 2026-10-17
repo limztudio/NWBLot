@@ -26,7 +26,7 @@ UiEditClipboardController::UiEditClipboardController(Core::Alloc::GlobalArena& a
     , m_insertText(arena)
 {}
 
-UiEditClipboardController::~UiEditClipboardController(){
+UiEditClipboardController::~UiEditClipboardController()noexcept{
     if(!cancel())
         TerminateInvariant();
 }

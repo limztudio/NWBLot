@@ -119,7 +119,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
 // Repeat the authored five-color palette across each material row; transparency and density remain unchanged.
-[[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const bool transparent){
+[[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const bool transparent)noexcept{
     static const Float4 s_transparentTints[s_CharacterTintCount] = {
         Float4(0.72f, 0.86f, 1.00f, 0.42f),
         Float4(0.60f, 1.00f, 0.85f, 0.42f),
@@ -282,7 +282,7 @@ private:
     }
 
 
-    void spinCharacters(){
+    void spinCharacters()noexcept{
         const f32 yawBase = m_yaw.yaw();
         for(usize index = 0u; index < m_characterOwners.size(); ++index){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
@@ -390,7 +390,7 @@ public:
         )
         , m_characterOwners(context.objectArena)
     {}
-    virtual ~StressTestSmokeProject()override{
+    virtual ~StressTestSmokeProject()noexcept override{
         m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
         m_timingRenderPass.stop();
         destroyWorld();

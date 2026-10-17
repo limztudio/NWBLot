@@ -37,7 +37,7 @@ public:
     explicit FakeTextInput(Alloc::GlobalArena& arena)
         : QueuedTextInputService(arena)
     {}
-    virtual ~FakeTextInput()override = default;
+    virtual ~FakeTextInput()noexcept override = default;
 
 
 public:
@@ -48,7 +48,7 @@ public:
     [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text){
         return emitPreedit(activeSession(), text, 0u, text.size());
     }
-    [[nodiscard]] AStringView publishedText()const{ return surroundingText(); }
+    [[nodiscard]] AStringView publishedText()const noexcept{ return surroundingText(); }
 
 
 protected:
@@ -70,7 +70,7 @@ public:
     explicit FakeClipboard(Alloc::GlobalArena& arena)
         : QueuedClipboardService(arena)
     {}
-    virtual ~FakeClipboard()override = default;
+    virtual ~FakeClipboard()noexcept override = default;
 
 
 public:

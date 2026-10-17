@@ -42,7 +42,7 @@ void RendererAvboitSystem::markFrameTargetUsage(const bool hasTransparentRendere
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
 }
 
-void RendererAvboitSystem::invalidateResources(){
+void RendererAvboitSystem::invalidateResources()noexcept{
     m_avboitState.invalidateResources();
 }
 

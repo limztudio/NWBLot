@@ -34,7 +34,7 @@ private:
 private:
     class IMessageChannel{
     public:
-        virtual ~IMessageChannel() = default;
+        virtual ~IMessageChannel()noexcept = default;
 
 
     public:
@@ -48,7 +48,7 @@ private:
     private:
         class PendingMessage{
         public:
-            PendingMessage() = default;
+            PendingMessage()noexcept = default;
             PendingMessage(const PendingMessage&) = delete;
             PendingMessage(PendingMessage&& rhs)noexcept(IsNothrowMoveConstructible_V<T>){
                 moveFrom(Move(rhs));
@@ -57,7 +57,7 @@ private:
             explicit PendingMessage(InPlaceType, Args&&... args)noexcept(noexcept(Optional<T>(s_InPlace, Forward<Args>(args)...)))
                 : m_value(s_InPlace, Forward<Args>(args)...)
             {}
-            ~PendingMessage() = default;
+            ~PendingMessage()noexcept(IsNothrowDestructible_V<Optional<T>>) = default;
 
 
         public:
@@ -167,7 +167,7 @@ public:
         : m_arena(arena)
         , m_channels(arena)
     {}
-    ~MessageBus() = default;
+    ~MessageBus()noexcept = default;
 
 
 public:

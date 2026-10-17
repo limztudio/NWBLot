@@ -25,7 +25,7 @@ namespace __hidden_clipboard_service{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static u64 AllocateServiceIdentity(){
+static u64 AllocateServiceIdentity()noexcept{
     static Atomic<u64> s_NextIdentity{ 1u };
     const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
     if(identity == 0u)
@@ -52,7 +52,7 @@ QueuedClipboardService::QueuedClipboardService(Alloc::GlobalArena& arena)
     m_requests.reserve(s_ClipboardMaxOutstandingRequests);
 }
 
-QueuedClipboardService::~QueuedClipboardService(){
+QueuedClipboardService::~QueuedClipboardService()noexcept{
     NWB_ASSERT(isOwnerThread());
 }
 

@@ -176,18 +176,18 @@ public:
 public:
     void invalidateResources();
     [[nodiscard]] Expected<MeshResources*> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset);
+    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept;
     // Graph declaration resolves prepared keys without touching assets or mesh state.
-    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Name& meshKey);
+    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Name& meshKey)noexcept;
     [[nodiscard]] Expected<MeshResources*> createRuntimeMeshResources(const RuntimeMeshDesc& desc);
-    [[nodiscard]] Expected<MeshResources*> findRuntimeMeshResources(const RuntimeMeshDesc& desc);
+    [[nodiscard]] Expected<MeshResources*> findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept;
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
-    [[nodiscard]] bool confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, bool runtimeMesh);
+    [[nodiscard]] bool confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, bool runtimeMesh)noexcept;
     void pruneRuntimeMeshResources();
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(const Name& meshName)const;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& mesh)const;
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(const Name& meshName)const noexcept;
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& mesh)const noexcept;
     [[nodiscard]] bool commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired);
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected);
     void discardRayTracingBuildState()noexcept;
@@ -198,13 +198,13 @@ public:
     [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
     [[nodiscard]] Expected<Float44> snapshotAcceptedMeshViewWorldToClip()const noexcept;
     // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
-    [[nodiscard]] ECSRenderDetail::MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const;
-    void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
+    [[nodiscard]] ECSRenderDetail::MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const noexcept;
+    void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState)noexcept;
     void invalidateMeshViewBufferUploadMirror()noexcept;
     [[nodiscard]] bool prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
-    [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const;
-    [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
-    void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
+    [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const noexcept;
+    [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept;
+    void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const noexcept;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 
 
@@ -212,7 +212,7 @@ private:
     void releaseMeshFrameHeapHandles();
     // Mesh descriptors are established at creation; draw paths only consume ready handles.
     [[nodiscard]] bool createMeshRenderBindings(MeshResources& mesh);
-    [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
+    [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const noexcept;
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
     [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
     void releaseAllMeshGeometryHeapHandles();

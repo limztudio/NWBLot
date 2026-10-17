@@ -83,13 +83,13 @@ public:
     [[nodiscard]] bool captureTargetClearState()const noexcept;
     void restoreTargetClearState(bool targetsNeedClear)noexcept;
     void markFrameTargetUsage(bool hasTransparentRenderers)noexcept;
-    void invalidateResources();
+    void invalidateResources()noexcept;
 
 public:
     // Host owns the graph artifact; AVBOIT owns its stage identifiers; users see the stage boundary.
     void resetTaskGraphStage()noexcept;
     [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
-    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledPlan, bool clearTargets, bool hasTransparentRenderers)const;
+    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledPlan, bool clearTargets, bool hasTransparentRenderers)const noexcept;
     [[nodiscard]] bool appendTaskGraphTimingTickets(const RendererAvboitTaskGraphValidation& validation, RendererAvboitTaskGraphTimingTickets& timingTickets, Core::GpuTaskGraphTaskTimingTicket* bindings, usize bindingCapacity, usize& bindingCount)const;
 
 

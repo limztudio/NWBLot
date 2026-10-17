@@ -77,7 +77,7 @@ struct CsgCutterTransforms{
     return BinaryByteView(bytes, byteSize);
 }
 
-static void CopyCsgCutterInlineParameters(const u8* parameterBytes, const usize parameterByteSize, CsgCutterGpuData& inOutCutter){
+static void CopyCsgCutterInlineParameters(const u8* parameterBytes, const usize parameterByteSize, CsgCutterGpuData& inOutCutter)noexcept{
     inOutCutter.parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
     inOutCutter.parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
     if(!parameterBytes)
@@ -156,7 +156,7 @@ public:
     return BuildCsgReceiverLocalSpace(boundsCanCull, localMinBounds, localMaxBounds, localToWorldPtr);
 }
 
-static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolvedCutter, const f32 worldToShapeScaleBound, CsgCutterGpuData& outCutter){
+static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolvedCutter, const f32 worldToShapeScaleBound, CsgCutterGpuData& outCutter)noexcept{
     NWB_ASSERT(resolvedCutter.cutter);
     NWB_ASSERT(resolvedCutter.parameterByteSize() == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
     NWB_ASSERT(resolvedCutter.parameterByteSize() == 0u || resolvedCutter.parameterBytes());
@@ -280,7 +280,7 @@ bool CsgClipWorkBounds::resolveCutter(const CsgShapeRegistry& shapeRegistry, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CsgFrameWorkRegion::expandWorldBounds(const SIMDMatrix& worldToClip, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const u32 frameWidth, const u32 frameHeight){
+void CsgFrameWorkRegion::expandWorldBounds(const SIMDMatrix& worldToClip, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const u32 frameWidth, const u32 frameHeight)noexcept{
     static constexpr f32 s_MinClipWForWorkRegion = static_cast<f32>(NWB_CSG_HOMOGENEOUS_W_EPSILON);
     static constexpr i32 s_WorkRegionPixelPadding = 2;
     static constexpr u32 s_BoxCornerCount = 8u;

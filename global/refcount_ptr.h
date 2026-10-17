@@ -54,7 +54,7 @@ u32 RefCountRelease(T* p)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AdoptRefT{ explicit AdoptRefT() = default; };
+struct AdoptRefT{ explicit AdoptRefT()noexcept = default; };
 inline constexpr AdoptRefT s_AdoptRef{};
 
 

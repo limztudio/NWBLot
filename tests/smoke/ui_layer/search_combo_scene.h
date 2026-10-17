@@ -32,7 +32,7 @@ namespace Tests::Smoke{
 class UiSearchComboSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiSearchComboSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiSearchComboSmokeScene()override;
+    virtual ~UiSearchComboSmokeScene()noexcept override;
 
 
 public:
@@ -42,8 +42,8 @@ public:
 
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    [[nodiscard]] Array<u64, 22u> values()const;
-    [[nodiscard]] Impl::Ui::Rect cursorRow()const;
+    [[nodiscard]] Array<u64, 22u> values()const noexcept;
+    [[nodiscard]] Impl::Ui::Rect cursorRow()const noexcept;
     void observeState(Impl::Ui::TextService& text);
 
 

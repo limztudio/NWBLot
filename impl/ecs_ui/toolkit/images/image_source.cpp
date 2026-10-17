@@ -28,7 +28,7 @@ static Atomic<u64> s_NextGeneration{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NewGeneration(){
+[[nodiscard]] static u64 NewGeneration()noexcept{
     const u64 generation = s_NextGeneration.fetch_add(1u, MemoryOrder::relaxed);
     NWB_FATAL_ASSERT_MSG(generation != 0u, NWB_TEXT("UI image source generation overflow"));
     return generation;

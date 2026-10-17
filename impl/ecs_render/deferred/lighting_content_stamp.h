@@ -23,7 +23,7 @@ namespace ECSRenderDetail{
 };
 
 // Hashes the immutable upload payload, including edits and light order.
-[[nodiscard]] u64 ComputeSceneLightingContentHash(const ECSRenderDetail::SceneShadingGpuData& shading, const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount);
+[[nodiscard]] u64 ComputeSceneLightingContentHash(const ECSRenderDetail::SceneShadingGpuData& shading, const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

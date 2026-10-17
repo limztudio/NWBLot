@@ -19,7 +19,7 @@ NWB_LOG_BEGIN
 
 class IClient : public Core::Common::ILogger{
 public:
-    virtual ~IClient()override = default;
+    virtual ~IClient()noexcept override = default;
 };
 
 
@@ -73,7 +73,7 @@ private:
 
 public:
     Client();
-    virtual ~Client()override;
+    virtual ~Client()noexcept override;
 
 
 public:
@@ -140,7 +140,7 @@ class ClientStandalone final : public ClientBase<ClientStandalone, s_ClientStand
 
 public:
     ClientStandalone();
-    virtual ~ClientStandalone()override;
+    virtual ~ClientStandalone()noexcept override;
 
 
 public:

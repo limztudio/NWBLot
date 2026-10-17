@@ -46,7 +46,7 @@ public:
 
 
 public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Core::GpuTaskId* timingTasks, usize timingTaskCount, bool timingBindingsValid, bool hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const;
+    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Core::GpuTaskId* timingTasks, usize timingTaskCount, bool timingBindingsValid, bool hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
 
 
 private:

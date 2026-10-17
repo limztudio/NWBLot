@@ -76,7 +76,7 @@ public:
     const NwbRtInstanceMaterialGpu* materials, const InstanceGpuData* instances, usize instanceCount,
     const u8* materialBytes, usize materialByteCount,
     const Core::TextureHandle* textures, usize textureCount
-);
+)noexcept;
 
 void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, bool hardware);
 void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, Core::ECS::EntityID entity, bool transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);

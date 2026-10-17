@@ -57,7 +57,7 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("integer_bounds"), NWB_TEXT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Array<u64, 30u> UiNumericEditSmokeScene::values()const{
+Array<u64, 30u> UiNumericEditSmokeScene::values()const noexcept{
     using namespace __hidden_ui_numeric_snapshot;
     const auto& integer = m_integer.draft();
     const auto& floating = m_float.draft();
@@ -112,7 +112,7 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
 void UiNumericEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const f32 y = context.display.logicalHeight - 18.0f;
     constexpr usize s_ValueCount = TupleSize_V<decltype(m_snapshot.values)>;
-    constexpr usize s_MarkerCount = [](){
+    constexpr usize s_MarkerCount = []()noexcept{
         usize count = 0u;
         for(usize index = 0u; index <= s_ValueCount; ++index)
             count += index < 2u ? 6u : index == 3u || index == 10u || index == 17u ? 3u : 2u;

@@ -22,10 +22,10 @@ MeshletPipeline::MeshletPipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
-MeshletPipeline::~MeshletPipeline(){
+MeshletPipeline::~MeshletPipeline()noexcept{
     VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
-Object MeshletPipeline::getNativeHandle(ObjectType objectType){
+Object MeshletPipeline::getNativeHandle(ObjectType objectType)noexcept{
     return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 

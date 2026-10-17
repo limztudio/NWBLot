@@ -36,8 +36,8 @@ private:
 
 
 public:
-    ShutdownCaptureServer() = default;
-    ~ShutdownCaptureServer();
+    ShutdownCaptureServer()noexcept = default;
+    ~ShutdownCaptureServer()noexcept;
 
 
 public:
@@ -98,7 +98,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
 }
 
 
-ShutdownCaptureServer::~ShutdownCaptureServer(){
+ShutdownCaptureServer::~ShutdownCaptureServer()noexcept{
     if(m_daemon){
         MHD_stop_daemon(m_daemon);
         m_daemon = nullptr;

@@ -53,7 +53,9 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     UiTextureImageSnapshot current = m_declared;
     current.display = context.display;
     const InputRouter& input = context.ui.input();
-    const auto observation = ObservePassiveSmokeTargets(input, current.rectangles, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, current.rectangles.size(), [](const usize index){ return index != 8u && index != 14u && index != 15u; });
+    const auto observation = ObservePassiveSmokeTargets(input, current.rectangles, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, current.rectangles.size(),
+        [](const usize index)noexcept{ return index != 8u && index != 14u && index != 15u; }
+    );
     const u32 focusCode = observation.focusCode;
     const u32 imageTargets = observation.passiveTargets;
     current.values[0u] = static_cast<u64>(m_phase);

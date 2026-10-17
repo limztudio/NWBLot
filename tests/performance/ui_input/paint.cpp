@@ -106,7 +106,7 @@ bool RunPaintBenchmarks(){
             if(!benchmark.operation() || !benchmark.checksum())
                 return false;
             const u64 setup = MixChecksum(MixChecksum(1469598103934665603u, s_Counts[index]), descending ? 1u : 0u);
-            if(!Measure(descending ? s_DescendingNames[index] : s_MonotonicNames[index], setup, [&benchmark](){ return benchmark.operation(); }, [&benchmark](){ return benchmark.checksum(); }))
+            if(!Measure(descending ? s_DescendingNames[index] : s_MonotonicNames[index], setup, [&benchmark](){ return benchmark.operation(); }, [&benchmark]()noexcept{ return benchmark.checksum(); }))
                 return false;
         }
     }

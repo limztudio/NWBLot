@@ -52,7 +52,7 @@ namespace LoggerBreakPolicy{
 
 class ILogger{
 public:
-    virtual ~ILogger() = default;
+    virtual ~ILogger()noexcept = default;
 
 
 public:

@@ -42,14 +42,14 @@ namespace Tests::Smoke{
 // Default-off fixture controller; it observes existing completed history/timing and owns no renderer resources.
 class ReflectionSpatialOwnerProbe final{
 public:
-    ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer);
+    ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer)noexcept;
 
 
 public:
     [[nodiscard]] bool configure(AStringView selection, Impl::ReflectionSettings& settings);
     [[nodiscard]] bool update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings);
     [[nodiscard]] bool shouldCapture(u64 graphicsFrame)const noexcept{ return m_finalReset && graphicsFrame == m_finalSource; }
-    [[nodiscard]] bool canFinish(const Impl::ReflectionStatistics& statistics, u64 capturedSource)const;
+    [[nodiscard]] bool canFinish(const Impl::ReflectionStatistics& statistics, u64 capturedSource)const noexcept;
 
 
 private:

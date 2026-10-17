@@ -87,7 +87,7 @@ Shader::Shader(const VulkanContext& context)noexcept
     , m_specializationData(context.objectArena)
     , m_context(context)
 {}
-Shader::~Shader(){
+Shader::~Shader()noexcept{
     if(m_shaderModule != VK_NULL_HANDLE){
         m_context.deviceDispatch.vkDestroyShaderModule(m_context.device, m_shaderModule, m_context.allocationCallbacks);
         m_shaderModule = VK_NULL_HANDLE;
@@ -113,7 +113,7 @@ ShaderLibrary::ShaderLibrary(const VulkanContext& context)
     , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), context.objectArena)
     , m_context(context)
 {}
-ShaderLibrary::~ShaderLibrary(){}
+ShaderLibrary::~ShaderLibrary()noexcept{}
 
 void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const noexcept{
     *ppBytecode = m_spirvWords.data();

@@ -26,14 +26,14 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Core::RenderState BuildMeshRenderState(){
+inline Core::RenderState BuildMeshRenderState()noexcept{
     Core::RenderState renderState;
     renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip();
     return renderState;
 }
 
-inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass, const bool twoSided){
+inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass, const bool twoSided)noexcept{
     auto applyTwoSided = [&](Core::RenderState renderState)noexcept{
         if(twoSided)
             renderState.rasterState.setCullNone();
@@ -65,7 +65,7 @@ inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
     }
 }
 
-inline Core::RenderState BuildCompositeRenderState(){
+inline Core::RenderState BuildCompositeRenderState()noexcept{
     Core::RenderState renderState;
     renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullNone();

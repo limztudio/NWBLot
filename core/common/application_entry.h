@@ -79,7 +79,17 @@ template<typename Invoke>
 
 template<typename EntryPoint, typename CharT>
 [[nodiscard]] inline int InvokeEntryPoint(EntryPoint entryPoint, const isize argc, CharT** argv, void* instance){
-    return InvokeWithInitializedCommon([entryPoint, argc, argv, instance](){ return entryPoint(argc, argv, instance); });
+    return InvokeWithInitializedCommon([entryPoint, argc, argv, instance]()noexcept(
+        noexcept(DeclVal<const RemoveReference_T<EntryPoint>&>()(DeclVal<const isize&>(), DeclVal<CharT** const&>(), DeclVal<void* const&>()))
+        && (
+            !IsReference_V<decltype(DeclVal<const RemoveReference_T<EntryPoint>&>()(DeclVal<const isize&>(), DeclVal<CharT** const&>(), DeclVal<void* const&>()))>
+            || IsNothrowConvertible_V<
+                decltype(DeclVal<const RemoveReference_T<EntryPoint>&>()(DeclVal<const isize&>(), DeclVal<CharT** const&>(), DeclVal<void* const&>())),
+                Decay_T<decltype(DeclVal<const RemoveReference_T<EntryPoint>&>()(DeclVal<const isize&>(), DeclVal<CharT** const&>(), DeclVal<void* const&>()))>
+            >
+        )
+    ){ return entryPoint(argc, argv, instance); }
+    );
 }
 
 #if defined(NWB_UNICODE)

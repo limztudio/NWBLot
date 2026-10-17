@@ -30,7 +30,7 @@ struct SelectionContext{
     RendererOpticalVolumeSelection selection{ arena };
 };
 
-[[nodiscard]] CoincidentOpticalVolumeCandidate MakeCandidate(const u32 entityIndex){
+[[nodiscard]] CoincidentOpticalVolumeCandidate MakeCandidate(const u32 entityIndex)noexcept{
     CoincidentOpticalVolumeCandidate candidate;
     candidate.entity = Core::ECS::EntityID(entityIndex, 0u);
     candidate.mesh = Core::Assets::AssetRef<Mesh>("tests/coincident_optical_volumes/mesh");

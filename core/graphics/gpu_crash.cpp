@@ -68,7 +68,7 @@ GpuCrashTracker::GpuCrashTracker(GraphicsArena& arena)noexcept
     , m_eventStrings(0u, Hasher<usize>(), EqualTo<usize>(), arena)
 {}
 
-ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
+ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash)noexcept{
     const auto found = m_eventStrings.find(markerHash);
     if(found != m_eventStrings.end())
         return MakePair(true, AStringView(found->second.data(), found->second.size()));

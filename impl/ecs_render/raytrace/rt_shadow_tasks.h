@@ -589,7 +589,7 @@ public:
         return true;
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         payload.raytracingSystem.discardSoftShadowTemporalHistory();
     }
 };

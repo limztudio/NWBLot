@@ -27,7 +27,7 @@ namespace ECSRenderDetail{
 
 
 template<usize N>
-inline Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Core::Format::Enum (&candidates)[N], const Core::FormatSupport::Mask requiredSupport){
+inline Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Core::Format::Enum (&candidates)[N], const Core::FormatSupport::Mask requiredSupport)noexcept{
     for(const Core::Format::Enum format : candidates){
         if((device.queryFormatSupport(format) & requiredSupport) == requiredSupport)
             return format;

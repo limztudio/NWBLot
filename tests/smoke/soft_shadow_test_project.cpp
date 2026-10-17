@@ -145,7 +145,7 @@ public:
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
     {}
-    virtual ~SoftShadowTestSmokeProject()override{
+    virtual ~SoftShadowTestSmokeProject()noexcept override{
         m_timingRenderPass.stop();
         m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
         destroyWorld();
@@ -157,7 +157,7 @@ private:
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
-    void spinCasters(){
+    void spinCasters()noexcept{
         for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
             if(transform)

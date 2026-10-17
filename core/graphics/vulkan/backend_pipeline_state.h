@@ -184,10 +184,10 @@ public:
     bool initialize();
     [[nodiscard]] bool shutdown();
 
-    [[nodiscard]] bool isEnabled()const;
+    [[nodiscard]] bool isEnabled()const noexcept;
 
     // Exact driver descriptor size; 0 when descriptor buffers are disabled.
-    [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
+    [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const noexcept;
     [[nodiscard]] u32 getOffsetAlignmentBytes()const noexcept;
     [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const noexcept;
     [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const noexcept;
@@ -218,7 +218,7 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const;
+    [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const noexcept;
     [[nodiscard]] bool isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
     bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment)noexcept;
@@ -375,7 +375,7 @@ public:
 
     [[nodiscard]] bool isInitialized()const noexcept{ return m_initialized; }
     // Coherent aggregate lifecycle counters; intentionally does not identify individual physical queues.
-    [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const;
+    [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const noexcept;
 
     // Returns invalid (logged) when the class namespace is exhausted.
     [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);
@@ -408,7 +408,7 @@ public:
     // SPIR-V binding number for a descriptor class.
     [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const noexcept;
     // Per-generation TLAS segment block bound at heap set 2.
-    [[nodiscard]] DescriptorBufferSegment getAccelStructBufferBlock(GpuDescriptorHandle handle)const;
+    [[nodiscard]] DescriptorBufferSegment getAccelStructBufferBlock(GpuDescriptorHandle handle)const noexcept;
 
 
 private:
@@ -487,14 +487,14 @@ class GraphicsPipeline final : public RefCounter<GraphicsResource>, public Pipel
 
 public:
     GraphicsPipeline(const VulkanContext& context)noexcept;
-    ~GraphicsPipeline();
+    ~GraphicsPipeline()noexcept;
 
 
 public:
     [[nodiscard]] const GraphicsPipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
-    Object getNativeHandle(ObjectType objectType);
+    Object getNativeHandle(ObjectType objectType)noexcept;
 
 
 private:
@@ -516,13 +516,13 @@ class ComputePipeline final : public RefCounter<GraphicsResource>, public Pipeli
 
 public:
     ComputePipeline(const VulkanContext& context)noexcept;
-    ~ComputePipeline();
+    ~ComputePipeline()noexcept;
 
 
 public:
     [[nodiscard]] const ComputePipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
-    Object getNativeHandle(ObjectType objectType);
+    Object getNativeHandle(ObjectType objectType)noexcept;
 
 
 private:
@@ -543,14 +543,14 @@ class MeshletPipeline final : public RefCounter<GraphicsResource>, public Pipeli
 
 public:
     MeshletPipeline(const VulkanContext& context)noexcept;
-    ~MeshletPipeline();
+    ~MeshletPipeline()noexcept;
 
 
 public:
     [[nodiscard]] const MeshletPipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
-    Object getNativeHandle(ObjectType objectType);
+    Object getNativeHandle(ObjectType objectType)noexcept;
 
 
 private:
@@ -597,7 +597,7 @@ class RayTracingPipeline final : public RefCounter<GraphicsResource>, public Pip
 
 public:
     RayTracingPipeline(const VulkanContext& context, Device& device, bool allowClusterAccelerationStructures)noexcept;
-    ~RayTracingPipeline();
+    ~RayTracingPipeline()noexcept;
 
 
 public:
@@ -605,7 +605,7 @@ public:
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] bool allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
     [[nodiscard]] Expected<RayTracingShaderTableHandle> createShaderTable();
-    Object getNativeHandle(ObjectType objectType);
+    Object getNativeHandle(ObjectType objectType)noexcept;
 
 
 private:
@@ -663,7 +663,7 @@ private:
 
 public:
     ShaderTable(const VulkanContext& context, Device& device)noexcept;
-    ~ShaderTable();
+    ~ShaderTable()noexcept;
 
 
 public:
@@ -671,15 +671,15 @@ public:
     [[nodiscard]] Expected<u32> addMissShader(AStringView exportName);
     [[nodiscard]] Expected<u32> addHitGroup(AStringView exportName);
     [[nodiscard]] Expected<u32> addCallableShader(AStringView exportName);
-    void clearMissShaders();
-    void clearHitShaders();
-    void clearCallableShaders();
+    void clearMissShaders()noexcept;
+    void clearHitShaders()noexcept;
+    void clearCallableShaders()noexcept;
     [[nodiscard]] RayTracingPipeline* getPipeline()noexcept{ return m_pipeline.get(); }
-    Object getNativeHandle(ObjectType objectType);
+    Object getNativeHandle(ObjectType objectType)noexcept;
 
 
 private:
-    [[nodiscard]] DispatchSnapshot captureDispatchSnapshot()const;
+    [[nodiscard]] DispatchSnapshot captureDispatchSnapshot()const noexcept;
     [[nodiscard]] Expected<u32> findGroupIndex(AStringView exportName, ShaderTableRecordKind::Enum expectedKind, TStringView operationName, TStringView exportKind)const;
     [[nodiscard]] Expected<ShaderRecordPreflight> preflightShaderRecord(AStringView exportName, ShaderTableRecordKind::Enum expectedKind, u32 recordCount, TStringView operationName, TStringView exportKind)const;
     [[nodiscard]] Expected<ShaderTableAllocation> allocateSBTBuffer(const ShaderRecordPreflight& preflight, TStringView operationName, TStringView recordName);

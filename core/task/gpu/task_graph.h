@@ -1061,12 +1061,12 @@ private:
     [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
     [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
     [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
-    [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
-    [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const noexcept;
+    [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const noexcept;
+    [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const noexcept;
+    [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const noexcept;
+    [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const noexcept;
+    [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const noexcept;
     [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(const GpuExternalCompletionId& completion)const noexcept;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
@@ -1109,7 +1109,7 @@ private:
 
 
     [[nodiscard]] Expected<MarkerLabelRange> appendMarkerLabel(AStringView text);
-    [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
+    [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const noexcept;
     [[nodiscard]] bool retireTaskPayloads();
     [[nodiscard]] bool destroyTaskPayloads();
     [[nodiscard]] bool destroyTaskPayloadsWithoutCallbacks()noexcept;

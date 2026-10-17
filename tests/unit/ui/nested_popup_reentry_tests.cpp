@@ -24,7 +24,7 @@ namespace ReentryKind{
 
 class ReentrySource final : public ComboSource{
 public:
-    explicit ReentrySource(const u64 instance){
+    explicit ReentrySource(const u64 instance)noexcept{
         generation = instance;
         count = 5u;
     }
@@ -105,7 +105,7 @@ public:
 
     void observeAttemptsOf(const ReentrySource& source)noexcept{ m_observer = &source; }
 
-    void resetObservations()const{
+    void resetObservations()const noexcept{
         resetCounters();
         m_metadataCalls = 0u;
         m_callbacksAfterAttempt = 0u;
@@ -187,7 +187,7 @@ struct AcceptedFrame{
 
 class UiNestedPopupReentryTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static PopupOptions ChildOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
         PopupOptions options;
         options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
         options.size = { 300.0f, 300.0f };
@@ -230,7 +230,7 @@ protected:
         return m_builder.beginPopup("sibling", m_sibling, ChildOptions()) && m_builder.virtualList("list", m_siblingSource, m_siblingList, ListOptions()).valid && m_builder.endPopup();
     }
 
-    [[nodiscard]] AcceptedFrame accepted()const{
+    [[nodiscard]] AcceptedFrame accepted()const noexcept{
         AcceptedFrame frame;
         frame.count = m_context.input().targets().size();
         frame.popupCount = m_context.input().popupCount();

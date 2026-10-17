@@ -208,17 +208,17 @@ void UiLayerSystem::pointerCaptureLost(){
     m_pointerOwner = __hidden_layer_input::s_Scene;
 }
 
-bool UiLayerSystem::wantsKeyboard()const{
+bool UiLayerSystem::wantsKeyboard()const noexcept{
     return m_resourcesReady && m_context.input().wantsCommands();
 }
 
-bool UiLayerSystem::wantsPointer()const{
+bool UiLayerSystem::wantsPointer()const noexcept{
     if(m_pressedButtons != 0u)
         return m_pointerOwner != __hidden_layer_input::s_Scene;
     return m_resourcesReady && m_context.input().wantsPointer();
 }
 
-bool UiLayerSystem::wantsTextInput()const{
+bool UiLayerSystem::wantsTextInput()const noexcept{
     return m_resourcesReady && m_editHost.wantsTextInput();
 }
 

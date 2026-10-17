@@ -117,7 +117,7 @@ NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const Core::ViewportState& viewportState,
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags
-){
+)noexcept{
     ShaderDrivenPushConstants pushConstants;
     pushConstants.meshletCount = meshletCount;
     pushConstants.instanceIndex = instanceIndex;

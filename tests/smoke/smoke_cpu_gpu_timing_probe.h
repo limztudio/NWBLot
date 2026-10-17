@@ -53,7 +53,7 @@ private:
 
 
 public:
-    explicit SmokeCpuGpuTimingProbe(TStringView owner, Core::Alloc::GlobalArena& arena);
+    explicit SmokeCpuGpuTimingProbe(TStringView owner, Core::Alloc::GlobalArena& arena)noexcept;
 
 
 public:

@@ -27,13 +27,13 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, const AStringView label){
+[[nodiscard]] inline Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Texture);
     return desc;
 }
 
-[[nodiscard]] inline Core::GpuGraphResourceDesc BufferResourceDesc(const Name& identity, const AStringView label){
+[[nodiscard]] inline Core::GpuGraphResourceDesc BufferResourceDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer);
     return desc;
@@ -76,7 +76,7 @@ template<typename Plan>
     return result;
 }
 
-[[nodiscard]] inline Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, const AStringView label){
+[[nodiscard]] inline Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::HazardDomain);
     return desc;
@@ -119,7 +119,7 @@ template<typename Plan>
     return result;
 }
 
-[[nodiscard]] inline Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label){
+[[nodiscard]] inline Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::AccelStruct);
     return desc;

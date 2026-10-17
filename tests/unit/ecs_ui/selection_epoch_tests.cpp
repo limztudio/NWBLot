@@ -25,7 +25,7 @@ namespace EpochMutation{
 
 class UiSelectionEpochTests : public UiEditBoxHostTests{
 protected:
-    [[nodiscard]] UiTextEditOwner owner()const{ return { { 271u }, 3u, m_model.instanceGeneration() }; }
+    [[nodiscard]] UiTextEditOwner owner()const noexcept{ return { { 271u }, 3u, m_model.instanceGeneration() }; }
 
     [[nodiscard]] bool seedSelection(){ return m_model.setText("abcd") && m_model.setSelection(1u, 3u); }
 

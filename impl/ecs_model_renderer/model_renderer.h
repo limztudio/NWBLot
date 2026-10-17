@@ -49,7 +49,7 @@ inline void ApplyModelObjectRenderer(Core::ECS::World& world, Core::Alloc::Globa
     materialInstance.overrides = Move(overrides);
 }
 
-[[nodiscard]] inline ModelObjectRendererHooks CreateModelObjectRendererHooks(){
+[[nodiscard]] inline ModelObjectRendererHooks CreateModelObjectRendererHooks()noexcept{
     static const Core::ECS::ComponentAccess s_Accesses[] = {
         { Core::ECS::ComponentType<RendererComponent>(), Core::ECS::AccessMode::Write },
         { Core::ECS::ComponentType<MaterialInstanceComponent>(), Core::ECS::AccessMode::Write },

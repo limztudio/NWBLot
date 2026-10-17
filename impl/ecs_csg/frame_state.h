@@ -115,9 +115,9 @@ public:
 public:
     [[nodiscard]] bool empty()const noexcept{ return m_cutterRanges.empty(); }
     [[nodiscard]] u32 cutterCount()const noexcept{ return static_cast<u32>(m_cutterRefs.size()); }
-    [[nodiscard]] Expected<CsgReceiverDrawState> resolveReceiverDrawState(Core::ECS::EntityID entity, CsgReceiverPass::Enum receiverPass)const;
+    [[nodiscard]] Expected<CsgReceiverDrawState> resolveReceiverDrawState(Core::ECS::EntityID entity, CsgReceiverPass::Enum receiverPass)const noexcept;
     template<typename CutterHandler>
-    void forEachReceiverCutter(const CsgReceiverDrawState& drawState, CutterHandler&& handler)const{
+    void forEachReceiverCutter(const CsgReceiverDrawState& drawState, CutterHandler&& handler)const noexcept(noexcept(handler(DeclVal<const Core::ECS::EntityID&>(), DeclVal<const CsgCutterComponent&>()))){
         if(!drawState.active || drawState.cutterCount == 0u)
             return;
 
@@ -154,7 +154,7 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<CsgFrameCutterRange> resolveReceiverCutterRange(Core::ECS::EntityID entity)const;
+    [[nodiscard]] Expected<CsgFrameCutterRange> resolveReceiverCutterRange(Core::ECS::EntityID entity)const noexcept;
 
 
 private:
@@ -167,13 +167,13 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world);
+[[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world)noexcept;
 struct CsgResolvedReceiver{
     const CsgReceiverComponent* receiver = nullptr;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
 };
 
-[[nodiscard]] Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, Core::ECS::EntityID entity);
+[[nodiscard]] Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, Core::ECS::EntityID entity)noexcept;
 void AddCsgFrameReceiverWork(CsgFrameState& inOutState, CsgReceiverKind::Enum receiverKind, bool opaqueWork, bool transparentWork, u32 cutterCount)noexcept;
 void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept;
 [[nodiscard]] CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc = CsgFrameBuildDesc{});

@@ -76,7 +76,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     // Subsequent visibility passes read/write this UAV in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
 
-    const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
+    const auto passState = [&](const Core::ComputePipelineHandle& pipeline)noexcept{
         Core::ComputeState state;
         state.setPipeline(pipeline.get());
         return state;

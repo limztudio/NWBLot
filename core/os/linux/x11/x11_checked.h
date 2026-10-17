@@ -55,7 +55,7 @@ private:
 
 public:
     explicit X11CheckedOperation(Display& display);
-    ~X11CheckedOperation();
+    ~X11CheckedOperation()noexcept;
 
 
 public:

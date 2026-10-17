@@ -26,7 +26,7 @@ namespace MutationKind{
 // Source callbacks can reenter host code; failed loans must retain that explicit mutation.
 class CallbackSource final : public ComboSource{
 public:
-    explicit CallbackSource(ComboState& state)
+    explicit CallbackSource(ComboState& state)noexcept
         : m_state(state)
     {}
 
@@ -42,7 +42,7 @@ public:
         return ComboSource::key(index);
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         mutate(MutationKind::TextSelect);
         if(m_kind == MutationKind::TextRevision){
             m_kind = MutationKind::None;
@@ -90,13 +90,13 @@ using AcceptedState = UiWidgetTests::AcceptedInputState<32u>;
 
 class ForeignRevisionSource final : public ComboSource{
 public:
-    explicit ForeignRevisionSource(ComboSource& source)
+    explicit ForeignRevisionSource(ComboSource& source)noexcept
         : m_foreign(source)
     {}
 
 
 public:
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         if(m_armed){
             m_armed = false;
             ++m_foreign.contentRevision;
@@ -135,7 +135,7 @@ protected:
         return declareCallbacks(generation) && finishPanel() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] AcceptedState accepted()const{ return UiWidgetTests::CaptureAcceptedInput<32u>(m_context.input()); }
+    [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<32u>(m_context.input()); }
 
     void expectAccepted(const AcceptedState& saved)const{ UiWidgetTests::ExpectAcceptedInput(m_context.input(), saved); }
 

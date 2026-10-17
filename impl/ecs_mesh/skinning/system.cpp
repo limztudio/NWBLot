@@ -41,7 +41,7 @@ namespace __hidden_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ResolveSkeletonComponents(Core::ECS::World& world, const Core::ECS::EntityID fallbackEntity, const Core::ECS::EntityID skeletonEntity, const SkeletonJointPaletteComponent*& outJointPalette, const SkeletonPoseComponent*& outSkeletonPose){
+static void ResolveSkeletonComponents(Core::ECS::World& world, const Core::ECS::EntityID fallbackEntity, const Core::ECS::EntityID skeletonEntity, const SkeletonJointPaletteComponent*& outJointPalette, const SkeletonPoseComponent*& outSkeletonPose)noexcept{
     const Core::ECS::EntityID resolvedEntity = skeletonEntity.valid() ? skeletonEntity : fallbackEntity;
     outJointPalette = world.tryGetComponent<SkeletonJointPaletteComponent>(resolvedEntity);
     outSkeletonPose = world.tryGetComponent<SkeletonPoseComponent>(resolvedEntity);
@@ -54,7 +54,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling(){
+[[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling()noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.overlapPreferred = false;
@@ -67,7 +67,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
     return scheduling;
 }
 
-[[nodiscard]] static Core::GpuTaskSchedulingHint SkinningDispatchScheduling(){
+[[nodiscard]] static Core::GpuTaskSchedulingHint SkinningDispatchScheduling()noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Small;
     scheduling.overlapPreferred = false;
@@ -186,7 +186,7 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
         if(payload.plans.empty())
             return false;
 
@@ -220,7 +220,7 @@ public:
         return true;
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         if(!token.valid())
             return;
         for(const MeshSkinningGraphDispatchPlan& plan : payload.plans)
@@ -371,7 +371,7 @@ Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS
     return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled, __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled);
 }
 
-bool MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
+bool MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept{
     return m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity) != nullptr;
 }
 

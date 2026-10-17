@@ -215,7 +215,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
         }
 
         const usize baseStateCount = base.m_textureStates.size();
-        const auto mergeState = [&](const TextureState& state){
+        const auto mergeState = [&](const TextureState& state)noexcept{
             const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
             const usize* const resultIndex = resultIndices.find(key);
             if(!resultIndex){
@@ -275,7 +275,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
         Vector<const BufferState*, Alloc::ScratchArena> activeStates(scratchArena);
         activeStates.resize(branchCount + 1u, nullptr);
         usize bufferCount = 0u;
-        const auto addEvents = [&](const BufferState& state, const usize branchIndex){
+        const auto addEvents = [&](const BufferState& state, const usize branchIndex)noexcept{
             if(!state.buffer || !state.range.hasExtent())
                 return false;
 
@@ -385,7 +385,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
         }
 
         const usize baseStateCount = base.m_permanentTextureStates.size();
-        const auto mergeState = [&](const PermanentTextureState& state){
+        const auto mergeState = [&](const PermanentTextureState& state)noexcept{
             const usize* const resultIndex = resultIndices.find(state.texture);
             if(!resultIndex){
                 const usize index = m_permanentTextureStates.size();
@@ -431,7 +431,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
         }
 
         const usize baseStateCount = base.m_permanentBufferStates.size();
-        const auto mergeState = [&](const BufferState& state){
+        const auto mergeState = [&](const BufferState& state)noexcept{
             const usize* const resultIndex = resultIndices.find(state.buffer);
             if(!resultIndex){
                 const usize index = m_permanentBufferStates.size();

@@ -32,7 +32,7 @@ namespace Tests::Smoke{
 class UiNumericEditSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
-    virtual ~UiNumericEditSmokeScene()override;
+    virtual ~UiNumericEditSmokeScene()noexcept override;
 
 
 public:
@@ -42,10 +42,10 @@ public:
 
 private:
     void resetModels();
-    [[nodiscard]] Array<u64, 30u> values()const;
+    [[nodiscard]] Array<u64, 30u> values()const noexcept;
     void observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text);
     void paintMarkers(Impl::UiPaintContext& context)const;
-    void count(const Impl::Ui::NumericEditResult& result);
+    void count(const Impl::Ui::NumericEditResult& result)noexcept;
     [[nodiscard]] Impl::Ui::FloatBounds floatBounds()const noexcept;
 
 

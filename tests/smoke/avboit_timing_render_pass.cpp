@@ -25,11 +25,11 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitTimingRenderPass::AvboitTimingRenderPass(Core::GraphicsRuntime& graphics)
+AvboitTimingRenderPass::AvboitTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept
     : IRenderPass(graphics)
 {}
 
-AvboitTimingRenderPass::~AvboitTimingRenderPass(){
+AvboitTimingRenderPass::~AvboitTimingRenderPass()noexcept{
     stop();
 }
 

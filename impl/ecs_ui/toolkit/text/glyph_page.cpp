@@ -33,7 +33,7 @@ GlyphPage::GlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& bi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels){
+Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels)noexcept{
     if(
         !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
         || binding.index >= s_GlyphAtlasMaxPages || binding.width == 0u || binding.height == 0u

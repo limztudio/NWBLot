@@ -36,7 +36,7 @@ class BindingLayout final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     BindingLayout(const VulkanContext& context);
-    ~BindingLayout();
+    ~BindingLayout()noexcept;
 
 
 public:
@@ -81,7 +81,7 @@ class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    AccelStruct(const VulkanContext& context, ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive);
+    AccelStruct(const VulkanContext& context, ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive)noexcept;
     ~AccelStruct()noexcept;
 
 
@@ -95,7 +95,7 @@ public:
     [[nodiscard]] Buffer* getBackingBuffer()const noexcept{ return m_buffer.get(); }
     // Graph declarations retain this handle when a task must seed or transition the backing storage explicitly.
     [[nodiscard]] const BufferHandle& getBackingBufferHandle()const noexcept{ return m_buffer; }
-    Object getNativeHandle(ObjectType objectType);
+    Object getNativeHandle(ObjectType objectType)noexcept;
 
 
 private:
@@ -130,7 +130,7 @@ class OpacityMicromap final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     OpacityMicromap(const VulkanContext& context)noexcept;
-    ~OpacityMicromap();
+    ~OpacityMicromap()noexcept;
 
 
 public:
@@ -200,41 +200,41 @@ private:
 
 public:
     StateTracker(const VulkanContext& context);
-    ~StateTracker();
+    ~StateTracker()noexcept;
 
 
 public:
     void reset()noexcept;
-    void beginRecordingAttempt();
+    void beginRecordingAttempt()noexcept;
     void commitRecordingAttempt()noexcept;
     void rollbackRecordingAttempt()noexcept;
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
-    [[nodiscard]] bool isPermanentTexture(Texture& texture)const;
-    [[nodiscard]] bool isPermanentBuffer(Buffer& buffer)const;
-    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
-    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
-    [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
-    [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)const;
+    [[nodiscard]] bool isPermanentTexture(Texture& texture)const noexcept;
+    [[nodiscard]] bool isPermanentBuffer(Buffer& buffer)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)const noexcept;
     // Explicit state comes from this command list or an imported packet handoff.
     // A keep-initial-state descriptor fallback deliberately does not count: graph lowering can still declare the first known graph state.
-    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
-    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const;
+    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const noexcept;
 
     void beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer);
     void appendKeepInitialStateBarriers(TrackedCommandBuffer& commandBuffer, Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers, Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers);
 
-    [[nodiscard]] bool isUavBarrierEnabledForTexture(Texture& texture)const;
-    [[nodiscard]] bool isUavBarrierEnabledForBuffer(Buffer& buffer)const;
+    [[nodiscard]] bool isUavBarrierEnabledForTexture(Texture& texture)const noexcept;
+    [[nodiscard]] bool isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept;
     void setEnableUavBarriersForTexture(Texture& texture, bool enableBarriers);
     void setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarriers);
 
 
 private:
-    [[nodiscard]] Expected<ResourceStates::Mask> getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const;
-    [[nodiscard]] ResourceStates::Mask getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const;
+    [[nodiscard]] Expected<ResourceStates::Mask> getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
+    [[nodiscard]] ResourceStates::Mask getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
 
     void beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);

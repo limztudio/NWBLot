@@ -86,7 +86,7 @@ bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& fil
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName() {
+AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()noexcept {
 #if defined(NWB_DEBUG)
     return "dbg";
 #elif defined(NWB_FINAL)
@@ -491,7 +491,7 @@ bool AssetsGraphicsFixture::EncodeTestMeshletRefs(
     NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas,
     const bool skinRequired
 ){
-    return NWB::Impl::EncodeMeshletRefDeltas(meshlets, positionRefs, attributeRefs, outPositionRefDeltas, outAttributeRefDeltas, skinRequired, [](const usize, const TStringView){ return false; }
+    return NWB::Impl::EncodeMeshletRefDeltas(meshlets, positionRefs, attributeRefs, outPositionRefDeltas, outAttributeRefDeltas, skinRequired, [](const usize, const TStringView)noexcept{ return false; }
     );
 }
 
@@ -533,7 +533,7 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     return MaterialBinaryTypedLayoutOffsets{ typedLayoutBegin, cursor };
 }
 
-Expected<u64> AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName){
+Expected<u64> AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName)noexcept{
     for(const NWB::Core::ShaderArchive::Record& record : records){
         const AStringView variantName(record.variantName.data(), record.variantName.size());
         if(record.shaderName == shaderName && record.stage == stageName && variantName == NWB::Core::ShaderArchive::s_DefaultVariant){

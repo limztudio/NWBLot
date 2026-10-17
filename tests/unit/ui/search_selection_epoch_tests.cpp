@@ -28,7 +28,7 @@ namespace SelectionMutation{
 
 class SelectionProbe final{
 public:
-    explicit SelectionProbe(EditModel& query)
+    explicit SelectionProbe(EditModel& query)noexcept
         : m_query(query)
     {}
 
@@ -40,7 +40,7 @@ public:
         m_caret = m_query.caret();
     }
 
-    [[nodiscard]] bool apply(){
+    [[nodiscard]] bool apply()noexcept{
         const SelectionMutation::Enum mutation = m_mutation;
         m_mutation = SelectionMutation::None;
         if(mutation == SelectionMutation::None)
@@ -64,7 +64,7 @@ private:
 
 class SelectionView final : public IListDataSource{
 public:
-    SelectionView(const IListDataSource& source, EditModel& query)
+    SelectionView(const IListDataSource& source, EditModel& query)noexcept
         : m_source(source)
         , m_probe(query)
     {}
@@ -100,7 +100,7 @@ private:
 
 class SelectionSource final : public ISearchableListDataSource{
 public:
-    SelectionSource(SearchSource& source, EditModel& query)
+    SelectionSource(SearchSource& source, EditModel& query)noexcept
         : m_source(source)
         , m_probe(query)
         , m_view(source.filtered(), query)
@@ -108,15 +108,15 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return m_source.instanceGeneration(); }
-    [[nodiscard]] virtual u64 revision()const override{ return m_source.revision(); }
-    [[nodiscard]] virtual u64 rowCount()const override{ return m_source.rowCount(); }
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ return m_source.key(index); }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return m_source.indexOf(key); }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_source.instanceGeneration(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return m_source.revision(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_source.rowCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_source.key(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_source.indexOf(key); }
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return m_source.findEnabled(start, reverse);
     }
-    [[nodiscard]] virtual StringView text(const u64 index)const override{ return m_source.text(index); }
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return m_source.text(index); }
     [[nodiscard]] virtual bool enabled(const u64 index)const override{ return m_source.enabled(index); }
     [[nodiscard]] virtual bool filter(const AStringView query)override{
         return m_probe.apply() && m_source.filter(query);

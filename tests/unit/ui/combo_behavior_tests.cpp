@@ -33,7 +33,7 @@ namespace CallbackMutation{
 
 class ComboSource final : public IListDataSource{
 public:
-    explicit ComboSource(ComboState* state = nullptr)
+    explicit ComboSource(ComboState* state = nullptr)noexcept
         : m_state(state)
     {}
 

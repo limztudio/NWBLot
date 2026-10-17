@@ -87,7 +87,7 @@ public:
 
 private:
     [[nodiscard]] usize findPendingSample(Core::GpuTimingSampleAttribution attribution)const noexcept;
-    void retirePendingSample(usize pendingIndex);
+    void retirePendingSample(usize pendingIndex)noexcept;
 
 
 private:

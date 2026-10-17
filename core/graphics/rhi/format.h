@@ -221,7 +221,7 @@ public:
         const bool hasStencilValue,
         const bool isSignedValue,
         const bool isSrgbValue
-    )
+    )noexcept
         : m_name(nameValue)
         , format(formatValue)
         , bytesPerBlock(bytesPerBlockValue)

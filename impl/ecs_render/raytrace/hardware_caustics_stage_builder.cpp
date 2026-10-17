@@ -220,7 +220,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     optionalResourcesImported = optionalResourcesImported && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
         m_graph, inputs.rayTracingResources->csgTraceContextBuffer,
         inputs.rayTracingResources->csgTraceBoundsBuffers, inputs.rayTracingResources->csgTraceBoundsBufferCount,
-        [&](const Core::GpuGraphResourceId resource){ hardwarePhotonResourceUses.push_back(ReadUse(resource)); }
+        [&](const Core::GpuGraphResourceId resource)noexcept{ hardwarePhotonResourceUses.push_back(ReadUse(resource)); }
     );
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a hardware-caustics dynamic resource"));

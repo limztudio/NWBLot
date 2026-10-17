@@ -99,12 +99,12 @@ public:
 public:
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
-    void invalidateResources();
+    void invalidateResources()noexcept;
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings)noexcept;
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
-    [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput);
-    void confirmSceneShadingBufferUploads(const ECSRenderDetail::SceneLightGpuData* lightData, u32 lightCount, bool lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, bool sceneShadingUploadRequired);
+    [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept;
+    void confirmSceneShadingBufferUploads(const ECSRenderDetail::SceneLightGpuData* lightData, u32 lightCount, bool lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, bool sceneShadingUploadRequired)noexcept;
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline();
     [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, bool useLaggedLightingHistory, Core::GpuTimingSubmissionTicket& timingTicket);

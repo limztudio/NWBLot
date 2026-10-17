@@ -35,7 +35,7 @@ UiSliderSmokeScene::UiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::In
     m_input.addHandlerToBack(*this);
 }
 
-UiSliderSmokeScene::~UiSliderSmokeScene(){
+UiSliderSmokeScene::~UiSliderSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -53,7 +53,7 @@ bool UiSliderSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiSliderSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiSliderSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F4 || key > Core::Key::F9)

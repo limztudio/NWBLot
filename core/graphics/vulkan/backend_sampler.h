@@ -26,7 +26,7 @@ class Sampler final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     Sampler(const VulkanContext& context)noexcept;
-    ~Sampler();
+    ~Sampler()noexcept;
 
 
 public:

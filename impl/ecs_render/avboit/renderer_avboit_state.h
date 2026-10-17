@@ -31,11 +31,11 @@ class RendererAvboitState final : NoCopy{
 
 
 public:
-    RendererAvboitState() = default;
+    RendererAvboitState()noexcept = default;
 
 
 public:
-    void invalidateResources();
+    void invalidateResources()noexcept;
 
 
 private:

@@ -130,7 +130,7 @@ public:
         if(!initialize())
             return false;
         const auto name = StringFormat(m_arena, "{}_targets_{}_sources_{}", s_Names[m_kind], m_targets.size(), m_contactCount);
-        return Measure(name, m_setupChecksum, [&](){ return operation(); }, [&](){ return checksum(); });
+        return Measure(name, m_setupChecksum, [&](){ return operation(); }, [&]()noexcept{ return checksum(); });
     }
 
 private:

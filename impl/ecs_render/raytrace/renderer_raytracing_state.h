@@ -444,7 +444,7 @@ public:
 
 
 private:
-    void invalidateResources();
+    void invalidateResources()noexcept;
 
 
 private:

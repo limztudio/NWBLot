@@ -32,7 +32,7 @@ private:
 
 public:
     explicit CommandBufferResourceReferences(Alloc::GlobalArena& arena)noexcept;
-    ~CommandBufferResourceReferences() = default;
+    ~CommandBufferResourceReferences()noexcept = default;
 
 
 public:

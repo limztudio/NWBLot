@@ -527,7 +527,7 @@ static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix()noexcept{
 }
 
 #if defined(NWB_FINAL)
-static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
+static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint)noexcept{
     NWB::Impl::SkinInfluence4 skin{};
     skin.joint[0] = joint;
     skin.weight.x = 1.0f;
@@ -578,7 +578,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Al
         instance.meshletPositionRefDeltas,
         instance.meshletAttributeRefDeltas,
         true,
-        [](const usize, const TStringView){ return false; }
+        [](const usize, const TStringView)noexcept{ return false; }
     );
     NWB_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());

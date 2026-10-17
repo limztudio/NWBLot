@@ -114,7 +114,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
         m_preparedMeshSwBvhBuildPlanFrozen = true;
         return true;
     }
-    const auto sharedResourcesReady = [&]{
+    const auto sharedResourcesReady = [&]()noexcept{
         return
             state.m_bvhSortKeysBuffer
             && state.m_bvhSortPayloadBuffer
@@ -199,7 +199,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
     return true;
 }
 
-bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const PreparedMeshSwBvhBuild& build){
+bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const PreparedMeshSwBvhBuild& build)noexcept{
     auto meshResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
     if(!meshResult)
         return false;

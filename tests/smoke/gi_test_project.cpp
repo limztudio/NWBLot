@@ -201,7 +201,7 @@ public:
         , m_world(CreateWorldOrDie(context))
         , m_csgGiScene(context, *m_world)
     {}
-    virtual ~GiTestSmokeProject()override{
+    virtual ~GiTestSmokeProject()noexcept override{
         destroyWorld();
     }
 
@@ -457,12 +457,12 @@ private:
         ComplexSceneBox placedBodies[s_ComplexRandomBodyCount] = {};
         u32 placedBodyCount = 0u;
         u32 randomState = s_ComplexRandomBodySeed;
-        const auto nextRandom01 = [&randomState]() -> f32{
+        const auto nextRandom01 = [&randomState]()noexcept -> f32{
             randomState = randomState * 1664525u + 1013904223u;
             return static_cast<f32>(randomState >> 8u) * (1.0f / 16777216.0f);
         };
-        const auto absolute = [](f32 value) -> f32{ return value < 0.0f ? -value : value; };
-        const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b) -> bool{
+        const auto absolute = [](f32 value)noexcept -> f32{ return value < 0.0f ? -value : value; };
+        const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b)noexcept -> bool{
             const SIMDVectorSingle verticalCenters = VectorSet(a.position.y, b.position.y, 0.0f, 0.0f);
             const SIMDVectorSingle verticalHalfExtents = VectorScale(VectorSet(a.scale.y, b.scale.y, 0.0f, 0.0f), 0.5f);
             const SIMDVectorSingle verticalUpper = VectorAdd(verticalCenters, verticalHalfExtents);

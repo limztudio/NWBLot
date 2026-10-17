@@ -23,7 +23,7 @@ Framebuffer::Framebuffer(const VulkanContext& context)noexcept
     , m_resources(context.objectArena)
     , m_context(context)
 {}
-Framebuffer::~Framebuffer(){
+Framebuffer::~Framebuffer()noexcept{
     if(m_framebuffer != VK_NULL_HANDLE){
         m_context.deviceDispatch.vkDestroyFramebuffer(m_context.device, m_framebuffer, m_context.allocationCallbacks);
         m_framebuffer = VK_NULL_HANDLE;

@@ -269,7 +269,7 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::createMaterialSurfaceInfo
     return &it.value();
 }
 
-Expected<MaterialSurfaceInfo*> RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset){
+Expected<MaterialSurfaceInfo*> RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset)noexcept{
     const Name materialPath = materialAsset.name();
     if(!materialPath)
         return MakeUnexpected(Failure{});

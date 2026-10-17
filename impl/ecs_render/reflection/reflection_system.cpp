@@ -270,7 +270,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings) && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled);
 }
 
-Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::createCsgDispatchState(const ReflectionFrameSnapshot& resources)const{
+Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::createCsgDispatchState(const ReflectionFrameSnapshot& resources)const noexcept{
     if(!resources.hasHardwareWork() || !resources.scene.csgTraceContextBuffer)
         return ReflectionCsgDispatchHandle{};
     auto* const control = NewArenaObject<ReflectionCsgDispatchControl>(m_arena, resources, m_graphics.gpuTiming());
@@ -294,7 +294,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     const ReflectionSettings& settings,
     const u32 frameIndex,
     const ReflectionSceneContentStamp& stamp
-)const{
+)const noexcept{
     if(
         !m_resources.valid() || !view.bindingValid() || !ValidateReflectionSettings(settings)
         || targets.width != m_resources.parameters.width || targets.height != m_resources.parameters.height

@@ -20,7 +20,7 @@ bool ValidateCausticQualitySettings(const CausticQualitySettings& settings)noexc
     return settings.photonGridDivisor == 1u || settings.photonGridDivisor == 2u || settings.photonGridDivisor == 4u;
 }
 
-CausticPhotonBudget MakeCausticPhotonBudget(const CausticQualitySettings& settings, const u32 baseGridSide, const u32 temporalPhaseCount){
+CausticPhotonBudget MakeCausticPhotonBudget(const CausticQualitySettings& settings, const u32 baseGridSide, const u32 temporalPhaseCount)noexcept{
     NWB_ASSERT(ValidateCausticQualitySettings(settings));
     NWB_ASSERT(baseGridSide == 128u || baseGridSide == 512u);
     NWB_ASSERT(temporalPhaseCount == 1u || temporalPhaseCount == 2u);

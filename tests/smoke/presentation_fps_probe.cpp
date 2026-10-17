@@ -22,13 +22,13 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-PresentationFpsProbe::PresentationFpsProbe(const f64 warmupSeconds, const f64 measurementSeconds)
+PresentationFpsProbe::PresentationFpsProbe(const f64 warmupSeconds, const f64 measurementSeconds)noexcept
     : m_warmupSeconds(warmupSeconds)
     , m_measurementSeconds(measurementSeconds)
     , m_invalid(!IsFinite(warmupSeconds) || warmupSeconds < 0.0 || !IsFinite(measurementSeconds) || measurementSeconds < 0.0)
 {}
 
-PresentationFpsStatus::Enum PresentationFpsProbe::observe(const u64 successfulPresentations, const Timer now){
+PresentationFpsStatus::Enum PresentationFpsProbe::observe(const u64 successfulPresentations, const Timer now)noexcept{
     if(m_invalid)
         return PresentationFpsStatus::Invalid;
     if(m_complete)

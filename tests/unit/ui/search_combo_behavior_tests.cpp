@@ -32,7 +32,7 @@ namespace Mutation{
 
 class FilteredView final : public IListDataSource{
 public:
-    explicit FilteredView(SearchComboState& state)
+    explicit FilteredView(SearchComboState& state)noexcept
         : m_state(state)
     {}
 
@@ -86,7 +86,7 @@ private:
 
 class SearchSource final : public ISearchableListDataSource{
 public:
-    SearchSource(Core::Alloc::GlobalArena& arena, SearchComboState& state)
+    SearchSource(Core::Alloc::GlobalArena& arena, SearchComboState& state)noexcept
         : view(state)
         , queryBytes(arena)
         , m_state(state)

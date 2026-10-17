@@ -24,7 +24,7 @@ class Framebuffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     Framebuffer(const VulkanContext& context)noexcept;
-    ~Framebuffer();
+    ~Framebuffer()noexcept;
 
 
 public:

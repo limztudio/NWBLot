@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, const bool clearTargets, const bool hasTransparentRenderers)const{
+RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, const bool clearTargets, const bool hasTransparentRenderers)const noexcept{
     const RendererAvboitTaskGraphStageState& taskGraphStage = m_taskGraphStage;
     const auto optionalTaskPrecedesInSharedPacket = [&compiledGraph](const Core::GpuTaskId optionalTask, const Core::GpuTaskId consumerTask)noexcept{
         return !optionalTask.valid() || !compiledGraph.tasksSharePacket(optionalTask, consumerTask) || compiledGraph.taskPrecedesInSamePacket(optionalTask, consumerTask);

@@ -248,7 +248,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     return Graphics::GpuPhysicalQueueInfo{ .familyIndex = 0u, .queueIndex = 0u, .id = Graphics::GpuPhysicalQueueId{ .index = index, .deviceGeneration = 1u }, .queueClass = Graphics::CommandQueue::Graphics, .capabilities = capabilities, .dedicated = false, };
 }
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index){
+[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index)noexcept{
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 1u,
         .queueIndex = 0u,
@@ -259,7 +259,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     };
 }
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index){
+[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index)noexcept{
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 2u,
         .queueIndex = 0u,

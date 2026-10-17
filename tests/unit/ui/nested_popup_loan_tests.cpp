@@ -25,7 +25,7 @@ using namespace NWB::UiSearchComboTests;
 
 class NestedMutationSource final : public ComboSource{
 public:
-    explicit NestedMutationSource(const u64 instance){
+    explicit NestedMutationSource(const u64 instance)noexcept{
         generation = instance;
         count = 5u;
     }
@@ -34,7 +34,7 @@ public:
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ ++metadataCalls; return generation; }
 
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         ++metadataCalls;
         if(selectListOnRevision){
             ListState* state = selectListOnRevision;
@@ -88,7 +88,7 @@ public:
         return value;
     }
 
-    void resetAllCounters()const{ resetCounters(); metadataCalls = 0u; }
+    void resetAllCounters()const noexcept{ resetCounters(); metadataCalls = 0u; }
 
 
 public:
@@ -106,22 +106,22 @@ public:
 
 class NestedSearchSource final : public ISearchableListDataSource{
 public:
-    explicit NestedSearchSource(Core::Alloc::GlobalArena& arena)
+    explicit NestedSearchSource(Core::Alloc::GlobalArena& arena)noexcept
         : m_query(arena)
     {}
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return full.instanceGeneration(); }
-    [[nodiscard]] virtual u64 revision()const override{ return full.revision(); }
-    [[nodiscard]] virtual u64 rowCount()const override{ return full.rowCount(); }
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ return full.key(index); }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return full.indexOf(key); }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return full.instanceGeneration(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return full.revision(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return full.rowCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return full.key(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return full.findEnabled(start, reverse);
     }
     [[nodiscard]] virtual StringView text(const u64 index)const override{ return full.text(index); }
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return full.enabled(index); }
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return full.enabled(index); }
 
     [[nodiscard]] virtual bool filter(const AStringView query)override{
         ++filterCalls;
@@ -224,7 +224,7 @@ protected:
         return m_builder.endPopup();
     }
 
-    void resetChildCounters(){
+    void resetChildCounters()noexcept{
         m_childSource.resetAllCounters();
         m_comboSource.resetAllCounters();
         m_menuSource.resetAllCounters();

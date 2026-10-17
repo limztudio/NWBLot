@@ -100,7 +100,7 @@ struct EqualityEnvironmentGuard{
 
 
 public:
-    ~EqualityEnvironmentGuard(){
+    ~EqualityEnvironmentGuard()noexcept{
         if(original){
             EXPECT_TRUE(SetFloatingPointEnvironment(*original));
             _mm_setcsr(originalMxcsr);
@@ -115,7 +115,7 @@ struct EqualityObservation{
 };
 
 template<typename Value, typename Compare>
-Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare){
+Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(compare(lhs, rhs))) && IsNothrowDestructible_V<Compare>){
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure{});
     _mm_setcsr(_mm_getcsr() & ~0x3Fu);

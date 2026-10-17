@@ -27,7 +27,7 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     const NwbRtInstanceMaterialGpu* const materials, const InstanceGpuData* const instances, const usize instanceCount,
     const u8* const materialBytes, const usize materialByteCount,
     const Core::TextureHandle* const textures, const usize textureCount
-){
+)noexcept{
     NWB_ASSERT(instanceCount == 0u || (materials && instances));
     NWB_ASSERT(materialByteCount == 0u || materialBytes);
     NWB_ASSERT(textureCount == 0u || textures);

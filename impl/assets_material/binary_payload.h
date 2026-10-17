@@ -85,7 +85,26 @@ inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferen
 
 
 template<typename BlockVector>
-[[nodiscard]] inline Expected<usize> ComputeMaterialTypedBlockByteSize(const BlockVector& blocks){
+[[nodiscard]] inline Expected<usize> ComputeMaterialTypedBlockByteSize(const BlockVector& blocks)noexcept([]()constexpr noexcept{
+    using Range = BlockVector;
+    if constexpr(IsArray_V<Range>)
+        return noexcept(DeclVal<void(*)(const MaterialTypedLayoutBlock&)noexcept>()(DeclVal<const RemoveExtent_T<Range>&>()));
+    else if constexpr(requires(const Range& values){ values.begin(); values.end(); }){
+        using Iterator = RemoveCVRef_T<decltype(DeclVal<const Range&>().begin())>;
+        using Sentinel = RemoveCVRef_T<decltype(DeclVal<const Range&>().end())>;
+        return
+            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<const Range&>().begin()))
+            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<const Range&>().end()))
+            && IsNothrowDestructible_V<Iterator>
+            && IsNothrowDestructible_V<Sentinel>
+            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+            && noexcept(++DeclVal<Iterator&>())
+            && noexcept(DeclVal<void(*)(const MaterialTypedLayoutBlock&)noexcept>()(*DeclVal<Iterator&>()))
+        ;
+    }
+    else
+        return false;
+}()){
     usize byteSize = 0u;
     for(const MaterialTypedLayoutBlock& block : blocks){
         if(static_cast<usize>(block.byteSize) > Limit<usize>::s_Max - byteSize)
@@ -97,7 +116,52 @@ template<typename BlockVector>
 }
 
 template<typename BlockVector, typename FieldVector, typename ResourceReferenceVector>
-[[nodiscard]] inline bool ValidateMaterialResourceReferences(const BlockVector& blocks, const FieldVector& fields, const ResourceReferenceVector& resourceReferences){
+[[nodiscard]] inline bool ValidateMaterialResourceReferences(const BlockVector& blocks, const FieldVector& fields, const ResourceReferenceVector& resourceReferences)noexcept(
+    []()constexpr noexcept{
+        using Range = BlockVector;
+        if constexpr(IsArray_V<Range>)
+            return noexcept(DeclVal<void(*)(const MaterialTypedLayoutBlock&)noexcept>()(DeclVal<const RemoveExtent_T<Range>&>()));
+        else if constexpr(requires(const Range& values){ values.begin(); values.end(); }){
+            using Iterator = RemoveCVRef_T<decltype(DeclVal<const Range&>().begin())>;
+            using Sentinel = RemoveCVRef_T<decltype(DeclVal<const Range&>().end())>;
+            return
+                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<const Range&>().begin()))
+                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<const Range&>().end()))
+                && IsNothrowDestructible_V<Iterator>
+                && IsNothrowDestructible_V<Sentinel>
+                && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+                && noexcept(++DeclVal<Iterator&>())
+                && noexcept(DeclVal<void(*)(const MaterialTypedLayoutBlock&)noexcept>()(*DeclVal<Iterator&>()))
+            ;
+        }
+        else
+            return false;
+    }()
+    && []()constexpr noexcept{
+        using Range = ResourceReferenceVector;
+        if constexpr(IsArray_V<Range>)
+            return noexcept(DeclVal<void(*)(const MaterialResourceReference&)noexcept>()(DeclVal<const RemoveExtent_T<Range>&>()));
+        else if constexpr(requires(const Range& values){ values.begin(); values.end(); }){
+            using Iterator = RemoveCVRef_T<decltype(DeclVal<const Range&>().begin())>;
+            using Sentinel = RemoveCVRef_T<decltype(DeclVal<const Range&>().end())>;
+            return
+                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<const Range&>().begin()))
+                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<const Range&>().end()))
+                && IsNothrowDestructible_V<Iterator>
+                && IsNothrowDestructible_V<Sentinel>
+                && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+                && noexcept(++DeclVal<Iterator&>())
+                && noexcept(DeclVal<void(*)(const MaterialResourceReference&)noexcept>()(*DeclVal<Iterator&>()))
+            ;
+        }
+        else
+            return false;
+    }()
+    && noexcept(static_cast<bool>(DeclVal<const MaterialTypedLayoutBlock&>().fieldBegin > fields.size() || DeclVal<const MaterialTypedLayoutBlock&>().fieldCount > fields.size() - DeclVal<const MaterialTypedLayoutBlock&>().fieldBegin))
+    && noexcept(DeclVal<void(*)(const MaterialTypedLayoutField&)noexcept>()(fields[DeclVal<usize>()]))
+    && noexcept(DeclVal<usize&>() == resourceReferences.size())
+    && IsNothrowConvertible_V<decltype(DeclVal<usize&>() == resourceReferences.size()), bool>
+){
     usize resourceFieldCount = 0u;
     u32 constantByteBegin = 0u;
     for(const MaterialTypedLayoutBlock& block : blocks){

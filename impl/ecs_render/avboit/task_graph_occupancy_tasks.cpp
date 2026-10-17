@@ -151,7 +151,7 @@ void AvboitDepthWarpGraphTask::Accepted(Payload& payload, const Core::QueueSubmi
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
 }
 
-void AvboitDepthWarpGraphTask::Discarded(Payload& payload){
+void AvboitDepthWarpGraphTask::Discarded(Payload& payload)noexcept{
     if(payload.timingFeedback)
         payload.timingFeedback->discardRecording(payload.timingAttribution);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

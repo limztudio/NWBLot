@@ -715,7 +715,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const auto& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
     shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? 5u : 4u)));
-    const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer){
+    const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer)noexcept{
         if(buffer)
             shadowPrepareLiveStateBuffers.push_back(buffer);
     };

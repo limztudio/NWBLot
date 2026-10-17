@@ -66,7 +66,7 @@ UiLayerSystem::UiLayerSystem(
         m_graphics.setTaskGraphOutputLayerContributor(&m_renderer);
 }
 
-UiLayerSystem::~UiLayerSystem(){
+UiLayerSystem::~UiLayerSystem()noexcept{
     m_input.removeHandler(*this);
     m_graphics.clearTaskGraphOutputLayerContributor(m_renderer);
 }

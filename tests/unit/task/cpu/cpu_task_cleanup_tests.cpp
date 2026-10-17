@@ -170,7 +170,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool WaitUntil(const Atomic<bool>& condition){
+[[nodiscard]] bool WaitUntil(const Atomic<bool>& condition)noexcept{
     const Timer begin = TimerNow();
     while(!condition.load(MemoryOrder::acquire)){
         if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)
@@ -336,7 +336,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     EXPECT_TRUE(cpuAdmission20);
     if(cpuAdmission20)
         EXPECT_TRUE(cpuAdmission20->valid());
-    JoiningThread releaseWorker([&](){
+    JoiningThread releaseWorker([&]()noexcept{
         if(!WaitUntil(drainStarted))
             expired.store(true, MemoryOrder::release);
         SleepMS(20u);
@@ -448,7 +448,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
 
 TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCompletionPublishes){
     using namespace __hidden_cpu_task_cleanup_tests;
-    JoiningThread watchdog([](const StopToken& stop){
+    JoiningThread watchdog([](const StopToken& stop)noexcept{
         const Timer begin = TimerNow();
         while(!stop.stop_requested()){
             if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)

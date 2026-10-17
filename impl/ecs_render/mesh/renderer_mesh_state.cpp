@@ -19,7 +19,7 @@ RendererMeshState::RendererMeshState(Core::Alloc::GlobalArena& arena)
 {}
 
 
-void RendererMeshState::invalidateResources(){
+void RendererMeshState::invalidateResources()noexcept{
     m_meshes.clear();
     m_meshViewBuffer.reset();
     m_frameBindings = {};

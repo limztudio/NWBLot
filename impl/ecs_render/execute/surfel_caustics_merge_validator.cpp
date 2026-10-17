@@ -24,7 +24,13 @@ SurfelCausticsMergeValidator::SurfelCausticsMergeValidator(NotNull<RendererFrame
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SurfelCausticsMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, bool captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const{
+void SurfelCausticsMergeValidator::validate(
+    const Core::GpuCompiledGraph::ReadView& compiledPlan,
+    Core::GpuTaskId causticsTask,
+    Core::GpuTaskId terminalPresentationTask,
+    bool captureLaggedLightingHistory,
+    SurfelCausticsMergeValidationResult& outResult
+)const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;
     outResult = SurfelCausticsMergeValidationResult{};
     outResult.hardwareCausticsQueue = compiledPlan.queueInfoForTask(pipeline.m_deferredHardwareCausticsTask);

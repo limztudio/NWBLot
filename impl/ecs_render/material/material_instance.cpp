@@ -194,7 +194,7 @@ Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterial
     return &cacheEntry.mutableTypedBytes;
 }
 
-Expected<const MaterialTypedByteVector*> RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const{
+Expected<const MaterialTypedByteVector*> RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept{
     if(!materialInstance || materialInstance->overrides.empty()){
         return &materialInfo.mutableDefaultTypedBytes;
     }
@@ -234,7 +234,7 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
     return ShadowOccluderMaterialContext{ ECSRenderDetail::BuildInstanceGpuData(entity, transform, typedRanges), constantRange->byteOffset };
 }
 
-void RendererMaterialSystem::pruneMaterialInstanceMutableCache(){
+void RendererMaterialSystem::pruneMaterialInstanceMutableCache()noexcept{
     const u64 componentMutationVersion = m_world.componentMutationVersion<MaterialInstanceComponent>();
     if(componentMutationVersion == m_materialState.m_instanceMutableCacheComponentMutationVersion)
         return;

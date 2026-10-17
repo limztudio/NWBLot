@@ -34,7 +34,7 @@ class RendererCsgState final : NoCopy{
 
 
 public:
-    RendererCsgState() = default;
+    RendererCsgState()noexcept = default;
 
 
 private:

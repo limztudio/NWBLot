@@ -421,7 +421,7 @@ public:
         : m_context(context)
         , m_world(CreateWorld(context))
     {}
-    virtual ~CsgShadowSmokeProject()override{ destroyWorld(); }
+    virtual ~CsgShadowSmokeProject()noexcept override{ destroyWorld(); }
 
 
 public:

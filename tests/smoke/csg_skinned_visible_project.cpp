@@ -99,7 +99,7 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static TStringView CsgSkinnedVisibleFpsLabel(){
+[[nodiscard]] static TStringView CsgSkinnedVisibleFpsLabel()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
     return NWB_TEXT("CsgSkinnedTransparentSphereVisibleSmokeProject");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
@@ -115,7 +115,7 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static f32 ReceiverAlpha(){
+[[nodiscard]] static f32 ReceiverAlpha()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
     return s_TransparentReceiverAlpha;
 #else
@@ -257,7 +257,7 @@ private:
         m_cutter = entity.id();
     }
 
-    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle receiverRotation){
+    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle receiverRotation)noexcept{
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(!transform)
             return;
@@ -265,12 +265,12 @@ private:
         StoreFloat(receiverRotation, transform->rotation);
     }
 
-    void updateReceiverTransforms(const SIMDVectorSingle receiverRotation){
+    void updateReceiverTransforms(const SIMDVectorSingle receiverRotation)noexcept{
         updateReceiverRotation(m_plainReceiver, receiverRotation);
         updateReceiverRotation(m_receiver, receiverRotation);
     }
 
-    void updateCutterTransform(const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalCenter){
+    void updateCutterTransform(const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalCenter)noexcept{
         auto* cutter = m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_cutter);
         if(!cutter)
             return;
@@ -284,7 +284,7 @@ public:
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
     {}
-    virtual ~CsgSkinnedVisibleSmokeProject()override{
+    virtual ~CsgSkinnedVisibleSmokeProject()noexcept override{
         destroyWorld();
     }
 

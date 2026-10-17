@@ -30,7 +30,7 @@ EventQuery::EventQuery(const VulkanContext& context)
     }
 }
 
-EventQuery::~EventQuery(){
+EventQuery::~EventQuery()noexcept{
     if(m_fence != VK_NULL_HANDLE){
         m_context.deviceDispatch.vkDestroyFence(m_context.device, m_fence, m_context.allocationCallbacks);
         m_fence = VK_NULL_HANDLE;

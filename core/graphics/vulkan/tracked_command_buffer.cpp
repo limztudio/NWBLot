@@ -31,7 +31,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& co
     , m_queue(queue)
 {}
 
-TrackedCommandBuffer::~TrackedCommandBuffer(){
+TrackedCommandBuffer::~TrackedCommandBuffer()noexcept{
     abandonPendingAccelStructBuildCommits();
 
     if(m_cmdBuf && m_cmdPool){
@@ -405,7 +405,7 @@ void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{
     }
 }
 
-void TrackedCommandBuffer::releasePendingAccelStructBuildCommits(){
+void TrackedCommandBuffer::releasePendingAccelStructBuildCommits()noexcept{
     for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
         AccelStructBuildSignatureRole* const preparedRole = commit.preparedRole;
         AccelStructBuildSignatureRole* const displacedRole = commit.displacedRole;

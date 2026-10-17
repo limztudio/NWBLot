@@ -55,7 +55,7 @@ bool ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph&
     return true;
 }
 
-bool ShadowPrepareGeometryResources::gatherRemainingTraceResources(){
+bool ShadowPrepareGeometryResources::gatherRemainingTraceResources()noexcept{
     NWB_ASSERT(m_inputsGathered);
     const bool hasBlasInputs = !m_blasBuildInputs.empty();
     for(usize resourceIndex = 0u; resourceIndex < m_inputs.traceResourceCount; ++resourceIndex){
@@ -114,7 +114,7 @@ void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer
     }
 }
 
-ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findRequest(Core::Buffer* const buffer){
+ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findRequest(Core::Buffer* const buffer)noexcept{
     if(m_requests){
         const auto found = m_requests->find(buffer);
         return found == m_requests->end() ? nullptr : &found.value();
@@ -173,7 +173,7 @@ bool ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& g
     return true;
 }
 
-ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findResolvedRequest(const Core::GpuGraphResourceId resource){
+ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findResolvedRequest(const Core::GpuGraphResourceId resource)noexcept{
     if(!resource.valid() || resource.generation != m_graphGeneration)
         return nullptr;
     if(m_resources){
@@ -188,7 +188,7 @@ ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::f
     return nullptr;
 }
 
-bool ShadowPrepareGeometryResources::appendBuildInput(const Core::BufferHandle& buffer){
+bool ShadowPrepareGeometryResources::appendBuildInput(const Core::BufferHandle& buffer)noexcept{
     BufferRequest* const request = findRequest(buffer.get());
     if(!request || !request->resource.valid() || !request->listedForTrace)
         return false;

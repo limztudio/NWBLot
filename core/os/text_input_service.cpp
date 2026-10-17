@@ -25,7 +25,7 @@ namespace __hidden_text_input_service{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static u64 AllocateServiceIdentity(){
+static u64 AllocateServiceIdentity()noexcept{
     static Atomic<u64> s_NextIdentity{ 1u };
     const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
     if(identity == 0u)
@@ -33,7 +33,7 @@ static u64 AllocateServiceIdentity(){
     return identity;
 }
 
-static TextInputAdmission::Enum ValidateSurrounding(const AStringView text, const usize anchorByte, const usize caretByte){
+static TextInputAdmission::Enum ValidateSurrounding(const AStringView text, const usize anchorByte, const usize caretByte)noexcept{
     const TextInputAdmission::Enum status = ValidateTextInputUtf8(text, s_TextInputMaxSurroundingBytes);
     if(status != TextInputAdmission::Accepted)
         return status;
@@ -62,7 +62,7 @@ QueuedTextInputService::QueuedTextInputService(Alloc::GlobalArena& arena)
     m_events.reserve(s_TextInputMaxEvents);
 }
 
-QueuedTextInputService::~QueuedTextInputService(){
+QueuedTextInputService::~QueuedTextInputService()noexcept{
     NWB_ASSERT(isOwnerThread());
 }
 

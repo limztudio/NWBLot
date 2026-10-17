@@ -27,12 +27,12 @@ namespace CsgIntervalDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Core::Rect ResolveCsgFrameWorkRect(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData){
+[[nodiscard]] static Core::Rect ResolveCsgFrameWorkRect(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData)noexcept{
     return csgFrameData.workRegion.resolveRect(targets.width, targets.height);
 }
 
 
-[[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const u32 meshViewHeapSlot){
+[[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const u32 meshViewHeapSlot)noexcept{
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
     const SIMDVectorSingle workRectLanes = VectorMax(VectorSet(static_cast<f32>(workRect.minX), static_cast<f32>(workRect.minY), static_cast<f32>(workRect.maxX), static_cast<f32>(workRect.maxY)), VectorZero());
@@ -46,7 +46,7 @@ namespace CsgIntervalDetail{
 }
 
 
-[[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const u32 meshViewHeapSlot, const u32 csgContextHeapSlot){
+[[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const u32 meshViewHeapSlot, const u32 csgContextHeapSlot)noexcept{
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
     CsgIntervalDispatchPushConstants pushConstants;
@@ -213,7 +213,7 @@ Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSam
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
-)const{
+)const noexcept{
     CsgIntervalSampleStateGpuData state{};
     if(!csgFrameData.hasWork())
         return state;

@@ -299,7 +299,7 @@ void GpuTimingRecorder::confirmFrameReset(const QueueSubmissionToken& token){
         it.value()->confirmFrameReset(token);
 }
 
-void GpuTimingRecorder::discardFrameReset(){
+void GpuTimingRecorder::discardFrameReset()noexcept{
     ScopedLock lock(m_mutex);
     discardFrameResetLocked();
 }
@@ -360,7 +360,7 @@ bool GpuTimingRecorder::recordDeferredScopeEnd(CommandList& commandList, const G
     return accumulator && accumulator->recordQueryEnd(commandList, scope);
 }
 
-bool GpuTimingRecorder::validateScopeSubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token){
+bool GpuTimingRecorder::validateScopeSubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)noexcept{
     if(!scope.valid())
         return true;
 
@@ -384,7 +384,7 @@ bool GpuTimingRecorder::confirmScope(const GpuTimingScope& scope, const QueueSub
     return confirmed;
 }
 
-bool GpuTimingRecorder::prepareDeferredScopeForRecovery(const GpuTimingScope& scope){
+bool GpuTimingRecorder::prepareDeferredScopeForRecovery(const GpuTimingScope& scope)noexcept{
     if(!scope.valid())
         return true;
 
@@ -519,7 +519,7 @@ bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissio
     return completion.value >= token.value;
 }
 
-void GpuTimingRecorder::discardFrameResetLocked(){
+void GpuTimingRecorder::discardFrameResetLocked()noexcept{
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
         it.value()->discardFrameReset();
 }

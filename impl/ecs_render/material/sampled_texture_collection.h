@@ -74,7 +74,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool containsInline(Core::Texture* identity)const{
+    [[nodiscard]] bool containsInline(Core::Texture* identity)const noexcept{
         for(usize index = 0u; index < m_inlineCount; ++index){
             if(m_inlineTextures[index] == identity)
                 return true;

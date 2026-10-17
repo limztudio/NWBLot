@@ -20,11 +20,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Mesh* MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const{
+const Mesh* MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const noexcept{
     return Core::Assets::CastAsset<Mesh>(meshAsset.get());
 }
 
-const Skin* MeshSkinningRuntimeCache::MeshSkinningSource::skin()const{
+const Skin* MeshSkinningRuntimeCache::MeshSkinningSource::skin()const noexcept{
     return Core::Assets::CastAsset<Skin>(skinAsset.get());
 }
 
@@ -78,17 +78,17 @@ void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world, Core::A
     }
 }
 
-void MeshSkinningRuntimeCache::clear(){
+void MeshSkinningRuntimeCache::clear()noexcept{
     m_handleToEntity.clear();
     m_instances.clear();
     m_sources.clear();
 }
 
-MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle){
+MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)noexcept{
     return findInstanceByEntity(entityForHandle(handle));
 }
 
-const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const{
+const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const noexcept{
     return findInstanceByEntity(entityForHandle(handle));
 }
 
@@ -105,7 +105,7 @@ RuntimeMeshHandle MeshSkinningRuntimeCache::allocateHandle(){
     return RuntimeMeshHandle{};
 }
 
-void MeshSkinningRuntimeCache::releaseRuntimeMesh(const Core::ECS::EntityID entity){
+void MeshSkinningRuntimeCache::releaseRuntimeMesh(const Core::ECS::EntityID entity)noexcept{
     const auto foundInstance = m_instances.find(entity);
     if(foundInstance == m_instances.end())
         return;
@@ -116,7 +116,7 @@ void MeshSkinningRuntimeCache::releaseRuntimeMesh(const Core::ECS::EntityID enti
     m_instances.erase(foundInstance);
 }
 
-void MeshSkinningRuntimeCache::releaseSource(const Name& sourceName){
+void MeshSkinningRuntimeCache::releaseSource(const Name& sourceName)noexcept{
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource == m_sources.end())
         return;
@@ -128,13 +128,13 @@ void MeshSkinningRuntimeCache::releaseSource(const Name& sourceName){
         m_sources.erase(foundSource);
 }
 
-void MeshSkinningRuntimeCache::eraseUnusedSource(const Name& sourceName){
+void MeshSkinningRuntimeCache::eraseUnusedSource(const Name& sourceName)noexcept{
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end() && foundSource.value().referenceCount == 0u)
         m_sources.erase(foundSource);
 }
 
-Core::ECS::EntityID MeshSkinningRuntimeCache::entityForHandle(const RuntimeMeshHandle handle)const{
+Core::ECS::EntityID MeshSkinningRuntimeCache::entityForHandle(const RuntimeMeshHandle handle)const noexcept{
     const auto foundEntity = m_handleToEntity.find(handle.value);
     if(foundEntity == m_handleToEntity.end())
         return Core::ECS::s_InvalidEntityId;

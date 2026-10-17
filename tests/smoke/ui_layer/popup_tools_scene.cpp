@@ -54,7 +54,7 @@ UiPopupToolsSmokeScene::UiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, 
     m_input.addHandlerToBack(*this);
 }
 
-UiPopupToolsSmokeScene::~UiPopupToolsSmokeScene(){
+UiPopupToolsSmokeScene::~UiPopupToolsSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
@@ -109,7 +109,7 @@ bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiPopupToolsSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool UiPopupToolsSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F9)
@@ -133,7 +133,7 @@ void UiPopupToolsSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& disp
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
-Array<u64, 15u> UiPopupToolsSmokeScene::values()const{
+Array<u64, 15u> UiPopupToolsSmokeScene::values()const noexcept{
     return { static_cast<u64>(m_tooltip.visible()), static_cast<u64>(m_menu.isOpen()), m_menu.cursorKey(), m_command,
         m_commits, m_anchorClicks, m_underlying, static_cast<u64>(m_sentinelFocused), static_cast<u64>(m_enabled),
         static_cast<u64>(m_source.reversed()), m_source.revision(), m_source.instanceGeneration(), m_source.labelReads(),

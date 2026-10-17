@@ -93,7 +93,7 @@ public:
 
 
 public:
-    void reset();
+    void reset()noexcept;
     [[nodiscard]] bool prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize);
     [[nodiscard]] const AtlasGlyph* find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const noexcept;
     [[nodiscard]] Expected<SharedGlyphPage> page(u32 index);

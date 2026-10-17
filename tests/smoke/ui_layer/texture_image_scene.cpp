@@ -72,7 +72,7 @@ UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& are
     m_input.addHandlerToBack(*this);
 }
 
-UiTextureImageSmokeScene::~UiTextureImageSmokeScene(){
+UiTextureImageSmokeScene::~UiTextureImageSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 

@@ -21,13 +21,13 @@ NWB_CORE_BEGIN
 class Win32TextInputService final : public QueuedTextInputService{
 public:
     Win32TextInputService(Alloc::GlobalArena& arena, NotNull<void*> nativeWindowHandle);
-    virtual ~Win32TextInputService()override;
+    virtual ~Win32TextInputService()noexcept override;
 
 
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override;
     [[nodiscard]] bool handleMessage(u32 message, usize wParam, isize lParam);
-    [[nodiscard]] Expected<isize> resolveContextMessage(u32 message, usize wParam, isize lParam);
+    [[nodiscard]] Expected<isize> resolveContextMessage(u32 message, usize wParam, isize lParam)noexcept;
     [[nodiscard]] Expected<u32> decodeFallbackCharInput(u32 unit)noexcept;
     [[nodiscard]] bool resetFallbackCharInput()noexcept;
 

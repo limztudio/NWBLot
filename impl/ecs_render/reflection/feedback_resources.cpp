@@ -88,7 +88,7 @@ bool RendererReflectionFeedback::prepareResources(const u32 width, const u32 hei
     return true;
 }
 
-ReflectionFeedbackSnapshot RendererReflectionFeedback::snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const bool enabled, const u64 graphicsFrameIndex)const{
+ReflectionFeedbackSnapshot RendererReflectionFeedback::snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const bool enabled, const u64 graphicsFrameIndex)const noexcept{
     ReflectionFeedbackSnapshot result;
     if(!m_control)
         return result;

@@ -164,7 +164,7 @@ bool BackendContext::createDevice(){
     }
     Vector<VulkanPhysicalQueueDesc, Alloc::ScratchArena> physicalQueues{scratchArena};
     physicalQueues.reserve(1u + m_sameClassQueues.size() + 2u);
-    const auto appendSameClassQueues = [this, &physicalQueues](const CommandQueue::Enum queueClass){
+    const auto appendSameClassQueues = [this, &physicalQueues](const CommandQueue::Enum queueClass)noexcept{
         for(const VulkanPhysicalQueueDesc& queue : m_sameClassQueues){
             if(queue.queueClass == queueClass)
                 physicalQueues.push_back(queue);

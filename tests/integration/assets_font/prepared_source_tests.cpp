@@ -83,7 +83,7 @@ struct MalformedField{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value){
+static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
     for(u32 index = 0u; index < 4u; ++index)
         bytes[offset + index] = static_cast<u8>(value >> (index * 8u));
 }

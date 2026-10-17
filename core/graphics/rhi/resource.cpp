@@ -14,7 +14,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
+TextureSlice TextureSlice::resolve(const TextureDesc& desc)const noexcept{
     NWB_ASSERT(mipLevel < desc.mipLevels);
     const MipLevel resolvedMipLevel = (desc.mipLevels > 0 && mipLevel < desc.mipLevels) ? mipLevel : 0;
 

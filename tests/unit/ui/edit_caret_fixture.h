@@ -35,10 +35,10 @@ namespace ShaperFault{
 
 class CaretShaper final : public ITextShaper{
 public:
-    explicit CaretShaper(Core::Alloc::GlobalArena& arena)
+    explicit CaretShaper(Core::Alloc::GlobalArena& arena)noexcept
         : m_arena(arena)
     {}
-    virtual ~CaretShaper()override = default;
+    virtual ~CaretShaper()noexcept override = default;
 
 
 public:

@@ -38,7 +38,7 @@ static_assert(IsTriviallyCopyable_V<PresentationReceipt>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static AcquiredBackBuffer Acquisition(const u64 value = 17u, const u32 imageIndex = 2u){
+static AcquiredBackBuffer Acquisition(const u64 value = 17u, const u32 imageIndex = 2u)noexcept{
     AcquiredBackBuffer acquired;
     acquired.availabilityCompletion = { value, 3u, 5u, Core::CommandQueue::Graphics };
     acquired.nativeInitialState = Core::ResourceStates::Present;

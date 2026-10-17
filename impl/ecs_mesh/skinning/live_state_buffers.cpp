@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningStateBufferCollector::MeshSkinningStateBufferCollector(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)
+MeshSkinningStateBufferCollector::MeshSkinningStateBufferCollector(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)noexcept
     : m_buffers(outBuffers)
     , m_scratchArena(scratchArena)
 {

@@ -26,7 +26,7 @@ namespace ECSRenderDetail{
 
 // Opaque and transparent snapshots copy the same draw-item, receiver-range, and cutter vectors between frame partitions and graph snapshots.
 template<typename DestinationT, typename SourceT>
-inline void ReplaceSnapshotVector(DestinationT& destination, const SourceT& source){
+inline void ReplaceSnapshotVector(DestinationT& destination, const SourceT& source)noexcept(noexcept(destination.reserve(source.size())) && noexcept(destination.assign(source.begin(), source.end()))){
     destination.reserve(source.size());
     destination.assign(source.begin(), source.end());
 }
@@ -36,7 +36,19 @@ inline void ReplaceSnapshotVector(DestinationT& destination, const SourceT& sour
 
 
 template<typename Snapshot>
-inline void CaptureMaterialPassSnapshot(Snapshot& snapshot, const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
+inline void CaptureMaterialPassSnapshot(Snapshot& snapshot, const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount)noexcept(
+    noexcept(ReplaceSnapshotVector(snapshot.regularMeshDrawItems, drawItems.regular.meshDrawItems))
+    && noexcept(ReplaceSnapshotVector(snapshot.regularIndexedDrawItems, drawItems.regular.indexedDrawItems))
+    && noexcept(ReplaceSnapshotVector(snapshot.regularComputeDrawItems, drawItems.regular.computeDrawItems))
+    && noexcept(ReplaceSnapshotVector(snapshot.csgMeshDrawItems, drawItems.csg.meshDrawItems))
+    && noexcept(ReplaceSnapshotVector(snapshot.csgIndexedDrawItems, drawItems.csg.indexedDrawItems))
+    && noexcept(ReplaceSnapshotVector(snapshot.csgComputeDrawItems, drawItems.csg.computeDrawItems))
+    && noexcept(ReplaceSnapshotVector(snapshot.csgReceiverRanges, csgFrameData.receiverRanges))
+    && noexcept(ReplaceSnapshotVector(snapshot.csgCutters, csgFrameData.cutters))
+    && noexcept(snapshot.csgWorkRegion = csgFrameData.workRegion)
+    && noexcept(snapshot.instanceCount = inInstanceCount)
+    && noexcept(snapshot.materialTypedByteCount = inMaterialTypedByteCount)
+){
     ReplaceSnapshotVector(snapshot.regularMeshDrawItems, drawItems.regular.meshDrawItems);
     ReplaceSnapshotVector(snapshot.regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
     ReplaceSnapshotVector(snapshot.regularComputeDrawItems, drawItems.regular.computeDrawItems);

@@ -92,7 +92,7 @@ struct ModelAttachmentJointQuery{
 class ModelSystem final : public Core::ECS::ISystem{
 public:
     ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::Assets::AssetManager& assetManager, ModelObjectRendererHooks rendererHooks = {});
-    virtual ~ModelSystem()override = default;
+    virtual ~ModelSystem()noexcept override = default;
 
 
 public:
@@ -111,7 +111,7 @@ private:
     [[nodiscard]] bool spawnSkinnedMeshObject(Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object);
     [[nodiscard]] Expected<void, Core::CpuTaskAdmissionError::Enum> updateModelObjectTransforms();
     void updateStaticMeshAttachments();
-    [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const;
+    [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const noexcept;
 
 
 private:

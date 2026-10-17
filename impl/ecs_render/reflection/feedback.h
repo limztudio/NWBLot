@@ -113,11 +113,11 @@ private:
 using ReflectionFeedbackControl = RefCounter<ReflectionFeedbackState>;
 using ReflectionFeedbackControlHandle = RefCountPtr< ReflectionFeedbackControl, ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration);
+[[nodiscard]] ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
 class ReflectionFeedbackReservation final : NoCopy{
 public:
-    ReflectionFeedbackReservation(ReflectionFeedbackControlHandle control, const ReflectionFeedbackPlan& plan);
+    ReflectionFeedbackReservation(ReflectionFeedbackControlHandle control, const ReflectionFeedbackPlan& plan)noexcept;
     ReflectionFeedbackReservation(ReflectionFeedbackReservation&& other)noexcept;
     ~ReflectionFeedbackReservation()noexcept;
 

@@ -21,7 +21,7 @@ using namespace NWB::UiNumericEditTests;
 
 class NumericMutationSource final : public ComboSource{
 public:
-    NumericMutationSource(){ count = 5u; }
+    NumericMutationSource()noexcept{ count = 5u; }
 
 
 public:

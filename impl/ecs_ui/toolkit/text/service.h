@@ -23,7 +23,7 @@ class GlyphAtlas;
 class TextService final : NoCopy{
 public:
     explicit TextService(Core::Alloc::GlobalArena& arena);
-    ~TextService();
+    ~TextService()noexcept;
 
 
 public:

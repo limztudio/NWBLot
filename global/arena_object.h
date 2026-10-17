@@ -92,7 +92,7 @@ consteval bool IsNothrowArenaArrayConstruction()noexcept{
 // Construction and destruction retain the supplied arena allocation; class-specific allocation functions do not replace that storage.
 // Raw construction does not require access to a private destructor; only accessible completed objects are retired on argument cleanup failure.
 template<typename Concrete, typename Arena, typename... Args>
-Concrete* NewArenaObject(Arena& arena, Args&&... args){
+Concrete* NewArenaObject(Arena& arena, Args&&... args)noexcept(noexcept(arena.template allocate<Concrete>(1)) && ArenaObjectDetail::IsNothrowArenaObjectConstruction<Concrete, Args...>()){
     auto* mem = arena.template allocate<Concrete>(1);
     if(!mem)
         return nullptr;

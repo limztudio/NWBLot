@@ -144,7 +144,7 @@ public:
     [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
     [[nodiscard]] u32 height()const noexcept{ return bounded() ? maxY - minY : 0u; }
 
-    void expandWorldBounds(const SIMDMatrix& worldToClip, SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds, u32 frameWidth, u32 frameHeight);
+    void expandWorldBounds(const SIMDMatrix& worldToClip, SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds, u32 frameWidth, u32 frameHeight)noexcept;
     void expandFull()noexcept{ fullFrame = true; }
     void expandClamped(const i32 rectMinX, const i32 rectMaxX, const i32 rectMinY, const i32 rectMaxY, const u32 frameWidth, const u32 frameHeight)noexcept{
         if(fullFrame || frameWidth == 0u || frameHeight == 0u)

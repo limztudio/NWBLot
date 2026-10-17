@@ -25,7 +25,7 @@ namespace __hidden_allocator_owner_concurrency_tests{
 using namespace NWB::Core::Alloc;
 using ArenaOwnerTestSupport::OwnerStats;
 
-void WaitForFlag(const Atomic<bool>& flag){
+void WaitForFlag(const Atomic<bool>& flag)noexcept{
     AtomicBackOff backoff;
     while(!flag.load(MemoryOrder::acquire))
         backoff.pause();
@@ -147,7 +147,7 @@ TEST(AllocationOwnerConcurrency, CrossThreadRawReallocationAndFreeKeepSettledBac
     Atomic<bool> consumed{ false };
     Atomic<bool> releaseWorkers{ false };
 
-    Thread producer([&](){
+    Thread producer([&]()noexcept{
         void* const warmup = CoreAlloc(1u);
         CoreFree(warmup);
         producerReady.store(true, MemoryOrder::release);
@@ -167,7 +167,7 @@ TEST(AllocationOwnerConcurrency, CrossThreadRawReallocationAndFreeKeepSettledBac
         WaitForFlag(releaseWorkers);
     }
     );
-    Thread consumer([&](){
+    Thread consumer([&]()noexcept{
         void* const warmup = CoreAlloc(1u);
         CoreFree(warmup);
         consumerReady.store(true, MemoryOrder::release);

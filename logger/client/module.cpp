@@ -88,7 +88,7 @@ Client::Client()
     , m_telemetryCount(0)
     , m_telemetryQueue(BaseType::arena())
 {}
-Client::~Client(){
+Client::~Client()noexcept{
     stopWorker();
 
     if(m_curl){
@@ -232,7 +232,7 @@ ClientStandalone::ClientStandalone()
     : ClientBaseType("NWB::Log::ClientStandalone")
     , m_processedMessageFile(BaseType::arena())
 {}
-ClientStandalone::~ClientStandalone(){
+ClientStandalone::~ClientStandalone()noexcept{
     stopWorker();
     m_processedMessageFile.close();
 }

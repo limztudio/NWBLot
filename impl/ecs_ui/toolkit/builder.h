@@ -221,7 +221,7 @@ private:
     [[nodiscard]] bool paintContextMenus();
     [[nodiscard]] bool paintContextMenuPopup(ContextMenuFrame& frame);
     [[nodiscard]] bool paintPopup();
-    [[nodiscard]] bool synchronizePopup();
+    [[nodiscard]] bool synchronizePopup()noexcept;
     [[nodiscard]] bool popupFrameVisible(const BuilderScopeFrame& frame)const noexcept;
     [[nodiscard]] bool popupAncestorsVisible()const noexcept;
     [[nodiscard]] bool finishPopupFamily();

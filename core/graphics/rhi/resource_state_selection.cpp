@@ -40,20 +40,20 @@ void CommandListResourceSelection::InsertIndex(void* const storage, const usize 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CommandListResourceSelection::~CommandListResourceSelection(){
+CommandListResourceSelection::~CommandListResourceSelection()noexcept{
     if(m_storage)
         m_scratchArena.deallocate(m_storage, alignof(Entry), m_capacity * s_BytesPerEntry);
 }
 
-bool CommandListResourceSelection::addTexture(Texture* const texture, const usize inputIndex){
+bool CommandListResourceSelection::addTexture(Texture* const texture, const usize inputIndex)noexcept{
     return addResource(texture, inputIndex, true);
 }
 
-bool CommandListResourceSelection::addBuffer(Buffer* const buffer, const usize inputIndex){
+bool CommandListResourceSelection::addBuffer(Buffer* const buffer, const usize inputIndex)noexcept{
     return addResource(buffer, inputIndex, false);
 }
 
-bool CommandListResourceSelection::addResource(void* const resource, const usize inputIndex, const bool texture){
+bool CommandListResourceSelection::addResource(void* const resource, const usize inputIndex, const bool texture)noexcept{
     if(!m_valid)
         return false;
     if(!resource || containsResource(resource, texture))
@@ -98,7 +98,7 @@ bool CommandListResourceSelection::containsIndexedResource(void* const resource,
     return false;
 }
 
-bool CommandListResourceSelection::grow(){
+bool CommandListResourceSelection::grow()noexcept{
     static_assert(IsTriviallyCopyable_V<Entry> && IsStandardLayout_V<Entry>);
     static_assert(alignof(Entry) >= alignof(usize) && sizeof(Entry) % alignof(usize) == 0u);
     if(MultiplyOverflows<usize>(m_capacity, s_BucketCountFactor))

@@ -48,7 +48,7 @@ class View;
 
 class IComponentPool{
 public:
-    virtual ~IComponentPool() = default;
+    virtual ~IComponentPool()noexcept = default;
 
 
 public:

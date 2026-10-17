@@ -60,7 +60,7 @@ struct AssignmentRange{
     return true;
 }
 
-[[nodiscard]] Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName){
+[[nodiscard]] Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
     AssignmentRange outRange;
     Core::Metascript::Lexer lexer(source);
     Core::Metascript::Token token = lexer.next();

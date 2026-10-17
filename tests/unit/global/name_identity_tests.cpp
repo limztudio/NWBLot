@@ -44,8 +44,8 @@ struct NameSymbolCallbackProbe{
 
 
 public:
-    NameSymbolCallbackProbe(){
-        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
+    NameSymbolCallbackProbe()noexcept{
+        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
             ++static_cast<NameSymbolCallbackProbe*>(context)->recordCount;
         }, this
         );
@@ -55,7 +55,7 @@ public:
         }, this
         );
     }
-    ~NameSymbolCallbackProbe(){
+    ~NameSymbolCallbackProbe()noexcept{
         SetNameSymbolRecordCallback(previousRecorder.callback, previousRecorder.userData);
         SetNameSymbolResolveCallback(previousResolver.callback, previousResolver.userData);
     }
@@ -201,7 +201,7 @@ TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
 #if defined(NWB_DEBUG)
     EXPECT_EQ(name.resolvedText().size(), NameDetail::s_DebugNameCapacity - 1u);
 #else
-    SetNameSymbolResolveCallback([](const NameHash&, char* outText, const usize outTextSize, void*){
+    SetNameSymbolResolveCallback([](const NameHash&, char* outText, const usize outTextSize, void*)noexcept{
         for(usize i = 0u; i < outTextSize; ++i)
             outText[i] = 'x';
         return true;

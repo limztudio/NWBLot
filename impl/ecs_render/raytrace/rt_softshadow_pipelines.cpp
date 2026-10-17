@@ -65,7 +65,7 @@ namespace __hidden_softshadow_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets){
+void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept{
     if(!m_rayTracingState.m_softShadowTemporalHistoryAdvancePending)
         return;
 
@@ -73,7 +73,7 @@ void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTa
     swapSoftShadowTemporalHistory(targets);
 }
 
-void RendererRayTracingSystem::discardSoftShadowTemporalHistory(){
+void RendererRayTracingSystem::discardSoftShadowTemporalHistory()noexcept{
     m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
     m_rayTracingState.m_transparentShadowSamplingHistory.discardPending();
 }
@@ -322,7 +322,7 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     return true;
 }
 
-void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTargets& targets){
+void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept{
     if(!m_rayTracingState.m_softShadowTemporalReady)
         return;
 

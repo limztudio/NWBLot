@@ -25,7 +25,7 @@ namespace __hidden_ui_edit_caret_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateLayout(const TextLayout& layout, const EditTextMode::Enum mode){
+[[nodiscard]] static bool ValidateLayout(const TextLayout& layout, const EditTextMode::Enum mode)noexcept{
     const StringView text = layout.utf8();
     const auto& lines = layout.lines();
     const auto& clusters = layout.clusters();

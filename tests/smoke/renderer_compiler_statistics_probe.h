@@ -55,8 +55,8 @@ private:
 
 
 public:
-    RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena);
-    virtual ~RendererCompilerStatisticsProbe()override;
+    RendererCompilerStatisticsProbe(Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena)noexcept;
+    virtual ~RendererCompilerStatisticsProbe()noexcept override;
 
 
 public:

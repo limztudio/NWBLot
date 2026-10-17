@@ -322,7 +322,7 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     return result;
 }
 
-[[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(const VkImageCreateInfo& imageInfo, const ImageQueueFamilyVector& queueFamilyIndices){
+[[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(const VkImageCreateInfo& imageInfo, const ImageQueueFamilyVector& queueFamilyIndices)noexcept{
     NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkImageCreateInfo result = imageInfo;
     result.pNext = nullptr;
@@ -357,7 +357,7 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const
     const bool retainedInitialStateKnown = m_creationDesc.keepInitialState && initialStateKnown;
     m_retainedSubresourceStates.assign(subresourceCount, retainedInitialStateKnown ? 1u : 0u);
 }
-Texture::~Texture(){
+Texture::~Texture()noexcept{
     const VkImage registeredNativeImage = m_image;
 
     for(const auto& [_, view] : m_views)
@@ -399,7 +399,7 @@ bool Texture::descriptionMatchesCreation()const noexcept{
     return VulkanTextureDetail::TextureDescriptionsEqual(m_desc, m_creationDesc);
 }
 
-ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const{
+ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const noexcept{
     if(!m_creationDesc.keepInitialState){
         return m_managed || m_creationInitialStateKnown ? m_creationDesc.initialState : ResourceStates::Unknown;
     }
@@ -422,7 +422,7 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const{
     return !hasUnknownState || (!hasKnownState && m_managed) ? m_creationDesc.initialState : ResourceStates::Unknown;
 }
 
-Object Texture::getNativeHandle(ObjectType objectType){
+Object Texture::getNativeHandle(ObjectType objectType)noexcept{
     if(objectType == ObjectTypes::s_Image){
         ScopedLock bindingLock(m_memoryBindingMutex);
         return Object(m_image);
@@ -486,7 +486,7 @@ Expected<VkImageView> Texture::getView(const TextureSubresourceSet& subresources
     return view;
 }
 
-bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage){
+bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
     if(expectedNativeImage == VK_NULL_HANDLE)
         return false;
 
@@ -499,7 +499,7 @@ bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage){
     return true;
 }
 
-bool Texture::prepareRevokeUnmanagedNativeImage(const VkImage expectedNativeImage){
+bool Texture::prepareRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
     if(expectedNativeImage == VK_NULL_HANDLE)
         return false;
 
@@ -539,7 +539,7 @@ void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage ex
     m_preparedRevokedNativeImage = VK_NULL_HANDLE;
 }
 
-bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel){
+bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel)noexcept{
     if(!m_creationDesc.keepInitialState || arraySlice >= m_creationDesc.arraySize || mipLevel >= m_creationDesc.mipLevels)
         return false;
 
@@ -573,7 +573,7 @@ StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& al
     , m_context(context)
     , m_allocator(allocator)
 {}
-StagingTexture::~StagingTexture(){
+StagingTexture::~StagingTexture()noexcept{
     ScopedLock lock(m_mappingMutex);
 
     m_allocator.destroyStagingTexture(*this);

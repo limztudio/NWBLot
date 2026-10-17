@@ -135,7 +135,7 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
     return Testbed::__hidden_testbed_entry::s_WindowTitle;
 }
 
-bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
+bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
     return Testbed::__hidden_testbed_entry::ConfigureRuntime(context);
 }
 

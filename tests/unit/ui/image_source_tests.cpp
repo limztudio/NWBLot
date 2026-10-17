@@ -35,7 +35,7 @@ struct TextureDescription{
 
 class UiImageSourceTests : public testing::Test{
 protected:
-    static void Install(Texture& texture, const TextureDescription& description, Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes){
+    static void Install(Texture& texture, const TextureDescription& description, Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes)noexcept{
         texture.setPayload(description.width, description.height, Move(mips), Move(bytes), description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
     }
 

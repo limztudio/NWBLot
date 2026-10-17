@@ -179,6 +179,11 @@ using IsConvertible = std::is_convertible<From, To>;
 template<class From, class To>
 inline constexpr bool IsConvertible_V = std::is_convertible_v<From, To>;
 
+template<class From, class To>
+using IsNothrowConvertible = std::is_nothrow_convertible<From, To>;
+template<class From, class To>
+inline constexpr bool IsNothrowConvertible_V = std::is_nothrow_convertible_v<From, To>;
+
 template<class To, class From>
 using IsAssignable = std::is_assignable<To, From>;
 template<class To, class From>

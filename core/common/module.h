@@ -32,7 +32,7 @@ namespace CommonDetail{
 
 class BaseInitializerable{
 public:
-    virtual ~BaseInitializerable() = default;
+    virtual ~BaseInitializerable()noexcept = default;
 
 
 public:

@@ -91,7 +91,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 
 class YawSpinController final{
 public:
-    void update(const f32 safeDelta, const f32 frozenYaw, const bool frozenYawValid, const ArrowYawInputHandler& arrowYawInput, const f32 manualYawSpeed, const f32 spinSpeed, const f32 maxSpinDelta){
+    void update(const f32 safeDelta, const f32 frozenYaw, const bool frozenYawValid, const ArrowYawInputHandler& arrowYawInput, const f32 manualYawSpeed, const f32 spinSpeed, const f32 maxSpinDelta)noexcept{
         if(frozenYawValid){
             m_yaw = frozenYaw;
             return;
@@ -126,7 +126,7 @@ struct SmokeYawDisplay{
     f32 degrees;
 };
 
-[[nodiscard]] inline SmokeYawDisplay MakeSmokeYawDisplay(const f32 yaw, const f32 twoPi){
+[[nodiscard]] inline SmokeYawDisplay MakeSmokeYawDisplay(const f32 yaw, const f32 twoPi)noexcept{
     f32 wrapped = FMod(yaw, twoPi);
     if(wrapped < 0.0f)
         wrapped += twoPi;

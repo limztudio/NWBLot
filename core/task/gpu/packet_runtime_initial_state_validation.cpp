@@ -36,7 +36,17 @@ static void BuildRecordIndex(const States& states, Vector<usize, Alloc::ScratchA
         if(resourceGetter(states[stateIndex]))
             index.push_back(stateIndex);
     }
-    Sort(index.begin(), index.end(), [&](const usize lhs, const usize rhs){ return recordLess(states[lhs], states[rhs]); });
+    Sort(index.begin(), index.end(), [&](const usize lhs, const usize rhs)noexcept(
+        noexcept(recordLess(states[lhs], states[rhs]))
+        && (
+            !IsReference_V<decltype(recordLess(states[lhs], states[rhs]))>
+            || IsNothrowConvertible_V<
+                decltype(recordLess(states[lhs], states[rhs])),
+                Decay_T<decltype(recordLess(states[lhs], states[rhs]))>
+            >
+        )
+    ){ return recordLess(states[lhs], states[rhs]); }
+    );
 }
 
 template<typename States, typename ResourceGetter>

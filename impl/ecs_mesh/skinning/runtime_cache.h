@@ -83,8 +83,8 @@ private:
 
 
     public:
-        [[nodiscard]] const Mesh* mesh()const;
-        [[nodiscard]] const Skin* skin()const;
+        [[nodiscard]] const Mesh* mesh()const noexcept;
+        [[nodiscard]] const Skin* skin()const noexcept;
     };
 
 
@@ -94,10 +94,10 @@ public:
 
 public:
     void prepareResources(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
-    void clear();
+    void clear()noexcept;
 
-    [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle);
-    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)const;
+    [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)noexcept;
+    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)const noexcept;
 
 
 private:
@@ -105,10 +105,10 @@ private:
     [[nodiscard]] Expected<MeshSkinningSource*> ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset);
     [[nodiscard]] bool uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] RuntimeMeshHandle allocateHandle();
-    void releaseRuntimeMesh(Core::ECS::EntityID entity);
-    void releaseSource(const Name& sourceName);
-    void eraseUnusedSource(const Name& sourceName);
-    [[nodiscard]] Core::ECS::EntityID entityForHandle(RuntimeMeshHandle handle)const;
+    void releaseRuntimeMesh(Core::ECS::EntityID entity)noexcept;
+    void releaseSource(const Name& sourceName)noexcept;
+    void eraseUnusedSource(const Name& sourceName)noexcept;
+    [[nodiscard]] Core::ECS::EntityID entityForHandle(RuntimeMeshHandle handle)const noexcept;
     [[nodiscard]] MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)noexcept;
     [[nodiscard]] const MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)const noexcept;
 

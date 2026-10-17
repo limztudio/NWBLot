@@ -49,7 +49,7 @@ struct LeaseTask{
 
 
 public:
-    static void Discarded(Payload& payload){ payload.reservation.discard(); }
+    static void Discarded(Payload& payload)noexcept{ payload.reservation.discard(); }
 };
 
 

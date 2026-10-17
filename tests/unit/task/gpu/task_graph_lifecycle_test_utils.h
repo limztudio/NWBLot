@@ -35,7 +35,7 @@ struct PayloadDestroyTask{
 
 
     public:
-        explicit Payload(u32* const value)
+        explicit Payload(u32* const value)noexcept
             : destructionCount(value)
         {}
         Payload(Payload&& other)noexcept
@@ -44,7 +44,7 @@ struct PayloadDestroyTask{
             other.destructionCount = nullptr;
         }
         Payload(const Payload&) = delete;
-        ~Payload(){
+        ~Payload()noexcept{
             if(destructionCount)
                 ++*destructionCount;
         }
@@ -59,11 +59,11 @@ struct PacketLifecycleTask{
 
 
 public:
-    static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken&){
+    static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
     }
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         if(payload.discardedCount)
             ++*payload.discardedCount;
     }
@@ -79,7 +79,7 @@ struct ReentrantCompileDuringDeclarationTask{
 
 
     public:
-        Payload() = default;
+        Payload()noexcept = default;
         Payload(const Payload&) = delete;
         Payload(Payload&& other)
             : graph(other.graph)

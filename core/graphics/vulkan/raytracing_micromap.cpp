@@ -134,7 +134,7 @@ OpacityMicromap::OpacityMicromap(const VulkanContext& context)noexcept
     , m_desc(context.objectArena)
     , m_context(context)
 {}
-OpacityMicromap::~OpacityMicromap(){
+OpacityMicromap::~OpacityMicromap()noexcept{
     if(m_micromap != VK_NULL_HANDLE){
         m_context.deviceDispatch.vkDestroyMicromapEXT(m_context.device, m_micromap, m_context.allocationCallbacks);
         m_micromap = VK_NULL_HANDLE;

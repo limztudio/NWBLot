@@ -84,7 +84,7 @@ bool ValidateRecord(const ShaderArchive::Record& record){
 }
 
 
-u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
+u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane)noexcept{
     NWB_ASSERT_MSG(lane < NameDetail::s_HashLaneCount, NWB_TEXT("ShaderArchive: invalid hash lane"));
 
     const u64 laneValue = nameHash.qwords[lane];

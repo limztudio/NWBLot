@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiEditBoxHost::prepareSubmit(const Ui::InputEvent& event){
+bool UiEditBoxHost::prepareSubmit(const Ui::InputEvent& event)noexcept{
     if(rejectBorrowedMutation() || !m_context.input().canSubmitCommand(event))
         return false;
     const Entry* entry = find(m_context.input().focus());

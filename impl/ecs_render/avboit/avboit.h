@@ -34,14 +34,14 @@ static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device);
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device);
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device);
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device);
-[[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState();
-[[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState();
-[[nodiscard]] Core::RenderState BuildRendererAvboitRefractionCaptureRenderState();
-[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, bool hdr10OutputActive);
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device)noexcept;
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device)noexcept;
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device)noexcept;
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device)noexcept;
+[[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState()noexcept;
+[[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept;
+[[nodiscard]] Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept;
+[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, bool hdr10OutputActive)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

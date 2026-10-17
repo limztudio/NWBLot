@@ -127,11 +127,11 @@ public:
 
 
 public:
-    [[nodiscard]] CsgShapeTypeId findShapeTypeId(const Name& name)const;
+    [[nodiscard]] CsgShapeTypeId findShapeTypeId(const Name& name)const noexcept;
     [[nodiscard]] Expected<CsgShapeTypeInfo> findShapeType(const Name& name)const;
     [[nodiscard]] Expected<CsgShapeTypeInfo> findShapeType(CsgShapeTypeId typeId)const;
-    [[nodiscard]] usize shapeTypeCount()const;
-    [[nodiscard]] u64 revision()const;
+    [[nodiscard]] usize shapeTypeCount()const noexcept;
+    [[nodiscard]] u64 revision()const noexcept;
     [[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>> findShaderModuleInclude(const Name& shaderModule, Core::Alloc::GlobalArena& resultArena)const;
 
 

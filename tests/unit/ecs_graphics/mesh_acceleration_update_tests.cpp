@@ -20,7 +20,7 @@ namespace __hidden_mesh_acceleration_update_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 
-[[nodiscard]] static ECSRenderDetail::MeshRayTracingResourceSnapshot AcceptedRuntimeGeometry(){
+[[nodiscard]] static ECSRenderDetail::MeshRayTracingResourceSnapshot AcceptedRuntimeGeometry()noexcept{
     ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
     mesh.runtimeMesh = true;
     mesh.runtimeGeometryContentRevision = 7u;

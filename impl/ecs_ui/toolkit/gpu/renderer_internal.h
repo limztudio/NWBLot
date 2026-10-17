@@ -86,7 +86,7 @@ template<typename T>
 using GpuVersion = RefCountPtr<RefCounter<T>, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>>;
 
 template<typename T, typename... Args>
-[[nodiscard]] Expected<GpuVersion<T>> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args){
+[[nodiscard]] Expected<GpuVersion<T>> MakeGpuVersion(Core::Alloc::GlobalArena& arena, Args&&... args)noexcept(ArenaObjectDetail::IsNothrowArenaObjectConstruction<RefCounter<T>, Args...>()){
     auto* const value = NewArenaObject<RefCounter<T>>(arena, Forward<Args>(args)...);
     if(!value)
         return MakeUnexpected(Failure{});
@@ -373,7 +373,7 @@ public:
     [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
     [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     void trimImageCache(const DrawSnapshot& snapshot);
-    void evictImageCacheEntry();
+    void evictImageCacheEntry()noexcept;
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);

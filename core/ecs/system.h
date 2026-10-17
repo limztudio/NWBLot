@@ -50,7 +50,7 @@ class ISystem{
 public:
     explicit ISystem(Alloc::GlobalArena& arena)noexcept;
     ISystem(const ISystem&) = delete;
-    virtual ~ISystem() = default;
+    virtual ~ISystem()noexcept = default;
 
 
 public:
@@ -98,7 +98,7 @@ private:
 
 public:
     explicit SystemScheduler(Alloc::GlobalArena& arena)noexcept;
-    ~SystemScheduler() = default;
+    ~SystemScheduler()noexcept = default;
 
 
 public:

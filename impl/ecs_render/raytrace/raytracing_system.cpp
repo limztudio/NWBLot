@@ -60,7 +60,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_preparedMeshSwBvhBuilds(arena)
 {}
 
-RendererRayTracingSystem::~RendererRayTracingSystem() = default;
+RendererRayTracingSystem::~RendererRayTracingSystem()noexcept = default;
 
 
 bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena){
@@ -702,7 +702,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         return rejectPreparedTraversal();
     }
 
-    const auto matchesMesh = [this, &validStorageHandle](const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const PreparedSceneSwBvhMesh& prepared){
+    const auto matchesMesh = [this, &validStorageHandle](const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const PreparedSceneSwBvhMesh& prepared)noexcept{
         const auto attributeCache = m_rayTracingState.m_swMeshHeapHandleCache.find(prepared.attributeBuffer.get());
         const bool topologyReady = mesh.swBvhTopologyBuilt || preparedMeshSwBvhBuildProducesTopology(mesh);
         return

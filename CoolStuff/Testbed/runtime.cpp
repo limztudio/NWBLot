@@ -87,13 +87,13 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
     return static_cast<usize>(key);
 }
 
-[[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
+[[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world)noexcept{
     const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
     NWB_ASSERT(ui);
     return ui->wantsKeyboard();
 }
 
-[[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
+[[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world)noexcept{
     const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
     NWB_ASSERT(ui);
     return ui->wantsPointer();
@@ -163,7 +163,7 @@ static void ResolveFlyCameraInput(
     }
 }
 
-static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const f32 rightAxis, const f32 forwardAxis, const bool boosted, const f32 mouseDeltaX, const f32 mouseDeltaY, const f32 delta){
+static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const f32 rightAxis, const f32 forwardAxis, const bool boosted, const f32 mouseDeltaX, const f32 mouseDeltaY, const f32 delta)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
     NWB_ASSERT(cameraView.valid());
 
@@ -225,7 +225,7 @@ Project::Project(NWB::ProjectRuntimeContext& context)
     , m_uiPreview(context.objectArena, context.assetManager)
 {}
 
-Project::~Project(){
+Project::~Project()noexcept{
     unregisterInputHandler();
     destroyWorld();
 }
@@ -280,12 +280,12 @@ bool Project::onUpdate(f32 delta){
     return true;
 }
 
-void Project::windowFocusUpdate(const bool focused){
+void Project::windowFocusUpdate(const bool focused)noexcept{
     if(!focused)
         clearInputState();
 }
 
-void Project::pointerCaptureLost(){
+void Project::pointerCaptureLost()noexcept{
     // Ordinary button-up already completed the gesture; keep its accumulated camera motion.
     if(!m_mouseLookActive)
         return;
@@ -295,7 +295,7 @@ void Project::pointerCaptureLost(){
     m_pendingMouseDeltaY = 0.0f;
 }
 
-bool Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
 
@@ -311,7 +311,7 @@ bool Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action
     return false;
 }
 
-bool Project::mousePosUpdate(const f64 xpos, const f64 ypos){
+bool Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
     if(!IsFinite(xpos) || !IsFinite(ypos)){
         m_mousePositionValid = false;
         return false;
@@ -350,7 +350,7 @@ bool Project::mousePosUpdate(const f64 xpos, const f64 ypos){
     return false;
 }
 
-bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods)noexcept{
     static_cast<void>(mods);
 
     if(__hidden_runtime::UiWantsMouseCapture(*m_world)){
@@ -435,7 +435,7 @@ bool Project::keyPressed(const i32 key)const noexcept{
     return m_keyPressed[*keyIndex];
 }
 
-void Project::updateMainCamera(const f32 delta){
+void Project::updateMainCamera(const f32 delta)noexcept{
     const bool pointerCaptured = __hidden_runtime::UiWantsMouseCapture(*m_world);
     // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
     const f32 mouseDeltaX = m_pendingMouseDeltaX;

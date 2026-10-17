@@ -84,7 +84,7 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     }
 }
 
-void GpuRendererState::evictImageCacheEntry(){
+void GpuRendererState::evictImageCacheEntry()noexcept{
     // Pending and in-flight frames keep their own strong version references after cache ownership is removed.
     if(!m_glyphCache.empty())
         m_glyphCache.erase(m_glyphCache.begin());

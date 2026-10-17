@@ -187,13 +187,13 @@ bool DescriptorBufferManager::shutdown(){
     return result.has_value();
 }
 
-bool DescriptorBufferManager::isEnabled()const{
+bool DescriptorBufferManager::isEnabled()const noexcept{
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
     return m_enabled && !m_lifecycleTransitioning && m_bindingGeneration != 0u;
 }
 
-u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptorType)const{
+u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptorType)const noexcept{
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
     return VulkanDetail::GetDescriptorSize(m_context, m_enabled, descriptorType);
@@ -462,7 +462,7 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
         mergeAdjacentAt(insertIndex - 1u);
 }
 
-Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::captureBindingSnapshotLocked()const{
+Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::captureBindingSnapshotLocked()const noexcept{
     BindingSnapshot snapshot;
     const u32 offsetAlignmentBytes = VulkanDetail::GetDescriptorBufferOffsetAlignmentBytes(m_context);
     if(

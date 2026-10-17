@@ -79,7 +79,7 @@ public:
 
 
 public:
-    constexpr GpuDescriptorHandle() = default;
+    constexpr GpuDescriptorHandle()noexcept = default;
     constexpr explicit GpuDescriptorHandle(u32 raw)noexcept : value(raw){}
 
 

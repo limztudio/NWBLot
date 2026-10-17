@@ -86,7 +86,7 @@ private:
 
 
 public:
-    explicit ReflectionTimingRenderPass(NWB::Core::GraphicsRuntime& graphics)
+    explicit ReflectionTimingRenderPass(NWB::Core::GraphicsRuntime& graphics)noexcept
         : IRenderPass(graphics)
     {}
 
@@ -153,7 +153,7 @@ public:
         : m_context(context)
         , m_world(CreateSmokeWorldOrDie(context, NWB_TEXT("ReflectionSmokeProject")))
         , m_renderer(CreateReflectionRenderer(*m_world, context)){}
-    virtual ~ReflectionSmokeProject()override{ destroyWorld(); }
+    virtual ~ReflectionSmokeProject()noexcept override{ destroyWorld(); }
 
 
 public:

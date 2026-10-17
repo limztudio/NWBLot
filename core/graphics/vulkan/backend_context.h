@@ -142,7 +142,7 @@ private:
 
 
 private:
-    [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
+    [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(void* context, u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept;
     [[nodiscard]] static bool InvokeFramePresentationSignalResolution(void* context, u64 identity, const QueueSubmissionToken& token)noexcept;
 
 
@@ -159,15 +159,15 @@ public:
     [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
     [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const noexcept;
 
-    [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const{
+    [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const noexcept{
         return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
     }
 
-    [[nodiscard]] bool isDeviceExtensionEnabled(AStringView extensionName)const{
+    [[nodiscard]] bool isDeviceExtensionEnabled(AStringView extensionName)const noexcept{
         return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
     }
 
-    [[nodiscard]] bool isLayerEnabled(AStringView layerName)const{
+    [[nodiscard]] bool isLayerEnabled(AStringView layerName)const noexcept{
         return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
     }
 

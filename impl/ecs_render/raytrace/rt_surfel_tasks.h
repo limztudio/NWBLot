@@ -37,7 +37,12 @@ inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
 
 template<typename StateT>
-[[nodiscard]] NwbSurfelConstantsGpu BuildSurfelFrameConstants(const StateT& state, const DeferredFrameTargets& targets){
+[[nodiscard]] NwbSurfelConstantsGpu BuildSurfelFrameConstants(const StateT& state, const DeferredFrameTargets& targets)noexcept(
+    noexcept(static_cast<bool>(state.m_surfelSeeded))
+    && noexcept(static_cast<f32>(state.m_surfelHashCellCount))
+    && noexcept(static_cast<f32>(state.m_surfelPoolCapacity))
+    && noexcept(static_cast<f32>(state.m_surfelFrameIndex))
+){
     // First frame traces every surfel; later frames use round-robin updates.
     const u32 updateDivisor = state.m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
     const f32 cellSize = NWB_SURFEL_CELL_SIZE;
@@ -66,7 +71,10 @@ namespace RayTracingSurfelGiTaskDetail{
 
 // Hash-build, spawn, trace-args, trace, and resolve share one async-guard preamble; only the render call differs.
 template<typename PayloadT>
-[[nodiscard]] inline bool SurfelAsyncRecordReady(const PayloadT& payload, const Core::GpuTaskRecordContext& context){
+[[nodiscard]] inline bool SurfelAsyncRecordReady(const PayloadT& payload, const Core::GpuTaskRecordContext& context)noexcept(
+    noexcept(static_cast<bool>(!payload.deferredLightingResources.valid()))
+    && noexcept(static_cast<bool>(!DeclVal<const Core::GpuPhysicalQueueInfo*>() || (DeclVal<const Core::GpuPhysicalQueueInfo*>()->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())))
+){
     if(!payload.deferredLightingResources.valid())
         return false;
 
@@ -261,7 +269,7 @@ public:
         return true;
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
     }
 
@@ -373,17 +381,17 @@ struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
         static_cast<void>(commandList);
         static_cast<void>(context);
         return payload.raytracingSystem.recordSurfelResourceInitializationLifecycle();
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         payload.raytracingSystem.discardSurfelResourceInitialization();
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         static_cast<void>(token);
         payload.raytracingSystem.finalizeSurfelResourceInitialization();
     }

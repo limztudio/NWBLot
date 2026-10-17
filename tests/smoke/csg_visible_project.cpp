@@ -140,7 +140,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     return QuaternionRotationRollPitchYawFromVector(angles);
 }
 
-static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle rotation){
+static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle rotation)noexcept{
     auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
     if(!transform)
         return;
@@ -148,7 +148,7 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
     StoreFloat(rotation, transform->rotation);
 }
 
-[[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot){
+[[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot)noexcept{
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane: return Float4(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY + s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
     case CsgVisibleShapeSlot::Box: return Float4(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY + s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
@@ -158,7 +158,7 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
     }
 }
 
-[[nodiscard]] static Float4 CsgVisibleShapeColor(const usize shapeSlot){
+[[nodiscard]] static Float4 CsgVisibleShapeColor(const usize shapeSlot)noexcept{
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane: return Float4(0.24f, 0.56f, 0.86f, 1.0f);
     case CsgVisibleShapeSlot::Box: return Float4(0.72f, 0.40f, 0.20f, 1.0f);
@@ -168,7 +168,7 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
     }
 }
 
-[[nodiscard]] static SIMDVectorSingle CsgVisibleCutterLocalOffset(const usize shapeSlot){
+[[nodiscard]] static SIMDVectorSingle CsgVisibleCutterLocalOffset(const usize shapeSlot)noexcept{
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane: return VectorZero();
     case CsgVisibleShapeSlot::Box: return VectorSet(0.0f, 0.0f, -0.30f * s_CutterScale, 0.0f);
@@ -178,7 +178,7 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
     }
 }
 
-static void ApplyCutterTransform(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID cutterEntity, const SIMDVectorSingle receiverCenter, const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalOffset){
+static void ApplyCutterTransform(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID cutterEntity, const SIMDVectorSingle receiverCenter, const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalOffset)noexcept{
     auto* cutter = world.tryGetComponent<NWB::Impl::CsgCutterComponent>(cutterEntity);
     if(!cutter)
         return;
@@ -344,7 +344,7 @@ public:
         , m_world(CreateWorldOrDie(context))
         , m_temporalOutput(context.objectArena)
     {}
-    virtual ~CsgVisibleSmokeProject()override{
+    virtual ~CsgVisibleSmokeProject()noexcept override{
         destroyWorld();
     }
 

@@ -341,7 +341,7 @@ void GpuDescriptorHeap::shutdown(){
     shutdownLocked();
 }
 
-GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()const{
+GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()const noexcept{
     ScopedLock lock(m_mutex);
 
     GpuDescriptorHeapLifecycleStatistics statistics;
@@ -498,7 +498,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
     }
 }
 
-DescriptorBufferSegment GpuDescriptorHeap::getAccelStructBufferBlock(const GpuDescriptorHandle handle)const{
+DescriptorBufferSegment GpuDescriptorHeap::getAccelStructBufferBlock(const GpuDescriptorHandle handle)const noexcept{
     ScopedLock lock(m_mutex);
     if(
         !m_initialized

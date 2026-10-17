@@ -140,7 +140,7 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
     return true;
 }
 
-ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSnapshot()const{
+ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSnapshot()const noexcept{
     const ECSRenderDetail::MeshFrameBindingSnapshot& bindings = m_meshState.m_frameBindings;
     return {
         .instanceBuffer = bindings.instanceBuffer,
@@ -153,7 +153,7 @@ ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSn
     };
 }
 
-bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const{
+bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept{
     bool ready = true;
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
         const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
@@ -163,7 +163,7 @@ bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)
     return ready;
 }
 
-void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const{
+void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const noexcept{
     NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
         outInstance.geometryHeapSlots[slotIndex] = 0u;
@@ -282,7 +282,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
     return true;
 }
 
-bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const{
+bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const noexcept{
     if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
         return false;
 

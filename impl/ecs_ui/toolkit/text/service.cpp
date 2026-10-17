@@ -28,7 +28,7 @@ static Atomic<u64> s_NextServiceIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NewIdentity(){
+[[nodiscard]] static u64 NewIdentity()noexcept{
     const u64 identity = s_NextServiceIdentity.fetch_add(1u, MemoryOrder::relaxed);
     NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("UI text service identity overflow"));
     return identity;
@@ -56,7 +56,7 @@ TextService::TextService(Core::Alloc::GlobalArena& arena)
     m_sdfPages.reserve(s_PaintMaxGlyphPages);
 }
 
-TextService::~TextService() = default;
+TextService::~TextService()noexcept = default;
 
 bool TextService::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
     if(m_generation == Limit<u64>::s_Max || !m_shaper.setFonts(scratchArena, sources, count))

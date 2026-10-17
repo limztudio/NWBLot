@@ -32,7 +32,7 @@ void GraphicsPrefixTimingResolver::resolve(
     Core::GpuTaskId* timingTasks,
     bool& asyncSpansOnePacket,
     GraphicsPrefixTimingResolutionResult& outResult
-)const{
+)const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;
     outResult = GraphicsPrefixTimingResolutionResult{};
     // CSG callbacks keep an independent anchor across FrontierSafe splits.

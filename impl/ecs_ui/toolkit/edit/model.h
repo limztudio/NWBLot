@@ -87,7 +87,7 @@ public:
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
     [[nodiscard]] bool setText(AStringView text);
     [[nodiscard]] bool setSelection(usize anchor, usize caret)noexcept;
-    [[nodiscard]] bool selectAll();
+    [[nodiscard]] bool selectAll()noexcept;
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false)noexcept;

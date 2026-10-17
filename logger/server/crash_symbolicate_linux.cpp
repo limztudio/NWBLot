@@ -110,7 +110,7 @@ public:
 
 [[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ExtractSymbolizerResult(Core::Alloc::ScratchArena& arena, const AStringView outputText){
     AString<Core::Alloc::ScratchArena> outSymbol(arena);
-    outSymbol.reserve(AddSize(outputText.size(), MulSize(outputText.size(), 3u)));
+    outSymbol.reserve(AddSize(outputText.size(), SizeOf<3u>(outputText.size())));
 
     usize cursor = 0u;
     while(const auto function = NextTrimmedTextLine(outputText, cursor)){

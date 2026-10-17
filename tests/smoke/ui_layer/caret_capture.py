@@ -1,4 +1,4 @@
-"""Observe real X11 caret pixels before capturing a full-frame blink-on sample."""
+"""Observe displayed caret pixels before capturing a full-frame blink-on sample."""
 from __future__ import annotations
 
 from pathlib import Path

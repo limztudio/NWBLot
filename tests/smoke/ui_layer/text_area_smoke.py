@@ -35,6 +35,7 @@ class TextAreaRun:
         self.deadline = time.monotonic() + args.timeout
         self.snapshot, self.failure_report = None, None
         self.stages = []
+        self.caret_phase_waits = 0
         self.expected = {**document_fields(INITIAL, 5, 5), "focus": 0, "enabled": 1, "readonly": 0, "compact": 0, "long_document": 0, "preferred_valid": 0, "preferred_bits": 0, "submits": 0,
             "cancels": 0, "outside": 0, "clipboard_seeds": 0, "clipboard_pending": 0, "coherent": 1}
 
@@ -102,13 +103,14 @@ class TextAreaRun:
 
             report = capture_frame()
             failed = [probe for probe in report["probes"] if not probe["passed"]]
-            if (not self.native.windows and report["model_matches"] and report["geometry_matches"] and report["extra_matches"] and (extent is None or tuple(report["extent"]) == extent) and len(failed) == 1 and failed[0]["name"] == "caret"):
+            if (report["model_matches"] and report["geometry_matches"] and report["extra_matches"] and (extent is None or tuple(report["extent"]) == extent) and len(failed) == 1 and failed[0]["name"] == "caret"):
                 # Reuse the exact oracle sample only when every other displayed-state requirement already matches.
                 probe = failed[0]
                 column, row = probe["position"]
                 sample = (column, max(0, row - 1), min(report["extent"][1], row + 2), probe["expected"], probe["tolerance"])
                 try:
                     wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
+                    self.caret_phase_waits += 1
                 except SmokeFailure:
                     # The 1s blink phase can be unobservable under full-suite GPU load; retry a fresh capture instead of failing the gate outright.
                     time.sleep(0.1)
@@ -143,7 +145,7 @@ class TextAreaRun:
         raise SmokeFailure(f"TextArea OS clipboard gate failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "marker_count_per_gate": 57,
+        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "marker_count_per_gate": 57, "caret_phase_waits": self.caret_phase_waits,
             "input_path": "Win32 maintained cursor, posted text/keys/buttons and positioned WM_MOUSEWHEEL/WM_MOUSEHWHEEL, modifier chords, CF_UNICODETEXT reads"
                 if self.native.windows else "X11 synthetic ASCII keys/buttons, positioned wheel buttons4/5/6/7, native focus, UTF8_STRING selection reads",
             "ordered_batch_scope": "Text then Down then text has no displayed-state wait; native delivery may cross frames.", "runtime_limit": "No fake preedit injection, live IME, native Wayland, or physical keyboard/grab qualification."}

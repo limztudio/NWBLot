@@ -1367,6 +1367,8 @@ class WindowsCapture:
         self.gdi32.SelectObject.restype = ctypes.c_void_p
         self.gdi32.BitBlt.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_uint32,]
         self.gdi32.BitBlt.restype = ctypes.c_int
+        self.gdi32.GetPixel.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+        self.gdi32.GetPixel.restype = ctypes.c_uint32
         self.gdi32.GetDIBits.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.POINTER(self.BITMAPINFO), ctypes.c_uint,]
         self.gdi32.GetDIBits.restype = ctypes.c_int
         self.gdi32.DeleteObject.argtypes = [ctypes.c_void_p]
@@ -1598,6 +1600,29 @@ class WindowsCapture:
         if not rect:
             raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
         return self._capture_screen_rect(hwnd, rect, output_path)
+
+    def sample_client_pixels(self, hwnd, x, y, width, height):
+        rect = self._client_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
+        if x < 0 or y < 0 or width <= 0 or height <= 0 or x + width > rect.right - rect.left or y + height > rect.bottom - rect.top:
+            raise SmokeFailure("Windows pixel sample falls outside the client area")
+        screen_dc = self.user32.GetDC(None)
+        if not screen_dc:
+            raise SmokeFailure(f"GetDC failed while sampling HWND 0x{hwnd:x}")
+        try:
+            rows = []
+            for row in range(height):
+                pixels = []
+                for column in range(width):
+                    color = self.gdi32.GetPixel(screen_dc, rect.left + x + column, rect.top + y + row)
+                    if color == 0xFFFFFFFF:
+                        raise SmokeFailure(f"GetPixel failed while sampling HWND 0x{hwnd:x}")
+                    pixels.append((color & 0xFF, (color >> 8) & 0xFF, (color >> 16) & 0xFF))
+                rows.append(pixels)
+            return rows
+        finally:
+            self.user32.ReleaseDC(None, screen_dc)
 
 
 def create_capture_backend():

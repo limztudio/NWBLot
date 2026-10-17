@@ -159,10 +159,22 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc)noexcept{
 }
 
 [[nodiscard]] constexpr VkImageType GetTextureImageType(const TextureDimension::Enum dimension)noexcept{
-    return dimension == TextureDimension::Texture1D || dimension == TextureDimension::Texture1DArray ? VK_IMAGE_TYPE_1D : dimension == TextureDimension::Texture2D || dimension == TextureDimension::Texture2DArray
-            || dimension == TextureDimension::TextureCube || dimension == TextureDimension::TextureCubeArray
-            || dimension == TextureDimension::Texture2DMS || dimension == TextureDimension::Texture2DMSArray ? VK_IMAGE_TYPE_2D : dimension == TextureDimension::Texture3D ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_MAX_ENUM
-    ;
+    switch(dimension){
+    case TextureDimension::Texture1D:
+    case TextureDimension::Texture1DArray:
+        return VK_IMAGE_TYPE_1D;
+    case TextureDimension::Texture2D:
+    case TextureDimension::Texture2DArray:
+    case TextureDimension::TextureCube:
+    case TextureDimension::TextureCubeArray:
+    case TextureDimension::Texture2DMS:
+    case TextureDimension::Texture2DMSArray:
+        return VK_IMAGE_TYPE_2D;
+    case TextureDimension::Texture3D:
+        return VK_IMAGE_TYPE_3D;
+    default:
+        return VK_IMAGE_TYPE_MAX_ENUM;
+    }
 }
 
 [[nodiscard]] constexpr Expected<VkImageType> TryTextureDimensionToImageType(const TextureDimension::Enum dimension)noexcept{

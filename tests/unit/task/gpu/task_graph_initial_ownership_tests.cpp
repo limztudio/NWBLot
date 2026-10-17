@@ -197,11 +197,7 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAcc
     };
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto completionResult = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/invalid_typed_initial_owner_completion"))
-            .setMarkerLabel("Invalid Typed Initial Owner Completion")
-    );
+    const auto completionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_typed_initial_owner_completion")).setMarkerLabel("Invalid Typed Initial Owner Completion"));
     ASSERT_TRUE(completionResult);
     const Graphics::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
@@ -321,18 +317,10 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
     const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto graphicsCompletionResult = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/invalid_multi_owner_graphics_completion"))
-            .setMarkerLabel("Invalid Multi Owner Graphics Completion")
-    );
+    const auto graphicsCompletionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_multi_owner_graphics_completion")).setMarkerLabel("Invalid Multi Owner Graphics Completion"));
     ASSERT_TRUE(graphicsCompletionResult);
     const Graphics::GpuExternalCompletionId graphicsCompletion = *graphicsCompletionResult;
-    const auto computeCompletionResult = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/invalid_multi_owner_compute_completion"))
-            .setMarkerLabel("Invalid Multi Owner Compute Completion")
-    );
+    const auto computeCompletionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_multi_owner_compute_completion")).setMarkerLabel("Invalid Multi Owner Compute Completion"));
     ASSERT_TRUE(computeCompletionResult);
     const Graphics::GpuExternalCompletionId computeCompletion = *computeCompletionResult;
     ASSERT_TRUE(graphicsCompletion.valid());

@@ -29,7 +29,8 @@ Ui::EditBoxResult UiEditBoxHost::editActions(const Ui::WidgetState& widget, Ui::
     return editBorrowed(widget, model, options, popup, &actions);
 }
 
-Ui::EditBoxResult UiEditBoxHost::editNavigated(const Ui::WidgetState& widget, Ui::EditModel& model,
+Ui::EditBoxResult UiEditBoxHost::editNavigated(
+    const Ui::WidgetState& widget, Ui::EditModel& model,
     const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
     Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
 ){

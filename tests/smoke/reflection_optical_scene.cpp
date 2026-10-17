@@ -76,7 +76,8 @@ static Core::ECS::EntityID CreatePanel(ProjectRuntimeContext& context, Core::ECS
     return entity;
 }
 
-static Core::ECS::EntityID CreateBoundary(ProjectRuntimeContext& context, Core::ECS::World& world,
+static Core::ECS::EntityID CreateBoundary(
+    ProjectRuntimeContext& context, Core::ECS::World& world,
     const SmokeMeshRef& mesh, const Float4& position, const Float4& scale, const f32 ior, const Float4& transmission,
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested,
     const i32 priority = 0, const f32 coverage = 0.f, const bool pane = false
@@ -96,7 +97,8 @@ static Core::ECS::EntityID CreateBoundary(ProjectRuntimeContext& context, Core::
     return entity;
 }
 
-static Core::ECS::EntityID CreateBox(ProjectRuntimeContext& context, Core::ECS::World& world,
+static Core::ECS::EntityID CreateBox(
+    ProjectRuntimeContext& context, Core::ECS::World& world,
     const f32 centerZ, const f32 thickness, const f32 ior, const Float4& transmission,
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested, const i32 priority = 0,
     const f32 xyScale = 1.f

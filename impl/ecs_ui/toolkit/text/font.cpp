@@ -364,15 +364,8 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
                 const SIMDVectorSingle size = VectorSelect(delta, VectorNegate(delta), VectorLess(delta, VectorZero()));
                 ink = { VectorGetX(minimum), VectorGetY(minimum), VectorGetX(size), VectorGetY(size) };
             }
-            const SIMDVectorSingle position = VectorScale(VectorSet(static_cast<f32>(positions[index].x_offset),
-                -static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance),
-                -static_cast<f32>(positions[index].y_advance)
-            ), 1.0f / 64.0f
-            );
-            output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd,
-                { VectorGetX(position), VectorGetY(position) }, { VectorGetZ(position), VectorGetW(position) },
-                ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) }
-            );
+            const SIMDVectorSingle position = VectorScale(VectorSet(static_cast<f32>(positions[index].x_offset), -static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance), -static_cast<f32>(positions[index].y_advance)), 1.0f / 64.0f);
+            output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd, { VectorGetX(position), VectorGetY(position) }, { VectorGetZ(position), VectorGetW(position) }, ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
         }
         previousBegin = clusterBegin;
         first = end;

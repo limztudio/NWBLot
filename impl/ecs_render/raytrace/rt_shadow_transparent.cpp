@@ -196,7 +196,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     if(composeCsg){
         commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
         commandList.commitBarriers();
-        if(!RecordLightSpaceResolve(commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(),
+        if(!RecordLightSpaceResolve(
+            commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(),
             *lightSpace, *targets.transparentSoftHalf, frameIndex, transparentShadowSampleCount(),
             targets.bindless.transparentSoftHalfStorage.slot(), true
         ))

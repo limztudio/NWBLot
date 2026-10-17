@@ -277,13 +277,14 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     const bool submissionValid =
-        !planAccess.valid() ? false : packetView.valid()
-            && validFor(planAccess)
-            && token.valid()
-            && lease.valid()
-            && lease.m_packet == packetID
-            && lease.m_planGeneration == planAccess.planGeneration()
-            && matchesRecordingAttemptBinding(graph, compiledGraph, lease.m_recordingAttemptGeneration, lease.m_submissionBinding)
+        planAccess.valid()
+        && packetView.valid()
+        && validFor(planAccess)
+        && token.valid()
+        && lease.valid()
+        && lease.m_packet == packetID
+        && lease.m_planGeneration == planAccess.planGeneration()
+        && matchesRecordingAttemptBinding(graph, compiledGraph, lease.m_recordingAttemptGeneration, lease.m_submissionBinding)
     ;
     if(!submissionValid){
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet must retain its transaction submission lease");

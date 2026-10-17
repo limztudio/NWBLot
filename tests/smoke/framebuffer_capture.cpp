@@ -334,12 +334,7 @@ Expected<Core::GpuTaskId> FramebufferCapture::declareTaskGraphPresentation(Core:
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
 
-    const auto stagingHazardResult = graph.importHazardDomain(
-        Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests.smoke.framebuffer_capture.staging"))
-            .setMarkerLabel("Framebuffer Capture Staging")
-            .setType(Core::GpuGraphResourceType::HazardDomain)
-    );
+    const auto stagingHazardResult = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name("tests.smoke.framebuffer_capture.staging")).setMarkerLabel("Framebuffer Capture Staging").setType(Core::GpuGraphResourceType::HazardDomain));
     if(!stagingHazardResult){
         markFailed(NWB_TEXT("failed to declare the framebuffer staging hazard domain"));
         return MakeUnexpected(Failure{});

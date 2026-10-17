@@ -83,7 +83,8 @@ bool CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
 
 bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena){
     Vector<CookEntryRegistrationFunction, Core::Alloc::ScratchArena> functions{scratchArena};
-    return RunAutoCollectedFunctions(__hidden_cook_entry_registry::QueryAutoRegistrationQueue(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
+    return RunAutoCollectedFunctions(
+        __hidden_cook_entry_registry::QueryAutoRegistrationQueue(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }
     );
 }

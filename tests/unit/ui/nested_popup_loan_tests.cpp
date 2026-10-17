@@ -236,8 +236,7 @@ protected:
     }
 
     void expectNoChildCallbacks()const{
-        for(const NestedMutationSource* source : { &m_childSource, &m_comboSource, &m_menuSource,
-            &m_searchSource.full, &m_searchSource.view }){
+        for(const NestedMutationSource* source : { &m_childSource, &m_comboSource, &m_menuSource, &m_searchSource.full, &m_searchSource.view }){
             EXPECT_EQ(source->metadataCalls, 0u);
             EXPECT_EQ(source->keyCalls, 0u);
             EXPECT_EQ(source->lookupCalls, 0u);

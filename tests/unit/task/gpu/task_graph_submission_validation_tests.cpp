@@ -72,25 +72,13 @@ TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWit
     ExpectWaitStatistics(queue, tokens.data(), tokens.size());
     Sort(tokens.begin(), tokens.end(), [](const auto& first, const auto& second)noexcept(
         noexcept(first.value > second.value)
-        && (
-            !IsReference_V<decltype(first.value > second.value)>
-            || IsNothrowConvertible_V<
-                decltype(first.value > second.value),
-                Decay_T<decltype(first.value > second.value)>
-            >
-        )
+        && (!IsReference_V<decltype(first.value > second.value)> || IsNothrowConvertible_V<decltype(first.value > second.value), Decay_T<decltype(first.value > second.value)>>)
     ){ return first.value > second.value; }
     );
     ExpectWaitStatistics(queue, tokens.data(), tokens.size());
     Sort(tokens.begin(), tokens.end(), [](const auto& first, const auto& second)noexcept(
         noexcept(first.value < second.value)
-        && (
-            !IsReference_V<decltype(first.value < second.value)>
-            || IsNothrowConvertible_V<
-                decltype(first.value < second.value),
-                Decay_T<decltype(first.value < second.value)>
-            >
-        )
+        && (!IsReference_V<decltype(first.value < second.value)> || IsNothrowConvertible_V<decltype(first.value < second.value), Decay_T<decltype(first.value < second.value)>>)
     ){ return first.value < second.value; }
     );
     ASSERT_EQ(tokens.size(), original.size());

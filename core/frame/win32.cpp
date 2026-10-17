@@ -700,7 +700,8 @@ bool Frame::mainLoop(){
         return true;
 
     bool gracefulQuit = false;
-    const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop([&]()noexcept{ return data<Common::WinFrame>().isActive(); },
+    const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop(
+        [&]()noexcept{ return data<Common::WinFrame>().isActive(); },
         [&](){
             RECT rect = {};
             if(!GetClientRect(data<Common::WinFrame>().hwnd(), &rect)){

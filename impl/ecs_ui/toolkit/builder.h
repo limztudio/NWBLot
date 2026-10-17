@@ -190,7 +190,8 @@ private:
     [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const noexcept;
     void publishSliderResults(bool valid)noexcept;
     [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
-    [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source,
+    [[nodiscard]] ComboResult declareCombo(
+        AStringView stableKey, const IListDataSource& source,
         ComboState& state, const ComboOptions& options, SearchComboState* search = nullptr,
         ISearchableListDataSource* searchSource = nullptr, const SearchComboOptions* searchOptions = nullptr
     );

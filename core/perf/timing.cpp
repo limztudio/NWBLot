@@ -75,7 +75,8 @@ void TimingRecorder::clear()noexcept{
 }
 
 Expected<TimingScopeId> TimingRecorder::registerScope(const Name& scopeName){
-    return RegisterNamedScope<TimingScopeId>(m_scopes, m_scopeMap, m_generation, scopeName, [&](const Name& name)noexcept{ return MakeGlobalUnique<ScopeRecord>(m_arena, name); },
+    return RegisterNamedScope<TimingScopeId>(
+        m_scopes, m_scopeMap, m_generation, scopeName, [&](const Name& name)noexcept{ return MakeGlobalUnique<ScopeRecord>(m_arena, name); },
         [&](ScopeRecord& scope, const TimingScopeId& scopeId)noexcept{
             scope.generation = scopeId.generation;
             scope.accumulator.setEnabled(m_enabled);

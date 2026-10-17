@@ -6,7 +6,6 @@
 #include <tests/unit/telemetry/telemetry_test_helpers.h>
 
 #include <core/alloc/scratch.h>
-
 #include <core/common/name_symbols.h>
 #include <core/perf/session.h>
 #include <core/telemetry/session.h>

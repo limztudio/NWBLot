@@ -42,7 +42,8 @@ struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBuf
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        return GpuTaskGraphBuiltinDetail::RecordCopies(payload, commandList, context, [](const Copy& copy)noexcept{ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
+        return GpuTaskGraphBuiltinDetail::RecordCopies(
+            payload, commandList, context, [](const Copy& copy)noexcept{ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
                 return captureContext.commandIrCapture->captureCopyBuffer(captureContext.task, captureContext.packet, captureContext.queue, copy.sourceResource, copy.sourceOffsetBytes, copy.destinationResource, copy.destinationOffsetBytes, copy.dataSizeBytes);
             },

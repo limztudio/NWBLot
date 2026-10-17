@@ -558,14 +558,10 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
     Core::Alloc::ScratchArena scratchArena(__hidden_mesh::s_RuntimeMeshPruningArena);
     if(meshSystemPtr){
         const NWB::Impl::MeshSystem& meshSystem = *meshSystemPtr;
-        ECSRenderDetail::PruneRuntimeMeshResources(m_meshState.m_meshes, meshSystem, [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
-            scratchArena
-        );
+        ECSRenderDetail::PruneRuntimeMeshResources(m_meshState.m_meshes, meshSystem, [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); }, scratchArena);
         return;
     }
-    ECSRenderDetail::PruneRuntimeMeshResources(m_meshState.m_meshes, meshSystemPtr, [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
-        scratchArena
-    );
+    ECSRenderDetail::PruneRuntimeMeshResources(m_meshState.m_meshes, meshSystemPtr, [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); }, scratchArena);
 }
 
 

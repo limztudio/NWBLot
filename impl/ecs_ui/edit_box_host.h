@@ -122,7 +122,8 @@ public:
     [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options)override;
     [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup)override;
     [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions)override;
-    [[nodiscard]] virtual Ui::EditBoxResult editNavigated(const Ui::WidgetState& widget, Ui::EditModel& model,
+    [[nodiscard]] virtual Ui::EditBoxResult editNavigated(
+        const Ui::WidgetState& widget, Ui::EditModel& model,
         const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
         Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
     )override;

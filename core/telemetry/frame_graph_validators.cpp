@@ -661,14 +661,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
         return false;
     if(
         recording.packetCount == 0u
-        && (
-            recording.taskCount != 0u
-            || recording.commandListCount != 0u
-            || recording.barrierCount != 0u
-            || recording.workerRoutedPacketCount != 0u
-            || recording.parallelPacketCount != 0u
-            || !__hidden_frame_graph_validators::DurationsAreZero(durations[0u])
-        )
+        && (recording.taskCount != 0u || recording.commandListCount != 0u || recording.barrierCount != 0u || recording.workerRoutedPacketCount != 0u || recording.parallelPacketCount != 0u || !__hidden_frame_graph_validators::DurationsAreZero(durations[0u]))
     )
         return false;
 

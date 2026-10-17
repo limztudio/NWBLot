@@ -371,7 +371,8 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         if(lightSpace && lightSpace->ready){
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
             commandList.commitBarriers();
-            if(!RecordLightSpaceResolve(commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA,
+            if(!RecordLightSpaceResolve(
+                commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA,
                 frameIndex, softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP,
                 targets.bindless.shadowSoftHalfAStorage.slot(), false
             ))

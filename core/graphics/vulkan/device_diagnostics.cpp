@@ -227,7 +227,8 @@ void Device::captureDeviceLoss(const AStringView context){
         }
 
         if(report.details.empty())
-            report.details.append(StringFormat(m_gpuCrashReportArena,
+            report.details.append(StringFormat(
+                m_gpuCrashReportArena,
                 "minimal GPU crash report: no vendor GPU dump or device-fault details were available\n"
                 "capture context: {}\n"
                 "device: {} (vendor 0x{:x}, device 0x{:x}, driver 0x{:x})\n"

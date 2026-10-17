@@ -4,9 +4,8 @@
 
 #include "command.h"
 
-#include <core/graphics/backend_selection/backend.h>
-
 #include <core/alloc/scratch.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/resource_state_selection.h>
 
 #include <global/containers.h>

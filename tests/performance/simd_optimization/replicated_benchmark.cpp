@@ -335,7 +335,8 @@ NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVec
 template<Operation::Enum Kind>
 u32 VerifyReduction(u64& seed){
 #pragma STDC FENV_ACCESS ON
-    return SimdOptimizationBenchmark::VerifyReductionCases(s_OperationNames[Kind], seed,
+    return SimdOptimizationBenchmark::VerifyReductionCases(
+        s_OperationNames[Kind], seed,
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); },
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, const SimdOptimizationBenchmark::Observation& expected, const SimdOptimizationBenchmark::Observation& actual, const usize index, u32& failures){
@@ -419,9 +420,7 @@ NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iteratio
 template<Operation::Enum Kind, bool Candidate>
 void Measure(const Dataset& data, const usize iterations, const bool latency){
     const usize operations = iterations * 4u;
-    SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations,
-        [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); }
-    );
+    SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations, [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); });
 }
 
 template<Operation::Enum Kind>

@@ -267,10 +267,7 @@ void CommandList::commitBarriers(){
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
         return;
 
-    executePipelineBarrier({},
-        { m_pendingImageBarriers.data(), m_pendingImageBarriers.size() },
-        { m_pendingBufferBarriers.data(), m_pendingBufferBarriers.size() }
-    );
+    executePipelineBarrier({}, { m_pendingImageBarriers.data(), m_pendingImageBarriers.size() }, { m_pendingBufferBarriers.data(), m_pendingBufferBarriers.size() });
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();

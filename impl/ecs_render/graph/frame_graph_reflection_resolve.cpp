@@ -160,7 +160,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
             .setResourceUses(refractionUses.data(), refractionUses.size())
             .setResourceSetUses(refractionSets, refractionSetCount)
         ;
-        refractionResolveTask = m_graph.addTask<RefractionResolveGraphTask>(refractionDesc,
+        refractionResolveTask = m_graph.addTask<RefractionResolveGraphTask>(
+            refractionDesc,
             RefractionResolveGraphTask::Payload{
                 .system = m_raytracingSystem, .targets = deferredTargets, .resources = refractionResources,
                 .hardwarePreparationReady = inputs.hardwarePreparationReady,

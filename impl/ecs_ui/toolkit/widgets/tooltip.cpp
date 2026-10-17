@@ -77,7 +77,8 @@ void TooltipState::advanceRevision()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
+bool TooltipBehavior::Update(
+    TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
     const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
     const bool hovered, const f32 deltaSeconds, const TooltipOptions& options
 )noexcept{

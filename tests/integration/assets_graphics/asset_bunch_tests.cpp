@@ -179,7 +179,8 @@ TEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReus
         AString<Metascript::MetaArena> secondVariable("second_", fixture.metadataArena);
         secondVariable.append(224u, 'b');
         AString<Metascript::MetaArena> virtualRoot(256u, 'r', fixture.metadataArena);
-        AString<Metascript::MetaArena> source = StringFormat(fixture.metadataArena,
+        AString<Metascript::MetaArena> source = StringFormat(
+            fixture.metadataArena,
             "probe {};\r\nprobe {};\r\n{}.target = {};\r\n{}.nested = [{{ \"target\": {} }}];\r\nasset_bunch bunch = [{}, {}];\r\n",
             firstVariable, secondVariable, firstVariable, secondVariable, secondVariable, firstVariable,
             secondVariable, firstVariable

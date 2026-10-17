@@ -55,12 +55,7 @@ void InputRouter::cancelDeviceInput(const u64 device)noexcept{
 }
 
 bool InputRouter::wantsCommands()const noexcept{
-    return
-        hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{
-        return source.consumed;
-    }
-    ) != m_commandSources.end()
-    ;
+    return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{ return source.consumed; }) != m_commandSources.end();
 }
 
 bool InputRouter::ownsKey(const i32 key)const noexcept{

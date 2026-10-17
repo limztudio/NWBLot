@@ -39,8 +39,7 @@ public:
 }
 
 namespace UiTextEditStatus{
-    enum Enum : u8{ Idle, Applied, Cancelled, StaleOwner, StaleModel, StaleSurrounding, InvalidEvent, ModelRejected,
-        NativeFailure, WrongThread };
+    enum Enum : u8{ Idle, Applied, Cancelled, StaleOwner, StaleModel, StaleSurrounding, InvalidEvent, ModelRejected, NativeFailure, WrongThread };
 };
 
 struct UiTextEditResult{

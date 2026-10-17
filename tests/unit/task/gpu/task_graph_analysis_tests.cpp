@@ -388,12 +388,7 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
         char resourceIndexBuffer[32u] = {};
         const auto derivedNameAt388Col29 = DeriveName(Name("tests/task_graph_analysis/resource_"), FormatDecimal(resourceIndex, resourceIndexBuffer));
         ASSERT_TRUE(derivedNameAt388Col29);
-        const auto gpuAdmissionAt368 = graph.importHazardDomain(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(*derivedNameAt388Col29)
-                .setMarkerLabel("Analysis Hazard Domain")
-                .setType(Graphics::GpuGraphResourceType::HazardDomain)
-        );
+        const auto gpuAdmissionAt368 = graph.importHazardDomain(Graphics::GpuGraphResourceDesc{}.setIdentity(*derivedNameAt388Col29).setMarkerLabel("Analysis Hazard Domain").setType(Graphics::GpuGraphResourceType::HazardDomain));
         ASSERT_TRUE(gpuAdmissionAt368);
         resources[resourceIndex] = *gpuAdmissionAt368;
         ASSERT_TRUE(resources[resourceIndex].valid());

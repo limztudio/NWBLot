@@ -531,9 +531,7 @@ TEST_F(UiPopupRouterTests, InsertingLowerBeneathRetainedTopKeepsTopFocusAndTheOr
     ASSERT_EQ(m_router.focus().value, 202u);
     const PopupScope lower = Scope();
     const auto lowerTargets = Targets(lower);
-    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u],
-        Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u),
-        Child(higher, 202u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u) };
+    const HitTarget targets[]{ lowerTargets[0u], lowerTargets[1u], lowerTargets[2u], lowerTargets[3u], lowerTargets[4u], Barrier(higher), Child(higher, 201u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u), Child(higher, 202u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u) };
     const PopupScope scopes[]{ lower, higher };
     ASSERT_TRUE(m_router.commitTargets(targets, 8u, 3u, scopes, 2u));
     EXPECT_EQ(m_router.focus().value, 202u);

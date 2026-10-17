@@ -78,11 +78,7 @@ constexpr auto MakeFactoryEqual()noexcept{
 
 
 template<typename QueueT, typename FactoryT>
-inline void RegisterAutoFactory(QueueT& queue, const FactoryT factory)noexcept(
-    IsNothrowDestructible_V<FactoryT>
-    && noexcept(static_cast<bool>(factory == nullptr))
-    && noexcept(queue.appendUnique(factory, AutoRegistrationDetail::MakeFactoryEqual<FactoryT>()))
-){
+inline void RegisterAutoFactory(QueueT& queue, const FactoryT factory)noexcept(IsNothrowDestructible_V<FactoryT> && noexcept(static_cast<bool>(factory == nullptr)) && noexcept(queue.appendUnique(factory, AutoRegistrationDetail::MakeFactoryEqual<FactoryT>()))){
     if(factory == nullptr)
         return;
 

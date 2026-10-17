@@ -372,10 +372,7 @@ public:
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates
     );
     template<typename FrontierVectorT>
-    static void ClearMeshletFrontier(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags)noexcept(
-        MeshletCookExceptionDetail::FrontierIndexIterationIsNothrow<FrontierVectorT>()
-        && noexcept(frontier.clear())
-    );
+    static void ClearMeshletFrontier(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags)noexcept(MeshletCookExceptionDetail::FrontierIndexIterationIsNothrow<FrontierVectorT>() && noexcept(frontier.clear()));
     template<typename FrontierVectorT>
     static void RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags, const usize frontierOffset)noexcept(
         noexcept(DeclVal<void(*)(u32)noexcept>()(frontier[frontierOffset]))
@@ -729,9 +726,7 @@ MeshletBounds MeshCookMeshlets::BuildMeshletBounds(const CookEntryT& entry, cons
     const auto positionAt = [&](const u32 localPositionIndex)noexcept{
         return positions[localPositionIndex];
     };
-    const auto localPositionAt = [&](const u8 localVertexIndex)noexcept(
-        noexcept(DeclVal<void(*)(const MeshletLocalVertexRef&)noexcept>()(entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex]))
-    ){
+    const auto localPositionAt = [&](const u8 localVertexIndex)noexcept(noexcept(DeclVal<void(*)(const MeshletLocalVertexRef&)noexcept>()(entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex]))){
         const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
         return positions[localVertexRef.localDeformedPosition];
     };
@@ -1028,10 +1023,7 @@ Expected<MeshletFrontierCandidate> MeshCookMeshlets::FindBestDisconnectedMeshlet
 
 
 template<typename FrontierVectorT>
-void MeshCookMeshlets::ClearMeshletFrontier(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags)noexcept(
-    MeshletCookExceptionDetail::FrontierIndexIterationIsNothrow<FrontierVectorT>()
-    && noexcept(frontier.clear())
-){
+void MeshCookMeshlets::ClearMeshletFrontier(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags)noexcept(MeshletCookExceptionDetail::FrontierIndexIterationIsNothrow<FrontierVectorT>() && noexcept(frontier.clear())){
     for(const u32 triangleIndex : frontier)
         frontierFlags[triangleIndex] = 0u;
     frontier.clear();

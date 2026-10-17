@@ -40,9 +40,7 @@ namespace __hidden_ui_text_shaper{
 static void Append(ShapedRun& run, const SharedFontFace& face, const PaintVector<RawShapedGlyph>& glyphs, usize begin, usize end){
     for(usize index = begin; index < end; ++index){
         const RawShapedGlyph& glyph = glyphs[index];
-        run.glyphs.push_back({ face, glyph.glyphId, glyph.byteBegin, glyph.byteEnd,
-            glyph.offset, glyph.advance, glyph.ink, glyph.coverage }
-        );
+        run.glyphs.push_back({ face, glyph.glyphId, glyph.byteBegin, glyph.byteEnd, glyph.offset, glyph.advance, glyph.ink, glyph.coverage });
     }
 }
 

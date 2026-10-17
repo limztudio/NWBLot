@@ -1174,6 +1174,7 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         run.native = SimpleNamespace(windows=False, maintain_pointer=mock.Mock(), observe_window=lambda: {})
         run.log_directory, run.log_baseline, run.log_pattern = Path("unused"), {}, "*.log"
         run.deadline, run.snapshot, run.failure_report, run.stages, run.expected = 1.0, None, None, [], expected
+        run.caret_phase_waits = 0
         run.write_report = mock.Mock()
         with mock.patch.object(text_area_smoke.time, "monotonic", side_effect=lambda: clock.now), \
              mock.patch.object(text_area_smoke.time, LIT_SLEEP, side_effect=sleep), \

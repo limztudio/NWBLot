@@ -133,9 +133,7 @@ GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
         .pendingCommandBufferCount = m_pendingCommandBufferCount.load(MemoryOrder::relaxed),
         .growthEventCount = m_commandBufferGrowthEventCount.load(MemoryOrder::relaxed),
         .resetEventCount = m_commandBufferResetEventCount.load(MemoryOrder::relaxed),
-        .nativeHandleStorageLowerBoundBytes =
-            commandPoolEpochCount * sizeof(VkCommandPool)
-            + currentCommandBufferCount * sizeof(VkCommandBuffer),
+        .nativeHandleStorageLowerBoundBytes = commandPoolEpochCount * sizeof(VkCommandPool) + currentCommandBufferCount * sizeof(VkCommandBuffer),
         .queue = m_physicalQueue,
     };
 }
@@ -158,8 +156,7 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(const u64 re
             .pendingCommandBufferCount = pendingCommandBufferCount,
             .growthEventCount = m_directCommandBufferGrowthEventCount.load(MemoryOrder::relaxed),
             .resetEventCount = m_directCommandBufferResetEventCount.load(MemoryOrder::relaxed),
-            .nativeHandleStorageLowerBoundBytes =
-                currentCommandBufferCount * (sizeof(VkCommandPool) + sizeof(VkCommandBuffer)),
+            .nativeHandleStorageLowerBoundBytes = currentCommandBufferCount * (sizeof(VkCommandPool) + sizeof(VkCommandBuffer)),
             .queue = m_physicalQueue,
             .recordingWorkerIndex = 0u,
         };
@@ -181,8 +178,7 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(const u64 re
         .pendingCommandBufferCount = pendingCommandBufferCount,
         .growthEventCount = arena->growthEventCount.load(MemoryOrder::relaxed),
         .resetEventCount = arena->resetEventCount.load(MemoryOrder::relaxed),
-        .nativeHandleStorageLowerBoundBytes =
-            sizeof(VkCommandPool) + currentCommandBufferCount * sizeof(VkCommandBuffer),
+        .nativeHandleStorageLowerBoundBytes = sizeof(VkCommandPool) + currentCommandBufferCount * sizeof(VkCommandBuffer),
         .queue = m_physicalQueue,
         .recordingWorkerIndex = recordingWorkerIndex,
     };

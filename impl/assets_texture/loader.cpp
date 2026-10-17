@@ -206,10 +206,7 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
     auto textureResult = graphics.createTexture(textureDesc);
     if(
         !textureResult
-        && (
-            (textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && format != Core::Format::RGBA8_UNORM)
-            || (textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4 && textureAsset.alphaMode() == TextureAlphaMode::Opaque)
-        )
+        && ((textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && format != Core::Format::RGBA8_UNORM) || (textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4 && textureAsset.alphaMode() == TextureAlphaMode::Opaque))
     ){
         auto fallbackResult = __hidden_texture_loader::CreateTextureWithFormatFallback(
             graphics,

@@ -263,9 +263,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.coverage.ink.x, glyph.coverage.ink.y, glyph.coverage.ink.width, glyph.coverage.ink.height)))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                result.m_glyphs.push_back({ glyph.face, glyph.glyphId,
-                    line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage }
-                );
+                result.m_glyphs.push_back({ glyph.face, glyph.glyphId, line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage });
                 pen = static_cast<f32>(nextPen);
             }
             TextCluster cluster;

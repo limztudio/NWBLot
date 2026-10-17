@@ -122,14 +122,17 @@ NWB_NOINLINE u32 Qualify()noexcept{
             const SIMDVectorDouble a = VectorDoubleSetInt(s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)]);
             const SIMDVectorDouble b = sample % 2u ? a : VectorDoubleSetInt(s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)]);
 #define NWB_AUDIT_COMPARE(kind) \
-            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) return 3u; \
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) \
+                return 3u; \
             errno = 0; \
             const u32 baseline##kind = Observe<Operation::kind, false>(a, b); \
             const int baselineFlags##kind = TestFloatingPointExceptions(FE_ALL_EXCEPT), baselineErrno##kind = errno; \
-            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) return 3u; \
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) \
+                return 3u; \
             errno = 0; \
             const u32 candidate##kind = Observe<Operation::kind, true>(a, b); \
-            if(candidate##kind != baseline##kind || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags##kind || errno != baselineErrno##kind) return 4u;
+            if(candidate##kind != baseline##kind || TestFloatingPointExceptions(FE_ALL_EXCEPT) != baselineFlags##kind || errno != baselineErrno##kind) \
+                return 4u;
             NWB_AUDIT_COMPARE(EqualFloat)
             NWB_AUDIT_COMPARE(EqualDouble)
             NWB_AUDIT_COMPARE(EqualDoubleXYZ)

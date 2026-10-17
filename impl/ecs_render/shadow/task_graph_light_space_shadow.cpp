@@ -255,7 +255,8 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph&
     const auto& snapshot = inputs.snapshot;
     if(!snapshot.ready || !snapshot.diagnostics || !snapshot.diagnosticReadback || !inputs.dependency.valid() || !context.valid())
         return MakeUnexpected(Failure{});
-    const auto readbackResult = graph.importBuffer(snapshot.diagnosticReadback,
+    const auto readbackResult = graph.importBuffer(
+        snapshot.diagnosticReadback,
         BufferResourceDesc(Name("render.light_space_shadow.diagnostics"), "CSG Shadow Diagnostics")
             .setInitialState(Core::ResourceStates::CopyDest).setExternalFinalState(Core::ResourceStates::CopyDest)
     );
@@ -278,7 +279,8 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph&
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
         .setResourceUses(uses, LengthOf(uses))
     ;
-    return graph.addTask<__hidden_task_graph_light_space_shadow::DiagnosticTask>(desc,
+    return graph.addTask<__hidden_task_graph_light_space_shadow::DiagnosticTask>(
+        desc,
         __hidden_task_graph_light_space_shadow::DiagnosticTask::Payload{ inputs.shadowPrepared, snapshot.csgContext, snapshot.diagnosticReadback, snapshot.diagnostics, snapshot.diagnosticFrame, }
     );
 }

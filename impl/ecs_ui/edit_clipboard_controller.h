@@ -22,9 +22,7 @@ NWB_IMPL_BEGIN
 
 
 namespace UiEditClipboardStatus{
-    enum Enum : u8{ Idle, Pending, Applied, Published, Cancelled, StaleOwner, StaleModel, InvalidOwner, InvalidAction,
-        ReadOnly, NoSelection, Unsupported, CompositionActive, InvalidText, TooLarge, ModelRejected, NativeFailure,
-        WrongThread, QueueFull };
+    enum Enum : u8{ Idle, Pending, Applied, Published, Cancelled, StaleOwner, StaleModel, InvalidOwner, InvalidAction, ReadOnly, NoSelection, Unsupported, CompositionActive, InvalidText, TooLarge, ModelRejected, NativeFailure, WrongThread, QueueFull };
 };
 
 struct UiEditClipboardResult{

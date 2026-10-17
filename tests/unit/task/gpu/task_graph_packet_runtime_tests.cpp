@@ -454,13 +454,7 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithConcreteResources){
 
     for(const ResourceCase& resourceCase : resourceCases){
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(resourceCase.identity)
-                .setMarkerLabel(resourceCase.markerLabel)
-                .setType(resourceCase.type)
-                .setInitialState(Graphics::ResourceStates::Common)
-        );
+        const auto resourceResult = graph.importResource(Graphics::GpuGraphResourceDesc{}.setIdentity(resourceCase.identity).setMarkerLabel(resourceCase.markerLabel).setType(resourceCase.type).setInitialState(Graphics::ResourceStates::Common));
         ASSERT_TRUE(resourceResult);
         const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());

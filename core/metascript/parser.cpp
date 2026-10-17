@@ -480,7 +480,8 @@ private:
     }
 
     Value parseAdditive(){
-        return parseBinaryExpression([&](){ return parseMultiplicative(); },
+        return parseBinaryExpression(
+            [&](){ return parseMultiplicative(); },
             TokenType::Plus, TokenType::Minus, [](const TokenType::Enum op, const Value& left, const Value& right){
                 return op == TokenType::Plus ? left + right : left - right;
             }
@@ -488,7 +489,8 @@ private:
     }
 
     Value parseMultiplicative(){
-        return parseBinaryExpression([&](){ return parseUnary(); },
+        return parseBinaryExpression(
+            [&](){ return parseUnary(); },
             TokenType::Star, TokenType::Slash, [](const TokenType::Enum op, const Value& left, const Value& right)noexcept{
                 return op == TokenType::Star ? left * right : left / right;
             }

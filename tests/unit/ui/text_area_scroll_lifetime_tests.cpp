@@ -125,10 +125,7 @@ protected:
             return false;
         const Point origin = UiWidgetTests::Center(thumb->rectangle);
         const Point destination{ origin.x, origin.y + 24.0f };
-        return
-            send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed
-            && m_context.input().capture() == thumbId
-        ;
+        return send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed && m_context.input().capture() == thumbId;
     }
 
     void expectModel(const EditModel& model, const AreaModelSnapshot& before)const{

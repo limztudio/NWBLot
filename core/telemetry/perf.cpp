@@ -87,9 +87,7 @@ template<typename HeaderT>
     && noexcept(BinaryDetail::CanReadBytes(DeclVal<const BinaryByteView&>(), DeclVal<usize>(), DeclVal<const HeaderT&>().scopeNameBytes))
     && noexcept((DeclVal<usize>() != DeclVal<const HeaderT&>().scopeNameBytes) ? 0 : 0)
     && noexcept(DeclVal<void (*)(Expected<ParsedPerfPayload<HeaderT>>)noexcept>()(MakeUnexpected(Failure{})))
-    && noexcept(DeclVal<void (*)(Expected<ParsedPerfPayload<HeaderT>>)noexcept>()(
-        ParsedPerfPayload<HeaderT>{ .header = DeclVal<const HeaderT&>(), .scopeText = AStringView(DeclVal<const char*>(), DeclVal<const HeaderT&>().scopeNameBytes) }
-    ))
+    && noexcept(DeclVal<void (*)(Expected<ParsedPerfPayload<HeaderT>>)noexcept>()(ParsedPerfPayload<HeaderT>{ .header = DeclVal<const HeaderT&>(), .scopeText = AStringView(DeclVal<const char*>(), DeclVal<const HeaderT&>().scopeNameBytes) }))
 ){
     if(payloadBytes < sizeof(HeaderT) || !payload)
         return MakeUnexpected(Failure{});

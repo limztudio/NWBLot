@@ -379,10 +379,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
     }
 
     if(!acquireImageBarriers.empty() || !acquireBufferBarriers.empty()){
-        executePipelineBarrier({},
-            { acquireImageBarriers.data(), acquireImageBarriers.size() },
-            { acquireBufferBarriers.data(), acquireBufferBarriers.size() }
-        );
+        executePipelineBarrier({}, { acquireImageBarriers.data(), acquireImageBarriers.size() }, { acquireBufferBarriers.data(), acquireBufferBarriers.size() });
         if(m_commandRecordingFailed)
             return false;
     }

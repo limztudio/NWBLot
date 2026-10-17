@@ -26,8 +26,7 @@ TEST_F(MultilineModelTests, SingleLineRejectsHardBreaksAndNulWithoutChangingMode
     EditModel single(m_arena);
     ASSERT_TRUE(single.setText("a\t\x01\x7F\xC2\x85" "b"));
     const MultilineSnapshot before(m_arena, single);
-    for(const AStringView rejected : { AStringView("\n"), AStringView("\r"), AStringView("\xE2\x80\xA8"),
-        AStringView("\xE2\x80\xA9"), AStringView("\0", 1u) }){
+    for(const AStringView rejected : { AStringView("\n"), AStringView("\r"), AStringView("\xE2\x80\xA8"), AStringView("\xE2\x80\xA9"), AStringView("\0", 1u) }){
         EXPECT_FALSE(single.setText(rejected));
         before.expectUnchanged(single);
     }

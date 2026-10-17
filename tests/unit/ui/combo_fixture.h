@@ -35,16 +35,16 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return generation; }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
     [[nodiscard]] virtual u64 revision()const override{ return contentRevision; }
-    [[nodiscard]] virtual u64 rowCount()const override{ return count; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         ++keyCalls;
         return rawKey(index);
     }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
         u64 index = 0u;
         ++lookupCalls;
         if(value == 0u || value == removed || value > count + (removed != 0u ? 1u : 0u))
@@ -54,7 +54,7 @@ public:
         return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
         ++searchCalls;
         return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
     }
@@ -64,7 +64,7 @@ public:
         return index % 2u == 0u ? "First" : "Second";
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         ++enabledCalls;
         return index < count && rawKey(index) != disabled;
     }

@@ -202,10 +202,7 @@ template<typename Source>
 
 
 bool IsValidSpirvModuleWords(const u32* words, const usize wordCount)noexcept{
-    return __hidden_spirv_entry_point::ScanSpirvEntryPoints(
-        __hidden_spirv_entry_point::SpirvWordSource{ words, wordCount },
-        [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&)noexcept{}
-    );
+    return __hidden_spirv_entry_point::ScanSpirvEntryPoints(__hidden_spirv_entry_point::SpirvWordSource{ words, wordCount }, [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&)noexcept{});
 }
 
 

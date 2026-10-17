@@ -6,8 +6,8 @@
 
 #include <global/blocking_io.h>
 #include <global/scope_exit.h>
+#include <global/termination.h>
 
-#include <cstdlib>
 #include <cstring>
 #include <windows.h>
 
@@ -125,7 +125,7 @@ static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo){
 
 [[noreturn]] static void TerminateHandler()noexcept{
     Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u);
-    std::abort();
+    TerminateInvariant();
 }
 
 static u64 ContextInstructionPointer(const CONTEXT& context)noexcept{

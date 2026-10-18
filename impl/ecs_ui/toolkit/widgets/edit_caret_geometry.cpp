@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/edit/multiline_text.h>
 
+#include <global/simd/result.h>
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 
@@ -121,7 +122,7 @@ namespace __hidden_ui_edit_caret_geometry{
     return total == 0u ? VectorZero() : VectorDivide(VectorReplicate(static_cast<f32>(before)), VectorReplicate(static_cast<f32>(total)));
 }
 
-[[nodiscard]] static Expected<SIMDVectorSingle> LoadCaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries, const usize byte)noexcept{
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries, const usize byte)noexcept{
     if(layout.lines().empty() || !GraphemeSegmentation::IsScalarBoundary(layout.utf8(), byte))
         return MakeUnexpected(Failure{});
     const TextLine& line = layout.lines()[LineForByte(layout, byte)];
@@ -158,7 +159,7 @@ namespace __hidden_ui_edit_caret_geometry{
     }
     if(!IsFinite(x))
         return MakeUnexpected(Failure{});
-    return VectorSet(x, line.top, 0.0f, line.height);
+    return SIMDVectorSingleResult{ VectorSet(x, line.top, 0.0f, line.height) };
 }
 
 [[nodiscard]] static Expected<usize> NearestStop(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops, const u32 lineIndex, const Point point)noexcept{
@@ -282,7 +283,7 @@ bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expect
         if(!caret)
             return false;
         const u32 lineIndex = __hidden_ui_edit_caret_geometry::LineForByte(layout, item.displayByte);
-        stops.push_back({ item.committedByte, item.displayByte, VectorGetX(*caret), lineIndex });
+        stops.push_back({ item.committedByte, item.displayByte, VectorGetX(caret->value), lineIndex });
         ++lines[lineIndex].stopCount;
         previousCommitted = item.committedByte;
         previousDisplay = item.displayByte;
@@ -307,7 +308,7 @@ Expected<Rect> EditCaretGeometry::caretRect(const usize displayByte)const noexce
     const auto value = __hidden_ui_edit_caret_geometry::LoadCaretRect(m_layout, m_boundaries, displayByte);
     if(!value)
         return MakeUnexpected(Failure{});
-    return Rect{ VectorGetX(*value), VectorGetY(*value), VectorGetZ(*value), VectorGetW(*value) };
+    return Rect{ VectorGetX(value->value), VectorGetY(value->value), VectorGetZ(value->value), VectorGetW(value->value) };
 }
 
 Expected<usize> EditCaretGeometry::hitTest(const Point localPoint)const noexcept{

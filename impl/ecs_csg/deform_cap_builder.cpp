@@ -113,12 +113,12 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Ve
     return true;
 }
 
-Expected<SIMDVectorSingle> CsgDeformCapBuilder::CapNormal(const SIMDVectorSingle areaVec)noexcept{
+Expected<SIMDVectorSingleResult> CsgDeformCapBuilder::CapNormal(const SIMDVectorSingle areaVec)noexcept{
     const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVec));
     if(!(areaLengthSq > s_LoopAreaEpsilonSq))
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle normalized = Vector3Normalize(areaVec);
-    return VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW);
+    return SIMDVectorSingleResult{ VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW) };
 }
 
 Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles, const Vector<u32, ScratchArena>& loop){
@@ -219,7 +219,7 @@ Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, CsgDe
         const auto loopNormal = CapNormal(area);
         if(!loopNormal)
             return MakeUnexpected(Failure{});
-        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(*loopNormal, inOutVertices, inOutTriangles, loop);
+        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(loopNormal->value, inOutVertices, inOutTriangles, loop);
         if(!loopCaps)
             return MakeUnexpected(Failure{});
         capTriangles += *loopCaps;

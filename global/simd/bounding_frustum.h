@@ -45,10 +45,11 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
             CollisionDetail::ExpandMinMax(corners[index], minBounds, maxBounds);
     }
 
-    struct LocalBounds{
+    struct alignas(SIMDVectorSingle) LocalBounds{
         SIMDVectorSingle minimum;
         SIMDVectorSingle maximum;
     };
+    static_assert(alignof(Expected<LocalBounds>) >= alignof(LocalBounds));
     const auto fitted = [&]()noexcept -> Expected<LocalBounds>{
         LocalBounds bounds{};
         for(usize index = 0u; index < s_CornerCount; ++index){
@@ -131,10 +132,11 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
             CollisionDoubleDetail::ExpandMinMax(corners[index], minBounds, maxBounds);
     }
 
-    struct LocalBounds{
+    struct alignas(SIMDVectorDouble) LocalBounds{
         SIMDVectorDouble minimum;
         SIMDVectorDouble maximum;
     };
+    static_assert(alignof(Expected<LocalBounds>) >= alignof(LocalBounds));
     const auto fitted = [&]()noexcept -> Expected<LocalBounds>{
         LocalBounds bounds{};
         for(usize index = 0u; index < s_DoubleCornerCount; ++index){

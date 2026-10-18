@@ -412,7 +412,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             add_dependencies(nwb_texture_smoke nwb_texture_smoke_assets)
 
             nwb_add_window_capture_smoke(nwb_texture_capture_smoke texture_smoke_capture.bmp "$<TARGET_FILE:nwb_texture_smoke>" "${_nwb_texture_smoke_runtime_root}" "NWB Texture Smoke" "--application-capture" "--application-capture-frame-count" "360"
-                "--expect-texture-smoke" "--reject-log-message" "[ERROR]" "--reject-log-message" "failed to resolve shader")
+                "--expect-texture-smoke" "--expect-log-message" "TextureSmokeProject: bounded sRGB clear edges preserve alpha and neighboring pixels" "--reject-log-message" "[ERROR]" "--reject-log-message" "failed to resolve shader")
 
             unset(_nwb_texture_smoke_asset_stamp)
             unset(_nwb_texture_smoke_runtime_root)

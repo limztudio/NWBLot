@@ -28,3 +28,7 @@ target_sources(nwb_math_tests PRIVATE
 target_sources(nwb_math_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/geometry_boundary_tests.cpp"
 )
+
+target_sources(nwb_math_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/vector_pow_boundary_tests.cpp"
+)

@@ -70,11 +70,12 @@ NWB_INLINE bool EqualBits(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs
     return true;
 }
 
-struct Observation{
+struct alignas(SIMDVectorDouble) Observation{
     SIMDVectorDouble value;
     i32 flags;
     i32 error;
 };
+static_assert(alignof(Expected<Observation>) >= alignof(Observation));
 
 template<typename Evaluate>
 [[nodiscard]] Expected<Observation> Observe(Evaluate&& evaluate)noexcept(

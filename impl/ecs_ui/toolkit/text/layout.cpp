@@ -4,6 +4,7 @@
 
 #include "layout.h"
 
+#include <global/simd/result.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simd/convert.h>
 
@@ -31,7 +32,7 @@ namespace __hidden_ui_text_layout{
     return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
 }
 
-[[nodiscard]] static Expected<SIMDVectorDouble> TranslateInk(const SIMDVectorDouble position, const SIMDVectorDouble ink)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> TranslateInk(const SIMDVectorDouble position, const SIMDVectorDouble ink)noexcept{
     const SIMDVectorDouble origin = VectorDoubleAdd(position, ink);
     const SIMDVectorDouble end = VectorDoubleAdd(origin, VectorDoubleSwizzle<2, 3, 2, 3>(ink));
     if(!FitsCoordinate(VectorDoubleGetX(origin)) || !FitsCoordinate(VectorDoubleGetY(origin)) || !FitsCoordinate(VectorDoubleGetX(end)) || !FitsCoordinate(VectorDoubleGetY(end)))
@@ -40,7 +41,7 @@ namespace __hidden_ui_text_layout{
     const SIMDVectorSingle roundedEnd = VectorAdd(VectorSelect(VectorZero(), rectangle, s_SIMDMaskXY), VectorSwizzle<2, 3, 2, 3>(rectangle));
     if(!IsFinite(VectorGetX(roundedEnd)) || !IsFinite(VectorGetY(roundedEnd)))
         return MakeUnexpected(Failure{});
-    return ConvertVectorSingleToDouble(rectangle);
+    return SIMDVectorDoubleResult{ ConvertVectorSingleToDouble(rectangle) };
 }
 
 [[nodiscard]] static bool ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction)noexcept{
@@ -259,7 +260,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
                 const SIMDVectorDouble positionValue = VectorDoubleSet(position.x, position.y, 0.0, 0.0);
                 const auto ink = __hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.ink.x, glyph.ink.y, glyph.ink.width, glyph.ink.height));
-                if(!ink || !__hidden_ui_text_layout::IncludeInk(inkBounds, hasInk, *ink))
+                if(!ink || !__hidden_ui_text_layout::IncludeInk(inkBounds, hasInk, ink->value))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.coverage.ink.x, glyph.coverage.ink.y, glyph.coverage.ink.width, glyph.coverage.ink.height)))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);

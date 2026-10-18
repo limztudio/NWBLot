@@ -55,7 +55,7 @@ Expected<ImageMetrics> ImageLayout::Measure(const ImageOptions& options, const U
     if(!sliceExtents)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble geometryPair0Operand0 = VectorDoubleSet(static_cast<f64>(region.rectangle.width), static_cast<f64>(region.rectangle.height), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair0Operand1 = *sliceExtents;
+    const SIMDVectorDouble geometryPair0Operand1 = sliceExtents->value;
     const SIMDVectorDouble pixelWidthPixelHeightValue = VectorDoubleSelect(geometryPair0Operand1, geometryPair0Operand0, VectorDoubleGreater(geometryPair0Operand0, geometryPair0Operand1));
     const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
     const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleZero(), pixelWidthPixelHeightValue, s_DoubleSIMDMaskXY), VectorDoubleReplicate(density));

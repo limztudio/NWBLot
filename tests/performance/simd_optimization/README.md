@@ -10,7 +10,7 @@ Run the following from the repository root on Linux x64, with the normal project
 set -euo pipefail
 cmake --preset linux-clang-x64 -DNWB_BUILD_SIMD_BENCHMARKS=ON
 cmake --build --preset linux-clang-opt --target nwb_math_tests nwb_simd_vector_benchmark nwb_simd_geometry_benchmark nwb_simd_memory_storage_benchmark nwb_simd_replicated_benchmark \
-    nwb_simd_mask_benchmark nwb_simd_box_normal_benchmark
+    nwb_simd_mask_benchmark nwb_simd_box_normal_benchmark nwb_simd_pow_qualification
 
 simd_cpu=4
 simd_bin_dir=__exec/linux/x64/full/opt
@@ -24,6 +24,7 @@ taskset -c "$simd_cpu" "$simd_bin_dir/simd_geometry_benchmark" validate > "$simd
 taskset -c "$simd_cpu" "$simd_bin_dir/simd_memory_storage_benchmark" --qualify > "$simd_result_dir/memory_qualify.log" 2>&1
 taskset -c "$simd_cpu" "$simd_bin_dir/simd_mask_benchmark" --verify > "$simd_result_dir/mask_qualify.log" 2>&1
 taskset -c "$simd_cpu" "$simd_bin_dir/simd_box_normal_benchmark" verify > "$simd_result_dir/box_normal_qualify.log" 2>&1
+taskset -c "$simd_cpu" "$simd_bin_dir/simd_pow_qualification" production > "$simd_result_dir/pow_production_qualify.log" 2>&1
 ```
 
 Choose an allowed logical CPU and keep it fixed for the whole comparison. The x64 preset enables AVX2, FMA, F16C and SSE4.2; run its binaries on a CPU supporting those features. Benchmarks remain disabled when `NWB_BUILD_SIMD_BENCHMARKS` is omitted or `OFF`.
@@ -40,6 +41,7 @@ The math suite covers ordered cancellation, distinct NaN payloads, inactive sign
 | `simd_memory_storage_benchmark` | Current `SIMDMemoryCopy` and storage equality helpers | Local AVX copy and wide integer equality experiments. |
 | `simd_mask_benchmark` | Frozen Double sign extraction and comparison-mask reductions | Current public mask and predicate APIs. |
 | `simd_box_normal_benchmark` | Frozen Single/Double box-normal formulas with two length reductions | Current public box-normal APIs. |
+| `simd_pow_qualification` | Frozen four-lane calls to scalar `Pow(float, float)` | Public `VectorPow` or local packed power experiments. |
 
 Keep copied reference formulas unchanged when promoting a candidate. They still share lower-level production primitives: a later change to one of those primitives also needs a preserved reference for that operation. Rebuild and requalify after each source change. Reusing an old binary or relabeling an experimental result as a production measurement invalidates the comparison.
 
@@ -166,6 +168,33 @@ Mask verification includes arbitrary binary64 sign bits, canonical comparison ma
 
 On Windows ARM64, configure `windows-clang-arm64` with `NWB_BUILD_SIMD_BENCHMARKS=ON`, then build these targets with `--config opt` in `__cmake/build/windows-clang-arm64`. Executables are under `__exec/windows/arm64/full/opt` and have the `.exe` suffix. Pin the orchestrating process before launching children, for example with `[System.Diagnostics.Process]::GetCurrentProcess().ProcessorAffinity = [IntPtr]256` in PowerShell when logical CPU 8 is allowed. Run warm-ups followed by at least seven alternating reference/candidate pairs serially; check paired checksums before calculating candidate/reference time ratios.
 
+On Windows, the existing geometry probe checks masked exception flags; its enabled-trap subprocess checks and the memory probe's protected-page checks are Linux-only. Their generic success banners do not establish those unavailable branches. The separate power qualifier implements its own Windows SEH controls.
+
 Box-normal length reuse is restricted to NEON64; other profiles retain their original arithmetic order and reductions. Exception verification must distinguish masked flags, trap/no-trap behavior, and the first enabled exception category. A host or emulator that does not deliver distinguishable enabled traps cannot establish mixed-category trap priority.
 
 Recorded native measurements and review evidence are retained in the separate [qualification report](qualification_history.md).
+
+## Packed single-precision power qualification
+
+Public `VectorPow` uses a packed table/FMA implementation with the release CRT on native Windows ARM64, excluding ARM64EC and `_DEBUG` CRT linkage. Its four lanes reduce the logarithm and exponential in binary64 SIMD pairs and narrow once to binary32. Packed integer admission selects a bounded ordinary path when x lies in [2^-16, 2^16] and |y| <= 4, with neutralized exact zero/one shortcuts; other inputs use the generic packed path. Loads, table indices and lane-control branches do not move the numerical intermediates out of the SIMD domain.
+
+The implementation preserves the measured Windows CRT operation order and special-value side effects, including normalization before the subnormal-base y == 1 return. Enabled standard floating-point exceptions use lane-ordered packed primitives with per-operation state restoration and exception replay. Exact tiny arithmetic results can trap underflow without setting a masked sticky flag; narrowing checks tininess before rounding and inexact, while excluding binary64 subnormals consumed as zero by flush mode. Native ARM input-denormal exceptions select the original four scalar calls because the available packed instruction delivers a different exception category. Debug CRT linkage (`_DEBUG`) retains the original scalar expression under its unoptimized inline policy. Other architectures and platforms retain the original scalar implementation. These are explicit remaining scalar paths, not a universal powf replacement. Provider-specific behavior must be requalified on a different CRT or execution environment.
+
+The default math edge tests compare the public API with the frozen formula across directed rounding, mixed special values, adjacent sRGB boundaries, seeded flags/errno, and native Windows ARM64 denormal modes/status. The opt-in corpus below provides broader numerical qualification; neither finite corpus admission nor local CPU timing proves equivalence or speed on every supported provider. The separate [power qualification report](pow_qualification_report.md) records the measured scope and limits.
+
+`simd_pow_qualification production|packed_single|packed_double [traps]` compares the frozen scalar `powf` formula with the selected implementation. `production` uses public `VectorPow`; the other variants remain local experiments and are not production alternatives. The single-precision experiment composes packed `Log2` and `Exp2`. The binary64 experiment extracts binary32 mantissas and exponents, computes a reduced atanh logarithm series and exponential series in packed double lanes, narrows once, and applies integer masks for exceptional result shapes. Its masks and `errno` handling remain subject to the same admission checks as the numerical core.
+
+Each variant runs all four standard rounding modes. Per mode it checks the Cartesian product of 29 exceptional bit patterns in each of four lane positions, 32,768 arbitrary four-lane pairs, 65,536 positive-finite four-lane pairs, every 8-bit sRGB decode input, the complete 16-bit uniform linear grid, and 33 adjacent binary32 inputs around each of the 255 rounded sRGB quantization transitions. The transition locations are found by binary search in the preserved consumer expression under the active rounding mode. Constants that are compile-time expressions in the consumers stay `constexpr` in the probe. This is a finite qualification corpus; it is not an exhaustive proof over all binary32 input pairs.
+
+Output separates differing result lanes, floating-point flag observations, `errno` observations and quantized channels. Any difference makes the selected variant return `1`; a zero result admits only that measured corpus and profile. Check the independent `production` control before interpreting a candidate. Rejected experiments must stay outside production and are not registered as passing CTest cases. No speed claim is made by this qualification-only probe.
+
+On Windows, `traps` separately checks isolated invalid, overflow and divide-by-zero controls before comparing mixed invalid/overflow lane orders. An additional edge gate checks exact-tiny `.5^149`/`.5^127` and subnormal-base zero-exponent behavior with underflow and underflow-plus-inexact enabled, all four rounding modes and available denormal modes. It compares delivered categories, errno, mapped/native status and control state; exact-tiny reference controls must deliver the expected underflow category. Reference controls must deliver the exact distinct Windows exception categories; unrelated SEH faults or a host/emulator delivering only sticky flags make trap qualification unavailable (`2`). A different candidate category returns `1`. Other platforms currently return `2` for `traps`; masked flag checks still run in the ordinary qualification. Do not infer first enabled exception priority from the masked checks.
+
+For standalone Windows qualification, the runner uses an existing `nwb_math_tests` `opt` entry from `compile_commands.json`, preserving its target, ISA, includes, defines and code-generation flags while replacing the source and output. It removes the generated `CMAKE_INTDIR` definition and records the full original entry and resulting compile/link commands. It builds only this test-owned probe in the chosen evidence directory and never configures or mutates the generated build tree.
+
+```powershell
+python -B tests/performance/simd_optimization/run_pow_qualification.py --build-dir __cmake/build/windows-clang-arm64 --output __cmake/Testing/pow_arm64_opt --traps
+python -B tests/performance/simd_optimization/run_pow_qualification.py --build-dir __cmake/build/windows-clang-arm64 --output __cmake/Testing/pow_arm64_strict --strict --traps
+```
+
+Use the matching x64 build directory to qualify that target. Strict FP is additional evidence and does not replace the actual `opt` profile. The runner saves full compiler/linker/variant logs and per-mode counts in `results.json`. It returns `1` when any selected variant is rejected, `2` for build/control failure or requested trap qualification unavailable on the host, and `0` only when every requested gate passes. It runs no timings, so its results establish neither speed nor behavior on other platforms. Recorded rejection evidence is retained in the separate [power qualification report](pow_qualification_report.md).

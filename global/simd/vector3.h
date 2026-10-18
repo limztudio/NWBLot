@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../expected.h"
+#include "result.h"
 #include "vector2.h"
 
 
@@ -261,24 +261,24 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3Normalize(SIMDVectorDoubl
     return VectorDoubleAndInt(VectorDoubleSelect(s_DoubleSIMDQNaN, result, VectorDoubleNotEqualInt(lengthSq, s_DoubleSIMDInfinity)), s_DoubleSIMDMask3);
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDVectorSingle> NWB_SIMD_CALL Vector3TryNormalize(SIMDVectorSingle value)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDVectorSingleResult> NWB_SIMD_CALL Vector3TryNormalize(SIMDVectorSingle value)noexcept{
     const SIMDVectorSingle lengthSquared = Vector3LengthSq(value);
     if(!VectorIsFinite(lengthSquared, VectorComponentMask::s_XYZW) || !Vector3Greater(lengthSquared, VectorZero()))
         return MakeUnexpected(Failure{});
 
     const SIMDVectorSingle normalized = Vector3Normalize(value);
     NWB_ASSERT(Vector3IsFinite(normalized));
-    return normalized;
+    return SIMDVectorSingleResult{ normalized };
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDVectorDouble> NWB_SIMD_CALL VectorDouble3TryNormalize(SIMDVectorDouble value)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDVectorDoubleResult> NWB_SIMD_CALL VectorDouble3TryNormalize(SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble lengthSquared = VectorDouble3LengthSq(value);
     if(!VectorDoubleIsFinite(lengthSquared, VectorDoubleComponentMask::s_DoubleXYZW) || !VectorDouble3Greater(lengthSquared, VectorDoubleZero()))
         return MakeUnexpected(Failure{});
 
     const SIMDVectorDouble normalized = VectorDouble3Normalize(value);
     NWB_ASSERT(VectorDouble3IsFinite(normalized));
-    return normalized;
+    return SIMDVectorDoubleResult{ normalized };
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3NormalizeOr(SIMDVectorSingle value, SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{

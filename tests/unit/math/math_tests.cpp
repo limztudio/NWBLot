@@ -401,7 +401,7 @@ TEST(Math, DoubleRigidQuaternionExtractionKeepsRowMatrixRotationAndDualTranslati
     ASSERT_TRUE(quaternion);
     const SIMDVectorDouble direction{ 2.0, -3.0, 4.0, 0.0 };
     const SIMDVectorDouble fromMatrix = VectorDouble3TransformNormal(direction, matrix);
-    const SIMDVectorDouble fromQuaternion = VectorDouble3Rotate(direction, *quaternion);
+    const SIMDVectorDouble fromQuaternion = VectorDouble3Rotate(direction, quaternion->value);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(fromQuaternion[lane], fromMatrix[lane], 2.0e-15) << lane;
 

@@ -19,10 +19,11 @@ namespace AabbTests{
 
 
 // Calculation result only; callers store retained bounds in Float/Double storage types.
-struct Bounds{
+struct alignas(SIMDVectorSingle) Bounds{
     SIMDVectorSingle minBounds;
     SIMDVectorSingle maxBounds;
 };
+static_assert(alignof(Expected<Bounds>) >= alignof(Bounds));
 
 [[nodiscard]] bool NWB_SIMD_CALL Valid(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 void NWB_SIMD_CALL Reset(SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept;
@@ -52,10 +53,11 @@ namespace AabbDoubleTests{
 
 
 // Calculation result only; callers store retained bounds in Float/Double storage types.
-struct Bounds{
+struct alignas(SIMDVectorDouble) Bounds{
     SIMDVectorDouble minBounds;
     SIMDVectorDouble maxBounds;
 };
+static_assert(alignof(Expected<Bounds>) >= alignof(Bounds));
 
 [[nodiscard]] bool NWB_SIMD_CALL Valid(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 void NWB_SIMD_CALL Reset(SIMDVectorDouble& outMinBounds, SIMDVectorDouble& outMaxBounds)noexcept;

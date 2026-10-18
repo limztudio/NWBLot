@@ -53,11 +53,11 @@ SIMDVectorSingle FbxMeshBuild::LoadCornerOutputNormalVector(const ufbx_mesh& mes
     }
 
     const auto outputNormal = Vector3TryNormalize(LoadUfbxVector(normal));
-    return outputNormal ? *outputNormal : VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    return outputNormal ? outputNormal->value : VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 }
 
 
-Expected<SIMDVectorSingle> FbxMeshBuild::LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
+Expected<SIMDVectorSingleResult> FbxMeshBuild::LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
     if(!mesh.vertex_tangent.exists)
         return MakeUnexpected(Failure{});
 
@@ -77,13 +77,13 @@ Expected<SIMDVectorSingle> FbxMeshBuild::LoadCornerOutputTangentVector(const ufb
 
         const auto outputBitangent = Vector3TryNormalize(LoadUfbxVector(bitangent));
         if(outputBitangent){
-            const SIMDVectorSingle tangentSpaceBitangent = Vector3Cross(normal, *outputTangent);
-            const SIMDVectorSingle bitangentDot = Vector3Dot(tangentSpaceBitangent, *outputBitangent);
+            const SIMDVectorSingle tangentSpaceBitangent = Vector3Cross(normal, outputTangent->value);
+            const SIMDVectorSingle bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent->value);
             sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(bitangentDot, VectorZero()));
         }
     }
 
-    return VectorSelect(*outputTangent, sign, s_SIMDMaskW);
+    return SIMDVectorSingleResult{ VectorSelect(outputTangent->value, sign, s_SIMDMaskW) };
 }
 
 
@@ -152,7 +152,7 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
             NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
-        it.value().value = *normal;
+        it.value().value = normal->value;
     }
     return outNormals;
 }
@@ -241,7 +241,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
-                normal = *generatedNormal;
+                normal = generatedNormal->value;
             }
             triangleNormals[triangleCornerIndex] = normal;
 
@@ -269,7 +269,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
                 const auto importedTangent = LoadCornerOutputTangentVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex, normal);
                 corner.hasTangent = importedTangent.has_value();
                 if(importedTangent){
-                    tangent = *importedTangent;
+                    tangent = importedTangent->value;
                     StoreFloat(tangent, corner.tangent);
                 }
             }
@@ -307,7 +307,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
                 return false;
             }
             for(SIMDVectorSingle& normal : triangleNormals)
-                normal = *normalizedFaceNormal;
+                normal = normalizedFaceNormal->value;
         }
 
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){

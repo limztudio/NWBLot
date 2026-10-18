@@ -10,6 +10,7 @@
 #include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
+#include <global/simd/result.h>
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/simd/convert.h>
@@ -56,7 +57,7 @@ namespace __hidden_ui_progress_layout{
     return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && VectorDoubleGetX(values.v[2]) >= static_cast<f32>(width) && VectorDoubleGetY(values.v[2]) >= static_cast<f32>(height);
 }
 
-[[nodiscard]] static Expected<SIMDVectorSingle> LoadMinimumSize(const UiSkinRegion& region, const SIMDVectorDouble density)noexcept{
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadMinimumSize(const UiSkinRegion& region, const SIMDVectorDouble density)noexcept{
     const Insets padding{ region.padding.left, region.padding.top, region.padding.right, region.padding.bottom };
     if(!IsBoundedUiPadding(padding) || !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
         return MakeUnexpected(Failure{});
@@ -64,13 +65,13 @@ namespace __hidden_ui_progress_layout{
     if(!sliceExtents)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleDivide(*sliceExtents, density);
+    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleDivide(sliceExtents->value, density);
     const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleGreater(geometryPair1Operand0, geometryPair1Operand1));
     const f64 width = VectorDoubleGetX(widthHeightValue);
     const f64 height = VectorDoubleGetY(widthHeightValue);
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
-    return ConvertVectorDoubleToSingle(widthHeightValue);
+    return SIMDVectorSingleResult{ ConvertVectorDoubleToSingle(widthHeightValue) };
 }
 
 
@@ -103,14 +104,14 @@ Expected<ProgressMetrics> ProgressLayout::Measure(const ProgressOptions& options
     const SIMDVectorSingle trackPadding = VectorSet(track.padding.left, track.padding.top, track.padding.right, track.padding.bottom);
     const SIMDVectorSingle padding = VectorSelect(trackPadding, stylePadding, VectorGreater(stylePadding, trackPadding));
     candidate.padding = { VectorGetX(padding), VectorGetY(padding), VectorGetZ(padding), VectorGetW(padding) };
-    candidate.fillMinimum = { VectorGetX(*fillMinimum), VectorGetY(*fillMinimum) };
+    candidate.fillMinimum = { VectorGetX(fillMinimum->value), VectorGetY(fillMinimum->value) };
     const SIMDVectorDouble innerWidthInnerHeightValue = VectorDoubleAdd(
         VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(candidate.padding.left), static_cast<f64>(candidate.padding.top), 0.0, 0.0), VectorDoubleSet(candidate.padding.right, candidate.padding.bottom, 0.0, 0.0)),
-        VectorDoubleSet(VectorGetX(*fillMinimum), VectorGetY(*fillMinimum), 0.0, 0.0)
+        VectorDoubleSet(VectorGetX(fillMinimum->value), VectorGetY(fillMinimum->value), 0.0, 0.0)
     );
     const f64 innerWidth = VectorDoubleGetX(innerWidthInnerHeightValue);
-    const SIMDVectorDouble geometryPair5Operand0 = VectorDoubleSet(static_cast<f64>(VectorGetX(*trackMinimum)), static_cast<f64>(options.height), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair5Operand1 = VectorDoubleMax(VectorDoubleSet(innerWidth, VectorGetY(*trackMinimum), 0.0, 0.0), innerWidthInnerHeightValue);
+    const SIMDVectorDouble geometryPair5Operand0 = VectorDoubleSet(static_cast<f64>(VectorGetX(trackMinimum->value)), static_cast<f64>(options.height), 0.0, 0.0);
+    const SIMDVectorDouble geometryPair5Operand1 = VectorDoubleMax(VectorDoubleSet(innerWidth, VectorGetY(trackMinimum->value), 0.0, 0.0), innerWidthInnerHeightValue);
     const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair5Operand1, geometryPair5Operand0, VectorDoubleGreater(geometryPair5Operand0, geometryPair5Operand1));
     const f64 width = VectorDoubleGetX(widthHeightValue);
     const f64 height = VectorDoubleGetY(widthHeightValue);

@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
+#include <global/simd/result.h>
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/simd/convert.h>
@@ -77,10 +78,10 @@ namespace __hidden_ui_scrollbar{
     return viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth && thumbY >= trackY && thumbHeight <= trackHeight && VectorGetW(end) <= VectorGetY(end);
 }
 
-[[nodiscard]] static Expected<SIMDVectorDouble> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const bool visible)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const bool visible)noexcept{
     const SIMDVectorDouble acceptedOffset = VectorDoubleMin(offset, maximum);
     if(!visible)
-        return VectorDoubleSelect(VectorDoubleZero(), acceptedOffset, s_DoubleSIMDMaskX);
+        return SIMDVectorDoubleResult{ VectorDoubleSelect(VectorDoubleZero(), acceptedOffset, s_DoubleSIMDMaskX) };
     const SIMDVectorDouble trackValues = ConvertVectorSingleToDouble(track);
     const SIMDVectorDouble travel = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleSplatY(trackValues), VectorDoubleSplatZ(trackValues)));
     const SIMDVectorDouble position = VectorDoubleAdd(VectorDoubleSplatX(trackValues), VectorDoubleMultiply(travel, VectorDoubleDivide(acceptedOffset, maximum)));
@@ -90,7 +91,7 @@ namespace __hidden_ui_scrollbar{
     const SIMDVectorSingle last = VectorMax(first, VectorSubtract(VectorAdd(first, VectorSplatY(track)), VectorSplatZ(track)));
     const SIMDVectorSingle positionSingle = ConvertVectorDoubleToSingle(position);
     const SIMDVectorSingle origin = VectorSelect(first, VectorMin(last, positionSingle), VectorGreater(positionSingle, first));
-    return VectorDoubleSelect(acceptedOffset, ConvertVectorSingleToDouble(origin), s_DoubleSIMDMaskY);
+    return SIMDVectorDoubleResult{ VectorDoubleSelect(acceptedOffset, ConvertVectorSingleToDouble(origin), s_DoubleSIMDMaskY) };
 }
 
 [[nodiscard]] static bool StoreBarOffset(const SIMDVectorDouble offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
@@ -98,9 +99,9 @@ namespace __hidden_ui_scrollbar{
     const auto values = MoveThumb(offset, VectorDoubleReplicate(bar.maximum), track, bar.visible);
     if(!values)
         return false;
-    bar.offset = VectorDoubleGetX(*values);
+    bar.offset = VectorDoubleGetX(values->value);
     if(bar.visible)
-        (axis == ScrollAxis::Horizontal ? bar.thumb.x : bar.thumb.y) = static_cast<f32>(VectorDoubleGetY(*values));
+        (axis == ScrollAxis::Horizontal ? bar.thumb.x : bar.thumb.y) = static_cast<f32>(VectorDoubleGetY(values->value));
     return !bar.visible || ValidBar(LoadBarValues(bar), axis);
 }
 

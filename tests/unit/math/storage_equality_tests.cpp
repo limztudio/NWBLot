@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <global/containers.h>
 #include <global/floating_point_environment.h>
+#include <global/simd/result.h>
 #include <global/simd/type.h>
 #include <global/simd/vector.h>
 #include <global/limit.h>
@@ -62,6 +64,28 @@ NWB_NOINLINE bool DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)n
 
 template<typename Value>
 NWB_NOINLINE bool StorageEqual(const Value& lhs, const Value& rhs)noexcept{ return lhs == rhs; }
+
+template<typename Result>
+struct ExpectedVectorStorage{
+    u64 prefix = 0u;
+    Expected<Result> values[2];
+};
+
+template<typename Result>
+NWB_NOINLINE auto ReadExpectedVector(const Expected<Result>& result)noexcept{ return result->value; }
+
+template<typename Result, typename Lane, usize Count>
+void CheckExpectedVectorAlignment(const Array<Lane, Count>& bits){
+    using VectorType = decltype(Result{}.value);
+    ExpectedVectorStorage<Result> storage{};
+    for(usize index = 0u; index < 2u; ++index){
+        storage.values[index] = Result{ BitCast<VectorType>(bits) };
+        ASSERT_TRUE(storage.values[index]);
+        EXPECT_EQ(reinterpret_cast<usize>(&storage.values[index]) % alignof(VectorType), 0u);
+        EXPECT_EQ(reinterpret_cast<usize>(&storage.values[index]->value) % alignof(VectorType), 0u);
+        EXPECT_EQ((BitCast<Array<Lane, Count>>(ReadExpectedVector(storage.values[index]))), bits);
+    }
+}
 
 template<typename Value, usize Count>
 void CheckNaNComparisonFlags(){
@@ -309,6 +333,13 @@ TEST(Math, StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags){
 #else
     GTEST_SKIP() << "Raw MXCSR equality flags are specific to x86 SSE targets";
 #endif
+}
+
+TEST(Math, ExpectedSIMDValuesKeepAlignedLoadsAfterEightBytePrefixAndAcrossArrayStride){
+    using namespace __hidden_storage_equality_tests;
+    // Bare SIMD values in packed expected storage caused an aligned load to crash.
+    CheckExpectedVectorAlignment<SIMDVectorSingleResult>(Array<u32, 4u>{ 0x80000000u, 0x7F812345u, 0x00000001u, 0x7F7FFFFFu });
+    CheckExpectedVectorAlignment<SIMDVectorDoubleResult>(Array<u64, 4u>{ 0x8000000000000000ull, 0x7FF0000000012345ull, 0x0000000000000001ull, 0x7FEFFFFFFFFFFFFFull });
 }
 
 

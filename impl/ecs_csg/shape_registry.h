@@ -36,11 +36,12 @@ inline constexpr Float4 s_CsgCapsuleDefaultRadiusHalfHeight = Float4(1.0f, 1.0f,
 
 
 // Call-scoped calculation scratch; retained scene/GPU values use Float storage.
-struct CsgShapeBounds{
+struct alignas(SIMDVectorSingle) CsgShapeBounds{
     SIMDVectorSingle minBounds = VectorZero();
     SIMDVectorSingle maxBounds = VectorZero();
     bool finiteBounds = false;
 };
+static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize);
 

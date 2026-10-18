@@ -87,10 +87,11 @@ static_assert((sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator
 }
 
 // Transient SIMD calculation result consumed by the owning rebuild boundary.
-struct TangentFrameDirections{
+struct alignas(SIMDVectorSingle) TangentFrameDirections{
     SIMDVectorSingle tangent;
     SIMDVectorSingle bitangent;
 };
+static_assert(alignof(Expected<TangentFrameDirections>) >= alignof(TangentFrameDirections));
 
 [[nodiscard]] inline Expected<TangentFrameDirections> AccumulateTriangleTangentFrame(const SIMDVectorSingle uv0, const SIMDVectorSingle uv1, const SIMDVectorSingle uv2, SIMDVectorSingle edge01, SIMDVectorSingle edge02)noexcept{
     const SIMDVectorSingle uvDelta1 = VectorSubtract(uv1, uv0);

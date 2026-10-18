@@ -152,7 +152,7 @@ template<usize ComponentCount>
     return values;
 }
 
-[[nodiscard]] Expected<SIMDVectorSingle> NormalizeSkinInfluenceWeights(const Path& nwbFilePath, const usize influenceIndex, const SIMDVectorSingle weights){
+[[nodiscard]] Expected<SIMDVectorSingleResult> NormalizeSkinInfluenceWeights(const Path& nwbFilePath, const usize influenceIndex, const SIMDVectorSingle weights){
     if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative"), PathToString<tchar>(nwbFilePath), influenceIndex);
         return MakeUnexpected(Failure{});
@@ -167,7 +167,7 @@ template<usize ComponentCount>
     const SIMDVectorSingle normalizedWeights = VectorDivide(weights, weightSum);
     if(!SkinValidation::ValidSkinInfluenceWeights(normalizedWeights))
         return MakeUnexpected(Failure{});
-    return normalizedWeights;
+    return SIMDVectorSingleResult{ normalizedWeights };
 }
 
 [[nodiscard]] Expected<SkinInfluence4> ParseSkinInfluence(const Path& nwbFilePath, const Value& influenceValue, const usize influenceIndex){
@@ -198,7 +198,7 @@ template<usize ComponentCount>
     if(!normalizedWeights)
         return MakeUnexpected(Failure{});
 
-    StoreFloat(*normalizedWeights, influence.weight);
+    StoreFloat(normalizedWeights->value, influence.weight);
     return influence;
 }
 

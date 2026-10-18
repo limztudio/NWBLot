@@ -35,3 +35,10 @@ target_sources(nwb_simd_box_normal_benchmark PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/box_normal_benchmark.cpp"
 )
 target_link_libraries(nwb_simd_box_normal_benchmark PRIVATE nwb_common nwb_alloc)
+
+nwb_declare_executable(nwb_simd_pow_qualification)
+target_sources(nwb_simd_pow_qualification PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/pow_qualification.cpp"
+)
+
+target_link_libraries(nwb_simd_pow_qualification PRIVATE nwb_common nwb_alloc)

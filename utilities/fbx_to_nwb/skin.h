@@ -41,10 +41,11 @@ public:
 };
 
 // Import calculation scratch; joint IDs and weights are stored only by the owning mesh builder.
-struct SkinInfluenceCalculation{
+struct alignas(SIMDVectorSingle) SkinInfluenceCalculation{
     SIMDVectorSingle joints;
     SIMDVectorSingle weights;
 };
+static_assert(alignof(Expected<SkinInfluenceCalculation>) >= alignof(SkinInfluenceCalculation));
 
 Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context, Core::Alloc::ScratchArena& scratchArena);
 

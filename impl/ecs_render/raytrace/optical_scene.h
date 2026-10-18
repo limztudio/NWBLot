@@ -86,10 +86,11 @@ public:
 };
 
 // Call-scoped calculation scratch; retained scene/GPU values use Float storage.
-struct OpticalWorldBounds{
+struct alignas(SIMDVectorSingle) OpticalWorldBounds{
     SIMDVectorSingle minimum;
     SIMDVectorSingle maximum;
 };
+static_assert(alignof(Expected<OpticalWorldBounds>) >= alignof(OpticalWorldBounds));
 
 
 // Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.

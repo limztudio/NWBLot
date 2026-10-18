@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../expected.h"
+#include "result.h"
 #include "quaternion.h"
 
 
@@ -502,27 +502,31 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleOrthographicOffCenterImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MatrixDecomposition{
+struct alignas(SIMDVectorSingle) MatrixDecomposition{
     SIMDVectorSingle scale;
     SIMDVectorSingle rotation;
     SIMDVectorSingle translation;
 };
+static_assert(alignof(Expected<MatrixDecomposition>) >= alignof(MatrixDecomposition));
 
-struct MatrixDoubleDecomposition{
+struct alignas(SIMDVectorDouble) MatrixDoubleDecomposition{
     SIMDVectorDouble scale;
     SIMDVectorDouble rotation;
     SIMDVectorDouble translation;
 };
+static_assert(alignof(Expected<MatrixDoubleDecomposition>) >= alignof(MatrixDoubleDecomposition));
 
-struct RigidDualQuaternion{
+struct alignas(SIMDVectorSingle) RigidDualQuaternion{
     SIMDVectorSingle real;
     SIMDVectorSingle dual;
 };
+static_assert(alignof(Expected<RigidDualQuaternion>) >= alignof(RigidDualQuaternion));
 
-struct RigidDualQuaternionDouble{
+struct alignas(SIMDVectorDouble) RigidDualQuaternionDouble{
     SIMDVectorDouble real;
     SIMDVectorDouble dual;
 };
+static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQuaternionDouble));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1110,24 +1114,24 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
     ;
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDVectorSingle> NWB_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDVectorSingleResult> NWB_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
     if(!MatrixIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
         return MakeUnexpected(Failure{});
 
     const SIMDVectorSingle quaternion = QuaternionRotationMatrix(matrix);
     if(QuaternionIsNaN(quaternion) || QuaternionIsInfinite(quaternion))
         return MakeUnexpected(Failure{});
-    return quaternion;
+    return SIMDVectorSingleResult{ quaternion };
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDVectorDouble> NWB_SIMD_CALL MatrixDoubleTryBuildRigidRotationQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDVectorDoubleResult> NWB_SIMD_CALL MatrixDoubleTryBuildRigidRotationQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
     if(!MatrixDoubleIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
         return MakeUnexpected(Failure{});
 
     const SIMDVectorDouble quaternion = QuaternionDoubleRotationMatrix(matrix);
     if(QuaternionDoubleIsNaN(quaternion) || QuaternionDoubleIsInfinite(quaternion))
         return MakeUnexpected(Failure{});
-    return quaternion;
+    return SIMDVectorDoubleResult{ quaternion };
 }
 
 [[nodiscard]] NWB_INLINE Expected<RigidDualQuaternion> NWB_SIMD_CALL MatrixTryBuildRigidDualQuaternion(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
@@ -1136,10 +1140,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
         return MakeUnexpected(real.error());
 
     const SIMDVectorSingle translation = VectorMergeX(VectorSplatW(matrix.v[0]), VectorSplatW(matrix.v[1]), VectorSplatW(matrix.v[2]), VectorZero());
-    const SIMDVectorSingle dual = VectorScale(QuaternionMultiply(translation, *real), SIMDMatrixDetail::s_MatrixHalf);
+    const SIMDVectorSingle dual = VectorScale(QuaternionMultiply(translation, real->value), SIMDMatrixDetail::s_MatrixHalf);
     if(!VectorIsFinite(dual, VectorComponentMask::s_XYZW))
         return MakeUnexpected(Failure{});
-    return RigidDualQuaternion{ *real, dual };
+    return RigidDualQuaternion{ real->value, dual };
 }
 
 [[nodiscard]] NWB_INLINE Expected<RigidDualQuaternionDouble> NWB_SIMD_CALL MatrixDoubleTryBuildRigidDualQuaternion(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
@@ -1148,10 +1152,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* 
         return MakeUnexpected(real.error());
 
     const SIMDVectorDouble translation = VectorDoubleMergeX(VectorDoubleSplatW(matrix.v[0]), VectorDoubleSplatW(matrix.v[1]), VectorDoubleSplatW(matrix.v[2]), VectorDoubleZero());
-    const SIMDVectorDouble dual = VectorDoubleScale(QuaternionDoubleMultiply(translation, *real), SIMDMatrixDoubleDetail::s_DoubleMatrixHalf);
+    const SIMDVectorDouble dual = VectorDoubleScale(QuaternionDoubleMultiply(translation, real->value), SIMDMatrixDoubleDetail::s_DoubleMatrixHalf);
     if(!VectorDoubleIsFinite(dual, VectorDoubleComponentMask::s_DoubleXYZW))
         return MakeUnexpected(Failure{});
-    return RigidDualQuaternionDouble{ *real, dual };
+    return RigidDualQuaternionDouble{ real->value, dual };
 }
 
 

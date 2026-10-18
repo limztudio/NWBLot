@@ -68,7 +68,7 @@ TEST(CurrentMathContractBoundaries, SingleRigidExtractionPreservesNonzeroRotatio
     const SIMDVectorSingle direction = VectorSet(2.0f, -3.0f, 4.0f, 0.0f);
     const auto quaternion = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);
     ASSERT_TRUE(quaternion);
-    ExpectSingleDirectionNear(Vector3Rotate(direction, *quaternion), Vector3TransformNormal(direction, matrix));
+    ExpectSingleDirectionNear(Vector3Rotate(direction, quaternion->value), Vector3TransformNormal(direction, matrix));
 
     const auto dualQuaternion = MatrixTryBuildRigidDualQuaternion(matrix, 0.0f, 0.0f);
     ASSERT_TRUE(dualQuaternion);

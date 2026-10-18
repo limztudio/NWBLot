@@ -9,6 +9,7 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/simd/result.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
@@ -38,7 +39,7 @@ namespace __hidden_ui_text_paint{
     return BitCast<f32>((upper == (rounded > 0.0f)) ? bits + 1u : bits - 1u);
 }
 
-[[nodiscard]] static Expected<SIMDVectorDouble> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
     const f64 left = VectorDoubleGetX(minimum);
     const f64 top = VectorDoubleGetY(minimum);
     const f64 right = VectorDoubleGetX(maximum);
@@ -59,15 +60,15 @@ namespace __hidden_ui_text_paint{
         || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(x), VectorReplicate(roundedWidth)))) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(y), VectorReplicate(roundedHeight))))
     )
         return MakeUnexpected(Failure{});
-    return VectorDoubleSet(x, y, roundedWidth, roundedHeight);
+    return SIMDVectorDoubleResult{ VectorDoubleSet(x, y, roundedWidth, roundedHeight) };
 }
 
-[[nodiscard]] static Expected<SIMDVectorDouble> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display)noexcept{
     const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, {});
     if(!plane)
         return MakeUnexpected(Failure{});
     if(plane->width <= 0.0f || plane->height <= 0.0f)
-        return VectorDoubleSet(plane->x, plane->y, plane->width, plane->height);
+        return SIMDVectorDoubleResult{ VectorDoubleSet(plane->x, plane->y, plane->width, plane->height) };
     const FontAtlasGlyph& glyph = *atlas.glyph(placed.glyphId);
     const SdfAtlasPage& page = *atlas.page(glyph.group);
     const SdfAtlasPageBinding& binding = page.binding();
@@ -134,7 +135,7 @@ namespace __hidden_ui_text_paint{
         }
     }
     if(!visible)
-        return VectorDoubleZero();
+        return SIMDVectorDoubleResult{ VectorDoubleZero() };
     const SIMDVectorDouble origin = VectorDoubleSet(plane->x, plane->y, 0.0, 0.0);
     const SIMDVectorDouble scale = VectorDoubleSelect(VectorDoubleZero(), texelSize, s_DoubleSIMDMaskXY);
     const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(supportMinimum, scale, origin);
@@ -185,10 +186,10 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
             const auto support = LoadSdfSupport(glyph, *atlas, layout.fontSize(), display);
             if(!support)
                 return MakeUnexpected(Failure{});
-            if(VectorDoubleGetZ(*support) <= 0.0 || VectorDoubleGetW(*support) <= 0.0)
+            if(VectorDoubleGetZ(support->value) <= 0.0 || VectorDoubleGetW(support->value) <= 0.0)
                 continue;
-            first = VectorDoubleSelect(VectorDoubleZero(), *support, s_DoubleSIMDMaskXY);
-            last = VectorDoubleAdd(first, VectorDoubleSwizzle<2, 3, 2, 3>(*support));
+            first = VectorDoubleSelect(VectorDoubleZero(), support->value, s_DoubleSIMDMaskXY);
+            last = VectorDoubleAdd(first, VectorDoubleSwizzle<2, 3, 2, 3>(support->value));
         }
         else{
             if(!glyph.face || !glyph.face->valid())
@@ -216,7 +217,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
     const auto rectangle = MeasuredRectangle(minimum, maximum);
     if(!rectangle)
         return MakeUnexpected(Failure{});
-    return Rect{ static_cast<f32>(VectorDoubleGetX(*rectangle)), static_cast<f32>(VectorDoubleGetY(*rectangle)), static_cast<f32>(VectorDoubleGetZ(*rectangle)), static_cast<f32>(VectorDoubleGetW(*rectangle)) };
+    return Rect{ static_cast<f32>(VectorDoubleGetX(rectangle->value)), static_cast<f32>(VectorDoubleGetY(rectangle->value)), static_cast<f32>(VectorDoubleGetZ(rectangle->value)), static_cast<f32>(VectorDoubleGetW(rectangle->value)) };
 }
 
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){

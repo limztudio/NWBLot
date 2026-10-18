@@ -258,7 +258,7 @@ struct alignas(16) SIMDMatrix
 #endif
 };
 
-struct SIMDMatrixDouble{
+struct alignas(SIMDVectorDouble) SIMDMatrixDouble{
     SIMDVectorDouble v[4];
 };
 

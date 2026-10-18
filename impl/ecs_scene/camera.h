@@ -36,7 +36,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<SIMDVectorSingle> TryComputeCameraTanHalfVerticalFov(const SIMDVectorSingle verticalFovRadians)noexcept{
+[[nodiscard]] inline Expected<SIMDVectorSingleResult> TryComputeCameraTanHalfVerticalFov(const SIMDVectorSingle verticalFovRadians)noexcept{
     constexpr f32 s_CameraFovCosEpsilon = 0.000001f;
 
     if(!VectorIsFinite(verticalFovRadians, VectorComponentMask::s_XYZW) || !Vector4Greater(verticalFovRadians, s_SIMDZero) || !Vector4Less(verticalFovRadians, VectorReplicate(s_PI)))
@@ -53,7 +53,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     if(!VectorIsFinite(tanHalfFovVector, VectorComponentMask::s_XYZW) || !Vector4Greater(tanHalfFovVector, VectorZero()))
         return MakeUnexpected(Failure{});
 
-    return tanHalfFovVector;
+    return SIMDVectorSingleResult{ tanHalfFovVector };
 }
 
 [[nodiscard]] inline bool CameraClipRangeValid(const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
@@ -115,13 +115,13 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     const SIMDVectorSingle aspectRatio = ResolveCameraAspectRatio(cameraAspectRatio, fallbackAspectRatio);
     const SIMDVectorSingle depthRange = VectorSubtract(farPlane, nearPlane);
     const SIMDVectorSingle selectZW = VectorOrInt(s_SIMDMaskZ, s_SIMDMaskW);
-    const SIMDVectorSingle projectionDenominators = VectorMultiply(VectorSelect(*tanHalfFov, depthRange, selectZW), VectorSelect(s_SIMDOne, aspectRatio, s_SIMDMaskX));
+    const SIMDVectorSingle projectionDenominators = VectorMultiply(VectorSelect(tanHalfFov->value, depthRange, selectZW), VectorSelect(s_SIMDOne, aspectRatio, s_SIMDMaskX));
     const SIMDVectorSingle projectionNumerators = VectorMultiply(VectorSelect(s_SIMDOne, VectorMergeXY(farPlane, nearPlane), selectZW), VectorSelect(s_SIMDOne, VectorNegate(farPlane), s_SIMDMaskW));
     const SIMDVectorSingle projectionParams = VectorDivide(projectionNumerators, projectionDenominators);
-    if(!CameraProjectionValuesValid(projectionParams, aspectRatio, *tanHalfFov, nearPlane, farPlane))
+    if(!CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalfFov->value, nearPlane, farPlane))
         return MakeUnexpected(Failure{});
 
-    return SIMDMatrix{ .v = { projectionParams, VectorMergeX(aspectRatio, *tanHalfFov, nearPlane, farPlane), VectorZero(), VectorZero() } };
+    return SIMDMatrix{ .v = { projectionParams, VectorMergeX(aspectRatio, tanHalfFov->value, nearPlane, farPlane), VectorZero(), VectorZero() } };
 }
 
 // Explicit boundary for retaining a projection; calculation helpers return SIMD rows.

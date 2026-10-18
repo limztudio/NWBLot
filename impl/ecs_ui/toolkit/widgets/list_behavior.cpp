@@ -4,6 +4,7 @@
 
 #include "list.h"
 
+#include <global/simd/result.h>
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 
@@ -81,7 +82,7 @@ struct KeyResolution{
     return key;
 }
 
-[[nodiscard]] static Expected<SIMDVectorDouble> WheelOffset(const SIMDVectorDouble current, const SIMDVectorDouble delta, const SIMDVectorDouble step, const SIMDVectorDouble maximum)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> WheelOffset(const SIMDVectorDouble current, const SIMDVectorDouble delta, const SIMDVectorDouble step, const SIMDVectorDouble maximum)noexcept{
     if(!IsFinite(VectorDoubleGetX(delta)) || !IsFinite(VectorDoubleGetX(step)) || VectorDoubleGetX(step) <= 0.0 || !IsFinite(VectorDoubleGetX(maximum)) || VectorDoubleGetX(maximum) < 0.0)
         return MakeUnexpected(Failure{});
     SIMDVectorDouble candidateValue = VectorDoubleMin(current, maximum);
@@ -97,7 +98,7 @@ struct KeyResolution{
     const f64 candidate = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())));
     if(!IsFinite(candidate))
         return MakeUnexpected(Failure{});
-    return VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero()));
+    return SIMDVectorDoubleResult{ VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())) };
 }
 
 
@@ -159,7 +160,7 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
         return false;
     if(action.kind == ControlActionKind::Wheel){
         const auto offset = WheelOffset(VectorDoubleReplicate(state.m_scroll.offset()), VectorDoubleReplicate(action.delta), VectorDoubleReplicate(action.step), VectorDoubleReplicate(action.maximum));
-        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(VectorDoubleGetX(*offset)))
+        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(VectorDoubleGetX(offset->value)))
             return false;
         state.m_ensureCursor = false;
         result.valid = true;

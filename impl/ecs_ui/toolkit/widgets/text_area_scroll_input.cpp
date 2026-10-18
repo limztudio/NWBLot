@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/simd/result.h>
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 
@@ -23,7 +24,7 @@ namespace __hidden_text_area_scroll_input{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<SIMDVectorDouble> Step(const SIMDVectorDouble offset, const SIMDVectorDouble delta, const SIMDVectorDouble step, const SIMDVectorDouble maximum)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> Step(const SIMDVectorDouble offset, const SIMDVectorDouble delta, const SIMDVectorDouble step, const SIMDVectorDouble maximum)noexcept{
     if(!IsFinite(VectorDoubleGetX(offset)) || !IsFinite(VectorDoubleGetX(delta)) || !IsFinite(VectorDoubleGetX(step)) || VectorDoubleGetX(step) < 0.0 || !IsFinite(VectorDoubleGetX(maximum)) || VectorDoubleGetX(maximum) < 0.0)
         return MakeUnexpected(Failure{});
     SIMDVectorDouble next = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, offset), VectorDoubleGreater(offset, VectorDoubleZero()));
@@ -37,7 +38,7 @@ namespace __hidden_text_area_scroll_input{
     }
     if(!IsFinite(VectorDoubleGetX(next)) || VectorDoubleGetX(next) > static_cast<f64>(Limit<f32>::s_Max))
         return MakeUnexpected(Failure{});
-    return next;
+    return SIMDVectorDoubleResult{ next };
 }
 
 [[nodiscard]] static SIMDMatrixDouble LoadDragValues(const PointerGesture& gesture, const bool horizontal)noexcept{
@@ -49,7 +50,7 @@ namespace __hidden_text_area_scroll_input{
     } };
 }
 
-[[nodiscard]] static Expected<SIMDVectorDouble> Drag(const SIMDVectorDouble startDelta, const SIMDVectorDouble travel, const SIMDVectorDouble maximum)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> Drag(const SIMDVectorDouble startDelta, const SIMDVectorDouble travel, const SIMDVectorDouble maximum)noexcept{
     if(!IsFinite(VectorDoubleGetX(travel)) || VectorDoubleGetX(travel) <= 0.0 || !IsFinite(VectorDoubleGetX(startDelta)) || !IsFinite(VectorDoubleGetY(startDelta)) || !IsFinite(VectorDoubleGetX(maximum)) || VectorDoubleGetX(maximum) < 0.0)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble normalized = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleSplatX(startDelta), VectorDoubleSplatY(startDelta)), travel);
@@ -57,7 +58,7 @@ namespace __hidden_text_area_scroll_input{
     const SIMDVectorDouble next = VectorDoubleMultiply(clamped, maximum);
     if(!IsFinite(VectorDoubleGetX(next)) || VectorDoubleGetX(next) > static_cast<f64>(Limit<f32>::s_Max))
         return MakeUnexpected(Failure{});
-    return next;
+    return SIMDVectorDoubleResult{ next };
 }
 
 
@@ -98,7 +99,7 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
             const auto next = __hidden_text_area_scroll_input::Drag(values.v[0], values.v[1], values.v[2]);
             if(!next)
                 return false;
-            scroll.x = static_cast<f32>(VectorDoubleGetX(*next));
+            scroll.x = static_cast<f32>(VectorDoubleGetX(next->value));
             manual = true;
             horizontal = m_context.takePartPointerGesture(item.state, horizontalId, enabled);
             haveHorizontal = horizontal && horizontal->control == token;
@@ -108,7 +109,7 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
             const auto next = __hidden_text_area_scroll_input::Drag(values.v[0], values.v[1], values.v[2]);
             if(!next)
                 return false;
-            scroll.y = static_cast<f32>(VectorDoubleGetX(*next));
+            scroll.y = static_cast<f32>(VectorDoubleGetX(next->value));
             manual = true;
             vertical = m_context.takePartPointerGesture(item.state, verticalId, enabled);
             haveVertical = vertical && vertical->control == token;
@@ -119,11 +120,11 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
                 const auto x = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(scroll.x), VectorDoubleReplicate(action->deltaX), VectorDoubleReplicate(action->stepX), VectorDoubleReplicate(action->maximumX));
                 if(!x)
                     return false;
-                const f32 nextX = static_cast<f32>(VectorDoubleGetX(*x));
+                const f32 nextX = static_cast<f32>(VectorDoubleGetX(x->value));
                 const auto y = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(scroll.y), VectorDoubleNegate(VectorDoubleReplicate(action->delta)), VectorDoubleReplicate(action->step), VectorDoubleReplicate(action->maximum));
                 if(!y)
                     return false;
-                next = { nextX, static_cast<f32>(VectorDoubleGetX(*y)) };
+                next = { nextX, static_cast<f32>(VectorDoubleGetX(y->value)) };
                 manual = true;
             }
             else if(action->kind == ControlActionKind::Activate && action->value >= 1u && action->value <= 4u){
@@ -134,7 +135,7 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
                 const auto stepped = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(x ? scroll.x : scroll.y), VectorDoubleReplicate(direction), VectorDoubleReplicate(bar.viewportExtent), VectorDoubleReplicate(bar.maximum));
                 if(!stepped)
                     return false;
-                (x ? next.x : next.y) = static_cast<f32>(VectorDoubleGetX(*stepped));
+                (x ? next.x : next.y) = static_cast<f32>(VectorDoubleGetX(stepped->value));
                 manual = true;
             }
             scroll = next;

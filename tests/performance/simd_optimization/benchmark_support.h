@@ -50,15 +50,17 @@ inline u64 NextSeed(u64& seed)noexcept{
 }
 
 NWB_NOINLINE inline void InitializeDataset(Dataset& dataset, u64 seed)noexcept{
+    const SIMDVectorDouble step = VectorDoubleReplicate(0x1p-10);
     for(usize index = 0u; index < s_DataCount; ++index){
-        f64 left[4], right[4];
+        // Keep the seed draw order: left and right per lane, then the angle.
+        f64 leftSteps[4], rightSteps[4];
         for(usize lane = 0u; lane < 4u; ++lane){
-            left[lane] = static_cast<f64>(NextSeed(seed) % 8192u) * 0x1p-10 - 4.0;
-            right[lane] = static_cast<f64>(NextSeed(seed) % 64u + 1u) * 0x1p-10;
+            leftSteps[lane] = static_cast<f64>(NextSeed(seed) % 8192u);
+            rightSteps[lane] = static_cast<f64>(NextSeed(seed) % 64u + 1u);
         }
-        dataset.left[index] = VectorDoubleSet(left[0], left[1], left[2], left[3]);
-        dataset.right[index] = VectorDoubleSet(right[0], right[1], right[2], right[3]);
-        dataset.angles[index] = static_cast<f64>(NextSeed(seed) % 2048u + 1u) * 0x1p-10;
+        dataset.left[index] = VectorDoubleMultiplyAddExpression(VectorDoubleSet(leftSteps[0], leftSteps[1], leftSteps[2], leftSteps[3]), step, VectorDoubleReplicate(-4.0));
+        dataset.right[index] = VectorDoubleMultiply(VectorDoubleSet(rightSteps[0], rightSteps[1], rightSteps[2], rightSteps[3]), step);
+        dataset.angles[index] = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(NextSeed(seed) % 2048u + 1u)), step));
     }
 }
 

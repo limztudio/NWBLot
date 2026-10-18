@@ -299,9 +299,10 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
     const SIMDVectorDouble roundingFactor = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(submissionCount)), VectorDoubleReplicate(s_DoublePrecisionEpsilon));
     if(VectorDoubleGetX(roundingFactor) >= s_SubmissionRoundingLimit)
         return false;
-    const bool lhsLarger = lhs > rhs;
-    const SIMDVectorDouble magnitude = VectorDoubleReplicate(lhsLarger ? lhs : rhs);
-    const SIMDVectorDouble difference = VectorDoubleSubtract(magnitude, VectorDoubleReplicate(lhsLarger ? rhs : lhs));
+    const SIMDVectorDouble left = VectorDoubleReplicate(lhs);
+    const SIMDVectorDouble right = VectorDoubleReplicate(rhs);
+    const SIMDVectorDouble magnitude = VectorDoubleMax(left, right);
+    const SIMDVectorDouble difference = VectorDoubleSubtract(magnitude, VectorDoubleMin(right, left));
     // x: relative difference, y: allowed rounding ratio.
     const SIMDVectorDouble numerators = VectorDoubleSelect(difference, VectorDoubleMultiply(VectorDoubleReplicate(s_SubmissionRoundingScale), roundingFactor), s_DoubleSIMDMaskY);
     const SIMDVectorDouble denominators = VectorDoubleSelect(magnitude, VectorDoubleSubtract(VectorDoubleSplatOne(), roundingFactor), s_DoubleSIMDMaskY);

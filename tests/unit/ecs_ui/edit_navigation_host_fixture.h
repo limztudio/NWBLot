@@ -69,8 +69,8 @@ public:
                 if(direction == Ui::EditNavigationDirection::Up || direction == Ui::EditNavigationDirection::Down)
                     target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == Ui::EditNavigationDirection::Down, preferredX);
                 else{
-                    const f32 distance = direction == Ui::EditNavigationDirection::PageDown ? viewportHeight : -viewportHeight;
-                    target = view.caretGeometry().hitTest({ preferredX, VectorGetX(VectorAdd(VectorMultiplyAddExpression(VectorReplicate(caret->height), VectorReplicate(0.5f), VectorReplicate(caret->y)), VectorReplicate(distance))) });
+                    const SIMDVectorSingle distance = direction == Ui::EditNavigationDirection::PageDown ? VectorReplicate(viewportHeight) : VectorNegate(VectorReplicate(viewportHeight));
+                    target = view.caretGeometry().hitTest({ preferredX, VectorGetX(VectorAdd(VectorMultiplyAddExpression(VectorReplicate(caret->height), VectorReplicate(0.5f), VectorReplicate(caret->y)), distance)) });
                 }
                 if(target)
                     result = Ui::EditNavigationResult{ *target, preferredX };

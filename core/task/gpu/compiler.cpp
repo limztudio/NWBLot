@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "compiler_internal.h"
 
+#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/timer.h>
 
@@ -431,7 +432,13 @@ bool GpuTaskGraphCompiler::compile(
     statistics.prologueBarrierCount = outCompiledGraph.m_prologueBarriers.size();
     statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();
     outCompiledGraph.buildPlanStatistics(graph, scratchArena);
-    statistics.declarationSeconds = IsFinite(options.declarationSeconds) && options.declarationSeconds >= 0.0 ? options.declarationSeconds : 0.0;
+    if(IsFinite(options.declarationSeconds)){
+        // Keep values >= 0, including -0.0; negative values become +0.0.
+        const SIMDVectorDouble declarationSeconds = VectorDoubleReplicate(options.declarationSeconds);
+        statistics.declarationSeconds = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), declarationSeconds, VectorDoubleGreaterOrEqual(declarationSeconds, VectorDoubleZero())));
+    }
+    else
+        statistics.declarationSeconds = 0.0;
     statistics.analysisSeconds = analysisSeconds;
     statistics.validationSeconds = outAnalysis.m_validationSeconds;
     statistics.dependencyAnalysisSeconds = outAnalysis.m_dependencyAnalysisSeconds;

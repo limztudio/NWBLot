@@ -8,6 +8,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +38,7 @@ VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mo
 }
 
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept{
-    const f32 maxAnisotropy = desc.maxAnisotropy >= 1.f ? desc.maxAnisotropy : 1.f;
+    const f32 maxAnisotropy = VectorGetX(VectorMax(VectorReplicate(desc.maxAnisotropy), VectorSplatOne()));
 
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -89,11 +91,9 @@ Expected<SamplerHandle> Device::createSampler(const SamplerDesc& d){
     }
 
     SamplerDesc normalizedDesc = d;
-    const f32 supported = m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy;
-    const f32 maximum = supported > 1.0f ? supported : 1.0f;
-    const f32 requested = normalizedDesc.maxAnisotropy;
-    const f32 lowerBounded = requested >= 1.0f ? requested : 1.0f;
-    normalizedDesc.maxAnisotropy = lowerBounded > maximum ? maximum : lowerBounded;
+    // x: requested anisotropy, y: device limit. Both are raised to at least 1 before the limit applies.
+    const SIMDVectorSingle bounded = VectorMax(VectorSet(normalizedDesc.maxAnisotropy, m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 0.0f, 0.0f), VectorSplatOne());
+    normalizedDesc.maxAnisotropy = VectorGetX(VectorMin(VectorSplatY(bounded), bounded));
 
     SamplerHandle sampler(NewArenaObject<Sampler>(m_context.objectArena, m_context), SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!sampler)

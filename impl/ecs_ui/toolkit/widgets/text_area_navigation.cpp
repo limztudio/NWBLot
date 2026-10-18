@@ -77,7 +77,8 @@ private:
     if(lines.empty() || !current || current->lineIndex >= lines.size())
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble center = VectorDoubleAdd(VectorDoubleReplicate(caret.y), VectorDoubleMultiply(VectorDoubleReplicate(caret.height), VectorDoubleReplicate(0.5)));
-    const f64 target = VectorDoubleGetX(VectorDoubleAdd(center, VectorDoubleReplicate(down ? static_cast<f64>(viewportHeight) : -static_cast<f64>(viewportHeight))));
+    const SIMDVectorDouble pageStep = VectorDoubleReplicate(static_cast<f64>(viewportHeight));
+    const f64 target = VectorDoubleGetX(VectorDoubleAdd(center, down ? pageStep : VectorDoubleNegate(pageStep)));
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
     const SIMDVectorDouble minimumMaximumValue = VectorDoubleMultiplyAddExpression(

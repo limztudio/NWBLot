@@ -196,7 +196,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
                 return MakeUnexpected(Failure{});
             const AtlasGlyph* cached = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
             const Expected<Rect> raster = cached
-                ? Expected<Rect>(Rect{ static_cast<f32>(cached->bearingX), -static_cast<f32>(cached->bearingY), cached->pixels.width, cached->pixels.height })
+                ? Expected<Rect>(Rect{ static_cast<f32>(cached->bearingX), VectorGetX(VectorNegate(VectorReplicate(static_cast<f32>(cached->bearingY)))), cached->pixels.width, cached->pixels.height })
                 : glyph.face->rasterBounds(glyph.glyphId, pixelSize);
             if(!raster)
                 return MakeUnexpected(Failure{});

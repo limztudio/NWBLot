@@ -133,7 +133,8 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
     const SIMDVectorDouble indicatorExtent = VectorDoubleMin(VectorDoubleReplicate(metrics.indicatorExtent), VectorDoubleReplicate(width));
     const f64 extent = VectorDoubleGetX(indicatorExtent);
     const SIMDVectorDouble labelOffset = VectorDoubleMin(VectorDoubleReplicate(width), VectorDoubleAdd(indicatorExtent, VectorDoubleReplicate(metrics.gap)));
-    const f64 labelStart = VectorDoubleGetX(labelOffset);
+    const SIMDVectorDouble labelStart = VectorDoubleSelect(VectorDoubleZero(), labelOffset, s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble labelShift = VectorDoubleSelect(labelStart, VectorDoubleNegate(labelStart), s_DoubleSIMDMaskY);
     const f64 markInset = VectorDoubleGetX(VectorDoubleMultiply(indicatorExtent, VectorDoubleReplicate(metrics.markInset)));
     for(u32 index = 0u; index < candidate.count; ++index){
         if(choices.rows[index].key == 0u)
@@ -163,7 +164,7 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         const auto mark = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleGetX(markOrigin), VectorDoubleGetY(markOrigin), VectorDoubleGetX(markSize), VectorDoubleGetY(markSize));
         if(!mark)
             return MakeUnexpected(Failure{});
-        const SIMDVectorDouble labelBounds = VectorDoubleAdd(VectorDoubleSet(x, width, 0.0, 0.0), VectorDoubleSet(labelStart, -labelStart, 0.0, 0.0));
+        const SIMDVectorDouble labelBounds = VectorDoubleAdd(VectorDoubleSet(x, width, 0.0, 0.0), labelShift);
         const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleGetX(labelBounds), rowY, VectorDoubleGetY(labelBounds), metrics.rowHeight);
         if(!label)
             return MakeUnexpected(Failure{});

@@ -36,7 +36,7 @@ public:
 
 public:
     void recordFrame(const f32 delta){
-        const f64 safeDelta = IsFinite(delta) && delta > 0.0f ? static_cast<f64>(delta) : 0.0;
+        const f64 safeDelta = IsFinite(delta) ? VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(static_cast<f64>(delta)), VectorDoubleZero())) : 0.0;
         if(safeDelta <= 0.0)
             return;
 

@@ -229,7 +229,8 @@ private:
         FT_Outline_Get_CBox(&slot->outline, &box);
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
         const SIMDVectorDouble scale = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(fontSize), static_cast<f64>(fontSize), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_face->units_per_EM), static_cast<f64>(m_face->units_per_EM), 1.0, 1.0));
-        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMin), -static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(1.0, 1.0, 0.0, 0.0)), scale);
+        const SIMDVectorDouble leftTopUnits = VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMax), 0.0, 0.0);
+        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(1.0, 1.0, 0.0, 0.0)), scale);
         const f64 left = VectorDoubleGetX(leftTopValue);
         const f64 top = VectorDoubleGetY(leftTopValue);
         const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(
@@ -301,7 +302,7 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     hb_font_extents_t extents{};
     if(!scaled.valid() || !hb_font_get_h_extents(&scaled.get(), &extents))
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle scaledExtents = VectorScale(VectorSet(static_cast<f32>(extents.ascender), -static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), 1.0f / 64.0f);
+    const SIMDVectorSingle scaledExtents = VectorScale(VectorXorInt(VectorSet(static_cast<f32>(extents.ascender), static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), s_SIMDFlipY), 1.0f / 64.0f);
     const SIMDVectorSingle positiveExtents = VectorSelect(scaledExtents, VectorZero(), VectorGreater(VectorZero(), scaledExtents));
     metrics.ascender = VectorGetX(positiveExtents);
     metrics.descender = VectorGetY(positiveExtents);
@@ -361,7 +362,8 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
             hb_glyph_extents_t extents{};
             Rect ink;
             if(hb_font_get_glyph_extents(&scaled.get(), infos[index].codepoint, &extents)){
-                const SIMDVectorSingle origin = VectorScale(VectorSet(static_cast<f32>(extents.x_bearing), -static_cast<f32>(extents.y_bearing), static_cast<f32>(extents.x_bearing), -static_cast<f32>(extents.y_bearing)), 1.0f / 64.0f);
+                const SIMDVectorSingle bearing = VectorSet(static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing), static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing));
+                const SIMDVectorSingle origin = VectorScale(VectorXorInt(bearing, s_SIMDFlipYW), 1.0f / 64.0f);
                 const SIMDVectorSingle width = VectorReplicate(static_cast<f32>(extents.width));
                 const SIMDVectorSingle height = VectorReplicate(static_cast<f32>(extents.height));
                 const SIMDVectorSingle scale = VectorReplicate(1.0f / 64.0f);
@@ -371,7 +373,8 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
                 const SIMDVectorSingle size = VectorSelect(delta, VectorNegate(delta), VectorLess(delta, VectorZero()));
                 ink = { VectorGetX(minimum), VectorGetY(minimum), VectorGetX(size), VectorGetY(size) };
             }
-            const SIMDVectorSingle position = VectorScale(VectorSet(static_cast<f32>(positions[index].x_offset), -static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance), -static_cast<f32>(positions[index].y_advance)), 1.0f / 64.0f);
+            const SIMDVectorSingle placement = VectorSet(static_cast<f32>(positions[index].x_offset), static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance), static_cast<f32>(positions[index].y_advance));
+            const SIMDVectorSingle position = VectorScale(VectorXorInt(placement, s_SIMDFlipYW), 1.0f / 64.0f);
             output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd, { VectorGetX(position), VectorGetY(position) }, { VectorGetZ(position), VectorGetW(position) }, ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
         }
         previousBegin = clusterBegin;
@@ -394,7 +397,8 @@ Expected<Rect> FontFace::rasterBounds(const u32 glyphId, const u32 pixelSize){
         NWB_LOGGER_ERROR(NWB_TEXT("UI glyph measurement requires a grayscale outline"));
         return MakeUnexpected(Failure{});
     }
-    return Rect{ static_cast<f32>(slot->bitmap_left), -static_cast<f32>(slot->bitmap_top), static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows) };
+    const SIMDVectorSingle bounds = VectorXorInt(VectorSet(static_cast<f32>(slot->bitmap_left), static_cast<f32>(slot->bitmap_top), static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows)), s_SIMDFlipY);
+    return Rect{ VectorGetX(bounds), VectorGetY(bounds), VectorGetZ(bounds), VectorGetW(bounds) };
 }
 
 bool FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){

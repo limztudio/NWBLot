@@ -7,6 +7,7 @@
 
 #include "basic_string.h"
 #include "expected.h"
+#include "simd/vector_arithmetic.h"
 
 #include <chrono>
 #include <ctime>
@@ -146,6 +147,30 @@ namespace TimerDetail{
 inline Timer g_VeryBegining = TimerNow();
 
 
+// Same steps as duration_cast to a float count: convert ticks, then scale them in SIMD lanes.
+template<typename T, typename Period>
+[[nodiscard]] inline T FloatDurationCount(const Timer::duration duration)noexcept{
+    using Scale = std::ratio_divide<Timer::period, Period>;
+    static_assert(IsSame_V<CommonType_T<T, Timer::rep>, T>);
+    if constexpr(IsSame_V<T, f32>){
+        SIMDVectorSingle value = VectorReplicate(static_cast<f32>(duration.count()));
+        if constexpr(Scale::num != 1)
+            value = VectorMultiply(value, VectorReplicate(static_cast<f32>(Scale::num)));
+        if constexpr(Scale::den != 1)
+            value = VectorDivide(value, VectorReplicate(static_cast<f32>(Scale::den)));
+        return VectorGetX(value);
+    }
+    else{
+        SIMDVectorDouble value = VectorDoubleReplicate(static_cast<f64>(duration.count()));
+        if constexpr(Scale::num != 1)
+            value = VectorDoubleMultiply(value, VectorDoubleReplicate(static_cast<f64>(Scale::num)));
+        if constexpr(Scale::den != 1)
+            value = VectorDoubleDivide(value, VectorDoubleReplicate(static_cast<f64>(Scale::den)));
+        return VectorDoubleGetX(value);
+    }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -176,7 +201,10 @@ inline Timer g_VeryBegining = TimerNow();
 
 template<typename T>
 inline T DurationInSeconds(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
-    return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
+    if constexpr(IsSame_V<T, f32> || IsSame_V<T, f64>)
+        return TimerDetail::FloatDurationCount<T, std::ratio<1, 1>>(current - late);
+    else
+        return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
 }
 template<typename T>
 inline T ConsumeTimerDeltaSeconds(Timer& previous)noexcept(IsArithmetic_V<T>){
@@ -187,11 +215,17 @@ inline T ConsumeTimerDeltaSeconds(Timer& previous)noexcept(IsArithmetic_V<T>){
 }
 template<typename T>
 inline T DurationInMS(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
-    return std::chrono::duration_cast<std::chrono::duration<T, std::milli>>(current - late).count();
+    if constexpr(IsSame_V<T, f32> || IsSame_V<T, f64>)
+        return TimerDetail::FloatDurationCount<T, std::milli>(current - late);
+    else
+        return std::chrono::duration_cast<std::chrono::duration<T, std::milli>>(current - late).count();
 }
 template<typename T>
 inline T DurationInNS(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept(IsArithmetic_V<T>){
-    return std::chrono::duration_cast<std::chrono::duration<T, std::nano>>(current - late).count();
+    if constexpr(IsSame_V<T, f32> || IsSame_V<T, f64>)
+        return TimerDetail::FloatDurationCount<T, std::nano>(current - late);
+    else
+        return std::chrono::duration_cast<std::chrono::duration<T, std::nano>>(current - late).count();
 }
 inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = TimerDetail::g_VeryBegining)noexcept{
     if(current < late)

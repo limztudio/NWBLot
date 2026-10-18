@@ -397,12 +397,12 @@ NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& ou
 
 inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle orientation, const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope, const f32 nearPlane, const f32 farPlane, SIMDVectorSingle* outPlanes)noexcept{
     const SIMDVectorSingle localPlanes[s_FrustumPlaneCount] = {
-        VectorSet(0.0f, 0.0f, 1.0f, -nearPlane),
+        VectorXorInt(VectorSet(0.0f, 0.0f, 1.0f, nearPlane), s_SIMDFlipW),
         VectorSet(0.0f, 0.0f, -1.0f, farPlane),
         VectorSet(-1.0f, 0.0f, rightSlope, 0.0f),
-        VectorSet(1.0f, 0.0f, -leftSlope, 0.0f),
+        VectorXorInt(VectorSet(1.0f, 0.0f, leftSlope, 0.0f), s_SIMDFlipZ),
         VectorSet(0.0f, -1.0f, topSlope, 0.0f),
-        VectorSet(0.0f, 1.0f, -bottomSlope, 0.0f),
+        VectorXorInt(VectorSet(0.0f, 1.0f, bottomSlope, 0.0f), s_SIMDFlipZ),
     };
     for(u32 i = 0u; i < s_FrustumPlaneCount; ++i)
         outPlanes[i] = PlaneNormalizeSafe(TransformPlane(localPlanes[i], orientation, origin));
@@ -1000,12 +1000,12 @@ NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& ou
 
 inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble orientation, const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope, const f64 nearPlane, const f64 farPlane, SIMDVectorDouble* outPlanes)noexcept{
     const SIMDVectorDouble localPlanes[s_DoubleFrustumPlaneCount] = {
-        VectorDoubleSet(0.0, 0.0, 1.0, -nearPlane),
+        VectorDoubleXorInt(VectorDoubleSet(0.0, 0.0, 1.0, nearPlane), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskW)),
         VectorDoubleSet(0.0, 0.0, -1.0, farPlane),
         VectorDoubleSet(-1.0, 0.0, rightSlope, 0.0),
-        VectorDoubleSet(1.0, 0.0, -leftSlope, 0.0),
+        VectorDoubleXorInt(VectorDoubleSet(1.0, 0.0, leftSlope, 0.0), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskZ)),
         VectorDoubleSet(0.0, -1.0, topSlope, 0.0),
-        VectorDoubleSet(0.0, 1.0, -bottomSlope, 0.0),
+        VectorDoubleXorInt(VectorDoubleSet(0.0, 1.0, bottomSlope, 0.0), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskZ)),
     };
     for(u64 i = 0u; i < s_DoubleFrustumPlaneCount; ++i)
         outPlanes[i] = PlaneDoubleNormalizeSafe(TransformPlane(localPlanes[i], orientation, origin));

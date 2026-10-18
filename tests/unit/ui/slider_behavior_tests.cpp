@@ -110,28 +110,30 @@ TEST(UiSliderMathTests, OutOfRangeAndConstantSpansClampNormalization){
 
 TEST(UiSliderMathTests, OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOverflowingSpan){
     const f64 maximum = Limit<f64>::s_Max;
+    const f64 minimum = VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(maximum)));
     Expected<f64> value = MakeUnexpected(Failure{});
-    value = SliderBehavior::Normalize(-maximum, maximum, 0.0);
+    value = SliderBehavior::Normalize(minimum, maximum, 0.0);
     ASSERT_TRUE(value);
     EXPECT_DOUBLE_EQ(*value, 0.5);
-    value = SliderBehavior::Normalize(-maximum, maximum, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(maximum), VectorDoubleReplicate(0.5))));
+    value = SliderBehavior::Normalize(minimum, maximum, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(maximum), VectorDoubleReplicate(0.5))));
     ASSERT_TRUE(value);
     EXPECT_DOUBLE_EQ(*value, 0.75);
-    value = SliderBehavior::Interpolate(-maximum, maximum, 0.25);
+    value = SliderBehavior::Interpolate(minimum, maximum, 0.25);
     ASSERT_TRUE(value);
     EXPECT_TRUE(IsFinite(*value));
     EXPECT_DOUBLE_EQ(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(*value), VectorDoubleReplicate(maximum))), -0.5);
-    value = SliderBehavior::Interpolate(-maximum, maximum, 0.75);
+    value = SliderBehavior::Interpolate(minimum, maximum, 0.75);
     ASSERT_TRUE(value);
     EXPECT_DOUBLE_EQ(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(*value), VectorDoubleReplicate(maximum))), 0.5);
 }
 
 TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
     const f64 maximum = Limit<f64>::s_Max;
-    // Lanes are the positive and negative three-quarter bounds.
-    const SIMDVectorDouble threeQuarters = VectorDoubleMultiply(VectorDoubleSet(maximum, -maximum, 0.0, 0.0), VectorDoubleReplicate(0.75));
+    // Lanes are the positive and negative bounds.
+    const SIMDVectorDouble bounds = VectorDoubleXorInt(VectorDoubleSet(maximum, maximum, 0.0, 0.0), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskY));
+    const SIMDVectorDouble threeQuarters = VectorDoubleMultiply(bounds, VectorDoubleReplicate(0.75));
     for(const bool negative : { false, true }){
-        const f64 minimum = negative ? -maximum : VectorDoubleGetX(threeQuarters);
+        const f64 minimum = negative ? VectorDoubleGetY(bounds) : VectorDoubleGetX(threeQuarters);
         const f64 upper = negative ? VectorDoubleGetY(threeQuarters) : maximum;
         Expected<f64> value = MakeUnexpected(Failure{});
         value = SliderBehavior::Interpolate(minimum, upper, 0.5);
@@ -149,7 +151,7 @@ TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
 TEST(UiSliderMathTests, TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath){
     const f64 tiny = BitCast<f64>(1ull);
     Expected<f64> normalized = MakeUnexpected(Failure{});
-    normalized = SliderBehavior::Normalize(-tiny, tiny, 0.0);
+    normalized = SliderBehavior::Normalize(VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(tiny))), tiny, 0.0);
     ASSERT_TRUE(normalized);
     EXPECT_DOUBLE_EQ(*normalized, 0.5);
     normalized = SliderBehavior::Normalize(tiny, BitCast<f64>(2ull), tiny);

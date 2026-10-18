@@ -54,7 +54,9 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 [[nodiscard]] inline Core::ECS::EntityID CreateSmokeCamera(Core::ECS::World& world, const f32 cameraHeight, const f32 cameraDistance, const f32 cameraPitch){
     auto activeCameraEntity = world.createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
-    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, Float4(0.0f, cameraHeight, -cameraDistance, 0.0f));
+    Float4 cameraPosition;
+    StoreFloat(VectorXorInt(VectorSet(0.0f, cameraHeight, cameraDistance, 0.0f), s_SIMDFlipZ), cameraPosition);
+    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, cameraPosition);
     auto* cameraTransform = world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera);
     NWB_ASSERT(cameraTransform);
     StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform->rotation);

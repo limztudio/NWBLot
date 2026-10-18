@@ -395,7 +395,7 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
         const SIMDVectorSingle fringe = VectorDivide(VectorReplicate(2.0f), scale);
         const Rect& bounds = glyph.coverage.ink;
         const SIMDVectorSingle boundsStart = VectorSet(bounds.x, bounds.y, 0.0f, 0.0f);
-        const SIMDVectorSingle bearing = VectorSet(static_cast<f32>(bitmap.bearingX), -static_cast<f32>(bitmap.bearingY), 0.0f, 0.0f);
+        const SIMDVectorSingle bearing = VectorXorInt(VectorSet(static_cast<f32>(bitmap.bearingX), static_cast<f32>(bitmap.bearingY), 0.0f, 0.0f), s_SIMDFlipY);
         const SIMDVectorSingle rasterStart = VectorDivide(bearing, scale);
         const SIMDVectorSingle rasterEnd = VectorDivide(VectorAdd(bearing, VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.height), 0.0f, 0.0f)), scale);
         const SIMDVectorSingle limitStart = VectorSubtract(boundsStart, fringe);

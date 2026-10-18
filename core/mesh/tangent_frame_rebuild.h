@@ -77,9 +77,11 @@ static_assert((sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator
 
 
 [[nodiscard]] inline f32 ResolveTangentHandedness(const f32 handedness)noexcept{
-    if(IsFinite(handedness) && VectorGetX(VectorAbs(VectorReplicate(handedness))) > s_Epsilon)
-        return handedness < 0.0f ? -1.0f : 1.0f;
-    return 1.0f;
+    if(!IsFinite(handedness))
+        return 1.0f;
+    const SIMDVectorSingle value = VectorReplicate(handedness);
+    const SIMDVectorSingle sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(value, VectorZero()));
+    return VectorGetX(VectorSelect(s_SIMDOne, sign, VectorGreater(VectorAbs(value), VectorReplicate(s_Epsilon))));
 }
 
 [[nodiscard]] inline bool ValidInputVertex(const SIMDVectorSingle position, const SIMDVectorSingle uv0)noexcept{

@@ -600,7 +600,7 @@ public:
             , s_TransparentRowZ
             , s_OpaqueRowZ
             , cameraHeight
-            , -cameraDistance
+            , VectorGetX(VectorNegate(VectorReplicate(cameraDistance)))
             , cameraPitch
             , cameraVerticalFov
             , cameraNearPlane

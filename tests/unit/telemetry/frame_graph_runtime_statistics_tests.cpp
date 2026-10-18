@@ -314,7 +314,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
 TEST(Telemetry, FrameGraphDurationTailsRejectInvalidValuesAndPreserveSignedZeroSubnormals){
     // The final submission durations are scalar tails after four-lane validation blocks.
     const f64 minimumSubnormal = BitCast<f64>(u64{ 1u });
-    const f64 invalidDurations[]{ -1.0, -minimumSubnormal, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, BitCast<f64>(u64{ 0x7FF0000000000001ull }) };
+    const f64 invalidDurations[]{ -1.0, BitCast<f64>(u64{ 0x8000000000000001ull }), Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, BitCast<f64>(u64{ 0x7FF0000000000001ull }) };
     for(const f64 duration : invalidDurations){
         Telemetry::FrameGraphRuntimeStatistics owner = MakeFrameGraphRuntimeStatistics();
         Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queue = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);

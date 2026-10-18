@@ -59,7 +59,8 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    return { a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z };
+    const SIMDVectorDouble larger = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 0.));
+    return { VectorDoubleGetX(larger), VectorDoubleGetY(larger), VectorDoubleGetZ(larger) };
 }
 
 [[nodiscard]] f32 saturate(const f32 a)noexcept{
@@ -68,8 +69,10 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
-    const ShaderFloat3 lower(a.x > 0. ? a.x : 0., a.y > 0. ? a.y : 0., a.z > 0. ? a.z : 0.);
-    return { lower.x > 1. ? 1. : lower.x, lower.y > 1. ? 1. : lower.y, lower.z > 1. ? 1. : lower.z };
+    // Max then min in this operand order maps NaN and -0 to +0.
+    const SIMDVectorDouble lower = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleZero());
+    const SIMDVectorDouble saturated = VectorDoubleMin(VectorDoubleSplatOne(), lower);
+    return { VectorDoubleGetX(saturated), VectorDoubleGetY(saturated), VectorDoubleGetZ(saturated) };
 }
 
 [[nodiscard]] ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{

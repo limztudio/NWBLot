@@ -82,14 +82,14 @@ TEST(CurrentMathContractBoundaries, OppositelyOrientedThinBoxesDoNotInventAnInte
     const BoundingDoubleOrientedBox doubleLhs(Double3U(0.0, 0.0, 0.0), Double3U(1.0, 1.0, 0.1), Double4(0.0, 0.0, 0.0, 1.0));
     for(i32 sign = -1; sign <= 1; sign += 2){
         SCOPED_TRACE(sign);
-        const SIMDVectorSingle signedTerms = VectorMultiply(VectorSet(static_cast<f32>(sign), -static_cast<f32>(sign), 0.0f, 0.0f), VectorSet(s_PIDIV4, 1.1f, 0.0f, 0.0f));
+        const SIMDVectorSingle signedTerms = VectorMultiply(VectorXorInt(VectorReplicate(static_cast<f32>(sign)), s_SIMDFlipY), VectorSet(s_PIDIV4, 1.1f, 0.0f, 0.0f));
         Float4 orientation;
         StoreFloat(QuaternionRotationNormal(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), VectorGetX(signedTerms)), orientation);
         const BoundingOrientedBox rhs(Float3U(1.1f, VectorGetY(signedTerms), 0.0f), Float3U(2.0f, 0.1f, 0.1f), orientation);
         EXPECT_FALSE(lhs.intersects(rhs));
         EXPECT_FALSE(rhs.intersects(lhs));
 
-        const SIMDVectorDouble doubleSignedTerms = VectorDoubleMultiply(VectorDoubleSet(static_cast<f64>(sign), -static_cast<f64>(sign), 0.0, 0.0), VectorDoubleSet(s_DoublePIDIV4, 1.1, 0.0, 0.0));
+        const SIMDVectorDouble doubleSignedTerms = VectorDoubleMultiply(VectorDoubleXorInt(VectorDoubleReplicate(static_cast<f64>(sign)), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskY)), VectorDoubleSet(s_DoublePIDIV4, 1.1, 0.0, 0.0));
         Double4 doubleOrientation;
         StoreDouble(QuaternionDoubleRotationNormal(SIMDVectorDouble{ 0.0, 0.0, 1.0, 0.0 }, VectorDoubleGetX(doubleSignedTerms)), doubleOrientation);
         const BoundingDoubleOrientedBox doubleRhs(Double3U(1.1, VectorDoubleGetY(doubleSignedTerms), 0.0), Double3U(2.0, 0.1, 0.1), doubleOrientation);

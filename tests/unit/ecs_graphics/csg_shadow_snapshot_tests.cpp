@@ -403,13 +403,16 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
         u64 previousExact = 0u;
         u64 previousContent = 0u;
         for(u32 frame = 0u; frame < 7u; ++frame){
-            const f32 x = VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(frame)), 0.25f));
+            const SIMDVectorSingle shift = VectorScale(VectorReplicate(static_cast<f32>(frame)), 0.25f);
+            const f32 x = VectorGetX(shift);
+            // Only lane X moves back; the other lanes stay +0.
+            const SIMDMatrix inverseShift = MatrixTranslationFromVector(VectorAndInt(VectorNegate(shift), s_SIMDMaskX));
             StoreFloat(MatrixTranslation(x, 0.f, 0.f), cutter->shapeToWorld);
-            StoreFloat(MatrixTranslation(-x, 0.f, 0.f), cutter->worldToShape);
+            StoreFloat(inverseShift, cutter->worldToShape);
             instance.translation.x = x;
             StoreFloat(QuaternionRotationRollPitchYaw(0.f, x, 0.f), instance.rotation);
             BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
-            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.f, 0.f), MatrixTranslation(-x, 0.f, 0.f), mesh);
+            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.f, 0.f), inverseShift, mesh);
             ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
             ASSERT_TRUE(state.snapshot.hasCsg);
             ASSERT_TRUE(state.captureGeometryTrusted);

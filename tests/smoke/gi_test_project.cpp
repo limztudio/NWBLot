@@ -462,7 +462,6 @@ private:
             randomState = randomState * 1664525u + 1013904223u;
             return static_cast<f32>(randomState >> 8u);
         };
-        const auto absolute = [](f32 value)noexcept -> f32{ return value < 0.0f ? -value : value; };
         const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b)noexcept -> bool{
             const SIMDVectorSingle verticalCenters = VectorSet(a.position.y, b.position.y, 0.0f, 0.0f);
             const SIMDVectorSingle verticalHalfExtents = VectorScale(VectorSet(a.scale.y, b.scale.y, 0.0f, 0.0f), 0.5f);
@@ -512,7 +511,7 @@ private:
             StoreFloat(VectorMultiply(VectorSet(x, height, z, 0.0f), VectorSet(1.0f, 0.5f, 1.0f, 1.0f)), position);
             const ComplexSceneBox body{ position, Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
             // Leave the line from the camera through the front doorway clear.
-            if(z < -1.8f && absolute(x) < 0.72f)
+            if(z < -1.8f && VectorGetX(VectorAbs(footprint)) < 0.72f)
                 continue;
             // Sun through the roof opening must still land on both colored floor sources.
             if(x > -1.12f && x < 1.12f && z > -1.20f && z < 0.18f)

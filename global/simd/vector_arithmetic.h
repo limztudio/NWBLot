@@ -105,15 +105,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ReciprocalSqrtReplicated(SIMDVectorDou
 }
 #endif
 
-[[nodiscard]] NWB_INLINE f64 FloorRemainder(const f64 numerator, const f64 denominator)noexcept{
-    const f64 remainder = FMod(numerator, denominator);
-    if(remainder == 0.0)
-        return CopySign(0.0, denominator);
-    if(SignBit(remainder) != SignBit(denominator))
-        return remainder + denominator;
-    return remainder;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -863,7 +854,13 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMod(SIMDVectorSingle v0, SIMDVec
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMod(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return VectorDoubleSet(SIMDVectorDoubleDetail::FloorRemainder(v0[0], v1[0]), SIMDVectorDoubleDetail::FloorRemainder(v0[1], v1[1]), SIMDVectorDoubleDetail::FloorRemainder(v0[2], v1[2]), SIMDVectorDoubleDetail::FloorRemainder(v0[3], v1[3]));
+    // FMod stays libm per lane for exact results. The floor fix-up runs in packed lanes.
+    const SIMDVectorDouble remainder = VectorDoubleSet(FMod(v0[0], v1[0]), FMod(v0[1], v1[1]), FMod(v0[2], v1[2]), FMod(v0[3], v1[3]));
+    const SIMDVectorDouble zero = VectorDoubleEqual(remainder, VectorDoubleZero());
+    // Only nonzero remainders whose sign differs from the divisor add the divisor; other lanes add 0 + 0.
+    const SIMDVectorDouble wrap = VectorDoubleAndCInt(VectorDoubleNotEqualInt(VectorDoubleAndInt(VectorDoubleXorInt(remainder, v1), s_DoubleSIMDNegativeZero), VectorDoubleZero()), zero);
+    const SIMDVectorDouble wrapped = VectorDoubleAdd(VectorDoubleAndInt(remainder, wrap), VectorDoubleAndInt(v1, wrap));
+    return VectorDoubleSelect(VectorDoubleSelect(remainder, wrapped, wrap), VectorDoubleAndInt(v1, s_DoubleSIMDNegativeZero), zero);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorModAngles(SIMDVectorSingle angles)noexcept{

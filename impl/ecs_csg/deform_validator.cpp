@@ -35,7 +35,7 @@ bool CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const 
 }
 
 f32 CsgDeformValidator::ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept{
-    return options.distanceEpsilon > s_MinEpsilon ? options.distanceEpsilon : s_MinEpsilon;
+    return VectorGetX(VectorMax(VectorReplicate(options.distanceEpsilon), VectorReplicate(s_MinEpsilon)));
 }
 
 bool CsgDeformValidator::ValidOptions(const CsgDeformBuildOptions& options)noexcept{

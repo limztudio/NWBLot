@@ -8,6 +8,8 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/simd/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -512,7 +514,7 @@ private:
                 return Value(-val.asInteger(), m_arena);
             }
             if(val.isDouble())
-                return Value(-val.asDouble(), m_arena);
+                return Value(VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(val.asDouble()))), m_arena);
 
             error("unary '-' requires numeric operand");
             return Value(m_arena);

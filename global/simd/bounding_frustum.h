@@ -106,8 +106,9 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
     outFarPlane = VectorGetY(scaledPlanes);
     if(scale < 0.0f){
         outOrientation = QuaternionNormalize(QuaternionMultiply(outOrientation, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)));
-        outTopSlope = -bottomSlopeValue;
-        outBottomSlope = -topSlopeValue;
+        const SIMDVectorSingle flippedSlopes = VectorNegate(VectorSet(bottomSlopeValue, topSlopeValue, 0.0f, 0.0f));
+        outTopSlope = VectorGetX(flippedSlopes);
+        outBottomSlope = VectorGetY(flippedSlopes);
     }
 }
 
@@ -193,8 +194,9 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
     outFarPlane = VectorDoubleGetY(scaledPlanes);
     if(scale < 0.0){
         outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(outOrientation, VectorDoubleSet(0.0, 1.0, 0.0, 0.0)));
-        outTopSlope = -bottomSlopeValue;
-        outBottomSlope = -topSlopeValue;
+        const SIMDVectorDouble flippedSlopes = VectorDoubleNegate(VectorDoubleSet(bottomSlopeValue, topSlopeValue, 0.0, 0.0));
+        outTopSlope = VectorDoubleGetX(flippedSlopes);
+        outBottomSlope = VectorDoubleGetY(flippedSlopes);
     }
 }
 

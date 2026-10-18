@@ -10,6 +10,7 @@
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <global/expected.h>
+#include <global/simd/vector_arithmetic.h>
 #include <global/timer.h>
 
 
@@ -66,7 +67,7 @@ template<typename Operation, typename Checksum>
         const auto elapsed = batch(iterations);
         if(!elapsed)
             return false;
-        sample = *elapsed / static_cast<f64>(iterations);
+        sample = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(*elapsed), VectorDoubleReplicate(static_cast<f64>(iterations))));
     }
     auto sorted = samples;
     Sort(sorted.begin(), sorted.end());

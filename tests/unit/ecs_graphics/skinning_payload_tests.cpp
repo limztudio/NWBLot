@@ -185,7 +185,7 @@ TEST(SkinningPayload, GpuInfluencesPreserveUpperU16JointBitsAndFp32WeightBits){
     const auto& gpuSkin = influences->front();
     EXPECT_EQ(gpuSkin.packedJoint[0], 0xffff0000u);
     EXPECT_EQ(gpuSkin.packedJoint[1], 0xfffe8000u);
-    for(u32 influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex)
+    for(u32 influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex)
         EXPECT_EQ(BitCast<u32>(gpuSkin.weight.raw[influenceIndex]), BitCast<u32>(skin.weight.raw[influenceIndex]));
 }
 

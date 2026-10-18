@@ -486,7 +486,7 @@ bool GraphicsRuntime::prepareFramePreamble(){
     m_gpuTiming.beginFrame(m_frameIndex);
 
     // Materialize and reset every declared timer-query pool before any pass preparation can record a timestamp.
-    // Per-pass preparation submits skinning and shadow packets, so this must remain ahead of it as well as every later render packet on the same GPU timeline.
+    // Per-pass preparation may submit GPU packets, so this must remain ahead of it as well as every later render packet on the same GPU timeline.
     if(m_gpuTiming.collectionActive()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to materialize one or more requested GPU-timing query pools"));
@@ -521,7 +521,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
     }
 
     // Each task pairs preparation with rendering.
-    // The dependency chain preserves skinning publication before the next pass prepares dependent meshes, while main-thread execution preserves the platform and UI contracts.
+    // The dependency chain publishes each pass's prepared work before the next pass prepares dependent resources, while main-thread execution preserves platform thread contracts.
     CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
     const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
     CpuTaskHandle previous;

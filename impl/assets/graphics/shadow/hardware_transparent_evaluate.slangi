@@ -10,7 +10,7 @@
 
 
 #include "hardware_transparent_resources.slangi"
-#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
 uint nwbMeshFrameMaterialTypedHeapSlot(){
@@ -25,7 +25,7 @@ uint nwbMeshFrameViewHeapSlot(){
     return 0u;
 }
 
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 #include "shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 #include "shadow_integrate.slangi"

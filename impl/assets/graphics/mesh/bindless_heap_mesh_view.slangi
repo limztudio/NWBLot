@@ -2,50 +2,38 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma once
-
-
-#include "module.h"
-
-#include <global/command_line.h>
+#ifndef NWB_GRAPHICS_MESH_BINDLESS_HEAP_MESH_VIEW_SLANGI
+#define NWB_GRAPHICS_MESH_BINDLESS_HEAP_MESH_VIEW_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_COMMON_BEGIN
+#include "../bindless/bindless_heap.slangi"
+#include "view_buffer.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ArgCommand{
-    enum Enum : u8{
-        LogAddress,
-        LogPort,
-
-        iNumArg,
-    };
-};
-inline constexpr StringView s_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };
-inline constexpr u16 s_DefaultLogServerPort = 7117u;
-inline const Tuple< AStringView, u16 > s_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
-inline constexpr StringView s_ArgDesc[] = { "Log server address", "Log server port", };
+#pragma warning(push)
+#pragma warning(disable: 39001) // The mesh view is a typed alias of the uniform descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbHeapMeshViewBuffers[];
+#pragma warning(pop)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<ArgCommand::Enum i, typename CLI, typename T>
-inline auto ArgAddOption(CLI& cli, T& arg){
-    return cli.add_option(s_ArgCmd[static_cast<usize>(i)].data(), arg, s_ArgDesc[static_cast<usize>(i)].data())->default_val(Get<static_cast<usize>(i)>(s_ArgDefault));
+ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> nwbHeapMeshViewBuffer(const uint slot){
+    return g_NwbHeapMeshViewBuffers[slot];
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_COMMON_END
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

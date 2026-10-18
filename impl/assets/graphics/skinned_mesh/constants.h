@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "../../../assets_mesh/skin_constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND 0u
 #define NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION 1u
 
@@ -20,8 +26,6 @@
 #define NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE 0u
 #endif
 #define NWB_SKINNED_MESH_EPSILON 0.000001
-// Joint/weight pairs per skin record.
-#define NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT 4u
 #define NWB_SKINNED_MESH_SKIN_JOINT_WORD_COUNT 2u
 #define NWB_SKINNED_MESH_SKIN_JOINT_BITS 16u
 #define NWB_SKINNED_MESH_SKIN_JOINT_MASK 0xffffu

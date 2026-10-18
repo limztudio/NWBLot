@@ -5,7 +5,7 @@
 The caller must establish its frozen material context before including the helpers:
 
 1. Declare the heap alias for `NwbRayTraceMaterialContextSlots` and select its buffer through the pass's own immutable parameters.
-2. Define `nwbMeshFrameMaterialTypedHeapSlot()`, `nwbMeshFrameInstanceHeapSlot()`, and `nwbMeshFrameViewHeapSlot()` for that same frame context, then include `bindless/bindless_heap_mesh.slangi`.
+2. Define `nwbMeshFrameMaterialTypedHeapSlot()`, `nwbMeshFrameInstanceHeapSlot()`, and `nwbMeshFrameViewHeapSlot()` for that same frame context, then include `mesh/bindless_heap_mesh.slangi`.
 3. Define `NWB_SCENE_SHADING_HEAP_SLOT` and `NWB_SCENE_LIGHT_LIST_HEAP_SLOT` from retained scene-light resources.
 4. Include `raytrace/surface_lighting.slangi` before any direct inclusion of `scene/lighting.slangi`. It includes `surface_hit.slangi` itself. The shader cook needs both generated include roots: `shadow/generated/surface_dispatch.slangi` and `deferred/generated/bxdf_dispatch.slangi`.
 5. Trace with `nwbRayTraceClosestSurfaceHit(instanceMaterialHeapSlot, origin, direction, minDistance, maxDistance)` and evaluate an accepted hit with `nwbRayTraceSurfaceRadiance(hit, -direction)`.

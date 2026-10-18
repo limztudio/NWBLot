@@ -5,10 +5,9 @@
 #pragma once
 
 
-#include "asset_builder/global.h"
-
 #include <core/assets/global.h>
 
+#include <global/optional.h>
 #include <global/terminal_entry.h>
 
 #include <CLI.hpp>
@@ -47,7 +46,8 @@ struct PipelineOptions{
     NWB::Core::Assets::AssetString outputPath;
     NWB::Core::Assets::AssetString cacheDirectory;
     ACompactString configuration;
-    ACompactString assetType{ NWB::Pipeline::AssetBuilder::s_GraphicsAssetBuildType };
+    // Unset when --asset-type is omitted; the asset builder owns the default domain.
+    Optional<ACompactString> assetType;
     bool includeSkinDependencies = false;
 
 
@@ -93,7 +93,7 @@ private:
     AInteropString m_outputPath;
     AInteropString m_cacheDirectory;
     AInteropString m_configuration;
-    AInteropString m_assetType{ NWB::Pipeline::AssetBuilder::s_GraphicsAssetBuildType };
+    AInteropString m_assetType;
     bool m_includeSkinDependencies = false;
     PipelineTool::Enum m_tool;
     CLI::App m_app;

@@ -34,7 +34,7 @@ uint nwbMeshFrameInstanceHeapSlot(){
 uint nwbMeshFrameViewHeapSlot(){
     return 0u;
 }
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 
 #include "sw_shadow_intersect.slangi"
 #include "sw_shadow_geometry.slangi"

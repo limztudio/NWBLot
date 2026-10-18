@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
-#include <impl/assets/graphics/mesh/material_typed_constants.h>
+#include <impl/assets_material/material_typed_constants.h>
 #include <impl/ecs_scene/components.h>
 
 #include <core/common/log.h>

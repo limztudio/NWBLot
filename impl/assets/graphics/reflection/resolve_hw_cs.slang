@@ -37,7 +37,7 @@
 uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbReflectionMaterialContext.sceneSlots.w; }
 uint nwbMeshFrameInstanceHeapSlot(){ return g_NwbReflectionMaterialContext.materialSlots.x; }
 uint nwbMeshFrameViewHeapSlot(){ return g_NwbReflectionParameters.viewSlot; }
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbReflectionResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbReflectionResources.avboitSlots.w

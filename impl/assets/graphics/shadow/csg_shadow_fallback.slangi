@@ -11,7 +11,7 @@
 
 #include "csg_shadow_resources.slangi"
 #include "csg_shadow_diagnostics.slangi"
-#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
 #include "shadow_heap_resources.slangi"
 #include "../csg/ray_geometry.slangi"
 
@@ -28,7 +28,7 @@
 uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbSwShadowMaterialContextSlots.sceneSlots.w; }
 uint nwbMeshFrameInstanceHeapSlot(){ return g_NwbSwShadowMaterialContextSlots.materialSlots.x; }
 uint nwbMeshFrameViewHeapSlot(){ return 0u; }
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 #endif
 
 #if NWB_CSG_SHADOW_HW_TRACE

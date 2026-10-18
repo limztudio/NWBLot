@@ -9,7 +9,7 @@
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
-#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 
 #include "../scene/buffer.slangi"
 #include "../bvh/bvh_common.slangi"
@@ -53,7 +53,7 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../common/math.slangi"
 
-#include "../bindless/bindless_heap_bvh.slangi"
+#include "../bvh/bindless_heap_bvh.slangi"
 
 // Caustics and shadows share per-hit surface dispatch.
 #include "../shadow/shadow_surface.slangi"

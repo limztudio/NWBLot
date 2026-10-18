@@ -13,7 +13,7 @@
 #include "../common/math.slangi"
 
 // Every raster material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. The trace and cap-fill paths establish their own material-context route before including shared surface code.
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "bindless_heap_mesh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

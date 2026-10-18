@@ -13,7 +13,7 @@
 #include "meshlet_payload.slangi"
 #include "binding_slots.h"
 #include "runtime_constants.h"
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "bindless_heap_mesh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

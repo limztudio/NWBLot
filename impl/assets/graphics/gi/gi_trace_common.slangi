@@ -16,7 +16,7 @@
 #include "../scene/buffer.slangi"
 #include "../scene/lighting.slangi"
 #include "../common/math.slangi"
-#include "../shadow/instance_material.slangi"
+#include "../bvh/instance_material.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

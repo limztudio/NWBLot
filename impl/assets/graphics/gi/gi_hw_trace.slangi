@@ -18,7 +18,7 @@
 #include "../raytrace/constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
-#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
 #include "surfel/surfel_heap_resources.slangi"
 
 
@@ -44,7 +44,7 @@ uint nwbMeshFrameInstanceHeapSlot(){
 uint nwbMeshFrameViewHeapSlot(){
     return 0u;
 }
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 
 // GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures.
 // Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.

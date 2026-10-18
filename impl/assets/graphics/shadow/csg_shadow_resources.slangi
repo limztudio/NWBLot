@@ -21,7 +21,7 @@
 #include "../csg/ray_topology.slangi"
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/bvh_common.slangi"
-#include "../bindless/bindless_heap_bvh.slangi"
+#include "../bvh/bindless_heap_bvh.slangi"
 #include "../mesh/runtime_bounds_constants.h"
 
 

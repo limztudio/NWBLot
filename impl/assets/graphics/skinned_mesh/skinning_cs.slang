@@ -95,7 +95,7 @@ bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 po
     // Position and normal skinning share the influence filter and normal-matrix admission.
     const float3 influenceValidationNormal = float3(0.0, 0.0, 1.0);
 
-    for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
+    for(uint influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex){
         const half weight = half(skinWeights[influenceIndex]);
         const uint jointId = skinJoints[influenceIndex];
         if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
@@ -132,7 +132,7 @@ bool nwbSkinnedMeshApplyLinearSkinFrame(const uint skinIndex, inout float3 norma
     // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
 
-    for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
+    for(uint influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex){
         const half weight = half(skinWeights[influenceIndex]);
         const uint jointId = skinJoints[influenceIndex];
         if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
@@ -175,7 +175,7 @@ bool nwbSkinnedMeshBuildDualQuaternionSkin(const uint skinIndex, out bool hasSki
     // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
 
-    for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
+    for(uint influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex){
         const half weight = half(skinWeights[influenceIndex]);
         const uint jointId = skinJoints[influenceIndex];
         if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)

@@ -7,8 +7,9 @@
 #include <core/alloc/scratch.h>
 #include <core/assets/arena_names.h>
 #include <core/assets/input_list.h>
-#include <core/common/command_line.h>
 #include <core/common/log.h>
+
+#include <global/command_line.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +96,9 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));
         return MakeUnexpected(Failure{});
     }
-    if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size())) || !options.assetType.assign(AStringView(m_assetType.data(), m_assetType.size()))){
+    if(m_tool == PipelineTool::AssetBuilder && m_app.count(s_PipelineAssetTypeOption.data()) != 0u)
+        options.assetType.emplace();
+    if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size())) || (options.assetType && !options.assetType->assign(AStringView(m_assetType.data(), m_assetType.size())))){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
         return MakeUnexpected(Failure{});
     }

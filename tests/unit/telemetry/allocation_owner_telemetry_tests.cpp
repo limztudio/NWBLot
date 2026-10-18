@@ -365,7 +365,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     ExpectSnapshot(parsed->snapshot, retired);
     ExpectDelta(parsed->delta, retiredDelta);
     EXPECT_NE(FindOwnerEvent(testArena.arena, capture.view(), scratchName, Perf::MemorySource::Arena), nullptr);
-    const Name heapName("core/alloc/heap_backing");
+    const Name heapName("global/arena_memory/heap_backing");
     EXPECT_NE(FindOwnerEvent(testArena.arena, capture.view(), heapName, Perf::MemorySource::HeapBacking), nullptr);
 
     Log::TelemetryReport report(testArena.arena);

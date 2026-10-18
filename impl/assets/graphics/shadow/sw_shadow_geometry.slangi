@@ -16,11 +16,11 @@
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../bvh/sw_instance.slangi"
 #include "../common/math.slangi"
-#include "instance_material.slangi"
+#include "../bvh/instance_material.slangi"
 
 // Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides nwbHeapBvhNodes() for nodes and nwbHeapRawBuffer() for positions, indices, and attributes.
-#include "../bindless/bindless_heap_bvh.slangi"
-#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/bindless_heap_bvh.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

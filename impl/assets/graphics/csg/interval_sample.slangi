@@ -32,7 +32,7 @@
 
 // Receiver-surface, material, AVBOIT, and cap-fill sampling share the mesh-view selector in their interval state.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalSampleState.resourceSlots.x)
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 
 #include "bindless_resources.slangi"
 #include "removed_cap_sample.slangi"

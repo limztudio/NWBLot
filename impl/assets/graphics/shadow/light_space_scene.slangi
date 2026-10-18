@@ -18,7 +18,7 @@
 uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbSwShadowMaterialContextSlots.sceneSlots.w; }
 uint nwbMeshFrameInstanceHeapSlot(){ return g_NwbSwShadowMaterialContextSlots.materialSlots.x; }
 uint nwbMeshFrameViewHeapSlot(){ return 0u; }
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

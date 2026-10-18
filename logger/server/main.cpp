@@ -11,9 +11,9 @@
 #include "module.h"
 #include "frame.h"
 
-#include <core/common/command_line.h>
 #include <core/common/module.h>
 
+#include <global/command_line.h>
 #include <global/terminal_entry.h>
 
 #include <CLI.hpp>
@@ -83,13 +83,13 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
 
 static int EntryPoint(isize argc, tchar** argv, void* inst){
     NWB::Core::Alloc::ScratchArena commandLineArena(__hidden_logger_server_main::s_CommandLineArena);
-    u16 logPort = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::s_ArgDefault);
+    u16 logPort = Get<static_cast<usize>(NWB::Log::ArgCommand::LogPort)>(NWB::Log::s_ArgDefault);
     AString<NWB::Core::Alloc::ScratchArena> crashSymbolStoreDirectory(commandLineArena);
     AString<NWB::Core::Alloc::ScratchArena> crashUploadToken(commandLineArena);
     NWB::Log::CrashRetentionConfig crashRetentionConfig;
     CLI::App app{ __hidden_logger_server_main::s_AppName.data() };
 
-    NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, logPort);
+    NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogPort>(app, logPort);
     app.add_option(__hidden_logger_server_main::s_CrashSymbolStoreOption.data(), crashSymbolStoreDirectory, "Directory containing crash symbol files");
     app.add_option(__hidden_logger_server_main::s_CrashUploadTokenOption.data(), crashUploadToken, "Bearer token required for crash uploads; empty disables upload auth");
     app.add_option(__hidden_logger_server_main::s_CrashRetainPackagesOption.data(), crashRetentionConfig.maxExtractedPackages, "Maximum extracted crash packages to keep; zero disables pruning");

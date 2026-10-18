@@ -13,7 +13,7 @@
 #include "../common/math.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../bvh/triangle_geometry.slangi"
-#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 #if NWB_RT_CSG_ENABLED

@@ -204,7 +204,7 @@ namespace __hidden_name_symbol_owner_capture_tests{
 
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE = "tests/namesymbols/before_registry_live";
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE = "tests/namesymbols/before_registry_retired";
-static constexpr AStringView s_CORE_ALLOC_HEAP_BACKING = "core/alloc/heap_backing";
+static constexpr AStringView s_GLOBAL_ARENA_MEMORY_HEAP_BACKING = "global/arena_memory/heap_backing";
 using NameSymbolTestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
 
 
@@ -217,7 +217,7 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     constexpr Name s_RetiredOwner{"Tests/NameSymbols/Before_Registry_Retired"};
     constexpr NameHash s_LiveHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_live"));
     constexpr NameHash s_RetiredHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_retired"));
-    constexpr NameHash s_HeapHash = ComputeNameHash(MakeNotNull("core/alloc/heap_backing"));
+    constexpr NameHash s_HeapHash = ComputeNameHash(MakeNotNull("global/arena_memory/heap_backing"));
     NameSymbols::UninstallRuntimeRegistry();
     NWB::Core::Alloc::GlobalArena liveOwner(s_LiveOwner);
     {
@@ -239,10 +239,10 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     EXPECT_TRUE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data());
     EXPECT_TRUE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, s_CORE_ALLOC_HEAP_BACKING.data());
+    EXPECT_STREQ(resolvedText, s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data());
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data()), decltype(namesymText)::npos);
 #else
     EXPECT_FALSE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
     EXPECT_FALSE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
@@ -265,11 +265,11 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
 #if defined(NWB_BUILD_SYMBOLS)
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data()), decltype(namesymText)::npos);
 #else
     EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
     EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
-    EXPECT_EQ(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data()), decltype(namesymText)::npos);
 #endif
     EXPECT_TRUE(RemoveFile(namesymPath));
 }

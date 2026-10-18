@@ -16,7 +16,7 @@
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
-#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +48,7 @@ uint nwbMeshFrameInstanceHeapSlot(){
 uint nwbMeshFrameViewHeapSlot(){
     return 0u; // The caustic surface path does not consume the mesh-view alias.
 }
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 
 #include "../scene/buffer.slangi"
 #include "../common/math.slangi"

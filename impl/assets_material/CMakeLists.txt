@@ -2,6 +2,7 @@ nwb_declare_static_library(nwb_assets_material)
 target_sources(nwb_assets_material PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
+    "${CMAKE_CURRENT_LIST_DIR}/material_typed_constants.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
 )

@@ -41,7 +41,7 @@ namespace __hidden_arena_memory{
 inline constexpr usize s_OwnerBucketCount = 256u;
 inline constexpr usize s_HeapShardPadBytes = 80u;
 inline constexpr usize s_HeapShardMinBytes = 128u;
-static constinit ArenaMemoryOwnerRecord s_HeapBacking{ .ownerName = Name("core/alloc/heap_backing"), .source = ArenaMemorySource::HeapBacking, };
+static constinit ArenaMemoryOwnerRecord s_HeapBacking{ .ownerName = Name("global/arena_memory/heap_backing"), .source = ArenaMemorySource::HeapBacking, };
 static constinit Atomic<const ArenaMemoryOwnerRecord*> s_OwnerHead{ &s_HeapBacking };
 static MallocMutex s_OwnerMutex;
 static ArenaMemoryOwnerRecord* s_OwnerBuckets[s_OwnerBucketCount] = {};

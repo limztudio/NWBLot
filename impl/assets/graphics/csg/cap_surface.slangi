@@ -49,7 +49,7 @@ uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbCsgClipContextSlots.meshInstances;
 }
 // interval_sample.slangi already included bindless_heap_mesh.slangi with its b18-selected mesh-view alias. Its include guard keeps this include focused on the cap-fill material/instance accessors above.
-#include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/bindless_heap_mesh.slangi"
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 

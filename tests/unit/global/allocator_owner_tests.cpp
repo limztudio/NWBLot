@@ -297,7 +297,7 @@ TEST(AllocationOwners, RawReallocationMaintainsBackingReservationAndCounts){
 }
 
 TEST(AllocationOwners, BackingDomainCannotCollideWithAnArenaName){
-    constexpr Name s_Owner("core/alloc/heap_backing");
+    constexpr Name s_Owner("global/arena_memory/heap_backing");
     GlobalArena arena(s_Owner);
     void* allocation = arena.allocate(1u, 13u);
     ASSERT_NE(allocation, nullptr);

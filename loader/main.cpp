@@ -7,11 +7,11 @@
 #include "profile_names.h"
 
 #include <logger/client/module.h>
+#include <logger/common.h>
 
 #include <core/alloc/scratch.h>
 #include <core/alloc/standalone_runtime.h>
 #include <core/common/application_entry.h>
-#include <core/common/command_line.h>
 #include <core/common/module.h>
 #include <core/crash/module.h>
 #include <core/frame/module.h>
@@ -23,6 +23,7 @@
 #include <core/filesystem/volume_naming.h>
 
 #include <global/global.h>
+#include <global/command_line.h>
 #include <global/exception.h>
 #include <global/scope_exit.h>
 #include <global/terminal_entry.h>
@@ -431,10 +432,10 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     __hidden_loader::LoaderOptions options(commandLineArena);
     CLI::App app{ __hidden_loader::s_LoaderAppName.data() };
 
-    AInteropString address(Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::s_ArgDefault));
-    u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::s_ArgDefault);
-    NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
-    NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
+    AInteropString address(Get<static_cast<usize>(NWB::Log::ArgCommand::LogAddress)>(NWB::Log::s_ArgDefault));
+    u16 port = Get<static_cast<usize>(NWB::Log::ArgCommand::LogPort)>(NWB::Log::s_ArgDefault);
+    NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogAddress>(app, address);
+    NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogPort>(app, port);
     app.add_option(__hidden_loader::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
     app.add_flag(__hidden_loader::s_ForceSdrOutputFlag.data(), options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
     app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag.data(), options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");

@@ -6,8 +6,7 @@
 
 
 #include "../global.h"
-
-#include <impl/assets/graphics/mesh/material_typed_constants.h>
+#include "material_typed_constants.h"
 
 #include <core/assets/module.h>
 #include <core/assets/paths.h>

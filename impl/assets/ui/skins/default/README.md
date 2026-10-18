@@ -48,7 +48,7 @@ each edge; a 40-unit field fits the default 16-unit font, while content sizing i
 Selection, caret and preedit underline are clipped geometry using edit-style colors rather than additional
 font or skin atlas parts. The caret is one physical pixel wide after display scaling. Read-only fields retain
 selection/copy behavior and use the ordinary/focused artwork; disabled fields use their separate region.
-The Testbed edit gallery uses this same skin with application-owned text models and borrowed OS services.
+Application edit fields use this same skin with application-owned text models and borrowed OS services.
 
 Font assets remain independent of the skin artwork. Each default font uses readable `.nwb` declarations
 paired with a same-stem `.font` prepared source containing SFNT shaping data and compact lossless SDF images.

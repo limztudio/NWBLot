@@ -79,7 +79,8 @@ int RunPipelineTool(const int argc, char** argv){
         buildOptions.outputDirectory = options.outputPath;
         buildOptions.cacheDirectory = options.cacheDirectory;
         buildOptions.configuration = options.configuration;
-        buildOptions.assetType = options.assetType;
+        if(options.assetType)
+            buildOptions.assetType = *options.assetType;
         buildOptions.useExplicitInputs = true;
         NWB::Core::Assets::ScratchArena scratchArena(__hidden_asset_builder::s_AssetBuilderArena);
         if(!__hidden_asset_builder::ResolveRoots(options, buildOptions, scratchArena))

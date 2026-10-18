@@ -34,6 +34,29 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Log server endpoint options shared by log clients and the server.
+namespace ArgCommand{
+    enum Enum : u8{
+        LogAddress,
+        LogPort,
+
+        iNumArg,
+    };
+};
+inline constexpr StringView s_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };
+inline constexpr u16 s_DefaultLogServerPort = 7117u;
+inline const Tuple< AStringView, u16 > s_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
+inline constexpr StringView s_ArgDesc[] = { "Log server address", "Log server port", };
+
+template<ArgCommand::Enum i, typename CLI, typename T>
+inline auto ArgAddOption(CLI& cli, T& arg){
+    return cli.add_option(s_ArgCmd[static_cast<usize>(i)].data(), arg, s_ArgDesc[static_cast<usize>(i)].data())->default_val(Get<static_cast<usize>(i)>(s_ArgDefault));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena)noexcept{
     return MakeTuple(Timer{}, Core::Common::LogType::Info, LogString(arena));
 }

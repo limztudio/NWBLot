@@ -530,6 +530,7 @@ MeshletCookMetrics MeshCookMeshlets::BuildMeshletCookMetrics(const CookEntryT& e
     MeshletCookMetrics metrics;
     metrics.meshletCount = static_cast<u32>(entry.meshlets.size());
     SIMDVectorDouble radiusAndCutoffSums = VectorDoubleZero();
+    SIMDVectorSingle worstConeCutoff = VectorReplicate(metrics.worstConeCutoff);
     for(usize meshletIndex = 0u; meshletIndex < entry.meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = entry.meshlets[meshletIndex];
         const MeshletBounds& bounds = entry.meshletBounds[meshletIndex];
@@ -549,11 +550,12 @@ MeshletCookMetrics MeshCookMeshlets::BuildMeshletCookMetrics(const CookEntryT& e
             continue;
         }
 
-        const f32 coneCutoff = static_cast<f32>(MeshletConePackedCutoff(bounds)) * (1.0f / s_MeshletUnorm8Max);
+        const SIMDVectorSingle coneCutoff = VectorScale(VectorReplicate(static_cast<f32>(MeshletConePackedCutoff(bounds))), 1.0f / s_MeshletUnorm8Max);
         ++metrics.coneEnabledCount;
-        radiusAndCutoffSums = VectorDoubleAdd(radiusAndCutoffSums, VectorDoubleSet(bounds.sphere.w, coneCutoff, 0.0, 0.0));
-        metrics.worstConeCutoff = Min(metrics.worstConeCutoff, coneCutoff);
+        radiusAndCutoffSums = VectorDoubleAdd(radiusAndCutoffSums, VectorDoubleSet(bounds.sphere.w, VectorGetX(coneCutoff), 0.0, 0.0));
+        worstConeCutoff = VectorMin(worstConeCutoff, coneCutoff);
     }
+    metrics.worstConeCutoff = VectorGetX(worstConeCutoff);
     metrics.radiusSum = VectorDoubleGetX(radiusAndCutoffSums);
     metrics.coneCutoffSum = VectorDoubleGetY(radiusAndCutoffSums);
 

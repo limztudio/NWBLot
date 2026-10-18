@@ -77,7 +77,7 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive)noexcept{
-    return static_cast<f32>(positive) - static_cast<f32>(negative);
+    return VectorGetX(VectorSubtract(VectorReplicate(static_cast<f32>(positive)), VectorReplicate(static_cast<f32>(negative))));
 }
 
 [[nodiscard]] static Expected<usize> ResolveKeyIndex(const i32 key)noexcept{

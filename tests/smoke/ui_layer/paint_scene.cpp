@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,10 +26,10 @@ namespace Tests::Smoke{
 
 void PaintUiLayerSmokeScene(Impl::UiPaintContext& context){
     Impl::Ui::PaintBuilder& paint = context.paint;
-    const f32 width = context.display.logicalWidth;
-    const f32 height = context.display.logicalHeight;
-    const auto rectangle = [width, height](const f32 x, const f32 y, const f32 w, const f32 h)noexcept{
-        return Impl::Ui::Rect{ x * width, y * height, w * width, h * height };
+    const SIMDVectorSingle extent = VectorSet(context.display.logicalWidth, context.display.logicalHeight, context.display.logicalWidth, context.display.logicalHeight);
+    const auto rectangle = [extent](const f32 x, const f32 y, const f32 w, const f32 h)noexcept{
+        const SIMDVectorSingle scaled = VectorMultiply(VectorSet(x, y, w, h), extent);
+        return Impl::Ui::Rect{ VectorGetX(scaled), VectorGetY(scaled), VectorGetZ(scaled), VectorGetW(scaled) };
     };
 
     // Empty margins make the layer clear and complete fullscreen presentation observable in the final framebuffer.

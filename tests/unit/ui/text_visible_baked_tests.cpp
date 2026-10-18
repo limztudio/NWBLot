@@ -4,7 +4,7 @@
 
 #include "text_visible_fixture.h"
 
-#include <global/simplemath.h>
+#include <global/simdmath.h>
 
 #include "baked_font_fixture.h"
 
@@ -26,19 +26,23 @@ using namespace NWB::UiTextVisibleTests;
 class TextVisibleBakedTests : public TextVisibleFixture{
 protected:
     [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-        return Rect{ origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
+        const SIMDVectorSingle position = VectorAdd(VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)), VectorSet(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f));
+        return Rect{ VectorGetX(position), VectorGetY(position), glyph.ink.width, glyph.ink.height };
     }
 
     [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin)noexcept{
         const Rect outline = OutlineRectangle(glyph, origin);
-        return { outline.x + outline.width * 0.5f, outline.y + outline.height * 0.5f, 1.0f, 1.0f };
+        const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(outline.width, outline.height, 0.0f, 0.0f), VectorReplicate(0.5f), VectorSet(outline.x, outline.y, 0.0f, 0.0f));
+        return { VectorGetX(center), VectorGetY(center), 1.0f, 1.0f };
     }
 
     [[nodiscard]] static Rect BakedRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
         const BakedFontAtlas& atlas = *glyph.face->bakedAtlas();
         const FontAtlasGlyph& record = *atlas.glyph(glyph.glyphId);
-        const f32 scale = 32.0f / static_cast<f32>(atlas.unitsPerEm());
-        return Rect{ origin.x + glyph.position.x + record.planeLeft * scale, origin.y + glyph.position.y + record.planeTop * scale, (record.planeRight - record.planeLeft) * scale, (record.planeBottom - record.planeTop) * scale };
+        const SIMDVectorSingle scale = VectorDivide(VectorReplicate(32.0f), VectorReplicate(static_cast<f32>(atlas.unitsPerEm())));
+        const SIMDVectorSingle position = VectorMultiplyAddExpression(VectorSet(record.planeLeft, record.planeTop, 0.0f, 0.0f), scale, VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)));
+        const SIMDVectorSingle size = VectorMultiply(VectorSubtract(VectorSet(record.planeRight, record.planeBottom, 0.0f, 0.0f), VectorSet(record.planeLeft, record.planeTop, 0.0f, 0.0f)), scale);
+        return Rect{ VectorGetX(position), VectorGetY(position), VectorGetX(size), VectorGetY(size) };
     }
 
 
@@ -67,7 +71,7 @@ protected:
         payload.glyphs.resize(payload.sourceGlyphCount);
         for(u32 id = 0u; id < payload.sourceGlyphCount; ++id)
             payload.glyphs[id].glyphId = id;
-        const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / 32.0f;
+        const SIMDVectorSingle unitsPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(32.0f));
         for(const PlacedGlyph& placed : m_layout.glyphs()){
             if(placed.face->identity() != payload.font || placed.glyphId >= payload.glyphs.size())
                 return false;
@@ -76,10 +80,12 @@ protected:
                 continue;
             if(payload.groups.size() == s_FontAtlasMaxGroupCount)
                 return false;
-            const f32 left = Floor(placed.ink.x) - 8.0f;
-            const f32 top = Floor(placed.ink.y) - 8.0f;
-            const u32 width = static_cast<u32>(Ceil(placed.ink.x + placed.ink.width) - left + 8.0f);
-            const u32 height = static_cast<u32>(Ceil(placed.ink.y + placed.ink.height) - top + 8.0f);
+            // Lanes are x and y. The plane has 8 pixels of room on each side.
+            const SIMDVectorSingle inkStart = VectorSet(placed.ink.x, placed.ink.y, 0.0f, 0.0f);
+            const SIMDVectorSingle start = VectorSubtract(VectorFloor(inkStart), VectorReplicate(8.0f));
+            const SIMDVectorSingle extent = VectorAdd(VectorSubtract(VectorCeiling(VectorAdd(inkStart, VectorSet(placed.ink.width, placed.ink.height, 0.0f, 0.0f))), start), VectorReplicate(8.0f));
+            const u32 width = static_cast<u32>(VectorGetX(extent));
+            const u32 height = static_cast<u32>(VectorGetY(extent));
             if(width > 62u || height > 62u)
                 return false;
             glyph.group = static_cast<u32>(payload.groups.size());
@@ -88,10 +94,12 @@ protected:
             glyph.y = 1u;
             glyph.width = width;
             glyph.height = height;
-            glyph.planeLeft = left * unitsPerPixel;
-            glyph.planeTop = top * unitsPerPixel;
-            glyph.planeRight = glyph.planeLeft + static_cast<f32>(width) * unitsPerPixel;
-            glyph.planeBottom = glyph.planeTop + static_cast<f32>(height) * unitsPerPixel;
+            const SIMDVectorSingle planeStart = VectorMultiply(start, unitsPerPixel);
+            const SIMDVectorSingle planeEnd = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(width), static_cast<f32>(height), 0.0f, 0.0f), unitsPerPixel, planeStart);
+            glyph.planeLeft = VectorGetX(planeStart);
+            glyph.planeTop = VectorGetY(planeStart);
+            glyph.planeRight = VectorGetX(planeEnd);
+            glyph.planeBottom = VectorGetY(planeEnd);
             payload.groups.emplace_back(m_arena);
             FontAtlasGroup& group = payload.groups.back();
             group.width = 64u;
@@ -135,12 +143,16 @@ TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingO
     const Point origin{ 40.0f, 40.0f };
     const Rect outline = OutlineRectangle(glyph, origin);
     const Rect plane = BakedRectangle(glyph, origin);
-    const Rect clip{ outline.x - 4.0f, outline.y + outline.height * 0.5f, 2.0f, 1.0f };
-    ASSERT_LT(clip.x + clip.width, outline.x);
+    const SIMDVectorSingle clipX = VectorSubtract(VectorReplicate(outline.x), VectorReplicate(4.0f));
+    const SIMDVectorSingle clipY = VectorMultiplyAddExpression(VectorReplicate(outline.height), VectorReplicate(0.5f), VectorReplicate(outline.y));
+    const Rect clip{ VectorGetX(clipX), VectorGetX(clipY), 2.0f, 1.0f };
+    // Lanes are clip right, clip bottom, plane right, plane bottom.
+    const SIMDVectorSingle ends = VectorAdd(VectorSet(clip.x, clip.y, plane.x, plane.y), VectorSet(clip.width, clip.height, plane.width, plane.height));
+    ASSERT_LT(VectorGetX(ends), outline.x);
     ASSERT_GE(clip.x, plane.x);
     ASSERT_GE(clip.y, plane.y);
-    ASSERT_LE(clip.x + clip.width, plane.x + plane.width);
-    ASSERT_LE(clip.y + clip.height, plane.y + plane.height);
+    ASSERT_LE(VectorGetX(ends), VectorGetZ(ends));
+    ASSERT_LE(VectorGetY(ends), VectorGetW(ends));
     beginPaint(1u);
     m_paint.pushClip(clip);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, origin));
@@ -156,8 +168,8 @@ TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingO
     EXPECT_EQ(snapshot.indices().size(), 6u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, clip.y);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, clip.x + clip.width);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, clip.y + clip.height);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, VectorGetX(ends));
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, VectorGetY(ends));
 }
 
 TEST_F(TextVisibleBakedTests, EmptyClipAndZeroAlphaAdmitNoBakedImagesOrGeometry){
@@ -192,8 +204,9 @@ TEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisible
     }
     const Point origin{ 20.0f, 20.0f };
     const Rect clip = OutlineCenterClip(m_layout.glyphs()[0u], origin);
+    const f32 clipBottom = VectorGetX(VectorAdd(VectorReplicate(clip.y), VectorReplicate(clip.height)));
     for(usize index = 1u; index < m_layout.glyphs().size(); ++index)
-        ASSERT_GT(BakedRectangle(m_layout.glyphs()[index], origin).y, clip.y + clip.height);
+        ASSERT_GT(BakedRectangle(m_layout.glyphs()[index], origin).y, clipBottom);
     beginPaint(1u);
     ASSERT_TRUE(m_paint.prepareGlyphPages(prior.data(), prior.size()));
     m_paint.pushClip(clip);

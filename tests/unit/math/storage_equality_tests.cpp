@@ -4,6 +4,7 @@
 
 #include <global/floating_point_environment.h>
 #include <global/simd/type.h>
+#include <global/simd/vector.h>
 #include <global/limit.h>
 #include <global/scope_exit.h>
 
@@ -79,7 +80,7 @@ void CheckNaNComparisonFlags(){
                     lhs.raw[lane] = rhs.raw[lane] = static_cast<f32>(lane + 1u);
                 lhs.raw[nanLane] = rhs.raw[nanLane] = BitCast<f32>(nanBits);
                 if(mismatch < Count && mismatch != nanLane)
-                    rhs.raw[mismatch] += 1.0f;
+                    rhs.raw[mismatch] = VectorGetX(VectorAdd(VectorReplicate(rhs.raw[mismatch]), VectorSplatOne()));
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
                 const bool expected = LegacyEqual<Value, Count>(lhs, rhs);
                 const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
@@ -142,7 +143,7 @@ void CheckRawEqualityComparisonFlags(){
                         lhs.raw[exceptionalLane] = BitCast<f32>(bits);
                         rhs.raw[exceptionalLane] = compareWithZero ? 0.0f : BitCast<f32>(bits);
                         if(mismatch < Count && mismatch != exceptionalLane)
-                            rhs.raw[mismatch] += 1.0f;
+                            rhs.raw[mismatch] = VectorGetX(VectorAdd(VectorReplicate(rhs.raw[mismatch]), VectorSplatOne()));
                         const auto strict = ObserveEquality(lhs, rhs, LegacyEqual<Value, Count>);
                         ASSERT_TRUE(strict);
                         const auto actual = ObserveEquality(lhs, rhs, StorageEqual<Value>);

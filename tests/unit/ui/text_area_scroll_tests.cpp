@@ -4,6 +4,8 @@
 
 #include "text_area_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,10 +50,14 @@ TEST_F(UiTextAreaScrollTests, ExplicitTwoAxisScrollSurvivesTheFirstModelBinding)
     EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.x, m_state.placement().content.x - visual->x - 17.0f);
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, m_state.placement().content.y - visual->y - 19.0f);
-    EXPECT_GT(m_state.placement().caret.x, m_state.placement().content.x + m_state.placement().content.width);
-    EXPECT_GT(m_state.placement().caret.y, m_state.placement().content.y + m_state.placement().content.height);
+    const EditBoxPlacement& placement = m_state.placement();
+    const SIMDVectorSingle content = VectorSet(placement.content.x, placement.content.y, placement.content.width, placement.content.height);
+    const SIMDVectorSingle textOrigin = VectorSubtract(VectorSubtract(content, VectorSet(visual->x, visual->y, 0.0f, 0.0f)), VectorSet(17.0f, 19.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle contentEnd = VectorAdd(content, VectorSwizzle<2, 3, 2, 3>(content));
+    EXPECT_FLOAT_EQ(placement.textOrigin.x, VectorGetX(textOrigin));
+    EXPECT_FLOAT_EQ(placement.textOrigin.y, VectorGetY(textOrigin));
+    EXPECT_GT(placement.caret.x, VectorGetX(contentEnd));
+    EXPECT_GT(placement.caret.y, VectorGetY(contentEnd));
 }
 
 TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch){
@@ -76,8 +82,9 @@ TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancing
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.x, m_state.placement().content.x - visual->x);
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, m_state.placement().content.y - visual->y);
+    const SIMDVectorSingle textOrigin = VectorSubtract(VectorSet(m_state.placement().content.x, m_state.placement().content.y, 0.0f, 0.0f), VectorSet(visual->x, visual->y, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.x, VectorGetX(textOrigin));
+    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, VectorGetY(textOrigin));
     ASSERT_EQ(m_host.publications.size(), 3u);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scroll, 17.0f);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scrollY, 19.0f);
@@ -96,7 +103,7 @@ TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNe
     const u64 selection = m_model.selectionGeneration();
     const u64 stateRevision = m_state.revision();
     TextAreaOptions compact = SmallOptions();
-    compact.height.value += m_builder.scrollbarStyle().thickness;
+    compact.height.value = VectorGetX(VectorAdd(VectorReplicate(compact.height.value), VectorReplicate(m_builder.scrollbarStyle().thickness)));
     ASSERT_TRUE(frameArea(2u, compact));
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
@@ -104,8 +111,11 @@ TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNe
     ASSERT_GE(placement.content.height, placement.caret.height);
     EXPECT_GE(placement.caret.x, placement.content.x);
     EXPECT_GE(placement.caret.y, placement.content.y);
-    EXPECT_LE(placement.caret.x + placement.caret.width, placement.content.x + placement.content.width + 0.001f);
-    EXPECT_LE(placement.caret.y + placement.caret.height, placement.content.y + placement.content.height + 0.001f);
+    // Lanes are caret right, caret bottom, content right, content bottom.
+    const SIMDVectorSingle ends = VectorAdd(VectorSet(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y), VectorSet(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height));
+    const SIMDVectorSingle limits = VectorAdd(ends, VectorReplicate(0.001f));
+    EXPECT_LE(VectorGetX(ends), VectorGetZ(limits));
+    EXPECT_LE(VectorGetY(ends), VectorGetW(limits));
     EXPECT_EQ(m_model.revision(), revision);
     EXPECT_EQ(m_model.selectionGeneration(), selection);
     EXPECT_EQ(m_state.revision(), stateRevision);
@@ -122,8 +132,10 @@ TEST_F(UiTextAreaScrollTests, ExplicitOverscrollClampsToBothContentExtents){
     EXPECT_GT(m_state.scroll().y, 0.0f);
     EXPECT_LT(m_state.scroll().x, 10000.0f);
     EXPECT_LT(m_state.scroll().y, 10000.0f);
-    EXPECT_NEAR(placement.caret.x + placement.caret.width, placement.content.x + placement.content.width, 0.001f);
-    EXPECT_NEAR(placement.caret.y + placement.caret.height, placement.content.y + placement.content.height, 0.001f);
+    // Lanes are caret right, caret bottom, content right, content bottom.
+    const SIMDVectorSingle ends = VectorAdd(VectorSet(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y), VectorSet(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height));
+    EXPECT_NEAR(VectorGetX(ends), VectorGetZ(ends), 0.001f);
+    EXPECT_NEAR(VectorGetY(ends), VectorGetW(ends), 0.001f);
     EXPECT_EQ(m_state.revision(), revision);
 }
 
@@ -236,7 +248,7 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     const Rect visual = reference.visualBounds();
     const Point logical = reference.layout().measure();
     ASSERT_LT(visual.y, 0.0f);
-    ASSERT_GT(visual.y + visual.height, logical.y);
+    ASSERT_GT(VectorGetX(VectorAdd(VectorReplicate(visual.y), VectorReplicate(visual.height))), logical.y);
     bool sawLatin = false;
     bool sawKorean = false;
     for(const PlacedGlyph& glyph : reference.layout().glyphs()){
@@ -252,10 +264,13 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     const EditBoxPlacement first = m_state.placement();
     EXPECT_FLOAT_EQ(first.scroll, 0.0f);
     EXPECT_FLOAT_EQ(first.scrollY, 0.0f);
-    EXPECT_NEAR(first.textOrigin.x + visual.x, first.content.x, 0.001f);
-    EXPECT_NEAR(first.textOrigin.y + visual.y, first.content.y, 0.001f);
+    const SIMDVectorSingle firstInk = VectorAdd(VectorSet(first.textOrigin.x, first.textOrigin.y, 0.0f, 0.0f), VectorSet(visual.x, visual.y, 0.0f, 0.0f));
+    // Lanes are caret bottom and content bottom.
+    const SIMDVectorSingle firstBottom = VectorAdd(VectorSet(first.caret.y, first.content.y, 0.0f, 0.0f), VectorSet(first.caret.height, first.content.height, 0.0f, 0.0f));
+    EXPECT_NEAR(VectorGetX(firstInk), first.content.x, 0.001f);
+    EXPECT_NEAR(VectorGetY(firstInk), first.content.y, 0.001f);
     EXPECT_GE(first.caret.y, first.content.y);
-    EXPECT_LE(first.caret.y + first.caret.height, first.content.y + first.content.height);
+    EXPECT_LE(VectorGetX(firstBottom), VectorGetY(firstBottom));
     m_host.key(Core::Key::End, true);
     ASSERT_TRUE(frameArea(2u, options));
     EXPECT_EQ(m_model.caret(), text.size());
@@ -264,13 +279,17 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     ASSERT_GT(last.scrollY, 0.0f);
     EXPECT_NEAR(last.scroll, m_state.scrollbars().horizontal.maximum, 0.001);
     EXPECT_NEAR(last.scrollY, m_state.scrollbars().vertical.maximum, 0.001);
-    EXPECT_NEAR(last.textOrigin.x + visual.x + visual.width + last.caret.width, last.content.x + last.content.width, 0.001f);
-    EXPECT_NEAR(last.textOrigin.y + visual.y + visual.height, last.content.y + last.content.height, 0.001f);
+    const SIMDVectorSingle lastTextOrigin = VectorSet(last.textOrigin.x, last.textOrigin.y, 0.0f, 0.0f);
+    const SIMDVectorSingle lastInkEnd = VectorAdd(VectorAdd(lastTextOrigin, VectorSet(visual.x, visual.y, 0.0f, 0.0f)), VectorSet(visual.width, visual.height, 0.0f, 0.0f));
+    const SIMDVectorSingle lastContentEnd = VectorAdd(VectorSet(last.content.x, last.content.y, 0.0f, 0.0f), VectorSet(last.content.width, last.content.height, 0.0f, 0.0f));
+    EXPECT_NEAR(VectorGetX(VectorAdd(lastInkEnd, VectorReplicate(last.caret.width))), VectorGetX(lastContentEnd), 0.001f);
+    EXPECT_NEAR(VectorGetY(lastInkEnd), VectorGetY(lastContentEnd), 0.001f);
     const auto endCaret = reference.caretGeometry().caretRect(text.size());
     ASSERT_TRUE(endCaret);
-    EXPECT_FLOAT_EQ(last.caret.x, last.textOrigin.x + endCaret->x);
-    EXPECT_FLOAT_EQ(last.caret.y, last.textOrigin.y + endCaret->y);
-    const auto hit = reference.hitTest({ last.caret.x, last.caret.y + last.caret.height * 0.5f }, last);
+    const SIMDVectorSingle endCaretOrigin = VectorAdd(lastTextOrigin, VectorSet(endCaret->x, endCaret->y, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(last.caret.x, VectorGetX(endCaretOrigin));
+    EXPECT_FLOAT_EQ(last.caret.y, VectorGetY(endCaretOrigin));
+    const auto hit = reference.hitTest({ last.caret.x, VectorGetX(VectorMultiplyAddExpression(VectorReplicate(last.caret.height), VectorReplicate(0.5f), VectorReplicate(last.caret.y))) }, last);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, text.size());
     ASSERT_EQ(m_host.publications.size(), 2u);
@@ -280,13 +299,15 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     EXPECT_EQ(m_model.caret(), 0u);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_NEAR(m_state.placement().textOrigin.y + visual.y, m_state.placement().content.y, 0.001f);
+    EXPECT_NEAR(VectorGetX(VectorAdd(VectorReplicate(m_state.placement().textOrigin.y), VectorReplicate(visual.y))), m_state.placement().content.y, 0.001f);
     ASSERT_TRUE(m_state.scrollTo({ 10000.0f, 10000.0f }));
     ASSERT_TRUE(frameArea(4u, options));
     EXPECT_EQ(m_model.caret(), 0u);
     EXPECT_NEAR(m_state.scroll().x, last.scroll, 0.001f);
     EXPECT_NEAR(m_state.scroll().y, last.scrollY, 0.001f);
-    EXPECT_NEAR(m_state.placement().textOrigin.y + visual.y + visual.height, m_state.placement().content.y + m_state.placement().content.height, 0.001f);
+    const EditBoxPlacement& scrolled = m_state.placement();
+    const SIMDVectorSingle scrolledInkBottom = VectorAdd(VectorAdd(VectorReplicate(scrolled.textOrigin.y), VectorReplicate(visual.y)), VectorReplicate(visual.height));
+    EXPECT_NEAR(VectorGetX(scrolledInkBottom), VectorGetX(VectorAdd(VectorReplicate(scrolled.content.y), VectorReplicate(scrolled.content.height))), 0.001f);
 }
 
 TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTextChangesWithoutMovingCaretStops){
@@ -312,15 +333,18 @@ TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTe
         const auto caret = view.caretGeometry().caretRect(view.displayCaret());
         ASSERT_TRUE(caret);
         ExpectRect(*caret, *logicalCaret);
-        const f32 caretWidth = 1.0f / scale;
-        const Rect bounds{ 20.25f, 30.75f, expected->width + caretWidth, expected->height };
-        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 800.0f, 600.0f }, {}, caretWidth);
+        const SIMDVectorSingle caretWidth = VectorDivide(VectorSplatOne(), VectorReplicate(scale));
+        const Rect bounds{ 20.25f, 30.75f, VectorGetX(VectorAdd(VectorReplicate(expected->width), caretWidth)), expected->height };
+        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 800.0f, 600.0f }, {}, VectorGetX(caretWidth));
         ASSERT_TRUE(placement);
-        EXPECT_NEAR(placement->textOrigin.x + expected->x, bounds.x, 0.001f);
-        EXPECT_NEAR(placement->textOrigin.y + expected->y, bounds.y, 0.001f);
-        EXPECT_NEAR(placement->textOrigin.y + expected->y + expected->height, bounds.y + bounds.height, 0.001f);
-        EXPECT_FLOAT_EQ(placement->caret.x, placement->textOrigin.x + logicalCaret->x);
-        EXPECT_FLOAT_EQ(placement->caret.y, placement->textOrigin.y + logicalCaret->y);
+        const SIMDVectorSingle textOrigin = VectorSet(placement->textOrigin.x, placement->textOrigin.y, 0.0f, 0.0f);
+        const SIMDVectorSingle inkOrigin = VectorAdd(textOrigin, VectorSet(expected->x, expected->y, 0.0f, 0.0f));
+        const SIMDVectorSingle caretOrigin = VectorAdd(textOrigin, VectorSet(logicalCaret->x, logicalCaret->y, 0.0f, 0.0f));
+        EXPECT_NEAR(VectorGetX(inkOrigin), bounds.x, 0.001f);
+        EXPECT_NEAR(VectorGetY(inkOrigin), bounds.y, 0.001f);
+        EXPECT_NEAR(VectorGetY(VectorAdd(inkOrigin, VectorReplicate(expected->height))), VectorGetX(VectorAdd(VectorReplicate(bounds.y), VectorReplicate(bounds.height))), 0.001f);
+        EXPECT_FLOAT_EQ(placement->caret.x, VectorGetX(caretOrigin));
+        EXPECT_FLOAT_EQ(placement->caret.y, VectorGetY(caretOrigin));
         if(scale != 1.0f)
             changedWithScale = changedWithScale || previous.x != expected->x || previous.y != expected->y || previous.width != expected->width || previous.height != expected->height;
         previous = *expected;

@@ -5,6 +5,8 @@
 #include "text_area_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -96,7 +98,8 @@ TEST_F(UiTextAreaBuilderTests, RawPointerCapturePersistsOutsideWithoutGestureRec
     const WidgetId widget = id("area", "panel");
     const HitTarget* area = target(widget);
     ASSERT_TRUE(area);
-    const Point origin{ area->rectangle.x + 10.0f, area->rectangle.y + 10.0f };
+    const SIMDVectorSingle originValue = VectorAdd(VectorSet(area->rectangle.x, area->rectangle.y, 0.0f, 0.0f), VectorReplicate(10.0f));
+    const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_EQ(m_context.input().capture(), widget);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { 780.0f, 580.0f } }).pointerConsumed);
@@ -117,7 +120,8 @@ TEST_F(UiTextAreaBuilderTests, DisabledAreaRetainsAPointerBarrierAndDiscardsHost
     const HitTarget* area = target(widget);
     ASSERT_TRUE(area);
     EXPECT_FALSE(area->enabled || area->focusable || area->textEditable || area->pointerGesture);
-    const Point point{ area->rectangle.x + 5.0f, area->rectangle.y + 5.0f };
+    const SIMDVectorSingle pointValue = VectorAdd(VectorSet(area->rectangle.x, area->rectangle.y, 0.0f, 0.0f), VectorReplicate(5.0f));
+    const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
     EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());

@@ -6,6 +6,8 @@
 
 #include <impl/ecs_ui/toolkit/context.h>
 
+#include <global/simdmath.h>
+
 #include <gtest/gtest.h>
 
 
@@ -71,7 +73,8 @@ protected:
         if(!m_context.addTarget(popup.owner, barrier))
             return false;
         HitTarget action;
-        action.rectangle = { popup.scope.bounds.x + 4.0f, popup.scope.bounds.y + 4.0f, 24.0f, 18.0f };
+        const SIMDVectorSingle origin = VectorAdd(VectorSet(popup.scope.bounds.x, popup.scope.bounds.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+        action.rectangle = { VectorGetX(origin), VectorGetY(origin), 24.0f, 18.0f };
         action.clip = popup.scope.bounds;
         action.focusable = true;
         action.activatable = true;

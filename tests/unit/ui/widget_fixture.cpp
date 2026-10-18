@@ -42,13 +42,18 @@ Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& sna
     const UiSkinRegion* region = m_skin.findRegion(name);
     if(!region)
         return MakeUnexpected(Failure{});
-    const f32 leftU = static_cast<f32>(region->rectangle.x) / m_skin.atlasWidth();
-    const f32 rightU = static_cast<f32>(region->rectangle.x + region->rectangle.width) / m_skin.atlasWidth();
-    const f32 topV = static_cast<f32>(region->rectangle.y) / m_skin.atlasHeight();
-    const f32 bottomV = static_cast<f32>(region->rectangle.y + region->rectangle.height) / m_skin.atlasHeight();
+    const f32 atlasWidth = static_cast<f32>(m_skin.atlasWidth());
+    const f32 atlasHeight = static_cast<f32>(m_skin.atlasHeight());
+    const SIMDVectorSingle edges = VectorSet(static_cast<f32>(region->rectangle.x), static_cast<f32>(region->rectangle.x + region->rectangle.width), static_cast<f32>(region->rectangle.y), static_cast<f32>(region->rectangle.y + region->rectangle.height));
+    const SIMDVectorSingle texCoordEdges = VectorDivide(edges, VectorSet(atlasWidth, atlasWidth, atlasHeight, atlasHeight));
+    const f32 leftU = VectorGetX(texCoordEdges);
+    const f32 rightU = VectorGetY(texCoordEdges);
+    const f32 topV = VectorGetZ(texCoordEdges);
+    const f32 bottomV = VectorGetW(texCoordEdges);
     SkinPaintSample candidate;
-    f32 right = 0.0f;
-    f32 bottom = 0.0f;
+    // Lanes are x, y. The far corner also keeps the largest right U in z.
+    SIMDVectorSingle origin = VectorZero();
+    SIMDVectorSingle corner = VectorZero();
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Skin)
             continue;
@@ -57,25 +62,23 @@ Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& sna
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
             if(first.texCoord.x < leftU || opposite.texCoord.x > rightU || first.texCoord.y < topV || opposite.texCoord.y > bottomV)
                 continue;
+            const SIMDVectorSingle firstPosition = VectorSet(first.position.x, first.position.y, 0.0f, 0.0f);
+            const SIMDVectorSingle oppositeCorner = VectorSet(opposite.position.x, opposite.position.y, opposite.texCoord.x, 0.0f);
             if(candidate.quads == 0u){
-                candidate.bounds.x = first.position.x;
-                candidate.bounds.y = first.position.y;
+                origin = firstPosition;
+                corner = VectorSet(opposite.position.x, opposite.position.y, candidate.maximumU, 0.0f);
                 candidate.color = first.color;
-                right = opposite.position.x;
-                bottom = opposite.position.y;
             }
-            candidate.bounds.x = Min(candidate.bounds.x, first.position.x);
-            candidate.bounds.y = Min(candidate.bounds.y, first.position.y);
-            right = Max(right, opposite.position.x);
-            bottom = Max(bottom, opposite.position.y);
-            candidate.maximumU = Max(candidate.maximumU, opposite.texCoord.x);
+            origin = VectorMin(origin, firstPosition);
+            corner = VectorMax(corner, oppositeCorner);
             ++candidate.quads;
         }
     }
     if(candidate.quads == 0u)
         return MakeUnexpected(Failure{});
-    candidate.bounds.width = right - candidate.bounds.x;
-    candidate.bounds.height = bottom - candidate.bounds.y;
+    const SIMDVectorSingle size = VectorSubtract(corner, origin);
+    candidate.bounds = { VectorGetX(origin), VectorGetY(origin), VectorGetX(size), VectorGetY(size) };
+    candidate.maximumU = VectorGetZ(corner);
     return candidate;
 }
 

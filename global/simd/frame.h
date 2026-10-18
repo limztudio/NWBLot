@@ -64,14 +64,6 @@ static constexpr f64 s_DoubleFrameFallbackTangentZAxisAlignmentThreshold = 0.999
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
-[[nodiscard]] NWB_INLINE T FrameTangentHandedness(const T handedness, const T fallbackHandedness)noexcept{
-    constexpr T s_HandednessEpsilon = IsSame_V<T, f32> ? static_cast<T>(s_FrameHandednessEpsilon) : static_cast<T>(s_DoubleFrameHandednessEpsilon);
-    if(Abs(handedness) > s_HandednessEpsilon)
-        return handedness < T{ 0 } ? T{ -1 } : T{ 1 };
-    return fallbackHandedness < T{ 0 } ? T{ -1 } : T{ 1 };
-}
-
 [[nodiscard]] NWB_INLINE SIMDVectorSingle FrameTangentHandedness(const SIMDVectorSingle handedness, const SIMDVectorSingle fallbackHandedness)noexcept{
     const SIMDVectorSingle zero = VectorZero();
     const SIMDVectorSingle sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(handedness, zero));

@@ -4,6 +4,8 @@
 
 #include "popup_tools_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -125,7 +127,7 @@ TEST_F(UiPopupToolsBuilderTests, SameAnchorPointerMotionKeepsTheTooltipDelay){
     ASSERT_TRUE(acceptTools(2u, true, false));
     const u64 activity = m_context.input().hoverActivityGeneration();
     const Point pointer = m_context.input().pointerPosition();
-    EXPECT_EQ(send({ InputEventType::PointerMove, { pointer.x + 5.0f, pointer.y } }).hover, anchor());
+    EXPECT_EQ(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(pointer.x), VectorReplicate(5.0f))), pointer.y } }).hover, anchor());
     EXPECT_EQ(m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
@@ -363,13 +365,13 @@ TEST_F(UiPopupToolsBuilderTests, PointerReleaseCommitsOnlyAnEnabledCommand){
     const HitTarget* disabled = menuRow(3u);
     ASSERT_NE(disabled, nullptr);
     EXPECT_FALSE(disabled->enabled);
-    click({ disabled->rectangle.x + disabled->rectangle.width * 0.5f, disabled->rectangle.y + disabled->rectangle.height * 0.5f });
+    click(Center(disabled->rectangle));
     ASSERT_TRUE(acceptTools(3u, false));
     EXPECT_FALSE(m_menuResult.activated);
     ASSERT_TRUE(m_menu.isOpen());
     const HitTarget* enabled = menuRow(5u);
     ASSERT_NE(enabled, nullptr);
-    click({ enabled->rectangle.x + enabled->rectangle.width * 0.5f, enabled->rectangle.y + enabled->rectangle.height * 0.5f });
+    click(Center(enabled->rectangle));
     ASSERT_TRUE(acceptTools(4u, false));
     EXPECT_TRUE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 5u);

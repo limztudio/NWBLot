@@ -209,7 +209,7 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         // Yaw priority: fixed override, manual scrub, then automatic spin.
         const f32 frozen = FrozenYaw();

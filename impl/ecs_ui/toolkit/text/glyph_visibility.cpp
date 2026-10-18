@@ -49,10 +49,17 @@ namespace __hidden_ui_glyph_visibility{
         || !IsFinite(top) || top < -Limit<f32>::s_Max || top > Limit<f32>::s_Max
         || !IsFinite(right) || right < left || right > Limit<f32>::s_Max
         || !IsFinite(bottom) || bottom < top || bottom > Limit<f32>::s_Max
-        || right - left > Limit<f32>::s_Max || bottom - top > Limit<f32>::s_Max
     )
         return TextGlyphIntersection::Invalid;
-    if(right <= left || bottom <= top || clipWidth <= 0.0f || clipHeight <= 0.0f || right <= clipX || bottom <= clipY || left >= static_cast<f64>(clipX) + clipWidth || top >= static_cast<f64>(clipY) + clipHeight)
+    // Both sides are finite and bounded here, so this f64 subtract cannot overflow.
+    const SIMDVectorDouble extent = VectorDoubleSubtract(maximum, minimum);
+    if(VectorDoubleGetX(extent) > Limit<f32>::s_Max || VectorDoubleGetY(extent) > Limit<f32>::s_Max)
+        return TextGlyphIntersection::Invalid;
+    if(right <= left || bottom <= top || clipWidth <= 0.0f || clipHeight <= 0.0f || right <= clipX || bottom <= clipY)
+        return TextGlyphIntersection::Invisible;
+    // Callers pass a valid clip, so these f64 sums are finite.
+    const SIMDVectorDouble clipEnd = VectorDoubleAdd(VectorDoubleSet(clipX, clipY, 0.0, 0.0), VectorDoubleSet(clipWidth, clipHeight, 0.0, 0.0));
+    if(left >= VectorDoubleGetX(clipEnd) || top >= VectorDoubleGetY(clipEnd))
         return TextGlyphIntersection::Invisible;
     return TextGlyphIntersection::Visible;
 }
@@ -71,7 +78,10 @@ const BakedFontAtlas* TextGlyphVisibility::SelectAtlas(const PlacedGlyph& glyph,
     if(!glyph.face || !glyph.face->valid() || !IsFinite(physicalSize) || physicalSize <= 0.0f)
         return nullptr;
     const SharedBakedFontAtlas& atlas = glyph.face->bakedAtlas();
-    if(!atlas || !atlas->valid() || physicalSize < static_cast<f32>(atlas->bakePpem()) * s_BakedFontAtlasMinScale || physicalSize > static_cast<f32>(atlas->bakePpem()) * s_BakedFontAtlasMaxScale || !atlas->glyph(glyph.glyphId))
+    if(!atlas || !atlas->valid())
+        return nullptr;
+    const SIMDVectorSingle sizeRange = VectorScale(VectorSet(s_BakedFontAtlasMinScale, s_BakedFontAtlasMaxScale, 0.0f, 0.0f), static_cast<f32>(atlas->bakePpem()));
+    if(physicalSize < VectorGetX(sizeRange) || physicalSize > VectorGetY(sizeRange) || !atlas->glyph(glyph.glyphId))
         return nullptr;
     return atlas.get();
 }
@@ -144,10 +154,9 @@ Expected<Rect> TextGlyphVisibility::AtlasRectangle(const PlacedGlyph& glyph, con
     }
     if(!IsFinite(record->planeLeft) || !IsFinite(record->planeTop) || !IsFinite(record->planeRight) || !IsFinite(record->planeBottom) || record->planeRight <= record->planeLeft || record->planeBottom <= record->planeTop)
         return MakeUnexpected(Failure{});
-    const f64 scale = static_cast<f64>(fontSize) / atlas.unitsPerEm();
     const SIMDVectorDouble origin = VectorDoubleAdd(VectorDoubleSet(topLeft.x, topLeft.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
     const SIMDVectorDouble planeOrigin = VectorDoubleSet(record->planeLeft, record->planeTop, 0.0, 0.0);
-    const SIMDVectorDouble scaleVector = VectorDoubleSet(scale, scale, 0.0, 0.0);
+    const SIMDVectorDouble scaleVector = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(fontSize), static_cast<f64>(fontSize), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(atlas.unitsPerEm()), static_cast<f64>(atlas.unitsPerEm()), 1.0, 1.0));
     const SIMDVectorDouble xYValue = VectorDoubleMultiplyAddExpression(planeOrigin, scaleVector, origin);
     const f64 x = VectorDoubleGetX(xYValue);
     const f64 y = VectorDoubleGetY(xYValue);

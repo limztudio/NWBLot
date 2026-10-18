@@ -12,6 +12,7 @@
 #include <tests/common/test_context.h>
 
 #include <global/filesystem.h>
+#include <global/simd/vector.h>
 
 #include <gtest/gtest.h>
 
@@ -68,7 +69,7 @@ struct AtlasTestArena : TestArena<FontAtlasTestArenaTag>{
     for(u32 index = 0u; index < 5u; ++index){
         FontAtlasGlyph glyph;
         glyph.glyphId = index;
-        glyph.advanceUnits = 400.f + static_cast<f32>(index);
+        glyph.advanceUnits = VectorGetX(VectorAdd(VectorReplicate(400.f), VectorReplicate(static_cast<f32>(index))));
         if(index < 4u){
             glyph.channel = index;
             glyph.x = 1u;
@@ -162,7 +163,7 @@ TEST(AssetsFontAtlas, BuildOwnsGlyphsGroupsAndPositioningInCallerArena){
     EXPECT_EQ(&payload.groups[0u].pixels.get_allocator().arena(), &resultArena);
     EXPECT_EQ(&payload.positioningTables[0u].bytes.get_allocator().arena(), &resultArena);
 
-    entry.payload.glyphs[0u].advanceUnits += 1.f;
+    entry.payload.glyphs[0u].advanceUnits = VectorGetX(VectorAdd(VectorReplicate(entry.payload.glyphs[0u].advanceUnits), VectorSplatOne()));
     entry.payload.groups[0u].pixels[0u] ^= 1u;
     entry.payload.positioningTables[0u].bytes.back() ^= 1u;
     ASSERT_TRUE(built->validatePayload(testArena.scratchArena));
@@ -325,7 +326,7 @@ TEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBySerialization){
     candidate.glyphs[0u].x = Limit<u32>::s_Max;
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
-    candidate.glyphs[0u].planeRight += 1.f;
+    candidate.glyphs[0u].planeRight = VectorGetX(VectorAdd(VectorReplicate(candidate.glyphs[0u].planeRight), VectorSplatOne()));
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[0u].advanceUnits = Limit<f32>::s_Infinity;
@@ -391,10 +392,10 @@ TEST(AssetsFontAtlas, PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize)
     FontAtlasPayload original = MakePayload(testArena);
     ASSERT_TRUE(ValidateFontAtlasPayload(original, testArena.scratchArena));
     FontAtlasPayload candidate(original);
-    candidate.glyphs[0u].planeRight += 1.f;
+    candidate.glyphs[0u].planeRight = VectorGetX(VectorAdd(VectorReplicate(candidate.glyphs[0u].planeRight), VectorSplatOne()));
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
-    candidate.glyphs[0u].planeBottom += 1.f;
+    candidate.glyphs[0u].planeBottom = VectorGetX(VectorAdd(VectorReplicate(candidate.glyphs[0u].planeBottom), VectorSplatOne()));
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.bakePpem *= 2u;
@@ -402,8 +403,9 @@ TEST(AssetsFontAtlas, PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize)
     for(FontAtlasGlyph& glyph : candidate.glyphs){
         if(glyph.drawable == 0u)
             continue;
-        glyph.planeRight = glyph.planeLeft + 31.25f;
-        glyph.planeBottom = glyph.planeTop + 31.25f;
+        const SIMDVectorSingle planeEnd = VectorAdd(VectorSet(glyph.planeLeft, glyph.planeTop, 0.f, 0.f), VectorReplicate(31.25f));
+        glyph.planeRight = VectorGetX(planeEnd);
+        glyph.planeBottom = VectorGetY(planeEnd);
     }
     EXPECT_TRUE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
 }

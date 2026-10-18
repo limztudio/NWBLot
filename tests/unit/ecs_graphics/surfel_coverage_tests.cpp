@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -42,7 +43,8 @@ using float3 = ShaderFloat3;
 using float4 = ShaderFloat4;
 
 ShaderFloat3 operator/(ShaderFloat3 value, float divisor)noexcept{
-    return ShaderFloat3(value.x / divisor, value.y / divisor, value.z / divisor);
+    const SIMDVectorSingle quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorSet(divisor, divisor, divisor, 1.0f));
+    return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
 }
 
 // Provide the Slang `exp` builtin for the C++ compilation through the project math wrapper.
@@ -59,13 +61,13 @@ TEST(SurfelCoverage, EmptyAndSaturatedGatherCoverageStayWithinEndpoints){
     ASSERT_GT(full, 0.0f);
     EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(0.0f), 0.0f);
     EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full), 1.0f);
-    EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full * 2.0f), 1.0f);
+    EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(VectorGetX(VectorScale(VectorReplicate(full), 2.0f))), 1.0f);
 }
 
 TEST(SurfelCoverage, UpsampleRejectsIncompatibleNormalsAndDistantGeometry){
     const float gate = NWB_SURFEL_UPSAMPLE_NORMAL_GATE;
     EXPECT_TRUE(nwbSurfelUpsampleNormalCompatible(gate));
-    EXPECT_FALSE(nwbSurfelUpsampleNormalCompatible(gate - 0.01f));
+    EXPECT_FALSE(nwbSurfelUpsampleNormalCompatible(VectorGetX(VectorSubtract(VectorReplicate(gate), VectorReplicate(0.01f)))));
     EXPECT_FALSE(nwbSurfelUpsampleNormalCompatible(0.0f));
 
     EXPECT_FLOAT_EQ(nwbSurfelUpsampleGeometryWeight(0.25f, 0.0f, 2.0f), 0.25f);
@@ -82,7 +84,7 @@ TEST(SurfelCoverage, MissingAndPartialTapsRetainFractionalAlpha){
     EXPECT_FLOAT_EQ(full, 0.25f);
 
     // A fully covered tap and a missing compatible tap have half coverage, not a renormalized 1.0.
-    const float4 result = nwbSurfelUpsampleFinalize(float3(0.5f, 0.25f, 0.125f), full, weight * 2.0f);
+    const float4 result = nwbSurfelUpsampleFinalize(float3(0.5f, 0.25f, 0.125f), full, VectorGetX(VectorScale(VectorReplicate(weight), 2.0f)));
     EXPECT_FLOAT_EQ(result.x, 2.0f);
     EXPECT_FLOAT_EQ(result.y, 1.0f);
     EXPECT_FLOAT_EQ(result.z, 0.5f);

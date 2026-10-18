@@ -64,7 +64,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
     const SIMDVectorSingle progressFill = VectorAdd(origin, VectorSet(14.0f, 134.0f, 0.0f, 0.0f));
     const SIMDVectorSingle editNormal = VectorAdd(origin, VectorSet(12.0f, 158.0f, 0.0f, 0.0f));
     return
-        paint.drawRegion(s_Panel, { x, y, s_PanelWidth, 170.0f + captionHeight })
+        paint.drawRegion(s_Panel, { x, y, s_PanelWidth, VectorGetX(VectorAdd(VectorReplicate(170.0f), VectorReplicate(captionHeight))) })
         && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), 122.0f, 30.0f })
         && paint.drawRegion(s_ButtonHover, { VectorGetX(buttonHover), VectorGetY(buttonHover), 122.0f, 30.0f })
         && paint.drawRegion(s_ButtonPressed, { VectorGetX(buttonPressed), VectorGetY(buttonPressed), 122.0f, 30.0f })
@@ -116,13 +116,14 @@ Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintCon
     const auto korean = m_korean.measure(context.text, context.display);
     if(!caption || !korean)
         return MakeUnexpected(Failure{});
-    const f32 captionHeight = caption->height + korean->height + 8.0f;
-    const f32 preferredTop = ((__hidden_ui_skin_preview::s_Margin + 170.0f) + captionHeight) + 12.0f;
+    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(8.0f));
+    const f32 preferredTop = VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(__hidden_ui_skin_preview::s_Margin), VectorReplicate(170.0f)), captionHeight), VectorReplicate(12.0f)));
     return UiWidgetGallery::LayoutBounds(context.display, preferredTop);
 }
 
 void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
-    const f32 x = Max(__hidden_ui_skin_preview::s_Margin, ((context.display.logicalWidth - __hidden_ui_skin_preview::s_PanelWidth) - __hidden_ui_skin_preview::s_Margin));
+    const SIMDVectorSingle margin = VectorReplicate(__hidden_ui_skin_preview::s_Margin);
+    const f32 x = VectorGetX(VectorMax(margin, VectorSubtract(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(__hidden_ui_skin_preview::s_PanelWidth)), margin)));
     const f32 y = __hidden_ui_skin_preview::s_Margin;
     const auto caption = m_caption.measure(context.text, context.display);
     const auto korean = m_korean.measure(context.text, context.display);
@@ -135,16 +136,16 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label measurement failed"));
         return;
     }
-    const f32 captionHeight = caption->height + korean->height + 8.0f;
+    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(8.0f));
     const auto gallery = galleryBounds(context);
     if(!gallery){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: UI gallery measurement failed"));
         return;
     }
     m_widgets.paint(context, *gallery);
-    if(gallery->y < ((y + 170.0f) + captionHeight) + 12.0f || x < 390.0f)
+    if(gallery->y < VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(y), VectorReplicate(170.0f)), captionHeight), VectorReplicate(12.0f))) || x < 390.0f)
         return;
-    if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, x, y, captionHeight)){
+    if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, x, y, VectorGetX(captionHeight))){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));
         return;
     }

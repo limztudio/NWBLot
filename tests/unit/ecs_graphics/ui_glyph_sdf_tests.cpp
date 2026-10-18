@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -28,15 +29,17 @@ using float4 = ShaderFloat4;
 using uint = u32;
 
 [[nodiscard]] ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
-    return { value.x * scale, value.y * scale, value.z * scale, value.w * scale };
+    const SIMDVectorSingle scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
+    return { VectorGetX(scaled), VectorGetY(scaled), VectorGetZ(scaled), VectorGetW(scaled) };
 }
 
 [[nodiscard]] f32 saturate(const f32 value)noexcept{
-    return Clamp(value, 0.f, 1.f);
+    const SIMDVectorSingle input = VectorReplicate(value);
+    return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorSplatOne(), input), VectorGreater(input, VectorZero())));
 }
 
 [[nodiscard]] f32 max(const f32 first, const f32 second)noexcept{
-    return Max(first, second);
+    return VectorGetX(VectorMax(VectorReplicate(first), VectorReplicate(second)));
 }
 
 

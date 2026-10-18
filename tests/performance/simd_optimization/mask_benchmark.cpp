@@ -196,9 +196,10 @@ void Measure(const Dataset& data, const usize iterations, const bool latency){
     const u64 checksum = Workload<Kind, Candidate>(data, iterations, latency);
     const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
     const usize operations = latency ? iterations : iterations * 8u;
+    const f64 nanosecondsPerOperation = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(nanoseconds), VectorDoubleReplicate(static_cast<f64>(operations))));
     NWB_COUT
         << "{\"operation\":" << Kind << ",\"variant\":\"" << (Candidate ? "candidate" : "baseline") << "\",\"workload\":\"" << (latency ? "latency" : "throughput")
-        << "\",\"operations\":" << operations << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nanoseconds / static_cast<f64>(operations) << ",\"checksum\":" << checksum << "}\n"
+        << "\",\"operations\":" << operations << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nanosecondsPerOperation << ",\"checksum\":" << checksum << "}\n"
     ;
 }
 

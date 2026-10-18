@@ -117,7 +117,8 @@ private:
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
             if(!parsed)
                 return s_DefaultAngularRadius;
-            return Clamp(*parsed, 0.0f, 0.2f);
+            const SIMDVectorSingle angle = VectorReplicate(*parsed);
+            return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorReplicate(0.2f), angle), VectorGreater(angle, VectorZero())));
         }();
         return s_angle;
     }
@@ -128,7 +129,8 @@ private:
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
             if(!parsed)
                 return s_DefaultSourceRadius;
-            return Clamp(*parsed, 0.0f, 1.0f);
+            const SIMDVectorSingle radius = VectorReplicate(*parsed);
+            return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorSplatOne(), radius), VectorGreater(radius, VectorZero())));
         }();
         return s_radius;
     }
@@ -291,7 +293,7 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         if(m_timingEnabled)
             m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -311,7 +313,7 @@ public:
 
     void updateWindowTitle(){
         const auto yawDisplay = MakeSmokeYawDisplay(m_yaw.yaw(), s_TwoPi);
-        const f32 angleDegrees = ConfiguredAngularRadius() * (360.0f / s_TwoPi);
+        const f32 angleDegrees = VectorGetX(VectorScale(VectorReplicate(ConfiguredAngularRadius()), 360.0f / s_TwoPi));
 
         static constexpr usize s_TitleCapacity = 256u;
         tchar title[s_TitleCapacity];

@@ -47,8 +47,8 @@ namespace __hidden_ui_text_layout{
     if(
         !IsFinite(run.metrics.ascender) || !IsFinite(run.metrics.descender) || !IsFinite(run.metrics.lineGap)
         || run.metrics.ascender < 0.0f || run.metrics.descender < 0.0f || run.metrics.lineGap < 0.0f
-        || run.metrics.ascender + run.metrics.descender <= 0.0f || run.glyphs.size() > s_TextMaxBytes
-        || !FitsCoordinate(static_cast<f64>(run.metrics.ascender) + run.metrics.descender + run.metrics.lineGap)
+        || VectorGetX(VectorAdd(VectorReplicate(run.metrics.ascender), VectorReplicate(run.metrics.descender))) <= 0.0f || run.glyphs.size() > s_TextMaxBytes
+        || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(run.metrics.ascender)), VectorDoubleReplicate(static_cast<f64>(run.metrics.descender))), VectorDoubleReplicate(static_cast<f64>(run.metrics.lineGap)))))
     )
         return false;
     u32 previous = direction == TextDirection::LeftToRight ? 0u : static_cast<u32>(text.size());
@@ -58,8 +58,8 @@ namespace __hidden_ui_text_layout{
             || !IsFinite(glyph.advance.x) || !IsFinite(glyph.advance.y) || glyph.advance.x < 0.0f || glyph.advance.y != 0.0f
             || !IsFinite(glyph.offset.x) || !IsFinite(glyph.offset.y) || !IsFinite(glyph.ink.x) || !IsFinite(glyph.ink.y)
             || !IsFinite(glyph.ink.width) || !IsFinite(glyph.ink.height) || glyph.ink.width < 0.0f || glyph.ink.height < 0.0f
-            || !FitsCoordinate(static_cast<f64>(glyph.ink.x) + glyph.ink.width)
-            || !FitsCoordinate(static_cast<f64>(glyph.ink.y) + glyph.ink.height)
+            || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(glyph.ink.x)), VectorDoubleReplicate(static_cast<f64>(glyph.ink.width)))))
+            || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(glyph.ink.y)), VectorDoubleReplicate(static_cast<f64>(glyph.ink.height)))))
         )
             return false;
         if(glyph.coverage.known){
@@ -67,8 +67,8 @@ namespace __hidden_ui_text_layout{
             if(
                 !IsFinite(coverage.x) || !IsFinite(coverage.y) || !IsFinite(coverage.width) || !IsFinite(coverage.height)
                 || coverage.width < 0.0f || coverage.height < 0.0f
-                || !FitsCoordinate(static_cast<f64>(coverage.x) + coverage.width)
-                || !FitsCoordinate(static_cast<f64>(coverage.y) + coverage.height)
+                || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(coverage.x)), VectorDoubleReplicate(static_cast<f64>(coverage.width)))))
+                || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(coverage.y)), VectorDoubleReplicate(static_cast<f64>(coverage.height)))))
             )
                 return false;
         }
@@ -126,7 +126,7 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
         return hit;
     usize lineIndex = m_lines.size() - 1u;
     for(usize index = 0u; index < m_lines.size(); ++index){
-        if(point.y < m_lines[index].top + m_lines[index].height){
+        if(point.y < VectorGetX(VectorAdd(VectorReplicate(m_lines[index].top), VectorReplicate(m_lines[index].height)))){
             lineIndex = index;
             break;
         }
@@ -134,7 +134,7 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
     const TextLine& line = m_lines[lineIndex];
     hit.lineIndex = static_cast<u32>(lineIndex);
     hit.byteOffset = line.byteBegin;
-    hit.inside = point.x >= 0.0f && point.x <= line.advance && point.y >= line.top && point.y < line.top + line.height;
+    hit.inside = point.x >= 0.0f && point.x <= line.advance && point.y >= line.top && point.y < VectorGetX(VectorAdd(VectorReplicate(line.top), VectorReplicate(line.height)));
     if(line.clusterCount == 0u)
         return hit;
     f32 nearest = Limit<f32>::s_Max;
@@ -236,7 +236,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         const SIMDVectorDouble baselineHeightValue = VectorDoubleSelect(baselineAndAscent, VectorDoubleAdd(baselineAndAscent, VectorDoubleSet(0.0, run.metrics.lineGap, 0.0, 0.0)), s_DoubleSIMDMaskY);
         const f64 baseline = VectorDoubleGetX(baselineHeightValue);
         const f64 height = VectorDoubleGetY(baselineHeightValue);
-        if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(line.top + height))
+        if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(line.top)), VectorDoubleSplatY(baselineHeightValue)))))
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.baseline = static_cast<f32>(baseline);
         line.height = static_cast<f32>(height);
@@ -277,7 +277,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             result.m_clusters.push_back(cluster);
             first = end;
         }
-        if(!IsFinite(pen) || !IsFinite(line.top + line.height))
+        if(!IsFinite(pen) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(line.top), VectorReplicate(line.height)))))
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.advance = pen;
         line.clusterCount = static_cast<u32>(result.m_clusters.size()) - line.firstCluster;

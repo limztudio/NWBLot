@@ -19,13 +19,11 @@ NWB_IMPL_BEGIN
 
 Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry)const noexcept{
     const Ui::Rect& caret = geometry.placement.caret;
-    const auto coordinate = [](const f32 value)noexcept{
-        return static_cast<i32>(Clamp(static_cast<f64>(value), static_cast<f64>(Limit<i32>::s_Min), static_cast<f64>(Limit<i32>::s_Max)));
-    };
     const SIMDVectorSingle physical = VectorMultiply(VectorSet(caret.x, caret.y, caret.width, caret.height), VectorSet(m_display.pixelScaleX, m_display.pixelScaleY, m_display.pixelScaleX, m_display.pixelScaleY));
     const SIMDVectorSingle origin = VectorFloor(VectorSwizzle<0, 1, 0, 1>(physical));
     const SIMDVectorSingle size = VectorCeiling(VectorSwizzle<2, 3, 2, 3>(physical));
-    return { coordinate(VectorGetX(origin)), coordinate(VectorGetY(origin)), Max(1, coordinate(VectorGetX(size))), Max(1, coordinate(VectorGetY(size))) };
+    const SIMDVectorDouble coordinate = VectorDoubleMin(VectorDoubleReplicate(static_cast<f64>(Limit<i32>::s_Max)), VectorDoubleMax(ConvertVectorSingleToDouble(VectorPermute<0, 1, 4, 5>(origin, size)), VectorDoubleReplicate(static_cast<f64>(Limit<i32>::s_Min))));
+    return { static_cast<i32>(VectorDoubleGetX(coordinate)), static_cast<i32>(VectorDoubleGetY(coordinate)), Max(1, static_cast<i32>(VectorDoubleGetZ(coordinate))), Max(1, static_cast<i32>(VectorDoubleGetW(coordinate))) };
 }
 
 Expected<usize> UiEditBoxHost::hit(const Entry& entry, const Ui::Point position)const noexcept{
@@ -51,7 +49,7 @@ Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point posit
     const Ui::Point local{ VectorGetX(localPosition), VectorGetY(localPosition) };
     u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
     for(u32 index = 0u; index < geometry.lines.size(); ++index){
-        if(local.y < (geometry.lines[index].top + geometry.lines[index].height)){
+        if(local.y < VectorGetX(VectorAdd(VectorReplicate(geometry.lines[index].top), VectorReplicate(geometry.lines[index].height)))){
             lineIndex = index;
             break;
         }

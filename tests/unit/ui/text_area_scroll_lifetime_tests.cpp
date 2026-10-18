@@ -5,6 +5,8 @@
 #include "text_area_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -124,7 +126,7 @@ protected:
         if(thumb == nullptr)
             return false;
         const Point origin = UiWidgetTests::Center(thumb->rectangle);
-        const Point destination{ origin.x, origin.y + 24.0f };
+        const Point destination{ origin.x, VectorGetX(VectorAdd(VectorReplicate(origin.y), VectorReplicate(24.0f))) };
         return send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed && m_context.input().capture() == thumbId;
     }
 

@@ -169,7 +169,7 @@ void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
 void UiEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const auto current = values();
     const auto positions = BuildSmokeMarkerPositions<TupleSize_V<decltype(current)> + 1u, 12u, 20u>();
-    const f32 y = context.display.logicalHeight - 20.0f;
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
     for(usize index = 0u; index <= current.size(); ++index){
         const u32 value = index == current.size() ? m_sequence : current[index];
         context.paint.fillRect({ positions[index], y, 14.0f, 12.0f }, EncodeSmokeColor(value));

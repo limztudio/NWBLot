@@ -8,6 +8,7 @@
 
 #include <global/diagnostics.h>
 #include <global/hash_utils.h>
+#include <global/simd/vector.h>
 #include <global/type_properties.h>
 
 
@@ -357,7 +358,7 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
             timedLabel.reserve(labelView.size() + s_TimedGraphDotTimingLabelExtraBytes);
             timedLabel.append(labelView.data(), labelView.size());
             timedLabel += '\n';
-            StringAppendFormat(timedLabel, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
+            StringAppendFormat(timedLabel, "{:.3f} ms", VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(timed.value()), s_MillisecondsPerSecond)));
 
             __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
         }

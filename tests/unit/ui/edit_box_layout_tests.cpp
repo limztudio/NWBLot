@@ -9,6 +9,7 @@
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 #include <gtest/gtest.h>
@@ -92,8 +93,9 @@ protected:
         auto rect = m_view.caretGeometry().rangeOnLine(range, 0u, m_placement.caret.width);
         if(!rect)
             return MakeUnexpected(Failure{});
-        rect->x += m_placement.textOrigin.x;
-        rect->y += m_placement.textOrigin.y;
+        const SIMDVectorSingle origin = VectorAdd(VectorSet(rect->x, rect->y, 0.0f, 0.0f), VectorSet(m_placement.textOrigin.x, m_placement.textOrigin.y, 0.0f, 0.0f));
+        rect->x = VectorGetX(origin);
+        rect->y = VectorGetY(origin);
         return rect;
     }
 
@@ -119,7 +121,7 @@ TEST_F(EditBoxLayoutTests, LigaturesExposeEachGraphemeCaretAndPartialSelection){
     ASSERT_EQ(m_view.caretStops().size(), 4u);
     for(usize index = 0u; index < 4u; ++index){
         EXPECT_EQ(m_view.caretStops()[index].committedByte, index);
-        EXPECT_FLOAT_EQ(m_view.caretStops()[index].x, static_cast<f32>(index) * 10.0f);
+        EXPECT_FLOAT_EQ(m_view.caretStops()[index].x, VectorGetX(VectorMultiply(VectorReplicate(static_cast<f32>(index)), VectorReplicate(10.0f))));
     }
     ASSERT_TRUE(place());
     EXPECT_FLOAT_EQ(m_placement.caret.x, 30.0f);
@@ -184,7 +186,7 @@ TEST_F(EditBoxLayoutTests, PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAndUn
     EXPECT_FLOAT_EQ(selection->width, 10.0f);
     EXPECT_FLOAT_EQ(preedit->x, 20.0f);
     EXPECT_FLOAT_EQ(preedit->width, 20.0f);
-    EXPECT_FLOAT_EQ(Min(m_placement.caret.width, preedit->height), 1.0f);
+    EXPECT_FLOAT_EQ(VectorGetX(VectorMin(VectorReplicate(m_placement.caret.width), VectorReplicate(preedit->height))), 1.0f);
     Expected<usize> hit = MakeUnexpected(Failure{});
     hit = m_view.hitTest({ 39.0f, 24.0f }, m_placement);
     ASSERT_TRUE(hit);
@@ -222,7 +224,7 @@ TEST_F(EditBoxLayoutTests, HorizontalScrollFollowsCaretAndClampsWhenTextShrinks)
     EXPECT_FLOAT_EQ(m_placement.content.x, 13.0f);
     EXPECT_FLOAT_EQ(m_placement.content.width, 20.0f);
     EXPECT_FLOAT_EQ(m_placement.scroll, 41.0f);
-    EXPECT_FLOAT_EQ(m_placement.caret.x + m_placement.caret.width, 33.0f);
+    EXPECT_FLOAT_EQ(VectorGetX(VectorAdd(VectorReplicate(m_placement.caret.x), VectorReplicate(m_placement.caret.width))), 33.0f);
     ASSERT_TRUE(m_model.move(EditMove::Home));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place(20.0f, 41.0f));
@@ -420,9 +422,10 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
         const auto snapshot = paint.freeze();
         ASSERT_FALSE(snapshot.glyphPages().empty());
         ASSERT_FALSE(snapshot.vertices().empty());
+        const f32 boundsRight = VectorGetX(VectorAdd(VectorReplicate(m_placement.bounds.x), VectorReplicate(m_placement.bounds.width)));
         for(const Vertex& vertex : snapshot.vertices()){
             EXPECT_GE(vertex.position.x, m_placement.bounds.x);
-            EXPECT_LE(vertex.position.x, m_placement.bounds.x + m_placement.bounds.width);
+            EXPECT_LE(vertex.position.x, boundsRight);
         }
     }
 }

@@ -134,10 +134,9 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     return entity;
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildCubeRotation(const f32 time, const f32 phase)noexcept{
-    SIMDVectorSingle angles = VectorMultiply(VectorSet(time, 0.0f, time, 0.0f), VectorSet(0.35f, 0.0f, 0.18f, 0.0f));
-    angles = VectorSetY(angles, time + phase);
-    return QuaternionRotationRollPitchYawFromVector(angles);
+[[nodiscard]] static SIMDVectorSingle BuildCubeRotation(const f32 time, const SIMDVectorSingle phase)noexcept{
+    const SIMDVectorSingle angles = VectorMultiply(VectorSet(time, 0.0f, time, 0.0f), VectorSet(0.35f, 0.0f, 0.18f, 0.0f));
+    return QuaternionRotationRollPitchYawFromVector(VectorSelect(angles, VectorAdd(VectorReplicate(time), phase), s_SIMDMaskY));
 }
 
 static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle rotation)noexcept{
@@ -149,11 +148,15 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
 }
 
 [[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot)noexcept{
+    const SIMDVectorSingle centerY = VectorReplicate(s_ShapeGridCenterY);
+    const SIMDVectorSingle halfSpacingY = VectorReplicate(s_ShapeGridHalfSpacing.y);
+    const f32 upperY = VectorGetX(VectorAdd(centerY, halfSpacingY));
+    const f32 lowerY = VectorGetX(VectorSubtract(centerY, halfSpacingY));
     switch(shapeSlot){
-    case CsgVisibleShapeSlot::Plane: return Float4(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY + s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY + s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY - s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY - s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Plane: return Float4(-s_ShapeGridHalfSpacing.x, upperY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Box: return Float4(s_ShapeGridHalfSpacing.x, upperY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Sphere: return Float4(-s_ShapeGridHalfSpacing.x, lowerY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Capsule: return Float4(s_ShapeGridHalfSpacing.x, lowerY, 0.0f, 0.0f);
     default: return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
     }
 }
@@ -435,7 +438,7 @@ public:
         bool allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
         if(overlapping){
             Float4 receiverPosition = CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane);
-            receiverPosition.z += s_OverlappingReceiverDepthOffset;
+            receiverPosition.z = VectorGetX(VectorAdd(VectorReplicate(receiverPosition.z), VectorReplicate(s_OverlappingReceiverDepthOffset)));
             const auto receiver = CreateSolidCubeEntity(
                 *m_world,
                 m_context.objectArena,
@@ -463,17 +466,17 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         if(m_temporalEnabled){
             m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
             const u32 posePhase = static_cast<u32>(m_context.graphics.getFrameIndex() % 240u);
-            m_animationTime = m_temporalAnimated ? static_cast<f32>(Min(posePhase, 240u - posePhase)) * (0.3f / 120.0f) : 0.0f;
+            m_animationTime = m_temporalAnimated ? VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(Min(posePhase, 240u - posePhase))), 0.3f / 120.0f)) : 0.0f;
             updateTemporalCapture();
         }else
-            m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CubeRotationSpeed;
+            m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CubeRotationSpeed), VectorReplicate(m_animationTime)));
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const f32 rotationPhase = static_cast<f32>(shapeSlot) * 0.18f;
+            const SIMDVectorSingle rotationPhase = VectorScale(VectorReplicate(static_cast<f32>(shapeSlot)), 0.18f);
             const SIMDVectorSingle rotation = BuildCubeRotation(m_animationTime, rotationPhase);
             ApplyCubeRotation(*m_world, m_receivers[shapeSlot], rotation);
             ApplyCutterTransform(*m_world, m_cutters[shapeSlot], LoadFloat(m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot));

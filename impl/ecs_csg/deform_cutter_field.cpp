@@ -8,6 +8,8 @@
 
 #include <impl/assets_csg/shape_id.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,11 +100,12 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
         const SIMDVectorSingle shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-        f32 distance = VectorGetX(distanceFunc(shapePosition, parameter0));
+        const SIMDVectorSingle distanceValue = distanceFunc(shapePosition, parameter0);
+        f32 distance = VectorGetX(distanceValue);
         if(!CsgDeformValidator::FiniteFloat(distance)){
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
         }
-        if(Abs(distance) <= epsilon)
+        if(VectorGetX(VectorAbs(distanceValue)) <= epsilon)
             distance = s_KeepDistanceZero;
         outDistances[vertexIndex] = distance;
     }

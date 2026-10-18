@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +41,7 @@ TEST_F(UiWindowTests, ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* apply = target(id("apply"));
     ASSERT_NE(apply, nullptr);
-    EXPECT_FLOAT_EQ(state.bounds.height, apply->rectangle.y + apply->rectangle.height + 6.0f - state.bounds.y);
+    EXPECT_FLOAT_EQ(state.bounds.height, VectorGetX(VectorSubtract(VectorAdd(VectorAdd(VectorReplicate(apply->rectangle.y), VectorReplicate(apply->rectangle.height)), VectorReplicate(6.0f)), VectorReplicate(state.bounds.y))));
     EXPECT_LT(state.bounds.height, 400.0f);
     const f32 firstHeight = state.bounds.height;
     options.initialBounds = { 500.0f, 500.0f, 500.0f, 500.0f };

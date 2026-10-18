@@ -4,6 +4,8 @@
 
 #include "combo_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -371,7 +373,7 @@ TEST_F(UiComboBuilderTests, FullyClippedFieldCannotPublishItsPopupAboveTheParent
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_NE(target(host()), nullptr);
-    EXPECT_GE(target(host())->rectangle.y, target(host())->clip.y + target(host())->clip.height);
+    EXPECT_GE(target(host())->rectangle.y, VectorGetX(VectorAdd(VectorReplicate(target(host())->clip.y), VectorReplicate(target(host())->clip.height))));
     EXPECT_FLOAT_EQ(target(host())->clip.height, 0.0f);
     EXPECT_EQ(target(popup()), nullptr);
     EXPECT_EQ(target(list()), nullptr);

@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,8 +24,10 @@ using namespace NWB::UiWidgetTests;
 [[nodiscard]] static UiSkinPalette MakePalette(const f32 offset)noexcept{
     UiSkinPalette palette;
     for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
-        const f32 value = offset + static_cast<f32>(index) * 0.02f;
-        palette.colors[index] = { value, value + 0.01f, value + 0.02f, 0.5f + static_cast<f32>(index) * 0.01f };
+        // Lane x is the base value and lane y is alpha.
+        const SIMDVectorSingle steps = VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index)), VectorSet(0.02f, 0.01f, 0.0f, 0.0f), VectorSet(offset, 0.5f, 0.0f, 0.0f));
+        const SIMDVectorSingle channels = VectorAdd(VectorSplatX(steps), VectorSet(0.0f, 0.01f, 0.02f, 0.0f));
+        palette.colors[index] = { VectorGetX(steps), VectorGetY(channels), VectorGetZ(channels), VectorGetY(steps) };
     }
     return palette;
 }

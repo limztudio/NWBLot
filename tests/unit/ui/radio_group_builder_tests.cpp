@@ -5,6 +5,7 @@
 #include "radio_group_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -54,7 +55,11 @@ TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallb
         const RadioGroupChoicePlacement& row = m_state.placement().rows[index];
         const auto measured = m_text.measure(layout, reference.displayMetrics());
         ASSERT_TRUE(measured);
-        const Point origin{ row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap - measured->x, row.rectangle.y + Max(0.0f, (row.rectangle.height - measured->height) * 0.5f) - measured->y };
+        const SIMDVectorSingle centering = VectorMax(VectorZero(), VectorMultiply(VectorSubtract(VectorReplicate(row.rectangle.height), VectorReplicate(measured->height)), VectorReplicate(0.5f)));
+        const SIMDVectorSingle textStart = VectorAdd(VectorAdd(VectorReplicate(row.indicator.x), VectorReplicate(row.indicator.width)), VectorReplicate(m_builder.radioGroupStyle().gap));
+        const SIMDVectorSingle textTop = VectorAdd(VectorReplicate(row.rectangle.y), centering);
+        const SIMDVectorSingle originValue = VectorSubtract(VectorMergeXY(textStart, textTop), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
+        const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
         reference.pushClip(row.clip);
         reference.pushClip(row.textClip);
         const Color& color = row.enabled ? m_builder.style().text : m_builder.style().disabledText;

@@ -28,7 +28,7 @@ namespace __hidden_ui_popup_layout{
     return
         IsFinite(anchor.x) && IsFinite(anchor.y) && IsFinite(anchor.width) && IsFinite(anchor.height)
         && anchor.width >= 0.0f && anchor.height >= 0.0f
-        && IsFinite(anchor.x + anchor.width) && IsFinite(anchor.y + anchor.height)
+        && VectorIsFinite(VectorAdd(VectorSet(anchor.x, anchor.y, 0.0f, 0.0f), VectorSet(anchor.width, anchor.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
         && IsFinite(options.size.x) && options.size.x > 0.0f && IsFinite(options.size.y) && options.size.y > 0.0f
         && options.side <= PopupPlacementSide::Center && IsFinite(options.gap) && options.gap >= 0.0f
         && IsFinite(display.logicalWidth) && display.logicalWidth > 0.0f
@@ -87,39 +87,33 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
                 side = opposite;
         }
     }
-    f64 x = options.anchor.x;
-    f64 y = options.anchor.y;
+    // Each side moves only its own lane; the other lane keeps the anchor value.
+    SIMDVectorDouble origin = VectorDoubleSet(options.anchor.x, options.anchor.y, 0.0, 0.0);
     switch(side){
     case PopupPlacementSide::Below:
-        y += static_cast<f64>(options.anchor.height) + options.gap;
+        origin = VectorDoubleSelect(origin, VectorDoubleAdd(VectorDoubleSplatY(origin), VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(options.anchor.height)), VectorDoubleReplicate(static_cast<f64>(options.gap)))), s_DoubleSIMDMaskY);
         break;
     case PopupPlacementSide::Above:
-        y -= static_cast<f64>(options.gap) + height;
+        origin = VectorDoubleSelect(origin, VectorDoubleSubtract(VectorDoubleSplatY(origin), VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(options.gap)), VectorDoubleReplicate(static_cast<f64>(height)))), s_DoubleSIMDMaskY);
         break;
     case PopupPlacementSide::Right:
-        x += static_cast<f64>(options.anchor.width) + options.gap;
+        origin = VectorDoubleSelect(origin, VectorDoubleAdd(VectorDoubleSplatX(origin), VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(options.anchor.width)), VectorDoubleReplicate(static_cast<f64>(options.gap)))), s_DoubleSIMDMaskX);
         break;
     case PopupPlacementSide::Left:
-        x -= static_cast<f64>(options.gap) + width;
+        origin = VectorDoubleSelect(origin, VectorDoubleSubtract(VectorDoubleSplatX(origin), VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(options.gap)), VectorDoubleReplicate(static_cast<f64>(width)))), s_DoubleSIMDMaskX);
         break;
-    case PopupPlacementSide::Center:{
-        const SIMDVectorDouble centered = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0)), VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
-        x = VectorDoubleGetX(centered);
-        y = VectorDoubleGetY(centered);
+    case PopupPlacementSide::Center:
+        origin = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0)), VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
         break;
     }
-    }
-    const SIMDVectorDouble origin = VectorDoubleSet(x, y, 0.0, 0.0);
     const SIMDVectorDouble maximum = VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0));
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble constrained = VectorDoubleSelect(zero, VectorDoubleSelect(origin, maximum, VectorDoubleGreater(origin, maximum)), VectorDoubleGreater(origin, zero));
-    x = VectorDoubleGetX(constrained);
-    y = VectorDoubleGetY(constrained);
     PopupPlacement candidate;
-    candidate.bounds = { static_cast<f32>(x), static_cast<f32>(y), width, height };
+    candidate.bounds = { static_cast<f32>(VectorDoubleGetX(constrained)), static_cast<f32>(VectorDoubleGetY(constrained)), width, height };
     candidate.viewport = { 0.0f, 0.0f, display.logicalWidth, display.logicalHeight };
     candidate.side = side;
-    if(!IsFinite(candidate.bounds.x + width) || !IsFinite(candidate.bounds.y + height))
+    if(!VectorIsFinite(VectorAdd(VectorSet(candidate.bounds.x, candidate.bounds.y, 0.0f, 0.0f), boundedSize), VectorComponentMask::s_XY))
         return MakeUnexpected(Failure{});
     return candidate;
 }

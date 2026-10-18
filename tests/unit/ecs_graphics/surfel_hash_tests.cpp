@@ -5,6 +5,8 @@
 #include <gtest/gtest.h>
 
 #include <global/simd/type.h>
+#include <global/simd/convert.h>
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -42,7 +44,9 @@ public:
 using int3 = ShaderInt3;
 
 float3 operator/(const float3 value, const f32 divisor)noexcept{
-    return float3(value.x / divisor, value.y / divisor, value.z / divisor);
+    float3 quotient;
+    StoreFloat(VectorDivide(LoadFloat(value), VectorSet(divisor, divisor, divisor, 1.0f)), quotient);
+    return quotient;
 }
 
 bool operator==(const int3 first, const int3 second)noexcept{
@@ -50,7 +54,9 @@ bool operator==(const int3 first, const int3 second)noexcept{
 }
 
 float3 FloorShaderVector(const float3 value)noexcept{
-    return float3(Floor(value.x), Floor(value.y), Floor(value.z));
+    float3 floored;
+    StoreFloat(VectorFloor(LoadFloat(value)), floored);
+    return floored;
 }
 
 bool AllShaderLanes(const bool value)noexcept{ return value; }
@@ -81,14 +87,15 @@ struct FieldRecord{
 };
 
 f32 GatherBoundaryValue(const float3 position, const bool validateCell)noexcept{
-    const float3 biasedPosition(position.x, position.y, position.z + 0.05f);
+    const float3 biasedPosition(position.x, position.y, VectorGetX(VectorAdd(VectorReplicate(position.z), VectorReplicate(0.05f))));
+    const SIMDVectorSingle biased = LoadFloat(biasedPosition);
     const int3 baseCell = nwbSurfelCellCoord(biasedPosition, s_CellSize);
     const FieldRecord records[]{
         { float3(0.61f, 0.61f, 0.0f), 1.0f, nwbSurfelCellCoord(float3(0.61f, 0.61f, 0.0f), s_CellSize) },
         { float3(1.21f, 0.61f, 0.0f), 0.0f, nwbSurfelCellCoord(float3(1.21f, 0.61f, 0.0f), s_CellSize) },
     };
-    f32 irradiance = 0.0f;
-    f32 totalWeight = 0.0f;
+    SIMDVectorSingle irradiance = VectorZero();
+    SIMDVectorSingle totalWeight = VectorZero();
     for(i32 z = -2; z <= 2; ++z)
     for(i32 y = -2; y <= 2; ++y)
     for(i32 x = -2; x <= 2; ++x){
@@ -99,16 +106,17 @@ f32 GatherBoundaryValue(const float3 position, const bool validateCell)noexcept{
                 continue;
             if(validateCell && !nwbSurfelSameCell(record.cell, visitedCell))
                 continue;
-            const f32 dx = biasedPosition.x - record.position.x;
-            const f32 dy = biasedPosition.y - record.position.y;
-            const f32 dz = biasedPosition.z - record.position.z;
-            const f32 distance = ::Sqrt(dx * dx + dy * dy + dz * dz);
-            const f32 weight = Max(1.0f - distance / NWB_SURFEL_DEFAULT_RADIUS, 0.0f);
-            irradiance += record.radiance * weight;
-            totalWeight += weight;
+            const SIMDVectorSingle delta = VectorSubtract(biased, LoadFloat(record.position));
+            const SIMDVectorSingle dx = VectorSplatX(delta);
+            const SIMDVectorSingle dy = VectorSplatY(delta);
+            const SIMDVectorSingle dz = VectorSplatZ(delta);
+            const SIMDVectorSingle distance = VectorSqrt(VectorMultiplyAddExpression(dz, dz, VectorMultiplyAddExpression(dx, dx, VectorMultiply(dy, dy))));
+            const SIMDVectorSingle weight = VectorMax(VectorSubtract(VectorSplatOne(), VectorDivide(distance, VectorReplicate(NWB_SURFEL_DEFAULT_RADIUS))), VectorZero());
+            irradiance = VectorMultiplyAddExpression(VectorReplicate(record.radiance), weight, irradiance);
+            totalWeight = VectorAdd(totalWeight, weight);
         }
     }
-    return irradiance / totalWeight;
+    return VectorGetX(VectorDivide(irradiance, totalWeight));
 }
 
 
@@ -144,7 +152,7 @@ TEST(SurfelHash, NeighborCellBoundaryPreservesTheNormalizedField){
     const float3 after(1.2f + 1e-6f, 0.61f, 0.0f);
     ASSERT_EQ(nwbSurfelCellCoord(before, s_CellSize).x, 1);
     ASSERT_EQ(nwbSurfelCellCoord(after, s_CellSize).x, 2);
-    EXPECT_GT(Abs(GatherBoundaryValue(before, false) - GatherBoundaryValue(after, false)), 0.1f);
+    EXPECT_GT(VectorGetX(VectorAbs(VectorSubtract(VectorReplicate(GatherBoundaryValue(before, false)), VectorReplicate(GatherBoundaryValue(after, false))))), 0.1f);
     EXPECT_NEAR(GatherBoundaryValue(before, true), GatherBoundaryValue(after, true), 1e-5f);
 }
 

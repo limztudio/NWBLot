@@ -10,6 +10,7 @@
 #include <core/alloc/scratch.h>
 
 #include <global/binary.h>
+#include <global/simd/vector.h>
 #include <global/span.h>
 
 
@@ -285,7 +286,7 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
     ))
         return false;
 
-    total.submissionSeconds += statistics.submissionSeconds;
+    total.submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(total.submissionSeconds), VectorDoubleReplicate(statistics.submissionSeconds)));
     return IsFinite(total.submissionSeconds);
 }
 
@@ -295,12 +296,17 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
     if(submissionCount == 0u)
         return false;
 
-    const f64 roundingFactor = static_cast<f64>(submissionCount) * s_DoublePrecisionEpsilon;
-    if(roundingFactor >= s_SubmissionRoundingLimit)
+    const SIMDVectorDouble roundingFactor = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(submissionCount)), VectorDoubleReplicate(s_DoublePrecisionEpsilon));
+    if(VectorDoubleGetX(roundingFactor) >= s_SubmissionRoundingLimit)
         return false;
-    const f64 magnitude = lhs > rhs ? lhs : rhs;
-    const f64 difference = lhs > rhs ? lhs - rhs : rhs - lhs;
-    return difference / magnitude <= (s_SubmissionRoundingScale * roundingFactor) / (1.0 - roundingFactor);
+    const bool lhsLarger = lhs > rhs;
+    const SIMDVectorDouble magnitude = VectorDoubleReplicate(lhsLarger ? lhs : rhs);
+    const SIMDVectorDouble difference = VectorDoubleSubtract(magnitude, VectorDoubleReplicate(lhsLarger ? rhs : lhs));
+    // x: relative difference, y: allowed rounding ratio.
+    const SIMDVectorDouble numerators = VectorDoubleSelect(difference, VectorDoubleMultiply(VectorDoubleReplicate(s_SubmissionRoundingScale), roundingFactor), s_DoubleSIMDMaskY);
+    const SIMDVectorDouble denominators = VectorDoubleSelect(magnitude, VectorDoubleSubtract(VectorDoubleSplatOne(), roundingFactor), s_DoubleSIMDMaskY);
+    const SIMDVectorDouble ratios = VectorDoubleDivide(numerators, denominators);
+    return VectorDoubleGetX(ratios) <= VectorDoubleGetY(ratios);
 }
 
 template<typename SubmissionStatistics>

@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,9 +24,9 @@ void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::All
         return;
     bool valid = ui.label("title", "Skinned progress bar");
     if(ui.button("advance", "Advance by 25%"))
-        m_fraction = m_fraction >= 1.0 ? 0.0 : (m_fraction + 0.25);
+        m_fraction = m_fraction >= 1.0 ? 0.0 : VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_fraction), VectorDoubleReplicate(0.25)));
     valid = ui.progress("amount", m_fraction) && valid;
-    const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", (m_fraction * 100.0));
+    const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(m_fraction), 100.0)));
     valid = ui.label("value", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid)

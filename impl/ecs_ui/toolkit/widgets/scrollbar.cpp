@@ -59,7 +59,8 @@ namespace __hidden_ui_scrollbar{
     const SIMDVectorDouble expectedMaximum = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleSplatX(values.v[2]), VectorDoubleSplatY(values.v[2])));
     if(
         trackWidth < 0.0f || trackHeight < 0.0f || thumbWidth < 0.0f || thumbHeight < 0.0f
-        || !IsFinite(trackX + trackWidth) || !IsFinite(trackY + trackHeight) || !IsFinite(thumbX + thumbWidth) || !IsFinite(thumbY + thumbHeight)
+        || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(trackX), VectorReplicate(trackWidth)))) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(trackY), VectorReplicate(trackHeight))))
+        || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(thumbX), VectorReplicate(thumbWidth)))) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(thumbY), VectorReplicate(thumbHeight))))
         || contentExtent < 0.0 || viewportExtent < 0.0 || maximum != VectorDoubleGetX(expectedMaximum)
         || offset < 0.0 || offset > maximum || (viewportExtent > 0.0 && maximum > 0.0 && maximum >= contentExtent)
     )
@@ -68,10 +69,12 @@ namespace __hidden_ui_scrollbar{
         return trackX == 0.0f && trackY == 0.0f && trackWidth == 0.0f && trackHeight == 0.0f && thumbX == 0.0f && thumbY == 0.0f && thumbWidth == 0.0f && thumbHeight == 0.0f;
     if(maximum <= 0.0 || trackWidth <= 0.0f || trackHeight <= 0.0f)
         return false;
+    // Lanes are track right, track bottom, thumb right, thumb bottom. The checks above proved these sums finite.
+    const SIMDVectorSingle end = VectorAdd(VectorSet(trackX, trackY, thumbX, thumbY), VectorSet(trackWidth, trackHeight, thumbWidth, thumbHeight));
     if(axis == ScrollAxis::Horizontal){
-        return viewportExtent == static_cast<f64>(trackWidth) && thumbY == trackY && thumbHeight == trackHeight && thumbX >= trackX && thumbWidth <= trackWidth && thumbX + thumbWidth <= trackX + trackWidth;
+        return viewportExtent == static_cast<f64>(trackWidth) && thumbY == trackY && thumbHeight == trackHeight && thumbX >= trackX && thumbWidth <= trackWidth && VectorGetZ(end) <= VectorGetX(end);
     }
-    return viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth && thumbY >= trackY && thumbHeight <= trackHeight && thumbY + thumbHeight <= trackY + trackHeight;
+    return viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth && thumbY >= trackY && thumbHeight <= trackHeight && VectorGetW(end) <= VectorGetY(end);
 }
 
 [[nodiscard]] static Expected<SIMDVectorDouble> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const bool visible)noexcept{

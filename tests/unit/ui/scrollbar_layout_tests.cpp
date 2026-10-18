@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/widgets/scrollbar.h>
 
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 #include <gtest/gtest.h>
@@ -309,8 +310,11 @@ TEST(UiScrollbarLayoutTests, ExtremeFiniteStoredOffsetsClampBeforeThumbArithmeti
     placement = *placementResult;
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 312.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 132.0);
-    EXPECT_FLOAT_EQ(placement.horizontal.thumb.x + placement.horizontal.thumb.width, placement.horizontal.track.x + placement.horizontal.track.width);
-    EXPECT_FLOAT_EQ(placement.vertical.thumb.y + placement.vertical.thumb.height, placement.vertical.track.y + placement.vertical.track.height);
+    // Lanes are horizontal thumb end, horizontal track end, vertical thumb end, vertical track end.
+    const SIMDVectorSingle starts = VectorSet(placement.horizontal.thumb.x, placement.horizontal.track.x, placement.vertical.thumb.y, placement.vertical.track.y);
+    const SIMDVectorSingle ends = VectorAdd(starts, VectorSet(placement.horizontal.thumb.width, placement.horizontal.track.width, placement.vertical.thumb.height, placement.vertical.track.height));
+    EXPECT_FLOAT_EQ(VectorGetX(ends), VectorGetY(ends));
+    EXPECT_FLOAT_EQ(VectorGetZ(ends), VectorGetW(ends));
 }
 
 TEST(UiScrollbarLayoutTests, OverscrollUpdatesClampBothThumbsAndRestoreExactStartGeometry){
@@ -404,13 +408,13 @@ TEST(UiScrollbarLayoutTests, InvalidOwnedProjectionRejectsOffsetUpdateAtomically
     placement.horizontal.maximum = -1.0;
     reject(placement);
     placement = previous;
-    placement.vertical.offset = placement.vertical.maximum + 1.0;
+    placement.vertical.offset = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(placement.vertical.maximum), VectorDoubleReplicate(1.0)));
     reject(placement);
     placement = previous;
-    placement.horizontal.viewportExtent += 1.0;
+    placement.horizontal.viewportExtent = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(placement.horizontal.viewportExtent), VectorDoubleReplicate(1.0)));
     reject(placement);
     placement = previous;
-    placement.vertical.thumb.height = placement.vertical.track.height + 1.0f;
+    placement.vertical.thumb.height = VectorGetX(VectorAdd(VectorReplicate(placement.vertical.track.height), VectorReplicate(1.0f)));
     reject(placement);
     placement = previous;
     placement.horizontal.visible = false;

@@ -10,6 +10,7 @@
 #include <core/graphics/gpu_timing.h>
 
 #include <global/exception.h>
+#include <global/simd/vector.h>
 #include <global/termination.h>
 
 
@@ -92,6 +93,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
         .queueClass = queueInfo->queueClass,
         .deviceGeneration = m_deviceGeneration,
     };
+    SIMDVectorDouble submissionSeconds = VectorDoubleZero();
     for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
         if(!packetID.valid())
@@ -119,7 +121,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             statistics.timelineWaitCount += runtime.timelineWaitCount;
             statistics.mergedTimelineWaitCount += runtime.mergedTimelineWaitCount;
             statistics.inheritedTimelineWaitElisionCount += runtime.inheritedTimelineWaitElisionCount;
-            statistics.submissionSeconds += runtime.submissionSeconds;
+            submissionSeconds = VectorDoubleAdd(submissionSeconds, VectorDoubleReplicate(runtime.submissionSeconds));
             if(packet.joinsAcceptedQueueFrontier)
                 ++statistics.acceptedFrontierSubmissionCount;
             if(packet.isRecoverySubmission)
@@ -135,6 +137,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             break;
         }
     }
+    statistics.submissionSeconds = VectorDoubleGetX(submissionSeconds);
     return statistics;
 }
 

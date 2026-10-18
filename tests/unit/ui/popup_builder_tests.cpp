@@ -5,6 +5,8 @@
 #include "widget_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -162,7 +164,8 @@ TEST_F(UiPopupBuilderTests, ClosingFromTheBodySkipsBackdropBodyPaintAndCandidate
     ASSERT_TRUE(m_context.commitFrame(1u));
     const WidgetId closeId = id("close", "popup");
     ASSERT_NE(target(closeId), nullptr);
-    click({ target(closeId)->rectangle.x + 4.0f, target(closeId)->rectangle.y + 4.0f });
+    const SIMDVectorSingle closePoint = VectorAdd(VectorSet(target(closeId)->rectangle.x, target(closeId)->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    click({ VectorGetX(closePoint), VectorGetY(closePoint) });
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPopup("popup", state, options));
     EXPECT_TRUE(m_builder.button("close", "Close", Control()));
@@ -204,8 +207,10 @@ TEST_F(UiPopupBuilderTests, ClosingAfterTheFirstQueuedButtonPreventsLaterQueuedA
     const HitTarget* later = target(id("later", "popup"));
     ASSERT_NE(close, nullptr);
     ASSERT_NE(later, nullptr);
-    click({ close->rectangle.x + 4.0f, close->rectangle.y + 4.0f });
-    click({ later->rectangle.x + 4.0f, later->rectangle.y + 4.0f });
+    // Lanes are the close point and the later point.
+    const SIMDVectorSingle points = VectorAdd(VectorSet(close->rectangle.x, close->rectangle.y, later->rectangle.x, later->rectangle.y), VectorReplicate(4.0f));
+    click({ VectorGetX(points), VectorGetY(points) });
+    click({ VectorGetZ(points), VectorGetW(points) });
     ASSERT_EQ(m_context.input().actions().size(), 2u);
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
@@ -234,7 +239,8 @@ TEST_F(UiPopupBuilderTests, EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeHost
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* close = target(id("close", "popup"));
     ASSERT_NE(close, nullptr);
-    click({ close->rectangle.x + 4.0f, close->rectangle.y + 4.0f });
+    const SIMDVectorSingle closePoint = VectorAdd(VectorSet(close->rectangle.x, close->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    click({ VectorGetX(closePoint), VectorGetY(closePoint) });
     EditModel model(m_arena);
     ASSERT_TRUE(model.setText("kept"));
     ASSERT_TRUE(model.setSelection(1u, 3u));
@@ -292,8 +298,10 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     const HitTarget* later = target(id("later", "popup"));
     ASSERT_NE(close, nullptr);
     ASSERT_NE(later, nullptr);
-    click({ close->rectangle.x + 4.0f, close->rectangle.y + 4.0f });
-    click({ later->rectangle.x + 4.0f, later->rectangle.y + 4.0f });
+    // Lanes are the close point and the later point.
+    const SIMDVectorSingle points = VectorAdd(VectorSet(close->rectangle.x, close->rectangle.y, later->rectangle.x, later->rectangle.y), VectorReplicate(4.0f));
+    click({ VectorGetX(points), VectorGetY(points) });
+    click({ VectorGetZ(points), VectorGetW(points) });
     ASSERT_EQ(m_context.input().actions().size(), 2u);
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
@@ -325,7 +333,8 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     EXPECT_TRUE(m_context.input().actions().empty());
     const HitTarget* reopenedLater = target(id("later", "popup"));
     ASSERT_NE(reopenedLater, nullptr);
-    click({ reopenedLater->rectangle.x + 4.0f, reopenedLater->rectangle.y + 4.0f });
+    const SIMDVectorSingle reopenedPoint = VectorAdd(VectorSet(reopenedLater->rectangle.x, reopenedLater->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    click({ VectorGetX(reopenedPoint), VectorGetY(reopenedPoint) });
     ASSERT_TRUE(begin(4u));
     ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
     EXPECT_FALSE(m_builder.button("close", "Close", Control()));
@@ -391,7 +400,8 @@ TEST_F(UiPopupBuilderTests, ReplacementClosedStateImmediatelyFencesPreviousAccep
     ASSERT_TRUE(m_context.commitFrame(1u));
     const WidgetId child = id("apply", "popup");
     ASSERT_NE(target(child), nullptr);
-    click({ target(child)->rectangle.x + 4.0f, target(child)->rectangle.y + 4.0f });
+    const SIMDVectorSingle childPoint = VectorAdd(VectorSet(target(child)->rectangle.x, target(child)->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    click({ VectorGetX(childPoint), VectorGetY(childPoint) });
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     PopupState replacement;
     ASSERT_NE(replacement.instanceGeneration(), original.instanceGeneration());

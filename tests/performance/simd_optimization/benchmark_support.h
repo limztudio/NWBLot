@@ -174,7 +174,7 @@ void Measure(const StringView operation, const bool candidate, const bool latenc
     NWB_COUT
         << "{\"operation\":\"" << operation << "\",\"variant\":\"" << (candidate ? "candidate" : "baseline")
         << "\",\"workload\":\"" << (latency ? "latency" : "throughput") << "\",\"operations\":" << operations
-        << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nanoseconds / static_cast<f64>(operations)
+        << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(nanoseconds), VectorDoubleReplicate(static_cast<f64>(operations))))
         << ",\"checksum\":\"" << checksum << "\"}\n"
     ;
 }

@@ -4,6 +4,8 @@
 
 #include "slider_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,15 +80,16 @@ TEST_F(UiSliderInputTests, OffCenterThumbPressHasNoJumpAndZeroDeltaDoesNotOverwr
     press(Core::Key::Tab);
     press(Core::Key::Right);
     const Rect thumbBounds = m_state.placement().thumb;
-    const Point origin{ thumbBounds.x + 3.0f, thumbBounds.y + thumbBounds.height * 0.5f };
+    const Point origin{ VectorGetX(VectorAdd(VectorReplicate(thumbBounds.x), VectorReplicate(3.0f))), UiWidgetTests::Center(thumbBounds).y };
+    const SIMDVectorDouble stepped = VectorDoubleAdd(VectorDoubleReplicate(baseline), VectorDoubleReplicate(0.125));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), baseline + 0.125);
+    EXPECT_DOUBLE_EQ(m_state.value(), VectorDoubleGetX(stepped));
     EXPECT_TRUE(m_state.result().dragging);
     EXPECT_EQ(m_context.input().capture(), thumb());
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, origin }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
-    EXPECT_DOUBLE_EQ(m_state.value(), baseline + 0.125);
+    EXPECT_DOUBLE_EQ(m_state.value(), VectorDoubleGetX(stepped));
     EXPECT_FALSE(m_state.result().valueChanged);
 }
 
@@ -95,13 +98,13 @@ TEST_F(UiSliderInputTests, HeldThumbRepaintPreservesCaptureAndReturningToOriginR
     ASSERT_TRUE(m_state.setValue(baseline));
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
-    const Point destination{ origin.x + 50.0f, origin.y };
+    const Point destination{ VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(50.0f))), origin.y };
     const f64 travel = m_state.placement().centerTravel.width;
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerMove, destination }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
-    const f64 displacement = static_cast<f64>(destination.x) - static_cast<f64>(origin.x);
-    EXPECT_NEAR(m_state.value(), baseline + displacement / travel, 0.00000001);
+    const SIMDVectorDouble displacement = VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(destination.x)), VectorDoubleReplicate(static_cast<f64>(origin.x)));
+    EXPECT_NEAR(m_state.value(), VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(baseline), VectorDoubleDivide(displacement, VectorDoubleReplicate(travel)))), 0.00000001);
     EXPECT_EQ(m_context.input().capture(), thumb());
     const ControlToken token = target(host())->control;
     ASSERT_TRUE(accept(3u));
@@ -122,12 +125,13 @@ TEST_F(UiSliderInputTests, LatestCoalescedMoveAfterAKeyAppliesAfterTheCopiedKeyS
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
     const f64 travel = m_state.placement().centerTravel.width;
+    const SIMDVectorSingle movedX = VectorAdd(VectorReplicate(origin.x), VectorSet(30.0f, 60.0f, 0.0f, 0.0f));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 30.0f, origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(movedX), origin.y } }).pointerConsumed);
     press(Core::Key::Right);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 60.0f, origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetY(movedX), origin.y } }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
-    EXPECT_NEAR(m_state.value(), 0.25 + 60.0 / travel, 0.00000001);
+    EXPECT_NEAR(m_state.value(), VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(0.25), VectorDoubleDivide(VectorDoubleReplicate(60.0), VectorDoubleReplicate(travel)))), 0.00000001);
     EXPECT_TRUE(m_state.result().dragging);
 }
 
@@ -136,10 +140,11 @@ TEST_F(UiSliderInputTests, AKeyAfterTheLatestCoalescedMoveAppliesToTheDraggedVal
     const Point origin = thumbPoint();
     const f64 travel = m_state.placement().centerTravel.width;
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 60.0f, origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(60.0f))), origin.y } }).pointerConsumed);
     press(Core::Key::Right);
     ASSERT_TRUE(accept(2u));
-    EXPECT_NEAR(m_state.value(), 0.25 + 60.0 / travel + 0.125, 0.00000001);
+    const SIMDVectorDouble dragged = VectorDoubleAdd(VectorDoubleReplicate(0.25), VectorDoubleDivide(VectorDoubleReplicate(60.0), VectorDoubleReplicate(travel)));
+    EXPECT_NEAR(m_state.value(), VectorDoubleGetX(VectorDoubleAdd(dragged, VectorDoubleReplicate(0.125))), 0.00000001);
 }
 
 TEST_F(UiSliderInputTests, DragOutsideTravelSaturatesBothEndsWithoutLosingOwnedCapture){
@@ -162,11 +167,12 @@ TEST_F(UiSliderInputTests, DragOutsideTravelSaturatesBothEndsWithoutLosingOwnedC
 TEST_F(UiSliderInputTests, CaptureLossCancelsPendingMotionAndRetainsTheLastAppliedValue){
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
+    const SIMDVectorSingle movedX = VectorAdd(VectorReplicate(origin.x), VectorSet(40.0f, 80.0f, 0.0f, 0.0f));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 40.0f, origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(movedX), origin.y } }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
     const u64 retained = BitCast<u64>(m_state.value());
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 80.0f, origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetY(movedX), origin.y } }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerCaptureLost }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(BitCast<u64>(m_state.value()), retained);
@@ -182,7 +188,7 @@ TEST_F(UiSliderInputTests, FocusLossRetiresPendingDragAndHeldNavigationWithoutRo
     press(Core::Key::Right);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 80.0f, origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(80.0f))), origin.y } }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::FocusLost }).pointerConsumed);
     EXPECT_FALSE(send({ InputEventType::FocusGained }).pointerConsumed);
     ASSERT_TRUE(accept(3u));

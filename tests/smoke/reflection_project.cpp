@@ -212,7 +212,7 @@ public:
         auto& camera = m_world->entity(cameraId).getComponent<NWB::Impl::Scene::CameraComponent>();
         camera.setVerticalFovRadians(s_PI / 3.0f);
         const auto extent = NWB::QueryProjectFrameClientSize();
-        camera.setAspectRatio(static_cast<f32>(extent.width) / static_cast<f32>(extent.height));
+        camera.setAspectRatio(VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(extent.width)), VectorReplicate(static_cast<f32>(extent.height)))));
         m_csgSliceRayCapacity = Min(m_reflectionSettings.maxHardwareRaysPerFrame, 2u * extent.width * extent.height);
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
         NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));

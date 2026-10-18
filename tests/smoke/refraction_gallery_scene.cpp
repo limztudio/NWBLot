@@ -247,11 +247,11 @@ public:
         }
         for(u32 stripe = 0u; stripe < 36u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.9f : 0.045f;
-            panel(s_Opaque, Float4(value, value, value, 1.0f), -5.25f + static_cast<f32>(stripe) * 0.3f, 1.4f, 4.5f, 0.15f, 5.0f);
+            panel(s_Opaque, Float4(value, value, value, 1.0f), VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(stripe)), VectorReplicate(0.3f), VectorReplicate(-5.25f))), 1.4f, 4.5f, 0.15f, 5.0f);
         }
         // A second direction and colored depth markers make ray displacement legible.
         for(u32 row = 0u; row < 9u; ++row)
-            panel(s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f), 0.0f, -1.4f + static_cast<f32>(row) * 0.7f, 4.48f, 5.4f, 0.015f);
+            panel(s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f), 0.0f, VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(row)), VectorReplicate(0.7f), VectorReplicate(-1.4f))), 4.48f, 5.4f, 0.015f);
         panel(s_Transparent, Float4(0.04f, 0.27f, 1.0f, 0.70f), 0.0f, 1.93f, 3.0f, 3.1f, 0.10f);
         panel(s_Transparent, Float4(1.0f, 0.035f, 0.025f, 0.70f), 0.0f, 1.05f, -2.5f, 1.55f, 0.04f);
     }

@@ -53,8 +53,10 @@ namespace __hidden_ui_edit_caret_geometry{
             || line.clusterCount > clusters.size() - nextCluster || line.glyphCount > glyphs.size() - nextGlyph
             || !IsFinite(line.top) || !IsFinite(line.height) || !IsFinite(line.advance) || !IsFinite(line.baseline)
             || line.top != previousBottom || line.height <= 0.0f || line.advance < 0.0f
-            || !IsFinite(line.top + line.height) || line.baseline < line.top || line.baseline > line.top + line.height
         )
+            return false;
+        const f32 bottom = VectorGetX(VectorAdd(VectorReplicate(line.top), VectorReplicate(line.height)));
+        if(!IsFinite(bottom) || line.baseline < line.top || line.baseline > bottom)
             return false;
         for(usize byte = line.byteBegin; byte < line.byteEnd; ++byte){
             if(text[byte] == '\n')
@@ -95,7 +97,7 @@ namespace __hidden_ui_edit_caret_geometry{
         if(coveredByte != line.byteEnd || nextGlyph != glyphEnd || previousX != line.advance)
             return false;
         previousBreak = line.breakEnd;
-        previousBottom = line.top + line.height;
+        previousBottom = bottom;
         maximumAdvance = VectorGetX(VectorMax(VectorReplicate(maximumAdvance), VectorReplicate(line.advance)));
     }
     return nextCluster == clusters.size() && nextGlyph == glyphs.size() && measure.x == maximumAdvance && measure.y == previousBottom;
@@ -193,7 +195,7 @@ namespace __hidden_ui_edit_caret_geometry{
         if(stop.lineIndex >= lines.size() || (line.stopCount != 0u && stop.lineIndex != lineIndex))
             return MakeUnexpected(Failure{});
         const EditCaretLine& stopLine = lines[stop.lineIndex];
-        if(!IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f || !IsFinite(stopLine.top + stopLine.height))
+        if(!IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(stopLine.top), VectorReplicate(stopLine.height)))))
             return MakeUnexpected(Failure{});
         const SIMDVectorDouble lineCenter = VectorDoubleAdd(VectorDoubleReplicate(stopLine.top), VectorDoubleMultiply(VectorDoubleReplicate(stopLine.height), VectorDoubleReplicate(0.5)));
         const f64 distanceY = line.stopCount == 0u ? VectorDoubleGetX(VectorDoubleAbs(VectorDoubleSubtract(VectorDoubleReplicate(point.y), lineCenter))) : 0.0;
@@ -223,9 +225,12 @@ Expected<usize> HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, co
     u32 lineIndex = static_cast<u32>(lines.size() - 1u);
     for(u32 index = 0u; index < lines.size(); ++index){
         const EditCaretLine& line = lines[index];
-        if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f || !IsFinite(line.top + line.height))
+        if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f)
             return MakeUnexpected(Failure{});
-        if(localPoint.y < line.top + line.height){
+        const f32 bottom = VectorGetX(VectorAdd(VectorReplicate(line.top), VectorReplicate(line.height)));
+        if(!IsFinite(bottom))
+            return MakeUnexpected(Failure{});
+        if(localPoint.y < bottom){
             lineIndex = index;
             break;
         }
@@ -357,8 +362,10 @@ Expected<Rect> EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u3
     const auto last = caretRect(end);
     if(!last)
         return MakeUnexpected(last.error());
-    const f32 width = VectorGetX(VectorAdd(VectorMax(VectorZero(), VectorSubtract(VectorReplicate(last->x), VectorReplicate(first->x))), VectorReplicate(selectedBreak ? breakWidth : 0.0f)));
-    if(!IsFinite(width) || !IsFinite(first->x + width))
+    const SIMDVectorSingle firstX = VectorReplicate(first->x);
+    const SIMDVectorSingle widthValue = VectorAdd(VectorMax(VectorZero(), VectorSubtract(VectorReplicate(last->x), firstX)), VectorReplicate(selectedBreak ? breakWidth : 0.0f));
+    const f32 width = VectorGetX(widthValue);
+    if(!IsFinite(width) || !IsFinite(VectorGetX(VectorAdd(firstX, widthValue))))
         return MakeUnexpected(Failure{});
     return Rect{ first->x, line.top, width, line.height };
 }

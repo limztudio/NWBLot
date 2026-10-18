@@ -8,6 +8,7 @@
 #include "deform_validator.h"
 
 #include <global/scope_exit.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,11 +60,11 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(CsgDeformVertexVector<Scratc
     if(found != edgeSplits.end()){
         return found.value();
     }
-    const f32 denominator = firstDistance - secondDistance;
-    if(!CsgDeformValidator::FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
+    const SIMDVectorSingle denominator = VectorSubtract(VectorReplicate(firstDistance), VectorReplicate(secondDistance));
+    if(!CsgDeformValidator::FiniteFloat(VectorGetX(denominator)) || VectorGetX(VectorAbs(denominator)) < s_SplitDenominatorEpsilon)
         return MakeUnexpected(Failure{});
     // A zero secondDistance selects the second endpoint.
-    const SIMDVectorSingle blend = VectorSaturate(VectorAbs(VectorDivide(VectorReplicate(secondDistance), VectorReplicate(denominator))));
+    const SIMDVectorSingle blend = VectorSaturate(VectorAbs(VectorDivide(VectorReplicate(secondDistance), denominator)));
     const SIMDVectorSingle other = VectorSubtract(s_SIMDOne, blend);
     const CsgDeformVertex& firstVertex = vertices[first];
     const CsgDeformVertex& secondVertex = vertices[second];

@@ -4,6 +4,7 @@
 
 #include "tooltip.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/atomic_identity.h>
 
@@ -90,7 +91,7 @@ bool TooltipBehavior::Update(
     const bool activeHover = options.enabled && hovered;
     f64 elapsed = 0.0;
     if(activeHover && state.m_hovered && sameBinding && sameOptions)
-        elapsed = Min((state.m_elapsed + static_cast<f64>(deltaSeconds)), static_cast<f64>(options.delaySeconds));
+        elapsed = VectorDoubleGetX(VectorDoubleMin(VectorDoubleAdd(VectorDoubleReplicate(state.m_elapsed), VectorDoubleReplicate(static_cast<f64>(deltaSeconds))), VectorDoubleReplicate(static_cast<f64>(options.delaySeconds))));
     const bool visible = activeHover && elapsed >= static_cast<f64>(options.delaySeconds);
     if(!sameBinding || !sameOptions || state.m_hovered != activeHover || state.m_elapsed != elapsed || state.m_visible != visible){
         state.advanceRevision();

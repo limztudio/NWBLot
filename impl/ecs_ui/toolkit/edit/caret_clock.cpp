@@ -4,6 +4,7 @@
 
 #include "caret_clock.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -17,11 +18,17 @@ NWB_IMPL_UI_BEGIN
 
 
 f64 AdvanceCaretPhase(const f64 phase, const f64 deltaSeconds)noexcept{
-    const f64 current = IsFinite(phase) && phase > 0.0 ? FMod(phase, 1.0) : 0.0;
-    if(!IsFinite(deltaSeconds) || deltaSeconds <= 0.0)
-        return current;
-    const f64 next = (current + FMod(deltaSeconds, 1.0));
-    return next >= 1.0 ? (next - 1.0) : next;
+    const bool validPhase = IsFinite(phase) && phase > 0.0;
+    const bool validDelta = IsFinite(deltaSeconds) && deltaSeconds > 0.0;
+    const SIMDVectorDouble one = VectorDoubleSplatOne();
+    // Lanes are phase and delta. Bad inputs become zero so the mod never sees them.
+    // Used inputs are positive, so floor mod matches FMod.
+    const SIMDVectorDouble wrapped = VectorDoubleMod(VectorDoubleSet(validPhase ? phase : 0.0, validDelta ? deltaSeconds : 0.0, 0.0, 0.0), one);
+    const SIMDVectorDouble current = validPhase ? VectorDoubleSplatX(wrapped) : VectorDoubleZero();
+    if(!validDelta)
+        return VectorDoubleGetX(current);
+    const SIMDVectorDouble next = VectorDoubleAdd(current, VectorDoubleSplatY(wrapped));
+    return VectorDoubleGetX(VectorDoubleSelect(next, VectorDoubleSubtract(next, one), VectorDoubleGreaterOrEqual(next, one)));
 }
 
 

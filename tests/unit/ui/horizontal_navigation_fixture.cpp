@@ -6,6 +6,8 @@
 
 #include <tests/unit/ui/native_input.h>
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,7 +62,7 @@ HorizontalNavigationFixture::HorizontalNavigationFixture()
         HitTarget& host = m_targets[index];
         host.id = { index + 1u };
         host.declarationGeneration = 7u;
-        host.rectangle = { static_cast<f32>(index) * 140.0f, 0.0f, 100.0f, 100.0f };
+        host.rectangle = { VectorGetX(VectorMultiply(VectorReplicate(static_cast<f32>(index)), VectorReplicate(140.0f))), 0.0f, 100.0f, 100.0f };
         host.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
         host.focusable = true;
         host.control = { 11u + index, 21u, 31u };
@@ -98,7 +100,8 @@ void HorizontalNavigationFixture::press(const Core::Key::Enum key){
 
 void HorizontalNavigationFixture::focusTarget(const usize index){
     const Rect& rectangle = m_targets[index].rectangle;
-    const Point point{ rectangle.x + 10.0f, rectangle.y + 10.0f };
+    const SIMDVectorSingle pointValue = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorReplicate(10.0f));
+    const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
     EXPECT_EQ(m_router.focus(), m_targets[index].id);

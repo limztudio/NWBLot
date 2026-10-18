@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
+
 #include <basisu_transcoder.h>
 
 
@@ -299,7 +301,7 @@ template<typename StoreTexelT>
 }
 
 static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex, const u8 alphaUnorm8)noexcept{
-    const basist::half_float alphaHalf = basist::float_to_half(static_cast<f32>(alphaUnorm8) / static_cast<f32>(Limit<u8>::s_Max));
+    const basist::half_float alphaHalf = basist::float_to_half(VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(alphaUnorm8)), VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)))));
     u8* const destination = outRgba16FloatBytes + texelIndex * s_Rgba16FloatBytesPerTexel + s_Rgba16FloatAlphaByteOffset;
     NWB_MEMCPY(destination, sizeof(alphaHalf), &alphaHalf, sizeof(alphaHalf));
 }

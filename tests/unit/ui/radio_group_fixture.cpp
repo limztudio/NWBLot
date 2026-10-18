@@ -6,6 +6,7 @@
 
 #include "combo_fixture.h"
 
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -275,8 +276,9 @@ usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& n
     if(!region)
         return 0u;
     constexpr f32 s_UvTolerance = 0.00000024f;
-    const f32 left = static_cast<f32>(region->rectangle.x) / static_cast<f32>(m_skin.atlasWidth());
-    const f32 right = static_cast<f32>(region->rectangle.x + region->rectangle.width) / static_cast<f32>(m_skin.atlasWidth());
+    const f32 atlasWidth = static_cast<f32>(m_skin.atlasWidth());
+    // Lanes are left U and right U.
+    const SIMDVectorSingle edges = VectorDivide(VectorSet(static_cast<f32>(region->rectangle.x), static_cast<f32>(region->rectangle.x + region->rectangle.width), 0.0f, 0.0f), VectorSet(atlasWidth, atlasWidth, 1.0f, 1.0f));
     usize count = 0u;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Skin)
@@ -284,7 +286,7 @@ usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& n
         for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
             const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            if(Abs(first.texCoord.x - left) <= s_UvTolerance && Abs(opposite.texCoord.x - right) <= s_UvTolerance)
+            if(Vector2LessOrEqual(VectorAbs(VectorSubtract(VectorSet(first.texCoord.x, opposite.texCoord.x, 0.0f, 0.0f), edges)), VectorReplicate(s_UvTolerance)))
                 ++count;
         }
     }

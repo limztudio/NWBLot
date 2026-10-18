@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -37,19 +38,24 @@ public:
 using float3 = ShaderFloat3;
 
 [[nodiscard]] ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    return { a.x + b.x, a.y + b.y, a.z + b.z };
+    const SIMDVectorDouble sum = VectorDoubleAdd(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 0.));
+    return { VectorDoubleGetX(sum), VectorDoubleGetY(sum), VectorDoubleGetZ(sum) };
 }
 
 [[nodiscard]] ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    return { a.x * b.x, a.y * b.y, a.z * b.z };
+    const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 0.));
+    return { VectorDoubleGetX(product), VectorDoubleGetY(product), VectorDoubleGetZ(product) };
 }
 
 [[nodiscard]] ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    return { a.x / b.x, a.y / b.y, a.z / b.z };
+    const SIMDVectorDouble quotient = VectorDoubleDivide(VectorDoubleSet(a.x, a.y, a.z, 0.), VectorDoubleSet(b.x, b.y, b.z, 1.));
+    return { VectorDoubleGetX(quotient), VectorDoubleGetY(quotient), VectorDoubleGetZ(quotient) };
 }
 
+// Keep the scalar sum order: (x + y) + z.
 [[nodiscard]] f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    return a.x * b.x + a.y * b.y + a.z * b.z;
+    const SIMDVectorDouble partial = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(a.x), VectorDoubleReplicate(b.x), VectorDoubleMultiply(VectorDoubleReplicate(a.y), VectorDoubleReplicate(b.y)));
+    return VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(a.z), VectorDoubleReplicate(b.z), partial));
 }
 
 [[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
@@ -57,7 +63,8 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] f32 saturate(const f32 a)noexcept{
-    return Clamp(a, 0.f, 1.f);
+    const SIMDVectorSingle value = VectorReplicate(a);
+    return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorSplatOne(), value), VectorGreater(value, VectorZero())));
 }
 
 [[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
@@ -66,7 +73,9 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
-    return { Pow(a.x, b), Pow(a.y, b), Pow(a.z, b) };
+    // VectorDoublePow calls Pow per lane, so the bits match.
+    const SIMDVectorDouble power = VectorDoublePow(VectorDoubleSet(a.x, a.y, a.z, 1.), VectorDoubleReplicate(b));
+    return { VectorDoubleGetX(power), VectorDoubleGetY(power), VectorDoubleGetZ(power) };
 }
 
 
@@ -100,7 +109,7 @@ TEST(OutputLayerColor, HdrBlendsInLinearNitsBeforeOnePqEncoding){
     const float3 actual = nwbHdr10EncodeSceneWithUi(float3(0.), float3(0.5), 0.5f);
     ExpectColorNear(actual, nwbHdr10PqEncodeNits(float3(101.5)));
     const float3 encodedBlend = nwbHdr10EncodeUiLinear(float3(1.)) * 0.5;
-    EXPECT_GT(actual.x - encodedBlend.x, 0.1);
+    EXPECT_GT(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(actual.x), VectorDoubleReplicate(encodedBlend.x))), 0.1);
 }
 
 TEST(OutputLayerColor, NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound){

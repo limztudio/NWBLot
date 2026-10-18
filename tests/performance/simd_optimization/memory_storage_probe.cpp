@@ -7,6 +7,7 @@
 #include <global/atomic.h>
 #include <global/simd/memory.h>
 #include <global/simd/type.h>
+#include <global/simd/vector.h>
 #include <global/timer.h>
 #include <global/text_utils.h>
 
@@ -395,7 +396,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     function(destination, source, slots, stride, bytes, iterations);
     const Timer end = TimerNow();
     g_Checksum = g_Checksum + destination[(iterations - 1u) % slots * stride];
-    return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
+    return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, start)), VectorDoubleReplicate(static_cast<f64>(iterations))));
 }
 
 [[nodiscard]] f64 TimeEquality(EqualityBatchFunction function, const u64* lhs, const u64* rhs, usize slots, usize stride, usize iterations)noexcept{
@@ -403,7 +404,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     const u64 result = function(lhs, rhs, slots, stride, iterations);
     const Timer end = TimerNow();
     g_Checksum = g_Checksum + result;
-    return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
+    return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, start)), VectorDoubleReplicate(static_cast<f64>(iterations))));
 }
 
 void BenchCopy(usize samples){
@@ -435,8 +436,9 @@ void BenchCopy(usize samples){
                             candidateNs = TimeCopy(candidate, destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, iterations);
                             baselineNs = TimeCopy(baseline, destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, iterations);
                         }
+                        const f64 candidateOverBaseline = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(candidateNs), VectorDoubleReplicate(baselineNs)));
                         NWB_COUT << (bytes == 5120u ? "copy_fixed" : "copy_dynamic") << ',' << (streaming ? "streaming" : "warm") << ',' << bytes << ',' << sourceOffset << ',' << destinationOffset << ',' << sample << ',';
-                        NWB_COUT << baselineNs << ',' << candidateNs << ',' << candidateNs / baselineNs << '\n';
+                        NWB_COUT << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
                         NWB_COUT.flush();
                     }
                 }
@@ -482,7 +484,8 @@ void BenchEquality(usize samples, bool firstWord){
                     }
                     constexpr StringView s_FirstWordCases[]{ "equal", "word0_mismatch", "word1_mismatch", "word2_mismatch", "word3_mismatch" };
                     const StringView caseName = firstWord ? s_FirstWordCases[comparisonCase] : comparisonCase == 0u ? "equal" : comparisonCase == 1u ? "early_mismatch" : "late_mismatch";
-                    NWB_COUT << "equality," << (streaming ? "streaming" : "warm") << ',' << caseName << ',' << offset * sizeof(u64) << ',' << sample << ',' << baselineNs << ',' << candidateNs << ',' << candidateNs / baselineNs << '\n';
+                    const f64 candidateOverBaseline = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(candidateNs), VectorDoubleReplicate(baselineNs)));
+                    NWB_COUT << "equality," << (streaming ? "streaming" : "warm") << ',' << caseName << ',' << offset * sizeof(u64) << ',' << sample << ',' << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
                     NWB_COUT.flush();
                 }
             }

@@ -184,7 +184,7 @@ protected:
         const HitTarget* accepted = target(anchor(parent));
         if(!accepted)
             return false;
-        const Point point{ accepted->rectangle.x + accepted->rectangle.width * 0.5f, accepted->rectangle.y + accepted->rectangle.height * 0.5f };
+        const Point point = Center(accepted->rectangle);
         return send({ InputEventType::PointerMove, point }).hover == anchor(parent);
     }
 
@@ -197,7 +197,7 @@ protected:
         const HitTarget* accepted = target(anchor());
         if(!accepted)
             return false;
-        const Point point{ accepted->rectangle.x + accepted->rectangle.width * 0.5f, accepted->rectangle.y + accepted->rectangle.height * 0.5f };
+        const Point point = Center(accepted->rectangle);
         secondaryClick(point);
         return acceptTools(generation, false) && m_menu.isOpen();
     }

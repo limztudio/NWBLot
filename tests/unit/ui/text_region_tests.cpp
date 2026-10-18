@@ -11,6 +11,8 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +44,7 @@ static constexpr StringView s_OverflowText = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\n
 }
 
 static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected){
+    const SIMDVectorSingle expectedEnd = VectorAdd(VectorSet(expected.x, expected.y, 0.0f, 0.0f), VectorSet(expected.width, expected.height, 0.0f, 0.0f));
     usize count = 0u;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
@@ -52,9 +55,9 @@ static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected
             ASSERT_LT(snapshot.indices()[index], snapshot.vertices().size());
             const Point& position = snapshot.vertices()[snapshot.indices()[index]].position;
             EXPECT_GE(position.x, expected.x);
-            EXPECT_LE(position.x, expected.x + expected.width);
+            EXPECT_LE(position.x, VectorGetX(expectedEnd));
             EXPECT_GE(position.y, expected.y);
-            EXPECT_LE(position.y, expected.y + expected.height);
+            EXPECT_LE(position.y, VectorGetY(expectedEnd));
         }
         count += command.indexCount;
     }
@@ -63,7 +66,7 @@ static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected
 
 // Compare nonzero native raster coverage rather than transparent atlas borders that may legitimately be clipped.
 [[nodiscard]] static Expected<f64> GlyphCoverageArea(const DrawSnapshot& snapshot)noexcept{
-    f64 area = 0.0;
+    SIMDVectorDouble area = VectorDoubleZero();
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material == PaintMaterial::SdfGlyph)
             return MakeUnexpected(Failure{});
@@ -75,37 +78,46 @@ static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected
         const GlyphPageBinding& binding = page.binding();
         if(page.pixels().size() != static_cast<usize>(binding.width) * binding.height)
             return MakeUnexpected(Failure{});
+        const SIMDVectorDouble textureSize = VectorDoubleSet(static_cast<f64>(binding.width), static_cast<f64>(binding.height), static_cast<f64>(binding.width), static_cast<f64>(binding.height));
         for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
             if(snapshot.indices()[index] >= snapshot.vertices().size() || snapshot.indices()[index + 2u] >= snapshot.vertices().size())
                 return MakeUnexpected(Failure{});
             const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
             const Vertex& last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            const f64 left = static_cast<f64>(first.texCoord.x) * binding.width;
-            const f64 top = static_cast<f64>(first.texCoord.y) * binding.height;
-            const f64 right = static_cast<f64>(last.texCoord.x) * binding.width;
-            const f64 bottom = static_cast<f64>(last.texCoord.y) * binding.height;
+            // Lanes are left, top, right, bottom in texels.
+            const SIMDVectorDouble texel = VectorDoubleMultiply(VectorDoubleSet(first.texCoord.x, first.texCoord.y, last.texCoord.x, last.texCoord.y), textureSize);
+            const f64 left = VectorDoubleGetX(texel);
+            const f64 top = VectorDoubleGetY(texel);
+            const f64 right = VectorDoubleGetZ(texel);
+            const f64 bottom = VectorDoubleGetW(texel);
             if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < 0.0 || top < 0.0 || right > binding.width || bottom > binding.height || right <= left || bottom <= top)
                 return MakeUnexpected(Failure{});
-            const f64 width = static_cast<f64>(last.position.x) - first.position.x;
-            const f64 height = static_cast<f64>(last.position.y) - first.position.y;
+            const SIMDVectorDouble size = VectorDoubleSubtract(VectorDoubleSet(last.position.x, last.position.y, 0.0, 0.0), VectorDoubleSet(first.position.x, first.position.y, 0.0, 0.0));
+            const f64 width = VectorDoubleGetX(size);
+            const f64 height = VectorDoubleGetY(size);
             if(!IsFinite(width) || !IsFinite(height) || width <= 0.0 || height <= 0.0)
                 return MakeUnexpected(Failure{});
-            const f64 texelArea = (width / (right - left)) * (height / (bottom - top));
-            const u32 endX = static_cast<u32>(Ceil(right));
-            const u32 endY = static_cast<u32>(Ceil(bottom));
-            for(u32 y = static_cast<u32>(Floor(top)); y < endY; ++y){
-                const f64 visibleHeight = Min(bottom, static_cast<f64>(y) + 1.0) - Max(top, static_cast<f64>(y));
-                for(u32 x = static_cast<u32>(Floor(left)); x < endX; ++x){
+            const SIMDVectorDouble texelScale = VectorDoubleDivide(size, VectorDoubleSubtract(VectorDoubleSwizzle<2, 3, 0, 1>(texel), texel));
+            const SIMDVectorDouble texelArea = VectorDoubleMultiply(VectorDoubleSplatX(texelScale), VectorDoubleSplatY(texelScale));
+            const SIMDVectorDouble firstTexel = VectorDoubleFloor(texel);
+            const SIMDVectorDouble endTexel = VectorDoubleCeiling(texel);
+            const u32 endX = static_cast<u32>(VectorDoubleGetZ(endTexel));
+            const u32 endY = static_cast<u32>(VectorDoubleGetW(endTexel));
+            for(u32 y = static_cast<u32>(VectorDoubleGetY(firstTexel)); y < endY; ++y){
+                const SIMDVectorDouble row = VectorDoubleReplicate(static_cast<f64>(y));
+                const SIMDVectorDouble visibleHeight = VectorDoubleSubtract(VectorDoubleMin(VectorDoubleSplatW(texel), VectorDoubleAdd(row, VectorDoubleSplatOne())), VectorDoubleMax(VectorDoubleSplatY(texel), row));
+                for(u32 x = static_cast<u32>(VectorDoubleGetX(firstTexel)); x < endX; ++x){
                     const u8 coverage = page.pixels()[static_cast<usize>(y) * binding.width + x];
                     if(coverage == 0u)
                         continue;
-                    const f64 visibleWidth = Min(right, static_cast<f64>(x) + 1.0) - Max(left, static_cast<f64>(x));
-                    area += (static_cast<f64>(coverage) / 255.0) * visibleWidth * visibleHeight * texelArea;
+                    const SIMDVectorDouble column = VectorDoubleReplicate(static_cast<f64>(x));
+                    const SIMDVectorDouble visibleWidth = VectorDoubleSubtract(VectorDoubleMin(VectorDoubleSplatZ(texel), VectorDoubleAdd(column, VectorDoubleSplatOne())), VectorDoubleMax(VectorDoubleSplatX(texel), column));
+                    area = VectorDoubleMultiplyAddExpression(VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(coverage)), VectorDoubleReplicate(255.0)), visibleWidth), visibleHeight), texelArea, area);
                 }
             }
         }
     }
-    return area;
+    return VectorDoubleGetX(area);
 }
 
 static void CopyGlyphVertices(const DrawSnapshot& snapshot, Vector<Vertex, Core::Alloc::ScratchArena>& vertices){
@@ -205,19 +217,21 @@ protected:
         const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(rows, placement.firstRow + 1u)));
         ASSERT_NE(first, nullptr);
         const f32 rowHeight = first->rectangle.height;
-        f32 expectedHeight = rowMetrics->minimum.y;
+        SIMDVectorSingle expectedHeight = VectorReplicate(rowMetrics->minimum.y);
         for(const StringView label : { StringView{}, source.ordinaryText, source.specialText }){
             const auto layout = m_text.layout({ .text = label, .fontSize = fontSize });
             ASSERT_TRUE(layout);
             const auto visual = m_text.measure(*layout, display);
             ASSERT_TRUE(visual);
-            expectedHeight = Max(expectedHeight, visual->height + rowMetrics->padding.top + rowMetrics->padding.bottom);
+            expectedHeight = VectorMax(expectedHeight, VectorAdd(VectorAdd(VectorReplicate(visual->height), VectorReplicate(rowMetrics->padding.top)), VectorReplicate(rowMetrics->padding.bottom)));
         }
-        EXPECT_FLOAT_EQ(rowHeight, expectedHeight);
-        EXPECT_DOUBLE_EQ(placement.contentHeight, static_cast<f64>(rowHeight) * source.count);
+        EXPECT_FLOAT_EQ(rowHeight, VectorGetX(expectedHeight));
+        // Lanes are content height and scroll step.
+        const SIMDVectorDouble listExtent = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(rowHeight)), VectorDoubleSet(static_cast<f64>(source.count), 3.0, 0.0, 0.0));
+        EXPECT_DOUBLE_EQ(placement.contentHeight, VectorDoubleGetX(listExtent));
         const HitTarget* host = target(listOwner);
         ASSERT_NE(host, nullptr);
-        EXPECT_DOUBLE_EQ(host->scrollStep, static_cast<f64>(rowHeight) * 3.0);
+        EXPECT_DOUBLE_EQ(host->scrollStep, VectorDoubleGetY(listExtent));
         PaintBuilder reference(m_arena);
         reference.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
         reference.pushClip(placement.contentClip);
@@ -231,9 +245,14 @@ protected:
             const auto visual = m_text.measure(*layout, display);
             ASSERT_TRUE(visual);
             const Insets& padding = rowMetrics->padding;
-            EXPECT_GE(rowHeight + 0.0001f, visual->height + padding.top + padding.bottom);
-            const f32 contentHeight = rowHeight - padding.top - padding.bottom;
-            const Point origin{ row->rectangle.x + padding.left - visual->x, row->rectangle.y + padding.top + Max(0.0f, (contentHeight - visual->height) * 0.5f) - visual->y };
+            const SIMDVectorSingle paddedHeight = VectorAdd(VectorAdd(VectorReplicate(visual->height), VectorReplicate(padding.top)), VectorReplicate(padding.bottom));
+            EXPECT_GE(VectorGetX(VectorAdd(VectorReplicate(rowHeight), VectorReplicate(0.0001f))), VectorGetX(paddedHeight));
+            const SIMDVectorSingle contentHeight = VectorSubtract(VectorSubtract(VectorReplicate(rowHeight), VectorReplicate(padding.top)), VectorReplicate(padding.bottom));
+            const SIMDVectorSingle centering = VectorMax(VectorZero(), VectorMultiply(VectorSubtract(contentHeight, VectorReplicate(visual->height)), VectorReplicate(0.5f)));
+            const SIMDVectorSingle start = VectorAdd(VectorSet(row->rectangle.x, row->rectangle.y, 0.0f, 0.0f), VectorSet(padding.left, padding.top, 0.0f, 0.0f));
+            // Only y gets the centering offset.
+            const SIMDVectorSingle originValue = VectorSubtract(VectorSelect(start, VectorAdd(start, centering), s_SIMDMaskY), VectorSet(visual->x, visual->y, 0.0f, 0.0f));
+            const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
             ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
         }
         ASSERT_TRUE(reference.popClip());
@@ -242,7 +261,7 @@ protected:
         ASSERT_TRUE(expectedCoverage);
         ASSERT_TRUE(actualCoverage);
         ASSERT_GT(*expectedCoverage, 0.0);
-        EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
+        EXPECT_NEAR(*actualCoverage, *expectedCoverage, VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(0.00001), VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.000002)))));
     }
 
     void checkContentButtonRow(const StringView firstText, const StringView secondText, const f32 fontSize, const f32 scale, const u64 generation, const bool fixedHeight = false){
@@ -263,8 +282,8 @@ protected:
         EXPECT_FLOAT_EQ(secondLayout->measure().y, secondLogical.y);
         EXPECT_GE(firstMeasured->height, firstLogical.y);
         EXPECT_GE(secondMeasured->height, secondLogical.y);
-        const f32 firstHeight = fixedHeight ? 32.0f : Max(32.0f, (firstMeasured->height + 8.0f) + 8.0f);
-        const f32 secondHeight = fixedHeight ? 32.0f : Max(32.0f, (secondMeasured->height + 8.0f) + 8.0f);
+        // Lanes are the first and second button heights.
+        const SIMDVectorSingle heights = fixedHeight ? VectorReplicate(32.0f) : VectorMax(VectorReplicate(32.0f), VectorAdd(VectorAdd(VectorSet(firstMeasured->height, secondMeasured->height, 0.0f, 0.0f), VectorReplicate(8.0f)), VectorReplicate(8.0f)));
         ASSERT_TRUE(begin(generation, display));
         ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 740.0f, 480.0f }));
         ContainerOptions row;
@@ -272,7 +291,7 @@ protected:
             row.height = { LayoutSizePolicy::Fixed, 32.0f };
         ASSERT_TRUE(m_builder.beginRow("navigation", row));
         WidgetOptions navigation;
-        navigation.width = { LayoutSizePolicy::Fixed, Max(100.0f, Max(firstMeasured->width, secondMeasured->width) + 16.0f) };
+        navigation.width = { LayoutSizePolicy::Fixed, VectorGetX(VectorMax(VectorReplicate(100.0f), VectorAdd(VectorMax(VectorReplicate(firstMeasured->width), VectorReplicate(secondMeasured->width)), VectorReplicate(16.0f)))) };
         if(fixedHeight)
             navigation.height = { LayoutSizePolicy::Fixed, 32.0f };
         EXPECT_FALSE(m_builder.button("previous", firstText, navigation));
@@ -292,10 +311,10 @@ protected:
         ASSERT_NE(first, nullptr);
         ASSERT_NE(second, nullptr);
         ASSERT_NE(after, nullptr);
-        EXPECT_FLOAT_EQ(first->rectangle.height, firstHeight);
-        EXPECT_FLOAT_EQ(second->rectangle.height, secondHeight);
+        EXPECT_FLOAT_EQ(first->rectangle.height, VectorGetX(heights));
+        EXPECT_FLOAT_EQ(second->rectangle.height, VectorGetY(heights));
         EXPECT_FLOAT_EQ(second->rectangle.y, first->rectangle.y);
-        EXPECT_FLOAT_EQ(after->rectangle.y, first->rectangle.y + Max(firstHeight, secondHeight) + m_builder.style().gap);
+        EXPECT_FLOAT_EQ(after->rectangle.y, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(first->rectangle.y), VectorMax(VectorSplatX(heights), VectorSplatY(heights))), VectorReplicate(m_builder.style().gap))));
         ExpectRect(first->clip, first->rectangle);
         ExpectRect(second->clip, second->rectangle);
         PaintBuilder reference(m_arena);
@@ -306,9 +325,10 @@ protected:
         for(u32 index = 0u; index < 2u; ++index){
             const Rect& bounds = controls[index];
             const Rect& visual = measured[index];
-            const f32 x = bounds.x + 8.0f + Max(0.0f, (bounds.width - 16.0f - visual.width) * 0.5f) - visual.x;
-            const f32 y = bounds.y + 8.0f + Max(0.0f, (bounds.height - 16.0f - visual.height) * 0.5f) - visual.y;
-            ASSERT_TRUE(m_text.paint(reference, *layouts[index], { x, y }, m_builder.style().text));
+            const SIMDVectorSingle slack = VectorSubtract(VectorSubtract(VectorSet(bounds.width, bounds.height, 0.0f, 0.0f), VectorReplicate(16.0f)), VectorSet(visual.width, visual.height, 0.0f, 0.0f));
+            const SIMDVectorSingle centered = VectorAdd(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorReplicate(8.0f)), VectorMax(VectorZero(), VectorMultiply(slack, VectorReplicate(0.5f))));
+            const SIMDVectorSingle origin = VectorSubtract(centered, VectorSet(visual.x, visual.y, 0.0f, 0.0f));
+            ASSERT_TRUE(m_text.paint(reference, *layouts[index], { VectorGetX(origin), VectorGetY(origin) }, m_builder.style().text));
         }
         const DrawSnapshot expected = reference.freeze();
         const auto actualCoverage = GlyphCoverageArea(actual);
@@ -317,9 +337,9 @@ protected:
         ASSERT_TRUE(expectedCoverage);
         ASSERT_GT(*expectedCoverage, 0.0);
         if(fixedHeight)
-            EXPECT_LT(*actualCoverage, *expectedCoverage * 0.999);
+            EXPECT_LT(*actualCoverage, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.999))));
         else
-            EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
+            EXPECT_NEAR(*actualCoverage, *expectedCoverage, VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(0.00001), VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.000002)))));
     }
 };
 
@@ -346,7 +366,8 @@ TEST_F(UiTextRegionTests, StandaloneMultilineLabelClipsNestedBoundsAfterResizeAc
             ASSERT_TRUE(m_paint.popClip());
             EXPECT_FALSE(m_paint.popClip());
             const DrawSnapshot snapshot = m_paint.freeze();
-            ExpectGlyphRegion(snapshot, { 25.0f, 24.0f, bounds.width - 5.0f, bounds.height - 4.0f });
+            const SIMDVectorSingle regionSize = VectorSubtract(VectorSet(bounds.width, bounds.height, 0.0f, 0.0f), VectorSet(5.0f, 4.0f, 0.0f, 0.0f));
+            ExpectGlyphRegion(snapshot, { 25.0f, 24.0f, VectorGetX(regionSize), VectorGetY(regionSize) });
             const usize indices = GlyphIndexCount(snapshot);
             if(previousIndices != 0u)
                 EXPECT_LT(indices, previousIndices);
@@ -432,7 +453,8 @@ TEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFo
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* sibling = target(id("sibling", "panel"));
     ASSERT_NE(sibling, nullptr);
-    ExpectGlyphRegion(snapshot, { sibling->rectangle.x + 2.0f, sibling->rectangle.y + 3.0f, 44.0f, 24.0f });
+    const SIMDVectorSingle regionStart = VectorAdd(VectorSet(sibling->rectangle.x, sibling->rectangle.y, 0.0f, 0.0f), VectorSet(2.0f, 3.0f, 0.0f, 0.0f));
+    ExpectGlyphRegion(snapshot, { VectorGetX(regionStart), VectorGetY(regionStart), 44.0f, 24.0f });
 }
 
 TEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip){
@@ -501,7 +523,11 @@ TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInstea
     PaintBuilder reference(m_arena);
     reference.begin(display, 2u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
     reference.pushClip(content);
-    const Point origin{ content.x - measured->x, content.y + (content.height - measured->height) * 0.5f - measured->y };
+    const SIMDVectorSingle contentStart = VectorSet(content.x, content.y, 0.0f, 0.0f);
+    const SIMDVectorSingle centered = VectorMultiplyAddExpression(VectorSubtract(VectorReplicate(content.height), VectorReplicate(measured->height)), VectorReplicate(0.5f), contentStart);
+    // Only y gets the centering offset.
+    const SIMDVectorSingle originValue = VectorSubtract(VectorSelect(contentStart, centered, s_SIMDMaskY), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
+    const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
     ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
     ASSERT_TRUE(reference.popClip());
     const DrawSnapshot expected = reference.freeze();
@@ -541,18 +567,21 @@ TEST_F(UiTextRegionTests, WindowTitleInkKeepsPaddingAndCollapseReservationWhenVi
             const HitTarget* title = target(id("@window.title"));
             ASSERT_NE(title, nullptr);
             const Rect& header = title->rectangle;
-            const f32 left = header.x + 5.0f + (collapsible ? 28.0f : 0.0f);
-            const f32 right = Min(width, header.x + header.width - 7.0f);
-            ExpectGlyphRegion(snapshot, { left, header.y + 6.0f, right - left, header.height - 14.0f });
+            const SIMDVectorSingle titleStart = VectorAdd(VectorReplicate(header.x), VectorReplicate(5.0f));
+            const SIMDVectorSingle left = VectorAdd(titleStart, VectorReplicate(collapsible ? 28.0f : 0.0f));
+            const SIMDVectorSingle right = VectorMin(VectorReplicate(width), VectorSubtract(VectorAdd(VectorReplicate(header.x), VectorReplicate(header.width)), VectorReplicate(7.0f)));
+            const SIMDVectorSingle inkTop = VectorAdd(VectorReplicate(header.y), VectorReplicate(6.0f));
+            const SIMDVectorSingle inkHeight = VectorSubtract(VectorReplicate(header.height), VectorReplicate(14.0f));
+            ExpectGlyphRegion(snapshot, { VectorGetX(left), VectorGetX(inkTop), VectorGetX(VectorSubtract(right, left)), VectorGetX(inkHeight) });
             const auto skin = sampleSkinPaint(snapshot, Name("window.title"));
             ASSERT_TRUE(skin);
             ExpectRect(skin->bounds, title->clip);
             if(collapsible){
                 const HitTarget* collapse = target(id("@window.collapse"));
                 ASSERT_NE(collapse, nullptr);
-                EXPECT_FLOAT_EQ(collapse->rectangle.x, header.x + 5.0f);
+                EXPECT_FLOAT_EQ(collapse->rectangle.x, VectorGetX(titleStart));
                 EXPECT_FLOAT_EQ(collapse->rectangle.width, 20.0f);
-                EXPECT_LE(collapse->rectangle.x + collapse->rectangle.width, left);
+                EXPECT_LE(VectorGetX(VectorAdd(VectorReplicate(collapse->rectangle.x), VectorReplicate(collapse->rectangle.width))), VectorGetX(left));
             }
         }
     }
@@ -623,10 +652,12 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
             ASSERT_TRUE(finishPanel());
             const DrawSnapshot actual = m_paint.freeze();
             ASSERT_TRUE(m_context.commitFrame(generation));
-            EXPECT_FLOAT_EQ(state.placement.bounds.height, Max(32.0f, (measured->height + 8.0f) + 8.0f));
+            EXPECT_FLOAT_EQ(state.placement.bounds.height, VectorGetX(VectorMax(VectorReplicate(32.0f), VectorAdd(VectorAdd(VectorReplicate(measured->height), VectorReplicate(8.0f)), VectorReplicate(8.0f)))));
             EXPECT_FLOAT_EQ(state.placement.scroll, 0.0f);
-            EXPECT_GE(state.placement.textOrigin.y + measured->y, state.placement.content.y - 0.0001f);
-            EXPECT_LE(state.placement.textOrigin.y + measured->y + measured->height, state.placement.content.y + state.placement.content.height + 0.0001f);
+            const SIMDVectorSingle inkTop = VectorAdd(VectorReplicate(state.placement.textOrigin.y), VectorReplicate(measured->y));
+            const SIMDVectorSingle contentBottom = VectorAdd(VectorReplicate(state.placement.content.y), VectorReplicate(state.placement.content.height));
+            EXPECT_GE(VectorGetX(inkTop), VectorGetX(VectorSubtract(VectorReplicate(state.placement.content.y), VectorReplicate(0.0001f))));
+            EXPECT_LE(VectorGetX(VectorAdd(inkTop, VectorReplicate(measured->height))), VectorGetX(VectorAdd(contentBottom, VectorReplicate(0.0001f))));
             PaintBuilder reference(m_arena);
             reference.begin(display, generation++, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
             ASSERT_TRUE(m_text.paint(reference, *layout, state.placement.textOrigin, m_builder.editStyle().text));
@@ -635,7 +666,7 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
             ASSERT_TRUE(expectedCoverage);
             ASSERT_TRUE(actualCoverage);
             ASSERT_GT(*expectedCoverage, 0.0);
-            EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
+            EXPECT_NEAR(*actualCoverage, *expectedCoverage, VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(0.00001), VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.000002)))));
         }
     }
 }

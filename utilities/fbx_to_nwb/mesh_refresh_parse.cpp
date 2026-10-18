@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -61,7 +63,7 @@ static constexpr AStringView s_ColorField = "color";
     }
 
     const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue) || numericValue > static_cast<f64>(s_MaxU32)){
+    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleGetX(VectorDoubleFloor(VectorDoubleReplicate(numericValue))) || numericValue > static_cast<f64>(s_MaxU32)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer, negative, or out-of-range u32 value"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
         return MakeUnexpected(Failure{});
     }

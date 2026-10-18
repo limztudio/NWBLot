@@ -4,6 +4,8 @@
 
 #include "telemetry_test_helpers.h"
 
+#include <global/simd/vector.h>
+
 #include <gtest/gtest.h>
 
 #include "frame_graph_test_helpers.h"
@@ -193,7 +195,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
     packetSubmissionStatistics[s_ThirdElementIndex].commandListCount = 1u;
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
-    packetSubmissionStatistics[1u].submissionSeconds += 0.01;
+    packetSubmissionStatistics[1u].submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(packetSubmissionStatistics[1u].submissionSeconds), VectorDoubleReplicate(0.01)));
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].queue = { .index = 3u, .deviceGeneration = 17u };
@@ -216,7 +218,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
     NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + packetSubmissionStatisticsOffset, sizeof(encodedStatistics));
-    encodedStatistics.submissionSeconds += 0.01;
+    encodedStatistics.submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(encodedStatistics.submissionSeconds), VectorDoubleReplicate(0.01)));
     NWB_MEMCPY(payload.data() + packetSubmissionStatisticsOffset, payload.size() - packetSubmissionStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
     EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 

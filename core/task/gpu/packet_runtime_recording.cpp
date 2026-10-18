@@ -11,6 +11,7 @@
 #include <core/graphics/gpu_timing.h>
 
 #include <global/exception.h>
+#include <global/simd/vector.h>
 #include <global/termination.h>
 #include <global/timer.h>
 
@@ -289,8 +290,8 @@ bool GpuNativePacketRecorder::recordPacket(
     if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))
         recorded = false;
     u32 barrierCount = 0u;
-    f64 graphBarrierRecordingSeconds = 0.0;
-    f64 taskRecordSeconds = 0.0;
+    SIMDVectorDouble graphBarrierRecordingSeconds = VectorDoubleZero();
+    SIMDVectorDouble taskRecordSeconds = VectorDoubleZero();
     for(u32 taskIndex = 0u; recorded && taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskId task = tasks[taskIndex];
         const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
@@ -335,7 +336,7 @@ bool GpuNativePacketRecorder::recordPacket(
             recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin);
+        graphBarrierRecordingSeconds = VectorDoubleAdd(graphBarrierRecordingSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin)));
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
         bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
@@ -369,7 +370,7 @@ bool GpuNativePacketRecorder::recordPacket(
             const auto taskRecorded = graph.recordTask(task, *commandList, context, recordingLease);
             recorded = static_cast<bool>(taskRecorded);
             const bool recordThunkInvoked = !taskRecorded && taskRecorded.error().recordThunkInvoked;
-            taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
+            taskRecordSeconds = VectorDoubleAdd(taskRecordSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), taskRecordBegin)));
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"), StringConvert(taskView.markerLabel));
@@ -447,7 +448,7 @@ bool GpuNativePacketRecorder::recordPacket(
         barrierCount += compiledTask->epilogueBarrierCount;
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin);
+        graphBarrierRecordingSeconds = VectorDoubleAdd(graphBarrierRecordingSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin)));
     }
     packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
     if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))
@@ -500,8 +501,8 @@ bool GpuNativePacketRecorder::recordPacket(
     recordedPacket.taskCount = packet.taskCount;
     recordedPacket.barrierCount = barrierCount;
     recordedPacket.commandListAcquisitionSeconds = commandListAcquisitionSeconds;
-    recordedPacket.graphBarrierRecordingSeconds = graphBarrierRecordingSeconds;
-    recordedPacket.taskRecordSeconds = taskRecordSeconds;
+    recordedPacket.graphBarrierRecordingSeconds = VectorDoubleGetX(graphBarrierRecordingSeconds);
+    recordedPacket.taskRecordSeconds = VectorDoubleGetX(taskRecordSeconds);
     recordedPacket.recordingBeginNanoseconds = DurationInNS<u64>(recordingBegin);
     recordedPacket.recordingEndNanoseconds = DurationInNS<u64>(recordingEnd);
     recordedPacket.recordingSeconds = DurationInSeconds<f64>(recordingEnd, recordingBegin);

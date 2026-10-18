@@ -117,7 +117,7 @@ template<typename SnapshotT, typename StateChangedT>
 
 template<typename ValuesT>
 inline void PaintPassiveSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u64 sequence){
-    const f32 y = context.display.logicalHeight - 18.0f;
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
     const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<ValuesT> + 1u) * 2u, 12u, 12u>();
     usize marker = 0u;
     for(const u64 value : values){

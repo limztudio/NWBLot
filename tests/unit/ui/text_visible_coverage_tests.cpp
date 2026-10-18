@@ -9,6 +9,7 @@
 #include <impl/ecs_ui/toolkit/text/glyph_visibility.h>
 
 #include <global/algorithm.h>
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -28,24 +29,29 @@ using namespace NWB::UiTextVisibleTests;
 class TextVisibleCoverageTests : public TextVisibleFixture{
 protected:
     [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-        return { origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
+        const SIMDVectorSingle position = VectorAdd(VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)), VectorSet(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f));
+        return { VectorGetX(position), VectorGetY(position), glyph.ink.width, glyph.ink.height };
     }
 
+    // Lanes are x and y. A fringe is half of the gap, but at most 0.05.
     [[nodiscard]] static Rect RasterFringe(const Rect& raster, const Rect& outline)noexcept{
-        if(raster.x + 0.001f < outline.x)
-            return { raster.x, raster.y, Min(0.05f, (outline.x - raster.x) * 0.5f), raster.height };
-        if(raster.y + 0.001f < outline.y)
-            return { raster.x, raster.y, raster.width, Min(0.05f, (outline.y - raster.y) * 0.5f) };
-        const f32 right = raster.x + raster.width;
-        if(right > outline.x + outline.width + 0.001f){
-            const f32 width = Min(0.05f, (right - outline.x - outline.width) * 0.5f);
-            return { right - width, raster.y, width, raster.height };
-        }
-        const f32 bottom = raster.y + raster.height;
-        if(bottom > outline.y + outline.height + 0.001f){
-            const f32 height = Min(0.05f, (bottom - outline.y - outline.height) * 0.5f);
-            return { raster.x, bottom - height, raster.width, height };
-        }
+        const SIMDVectorSingle rasterStart = VectorSet(raster.x, raster.y, 0.0f, 0.0f);
+        const SIMDVectorSingle outlineStart = VectorSet(outline.x, outline.y, 0.0f, 0.0f);
+        const SIMDVectorSingle startTest = VectorAdd(rasterStart, VectorReplicate(0.001f));
+        const SIMDVectorSingle startFringe = VectorMin(VectorReplicate(0.05f), VectorMultiply(VectorSubtract(outlineStart, rasterStart), VectorReplicate(0.5f)));
+        if(VectorGetX(startTest) < outline.x)
+            return { raster.x, raster.y, VectorGetX(startFringe), raster.height };
+        if(VectorGetY(startTest) < outline.y)
+            return { raster.x, raster.y, raster.width, VectorGetY(startFringe) };
+        const SIMDVectorSingle outlineSize = VectorSet(outline.width, outline.height, 0.0f, 0.0f);
+        const SIMDVectorSingle rasterEnd = VectorAdd(rasterStart, VectorSet(raster.width, raster.height, 0.0f, 0.0f));
+        const SIMDVectorSingle endTest = VectorAdd(VectorAdd(outlineStart, outlineSize), VectorReplicate(0.001f));
+        const SIMDVectorSingle endFringe = VectorMin(VectorReplicate(0.05f), VectorMultiply(VectorSubtract(VectorSubtract(rasterEnd, outlineStart), outlineSize), VectorReplicate(0.5f)));
+        const SIMDVectorSingle endFringeStart = VectorSubtract(rasterEnd, endFringe);
+        if(VectorGetX(rasterEnd) > VectorGetX(endTest))
+            return { VectorGetX(endFringeStart), raster.y, VectorGetX(endFringe), raster.height };
+        if(VectorGetY(rasterEnd) > VectorGetY(endTest))
+            return { raster.x, VectorGetY(endFringeStart), raster.width, VectorGetY(endFringe) };
         return {};
     }
 
@@ -65,15 +71,18 @@ protected:
     }
 
     [[nodiscard]] Expected<Rect> rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize, const DisplayMetrics& display, const Point origin){
-        const f32 physicalSize = Ceil(fontSize * Max(display.pixelScaleX, display.pixelScaleY));
-        if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(physicalSize), m_bitmap))
+        const SIMDVectorSingle physicalSize = VectorCeiling(VectorMultiply(VectorReplicate(fontSize), VectorMax(VectorReplicate(display.pixelScaleX), VectorReplicate(display.pixelScaleY))));
+        if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(VectorGetX(physicalSize)), m_bitmap))
             return MakeUnexpected(Failure{});
-        const f32 scale = physicalSize / fontSize;
-        const f64 unsnappedX = static_cast<f64>(origin.x) + glyph.position.x + static_cast<f64>(m_bitmap.bearingX) / scale;
-        const f64 unsnappedY = static_cast<f64>(origin.y) + glyph.position.y - static_cast<f64>(m_bitmap.bearingY) / scale;
-        const Rect rectangle{ static_cast<f32>(Floor(unsnappedX * display.pixelScaleX + 0.5) / display.pixelScaleX),
-            static_cast<f32>(Floor(unsnappedY * display.pixelScaleY + 0.5) / display.pixelScaleY),
-            static_cast<f32>(m_bitmap.width) / scale, static_cast<f32>(m_bitmap.height) / scale };
+        const SIMDVectorSingle scale = VectorDivide(physicalSize, VectorReplicate(fontSize));
+        // Lanes are x and y. X adds the bearing and y subtracts it.
+        const SIMDVectorDouble base = VectorDoubleAdd(VectorDoubleSet(origin.x, origin.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
+        const SIMDVectorDouble bearing = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(m_bitmap.bearingX), static_cast<f64>(m_bitmap.bearingY), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(VectorGetX(scale))));
+        const SIMDVectorDouble unsnapped = VectorDoublePermute<0, 5, 2, 3>(VectorDoubleAdd(base, bearing), VectorDoubleSubtract(base, bearing));
+        const SIMDVectorDouble pixelScale = VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0);
+        const SIMDVectorDouble snapped = VectorDoubleDivide(VectorDoubleFloor(VectorDoubleMultiplyAddExpression(unsnapped, pixelScale, VectorDoubleReplicate(0.5))), pixelScale);
+        const SIMDVectorSingle size = VectorDivide(VectorSet(static_cast<f32>(m_bitmap.width), static_cast<f32>(m_bitmap.height), 0.0f, 0.0f), scale);
+        const Rect rectangle{ static_cast<f32>(VectorDoubleGetX(snapped)), static_cast<f32>(VectorDoubleGetY(snapped)), VectorGetX(size), VectorGetY(size) };
         if(!(rectangle.width > 0.0f && rectangle.height > 0.0f))
             return MakeUnexpected(Failure{});
         return rectangle;
@@ -109,7 +118,7 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     Core::Alloc::ScratchArena scratch(Name("tests/ui/text/visible_hangul"));
     Vector<u32, Core::Alloc::ScratchArena> ids(scratch);
     ids.reserve(hiddenCount);
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
+    const Rect clip{ 0.0f, 0.0f, 100.0f, VectorGetX(VectorAdd(VectorReplicate(20.0f), VectorReplicate(m_layout.lines()[1u].top))) };
     for(const PlacedGlyph& glyph : m_layout.glyphs()){
         if(glyph.byteBegin < 2u)
             continue;
@@ -132,7 +141,8 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     EXPECT_EQ(prefix.vertices().size(), 4u);
     EXPECT_EQ(prefix.indices().size(), 6u);
     const PlacedGlyph& reveal = m_layout.glyphs()[hiddenCount / 2u];
-    const Point origin{ 20.0f - reveal.position.x - reveal.ink.x, 20.0f - reveal.position.y - reveal.ink.y };
+    const SIMDVectorSingle originValue = VectorSubtract(VectorSubtract(VectorReplicate(20.0f), VectorSet(reveal.position.x, reveal.position.y, 0.0f, 0.0f)), VectorSet(reveal.ink.x, reveal.ink.y, 0.0f, 0.0f));
+    const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
     beginPaint(2u);
     ASSERT_TRUE(paintClipped(m_layout, { 20.0f, 20.0f, 80.0f, 40.0f }, origin));
     const DrawSnapshot revealed = m_paint.freeze();
@@ -153,7 +163,7 @@ TEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsReveal
         m_layout = Move(*layoutResult);
     }
     ASSERT_EQ(m_layout.lines().size(), 2u);
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
+    const Rect clip{ 0.0f, 0.0f, 100.0f, VectorGetX(VectorAdd(VectorReplicate(20.0f), VectorReplicate(m_layout.lines()[1u].top))) };
     beginPaint(1u);
     ASSERT_TRUE(paintClipped(m_layout, clip));
     const DrawSnapshot first = m_paint.freeze();
@@ -261,8 +271,9 @@ TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOut
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, clip.y);
-    EXPECT_NEAR(snapshot.vertices()[2u].position.x, clip.x + clip.width, 0.0001f);
-    EXPECT_NEAR(snapshot.vertices()[2u].position.y, clip.y + clip.height, 0.0001f);
+    const SIMDVectorSingle clipEnd = VectorAdd(VectorSet(clip.x, clip.y, 0.0f, 0.0f), VectorSet(clip.width, clip.height, 0.0f, 0.0f));
+    EXPECT_NEAR(snapshot.vertices()[2u].position.x, VectorGetX(clipEnd), 0.0001f);
+    EXPECT_NEAR(snapshot.vertices()[2u].position.y, VectorGetY(clipEnd), 0.0001f);
 }
 
 TEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid){
@@ -296,14 +307,14 @@ TEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyp
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const auto raster = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
     ASSERT_TRUE(raster);
-    const f32 glyphOrigin = origin.x + m_layout.glyphs()[0u].position.x;
-    ASSERT_LT(raster->x, glyphOrigin);
-    const Rect clip{ raster->x, raster->y, (glyphOrigin - raster->x) * 0.5f, raster->height };
+    const SIMDVectorSingle glyphOrigin = VectorAdd(VectorReplicate(origin.x), VectorReplicate(m_layout.glyphs()[0u].position.x));
+    ASSERT_LT(raster->x, VectorGetX(glyphOrigin));
+    const Rect clip{ raster->x, raster->y, VectorGetX(VectorMultiply(VectorSubtract(glyphOrigin, VectorReplicate(raster->x)), VectorReplicate(0.5f))), raster->height };
     beginPaint(1u, display);
     ASSERT_TRUE(paintClipped(m_layout, clip, origin));
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_LT(snapshot.vertices()[2u].position.x, glyphOrigin);
+    EXPECT_LT(snapshot.vertices()[2u].position.x, VectorGetX(glyphOrigin));
     EXPECT_EQ(snapshot.glyphPages().size(), 1u);
 }
 
@@ -322,7 +333,7 @@ TEST_F(TextVisibleCoverageTests, CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcl
     const auto mark = rasterRectangle(m_layout.glyphs()[1u], m_layout.fontSize(), display, origin);
     ASSERT_TRUE(mark);
     ASSERT_LT(mark->y, base->y);
-    const Rect clip{ mark->x, mark->y, mark->width, Min(mark->height, base->y - mark->y) * 0.5f };
+    const Rect clip{ mark->x, mark->y, mark->width, VectorGetX(VectorMultiply(VectorMin(VectorReplicate(mark->height), VectorSubtract(VectorReplicate(base->y), VectorReplicate(mark->y))), VectorReplicate(0.5f))) };
     beginPaint(1u, display);
     ASSERT_TRUE(paintClipped(m_layout, clip, origin));
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -348,7 +359,7 @@ TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisible
     }
     beginPaint(1u);
     ASSERT_TRUE(m_paint.prepareGlyphPages(prior.data(), prior.size()));
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
+    const Rect clip{ 0.0f, 0.0f, 100.0f, VectorGetX(VectorAdd(VectorReplicate(20.0f), VectorReplicate(m_layout.lines()[1u].top))) };
     ASSERT_TRUE(paintClipped(m_layout, clip));
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages);
@@ -388,20 +399,27 @@ TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAn
                 const DisplayMetrics display{ 800.0f, 600.0f, scale.x, scale.y };
                 const auto measured = m_text.measure(*layout, display);
                 ASSERT_TRUE(measured);
+                const u32 presetSize = static_cast<u32>(VectorGetX(VectorCeiling(VectorMultiply(VectorReplicate(size), VectorMax(VectorReplicate(scale.x), VectorReplicate(scale.y))))));
                 for(const f32 phase : { 0.0f, 0.25f, 0.53125f, 0.9375f }){
-                    const Rect content{ 32.0f + phase, 24.0f + phase, measured->width, measured->height };
-                    const Point origin{ content.x - measured->x, content.y - measured->y };
+                    const SIMDVectorSingle contentStart = VectorAdd(VectorSet(32.0f, 24.0f, 0.0f, 0.0f), VectorReplicate(phase));
+                    const Rect content{ VectorGetX(contentStart), VectorGetY(contentStart), measured->width, measured->height };
+                    const SIMDVectorSingle originValue = VectorSubtract(contentStart, VectorSet(measured->x, measured->y, 0.0f, 0.0f));
+                    const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
+                    const SIMDVectorSingle contentLimit = VectorAdd(VectorAdd(contentStart, VectorSet(content.width, content.height, 0.0f, 0.0f)), VectorReplicate(0.0001f));
                     for(const PlacedGlyph& glyph : layout->glyphs()){
-                        const auto preset = glyph.face->rasterBounds(glyph.glyphId, static_cast<u32>(Ceil(size * Max(scale.x, scale.y))));
+                        const auto preset = glyph.face->rasterBounds(glyph.glyphId, presetSize);
                         ASSERT_TRUE(preset);
                         if(preset->width == 0.0f || preset->height == 0.0f)
                             continue;
                         const auto raster = rasterRectangle(glyph, size, display, origin);
                         ASSERT_TRUE(raster);
-                        EXPECT_GE(raster->x + 0.0001f, content.x);
-                        EXPECT_GE(raster->y + 0.0001f, content.y);
-                        EXPECT_LE(raster->x + raster->width, content.x + content.width + 0.0001f);
-                        EXPECT_LE(raster->y + raster->height, content.y + content.height + 0.0001f);
+                        const SIMDVectorSingle rasterStart = VectorSet(raster->x, raster->y, 0.0f, 0.0f);
+                        const SIMDVectorSingle rasterTest = VectorAdd(rasterStart, VectorReplicate(0.0001f));
+                        const SIMDVectorSingle rasterEnd = VectorAdd(rasterStart, VectorSet(raster->width, raster->height, 0.0f, 0.0f));
+                        EXPECT_GE(VectorGetX(rasterTest), content.x);
+                        EXPECT_GE(VectorGetY(rasterTest), content.y);
+                        EXPECT_LE(VectorGetX(rasterEnd), VectorGetX(contentLimit));
+                        EXPECT_LE(VectorGetY(rasterEnd), VectorGetY(contentLimit));
                     }
                 }
             }
@@ -410,24 +428,27 @@ TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAn
 }
 
 
-[[nodiscard]] static f32 SampleSdfDistance(const SdfAtlasPage& page, const u32 channel, const f32 texelX, const f32 texelY)noexcept{
+// Texel lanes are x and y. Every lane of the result holds the distance.
+[[nodiscard]] static SIMDVectorSingle SampleSdfDistance(const SdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
     const SdfAtlasPageBinding& binding = page.binding();
     const auto& pixels = page.pixels();
-    const f32 x = texelX - 0.5f;
-    const f32 y = texelY - 0.5f;
-    const i32 firstX = static_cast<i32>(Floor(x));
-    const i32 firstY = static_cast<i32>(Floor(y));
-    const f32 fractionX = x - static_cast<f32>(firstX);
-    const f32 fractionY = y - static_cast<f32>(firstY);
+    const SIMDVectorSingle position = VectorSubtract(texel, VectorReplicate(0.5f));
+    const SIMDVectorSingle firstTexel = VectorFloor(position);
+    const i32 firstX = static_cast<i32>(VectorGetX(firstTexel));
+    const i32 firstY = static_cast<i32>(VectorGetY(firstTexel));
+    const SIMDVectorSingle fraction = VectorSubtract(position, VectorSet(static_cast<f32>(firstX), static_cast<f32>(firstY), 0.0f, 0.0f));
+    const SIMDVectorSingle remainder = VectorSubtract(VectorSplatOne(), fraction);
     const auto sample = [&](const i32 column, const i32 row)noexcept -> f32{
         const u32 clampedX = static_cast<u32>(Clamp(column, 0, static_cast<i32>(binding.width) - 1));
         const u32 clampedY = static_cast<u32>(Clamp(row, 0, static_cast<i32>(binding.height) - 1));
-        return static_cast<f32>(pixels[(static_cast<usize>(clampedY) * binding.width + clampedX) * binding.channelCount + channel]) / 255.0f;
+        return static_cast<f32>(pixels[(static_cast<usize>(clampedY) * binding.width + clampedX) * binding.channelCount + channel]);
     };
-    const f32 top = sample(firstX, firstY) * (1.0f - fractionX) + sample(firstX + 1, firstY) * fractionX;
-    const f32 bottom = sample(firstX, firstY + 1) * (1.0f - fractionX) + sample(firstX + 1, firstY + 1) * fractionX;
-    const f32 encoded = top * (1.0f - fractionY) + bottom * fractionY;
-    return (encoded * 255.0f - 128.0f) * static_cast<f32>(binding.spreadPixels) / 128.0f;
+    // Lanes are top left, bottom left, top right, bottom right.
+    const SIMDVectorSingle samples = VectorDivide(VectorSet(sample(firstX, firstY), sample(firstX, firstY + 1), sample(firstX + 1, firstY), sample(firstX + 1, firstY + 1)), VectorReplicate(255.0f));
+    // Lanes are the top and bottom rows.
+    const SIMDVectorSingle rows = VectorMultiplyAddExpression(samples, VectorSplatX(remainder), VectorMultiply(VectorSwizzle<2, 3, 2, 3>(samples), VectorSplatX(fraction)));
+    const SIMDVectorSingle encoded = VectorMultiplyAddExpression(VectorSplatX(rows), VectorSplatY(remainder), VectorMultiply(VectorSplatY(rows), VectorSplatY(fraction)));
+    return VectorDivide(VectorMultiply(VectorMultiplyAddExpression(encoded, VectorReplicate(255.0f), VectorNegate(VectorReplicate(128.0f))), VectorReplicate(static_cast<f32>(binding.spreadPixels))), VectorReplicate(128.0f));
 }
 
 TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage){
@@ -455,8 +476,10 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
     glyph.height = 48u;
     glyph.planeLeft = -1000.0f;
     glyph.planeTop = -2000.0f;
-    glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width * payload.unitsPerEm) / payload.bakePpem;
-    glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height * payload.unitsPerEm) / payload.bakePpem;
+    const SIMDVectorSingle planeExtent = VectorDivide(VectorSet(static_cast<f32>(glyph.width * payload.unitsPerEm), static_cast<f32>(glyph.height * payload.unitsPerEm), 0.0f, 0.0f), VectorReplicate(static_cast<f32>(payload.bakePpem)));
+    const SIMDVectorSingle planeEnd = VectorAdd(VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f), planeExtent);
+    glyph.planeRight = VectorGetX(planeEnd);
+    glyph.planeBottom = VectorGetY(planeEnd);
     payload.groups.emplace_back(m_arena);
     FontAtlasGroup& group = payload.groups.back();
     group.width = 64u;
@@ -487,7 +510,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
         const FontAtlasGlyph& record = *atlas.glyph(placed.glyphId);
         const SdfAtlasPage& page = *atlas.page(record.group);
         for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 2.0f }, Point{ 2.0f, 0.75f } }){
-            const f32 physicalSize = fontSize * Max(scale.x, scale.y);
+            const f32 physicalSize = VectorGetX(VectorMultiply(VectorReplicate(fontSize), VectorMax(VectorReplicate(scale.x), VectorReplicate(scale.y))));
             if(physicalSize < 24.0f || physicalSize > 48.0f)
                 continue;
             const DisplayMetrics display{ 800.0f, 600.0f, scale.x, scale.y };
@@ -498,35 +521,50 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
             EXPECT_GT(measured->x, relativePlane->x);
             EXPECT_GT(measured->y, relativePlane->y);
             for(const f32 phase : { 0.0f, 0.25f, 0.53125f, 0.9375f }){
-                const Rect content{ 100.0f + phase, 100.0f + phase * 0.5f, measured->width, measured->height };
-                const Point origin{ content.x - measured->x, content.y - measured->y };
+                // Lanes are x and y. X moves by the full phase and y by half of it.
+                const SIMDVectorSingle contentStart = VectorMultiplyAddExpression(VectorReplicate(phase), VectorSet(1.0f, 0.5f, 0.0f, 0.0f), VectorReplicate(100.0f));
+                const Rect content{ VectorGetX(contentStart), VectorGetY(contentStart), measured->width, measured->height };
+                const SIMDVectorSingle originValue = VectorSubtract(contentStart, VectorSet(measured->x, measured->y, 0.0f, 0.0f));
+                const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
+                const SIMDVectorSingle contentLimit = VectorAdd(VectorAdd(contentStart, VectorSet(content.width, content.height, 0.0f, 0.0f)), VectorReplicate(0.0001f));
                 const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, origin);
                 ASSERT_TRUE(plane);
-                const i32 firstX = static_cast<i32>(Floor(plane->x * scale.x));
-                const i32 firstY = static_cast<i32>(Floor(plane->y * scale.y));
-                const i32 lastX = static_cast<i32>(Ceil((plane->x + plane->width) * scale.x));
-                const i32 lastY = static_cast<i32>(Ceil((plane->y + plane->height) * scale.y));
-                const auto distance = [&](const i32 x, const i32 y)noexcept -> f32{
-                    const f32 localX = (static_cast<f32>(x) + 0.5f) / scale.x - plane->x;
-                    const f32 localY = (static_cast<f32>(y) + 0.5f) / scale.y - plane->y;
-                    return SampleSdfDistance(page, record.channel, static_cast<f32>(record.x) + localX * record.width / plane->width, static_cast<f32>(record.y) + localY * record.height / plane->height);
+                const SIMDVectorSingle pixelScale = VectorSet(scale.x, scale.y, 1.0f, 1.0f);
+                const SIMDVectorSingle planeStart = VectorSet(plane->x, plane->y, 0.0f, 0.0f);
+                const SIMDVectorSingle planeEnd = VectorAdd(planeStart, VectorSet(plane->width, plane->height, 0.0f, 0.0f));
+                const SIMDVectorSingle firstPixel = VectorFloor(VectorMultiply(planeStart, pixelScale));
+                const SIMDVectorSingle lastPixel = VectorCeiling(VectorMultiply(planeEnd, pixelScale));
+                const i32 firstX = static_cast<i32>(VectorGetX(firstPixel));
+                const i32 firstY = static_cast<i32>(VectorGetY(firstPixel));
+                const i32 lastX = static_cast<i32>(VectorGetX(lastPixel));
+                const i32 lastY = static_cast<i32>(VectorGetY(lastPixel));
+                const SIMDVectorSingle recordStart = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y), 0.0f, 0.0f);
+                const SIMDVectorSingle recordSize = VectorSet(static_cast<f32>(record.width), static_cast<f32>(record.height), 0.0f, 0.0f);
+                const SIMDVectorSingle planeSize = VectorSet(plane->width, plane->height, 1.0f, 1.0f);
+                // Pixel centers are in logical units. Lanes are x and y.
+                const auto pixelCenter = [&](const i32 x, const i32 y)noexcept -> SIMDVectorSingle{ return VectorDivide(VectorAdd(VectorSet(static_cast<f32>(x), static_cast<f32>(y), 0.0f, 0.0f), VectorReplicate(0.5f)), pixelScale); };
+                const auto distance = [&](const i32 x, const i32 y)noexcept -> SIMDVectorSingle{
+                    const SIMDVectorSingle local = VectorSubtract(pixelCenter(x, y), planeStart);
+                    return SampleSdfDistance(page, record.channel, VectorAdd(recordStart, VectorDivide(VectorMultiply(local, recordSize), planeSize)));
                 };
                 for(i32 y = firstY; y < lastY; ++y){
                     for(i32 x = firstX; x < lastX; ++x){
-                        const f32 pointX = (static_cast<f32>(x) + 0.5f) / scale.x;
-                        const f32 pointY = (static_cast<f32>(y) + 0.5f) / scale.y;
-                        if(pointX < plane->x || pointY < plane->y || pointX >= plane->x + plane->width || pointY >= plane->y + plane->height)
+                        const SIMDVectorSingle point = pixelCenter(x, y);
+                        const f32 pointX = VectorGetX(point);
+                        const f32 pointY = VectorGetY(point);
+                        if(pointX < plane->x || pointY < plane->y || pointX >= VectorGetX(planeEnd) || pointY >= VectorGetY(planeEnd))
                             continue;
-                        const f32 current = distance(x, y);
+                        const SIMDVectorSingle current = distance(x, y);
                         // Quad lanes share a finite difference with their horizontal and vertical partners, including helpers outside the plane.
-                        const f32 derivative = Abs(distance(x ^ 1, y) - current) + Abs(distance(x, y ^ 1) - current);
-                        if(0.5f + current / Max(derivative, 0.001f) <= 0.0f)
+                        const SIMDVectorSingle derivative = VectorAdd(VectorAbs(VectorSubtract(distance(x ^ 1, y), current)), VectorAbs(VectorSubtract(distance(x, y ^ 1), current)));
+                        if(VectorGetX(VectorAdd(VectorReplicate(0.5f), VectorDivide(current, VectorMax(derivative, VectorReplicate(0.001f))))) <= 0.0f)
                             continue;
                         ++visibleSamples;
-                        EXPECT_GE(pointX + 0.0001f, content.x);
-                        EXPECT_GE(pointY + 0.0001f, content.y);
-                        EXPECT_LE(pointX, content.x + content.width + 0.0001f);
-                        EXPECT_LE(pointY, content.y + content.height + 0.0001f);
+                        const SIMDVectorSingle pointTest = VectorAdd(point, VectorReplicate(0.0001f));
+                        EXPECT_GE(VectorGetX(pointTest), content.x);
+                        EXPECT_GE(VectorGetY(pointTest), content.y);
+                        EXPECT_LE(pointX, VectorGetX(contentLimit));
+                        EXPECT_LE(pointY, VectorGetY(contentLimit));
                     }
                 }
             }

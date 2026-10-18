@@ -9,6 +9,8 @@
 
 #include <impl/ecs_ui/toolkit/edit/vertical_navigation.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,7 +70,7 @@ public:
                     target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == Ui::EditNavigationDirection::Down, preferredX);
                 else{
                     const f32 distance = direction == Ui::EditNavigationDirection::PageDown ? viewportHeight : -viewportHeight;
-                    target = view.caretGeometry().hitTest({ preferredX, caret->y + caret->height * 0.5f + distance });
+                    target = view.caretGeometry().hitTest({ preferredX, VectorGetX(VectorAdd(VectorMultiplyAddExpression(VectorReplicate(caret->height), VectorReplicate(0.5f), VectorReplicate(caret->y)), VectorReplicate(distance))) });
                 }
                 if(target)
                     result = Ui::EditNavigationResult{ *target, preferredX };

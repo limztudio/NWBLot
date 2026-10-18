@@ -112,7 +112,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scra
         }
         pixelBytes += byteCount;
     }
-    const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
+    const SIMDVectorSingle unitsPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(static_cast<f32>(payload.bakePpem)));
     for(usize index = 0u; index < payload.glyphs.size(); ++index){
         const FontAtlasGlyph& glyph = payload.glyphs[index];
         if(glyph.glyphId != index || glyph.drawable > 1u || !IsFinite(glyph.advanceUnits) || !IsFinite(glyph.planeLeft) || !IsFinite(glyph.planeTop) || !IsFinite(glyph.planeRight) || !IsFinite(glyph.planeBottom)){
@@ -130,7 +130,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scra
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
             return false;
         }
-        const SIMDVectorSingle expectedSize = VectorScale(VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), 0.0f, 0.0f), unitsPerPixel);
+        const SIMDVectorSingle expectedSize = VectorMultiply(VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), 0.0f, 0.0f), unitsPerPixel);
         const SIMDVectorSingle planeSize = VectorSubtract(VectorSet(glyph.planeRight, glyph.planeBottom, 0.0f, 0.0f), VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f));
         const SIMDVectorSingle difference = VectorSubtract(planeSize, expectedSize);
         const SIMDVectorSingle magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));

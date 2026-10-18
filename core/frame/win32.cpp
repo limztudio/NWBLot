@@ -25,6 +25,7 @@
 
 #include <global/compile.h>
 #include <global/diagnostics.h>
+#include <global/simd/vector.h>
 #include <global/timer.h>
 
 
@@ -570,13 +571,13 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_MOUSEWHEEL: {
             DispatchScreenMousePosition(hwnd, *frame, lParam);
-            frame->input().mouseScrollUpdate(0.0, static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA));
+            frame->input().mouseScrollUpdate(0.0, VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam))), VectorDoubleReplicate(static_cast<f64>(WHEEL_DELTA)))));
         }
         return 0;
 
         case WM_MOUSEHWHEEL: {
             DispatchScreenMousePosition(hwnd, *frame, lParam);
-            frame->input().mouseScrollUpdate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA), 0.0);
+            frame->input().mouseScrollUpdate(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam))), VectorDoubleReplicate(static_cast<f64>(WHEEL_DELTA)))), 0.0);
         }
         return 0;
         }

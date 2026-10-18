@@ -6,6 +6,8 @@
 
 #include <impl/ecs_ui/toolkit/widgets/progress.h>
 
+#include <global/simdmath.h>
+
 #include <gtest/gtest.h>
 
 
@@ -92,7 +94,9 @@ TEST(UiProgressLayoutTests, ZeroSkipsFillAndFullCopiesTheExactContentEndpoints){
     UiWidgetTests::ExpectRectExact(zero->fillCanvas, zero->fillReveal);
     UiWidgetTests::ExpectRectExact(full->fillReveal, full->content);
     UiWidgetTests::ExpectRectExact(full->fillCanvas, full->content);
-    EXPECT_EQ(BitCast<u32>(full->fillReveal.x + full->fillReveal.width), BitCast<u32>(full->content.x + full->content.width));
+    // Lanes are the fill end and the content end.
+    const SIMDVectorSingle ends = VectorAdd(VectorSet(full->fillReveal.x, full->content.x, 0.0f, 0.0f), VectorSet(full->fillReveal.width, full->content.width, 0.0f, 0.0f));
+    EXPECT_EQ(BitCast<u32>(VectorGetX(ends)), BitCast<u32>(VectorGetY(ends)));
 }
 
 TEST(UiProgressLayoutTests, FiniteFractionsOutsideTheUnitIntervalClampVisually){
@@ -177,8 +181,9 @@ TEST(UiProgressLayoutTests, TinyAndEmptyAreasBoundPaddingWithoutNegativeContent)
         EXPECT_FLOAT_EQ(placement->content.height, 0.0f);
         EXPECT_FLOAT_EQ(placement->fillReveal.width, 0.0f);
         EXPECT_FLOAT_EQ(placement->fillCanvas.width, 0.0f);
-        EXPECT_LE(placement->content.x, bounds.x + bounds.width);
-        EXPECT_LE(placement->content.y, bounds.y + bounds.height);
+        const SIMDVectorSingle boundsEnd = VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(bounds.width, bounds.height, 0.0f, 0.0f));
+        EXPECT_LE(placement->content.x, VectorGetX(boundsEnd));
+        EXPECT_LE(placement->content.y, VectorGetY(boundsEnd));
     }
 }
 

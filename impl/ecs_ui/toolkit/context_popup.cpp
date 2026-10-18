@@ -4,6 +4,7 @@
 
 #include "context.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -23,15 +24,19 @@ namespace __hidden_ui_context_popup{
 
 
 [[nodiscard]] static bool Geometry(const PopupScope& scope)noexcept{
+    if(
+        !IsFinite(scope.bounds.x) || !IsFinite(scope.bounds.y) || !IsFinite(scope.bounds.width) || !IsFinite(scope.bounds.height)
+        || !IsFinite(scope.viewport.x) || !IsFinite(scope.viewport.y) || !IsFinite(scope.viewport.width) || !IsFinite(scope.viewport.height)
+        || scope.bounds.width <= 0.0f || scope.bounds.height <= 0.0f || scope.viewport.width <= 0.0f || scope.viewport.height <= 0.0f
+    )
+        return false;
+    // Lanes are bounds right, bounds bottom, viewport right, viewport bottom. All inputs are finite here.
+    const SIMDVectorSingle end = VectorAdd(VectorSet(scope.bounds.x, scope.bounds.y, scope.viewport.x, scope.viewport.y), VectorSet(scope.bounds.width, scope.bounds.height, scope.viewport.width, scope.viewport.height));
     return
-        IsFinite(scope.bounds.x) && IsFinite(scope.bounds.y) && IsFinite(scope.bounds.width) && IsFinite(scope.bounds.height)
-        && IsFinite(scope.viewport.x) && IsFinite(scope.viewport.y) && IsFinite(scope.viewport.width) && IsFinite(scope.viewport.height)
-        && scope.bounds.width > 0.0f && scope.bounds.height > 0.0f && scope.viewport.width > 0.0f && scope.viewport.height > 0.0f
-        && IsFinite((scope.bounds.x + scope.bounds.width)) && IsFinite((scope.bounds.y + scope.bounds.height))
-        && IsFinite((scope.viewport.x + scope.viewport.width)) && IsFinite((scope.viewport.y + scope.viewport.height))
+        VectorIsFinite(end, VectorComponentMask::s_XYZW)
         && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y
-        && (scope.bounds.x + scope.bounds.width) <= (scope.viewport.x + scope.viewport.width)
-        && (scope.bounds.y + scope.bounds.height) <= (scope.viewport.y + scope.viewport.height)
+        && VectorGetX(end) <= VectorGetZ(end)
+        && VectorGetY(end) <= VectorGetW(end)
     ;
 }
 

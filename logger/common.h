@@ -8,6 +8,7 @@
 #include "global.h"
 
 #include <global/binary.h>
+#include <global/simd/vector.h>
 #include <global/thread.h>
 
 #include <fstream>
@@ -372,10 +373,10 @@ private:
             const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self->m_lastUpdateTime);
             if(elapsedSeconds < updateIntervalSeconds){
                 // Sleep until the next update deadline; the cadence bounds message and shutdown latency.
-                const f32 remainingSeconds = updateIntervalSeconds - elapsedSeconds;
+                const SIMDVectorSingle remainingSeconds = VectorSubtract(VectorReplicate(updateIntervalSeconds), VectorReplicate(elapsedSeconds));
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;
-                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(Ceil(remainingSeconds * s_MillisecondsPerSecondF)));
+                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(VectorGetX(VectorCeiling(VectorScale(remainingSeconds, s_MillisecondsPerSecondF)))));
                 SleepMS(sleepMilliseconds);
                 continue;
             }

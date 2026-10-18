@@ -10,7 +10,7 @@
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
-#include <global/simplemath.h>
+#include <global/simdmath.h>
 
 #include <gtest/gtest.h>
 
@@ -333,8 +333,9 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
         ASSERT_EQ(atlas.pageCount(), index + 1u);
         const AtlasGlyph* record = atlas.find(glyph.face, glyph.glyphId, 460u + index);
         ASSERT_NE(record, nullptr);
-        EXPECT_LT(record->pixels.x + record->pixels.width, static_cast<f32>(s_GlyphAtlasPageExtent));
-        EXPECT_LT(record->pixels.y + record->pixels.height, static_cast<f32>(s_GlyphAtlasPageExtent));
+        const SIMDVectorSingle pixelEnd = VectorAdd(VectorSet(record->pixels.x, record->pixels.y, 0.0f, 0.0f), VectorSet(record->pixels.width, record->pixels.height, 0.0f, 0.0f));
+        EXPECT_LT(VectorGetX(pixelEnd), static_cast<f32>(s_GlyphAtlasPageExtent));
+        EXPECT_LT(VectorGetY(pixelEnd), static_cast<f32>(s_GlyphAtlasPageExtent));
         auto pageResult = atlas.page(index);
         ASSERT_TRUE(pageResult);
         const SharedGlyphPage page = Move(*pageResult);
@@ -387,16 +388,22 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
         ASSERT_EQ(m_layout.glyphs().size(), 1u);
         const PlacedGlyph& glyph = m_layout.glyphs()[0];
         ASSERT_TRUE(glyph.coverage.known);
-        const u32 pixelSize = static_cast<u32>(Ceil(fontSize * 1.375f));
+        const u32 pixelSize = static_cast<u32>(VectorGetX(VectorCeiling(VectorMultiply(VectorReplicate(fontSize), VectorReplicate(1.375f)))));
         GlyphBitmap bitmap(m_arena);
         ASSERT_TRUE(glyph.face->rasterize(glyph.glyphId, pixelSize, bitmap));
-        const f32 scale = static_cast<f32>(pixelSize) / fontSize;
-        const f32 fringe = 2.0f / scale;
+        const SIMDVectorSingle scale = VectorDivide(VectorReplicate(static_cast<f32>(pixelSize)), VectorReplicate(fontSize));
+        const SIMDVectorSingle fringe = VectorDivide(VectorReplicate(2.0f), scale);
         const Rect& bounds = glyph.coverage.ink;
-        EXPECT_GE(static_cast<f32>(bitmap.bearingX) / scale, bounds.x - fringe);
-        EXPECT_GE(-static_cast<f32>(bitmap.bearingY) / scale, bounds.y - fringe);
-        EXPECT_LE((static_cast<f32>(bitmap.bearingX) + bitmap.width) / scale, bounds.x + bounds.width + fringe);
-        EXPECT_LE((-static_cast<f32>(bitmap.bearingY) + bitmap.height) / scale, bounds.y + bounds.height + fringe);
+        const SIMDVectorSingle boundsStart = VectorSet(bounds.x, bounds.y, 0.0f, 0.0f);
+        const SIMDVectorSingle bearing = VectorSet(static_cast<f32>(bitmap.bearingX), -static_cast<f32>(bitmap.bearingY), 0.0f, 0.0f);
+        const SIMDVectorSingle rasterStart = VectorDivide(bearing, scale);
+        const SIMDVectorSingle rasterEnd = VectorDivide(VectorAdd(bearing, VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.height), 0.0f, 0.0f)), scale);
+        const SIMDVectorSingle limitStart = VectorSubtract(boundsStart, fringe);
+        const SIMDVectorSingle limitEnd = VectorAdd(VectorAdd(boundsStart, VectorSet(bounds.width, bounds.height, 0.0f, 0.0f)), fringe);
+        EXPECT_GE(VectorGetX(rasterStart), VectorGetX(limitStart));
+        EXPECT_GE(VectorGetY(rasterStart), VectorGetY(limitStart));
+        EXPECT_LE(VectorGetX(rasterEnd), VectorGetX(limitEnd));
+        EXPECT_LE(VectorGetY(rasterEnd), VectorGetY(limitEnd));
     }
 }
 

@@ -264,7 +264,8 @@ private:
         }
         const u64 relativeFrame = frame - m_transitionFirstFrame;
         const u32 phase = static_cast<u32>(Min(relativeFrame / s_TransitionPhaseFrames, static_cast<u64>(s_TransitionPhaseCount - 1u)));
-        m_animationTime = static_cast<f64>(relativeFrame % s_TransitionPhaseFrames) * static_cast<f64>(s_PI * 2.0f) / (static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed);
+        const SIMDVectorDouble phaseAngle = VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(relativeFrame % s_TransitionPhaseFrames)), static_cast<f64>(s_PI * 2.0f));
+        m_animationTime = VectorDoubleGetX(VectorDoubleDivide(phaseAngle, VectorDoubleReplicate(static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed)));
         if(phase != m_transitionPhase){
             auto* cutter = m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_cutterEntity);
             NWB_ASSERT(cutter);
@@ -454,14 +455,16 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         if(m_transitionEnabled){
-            m_animationTime = static_cast<f64>(m_context.graphics.getFrameIndex() % s_TransitionPhaseFrames) * static_cast<f64>(s_PI * 2.0f) / (static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed);
+            const SIMDVectorDouble phaseAngle = VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(m_context.graphics.getFrameIndex() % s_TransitionPhaseFrames)), static_cast<f64>(s_PI * 2.0f));
+            m_animationTime = VectorDoubleGetX(VectorDoubleDivide(phaseAngle, VectorDoubleReplicate(static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed)));
             updateTransitionState();
         }else{
-            m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_PoseAnimationSpeed;
+            const f32 animationStep = VectorGetX(VectorScale(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), s_PoseAnimationSpeed));
+            m_animationTime = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_animationTime), VectorDoubleReplicate(static_cast<f64>(animationStep))));
         }
         animatePoses();
         const auto updated = m_world->tick(m_transitionEnabled ? 1.0f / 60.0f : safeDelta);

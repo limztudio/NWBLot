@@ -65,7 +65,7 @@ bool UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     ui.listStyle().padding = { 8.0f, 8.0f, 8.0f, 8.0f };
     Rect panel = __hidden_ui_combo_smoke::s_Panel;
     if(m_bottom)
-        panel.y = context.display.logicalHeight - 192.0f;
+        panel.y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(192.0f)));
     if(!ui.beginPanel("combo_fixture", panel))
         return false;
     const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };

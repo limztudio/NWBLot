@@ -8,6 +8,7 @@
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
+#include <global/simdmath.h>
 
 #include "baked_font_fixture.h"
 
@@ -80,8 +81,10 @@ protected:
             glyph.height = 2u;
             glyph.planeLeft = -125.f;
             glyph.planeTop = -875.f;
-            glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width * payload.unitsPerEm) / payload.bakePpem;
-            glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height * payload.unitsPerEm) / payload.bakePpem;
+            const SIMDVectorSingle planeExtent = VectorDivide(VectorSet(static_cast<f32>(glyph.width * payload.unitsPerEm), static_cast<f32>(glyph.height * payload.unitsPerEm), 0.0f, 0.0f), VectorReplicate(static_cast<f32>(payload.bakePpem)));
+            const SIMDVectorSingle planeEnd = VectorAdd(VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f), planeExtent);
+            glyph.planeRight = VectorGetX(planeEnd);
+            glyph.planeBottom = VectorGetY(planeEnd);
         }
         m_atlas.setPayload(Move(payload));
         ASSERT_TRUE(m_atlas.validatePayload(m_scratchArena));

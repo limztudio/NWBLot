@@ -25,7 +25,10 @@ namespace __hidden_ui_edit_box_layout{
 
 
 [[nodiscard]] static bool ValidRect(const Rect& rectangle)noexcept{
-    return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
+    return
+        IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f
+        && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
+    ;
 }
 
 
@@ -65,7 +68,12 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(viewport)
         || !__hidden_ui_edit_box_layout::ValidRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y
-        || viewport.x + viewport.width > bounds.x + bounds.width || viewport.y + viewport.height > bounds.y + bounds.height
+    )
+        return MakeUnexpected(Failure{});
+    // Lanes are viewport right, viewport bottom, bounds right, bounds bottom. ValidRect already proved these sums finite.
+    const SIMDVectorSingle end = VectorAdd(VectorSet(viewport.x, viewport.y, bounds.x, bounds.y), VectorSet(viewport.width, viewport.height, bounds.width, bounds.height));
+    if(
+        VectorGetX(end) > VectorGetZ(end) || VectorGetY(end) > VectorGetW(end)
         || !IsFinite(previousScroll.x) || previousScroll.x < 0.0f || !IsFinite(previousScroll.y) || previousScroll.y < 0.0f
         || !IsFinite(caretWidth) || caretWidth <= 0.0f
     )
@@ -99,8 +107,8 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
     placement.scroll = VectorGetX(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f)), VectorGreater(VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f), VectorZero())));
     if(revealCaret && caret->x < placement.scroll)
         placement.scroll = caret->x;
-    if(revealCaret && caretEndX > placement.scroll + placement.content.width)
-        placement.scroll = caretEndX - placement.content.width;
+    if(revealCaret && caretEndX > VectorGetX(VectorAdd(VectorReplicate(placement.scroll), VectorReplicate(placement.content.width))))
+        placement.scroll = VectorGetX(VectorSubtract(VectorReplicate(caretEndX), VectorReplicate(placement.content.width)));
     placement.scroll = VectorGetX(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorReplicate(placement.scroll)), VectorGreater(VectorReplicate(placement.scroll), VectorZero())));
     if(m_textMode == EditTextMode::Multiline){
         const f32 maximumScrollY = VectorGetY(maximumScrolls);
@@ -110,8 +118,8 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
         placement.scrollY = VectorGetY(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f)), VectorGreater(VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f), VectorZero())));
         if(revealCaret && caret->y < placement.scrollY)
             placement.scrollY = caret->y;
-        if(revealCaret && caretEndY > placement.scrollY + placement.content.height)
-            placement.scrollY = caretEndY - placement.content.height;
+        if(revealCaret && caretEndY > VectorGetX(VectorAdd(VectorReplicate(placement.scrollY), VectorReplicate(placement.content.height))))
+            placement.scrollY = VectorGetX(VectorSubtract(VectorReplicate(caretEndY), VectorReplicate(placement.content.height)));
         placement.scrollY = VectorGetY(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorReplicate(placement.scrollY)), VectorGreater(VectorReplicate(placement.scrollY), VectorZero())));
         const SIMDVectorSingle visualOrigin = VectorSubtract(VectorSet(left, top, left, top), VectorSet(m_visualBounds.x, m_visualBounds.y, m_visualBounds.x, m_visualBounds.y));
         const SIMDVectorSingle origin = VectorSubtract(visualOrigin, VectorSet(placement.scroll, placement.scrollY, placement.scroll, placement.scrollY));

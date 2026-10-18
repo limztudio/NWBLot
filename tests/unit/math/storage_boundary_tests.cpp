@@ -144,7 +144,10 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     NWB_MEMSET(unaligned, 0x5a, sizeof(unaligned));
     const u64 poison = 0x7ff8000000001234u;
     for(usize index = 0u; index < LengthOf(aligned); ++index){
-        StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25 + 0.25 * static_cast<f64>(index), (static_cast<f64>(index) - 1.0) * 0x1p-40, 1.0 + 0x1p-52, Limit<f64>::s_Infinity }, aligned[index].value);
+        const SIMDVectorDouble position = VectorDoubleReplicate(static_cast<f64>(index));
+        const SIMDVectorDouble x = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), position, VectorDoubleReplicate(0x1p+40 + 0.25));
+        const SIMDVectorDouble y = VectorDoubleMultiply(VectorDoubleSubtract(position, VectorDoubleSplatOne()), VectorDoubleReplicate(0x1p-40));
+        StoreDouble(VectorDoubleMergeX(x, y, VectorDoubleReplicate(1.0 + 0x1p-52), VectorDoubleReplicate(Limit<f64>::s_Infinity)), aligned[index].value);
         NWB_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
     }
     Array<u8, sizeof(aligned)> alignedOriginal{};

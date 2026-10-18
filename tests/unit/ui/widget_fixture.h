@@ -13,6 +13,7 @@
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
+#include <global/simdmath.h>
 
 #include <gtest/gtest.h>
 
@@ -36,7 +37,8 @@ using namespace Impl;
 using namespace Impl::Ui;
 
 [[nodiscard]] inline Point Center(const Rect& bounds)noexcept{
-    return { bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f };
+    const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(bounds.width, bounds.height, 0.0f, 0.0f), VectorReplicate(0.5f), VectorSet(bounds.x, bounds.y, 0.0f, 0.0f));
+    return { VectorGetX(center), VectorGetY(center) };
 }
 
 inline void ExpectRect(const Rect& actual, const Rect& expected){
@@ -285,8 +287,9 @@ protected:
     [[nodiscard]] bool installKoreanFallback();
 
     [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
-        const f32 left = static_cast<f32>(slot) / 16.0f;
-        const f32 right = static_cast<f32>(slot + 1u) / 16.0f;
+        const SIMDVectorSingle edges = VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f));
+        const f32 left = VectorGetX(edges);
+        const f32 right = VectorGetY(edges);
         for(const DrawCommand& command : snapshot.commands()){
             if(command.material != PaintMaterial::Skin)
                 continue;
@@ -294,7 +297,8 @@ protected:
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
                 if(first.texCoord.x == left && opposite.texCoord.x == right){
-                    return Rect{ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y };
+                    const SIMDVectorSingle size = VectorSubtract(VectorSet(opposite.position.x, opposite.position.y, 0.0f, 0.0f), VectorSet(first.position.x, first.position.y, 0.0f, 0.0f));
+                    return Rect{ first.position.x, first.position.y, VectorGetX(size), VectorGetY(size) };
                 }
             }
         }

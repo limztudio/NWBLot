@@ -49,7 +49,9 @@ static constexpr f32 s_Gap = 4.0f;
 
 [[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics)noexcept{
     const Impl::Ui::Rect content = Impl::Ui::WindowLayout::Content(state, metrics);
-    return { content.x + metrics.contentPadding.left, content.y + metrics.contentPadding.top + s_LabelHeight + s_SeparatorHeight + 2.0f * s_Gap, s_ControlWidth, s_ControlHeight };
+    const SIMDVectorSingle origin = VectorAdd(VectorSet(content.x, content.y, 0.0f, 0.0f), VectorSet(metrics.contentPadding.left, metrics.contentPadding.top, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonY = VectorAdd(VectorAdd(VectorAdd(VectorSplatY(origin), VectorReplicate(s_LabelHeight)), VectorReplicate(s_SeparatorHeight)), VectorReplicate(2.0f * s_Gap));
+    return { VectorGetX(origin), VectorGetX(buttonY), s_ControlWidth, s_ControlHeight };
 }
 
 
@@ -144,7 +146,7 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
     );
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: controls sequence={} button={},{},{},{} lock={},{},{},{} content={},{},{},{} minimum={},{}")
         , m_sequence, button.x, button.y, button.width, button.height
-        , button.x + button.width + __hidden_ui_window_smoke::s_Gap, button.y, button.width, button.height
+        , VectorGetX(VectorAdd(VectorAdd(VectorReplicate(button.x), VectorReplicate(button.width)), VectorReplicate(__hidden_ui_window_smoke::s_Gap))), button.y, button.width, button.height
         , content.x, content.y, content.width, content.height, metrics.minimumSize.x, metrics.minimumSize.y
     );
 }
@@ -158,13 +160,15 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
     using namespace Impl::Ui;
     const Rect& bounds = m_window.bounds;
     const f32 values[]{ bounds.x, bounds.y, bounds.width, bounds.height, static_cast<f32>(m_count), static_cast<f32>(m_window.collapsed), static_cast<f32>(m_locked), static_cast<f32>(m_sequence) };
-    const f32 markerY = context.display.logicalHeight - 20.0f;
+    const f32 markerY = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
     for(usize index = 0u; index < LengthOf(values); ++index)
-        context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, markerY, 14.0f, 12.0f }, EncodeSmokeColor(values[index]));
+        context.paint.fillRect({ VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index)), VectorReplicate(20.0f), VectorReplicate(12.0f))), markerY, 14.0f, 12.0f }, EncodeSmokeColor(values[index]));
+    // Lanes are anchor x, title anchor y and content anchor y.
+    const SIMDVectorSingle anchors = VectorAdd(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.y, 0.0f), VectorSet(bounds.width, 4.0f, metrics.titleHeight, 0.0f)), VectorSet(-14.0f, 0.0f, 4.0f, 0.0f));
     context.paint.pushClip(WindowLayout::Visible(m_window, metrics));
-    context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + 4.0f, 10.0f, 10.0f }, __hidden_ui_window_smoke::s_TitleAnchor);
+    context.paint.fillRect({ VectorGetX(anchors), VectorGetY(anchors), 10.0f, 10.0f }, __hidden_ui_window_smoke::s_TitleAnchor);
     if(!m_window.collapsed)
-        context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + metrics.titleHeight + 4.0f, 10.0f, 10.0f }, __hidden_ui_window_smoke::s_ContentAnchor);
+        context.paint.fillRect({ VectorGetX(anchors), VectorGetZ(anchors), 10.0f, 10.0f }, __hidden_ui_window_smoke::s_ContentAnchor);
     const bool popped = context.paint.popClip();
     NWB_FATAL_ASSERT(popped);
 }

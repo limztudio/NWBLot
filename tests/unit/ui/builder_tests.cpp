@@ -11,6 +11,7 @@
 
 #include <global/filesystem.h>
 #include <global/sha256.h>
+#include <global/simdmath.h>
 
 #include <gtest/gtest.h>
 
@@ -92,16 +93,18 @@ protected:
     }
 
     [[nodiscard]] Expected<Rect> regionQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
-        const f32 left = static_cast<f32>(slot) / 16.0f;
-        const f32 right = static_cast<f32>(slot + 1u) / 16.0f;
+        // Lanes are first U, last U, first V, last V.
+        const SIMDVectorSingle expected = VectorSetW(VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f)), 0.5f);
         for(const DrawCommand& command : snapshot.commands()){
             if(command.material != PaintMaterial::Skin)
                 continue;
             for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-                if(Abs(first.texCoord.x - left) < 1e-6f && Abs(last.texCoord.x - right) < 1e-6f && Abs(first.texCoord.y) < 1e-6f && Abs(last.texCoord.y - 0.5f) < 1e-6f){
-                    return Rect{ first.position.x, first.position.y, last.position.x - first.position.x, last.position.y - first.position.y };
+                const SIMDVectorSingle error = VectorAbs(VectorSubtract(VectorSet(first.texCoord.x, last.texCoord.x, first.texCoord.y, last.texCoord.y), expected));
+                if(Vector4Less(error, VectorReplicate(1e-6f))){
+                    const SIMDVectorSingle size = VectorSubtract(VectorSet(last.position.x, last.position.y, 0.0f, 0.0f), VectorSet(first.position.x, first.position.y, 0.0f, 0.0f));
+                    return Rect{ first.position.x, first.position.y, VectorGetX(size), VectorGetY(size) };
                 }
             }
         }
@@ -167,7 +170,8 @@ TEST_F(UiBuilderTests, CheckboxTogglesOncePerAcceptedActionAcrossRepeatedBuilds)
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("enabled"));
     ASSERT_NE(control, nullptr);
-    const Point center{ control->rectangle.x + 4.0f, control->rectangle.y + 4.0f };
+    const SIMDVectorSingle centerValue = VectorAdd(VectorSet(control->rectangle.x, control->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    const Point center{ VectorGetX(centerValue), VectorGetY(centerValue) };
     click(center);
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     EXPECT_FALSE(m_context.input().process().pointerConsumed);
@@ -195,7 +199,8 @@ TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivat
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"));
     ASSERT_NE(control, nullptr);
-    const Point point{ control->rectangle.x + 4.0f, control->rectangle.y + 4.0f };
+    const SIMDVectorSingle pointValue = VectorAdd(VectorSet(control->rectangle.x, control->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
     click(point);
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     ASSERT_TRUE(begin(2u));
@@ -353,7 +358,7 @@ TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmiss
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
     const Rect rectangle = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"))->rectangle;
-    const Point point{ rectangle.x + rectangle.width * 0.5f, rectangle.y + rectangle.height * 0.5f };
+    const Point point = UiWidgetTests::Center(rectangle);
     u64 generation = 1u;
     for(const i32 key : { Core::Key::Unknown, Core::Key::Enter, Core::Key::Space }){
         if(!m_context.input().focus().valid()){

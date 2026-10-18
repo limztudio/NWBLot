@@ -4,6 +4,8 @@
 
 #include "multiline_view_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,8 +43,9 @@ TEST_F(UiTextAreaViewTests, SuppressedCaretRevealPreservesBothRequestedAxesAndHi
     EXPECT_FLOAT_EQ(m_placement.scrollY, 6.0f);
     EXPECT_FLOAT_EQ(m_placement.textOrigin.x, 5.0f);
     EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 14.0f);
-    EXPECT_GT(m_placement.caret.x, m_placement.clip.x + m_placement.clip.width);
-    EXPECT_GT(m_placement.caret.y, m_placement.clip.y + m_placement.clip.height);
+    const SIMDVectorSingle clipEnd = VectorAdd(VectorSet(m_placement.clip.x, m_placement.clip.y, 0.0f, 0.0f), VectorSet(m_placement.clip.width, m_placement.clip.height, 0.0f, 0.0f));
+    EXPECT_GT(m_placement.caret.x, VectorGetX(clipEnd));
+    EXPECT_GT(m_placement.caret.y, VectorGetY(clipEnd));
     Expected<usize> hit = MakeUnexpected(Failure{});
     hit = m_view.hitTest({ 15.0f, 20.0f }, m_placement);
     ASSERT_TRUE(hit);

@@ -54,7 +54,10 @@ namespace __hidden_ui_text_paint{
         return MakeUnexpected(Failure{});
     const f32 roundedWidth = RoundMeasuredBound(width, true);
     const f32 roundedHeight = RoundMeasuredBound(height, true);
-    if(!IsFinite(roundedWidth) || roundedWidth < 0.0f || !IsFinite(roundedHeight) || roundedHeight < 0.0f || !IsFinite(x + roundedWidth) || !IsFinite(y + roundedHeight))
+    if(
+        !IsFinite(roundedWidth) || roundedWidth < 0.0f || !IsFinite(roundedHeight) || roundedHeight < 0.0f
+        || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(x), VectorReplicate(roundedWidth)))) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(y), VectorReplicate(roundedHeight))))
+    )
         return MakeUnexpected(Failure{});
     return VectorDoubleSet(x, y, roundedWidth, roundedHeight);
 }

@@ -7,6 +7,8 @@
 
 #include "foundation.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -139,8 +141,8 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr f32 width()const noexcept{ return maxX - minX; }
-    [[nodiscard]] constexpr f32 height()const noexcept{ return maxY - minY; }
+    [[nodiscard]] f32 width()const noexcept{ return VectorGetX(VectorSubtract(VectorReplicate(maxX), VectorReplicate(minX))); }
+    [[nodiscard]] f32 height()const noexcept{ return VectorGetX(VectorSubtract(VectorReplicate(maxY), VectorReplicate(minY))); }
 };
 inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);

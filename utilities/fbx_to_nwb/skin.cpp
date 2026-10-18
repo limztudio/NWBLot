@@ -111,7 +111,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             return MakeUnexpected(Failure{});
         }
         const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
-        if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= s_InvertibleMatrixDeterminantEpsilon){
+        if(!FiniteUfbxMatrix(inverseBind) || VectorDoubleGetX(VectorDoubleAbs(VectorDoubleReplicate(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))))) <= s_InvertibleMatrixDeterminantEpsilon){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
             return MakeUnexpected(Failure{});
         }
@@ -173,7 +173,7 @@ Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const
         return MakeUnexpected(Failure{});
     }
 
-    f64 weightSum = 0.0;
+    SIMDVectorDouble weightSum = VectorDoubleZero();
     u32 writtenInfluenceCount = 0u;
     for(u32 weightOffset = 0u; weightOffset < skinVertex.num_weights; ++weightOffset){
         if(writtenInfluenceCount == static_cast<u32>(s_MeshSkinInfluenceCount))
@@ -194,16 +194,17 @@ Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const
 
         result.joints = VectorSetIntByIndex(result.joints, clusterJoints[weight.cluster_index], writtenInfluenceCount);
         result.weights = VectorSetByIndex(result.weights, static_cast<f32>(value), writtenInfluenceCount);
-        weightSum += value;
+        weightSum = VectorDoubleAdd(weightSum, VectorDoubleReplicate(value));
         ++writtenInfluenceCount;
     }
 
-    if(!IsFinite(weightSum) || weightSum <= 0.0){
+    const f64 weightSumValue = VectorDoubleGetX(weightSum);
+    if(!IsFinite(weightSumValue) || weightSumValue <= 0.0){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights"));
         return MakeUnexpected(Failure{});
     }
 
-    const SIMDVectorDouble inverseWeightSum = VectorDoubleDivide(VectorDoubleSplatOne(), VectorDoubleReplicate(weightSum));
+    const SIMDVectorDouble inverseWeightSum = VectorDoubleDivide(VectorDoubleSplatOne(), weightSum);
     const f32 normalization = static_cast<f32>(VectorDoubleGetX(inverseWeightSum));
     result.weights = VectorScale(result.weights, normalization);
 

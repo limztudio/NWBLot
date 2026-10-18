@@ -105,7 +105,7 @@ bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
     options.modal = m_modal;
     options.dismissOutside = !m_modal;
     if(m_edge)
-        options.anchor = { context.display.logicalWidth - 60.0f, context.display.logicalHeight - 48.0f, 48.0f, 24.0f };
+        options.anchor = StoreSmokeRect(VectorSubtract(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 48.0f, 24.0f), VectorSet(60.0f, 48.0f, 0.0f, 0.0f)));
     options.side = m_right ? PopupPlacementSide::Right : PopupPlacementSide::Below;
     m_popupFocused = false;
     if(m_visible && ui.beginPopup("popup", m_popup, options)){
@@ -139,12 +139,12 @@ bool UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
     Rect bounds = m_popup.placement().bounds;
     if(bounds.width <= 0.0f)
         bounds = { 200.0f, 104.0f, 220.0f, 236.0f };
-    if(!context.ui.beginPanel("later_root", { bounds.x - 8.0f, bounds.y - 8.0f, bounds.width + 16.0f, bounds.height + 16.0f }))
+    if(!context.ui.beginPanel("later_root", StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(-8.0f, -8.0f, 16.0f, 16.0f)))))
         return false;
     if(!context.ui.endPanel())
         return false;
     context.paint.fillRect(bounds, { 0.72f, 0.02f, 0.04f, 1.0f });
-    context.paint.fillRect({ context.display.logicalWidth - 40.0f, 24.0f, 16.0f, 16.0f }, { 0.12f, 0.52f, 0.86f, 1.0f });
+    context.paint.fillRect({ VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(40.0f))), 24.0f, 16.0f, 16.0f }, { 0.12f, 0.52f, 0.86f, 1.0f });
     return true;
 }
 
@@ -201,19 +201,21 @@ void UiPopupSmokeScene::observeState(){
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("modal"), __hidden_ui_popup_smoke::s_ModalTrigger);
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("outside"), m_outsideEdit.placement.bounds);
-    const Impl::Ui::Rect first{ placement.bounds.x + 8.0f, placement.bounds.y + 36.0f, placement.bounds.width - 16.0f, 32.0f };
+    const Impl::Ui::Rect first = StoreSmokeRect(VectorAdd(VectorSet(placement.bounds.x, placement.bounds.y, placement.bounds.width, 0.0f), VectorSet(8.0f, 36.0f, -16.0f, 32.0f)));
+    const SIMDVectorSingle laterRowsY = VectorAdd(VectorReplicate(first.y), VectorSet(40.0f, 80.0f, 0.0f, 0.0f));
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("first"), first);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("second"), { first.x, first.y + 40.0f, first.width, first.height });
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("check"), { first.x, first.y + 80.0f, first.width, first.height });
+    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("second"), { first.x, VectorGetX(laterRowsY), first.width, first.height });
+    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("check"), { first.x, VectorGetY(laterRowsY), first.width, first.height });
     LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("edit"), m_popupEdit.placement.bounds);
 }
 
 void UiPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const auto current = values();
-    const f32 y = context.display.logicalHeight - 20.0f;
+    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<decltype(current)> + 1u, 12u, 20u>();
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
     for(usize index = 0u; index <= current.size(); ++index){
         const u32 value = index == current.size() ? m_sequence : current[index];
-        context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, y, 14.0f, 12.0f }, EncodeSmokeColor(value));
+        context.paint.fillRect({ positions[index], y, 14.0f, 12.0f }, EncodeSmokeColor(value));
     }
 }
 

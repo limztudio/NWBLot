@@ -45,9 +45,9 @@ template<UiRectPrecision::Enum Precision>
     }
     Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
     if constexpr(Precision == UiRectPrecision::EmptyPaint){
-        if(candidate.width > 0.0f && (candidate.x + candidate.width) <= candidate.x)
+        if(candidate.width > 0.0f && VectorGetX(VectorAdd(VectorReplicate(candidate.x), VectorReplicate(candidate.width))) <= candidate.x)
             candidate.width = 0.0f;
-        if(candidate.height > 0.0f && (candidate.y + candidate.height) <= candidate.y)
+        if(candidate.height > 0.0f && VectorGetX(VectorAdd(VectorReplicate(candidate.y), VectorReplicate(candidate.height))) <= candidate.y)
             candidate.height = 0.0f;
         if(!IsBoundedUiRect(candidate))
             return MakeUnexpected(Failure{});
@@ -56,7 +56,7 @@ template<UiRectPrecision::Enum Precision>
         if(!IsValidUiRect(candidate))
             return MakeUnexpected(Failure{});
         if constexpr(Precision == UiRectPrecision::PreciseExtents){
-            if((width > 0.0 && (candidate.x + candidate.width) <= candidate.x) || (height > 0.0 && (candidate.y + candidate.height) <= candidate.y))
+            if((width > 0.0 && VectorGetX(VectorAdd(VectorReplicate(candidate.x), VectorReplicate(candidate.width))) <= candidate.x) || (height > 0.0 && VectorGetX(VectorAdd(VectorReplicate(candidate.y), VectorReplicate(candidate.height))) <= candidate.y))
                 return MakeUnexpected(Failure{});
         }
     }

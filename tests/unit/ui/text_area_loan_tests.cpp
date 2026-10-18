@@ -4,6 +4,8 @@
 
 #include "text_area_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -306,7 +308,8 @@ TEST_F(UiTextAreaLoanTests, LaterSiblingStateScrollABARetiresAnAlreadyPaintedEnd
         scroll = m_state.scroll();
         revision = m_state.revision();
         navigation = m_state.navigation().snapshot();
-        EXPECT_TRUE(m_state.scrollTo({ scroll.x + 13.0f, scroll.y + 17.0f }));
+        const SIMDVectorSingle moved = VectorAdd(VectorSet(scroll.x, scroll.y, 0.0f, 0.0f), VectorSet(13.0f, 17.0f, 0.0f, 0.0f));
+        EXPECT_TRUE(m_state.scrollTo({ VectorGetX(moved), VectorGetY(moved) }));
         EXPECT_TRUE(m_state.scrollTo(scroll));
     };
     EXPECT_FALSE(m_builder.endPopup());

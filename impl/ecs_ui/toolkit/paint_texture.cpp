@@ -28,10 +28,10 @@ bool PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectan
         !source || !IsFinite(rectangle.x) || !IsFinite(rectangle.y)
         || !IsFinite(rectangle.width) || !IsFinite(rectangle.height)
         || rectangle.width < 0.0f || rectangle.height < 0.0f
-        || !IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height)
+        || !VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
         || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
         || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
-        || uv.x + uv.width > 1.0f || uv.y + uv.height > 1.0f
+        || VectorGetX(VectorAdd(VectorReplicate(uv.x), VectorReplicate(uv.width))) > 1.0f || VectorGetX(VectorAdd(VectorReplicate(uv.y), VectorReplicate(uv.height))) > 1.0f
         || !IsFinite(tint.r) || !IsFinite(tint.g) || !IsFinite(tint.b) || !IsFinite(tint.a)
         || tint.a < 0.0f || tint.a > 1.0f
     )

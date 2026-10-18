@@ -6,6 +6,7 @@
 
 #include "../smoke_environment.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -43,9 +44,13 @@ bool UiSliderSmokeScene::paint(Impl::UiPaintContext& context){
     auto& ui = context.ui;
     ui.style().fontSize = 14.0f;
     ui.style().gap = 8.0f;
-    const f32 leftWidth = Max(280.0f, (context.display.logicalWidth - 96.0f) * 0.5f);
-    const f32 right = 24.0f + leftWidth + 32.0f;
-    const f32 rightWidth = Max(240.0f, context.display.logicalWidth - right - 24.0f);
+    const SIMDVectorSingle logicalWidth = VectorReplicate(context.display.logicalWidth);
+    const SIMDVectorSingle leftColumnWidth = VectorMax(VectorReplicate(280.0f), VectorScale(VectorSubtract(logicalWidth, VectorReplicate(96.0f)), 0.5f));
+    const SIMDVectorSingle rightColumn = VectorAdd(VectorAdd(VectorReplicate(24.0f), leftColumnWidth), VectorReplicate(32.0f));
+    const SIMDVectorSingle rightColumnWidth = VectorMax(VectorReplicate(240.0f), VectorSubtract(VectorSubtract(logicalWidth, rightColumn), VectorReplicate(24.0f)));
+    const f32 leftWidth = VectorGetX(leftColumnWidth);
+    const f32 right = VectorGetX(rightColumn);
+    const f32 rightWidth = VectorGetX(rightColumnWidth);
     if(!paintMain(ui, { 24.0f, 24.0f, leftWidth, 220.0f }) || !paintOther(ui, { right, 24.0f, rightWidth, 180.0f }) || !paintPopup(ui, right) || ui.failed())
         return false;
     observeState(context);

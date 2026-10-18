@@ -152,7 +152,7 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiRadioGroupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const f32 y = context.display.logicalHeight - 18.0f;
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
     const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<decltype(m_snapshot.values)> + 1u) * 2u, 12u, 12u>();
     for(usize index = 0u; index <= m_snapshot.values.size(); ++index){
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];

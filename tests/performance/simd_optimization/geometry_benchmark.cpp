@@ -363,8 +363,8 @@ NWB_NOINLINE u64 Run(const Intersection implementation, const TrianglePair (&pai
 
 static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     for(u32 index = 0u; index < s_FixtureCount; ++index){
-        const f64 offset = static_cast<f64>(index) * 0.25;
-        const SIMDVectorDouble translation = LoadPosition(offset, -offset, offset);
+        // index * -0.25 has the same bits as -(index * 0.25).
+        const SIMDVectorDouble translation = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleSet(0.25, -0.25, 0.25, 0.0));
         TrianglePair& pair = pairs[index];
         if(kind == 0u){
             pair = { { LoadPosition(0.0, 0.0, 0.0), LoadPosition(4.0, 0.0, 0.0), LoadPosition(0.0, 4.0, 0.0) }, { LoadPosition(1.0, 1.0, 0.0), LoadPosition(3.0, 1.0, 0.0), LoadPosition(1.0, 3.0, 0.0) } };
@@ -513,8 +513,8 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
             f64 coordinates[3];
             for(f64& coordinate : coordinates)
-                coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000000001u) - 1000000000) * 0.25;
-            pair.first[vertex] = LoadPosition(coordinates[0], coordinates[1], coordinates[2]);
+                coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000000001u) - 1000000000);
+            pair.first[vertex] = VectorDoubleScale(LoadPosition(coordinates[0], coordinates[1], coordinates[2]), 0.25);
         }
         const SIMDVectorDouble contained = (pair.first[0] * VectorDoubleReplicate(2.0) + pair.first[1] + pair.first[2]) * VectorDoubleReplicate(0.25);
         for(SIMDVectorDouble& vertex : pair.second)
@@ -649,11 +649,11 @@ static i32 Benchmark(const bool validationOnly, const bool measureAbs, const boo
                 const Timer end = TimerNow();
                 if(checksum != expected)
                     return 3;
-                const f64 nanoseconds = DurationInNS<f64>(end, begin) / static_cast<f64>(s_Passes * s_FixtureCount);
+                const f64 nanoseconds = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, begin)), VectorDoubleReplicate(static_cast<f64>(s_Passes * s_FixtureCount))));
                 (candidate ? candidateValues : baselineValues)[round] = nanoseconds;
                 NWB_COUT << "sample," << s_Names[kind] << ',' << (candidate ? selectedName : referenceName) << ',' << round << ',' << nanoseconds << ',' << checksum << '\n';
             }
-            ratios[round] = candidateValues[round] / baselineValues[round];
+            ratios[round] = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(candidateValues[round]), VectorDoubleReplicate(baselineValues[round])));
         }
         NWB_COUT << referenceName << '_';
         PrintSummary(s_Names[kind], baselineValues);

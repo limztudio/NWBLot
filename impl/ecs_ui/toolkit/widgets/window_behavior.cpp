@@ -24,7 +24,10 @@ namespace __hidden_ui_window_behavior{
 
 
 [[nodiscard]] bool ValidBounds(const Rect& bounds)noexcept{
-    return IsFinite(bounds.x) && IsFinite(bounds.y) && IsFinite(bounds.width) && IsFinite(bounds.height) && bounds.width >= 0.0f && bounds.height >= 0.0f && IsFinite(bounds.x + bounds.width) && IsFinite(bounds.y + bounds.height);
+    return
+        IsFinite(bounds.x) && IsFinite(bounds.y) && IsFinite(bounds.width) && IsFinite(bounds.height) && bounds.width >= 0.0f && bounds.height >= 0.0f
+        && VectorIsFinite(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(bounds.width, bounds.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
+    ;
 }
 
 [[nodiscard]] bool SameGesture(const InputActionId& lhs, const InputActionId& rhs)noexcept{
@@ -95,7 +98,8 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
     const SIMDVectorDouble leftTopValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(movement.initialBounds.x), static_cast<f64>(movement.initialBounds.y), 0.0, 0.0), *displacement);
     const f64 left = VectorDoubleGetX(leftTopValue);
     const f64 top = VectorDoubleGetY(leftTopValue);
-    if(Abs(left) > Limit<f32>::s_Max || Abs(top) > Limit<f32>::s_Max)
+    const SIMDVectorDouble magnitude = VectorDoubleAbs(leftTopValue);
+    if(VectorDoubleGetX(magnitude) > Limit<f32>::s_Max || VectorDoubleGetY(magnitude) > Limit<f32>::s_Max)
         return false;
     Rect candidate = state.bounds;
     candidate.x = static_cast<f32>(left);

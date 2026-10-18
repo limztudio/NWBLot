@@ -4,6 +4,8 @@
 
 #include "edit_box_host_fixture.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,7 +23,8 @@ using namespace UiEditBoxTestSupport;
 class UiEditWordSelectionTests : public UiEditBoxHostTests{
 protected:
     [[nodiscard]] Ui::Point atByte(const usize byte)const noexcept{
-        return { m_placement.textOrigin.x + static_cast<f32>(byte) * 10.0f + 1.0f, m_placement.textOrigin.y + 5.0f };
+        const SIMDVectorSingle x = VectorAdd(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(byte)), VectorReplicate(10.0f), VectorReplicate(m_placement.textOrigin.x)), VectorSplatOne());
+        return { VectorGetX(x), VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(5.0f))) };
     }
     [[nodiscard]] bool down(const usize byte, const u64 timestampMs, const bool shift = false){
         return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = atByte(byte), .shift = shift, .timestampMs = timestampMs });
@@ -47,7 +50,8 @@ protected:
 TEST_F(UiEditWordSelectionTests, RightHalfOfFinalWordGlyphSelectsItsWordRatherThanFollowingSpace){
     ASSERT_TRUE(m_model.setText("one two"));
     ASSERT_TRUE(activate());
-    const Ui::Point point{ m_placement.textOrigin.x + 29.0f, m_placement.textOrigin.y + 5.0f };
+    const SIMDVectorSingle shifted = VectorAdd(VectorSet(m_placement.textOrigin.x, m_placement.textOrigin.y, 0.0f, 0.0f), VectorSet(29.0f, 5.0f, 0.0f, 0.0f));
+    const Ui::Point point{ VectorGetX(shifted), VectorGetY(shifted) };
     ASSERT_TRUE(clickAt(point, 1000u));
     ASSERT_TRUE(frame(m_model));
     ASSERT_TRUE(clickAt(point, 1200u));
@@ -74,7 +78,8 @@ TEST_F(UiEditWordSelectionTests, RightHalfAtHardLineEndDoesNotSelectNewline){
     ASSERT_TRUE(frame(multiline));
     ASSERT_TRUE(key(Core::Key::Tab));
     ASSERT_TRUE(frame(multiline));
-    const Ui::Point point{ m_placement.textOrigin.x + 29.0f, m_placement.textOrigin.y + 5.0f };
+    const SIMDVectorSingle shifted = VectorAdd(VectorSet(m_placement.textOrigin.x, m_placement.textOrigin.y, 0.0f, 0.0f), VectorSet(29.0f, 5.0f, 0.0f, 0.0f));
+    const Ui::Point point{ VectorGetX(shifted), VectorGetY(shifted) };
     ASSERT_TRUE(clickAt(point, 1000u));
     ASSERT_TRUE(frame(multiline));
     ASSERT_TRUE(clickAt(point, 1200u));

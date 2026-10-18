@@ -8,6 +8,8 @@
 #include <core/alloc/general.h>
 #include <core/task/gpu/task_graph.h>
 
+#include <global/simd/vector.h>
+
 #include <gtest/gtest.h>
 
 
@@ -124,13 +126,13 @@ TEST(ReflectionFeedback, ScreenRangeBudgetAndSeedChangesInvalidateFeedback){
         case 0u: ++settings.samplingSeed; break;
         case 1u: --settings.maxHardwareRaysPerFrame; break;
         case s_ExpectedDualCount: --settings.maxOpticalQueries; break;
-        case 3u: settings.maxRayDistance += 1.f; break;
-        case 4u: settings.distanceFadeStart -= 1.f; break;
-        case 5u: settings.roughnessCutoff -= 0.1f; break;
+        case 3u: settings.maxRayDistance = VectorGetX(VectorAdd(VectorReplicate(settings.maxRayDistance), VectorSplatOne())); break;
+        case 4u: settings.distanceFadeStart = VectorGetX(VectorSubtract(VectorReplicate(settings.distanceFadeStart), VectorSplatOne())); break;
+        case 5u: settings.roughnessCutoff = VectorGetX(VectorSubtract(VectorReplicate(settings.roughnessCutoff), VectorReplicate(0.1f))); break;
         case 6u: --settings.screenMaxSteps; break;
-        case 7u: settings.screenThickness += 0.01f; break;
-        case 8u: settings.screenConfidenceThreshold -= 0.1f; break;
-        case 9u: settings.screenEdgeFade += 0.01f; break;
+        case 7u: settings.screenThickness = VectorGetX(VectorAdd(VectorReplicate(settings.screenThickness), VectorReplicate(0.01f))); break;
+        case 8u: settings.screenConfidenceThreshold = VectorGetX(VectorSubtract(VectorReplicate(settings.screenConfidenceThreshold), VectorReplicate(0.1f))); break;
+        case 9u: settings.screenEdgeFade = VectorGetX(VectorAdd(VectorReplicate(settings.screenEdgeFade), VectorReplicate(0.01f))); break;
         }
         const auto next = state.plan(Stamp(), settings, true, s_ExpectedDualCount);
         EXPECT_EQ(next.resetReason, ReflectionFeedbackResetReason::SettingsChanged);

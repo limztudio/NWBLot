@@ -8,6 +8,7 @@
 #include <core/common/global.h>
 
 #include <global/algorithm.h>
+#include <global/simd/vector.h>
 #include <global/timer.h>
 
 
@@ -72,16 +73,16 @@ public:
             return;
         }
         m_previousObservationTime = now;
-        const f64 wallSeconds = DurationInSeconds<f64>(now, m_previousPresentationTime);
+        const SIMDVectorDouble wallIntervalMs = VectorDoubleScale(VectorDoubleReplicate(DurationInSeconds<f64>(now, m_previousPresentationTime)), s_MsPerSecond);
         const u64 advanced = successfulPresentations - m_previousCount;
         if(advanced == 0u){
-            if(!m_pendingStallCounted && wallSeconds * s_MsPerSecond >= s_StallThresholdMs){
+            if(!m_pendingStallCounted && VectorDoubleGetX(wallIntervalMs) >= s_StallThresholdMs){
                 ++m_stalls;
                 m_pendingStallCounted = true;
             }
             return;
         }
-        const f64 wallMs = wallSeconds * s_MsPerSecond / static_cast<f64>(advanced);
+        const f64 wallMs = VectorDoubleGetX(VectorDoubleDivide(wallIntervalMs, VectorDoubleReplicate(static_cast<f64>(advanced))));
         if(!m_pendingStallCounted && wallMs >= s_StallThresholdMs)
             ++m_stalls;
         m_samples[m_head] = PresentationPacingSample{ wallMs, advanced };

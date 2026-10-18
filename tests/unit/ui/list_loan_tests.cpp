@@ -5,6 +5,8 @@
 #include "widget_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -166,7 +168,8 @@ TEST_F(UiListLoanTests, SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptureS
     ASSERT_TRUE(acceptFirst());
     const HitTarget* row = target(firstRow());
     ASSERT_NE(row, nullptr);
-    const Point point{ row->rectangle.x + 10.0f, row->rectangle.y + 12.0f };
+    const SIMDVectorSingle pointValue = VectorAdd(VectorSet(row->rectangle.x, row->rectangle.y, 0.0f, 0.0f), VectorSet(10.0f, 12.0f, 0.0f, 0.0f));
+    const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     ASSERT_EQ(m_context.input().capture(), firstRow());
     const AcceptedState displayed = accepted();

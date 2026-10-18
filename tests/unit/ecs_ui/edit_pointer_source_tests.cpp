@@ -4,6 +4,8 @@
 
 #include "edit_box_host_fixture.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +21,8 @@ using namespace UiEditBoxTestSupport;
 class UiEditPointerSourceTests : public UiEditBoxHostTests{
 protected:
     [[nodiscard]] Ui::Point atByte(const usize byte)const noexcept{
-        return { m_placement.textOrigin.x + static_cast<f32>(byte) * 10.0f + 1.0f, m_placement.textOrigin.y + 5.0f };
+        const SIMDVectorSingle x = VectorAdd(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(byte)), VectorReplicate(10.0f), VectorReplicate(m_placement.textOrigin.x)), VectorSplatOne());
+        return { VectorGetX(x), VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(5.0f))) };
     }
 };
 

@@ -7,6 +7,8 @@
 
 #include "pipeline.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -227,8 +229,8 @@ public:
         return timestampValidBits == s_FullWidthBits ? duration : duration & mask;
     }
     [[nodiscard]] f64 durationSeconds()const noexcept{
-        const f64 ticks = static_cast<f64>(durationTicks());
-        return ticks * secondsPerTick;
+        const SIMDVectorDouble ticks = VectorDoubleReplicate(static_cast<f64>(durationTicks()));
+        return VectorDoubleGetX(VectorDoubleMultiply(ticks, VectorDoubleReplicate(secondsPerTick)));
     }
     [[nodiscard]] bool hasComparableRange()const noexcept{
         return valid() && comparableAcrossSubmissions && timestampValidBits == s_FullWidthBits && physicalQueue.valid() && beginTicks <= endTicks;

@@ -76,7 +76,7 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
         sample.milliseconds[scope + 1u] = milliseconds.y;
     }
     if(scope < s_CpuScopeCount)
-        sample.milliseconds[scope] *= 1000.0;
+        sample.milliseconds[scope] = VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(sample.milliseconds[scope]), 1000.0));
     if(memoryEnabled){
         for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
             const auto arenaName = Name::FromText(s_ArenaNames[scope]);

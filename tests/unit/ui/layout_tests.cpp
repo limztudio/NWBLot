@@ -6,6 +6,8 @@
 
 #include <impl/ecs_ui/toolkit/layout/tree.h>
 
+#include <global/simdmath.h>
+
 #include <gtest/gtest.h>
 
 
@@ -128,8 +130,8 @@ TEST_F(UiLayoutTests, OddPhysicalDisplaySizesRemainLogicalAndDoNotRoundStretch){
     ASSERT_EQ(m_tree.boxes().size(), 3u);
     const Rect firstBefore = m_tree.box(first)->rectangle;
     const Rect secondBefore = m_tree.box(second)->rectangle;
-    EXPECT_FLOAT_EQ(firstBefore.width, firstMetrics.logicalWidth * 0.5f);
-    EXPECT_FLOAT_EQ(secondBefore.x + secondBefore.width, firstMetrics.logicalWidth);
+    EXPECT_FLOAT_EQ(firstBefore.width, VectorGetX(VectorMultiply(VectorReplicate(firstMetrics.logicalWidth), VectorReplicate(0.5f))));
+    EXPECT_FLOAT_EQ(VectorGetX(VectorAdd(VectorReplicate(secondBefore.x), VectorReplicate(secondBefore.width))), firstMetrics.logicalWidth);
     const DisplayMetrics secondMetrics{ firstMetrics.logicalWidth, firstMetrics.logicalHeight, 2.0f, 1.25f };
     ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, secondMetrics.logicalWidth, secondMetrics.logicalHeight }));
     NWB::UiWidgetTests::ExpectRect(m_tree.box(first)->rectangle, firstBefore);

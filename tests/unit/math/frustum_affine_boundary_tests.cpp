@@ -31,11 +31,11 @@ TEST(FrustumAffineBoundaries, NonuniformScaleAndShearRetainInteriorPoints){
             for(i32 ySign = -1; ySign <= 1; ySign += 2){
                 for(i32 depth = 0; depth < 2; ++depth){
                     const f32 z = depth == 0 ? 1.01f : 1.99f;
-                    const SIMDVectorSingle point = VectorSet(static_cast<f32>(xSign) * z * 0.99f, static_cast<f32>(ySign) * z * 0.99f, z, 1.0f);
+                    const SIMDVectorSingle point = VectorPermute<0, 1, 6, 7>(VectorScale(VectorScale(VectorSet(static_cast<f32>(xSign), static_cast<f32>(ySign), 0.0f, 0.0f), z), 0.99f), VectorSet(0.0f, 0.0f, z, 1.0f));
                     ASSERT_EQ(source.contains(point), ContainmentType::Contains);
                     EXPECT_EQ(transformed.contains(Vector3Transform(point, matrices[index])), ContainmentType::Contains);
                     const f64 doubleZ = depth == 0 ? 1.01 : 1.99;
-                    const SIMDVectorDouble doublePoint{ static_cast<f64>(xSign) * doubleZ * 0.99, static_cast<f64>(ySign) * doubleZ * 0.99, doubleZ, 1.0 };
+                    const SIMDVectorDouble doublePoint = VectorDoublePermute<0, 1, 6, 7>(VectorDoubleScale(VectorDoubleScale(VectorDoubleSet(static_cast<f64>(xSign), static_cast<f64>(ySign), 0.0, 0.0), doubleZ), 0.99), VectorDoubleSet(0.0, 0.0, doubleZ, 1.0));
                     ASSERT_EQ(doubleSource.contains(doublePoint), ContainmentType::Contains);
                     EXPECT_EQ(doubleTransformed.contains(VectorDouble3Transform(doublePoint, doubleMatrices[index])), ContainmentType::Contains);
                 }

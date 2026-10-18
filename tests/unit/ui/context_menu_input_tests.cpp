@@ -6,6 +6,8 @@
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
+#include <global/simdmath.h>
+
 #include <gtest/gtest.h>
 
 
@@ -279,7 +281,7 @@ TEST_F(UiContextMenuInputTests, MenuAndShiftF10UseTheAcceptedKeyboardAnchorOnceP
         action = *actionResult;
         EXPECT_EQ(action.origin, InputActionSource::Command);
         EXPECT_FLOAT_EQ(action.position.x, target.rectangle.x);
-        EXPECT_FLOAT_EQ(action.position.y, target.rectangle.y + target.rectangle.height);
+        EXPECT_FLOAT_EQ(action.position.y, VectorGetX(VectorAdd(VectorReplicate(target.rectangle.y), VectorReplicate(target.rectangle.height))));
         EXPECT_EQ(action.control, target.control);
         EXPECT_EQ(action.id.layoutGeneration, 5u);
         EXPECT_FALSE(take());

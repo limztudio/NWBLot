@@ -4,6 +4,8 @@
 
 #include "router.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,7 +71,7 @@ bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarg
         return false;
     if(!alreadyPressed && !event.repeat){
         source.contextArmed = true;
-        source.contextPosition = { focused->rectangle.x, (focused->rectangle.y + focused->rectangle.height) };
+        source.contextPosition = { focused->rectangle.x, VectorGetX(VectorAdd(VectorReplicate(focused->rectangle.y), VectorReplicate(focused->rectangle.height))) };
     }
     return true;
 }

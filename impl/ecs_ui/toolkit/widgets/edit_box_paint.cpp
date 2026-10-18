@@ -77,8 +77,9 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
                     break;
                 }
                 if(segment->width > 0.0f){
-                    segment->x += placement.textOrigin.x;
-                    segment->y += placement.textOrigin.y;
+                    const SIMDVectorSingle segmentOrigin = VectorAdd(VectorSet(segment->x, segment->y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
+                    segment->x = VectorGetX(segmentOrigin);
+                    segment->y = VectorGetY(segmentOrigin);
                     paint.fillRect(*segment, selection);
                 }
             }

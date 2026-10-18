@@ -169,7 +169,7 @@ static u16 PixelDimensionForLogical(i32 logicalDimension, i32 bufferScale)noexce
 }
 
 static f64 SurfaceCoordinateToPixels(wl_fixed_t value, i32 bufferScale)noexcept{
-    return wl_fixed_to_double(value) * static_cast<f64>(ClampBufferScale(bufferScale));
+    return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(wl_fixed_to_double(value)), VectorDoubleReplicate(static_cast<f64>(ClampBufferScale(bufferScale)))));
 }
 
 static i32 TranslateModifiers(const WaylandContext& context)noexcept{
@@ -604,11 +604,11 @@ static void OnPointerAxis(void* data, wl_pointer* pointer, u32 time, u32 axis, w
     auto& context = *static_cast<WaylandContext*>(data);
     context.scrollPending = true;
 
-    const f64 delta = wl_fixed_to_double(value);
+    const SIMDVectorDouble delta = VectorDoubleReplicate(wl_fixed_to_double(value));
     if(axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL)
-        context.scrollX += delta;
+        context.scrollX = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(context.scrollX), delta));
     else if(axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
-        context.scrollY += delta;
+        context.scrollY = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(context.scrollY), delta));
 
     if(context.seatVersion < s_WaylandPointerFrameSeatVersion)
         DispatchScroll(context);
@@ -1215,7 +1215,7 @@ bool RunWaylandFrame(Frame& frame){
         i32 timeoutMs = (!windowVisible || !windowIsInFocus) ? s_InactivePollTimeoutMs : 0;
         if(context->repeatPending && timeoutMs > 0){
             const f64 secondsUntilRepeat = DurationInSeconds<f64>(context->nextRepeatTime, TimerNow());
-            const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(Ceil(secondsUntilRepeat * static_cast<f64>(s_MillisecondsPerSecond)));
+            const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(VectorDoubleGetX(VectorDoubleCeiling(VectorDoubleScale(VectorDoubleReplicate(secondsUntilRepeat), static_cast<f64>(s_MillisecondsPerSecond)))));
             timeoutMs = timeoutMs < repeatTimeoutMs ? timeoutMs : repeatTimeoutMs;
         }
 

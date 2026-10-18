@@ -177,7 +177,7 @@ bool UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     PopupOptions options;
     const Rect& parent = m_parent.placement().bounds;
-    options.anchor = { parent.x + parent.width - 8.0f, parent.y + 124.0f, 8.0f, 32.0f };
+    options.anchor = StoreSmokeRect(VectorSubtract(VectorAdd(VectorSet(parent.x, parent.y, 8.0f, 32.0f), VectorSet(parent.width, 124.0f, 0.0f, 0.0f)), VectorSet(8.0f, 0.0f, 0.0f, 0.0f)));
     options.side = PopupPlacementSide::Right;
     options.size = { 220.0f, 178.0f };
     if(!ui.beginPopup("child", m_child, options))
@@ -213,24 +213,26 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
     if(m_parent.isOpen()){
         const Rect parent = m_parent.placement().bounds;
         m_rectangles[2] = parent;
-        m_rectangles[4] = { parent.x + 8.0f, parent.y + 28.0f, 100.0f, 32.0f };
+        const SIMDVectorSingle parentFrame = VectorSet(parent.x, parent.y, parent.width, 0.0f);
+        m_rectangles[4] = StoreSmokeRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 28.0f, 0.0f, 0.0f)));
         m_rectangles[5] = m_beforeEdit.placement.bounds;
         m_rectangles[6] = m_beforeList.placement().bounds;
         m_rectangles[7] = rowBounds(m_beforeList, m_source, 2u);
-        m_rectangles[8] = { parent.x + 8.0f, parent.y + 124.0f, parent.width - 16.0f, 32.0f };
-        m_rectangles[9] = { parent.x + 8.0f, parent.y + 160.0f, 100.0f, 32.0f };
+        m_rectangles[8] = StoreSmokeRect(VectorAdd(parentFrame, VectorSet(8.0f, 124.0f, -16.0f, 32.0f)));
+        m_rectangles[9] = StoreSmokeRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 160.0f, 0.0f, 0.0f)));
         m_rectangles[10] = m_afterEdit.placement.bounds;
         m_rectangles[11] = m_afterList.placement().bounds;
         m_rectangles[12] = rowBounds(m_afterList, m_source, 2u);
         m_rectangles[16] = m_combo.bounds();
         m_rectangles[19] = m_search.combo().bounds();
-        m_rectangles[23] = { parent.x + 8.0f, parent.y + 328.0f, parent.width - 16.0f, 32.0f };
+        m_rectangles[23] = StoreSmokeRect(VectorAdd(parentFrame, VectorSet(8.0f, 328.0f, -16.0f, 32.0f)));
         if(m_childDeclared && m_child.isOpen()){
             const Rect child = m_child.placement().bounds;
             m_rectangles[3] = child;
-            m_rectangles[13] = { child.x + 8.0f, child.y + 28.0f, child.width - 16.0f, 32.0f };
+            const SIMDVectorSingle childFrame = VectorSet(child.x, child.y, child.width, 0.0f);
+            m_rectangles[13] = StoreSmokeRect(VectorAdd(childFrame, VectorSet(8.0f, 28.0f, -16.0f, 32.0f)));
             m_rectangles[14] = m_childEdit.placement.bounds;
-            m_rectangles[15] = { child.x + 8.0f, child.y + 100.0f, child.width - 16.0f, 32.0f };
+            m_rectangles[15] = StoreSmokeRect(VectorAdd(childFrame, VectorSet(8.0f, 100.0f, -16.0f, 32.0f)));
         }
         if(m_combo.isOpen()){
             m_rectangles[17] = m_combo.placement().bounds;
@@ -293,12 +295,13 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
 
 void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const auto current = values();
-    const f32 y = context.display.logicalHeight - 18.0f;
+    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<decltype(current)> + 1u) * 2u, 12u, 12u>();
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
     for(usize index = 0u; index <= current.size(); ++index){
         const u64 value = index == current.size() ? m_sequence : current[index];
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ positions[marker], y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

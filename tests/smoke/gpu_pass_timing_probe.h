@@ -80,13 +80,14 @@ public:
         if(safeDelta <= 0.0)
             return;
 
-        m_elapsedSeconds += safeDelta;
+        const SIMDVectorDouble frameSeconds = VectorDoubleReplicate(safeDelta);
+        m_elapsedSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_elapsedSeconds), frameSeconds));
         if(m_elapsedSeconds < s_WarmupSeconds)
             return;
         if(!gpuTiming.valid())
             return;
 
-        m_intervalSeconds += safeDelta;
+        m_intervalSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_intervalSeconds), frameSeconds));
         ++m_intervalFrames;
         accumulate(gpuTiming);
 
@@ -115,15 +116,18 @@ private:
             m_scopes[i].lastFoldedPublish = stats.publishFrameIndex;
 
             ScopeAccum& accum = m_scopes[i].interval;
+            const SIMDVectorDouble windowSeconds = VectorDoubleReplicate(stats.seconds);
             if(accum.frames == 0u){
                 accum.minSeconds = stats.seconds;
                 accum.maxSeconds = stats.seconds;
             }
             else{
-                accum.minSeconds = Min(accum.minSeconds, stats.seconds);
-                accum.maxSeconds = Max(accum.maxSeconds, stats.seconds);
+                const SIMDVectorDouble extremaSeconds = VectorDoubleSet(accum.minSeconds, accum.maxSeconds, 0.0, 0.0);
+                const SIMDVectorDouble nextExtremaSeconds = VectorDoubleSelect(VectorDoubleMin(extremaSeconds, windowSeconds), VectorDoubleMax(extremaSeconds, windowSeconds), s_DoubleSIMDMaskY);
+                accum.minSeconds = VectorDoubleGetX(nextExtremaSeconds);
+                accum.maxSeconds = VectorDoubleGetY(nextExtremaSeconds);
             }
-            accum.sumSeconds += stats.seconds;
+            accum.sumSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(accum.sumSeconds), windowSeconds));
             accum.samples += stats.sampleCount;
             ++accum.frames;
         }
@@ -149,19 +153,20 @@ private:
                 continue;
 
             const Name scopeName = gpuTiming.scopeNameAt(i);
-            const SIMDVectorDouble totalsMs = SIMDVectorDouble{ accum.sumSeconds / static_cast<f64>(accum.frames), accum.sumSeconds } * s_MillisecondsPerSecond;
-            const SIMDVectorDouble rangeMs = SIMDVectorDouble{ accum.minSeconds, accum.maxSeconds } * s_MillisecondsPerSecond;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}"), StringConvert(scopeName.resolvedText()), totalsMs.x, rangeMs.x, rangeMs.y, accum.frames);
+            const SIMDVectorDouble averageSeconds = VectorDoubleDivide(VectorDoubleReplicate(accum.sumSeconds), VectorDoubleReplicate(static_cast<f64>(accum.frames)));
+            // Lanes are window average, min, max and total.
+            const SIMDVectorDouble windowMs = VectorDoubleScale(VectorDoubleSelect(VectorDoubleSet(0.0, accum.minSeconds, accum.maxSeconds, accum.sumSeconds), averageSeconds, s_DoubleSIMDMaskX), s_MillisecondsPerSecond);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}"), StringConvert(scopeName.resolvedText()), VectorDoubleGetX(windowMs), VectorDoubleGetY(windowMs), VectorDoubleGetZ(windowMs), accum.frames);
             if(timingFile.is_open()){
                 timingFile
                     << "  " << scopeName.resolvedText()
-                    << ": window_avg_ms=" << totalsMs.x
-                    << " window_min_ms=" << rangeMs.x
-                    << " window_max_ms=" << rangeMs.y
+                    << ": window_avg_ms=" << VectorDoubleGetX(windowMs)
+                    << " window_min_ms=" << VectorDoubleGetY(windowMs)
+                    << " window_max_ms=" << VectorDoubleGetZ(windowMs)
                     << " published_windows=" << static_cast<unsigned>(accum.frames)
-                    << " total_ms=" << totalsMs.y
+                    << " total_ms=" << VectorDoubleGetW(windowMs)
                     << " gpu_samples=" << accum.samples
-                    << " sample_avg_ms=" << totalsMs.y / static_cast<f64>(accum.samples)
+                    << " sample_avg_ms=" << VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSplatW(windowMs), VectorDoubleReplicate(static_cast<f64>(accum.samples))))
                     << '\n'
                 ;
             }

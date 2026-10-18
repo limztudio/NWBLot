@@ -165,17 +165,16 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
     for(usize vertexRefIndex = 0u; vertexRefIndex < mesh.vertexRefs.size(); ++vertexRefIndex){
         SourceVertexRef& ref = mesh.vertexRefs[vertexRefIndex];
         const Vec3& storedNormal = mesh.normals[ref.normal];
-        const Float4& storedTangent = rebuildVertices[vertexRefIndex].tangent;
+        const SIMDVectorSingle storedTangent = LoadFloat(rebuildVertices[vertexRefIndex].tangent);
         const SIMDVectorSingle normal = ::FrameNormalizeDirection(LoadFloat(storedNormal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-        const SIMDVectorSingle tangent = ::FrameResolveTangent(normal, VectorSetW(LoadFloat(storedTangent), 0.0f), ::FrameFallbackTangent(normal));
+        const SIMDVectorSingle tangent = ::FrameResolveTangent(normal, VectorSetW(storedTangent, 0.0f), ::FrameFallbackTangent(normal));
         if(!::FrameValidDirection(tangent)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
             return MakeUnexpected(Failure{});
         }
 
-        const f32 handedness = ::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
         Vec4 generatedTangent;
-        StoreFloat(VectorSetW(tangent, handedness), generatedTangent);
+        StoreFloat(VectorSelect(tangent, ::FrameTangentHandedness(storedTangent, s_SIMDOne), s_SIMDMaskW), generatedTangent);
         const auto tangentIndex = InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, s_SourceTangentLabel);
         if(!tangentIndex)
             return MakeUnexpected(tangentIndex.error());

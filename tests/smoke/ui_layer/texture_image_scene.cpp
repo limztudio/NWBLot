@@ -91,9 +91,13 @@ bool UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
     ui.style().fontSize = 14.0f;
     ui.style().gap = 8.0f;
     m_declared = {};
-    const f32 width = Max(300.0f, context.display.logicalWidth * 0.5f - 40.0f);
-    const f32 right = 24.0f + width + 32.0f;
-    const f32 otherWidth = Max(220.0f, context.display.logicalWidth - right - 24.0f);
+    const SIMDVectorSingle logicalWidth = VectorReplicate(context.display.logicalWidth);
+    const SIMDVectorSingle mainWidth = VectorMax(VectorReplicate(300.0f), VectorMultiplyAddExpression(logicalWidth, VectorReplicate(0.5f), VectorNegate(VectorReplicate(40.0f))));
+    const SIMDVectorSingle rightColumn = VectorAdd(VectorAdd(VectorReplicate(24.0f), mainWidth), VectorReplicate(32.0f));
+    const SIMDVectorSingle rightWidth = VectorMax(VectorReplicate(220.0f), VectorSubtract(VectorSubtract(logicalWidth, rightColumn), VectorReplicate(24.0f)));
+    const f32 width = VectorGetX(mainWidth);
+    const f32 right = VectorGetX(rightColumn);
+    const f32 otherWidth = VectorGetX(rightWidth);
     if(!paintControls(ui, { 24.0f, 24.0f, width, 112.0f }) || !paintImages(context, width, right, otherWidth) || !paintBuilderImages(ui, { right, 24.0f, otherWidth, 112.0f }) || !paintPopups(context, right) || ui.failed())
         return false;
     observeState(context);
@@ -175,12 +179,16 @@ bool UiTextureImageSmokeScene::paintImages(Impl::UiPaintContext& context, const 
     rectangles[3u] = { 140.0f, 168.0f, 96.0f, 64.0f };
     rectangles[4u] = { 248.0f, 168.0f, 96.0f, 64.0f };
     rectangles[5u] = { 32.0f, 240.0f, 96.0f, 32.0f };
-    rectangles[6u] = { right + 8.0f, 168.0f, otherWidth - 16.0f, 64.0f };
-    rectangles[7u] = { right + 8.0f, 240.0f, otherWidth - 16.0f, 32.0f };
-    rectangles[8u] = { right + 8.0f, 240.0f, (otherWidth - 16.0f) * 0.5f, 32.0f };
+    // Lanes are column x, column width and half column width.
+    const SIMDVectorSingle column = VectorMultiply(VectorAdd(VectorSet(right, otherWidth, otherWidth, 0.0f), VectorSet(8.0f, -16.0f, -16.0f, 0.0f)), VectorSet(1.0f, 1.0f, 0.5f, 1.0f));
+    const f32 columnX = VectorGetX(column);
+    const f32 columnWidth = VectorGetY(column);
+    rectangles[6u] = { columnX, 168.0f, columnWidth, 64.0f };
+    rectangles[7u] = { columnX, 240.0f, columnWidth, 32.0f };
+    rectangles[8u] = { columnX, 240.0f, VectorGetZ(column), 32.0f };
     rectangles[9u] = { 32.0f, 280.0f, 256.0f, 128.0f };
-    rectangles[10u] = { right + 8.0f, 280.0f, 256.0f, 128.0f };
-    rectangles[11u] = { right + 8.0f, 416.0f, otherWidth - 16.0f, 24.0f };
+    rectangles[10u] = { columnX, 280.0f, 256.0f, 128.0f };
+    rectangles[11u] = { columnX, 416.0f, columnWidth, 24.0f };
     if(
         !paint.drawImage(m_default, rectangles[2u], TextureUv(4.0f, 4.0f))
         || !paint.drawImage(m_alternate, rectangles[3u], TextureUv(196.0f, 100.0f))
@@ -218,7 +226,8 @@ bool UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const I
     options.height = { LayoutSizePolicy::Fixed, 80.0f };
     options.tint = m_phase ? Color{ 0.5f, 0.75f, 1.0f, 0.5f } : Color{};
     SharedImageSource source = m_phase ? m_alternate : m_replacement;
-    m_declared.rectangles[16u] = { bounds.x + 8.0f, bounds.y + 8.0f, bounds.width - 16.0f, 80.0f };
+    const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 80.0f));
+    m_declared.rectangles[16u] = { VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) };
     m_declared.values[14u] = m_phase ? 2u : 1u;
     if(!ui.image("owned_source", source, options))
         return false;
@@ -250,7 +259,7 @@ bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const 
         return false;
     source.reset();
     PopupOptions child;
-    child.anchor = { right + 100.0f, 370.0f, 8.0f, 16.0f };
+    child.anchor = { VectorGetX(VectorAdd(VectorReplicate(right), VectorReplicate(100.0f))), 370.0f, 8.0f, 16.0f };
     child.size = { 240.0f, 128.0f };
     if(ui.beginPopup("texture_image_child", m_child, child)){
         source = m_default;
@@ -270,11 +279,13 @@ bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const 
         return false;
     m_declared.rectangles[14u] = m_parent.placement().bounds;
     const Rect& parentBounds = m_declared.rectangles[14u];
-    m_declared.rectangles[12u] = { parentBounds.x + 8.0f, parentBounds.y + 44.0f, parentBounds.width - 16.0f, 64.0f };
+    const SIMDVectorSingle parentRow = VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 64.0f));
+    m_declared.rectangles[12u] = { VectorGetX(parentRow), VectorGetY(parentRow), VectorGetZ(parentRow), VectorGetW(parentRow) };
     if(m_child.isOpen()){
         m_declared.rectangles[15u] = m_child.placement().bounds;
         const Rect& childBounds = m_declared.rectangles[15u];
-        m_declared.rectangles[13u] = { childBounds.x + 8.0f, childBounds.y + 8.0f, childBounds.width - 16.0f, 64.0f };
+        const SIMDVectorSingle childRow = VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 64.0f));
+        m_declared.rectangles[13u] = { VectorGetX(childRow), VectorGetY(childRow), VectorGetZ(childRow), VectorGetW(childRow) };
     }
     // Both late base commands must remain beneath the actual deferred Builder popup chrome and source images.
     context.paint.fillRect(m_declared.rectangles[12u], { 0.8f, 0.0f, 0.0f, 1.0f });

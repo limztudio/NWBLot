@@ -77,7 +77,7 @@ static_assert((sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator
 
 
 [[nodiscard]] inline f32 ResolveTangentHandedness(const f32 handedness)noexcept{
-    if(IsFinite(handedness) && Abs(handedness) > s_Epsilon)
+    if(IsFinite(handedness) && VectorGetX(VectorAbs(VectorReplicate(handedness))) > s_Epsilon)
         return handedness < 0.0f ? -1.0f : 1.0f;
     return 1.0f;
 }

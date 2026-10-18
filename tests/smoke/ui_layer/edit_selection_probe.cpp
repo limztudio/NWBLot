@@ -4,6 +4,7 @@
 
 #include "edit_selection_probe.h"
 
+#include <global/simd/vector.h>
 #include <global/termination.h>
 
 
@@ -36,8 +37,9 @@ Impl::Ui::Rect CaptureEditSelection(Core::Alloc::GlobalArena& arena, Impl::Ui::T
     auto selection = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
     NWB_FATAL_ASSERT(selection.has_value());
     if(selection->width > 0.0f){
-        selection->x += placement.textOrigin.x;
-        selection->y += placement.textOrigin.y;
+        const SIMDVectorSingle origin = VectorAdd(VectorSet(selection->x, selection->y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
+        selection->x = VectorGetX(origin);
+        selection->y = VectorGetY(origin);
     }
     return *selection;
 }

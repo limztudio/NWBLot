@@ -14,6 +14,7 @@
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 #include <gtest/gtest.h>
@@ -90,7 +91,8 @@ inline void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, 
             if(first.color.r != color.r || first.color.g != color.g || first.color.b != color.b || first.color.a != color.a)
                 continue;
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            output.push_back({ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y });
+            const SIMDVectorSingle size = VectorSubtract(VectorSet(opposite.position.x, opposite.position.y, 0.0f, 0.0f), VectorSet(first.position.x, first.position.y, 0.0f, 0.0f));
+            output.push_back({ first.position.x, first.position.y, VectorGetX(size), VectorGetY(size) });
         }
     }
 }

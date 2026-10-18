@@ -27,7 +27,7 @@ namespace __hidden_ui_router_popup{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width > 0.0f && rectangle.height > 0.0f
-        && IsFinite((rectangle.x + rectangle.width)) && IsFinite((rectangle.y + rectangle.height))
+        && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
     ;
 }
 
@@ -91,9 +91,11 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
             || scope.layer == 0u || (index != 0u && scope.layer <= scopes[index - 1u].layer)
             || (scope.dismissFocusTraversal && (!scope.focusAnchor.valid() || scope.focusAnchorDeclarationGeneration == 0u))
             || scope.bounds.x < scope.viewport.x || scope.bounds.y < scope.viewport.y
-            || (scope.bounds.x + scope.bounds.width) > (scope.viewport.x + scope.viewport.width)
-            || (scope.bounds.y + scope.bounds.height) > (scope.viewport.y + scope.viewport.height)
         )
+            return false;
+        // Lanes are bounds right, bounds bottom, viewport right, viewport bottom. Area already proved these sums finite.
+        const SIMDVectorSingle end = VectorAdd(VectorSet(scope.bounds.x, scope.bounds.y, scope.viewport.x, scope.viewport.y), VectorSet(scope.bounds.width, scope.bounds.height, scope.viewport.width, scope.viewport.height));
+        if(VectorGetX(end) > VectorGetZ(end) || VectorGetY(end) > VectorGetW(end))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
             if(scopes[previous].token.widget == scope.token.widget)

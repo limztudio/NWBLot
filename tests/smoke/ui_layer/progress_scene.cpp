@@ -45,9 +45,13 @@ bool UiProgressSmokeScene::paint(Impl::UiPaintContext& context){
     ui.progressStyle().trackTint = {};
     ui.progressStyle().fillTint = {};
     m_declared = {};
-    const f32 width = Max(300.0f, context.display.logicalWidth * 0.5f - 40.0f);
-    const f32 right = 24.0f + width + 32.0f;
-    const f32 otherWidth = Max(220.0f, context.display.logicalWidth - right - 24.0f);
+    const SIMDVectorSingle logicalWidth = VectorReplicate(context.display.logicalWidth);
+    const SIMDVectorSingle mainWidth = VectorMax(VectorReplicate(300.0f), VectorMultiplyAddExpression(logicalWidth, VectorReplicate(0.5f), VectorNegate(VectorReplicate(40.0f))));
+    const SIMDVectorSingle rightColumn = VectorAdd(VectorAdd(VectorReplicate(24.0f), mainWidth), VectorReplicate(32.0f));
+    const SIMDVectorSingle rightWidth = VectorMax(VectorReplicate(220.0f), VectorSubtract(VectorSubtract(logicalWidth, rightColumn), VectorReplicate(24.0f)));
+    const f32 width = VectorGetX(mainWidth);
+    const f32 right = VectorGetX(rightColumn);
+    const f32 otherWidth = VectorGetX(rightWidth);
     if(!paintMain(ui, { 24.0f, 24.0f, width, 360.0f }) || !paintFrozen(ui, { right, 24.0f, otherWidth, 120.0f }) || !paintExternal(context, { right, 176.0f, otherWidth, 84.0f }) || !paintPopups(ui, right) || ui.failed())
         return false;
     observeState(context);
@@ -73,10 +77,11 @@ bool UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect
         ++m_beforeClicks;
     constexpr Array<StringView, 6u> s_Keys{ "zero", "quarter", "full", "below", "above", "tiny" };
     constexpr Array<f64, 6u> s_Fractions{ 0.0, 0.25, 1.0, -2.0, 3.0, 0.01 };
+    const SIMDVectorSingle row = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 68.0f, -16.0f, 32.0f));
     for(usize index = 0u; index < s_Keys.size(); ++index){
         if(!ui.progress(s_Keys[index], s_Fractions[index]))
             return false;
-        m_declared.rectangles[index + 2u] = { bounds.x + 8.0f, bounds.y + 68.0f + static_cast<f32>(index) * 40.0f, bounds.width - 16.0f, 32.0f };
+        m_declared.rectangles[index + 2u] = StoreSmokeRect(VectorSelect(row, VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index)), VectorReplicate(40.0f), row), s_SIMDMaskY));
     }
     if(ui.button("after", "After progress", button))
         ++m_afterClicks;
@@ -96,7 +101,7 @@ bool UiProgressSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Re
     ProgressOptions options;
     if(!ui.progress("frozen", fraction, options))
         return false;
-    m_declared.rectangles[8u] = { bounds.x + 8.0f, bounds.y + 32.0f, bounds.width - 16.0f, 32.0f };
+    m_declared.rectangles[8u] = StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 32.0f, -16.0f, 32.0f)));
     fraction = m_phase ? 0.25 : 0.75;
     m_declared.bits[1u] = BitCast<u64>(fraction);
     options.height = 70.0f;
@@ -111,8 +116,9 @@ bool UiProgressSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Re
 bool UiProgressSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     auto& ui = context.ui;
-    m_declared.rectangles[9u] = { bounds.x + 8.0f, bounds.y + 8.0f, bounds.width - 16.0f, 32.0f };
-    const Rect clip{ bounds.x + 8.0f, bounds.y + 8.0f, (bounds.width - 16.0f) * 0.5f, 32.0f };
+    const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 32.0f));
+    m_declared.rectangles[9u] = StoreSmokeRect(content);
+    const Rect clip = StoreSmokeRect(VectorMultiply(content, VectorSet(1.0f, 1.0f, 0.5f, 1.0f)));
     m_declared.rectangles[10u] = clip;
     context.paint.fillRect(bounds, { 0.07f, 0.13f, 0.2f, 1.0f });
     context.paint.pushClip(clip);
@@ -134,7 +140,7 @@ bool UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     if(!ui.progress("parent_value", 0.25))
         return false;
     PopupOptions child;
-    child.anchor = { right + 100.0f, 392.0f, 8.0f, 16.0f };
+    child.anchor = { VectorGetX(VectorAdd(VectorReplicate(right), VectorReplicate(100.0f))), 392.0f, 8.0f, 16.0f };
     child.size = { 240.0f, 120.0f };
     if(ui.beginPopup("progress_child", m_child, child)){
         if(!ui.progress("child_value", 0.75))
@@ -148,11 +154,11 @@ bool UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
         return false;
     const Rect& parentBounds = m_parent.placement().bounds;
     m_declared.rectangles[13u] = parentBounds;
-    m_declared.rectangles[11u] = { parentBounds.x + 8.0f, parentBounds.y + 44.0f, parentBounds.width - 16.0f, 32.0f };
+    m_declared.rectangles[11u] = StoreSmokeRect(VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 32.0f)));
     if(m_child.isOpen()){
         const Rect& childBounds = m_child.placement().bounds;
         m_declared.rectangles[14u] = childBounds;
-        m_declared.rectangles[12u] = { childBounds.x + 8.0f, childBounds.y + 8.0f, childBounds.width - 16.0f, 32.0f };
+        m_declared.rectangles[12u] = StoreSmokeRect(VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 32.0f)));
     }
     return true;
 }

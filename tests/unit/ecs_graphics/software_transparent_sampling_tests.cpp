@@ -5,6 +5,8 @@
 #include <impl/ecs_render/raytrace/software_transparent_sampling.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
+#include <global/simd/vector.h>
+
 #include <gtest/gtest.h>
 
 
@@ -83,7 +85,8 @@ TEST(SoftwareTransparentSampling, EveryLightInputAndSlotOrderInvalidatesTrust){
         history.prepareLighting(original, s_ExpectedDualCount);
         history.accept();
         ECSRenderDetail::SceneLightGpuData changed[] = { original[0], original[1] };
-        (changed[0].*field).x += 0.125f;
+        Float4& value = changed[0].*field;
+        value.x = VectorGetX(VectorAdd(VectorReplicate(value.x), VectorReplicate(0.125f)));
         history.prepareLighting(changed, s_ExpectedDualCount);
         EXPECT_FALSE(history.usable());
     }

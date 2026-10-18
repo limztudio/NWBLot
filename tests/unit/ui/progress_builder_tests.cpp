@@ -4,6 +4,7 @@
 
 #include "widget_fixture.h"
 
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -94,7 +95,7 @@ TEST_F(UiProgressBuilderTests, CallerMutationCannotChangeDeferredProgressGeometr
     ASSERT_TRUE(fill);
     EXPECT_FLOAT_EQ(track->bounds.width, 240.0f);
     EXPECT_FLOAT_EQ(track->bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(fill->bounds.x - track->bounds.x, 4.0f);
+    EXPECT_FLOAT_EQ(VectorGetX(VectorSubtract(VectorReplicate(fill->bounds.x), VectorReplicate(track->bounds.x))), 4.0f);
     EXPECT_FLOAT_EQ(fill->bounds.width, 58.0f);
     EXPECT_FLOAT_EQ(fill->bounds.height, 24.0f);
     EXPECT_FLOAT_EQ(fill->color.r, 0.4f);
@@ -128,9 +129,10 @@ TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){
         EXPECT_EQ(fill.has_value(), index >= 2u);
         if(index >= 2u){
             ASSERT_TRUE(fill);
-            EXPECT_FLOAT_EQ(fill->bounds.x, track->bounds.x + 4.0f);
-            EXPECT_FLOAT_EQ(fill->bounds.width, track->bounds.width - 8.0f);
-            EXPECT_FLOAT_EQ(fill->bounds.height, track->bounds.height - 8.0f);
+            const SIMDVectorSingle insetSize = VectorSubtract(VectorSet(track->bounds.width, track->bounds.height, 0.0f, 0.0f), VectorReplicate(8.0f));
+            EXPECT_FLOAT_EQ(fill->bounds.x, VectorGetX(VectorAdd(VectorReplicate(track->bounds.x), VectorReplicate(4.0f))));
+            EXPECT_FLOAT_EQ(fill->bounds.width, VectorGetX(insetSize));
+            EXPECT_FLOAT_EQ(fill->bounds.height, VectorGetY(insetSize));
         }
         m_context.abandonFrame();
     }
@@ -145,9 +147,9 @@ TEST_F(UiProgressBuilderTests, TinyFillClipsNaturalBorderTexelsWithoutCompressin
     ASSERT_TRUE(track);
     const auto fill = sampleSkinPaint(snapshot, Name("progress.fill"));
     ASSERT_TRUE(fill);
-    EXPECT_NEAR(fill->bounds.width, (track->bounds.width - 8.0f) * 0.01f, 0.000001f);
+    EXPECT_NEAR(fill->bounds.width, VectorGetX(VectorMultiply(VectorSubtract(VectorReplicate(track->bounds.width), VectorReplicate(8.0f)), VectorReplicate(0.01f))), 0.000001f);
     EXPECT_LT(fill->maximumU, 134.0f / 256.0f);
-    EXPECT_NEAR(fill->maximumU, (128.0f + fill->bounds.width) / 256.0f, 0.000001f);
+    EXPECT_NEAR(fill->maximumU, VectorGetX(VectorDivide(VectorAdd(VectorReplicate(128.0f), VectorReplicate(fill->bounds.width)), VectorReplicate(256.0f))), 0.000001f);
     EXPECT_EQ(fill->quads, 3u);
 }
 

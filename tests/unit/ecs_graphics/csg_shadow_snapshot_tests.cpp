@@ -17,6 +17,8 @@
 #include <tests/common/ecs_test_world.h>
 #include <tests/common/capturing_logger.h>
 
+#include <global/simd/vector.h>
+
 #include <gtest/gtest.h>
 
 
@@ -401,7 +403,7 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
         u64 previousExact = 0u;
         u64 previousContent = 0u;
         for(u32 frame = 0u; frame < 7u; ++frame){
-            const f32 x = static_cast<f32>(frame) * 0.25f;
+            const f32 x = VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(frame)), 0.25f));
             StoreFloat(MatrixTranslation(x, 0.f, 0.f), cutter->shapeToWorld);
             StoreFloat(MatrixTranslation(-x, 0.f, 0.f), cutter->worldToShape);
             instance.translation.x = x;
@@ -556,7 +558,7 @@ TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrd
     ASSERT_TRUE(context.build(inputs, LengthOf(inputs)));
     EXPECT_NE(context.snapshot.identity, identity);
     identity = context.snapshot.identity;
-    inputs[1].worldMin.x -= 1.f;
+    inputs[1].worldMin.x = VectorGetX(VectorSubtract(VectorReplicate(inputs[1].worldMin.x), VectorSplatOne()));
     ASSERT_TRUE(context.build(inputs, LengthOf(inputs)));
     EXPECT_NE(context.snapshot.identity, identity);
 

@@ -73,10 +73,13 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     current.rectangles[1u] = placement.content;
     current.rectangles[2u] = placement.clip;
     current.rectangles[3u] = placement.caret;
+    const SIMDVectorSingle labelOrigin = VectorSet(placement.bounds.x, placement.bounds.y, 112.0f, 30.0f);
     for(u32 index = 0u; index < 6u; ++index){
-        current.rectangles[4u + index] = { placement.bounds.x + static_cast<f32>(index % 3u) * 120.0f, placement.bounds.y - (index < 3u ? 76.0f : 38.0f), 112.0f, 30.0f };
+        // Lane x steps by column; lane y lifts the row above the box.
+        const SIMDVectorSingle lifted = VectorSubtract(labelOrigin, VectorSet(0.0f, index < 3u ? 76.0f : 38.0f, 0.0f, 0.0f));
+        current.rectangles[4u + index] = StoreSmokeRect(VectorSelect(lifted, VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index % 3u)), VectorReplicate(120.0f), labelOrigin), s_SIMDMaskX));
     }
-    current.rectangles[10u] = { placement.bounds.x, placement.bounds.y + placement.bounds.height + 8.0f, 160.0f, 30.0f };
+    current.rectangles[10u] = { placement.bounds.x, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(placement.bounds.y), VectorReplicate(placement.bounds.height)), VectorReplicate(8.0f))), 160.0f, 30.0f };
     current.rectangles[11u] = scrollbars.horizontal.track;
     current.rectangles[12u] = scrollbars.horizontal.thumb;
     current.rectangles[13u] = scrollbars.vertical.track;
@@ -88,12 +91,15 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
             return false;
         if(rectangle->width == 0.0f)
             continue;
-        rectangle->x += placement.textOrigin.x;
-        rectangle->y += placement.textOrigin.y;
+        const SIMDVectorSingle origin = VectorAdd(VectorSet(rectangle->x, rectangle->y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
+        rectangle->x = VectorGetX(origin);
+        rectangle->y = VectorGetY(origin);
         current.selections[current.selectionCount++] = *rectangle;
     }
-    const bool coherent = Abs(placement.caret.x - placement.textOrigin.x - localCaret->x) < 0.02f
-        && Abs(placement.caret.y - placement.textOrigin.y - localCaret->y) < 0.02f
+    const SIMDVectorSingle caretOffset = VectorSubtract(VectorSet(placement.caret.x, placement.caret.y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
+    const SIMDVectorSingle caretError = VectorAbs(VectorSubtract(caretOffset, VectorSet(localCaret->x, localCaret->y, 0.0f, 0.0f)));
+    const bool coherent = VectorGetX(caretError) < 0.02f
+        && VectorGetY(caretError) < 0.02f
         && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY
         && SameSmokeRect(placement.content, scrollbars.viewport) && SameSmokeRect(placement.clip, scrollbars.contentClip)
         && current.scroll.x == scrollbars.horizontal.offset && current.scroll.y == scrollbars.vertical.offset;
@@ -142,13 +148,13 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiTextAreaSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const f32 y = context.display.logicalHeight - 18.0f;
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
     usize marker = 0u;
     for(usize index = 0u; index <= m_snapshot.values.size(); ++index){
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
         const u32 parts = index == 1u || index == 10u || (index >= 18u && index <= 20u) ? 3u : 2u;
         for(u32 part = 0u; part < parts; ++part){
-            context.paint.fillRect({ 8.0f + static_cast<f32>(marker) * 8.0f, y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(marker)), VectorReplicate(8.0f), VectorReplicate(8.0f))), y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }
     }

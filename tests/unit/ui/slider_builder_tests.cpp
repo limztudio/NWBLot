@@ -4,6 +4,8 @@
 
 #include "slider_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -43,7 +45,7 @@ TEST_F(UiSliderBuilderTests, FiniteExternalValueOutsideTheRangeIsRetainedWhileIt
     EXPECT_DOUBLE_EQ(m_state.value(), 2.0);
     EXPECT_FALSE(m_state.result().valueChanged);
     const SliderPlacement& placement = m_state.placement();
-    EXPECT_FLOAT_EQ(placement.thumb.x + placement.thumb.width * 0.5f, placement.centerTravel.x + placement.centerTravel.width);
+    EXPECT_FLOAT_EQ(UiWidgetTests::Center(placement.thumb).x, VectorGetX(VectorAdd(VectorReplicate(placement.centerTravel.x), VectorReplicate(placement.centerTravel.width))));
     press(Core::Key::Tab);
     press(Core::Key::Home);
     ASSERT_TRUE(accept(2u));

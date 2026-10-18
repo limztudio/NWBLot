@@ -33,7 +33,12 @@ inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjection
 
 
 template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
-NWB_INLINE bool ScalarNearEqual(T value0, T value1, T epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
+NWB_INLINE bool ScalarNearEqual(T value0, T value1, T epsilon)noexcept{
+    if constexpr(IsSame_V<T, f32>)
+        return (VectorMoveMask(VectorNearEqual(VectorReplicate(value0), VectorReplicate(value1), VectorReplicate(epsilon))) & 1u) != 0u;
+    else
+        return (VectorDoubleMoveMask(VectorDoubleNearEqual(VectorDoubleReplicate(value0), VectorDoubleReplicate(value1), VectorDoubleReplicate(epsilon))) & 1u) != 0u;
+}
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixRowMultiply(SIMDVectorSingle row, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SCALAR)

@@ -7,6 +7,7 @@
 #include <core/ecs/world.h>
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/timer.h>
 
@@ -84,7 +85,10 @@ bool UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
 }
 
 bool UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
-    if(!IsFinite(xpos) || !IsFinite(ypos) || Abs(xpos) > Limit<f32>::s_Max || Abs(ypos) > Limit<f32>::s_Max)
+    if(!IsFinite(xpos) || !IsFinite(ypos))
+        return false;
+    const SIMDVectorDouble magnitude = VectorDoubleAbs(VectorDoubleSet(xpos, ypos, 0.0, 0.0));
+    if(VectorDoubleGetX(magnitude) > Limit<f32>::s_Max || VectorDoubleGetY(magnitude) > Limit<f32>::s_Max)
         return false;
     synchronizeNativeInput();
     m_pointer = { static_cast<f32>(xpos), static_cast<f32>(ypos) };

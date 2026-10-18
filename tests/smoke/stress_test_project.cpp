@@ -222,9 +222,11 @@ private:
         const bool transparent = !HardwareShadowOpaqueBaseline() && transparentMaterialClass;
         const u32 classIndex = index / 2u;
         const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
-        const f32 x = comparison ? (static_cast<f32>(index) - static_cast<f32>(m_charactersPerClass * 2u - 1u) * 0.5f) * s_CharacterSpacingX : (static_cast<f32>(classIndex) - static_cast<f32>(m_charactersPerClass - 1u) * 0.5f) * s_CharacterSpacingX
-                + (transparentMaterialClass ? -0.25f : 0.25f) * s_CharacterSpacingX
-        ;
+        const f32 slot = static_cast<f32>(comparison ? index : classIndex);
+        const f32 lastSlot = static_cast<f32>(comparison ? m_charactersPerClass * 2u - 1u : m_charactersPerClass - 1u);
+        const SIMDVectorSingle spacing = VectorReplicate(s_CharacterSpacingX);
+        const SIMDVectorSingle slotOffset = VectorNegativeMultiplySubtractExpression(VectorReplicate(lastSlot), VectorReplicate(0.5f), VectorReplicate(slot));
+        const f32 x = comparison ? VectorGetX(VectorMultiply(slotOffset, spacing)) : VectorGetX(VectorMultiplyAddExpression(slotOffset, spacing, VectorMultiply(VectorReplicate(transparentMaterialClass ? -0.25f : 0.25f), spacing)));
         const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
 
         bool tintApplied = false;
@@ -248,8 +250,7 @@ private:
     // The XZ source plane spans -1..+1, so wall scales are half-extents.
     [[nodiscard]] NWB::Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 spanScale){
         const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
-        const f32 yawRad = yawDeg * (s_PI / 180.0f);
-        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
+        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
         // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
         const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
 
@@ -264,6 +265,8 @@ private:
     // Face the ceiling downward so it bounces light into the crowd.
     [[nodiscard]] NWB::Core::ECS::EntityID createCeiling(const Float4& colorTint){
         const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
+        Float4 ceilingScale;
+        StoreFloat(VectorMultiply(VectorSet(2.0f, 1.0f, 2.0f, 0.0f), VectorSet(s_BoxHalf.x, 1.0f, s_BoxHalf.y, 0.0f)), ceilingScale);
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -272,7 +275,7 @@ private:
             s_SmokeSurfaceMaterialInterface,
             colorTint,
             Float4(0.0f, s_BoxHeight, 0.0f, 0.0f),
-            Float4(2.0f * s_BoxHalf.x, 1.0f, 2.0f * s_BoxHalf.y, 0.0f)
+            ceilingScale
         );
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
@@ -283,14 +286,15 @@ private:
 
 
     void spinCharacters()noexcept{
-        const f32 yawBase = m_yaw.yaw();
+        const SIMDVectorSingle yawBase = VectorReplicate(m_yaw.yaw());
+        const SIMDVectorSingle phaseStep = VectorDivide(VectorReplicate(s_TwoPi), VectorReplicate(static_cast<f32>(m_charactersPerClass * 2u)));
         for(usize index = 0u; index < m_characterOwners.size(); ++index){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
             if(!transform)
                 continue;
 
-            const f32 phase = static_cast<f32>(index) * (s_TwoPi / static_cast<f32>(m_charactersPerClass * 2u));
-            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yawBase + phase, 0.0f), transform->rotation);
+            const SIMDVectorSingle yaw = VectorAdd(yawBase, VectorMultiply(VectorReplicate(static_cast<f32>(index)), phaseStep));
+            StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorSelect(VectorZero(), yaw, s_SIMDMaskY)), transform->rotation);
         }
     }
 
@@ -535,9 +539,11 @@ public:
             Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
         );
 
-        m_wallPosX = createWall(Float4(s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, 2.0f * s_BoxHalf.y);
-        m_wallNegX = createWall(Float4(-s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, 2.0f * s_BoxHalf.y);
-        m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalf.y, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, 2.0f * s_BoxHalf.x);
+        // Lane x spans the side walls; lane y spans the back wall.
+        const SIMDVectorSingle wallSpans = VectorMultiply(VectorReplicate(2.0f), VectorSet(s_BoxHalf.y, s_BoxHalf.x, 0.0f, 0.0f));
+        m_wallPosX = createWall(Float4(s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, VectorGetX(wallSpans));
+        m_wallNegX = createWall(Float4(-s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, VectorGetX(wallSpans));
+        m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalf.y, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, VectorGetY(wallSpans));
         m_ceiling = createCeiling(Float4(0.90f, 0.86f, 0.72f, 1.0f));
 
         const u32 characterCount = m_charactersPerClass * 2u;
@@ -579,6 +585,7 @@ public:
             , characterCount - transparentCharacterCount
         );
         const TStringView layout = comparison ? NWB_TEXT("zigzag_v1") : NWB_TEXT("two_rows_v1");
+        const SIMDVectorSingle rowSpacing = VectorMultiply(VectorReplicate(s_CharacterSpacingX), VectorSet(comparison ? 2.0f : 1.0f, comparison ? 0.5f : 0.25f, 0.0f, 0.0f));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: workload characters_per_class={} total={} transparent={} opaque={}")
             NWB_TEXT(" layout={} rows=2 columns={} row_spacing_x={} row_stagger_x={} front_z={} back_z={} body_scale=1")
             NWB_TEXT(" camera_x=0 camera_y={} camera_z={} camera_pitch={} vertical_fov={} near_plane={} far_plane={} aspect={}")
@@ -588,8 +595,8 @@ public:
             , characterCount - transparentCharacterCount
             , layout
             , m_charactersPerClass
-            , s_CharacterSpacingX * (comparison ? 2.0f : 1.0f)
-            , s_CharacterSpacingX * (comparison ? 0.5f : 0.25f)
+            , VectorGetX(rowSpacing)
+            , VectorGetY(rowSpacing)
             , s_TransparentRowZ
             , s_OpaqueRowZ
             , cameraHeight
@@ -643,7 +650,7 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
         if(!samplePresentationFps())
             return false;
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());

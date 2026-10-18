@@ -8,6 +8,7 @@
 
 #include <impl/ecs_ui/toolkit/images/image_source.h>
 
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -43,8 +44,9 @@ struct TextureImagePaintSample{
 
 [[nodiscard]] static Expected<TextureImagePaintSample> SampleImage(const DrawSnapshot& snapshot, const u64 generation)noexcept{
     TextureImagePaintSample candidate;
-    f32 right = 0.0f;
-    f32 bottom = 0.0f;
+    // Lanes are x, y.
+    SIMDVectorSingle origin = VectorZero();
+    SIMDVectorSingle corner = VectorZero();
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Image || command.textureImageIndex >= snapshot.textureImages().size())
             continue;
@@ -54,26 +56,25 @@ struct TextureImagePaintSample{
         for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
             const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            const SIMDVectorSingle firstPosition = VectorSet(first.position.x, first.position.y, 0.0f, 0.0f);
+            const SIMDVectorSingle oppositePosition = VectorSet(opposite.position.x, opposite.position.y, 0.0f, 0.0f);
             if(candidate.quads == 0u){
-                candidate.bounds.x = first.position.x;
-                candidate.bounds.y = first.position.y;
-                candidate.uv = { first.texCoord.x, first.texCoord.y, opposite.texCoord.x - first.texCoord.x, opposite.texCoord.y - first.texCoord.y };
+                origin = firstPosition;
+                corner = oppositePosition;
+                const SIMDVectorSingle uvSize = VectorSubtract(VectorSet(opposite.texCoord.x, opposite.texCoord.y, 0.0f, 0.0f), VectorSet(first.texCoord.x, first.texCoord.y, 0.0f, 0.0f));
+                candidate.uv = { first.texCoord.x, first.texCoord.y, VectorGetX(uvSize), VectorGetY(uvSize) };
                 candidate.color = first.color;
                 candidate.layer = command.layer;
-                right = opposite.position.x;
-                bottom = opposite.position.y;
             }
-            candidate.bounds.x = Min(candidate.bounds.x, first.position.x);
-            candidate.bounds.y = Min(candidate.bounds.y, first.position.y);
-            right = Max(right, opposite.position.x);
-            bottom = Max(bottom, opposite.position.y);
+            origin = VectorMin(origin, firstPosition);
+            corner = VectorMax(corner, oppositePosition);
             ++candidate.quads;
         }
     }
     if(candidate.quads == 0u)
         return MakeUnexpected(Failure{});
-    candidate.bounds.width = right - candidate.bounds.x;
-    candidate.bounds.height = bottom - candidate.bounds.y;
+    const SIMDVectorSingle size = VectorSubtract(corner, origin);
+    candidate.bounds = { VectorGetX(origin), VectorGetY(origin), VectorGetX(size), VectorGetY(size) };
     return candidate;
 }
 
@@ -249,7 +250,7 @@ TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePa
     EXPECT_FLOAT_EQ(sample->bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(sample->bounds.width, 20.0f);
     EXPECT_NEAR(sample->uv.x, 7.0f / 96.0f, 0.000001f);
-    EXPECT_NEAR(sample->uv.x + sample->uv.width, 27.0f / 96.0f, 0.000001f);
+    EXPECT_NEAR(VectorGetX(VectorAdd(VectorReplicate(sample->uv.x), VectorReplicate(sample->uv.width))), 27.0f / 96.0f, 0.000001f);
     bool sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)

@@ -73,7 +73,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
         if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f){
             return 0u;
         }
-        return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
+        return static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(*configuredFrame), VectorReplicate(1000000.0f))));
     }();
     return s_captureFrame;
 }
@@ -101,10 +101,11 @@ public:
         if(manualAxis != 0.0f)
             m_manualControl = true;
 
+        const SIMDVectorSingle yaw = VectorReplicate(m_yaw);
         if(m_manualControl)
-            m_yaw += manualAxis * manualYawSpeed * safeDelta;
+            m_yaw = VectorGetX(VectorMultiplyAddExpression(VectorScale(VectorReplicate(manualAxis), manualYawSpeed), VectorReplicate(safeDelta), yaw));
         else
-            m_yaw += Min(safeDelta, maxSpinDelta) * spinSpeed;
+            m_yaw = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(maxSpinDelta)), VectorReplicate(spinSpeed), yaw));
     }
 
     [[nodiscard]] f32 yaw()const noexcept{
@@ -127,11 +128,12 @@ struct SmokeYawDisplay{
 };
 
 [[nodiscard]] inline SmokeYawDisplay MakeSmokeYawDisplay(const f32 yaw, const f32 twoPi)noexcept{
-    f32 wrapped = FMod(yaw, twoPi);
-    if(wrapped < 0.0f)
-        wrapped += twoPi;
+    const SIMDVectorSingle turn = VectorReplicate(twoPi);
+    SIMDVectorSingle wrapped = VectorReplicate(FMod(yaw, twoPi));
+    if(VectorGetX(wrapped) < 0.0f)
+        wrapped = VectorAdd(wrapped, turn);
 
-    return { wrapped, wrapped * (s_DegreesPerTurn / twoPi), };
+    return { VectorGetX(wrapped), VectorGetX(VectorMultiply(wrapped, VectorDivide(VectorReplicate(s_DegreesPerTurn), turn))), };
 }
 
 inline void SetSmokeYawWindowTitle(ProjectRuntimeContext& context, const f32 yaw, const bool manualControl, const f32 twoPi){

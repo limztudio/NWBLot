@@ -5,6 +5,8 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -128,13 +130,12 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
     f32 bestCost = s_RayTracingFiniteInfinity;
 
     for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
-        const f32 loExtent = VectorGetByIndex(centroidMin, axis);
-        const f32 hiExtent = VectorGetByIndex(centroidMax, axis);
-        const f32 extent = hiExtent - loExtent;
-        if(extent <= 0.0f)
+        const SIMDVectorSingle loExtent = VectorReplicate(VectorGetByIndex(centroidMin, axis));
+        const SIMDVectorSingle extent = VectorSubtract(VectorReplicate(VectorGetByIndex(centroidMax, axis)), loExtent);
+        if(VectorGetX(extent) <= 0.0f)
             continue; // coincident centroids on this axis -> binning cannot split it
         anyAxisValid = true;
-        const f32 invExtent = s_SceneBvhSahBinCount / extent;
+        const SIMDVectorSingle invExtent = VectorDivide(VectorReplicate(static_cast<f32>(s_SceneBvhSahBinCount)), extent);
 
         for(u32 b = 0u; b < s_SceneBvhSahBinCount; ++b){
             binMin[b] = VectorReplicate(s_RayTracingFiniteInfinity);
@@ -144,13 +145,13 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
         }
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const f32 c = VectorGetByIndex(primitiveBounds[instance].centroid, axis);
-            u32 b = static_cast<u32>((c - loExtent) * invExtent);
+            const SIMDVectorSingle c = VectorReplicate(VectorGetByIndex(primitiveBounds[instance].centroid, axis));
+            u32 b = static_cast<u32>(VectorGetX(VectorMultiply(VectorSubtract(c, loExtent), invExtent)));
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
             binMin[b] = VectorMin(binMin[b], primitiveBounds[instance].aabbMin);
             binMax[b] = VectorMax(binMax[b], primitiveBounds[instance].aabbMax);
-            binCost[b] += static_cast<f32>(instanceLeafCost.get()[instance]);
+            binCost[b] = VectorGetX(VectorAdd(VectorReplicate(binCost[b]), VectorReplicate(static_cast<f32>(instanceLeafCost.get()[instance]))));
             ++binCount[b];
         }
 
@@ -162,17 +163,17 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
         {
             SIMDVectorSingle accMin = VectorReplicate(s_RayTracingFiniteInfinity);
             SIMDVectorSingle accMax = VectorReplicate(-s_RayTracingFiniteInfinity);
-            f32 accCost = 0.0f;
+            SIMDVectorSingle accCost = VectorZero();
             u32 accCount = 0u;
             for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
                 const u32 idx = b - 1u;
                 accMin = VectorMin(accMin, binMin[idx]);
                 accMax = VectorMax(accMax, binMax[idx]);
-                accCost += binCost[idx];
+                accCost = VectorAdd(accCost, VectorReplicate(binCost[idx]));
                 accCount += binCount[idx];
                 suffixMin[idx] = accMin;
                 suffixMax[idx] = accMax;
-                suffixCost[idx] = accCost;
+                suffixCost[idx] = VectorGetX(accCost);
                 suffixCount[idx] = accCount;
             }
         }
@@ -185,13 +186,13 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
 
         SIMDVectorSingle leftMin = VectorReplicate(s_RayTracingFiniteInfinity);
         SIMDVectorSingle leftMax = VectorReplicate(-s_RayTracingFiniteInfinity);
-        f32 leftCost = 0.0f;
+        SIMDVectorSingle leftCost = VectorZero();
         u32 leftCount = 0u;
         for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){
             const u32 b = k - 1u;
             leftMin = VectorMin(leftMin, binMin[b]);
             leftMax = VectorMax(leftMax, binMax[b]);
-            leftCost += binCost[b];
+            leftCost = VectorAdd(leftCost, VectorReplicate(binCost[b]));
             leftCount += binCount[b];
 
             const u32 rightCount = suffixCount[k];
@@ -201,7 +202,7 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
             const SIMDVectorSingle leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
             const SIMDVectorSingle rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
             // SAH cost on lanes: parent*s_Traversal + left*leftCost + right*rightCost via multiply-add chains.
-            const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(leftArea, VectorReplicate(leftCost), VectorMultiplyAdd(rightArea, VectorReplicate(suffixCost[k]), VectorMultiply(parentArea, VectorReplicate(s_SceneBvhSahTraversalCost))));
+            const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(leftArea, leftCost, VectorMultiplyAdd(rightArea, VectorReplicate(suffixCost[k]), VectorMultiply(parentArea, VectorReplicate(s_SceneBvhSahTraversalCost))));
             const f32 cost = VectorGetX(sahCostLanes);
             if(cost < bestCost){
                 bestCost = cost;
@@ -214,15 +215,14 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
     u32 mid;
     if(anyAxisValid){
         // Partition the index slice by the winning axis/bin boundary, matching the binning that produced bestCost.
-        const f32 loExtent = VectorGetByIndex(centroidMin, bestAxis);
-        const f32 hiExtent = VectorGetByIndex(centroidMax, bestAxis);
-        const f32 extent = hiExtent - loExtent;
-        const f32 invExtent = s_SceneBvhSahBinCount / extent;
+        const SIMDVectorSingle loExtent = VectorReplicate(VectorGetByIndex(centroidMin, bestAxis));
+        const SIMDVectorSingle extent = VectorSubtract(VectorReplicate(VectorGetByIndex(centroidMax, bestAxis)), loExtent);
+        const SIMDVectorSingle invExtent = VectorDivide(VectorReplicate(static_cast<f32>(s_SceneBvhSahBinCount)), extent);
         mid = lo;
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const f32 c = VectorGetByIndex(primitiveBounds[instance].centroid, bestAxis);
-            u32 b = static_cast<u32>((c - loExtent) * invExtent);
+            const SIMDVectorSingle c = VectorReplicate(VectorGetByIndex(primitiveBounds[instance].centroid, bestAxis));
+            u32 b = static_cast<u32>(VectorGetX(VectorMultiply(VectorSubtract(c, loExtent), invExtent)));
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
             if(b < bestBin){

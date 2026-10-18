@@ -116,9 +116,7 @@ public:
     [[nodiscard]] f64 readyFrontierWorkerUtilization()const noexcept{
         if(!(readyFrontierWorkerCapacitySeconds > 0.0))
             return 0.0;
-        const f64 utilization = readyFrontierWorkerBusySeconds / readyFrontierWorkerCapacitySeconds;
-        const f64 lowerBounded = utilization < 0.0 ? 0.0 : utilization;
-        return lowerBounded > 1.0 ? 1.0 : lowerBounded;
+        return VectorDoubleGetX(VectorDoubleSaturate(VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds))));
     }
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };

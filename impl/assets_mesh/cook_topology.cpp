@@ -166,7 +166,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
         const SIMDVectorDouble aValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base]]));
         const SIMDVectorDouble bValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base + 1u]]));
         const SIMDVectorDouble cValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base + 2u]]));
-        componentVolumes[component] += VectorDoubleGetX(RelativeTriangleVolume(aValue, bValue, cValue, origin));
+        componentVolumes[component] = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(componentVolumes[component]), RelativeTriangleVolume(aValue, bValue, cValue, origin)));
     }
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         const u32 component = FindComponent(parents, triangle);

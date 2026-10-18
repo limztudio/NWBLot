@@ -68,7 +68,12 @@ template<typename Source>
 }
 
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value)noexcept{
-    return EncodeSmokeColor(static_cast<u64>(Max(0.0f, value) + 0.5f));
+    return EncodeSmokeColor(static_cast<u64>(VectorGetX(VectorAdd(VectorMax(VectorZero(), VectorReplicate(value)), VectorReplicate(0.5f)))));
+}
+
+// Lanes are x, y, width and height.
+[[nodiscard]] inline Impl::Ui::Rect StoreSmokeRect(const SIMDVectorSingle rectangle)noexcept{
+    return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) };
 }
 
 [[nodiscard]] inline bool SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{
@@ -79,7 +84,7 @@ template<typename Source>
 [[nodiscard]] inline Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
     if(placement.rowCount == 0u)
         return MakeUnexpected(Failure{});
-    const f32 height = static_cast<f32>(placement.contentHeight / static_cast<f64>(placement.rowCount));
+    const f32 height = static_cast<f32>(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(placement.contentHeight), VectorDoubleReplicate(static_cast<f64>(placement.rowCount)))));
     return Impl::Ui::ScrollLayout::RowBounds(index, placement, height);
 }
 
@@ -105,7 +110,7 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
 template<u32 Step, u32 Width, typename ValuesT>
 inline void PaintKeyedSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u64 sequence){
     const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<ValuesT> + 1u) * 2u, 12u, Step>();
-    const f32 y = context.display.logicalHeight - 20.0f;
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
     for(usize index = 0u; index <= values.size(); ++index){
         const u64 value = index == values.size() ? sequence : values[index];
         for(u32 part = 0u; part < 2u; ++part){
@@ -118,20 +123,21 @@ inline void PaintKeyedSmokeValueMarkers(Impl::UiPaintContext& context, const Val
 // Progress, slider, and image snapshots paint one 12-bit marker swatch per value part plus sequence swatches along the bottom edge.
 template<typename ValuesT, typename BitsT>
 inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const BitsT& bits, const u64 sequence){
-    const f32 y = context.display.logicalHeight - 18.0f;
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
+    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<ValuesT> * 2u + TupleSize_V<BitsT> * 6u + 2u, 12u, 12u>();
     usize marker = 0u;
     for(const u64 value : values){
         for(u32 part = 0u; part < 2u; ++part){
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
         }
     }
     for(const u64 bit : bits){
         for(u32 part = 0u; part < 6u; ++part){
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(bit >> (part * 12u)));
+            context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(bit >> (part * 12u)));
         }
     }
     for(u32 part = 0u; part < 2u; ++part){
-        context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f }, EncodeSmokeColor(sequence >> (part * 12u)));
+        context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(sequence >> (part * 12u)));
     }
 }
 

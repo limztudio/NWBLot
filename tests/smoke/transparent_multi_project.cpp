@@ -641,7 +641,7 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)

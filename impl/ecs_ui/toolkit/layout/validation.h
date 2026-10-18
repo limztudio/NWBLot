@@ -7,6 +7,7 @@
 
 #include "../paint.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -23,13 +24,18 @@ NWB_IMPL_UI_BEGIN
     return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && rectangle.width >= 0.0f && IsFinite(rectangle.height) && rectangle.height >= 0.0f;
 }
 
+// Inputs may be unchecked here, so the bottom sum runs only after the right sum is finite.
 [[nodiscard]] inline bool HasPreciseUiRectEndpoints(const Rect& rectangle)noexcept{
-    return IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height) && (rectangle.width == 0.0f || rectangle.x + rectangle.width > rectangle.x) && (rectangle.height == 0.0f || rectangle.y + rectangle.height > rectangle.y);
+    const f32 right = VectorGetX(VectorAdd(VectorReplicate(rectangle.x), VectorReplicate(rectangle.width)));
+    if(!IsFinite(right))
+        return false;
+    const f32 bottom = VectorGetX(VectorAdd(VectorReplicate(rectangle.y), VectorReplicate(rectangle.height)));
+    return IsFinite(bottom) && (rectangle.width == 0.0f || right > rectangle.x) && (rectangle.height == 0.0f || bottom > rectangle.y);
 }
 
 // Zero or subprecision extents remain valid when their rounded endpoints are finite.
 [[nodiscard]] inline bool IsValidUiRect(const Rect& rectangle)noexcept{
-    return HasValidUiRectDimensions(rectangle) && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
+    return HasValidUiRectDimensions(rectangle) && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY);
 }
 
 // Controls with travel geometry additionally reject positive extents lost to coordinate precision.
@@ -39,7 +45,11 @@ NWB_IMPL_UI_BEGIN
 
 // Image placements require both precise rounded extents and f64 endpoint sums inside the f32 upper bound.
 [[nodiscard]] inline bool IsBoundedUiRect(const Rect& rectangle)noexcept{
-    return HasValidUiRectDimensions(rectangle) && static_cast<f64>(rectangle.x) + rectangle.width <= Limit<f32>::s_Max && static_cast<f64>(rectangle.y) + rectangle.height <= Limit<f32>::s_Max && HasPreciseUiRectEndpoints(rectangle);
+    if(!HasValidUiRectDimensions(rectangle))
+        return false;
+    // Finite f32 inputs cannot overflow these f64 sums.
+    const SIMDVectorDouble end = VectorDoubleAdd(VectorDoubleSet(rectangle.x, rectangle.y, 0.0, 0.0), VectorDoubleSet(rectangle.width, rectangle.height, 0.0, 0.0));
+    return VectorDoubleGetX(end) <= Limit<f32>::s_Max && VectorDoubleGetY(end) <= Limit<f32>::s_Max && HasPreciseUiRectEndpoints(rectangle);
 }
 
 [[nodiscard]] inline bool IsValidUiPadding(const Insets& padding)noexcept{
@@ -47,7 +57,11 @@ NWB_IMPL_UI_BEGIN
 }
 
 [[nodiscard]] inline bool IsBoundedUiPadding(const Insets& padding)noexcept{
-    return IsValidUiPadding(padding) && static_cast<f64>(padding.left) + padding.right <= Limit<f32>::s_Max && static_cast<f64>(padding.top) + padding.bottom <= Limit<f32>::s_Max;
+    if(!IsValidUiPadding(padding))
+        return false;
+    // Finite f32 inputs cannot overflow these f64 sums.
+    const SIMDVectorDouble size = VectorDoubleAdd(VectorDoubleSet(padding.left, padding.top, 0.0, 0.0), VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0));
+    return VectorDoubleGetX(size) <= Limit<f32>::s_Max && VectorDoubleGetY(size) <= Limit<f32>::s_Max;
 }
 
 [[nodiscard]] inline bool IsValidUiColor(const Color& color)noexcept{

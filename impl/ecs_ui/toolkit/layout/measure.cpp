@@ -41,15 +41,15 @@ bool LayoutTree::measure()noexcept{
             ++childCount;
         }
         if(childCount > 1u){
-            const f64 spacing = static_cast<f64>(description.gap) * static_cast<f64>(childCount - 1u);
+            const SIMDVectorDouble spacing = VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(description.gap)), static_cast<f64>(childCount - 1u));
             if(description.direction == LayoutDirection::Row){
                 const SIMDVectorDouble horizontal = VectorDoubleSelect(VectorDoubleZero(), extent, s_DoubleSIMDMaskX);
-                const SIMDVectorDouble accumulated = VectorDoubleAdd(horizontal, VectorDoubleSet(spacing, 0.0, 0.0, 0.0));
+                const SIMDVectorDouble accumulated = VectorDoubleAdd(horizontal, spacing);
                 extent = VectorDoubleSelect(extent, accumulated, s_DoubleSIMDMaskX);
             }
             else if(description.direction == LayoutDirection::Column){
                 const SIMDVectorDouble vertical = VectorDoubleSelect(VectorDoubleZero(), extent, s_DoubleSIMDMaskY);
-                const SIMDVectorDouble accumulated = VectorDoubleAdd(vertical, VectorDoubleSet(0.0, spacing, 0.0, 0.0));
+                const SIMDVectorDouble accumulated = VectorDoubleAdd(vertical, spacing);
                 extent = VectorDoubleSelect(extent, accumulated, s_DoubleSIMDMaskY);
             }
         }

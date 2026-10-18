@@ -28,12 +28,16 @@ bool ValidRectangle(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width >= 0.0f && rectangle.height >= 0.0f
-        && IsFinite((rectangle.x + rectangle.width)) && IsFinite((rectangle.y + rectangle.height))
+        && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
     ;
 }
 
 bool Contains(const Rect& rectangle, const Point& position)noexcept{
-    return position.x >= rectangle.x && position.y >= rectangle.y && position.x < (rectangle.x + rectangle.width) && position.y < (rectangle.y + rectangle.height);
+    return
+        position.x >= rectangle.x && position.y >= rectangle.y
+        && position.x < VectorGetX(VectorAdd(VectorReplicate(rectangle.x), VectorReplicate(rectangle.width)))
+        && position.y < VectorGetX(VectorAdd(VectorReplicate(rectangle.y), VectorReplicate(rectangle.height)))
+    ;
 }
 
 

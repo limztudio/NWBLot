@@ -6,6 +6,8 @@
 
 #include <impl/ecs_ui/toolkit/context.h>
 
+#include <global/simdmath.h>
+
 #include <gtest/gtest.h>
 
 
@@ -119,7 +121,8 @@ protected:
         }
         if(open || keepClosedChild){
             EXPECT_TRUE(m_context.pushScope("popup"));
-            const auto frameChildResult = button("child", { bounds.x + 10.0f, bounds.y + 10.0f, 60.0f, 24.0f }, open);
+            const SIMDVectorSingle childOrigin = VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorReplicate(10.0f));
+            const auto frameChildResult = button("child", { VectorGetX(childOrigin), VectorGetY(childOrigin), 60.0f, 24.0f }, open);
             EXPECT_TRUE(frameChildResult);
             if(!frameChildResult)
                 return MakeUnexpected(frameChildResult.error());

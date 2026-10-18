@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/widgets/text_area_navigation.h>
 
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -138,7 +139,7 @@ TEST_F(UiTextAreaNavigationTests, APageWithinTheCurrentRowKeepsTheActiveCaret){
     ASSERT_TRUE(m_model.setText("MMMM\nMMMM\nMMMM"));
     ASSERT_TRUE(m_model.setSelection(7u, 7u));
     ASSERT_TRUE(shapeCurrent());
-    const f32 height = m_view.caretGeometry().lines()[1u].height * 0.25f;
+    const f32 height = VectorGetX(VectorMultiply(VectorReplicate(m_view.caretGeometry().lines()[1u].height), VectorReplicate(0.25f)));
     const auto down = resolve(EditNavigationDirection::PageDown, height);
     ASSERT_TRUE(down);
     EXPECT_EQ(down->committedByte, 7u);

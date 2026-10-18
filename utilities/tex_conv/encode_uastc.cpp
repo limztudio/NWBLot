@@ -166,7 +166,7 @@ struct EncodedMip{
 }
 
 [[nodiscard]] static u8 QuantizeUnorm(const f32 value)noexcept{
-    return static_cast<u8>(Saturate(value) * s_UnormScale + s_UnormRoundingBias);
+    return static_cast<u8>(VectorGetX(VectorMultiplyAddExpression(VectorSaturate(VectorReplicate(value)), VectorReplicate(s_UnormScale), VectorReplicate(s_UnormRoundingBias))));
 }
 
 [[nodiscard]] static Expected<AlphaTransport> DeriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){

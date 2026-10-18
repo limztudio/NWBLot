@@ -49,7 +49,7 @@ public:
         : m_font(hb_font_create(&face))
     {
         hb_ot_font_set_funcs(m_font);
-        const i32 scale = static_cast<i32>(size * 64.0f + 0.5f);
+        const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(size), VectorReplicate(64.0f), VectorReplicate(0.5f))));
         hb_font_set_scale(m_font, scale, scale);
     }
     ~ScaledFont()noexcept{ hb_font_destroy(m_font); }
@@ -228,21 +228,28 @@ private:
         FT_BBox box{};
         FT_Outline_Get_CBox(&slot->outline, &box);
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
-        const f64 scale = static_cast<f64>(fontSize) / m_face->units_per_EM;
-        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMin), -static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(1.0, 1.0, 0.0, 0.0)), VectorDoubleSet(scale, scale, 0.0, 0.0));
+        const SIMDVectorDouble scale = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(fontSize), static_cast<f64>(fontSize), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_face->units_per_EM), static_cast<f64>(m_face->units_per_EM), 1.0, 1.0));
+        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMin), -static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(1.0, 1.0, 0.0, 0.0)), scale);
         const f64 left = VectorDoubleGetX(leftTopValue);
         const f64 top = VectorDoubleGetY(leftTopValue);
         const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(
             VectorDoubleAdd(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMax), static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMin), 0.0, 0.0)), VectorDoubleSet(2.0, 2.0, 0.0, 0.0)),
-            VectorDoubleSet(scale, scale, 0.0, 0.0)
+            scale
         );
         const f64 width = VectorDoubleGetX(widthHeightValue);
         const f64 height = VectorDoubleGetY(widthHeightValue);
         const f64 limit = Limit<f32>::s_Max;
-        if(!IsFinite(left) || !IsFinite(top) || !IsFinite(width) || !IsFinite(height) || Abs(left) > limit || Abs(top) > limit || width < 0.0 || height < 0.0 || width > limit || height > limit || Abs(left + width) > limit || Abs(top + height) > limit)
+        const SIMDVectorDouble limitValue = VectorDoubleReplicate(limit);
+        // The end sums run last, on finite and bounded inputs, like the old chain.
+        if(
+            !IsFinite(left) || !IsFinite(top) || !IsFinite(width) || !IsFinite(height)
+            || VectorDoubleMoveMask(VectorDoubleGreater(VectorDoubleAbs(leftTopValue), limitValue)) != 0u
+            || width < 0.0 || height < 0.0 || width > limit || height > limit
+            || VectorDoubleMoveMask(VectorDoubleGreater(VectorDoubleAbs(VectorDoubleAdd(leftTopValue, widthHeightValue)), limitValue)) != 0u
+        )
             return {};
         const Rect ink{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(width), static_cast<f32>(height) };
-        if(!IsFinite(ink.x + ink.width) || !IsFinite(ink.y + ink.height))
+        if(!VectorIsFinite(VectorAdd(VectorSet(ink.x, ink.y, 0.0f, 0.0f), VectorSet(ink.width, ink.height, 0.0f, 0.0f)), VectorComponentMask::s_XY))
             return {};
         return { ink, true };
     }
@@ -299,7 +306,7 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     metrics.ascender = VectorGetX(positiveExtents);
     metrics.descender = VectorGetY(positiveExtents);
     metrics.lineGap = VectorGetZ(positiveExtents);
-    if(!(metrics.ascender + metrics.descender > 0.0f))
+    if(!(VectorGetX(VectorAdd(VectorSplatX(positiveExtents), VectorSplatY(positiveExtents))) > 0.0f))
         return MakeUnexpected(Failure{});
     return metrics;
 }

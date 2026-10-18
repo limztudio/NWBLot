@@ -590,7 +590,7 @@ public:
         }
 
         if(m_staticPreview){
-            m_totalTimeSeconds += static_cast<f64>(safeDelta);
+            m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
             animatePoses();
             const auto updated = m_world->tick(safeDelta);
             if(!updated){
@@ -605,7 +605,7 @@ public:
         if(m_finished)
             return true;
 
-        m_totalTimeSeconds += static_cast<f64>(safeDelta);
+        m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
         animatePoses();
         const auto updated = m_world->tick(safeDelta);
         if(!updated){

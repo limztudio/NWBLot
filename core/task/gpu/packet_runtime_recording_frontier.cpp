@@ -279,21 +279,21 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     Alloc::ScratchArena& serialStateFanInScratchArena = *serialScratch->stateFanInScratchArena;
     const auto completeReadyFrontierTelemetry = [&]()noexcept{
         const f64 elapsedSeconds = DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
-        f64 workerBusySeconds = 0.0;
+        SIMDVectorDouble workerBusySeconds = VectorDoubleZero();
         for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
             const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
             const GpuRecordedPacket* const recordedPacket = outRecordedGraph.findWithinArtifactOperation(packet, artifactOperation);
             if(recordedPacket)
-                workerBusySeconds += recordedPacket->recordingSeconds;
+                workerBusySeconds = VectorDoubleAdd(workerBusySeconds, VectorDoubleReplicate(recordedPacket->recordingSeconds));
         }
 
         // CpuTaskScheduler workers and its calling thread are all callable logical recording slots.
         // Keeping the entire successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
         const f64 workerCount = static_cast<f64>(cpuScheduler.workerThreadCount());
-        const f64 logicalWorkerSlotCount = workerCount + 1.0;
+        const SIMDVectorDouble logicalWorkerSlotCount = VectorDoubleAdd(VectorDoubleReplicate(workerCount), VectorDoubleSplatOne());
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
-        const f64 availableWorkerSeconds = elapsedSeconds * logicalWorkerSlotCount;
-        outRecordedGraph.addReadyFrontierStatistics(elapsedSeconds, workerBusySeconds, availableWorkerSeconds, artifactOperation);
+        const f64 availableWorkerSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(elapsedSeconds), logicalWorkerSlotCount));
+        outRecordedGraph.addReadyFrontierStatistics(elapsedSeconds, VectorDoubleGetX(workerBusySeconds), availableWorkerSeconds, artifactOperation);
     };
 
     // Command-IR records form one linear graph-generation artifact. Keeping capture serial preserves its existing record order and rollback contract. This path records directly after the shared prepare step so the enclosing ready-frontier operation owns exactly one elapsed span rather than nesting compile-order telemetry.

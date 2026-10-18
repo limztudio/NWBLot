@@ -82,15 +82,17 @@ TEST(CurrentMathContractBoundaries, OppositelyOrientedThinBoxesDoNotInventAnInte
     const BoundingDoubleOrientedBox doubleLhs(Double3U(0.0, 0.0, 0.0), Double3U(1.0, 1.0, 0.1), Double4(0.0, 0.0, 0.0, 1.0));
     for(i32 sign = -1; sign <= 1; sign += 2){
         SCOPED_TRACE(sign);
+        const SIMDVectorSingle signedTerms = VectorMultiply(VectorSet(static_cast<f32>(sign), -static_cast<f32>(sign), 0.0f, 0.0f), VectorSet(s_PIDIV4, 1.1f, 0.0f, 0.0f));
         Float4 orientation;
-        StoreFloat(QuaternionRotationNormal(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), static_cast<f32>(sign) * s_PIDIV4), orientation);
-        const BoundingOrientedBox rhs(Float3U(1.1f, -static_cast<f32>(sign) * 1.1f, 0.0f), Float3U(2.0f, 0.1f, 0.1f), orientation);
+        StoreFloat(QuaternionRotationNormal(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), VectorGetX(signedTerms)), orientation);
+        const BoundingOrientedBox rhs(Float3U(1.1f, VectorGetY(signedTerms), 0.0f), Float3U(2.0f, 0.1f, 0.1f), orientation);
         EXPECT_FALSE(lhs.intersects(rhs));
         EXPECT_FALSE(rhs.intersects(lhs));
 
+        const SIMDVectorDouble doubleSignedTerms = VectorDoubleMultiply(VectorDoubleSet(static_cast<f64>(sign), -static_cast<f64>(sign), 0.0, 0.0), VectorDoubleSet(s_DoublePIDIV4, 1.1, 0.0, 0.0));
         Double4 doubleOrientation;
-        StoreDouble(QuaternionDoubleRotationNormal(SIMDVectorDouble{ 0.0, 0.0, 1.0, 0.0 }, static_cast<f64>(sign) * s_DoublePIDIV4), doubleOrientation);
-        const BoundingDoubleOrientedBox doubleRhs(Double3U(1.1, -static_cast<f64>(sign) * 1.1, 0.0), Double3U(2.0, 0.1, 0.1), doubleOrientation);
+        StoreDouble(QuaternionDoubleRotationNormal(SIMDVectorDouble{ 0.0, 0.0, 1.0, 0.0 }, VectorDoubleGetX(doubleSignedTerms)), doubleOrientation);
+        const BoundingDoubleOrientedBox doubleRhs(Double3U(1.1, VectorDoubleGetY(doubleSignedTerms), 0.0), Double3U(2.0, 0.1, 0.1), doubleOrientation);
         EXPECT_FALSE(doubleLhs.intersects(doubleRhs));
         EXPECT_FALSE(doubleRhs.intersects(doubleLhs));
     }
@@ -165,7 +167,7 @@ TEST(CurrentMathContractBoundaries, ShearedSphereContainsATransformedSurfacePoin
     shear.v[0] = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
     BoundingSphere transformed;
     source.transform(transformed, shear);
-    const f32 diagonal = 1.0f / Sqrt(2.0f);
+    const f32 diagonal = VectorGetX(VectorDivide(VectorSplatOne(), VectorSqrt(VectorReplicate(2.0f))));
     const SIMDVectorSingle point = Vector3Transform(VectorSet(diagonal, diagonal, 0.0f, 1.0f), shear);
     EXPECT_NE(transformed.contains(point), ContainmentType::Disjoint);
     const SIMDMatrix srt = MatrixMultiply(MatrixTranslation(7.0f, -11.0f, 5.0f), MatrixScaling(2.0f, 3.0f, 4.0f));
@@ -179,7 +181,7 @@ TEST(CurrentMathContractBoundaries, ShearedSphereContainsATransformedSurfacePoin
     doubleShear.v[0] = SIMDVectorDouble{ 1.0, 1.0, 0.0, 0.0 };
     BoundingDoubleSphere doubleTransformed;
     doubleSource.transform(doubleTransformed, doubleShear);
-    const f64 doubleDiagonal = 1.0 / Sqrt(2.0);
+    const f64 doubleDiagonal = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSplatOne(), VectorDoubleSqrt(VectorDoubleReplicate(2.0))));
     const SIMDVectorDouble doublePoint = VectorDouble3Transform(SIMDVectorDouble{ doubleDiagonal, doubleDiagonal, 0.0, 1.0 }, doubleShear);
     EXPECT_NE(doubleTransformed.contains(doublePoint), ContainmentType::Disjoint);
     const SIMDMatrixDouble doubleSrt = MatrixDoubleMultiply(MatrixDoubleTranslation(7.0, -11.0, 5.0), MatrixDoubleScaling(2.0, 3.0, 4.0));
@@ -274,7 +276,7 @@ TEST(CurrentMathContractBoundaries, NonuniformOrientedBoxTransformBoundsItsRotat
     ASSERT_EQ(doubleSource.contains(doubleSourcePoint), ContainmentType::Contains);
     for(i32 sign = -1; sign <= 1; sign += 2){
         SCOPED_TRACE(sign);
-        const SIMDMatrix matrix = MatrixScaling(static_cast<f32>(sign) * 2.0f, 1.0f, 1.0f);
+        const SIMDMatrix matrix = MatrixScaling(VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(sign)), 2.0f)), 1.0f, 1.0f);
         ASSERT_TRUE(MatrixDecompose(matrix));
         BoundingOrientedBox transformed;
         source.transform(transformed, matrix);
@@ -282,7 +284,7 @@ TEST(CurrentMathContractBoundaries, NonuniformOrientedBoxTransformBoundsItsRotat
         const SIMDVectorSingle expectedExtents = sign > 0 ? VectorSet(2.5f, 3.5f, 1.0f, 0.0f) : VectorSet(3.5f, 2.5f, 1.0f, 0.0f);
         ExpectSingleDirectionNear(LoadFloat(transformed.extents), expectedExtents);
 
-        const SIMDMatrixDouble doubleMatrix = MatrixDoubleScaling(static_cast<f64>(sign) * 2.0, 1.0, 1.0);
+        const SIMDMatrixDouble doubleMatrix = MatrixDoubleScaling(VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(sign)), 2.0)), 1.0, 1.0);
         ASSERT_TRUE(MatrixDoubleDecompose(doubleMatrix));
         BoundingDoubleOrientedBox doubleTransformed;
         doubleSource.transform(doubleTransformed, doubleMatrix);
@@ -295,24 +297,27 @@ TEST(CurrentMathContractBoundaries, NonuniformOrientedBoxTransformBoundsItsRotat
 TEST(CurrentMathContractBoundaries, SphereTransformBoundsSmallShearAdmittedByDecomposition){
     const BoundingSphere source(Float3U(0.0f, 0.0f, 0.0f), 1.0f);
     const BoundingDoubleSphere doubleSource(Double3U(0.0, 0.0, 0.0), 1.0);
-    const f32 diagonal = 1.0f / Sqrt(2.0f);
-    const f64 doubleDiagonal = 1.0 / Sqrt(2.0);
+    const SIMDVectorSingle diagonal = VectorDivide(VectorSplatOne(), VectorSqrt(VectorReplicate(2.0f)));
+    const SIMDVectorDouble doubleDiagonal = VectorDoubleDivide(VectorDoubleSplatOne(), VectorDoubleSqrt(VectorDoubleReplicate(2.0)));
     for(i32 sign = -1; sign <= 1; sign += 2){
         SCOPED_TRACE(sign);
+        // Lane x keeps 1, lane y takes the sign, lanes z and w stay +0.
+        const SIMDVectorSingle signLanes = VectorSet(1.0f, static_cast<f32>(sign), 0.0f, 0.0f);
+        const SIMDVectorDouble doubleSignLanes = VectorDoubleSet(1.0, static_cast<f64>(sign), 0.0, 0.0);
         SIMDMatrix shear = MatrixIdentity();
-        shear.v[0] = VectorSet(1.0f, static_cast<f32>(sign) * 0.1f, 0.0f, 0.0f);
+        shear.v[0] = VectorMultiply(signLanes, VectorSet(1.0f, 0.1f, 0.0f, 0.0f));
         ASSERT_TRUE(MatrixDecompose(shear));
         BoundingSphere transformed;
         source.transform(transformed, shear);
-        const SIMDVectorSingle point = Vector3Transform(VectorSet(diagonal, static_cast<f32>(sign) * diagonal, 0.0f, 0.0f), shear);
+        const SIMDVectorSingle point = Vector3Transform(VectorMultiply(signLanes, diagonal), shear);
         EXPECT_NE(transformed.contains(point), ContainmentType::Disjoint);
 
         SIMDMatrixDouble doubleShear = MatrixDoubleIdentity();
-        doubleShear.v[0] = SIMDVectorDouble{ 1.0, static_cast<f64>(sign) * 0.001, 0.0, 0.0 };
+        doubleShear.v[0] = VectorDoubleMultiply(doubleSignLanes, VectorDoubleSet(1.0, 0.001, 0.0, 0.0));
         ASSERT_TRUE(MatrixDoubleDecompose(doubleShear));
         BoundingDoubleSphere doubleTransformed;
         doubleSource.transform(doubleTransformed, doubleShear);
-        const SIMDVectorDouble doublePoint = VectorDouble3Transform(SIMDVectorDouble{ doubleDiagonal, static_cast<f64>(sign) * doubleDiagonal, 0.0, 0.0 }, doubleShear);
+        const SIMDVectorDouble doublePoint = VectorDouble3Transform(VectorDoubleMultiply(doubleSignLanes, doubleDiagonal), doubleShear);
         EXPECT_NE(doubleTransformed.contains(doublePoint), ContainmentType::Disjoint);
     }
 }

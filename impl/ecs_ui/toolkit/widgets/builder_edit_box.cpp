@@ -163,7 +163,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
 bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
     if(!numericEditMatches(item))
         return false;
-    const f32 caretWidth = (1.0f / m_paint.displayMetrics().pixelScaleX);
+    const f32 caretWidth = VectorGetX(VectorDivide(VectorSplatOne(), VectorReplicate(m_paint.displayMetrics().pixelScaleX)));
     const auto arranged = item.editView.arrange(box.rectangle, item.padding, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), { item.editState->scroll, 0.0f }, caretWidth);
     if(!arranged)
         return false;

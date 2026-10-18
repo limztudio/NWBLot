@@ -11,6 +11,8 @@
 
 #include <core/ecs/world.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,7 +50,7 @@ inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE
 
 NWB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height)noexcept{
     if(width != 0u && height != 0u)
-        return static_cast<f32>(width) / static_cast<f32>(height);
+        return VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(width)), VectorReplicate(static_cast<f32>(height))));
 
     return NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio;
 }

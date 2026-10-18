@@ -7,6 +7,8 @@
 #include <impl/ecs_ui/toolkit/widgets/slider.h>
 #include <impl/ecs_ui/toolkit/widgets/slider_style.h>
 
+#include <global/simdmath.h>
+
 #include <gtest/gtest.h>
 
 
@@ -40,7 +42,9 @@ TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
     const auto last = SliderLayout::Place(bounds, bounds, *metrics, 1.0);
     ASSERT_TRUE(last);
     EXPECT_FLOAT_EQ(first->thumb.x, first->travelBounds.x);
-    EXPECT_FLOAT_EQ(last->thumb.x + last->thumb.width, last->travelBounds.x + last->travelBounds.width);
+    // Lanes are the thumb end and the travel end.
+    const SIMDVectorSingle ends = VectorAdd(VectorSet(last->thumb.x, last->travelBounds.x, 0.0f, 0.0f), VectorSet(last->thumb.width, last->travelBounds.width, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(VectorGetX(ends), VectorGetY(ends));
 }
 
 TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry){

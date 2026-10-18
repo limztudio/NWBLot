@@ -5,6 +5,8 @@
 #include "text_area_fixture.h"
 #include "widget_id_assertion.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -230,7 +232,7 @@ TEST_F(UiTextAreaInputScrollTests, ReadOnlyWheelAndThumbScrollingLeaveUndoAndRed
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
     const Point origin = Center(thumb.rectangle);
-    const Point destination{ origin.x, thumb.gestureReference.y + thumb.gestureReference.height + 50.0f };
+    const Point destination{ origin.x, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(thumb.gestureReference.y), VectorReplicate(thumb.gestureReference.height)), VectorReplicate(50.0f))) };
     drag(origin, destination);
     ASSERT_TRUE(frameArea(3u, options));
     EXPECT_NEAR(m_state.scroll().y, m_state.scrollbars().vertical.maximum, 0.001);
@@ -291,9 +293,10 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     const HitTarget* found = target(part("scroll.y.thumb"));
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
-    const f32 travel = thumb.gestureReference.height - thumb.rectangle.height;
-    ASSERT_GT(travel, 0.0f);
-    const Point origin{ thumb.rectangle.x + thumb.rectangle.width * 0.5f, thumb.rectangle.y + thumb.rectangle.height * 0.25f };
+    const SIMDVectorSingle travel = VectorSubtract(VectorReplicate(thumb.gestureReference.height), VectorReplicate(thumb.rectangle.height));
+    ASSERT_GT(VectorGetX(travel), 0.0f);
+    const SIMDVectorSingle originValue = VectorMultiplyAddExpression(VectorSet(thumb.rectangle.width, thumb.rectangle.height, 0.0f, 0.0f), VectorSet(0.5f, 0.25f, 0.0f, 0.0f), VectorSet(thumb.rectangle.x, thumb.rectangle.y, 0.0f, 0.0f));
+    const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_EQ(m_context.input().capture(), thumb.id);
@@ -304,19 +307,22 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     const HitTarget* afterPress = target(part("scroll.y.thumb"));
     ASSERT_TRUE(afterPress);
     EXPECT_EQ(afterPress->control, thumb.control);
-    const Point quarter{ origin.x, origin.y + travel * 0.25f };
+    // Lanes are the quarter and half drag steps.
+    const SIMDVectorSingle dragY = VectorMultiplyAddExpression(travel, VectorSet(0.25f, 0.5f, 0.0f, 0.0f), VectorSplatY(originValue));
+    const SIMDVectorDouble expectedScroll = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(thumb.gestureMaximum), VectorDoubleSet(0.25, 0.5, 0.0, 0.0), VectorDoubleReplicate(50.0));
+    const Point quarter{ origin.x, VectorGetX(dragY) };
     ASSERT_TRUE(send({ InputEventType::PointerMove, quarter }).pointerConsumed);
     ASSERT_TRUE(frameArea(3u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().y, 50.0 + thumb.gestureMaximum * 0.25, 0.001);
+    EXPECT_NEAR(m_state.scroll().y, VectorDoubleGetX(expectedScroll), 0.001);
     const HitTarget* afterMove = target(part("scroll.y.thumb"));
     ASSERT_TRUE(afterMove);
     EXPECT_EQ(afterMove->control, thumb.control);
     EXPECT_GT(afterMove->rectangle.y, thumb.rectangle.y);
-    const Point half{ origin.x, origin.y + travel * 0.5f };
+    const Point half{ origin.x, VectorGetY(dragY) };
     ASSERT_TRUE(send({ InputEventType::PointerMove, half }).pointerConsumed);
     ASSERT_TRUE(send({ InputEventType::PrimaryUp, half }).pointerConsumed);
     ASSERT_TRUE(frameArea(4u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().y, 50.0 + thumb.gestureMaximum * 0.5, 0.001);
+    EXPECT_NEAR(m_state.scroll().y, VectorDoubleGetY(expectedScroll), 0.001);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 30.0f);
     EXPECT_FALSE(m_context.input().capture().valid());
     model.expect(m_model);
@@ -328,7 +334,8 @@ TEST_F(UiTextAreaInputScrollTests, CompletedHorizontalThumbDragKeepsOutsideRelea
     const HitTarget* found = target(part("scroll.x.thumb"));
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
-    const Point origin{ thumb.rectangle.x + thumb.rectangle.width * 0.25f, thumb.rectangle.y + thumb.rectangle.height * 0.5f };
+    const SIMDVectorSingle originValue = VectorMultiplyAddExpression(VectorSet(thumb.rectangle.width, thumb.rectangle.height, 0.0f, 0.0f), VectorSet(0.25f, 0.5f, 0.0f, 0.0f), VectorSet(thumb.rectangle.x, thumb.rectangle.y, 0.0f, 0.0f));
+    const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
     const Point outside{ 900.0f, origin.y };
     ASSERT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     ASSERT_TRUE(send({ InputEventType::PointerMove, outside }).pointerConsumed);
@@ -356,7 +363,7 @@ TEST_F(UiTextAreaInputScrollTests, TrackPagesOnlyOnReleaseByTheAcceptedViewport)
     ASSERT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
     EXPECT_NEAR(m_state.scroll().y, 100.0, 0.001);
     ASSERT_TRUE(frameArea(3u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().y, 100.0 + page, 0.001);
+    EXPECT_NEAR(m_state.scroll().y, VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(100.0), VectorDoubleReplicate(page))), 0.001);
     model.expect(m_model);
 }
 
@@ -367,16 +374,16 @@ TEST_F(UiTextAreaInputScrollTests, LaterCoalescedThumbUpdateRunsAfterAnInterveni
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
     const Point origin = Center(thumb.rectangle);
-    const f32 travel = thumb.gestureReference.height - thumb.rectangle.height;
-    ASSERT_GT(travel, 0.0f);
+    const SIMDVectorSingle travel = VectorSubtract(VectorReplicate(thumb.gestureReference.height), VectorReplicate(thumb.rectangle.height));
+    ASSERT_GT(VectorGetX(travel), 0.0f);
     ASSERT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     ASSERT_TRUE(wheel(0.0, -1.0, origin));
     ASSERT_EQ(m_context.input().controlActions().size(), 1u);
-    const Point quarter{ origin.x, origin.y + travel * 0.25f };
+    const Point quarter{ origin.x, VectorGetX(VectorMultiplyAddExpression(travel, VectorReplicate(0.25f), VectorReplicate(origin.y))) };
     ASSERT_TRUE(send({ InputEventType::PointerMove, quarter }).pointerConsumed);
     ASSERT_TRUE(send({ InputEventType::PrimaryUp, quarter }).pointerConsumed);
     ASSERT_TRUE(frameArea(2u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().y, thumb.gestureMaximum * 0.25, 0.001);
+    EXPECT_NEAR(m_state.scroll().y, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(thumb.gestureMaximum), VectorDoubleReplicate(0.25))), 0.001);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_TRUE(m_context.input().controlActions().empty());
     model.expect(m_model);

@@ -9,6 +9,7 @@
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/gpu_timing.h>
 
+#include <global/simd/vector.h>
 #include <global/termination.h>
 
 
@@ -711,7 +712,7 @@ u64 GpuRecordedGraph::recordingAttemptGenerationWithinArtifactOperation(const Ar
 
 void GpuRecordedGraph::addRecordingElapsedSeconds(const f64 elapsedSeconds, const ArtifactOperation& artifactAccess)noexcept{
     if(artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid)
-        m_activeStorage->recordingElapsedSeconds += elapsedSeconds;
+        m_activeStorage->recordingElapsedSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_activeStorage->recordingElapsedSeconds), VectorDoubleReplicate(elapsedSeconds)));
 }
 
 void GpuRecordedGraph::addReadyFrontierStatistics(const f64 elapsedSeconds, const f64 workerBusySeconds, const f64 workerCapacitySeconds, const ArtifactOperation& artifactAccess)noexcept{

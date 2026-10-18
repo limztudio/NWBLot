@@ -12,6 +12,7 @@
 
 #include <global/bit.h>
 #include <global/hash_utils.h>
+#include <global/simd/vector.h>
 #include <global/type_properties.h>
 
 
@@ -137,7 +138,7 @@ void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPaylo
         ++summary.cpuTimingEventCount;
         summary.cpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.cpuTimingSecondsValid){
-            const f64 total = summary.cpuTimingSeconds + payload.stats.seconds;
+            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.cpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
             if((BitCast<u64>(total) & s_TimingSecondsExponentMask) != s_TimingSecondsExponentMask)
                 summary.cpuTimingSeconds = total;
             else
@@ -150,7 +151,7 @@ void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPaylo
         ++summary.gpuTimingEventCount;
         summary.gpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.gpuTimingSecondsValid){
-            const f64 total = summary.gpuTimingSeconds + payload.stats.seconds;
+            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.gpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
             if((BitCast<u64>(total) & s_TimingSecondsExponentMask) != s_TimingSecondsExponentMask)
                 summary.gpuTimingSeconds = total;
             else

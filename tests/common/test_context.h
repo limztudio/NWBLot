@@ -73,7 +73,7 @@ using TestVector = DefaultVector<T, Core::Alloc::GlobalArena, TestDetail::Arena>
 using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
 [[nodiscard]] inline bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
-    return Abs(lhs - rhs) <= epsilon;
+    return VectorGetX(VectorAbs(VectorSubtract(VectorReplicate(lhs), VectorReplicate(rhs)))) <= epsilon;
 }
 
 [[nodiscard]] inline usize CountText(const AStringView text, const AStringView expected)noexcept{

@@ -5,6 +5,7 @@
 #include <impl/ecs_ui/toolkit/widgets/slider.h>
 #include <impl/ecs_ui/toolkit/widgets/slider_style.h>
 
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 #include <gtest/gtest.h>
@@ -71,7 +72,7 @@ protected:
     [[nodiscard]] PointerGesture gesture(const bool thumb = true)const noexcept{
         PointerGesture gesture;
         gesture.id = { { thumb ? 42u : 43u }, 3u, 7u, 11u };
-        gesture.origin = { m_placement.thumb.x + m_placement.thumb.width * 0.5f, 36.0f };
+        gesture.origin = { VectorGetX(VectorMultiplyAddExpression(VectorReplicate(m_placement.thumb.width), VectorReplicate(0.5f), VectorReplicate(m_placement.thumb.x))), 36.0f };
         gesture.position = gesture.origin;
         gesture.targetRectangle = thumb ? m_placement.thumb : m_placement.track;
         gesture.referenceRectangle = thumb ? m_placement.travelBounds : m_placement.centerTravel;
@@ -113,23 +114,25 @@ TEST(UiSliderMathTests, OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOve
     value = SliderBehavior::Normalize(-maximum, maximum, 0.0);
     ASSERT_TRUE(value);
     EXPECT_DOUBLE_EQ(*value, 0.5);
-    value = SliderBehavior::Normalize(-maximum, maximum, maximum * 0.5);
+    value = SliderBehavior::Normalize(-maximum, maximum, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(maximum), VectorDoubleReplicate(0.5))));
     ASSERT_TRUE(value);
     EXPECT_DOUBLE_EQ(*value, 0.75);
     value = SliderBehavior::Interpolate(-maximum, maximum, 0.25);
     ASSERT_TRUE(value);
     EXPECT_TRUE(IsFinite(*value));
-    EXPECT_DOUBLE_EQ(*value / maximum, -0.5);
+    EXPECT_DOUBLE_EQ(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(*value), VectorDoubleReplicate(maximum))), -0.5);
     value = SliderBehavior::Interpolate(-maximum, maximum, 0.75);
     ASSERT_TRUE(value);
-    EXPECT_DOUBLE_EQ(*value / maximum, 0.5);
+    EXPECT_DOUBLE_EQ(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(*value), VectorDoubleReplicate(maximum))), 0.5);
 }
 
 TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
     const f64 maximum = Limit<f64>::s_Max;
+    // Lanes are the positive and negative three-quarter bounds.
+    const SIMDVectorDouble threeQuarters = VectorDoubleMultiply(VectorDoubleSet(maximum, -maximum, 0.0, 0.0), VectorDoubleReplicate(0.75));
     for(const bool negative : { false, true }){
-        const f64 minimum = negative ? -maximum : maximum * 0.75;
-        const f64 upper = negative ? -maximum * 0.75 : maximum;
+        const f64 minimum = negative ? -maximum : VectorDoubleGetX(threeQuarters);
+        const f64 upper = negative ? VectorDoubleGetY(threeQuarters) : maximum;
         Expected<f64> value = MakeUnexpected(Failure{});
         value = SliderBehavior::Interpolate(minimum, upper, 0.5);
         ASSERT_TRUE(value);
@@ -272,10 +275,10 @@ TEST_F(UiSliderBehaviorTests, AutomaticStepsRemainFiniteAcrossOppositeExtremeBou
     ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Right), m_result));
     EXPECT_TRUE(IsFinite(m_state.value()));
     EXPECT_GT(m_state.value(), 0.0);
-    EXPECT_NEAR(m_state.value() / Limit<f64>::s_Max, 0.02, 1.0e-15);
+    EXPECT_NEAR(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(m_state.value()), VectorDoubleReplicate(Limit<f64>::s_Max))), 0.02, 1.0e-15);
     ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::PageUp), m_result));
     EXPECT_TRUE(IsFinite(m_state.value()));
-    EXPECT_NEAR(m_state.value() / Limit<f64>::s_Max, 0.22, 1.0e-15);
+    EXPECT_NEAR(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(m_state.value()), VectorDoubleReplicate(Limit<f64>::s_Max))), 0.22, 1.0e-15);
 }
 
 TEST_F(UiSliderBehaviorTests, AutomaticSubnormalStepUsesTheRepresentableSpanWhenDivisionUnderflows){
@@ -363,7 +366,7 @@ TEST_F(UiSliderBehaviorTests, InvalidAdmissionGeometryOrOptionsPreserveThePrevio
     EXPECT_FALSE(SliderBehavior::Admit(m_state, policy, m_placement));
     EXPECT_TRUE(m_state.matches(before));
     invalid = m_placement;
-    invalid.thumbExtent.x = invalid.travelBounds.width + 1.0f;
+    invalid.thumbExtent.x = VectorGetX(VectorAdd(VectorReplicate(invalid.travelBounds.width), VectorReplicate(1.0f)));
     EXPECT_FALSE(SliderBehavior::Admit(m_state, m_options, invalid));
     EXPECT_TRUE(m_state.matches(before));
 }
@@ -382,7 +385,7 @@ TEST_F(UiSliderBehaviorTests, TrackSeekUsesAbsoluteAcceptedCenterTravelAndExactE
 
 TEST_F(UiSliderBehaviorTests, TrackSeekRejectsAChangedCopiedReferenceWithoutPublishingResult){
     PointerGesture seek = gesture(false);
-    seek.referenceRectangle.x += 1.0f;
+    seek.referenceRectangle.x = VectorGetX(VectorAdd(VectorReplicate(seek.referenceRectangle.x), VectorReplicate(1.0f)));
     const SliderSnapshot before = m_state.snapshot();
     const SliderResult result = m_result;
     EXPECT_FALSE(SliderBehavior::Seek(m_state, m_options, seek, m_result));
@@ -393,10 +396,11 @@ TEST_F(UiSliderBehaviorTests, TrackSeekRejectsAChangedCopiedReferenceWithoutPubl
 TEST_F(UiSliderBehaviorTests, RepeatedThumbUpdatesUseOriginalCopiedBaselineWithoutAccumulatingDelta){
     ASSERT_TRUE(set(0.25));
     PointerGesture drag = gesture();
-    drag.position.x += (drag.referenceRectangle.width - drag.targetRectangle.width) * 0.25f;
+    const SIMDVectorSingle widthGap = VectorSubtract(VectorReplicate(drag.referenceRectangle.width), VectorReplicate(drag.targetRectangle.width));
+    drag.position.x = VectorGetX(VectorMultiplyAddExpression(widthGap, VectorReplicate(0.25f), VectorReplicate(drag.position.x)));
     ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    drag.position.x += (drag.referenceRectangle.width - drag.targetRectangle.width) * 0.25f;
+    drag.position.x = VectorGetX(VectorMultiplyAddExpression(widthGap, VectorReplicate(0.25f), VectorReplicate(drag.position.x)));
     ++drag.updateSequence;
     ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.75);
@@ -422,7 +426,8 @@ TEST_F(UiSliderBehaviorTests, ReturningAfterAnAppliedMoveRestoresTheExactSignedZ
     m_options.minimum = -1.0;
     ASSERT_TRUE(set(-0.0));
     PointerGesture drag = gesture();
-    drag.position.x += (drag.referenceRectangle.width - drag.targetRectangle.width) * 0.25f;
+    const SIMDVectorSingle widthGap = VectorSubtract(VectorReplicate(drag.referenceRectangle.width), VectorReplicate(drag.targetRectangle.width));
+    drag.position.x = VectorGetX(VectorMultiplyAddExpression(widthGap, VectorReplicate(0.25f), VectorReplicate(drag.position.x)));
     ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     EXPECT_TRUE(m_state.snapshot().pressMoved);
@@ -437,7 +442,7 @@ TEST_F(UiSliderBehaviorTests, ReturningAfterAnAppliedMoveRestoresTheExactSignedZ
 TEST_F(UiSliderBehaviorTests, ANewStationaryPressDoesNotBorrowTheOldPressMovedFlag){
     ASSERT_TRUE(set(0.25));
     PointerGesture first = gesture();
-    first.position.x += 52.0f;
+    first.position.x = VectorGetX(VectorAdd(VectorReplicate(first.position.x), VectorReplicate(52.0f)));
     ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, first, m_result));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     PointerGesture second = first;
@@ -452,7 +457,7 @@ TEST_F(UiSliderBehaviorTests, ANewStationaryPressDoesNotBorrowTheOldPressMovedFl
 TEST_F(UiSliderBehaviorTests, AdmissionRetirementEndsThePressAndKeepsItsLastAppliedValue){
     ASSERT_TRUE(set(0.25));
     PointerGesture drag = gesture();
-    drag.position.x += 52.0f;
+    drag.position.x = VectorGetX(VectorAdd(VectorReplicate(drag.position.x), VectorReplicate(52.0f)));
     ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     m_options.enabled = false;
@@ -488,8 +493,8 @@ TEST_F(UiSliderBehaviorTests, InvalidThumbPayloadGeometryOrTokenIsRejectedAtomic
         switch(field){
         case 0u: drag.value = BitCast<u64>(Limit<f64>::s_QuietNaN); break;
         case 1u: ++drag.control.instanceGeneration; break;
-        case 2u: drag.targetRectangle.width += 1.0f; break;
-        case 3u: drag.referenceRectangle.x += 1.0f; break;
+        case 2u: drag.targetRectangle.width = VectorGetX(VectorAdd(VectorReplicate(drag.targetRectangle.width), VectorReplicate(1.0f))); break;
+        case 3u: drag.referenceRectangle.x = VectorGetX(VectorAdd(VectorReplicate(drag.referenceRectangle.x), VectorReplicate(1.0f))); break;
         case 4u: drag.position.x = Limit<f32>::s_Infinity; break;
         case 5u: drag.id.sequence = 0u; break;
         default: drag.updateSequence = 0u; break;
@@ -504,7 +509,7 @@ TEST_F(UiSliderBehaviorTests, AClampedNonzeroMoveStillRestoresItsBaselineWhenRet
     m_options.keyStep = 0.125;
     ASSERT_TRUE(set(1.0));
     PointerGesture drag = gesture();
-    drag.position.x += 20.0f;
+    drag.position.x = VectorGetX(VectorAdd(VectorReplicate(drag.position.x), VectorReplicate(20.0f)));
     ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
     EXPECT_FALSE(m_result.valueChanged);
     EXPECT_TRUE(m_state.snapshot().pressMoved);

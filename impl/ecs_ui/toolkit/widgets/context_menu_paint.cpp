@@ -36,8 +36,8 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(anchorBox->clip)));
     if(
         !anchor.enabled || clip.width <= 0.0f || clip.height <= 0.0f
-        || anchorBox->rectangle.x >= (clip.x + clip.width) || anchorBox->rectangle.y >= (clip.y + clip.height)
-        || (anchorBox->rectangle.x + anchorBox->rectangle.width) <= clip.x || (anchorBox->rectangle.y + anchorBox->rectangle.height) <= clip.y
+        || anchorBox->rectangle.x >= VectorGetX(VectorAdd(VectorReplicate(clip.x), VectorReplicate(clip.width))) || anchorBox->rectangle.y >= VectorGetX(VectorAdd(VectorReplicate(clip.y), VectorReplicate(clip.height)))
+        || VectorGetX(VectorAdd(VectorReplicate(anchorBox->rectangle.x), VectorReplicate(anchorBox->rectangle.width))) <= clip.x || VectorGetX(VectorAdd(VectorReplicate(anchorBox->rectangle.y), VectorReplicate(anchorBox->rectangle.height))) <= clip.y
     ){
         frame.state->close();
         m_context.discardPopupScope(frame.popupToken);

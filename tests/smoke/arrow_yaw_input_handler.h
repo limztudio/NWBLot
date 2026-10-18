@@ -6,6 +6,8 @@
 
 #include <core/input/module.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,7 +33,7 @@ public:
     }
 
     [[nodiscard]] f32 axis()const noexcept{
-        return (m_rightHeld ? 1.0f : 0.0f) - (m_leftHeld ? 1.0f : 0.0f);
+        return VectorGetX(VectorSubtract(VectorReplicate(m_rightHeld ? 1.0f : 0.0f), VectorReplicate(m_leftHeld ? 1.0f : 0.0f)));
     }
 
 

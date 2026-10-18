@@ -273,10 +273,12 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
     if(caseName == "optical_nested2" || caseName == "optical_nested3" || caseName == "optical_overflow"){
         const u32 count = caseName == "optical_overflow" ? 5u : caseName == "optical_nested3" ? 3u : 2u;
         for(u32 index = 0u; index < count; ++index){
-            const f32 thickness = count == 5u ? 4.f - 0.6f * static_cast<f32>(index) : 3.f / static_cast<f32>(1u << index);
-            const f32 ior = index == 0u ? 1.5f : index == 1u ? 1.33f : 1.1f + 0.02f * static_cast<f32>(index - 2u);
+            // Lane x is the stepped thickness; lane y is the layer opacity.
+            const SIMDVectorSingle layerFade = VectorNegativeMultiplySubtractExpression(VectorSet(0.6f, 0.1f, 0.f, 0.f), VectorReplicate(static_cast<f32>(index)), VectorSet(4.f, 1.f, 0.f, 0.f));
+            const f32 thickness = count == 5u ? VectorGetX(layerFade) : VectorGetX(VectorDivide(VectorReplicate(3.f), VectorReplicate(static_cast<f32>(1u << index))));
+            const f32 ior = index == 0u ? 1.5f : index == 1u ? 1.33f : VectorGetX(VectorMultiplyAddExpression(VectorReplicate(0.02f), VectorReplicate(static_cast<f32>(index - 2u)), VectorReplicate(1.1f)));
             const Float4 transmission = index == 0u ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f);
-            if(!CreateBox(context, world, -9.f, thickness, ior, transmission, Impl::OpticalBoundaryMode::ClosedNested, 0, 1.f - 0.1f * static_cast<f32>(index)).valid())
+            if(!CreateBox(context, world, -9.f, thickness, ior, transmission, Impl::OpticalBoundaryMode::ClosedNested, 0, VectorGetY(layerFade)).valid())
                 return false;
         }
         return true;
@@ -290,7 +292,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
             const auto entity = CreateBoundary(
                 context, world, s_Plane, Float4(x, 1.4f, caseName == "optical_alpha_before" ? -7.f : -11.f, 0.f),
                 Float4(halfWidth, 1.f, 9.f, 0.f), 1.f, s_Clear, Impl::OpticalBoundaryMode::Unspecified,
-                0, static_cast<f32>(index) * 0.5f, true
+                0, VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(index)), 0.5f)), true
             );
             if(!entity.valid())
                 return false;

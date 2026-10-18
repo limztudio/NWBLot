@@ -4,6 +4,8 @@
 
 #include <impl/assets_mesh/cook_topology.h>
 
+#include <global/simd/vector.h>
+
 #include <gtest/gtest.h>
 
 
@@ -76,9 +78,10 @@ TEST(MeshSolidTopology, MembershipCrossesWordBoundariesWithoutSettingTailPadding
     Vector<u32, Core::Alloc::ScratchArena> indices{scratch};
     constexpr u32 s_Tetrahedron[] = {0u, 2u, 1u, 0u, 1u, 3u, 0u, 3u, 2u, 1u, 2u, 3u};
     for(u32 component = 0u; component < 9u; ++component){
-        const f32 x = static_cast<f32>(component) * 2.f;
+        const SIMDVectorSingle offset = VectorScale(VectorReplicate(static_cast<f32>(component)), 2.f);
+        const f32 x = VectorGetX(offset);
         positions.push_back({x, 0.f, 0.f});
-        positions.push_back({x + 1.f, 0.f, 0.f});
+        positions.push_back({VectorGetX(VectorAdd(offset, VectorSplatOne())), 0.f, 0.f});
         positions.push_back({x, 1.f, 0.f});
         positions.push_back({x, 0.f, 1.f});
         for(const u32 corner : s_Tetrahedron)
@@ -130,11 +133,12 @@ TEST(MeshSolidTopology, RelativeComponentVolumePreservesTinyAndTranslatedSolids)
     const u32 indices[] = {0u, 2u, 1u, 0u, 1u, 3u, 0u, 3u, 2u, 1u, 2u, 3u};
     for(const VolumeCase& volumeCase : cases){
         const Float3U& origin = volumeCase.origin;
+        const SIMDVectorSingle shifted = VectorAdd(VectorSet(origin.x, origin.y, origin.z, 0.f), VectorReplicate(volumeCase.size));
         const Float3U positions[] = {
             origin,
-            {origin.x + volumeCase.size, origin.y, origin.z},
-            {origin.x, origin.y + volumeCase.size, origin.z},
-            {origin.x, origin.y, origin.z + volumeCase.size},
+            {VectorGetX(shifted), origin.y, origin.z},
+            {origin.x, VectorGetY(shifted), origin.z},
+            {origin.x, origin.y, VectorGetZ(shifted)},
         };
         const auto words = Impl::BuildSolidTriangleWords(positions, indices, scratch);
         ASSERT_TRUE(words);

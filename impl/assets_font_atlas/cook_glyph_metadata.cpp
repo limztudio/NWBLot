@@ -130,7 +130,7 @@ Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
     }
     Core::Assets::AssetVector<FontAtlasGlyph> candidate(payload.glyphs.get_allocator().arena());
     candidate.reserve(payload.sourceGlyphCount);
-    const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
+    const f32 unitsPerPixel = VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(static_cast<f32>(payload.bakePpem))));
     for(u32 index = 0u; index < payload.sourceGlyphCount; ++index){
         auto glyphResult = ReadGlyph(nwbFilePath, (*glyphs)->asList()[index], index, unitsPerPixel);
         if(!glyphResult)

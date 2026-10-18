@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,7 +33,7 @@ inline constexpr int s_OutputFloatPrecision = 9;
 
 
 inline f32 CleanFloat(const f32 value)noexcept{
-    if(Abs(value) < s_CleanFloatEpsilon)
+    if(VectorGetX(VectorAbs(VectorReplicate(value))) < s_CleanFloatEpsilon)
         return 0.0f;
     return value;
 }

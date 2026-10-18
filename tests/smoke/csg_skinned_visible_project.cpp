@@ -125,7 +125,7 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 
 
 [[nodiscard]] static SIMDVectorSingle BuildReceiverRotation(const f32 animationTime)noexcept{
-    return QuaternionRotationRollPitchYaw(0.0f, animationTime * s_ReceiverYawSpeed, 0.0f);
+    return QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, animationTime, 0.0f, 0.0f), s_ReceiverYawSpeed));
 }
 
 [[nodiscard]] static SIMDVectorSingle BuildCsgReceiverPosition()noexcept{
@@ -134,7 +134,7 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 
 [[nodiscard]] static SIMDVectorSingle BuildCutterLocalRotation(const f32 animationTime)noexcept{
     const SIMDVectorSingle horizontalCapsule = QuaternionRotationRollPitchYaw(s_PIDIV2, s_PIDIV2, 0.0f);
-    const SIMDVectorSingle gentleRoll = QuaternionRotationRollPitchYaw(0.0f, animationTime * s_CutterGentleRollSpeed, 0.0f);
+    const SIMDVectorSingle gentleRoll = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, animationTime, 0.0f, 0.0f), s_CutterGentleRollSpeed));
     return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
 }
 
@@ -344,9 +344,9 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
-        m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;
+        m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CutterAnimationSpeed), VectorReplicate(m_animationTime)));
         const SIMDVectorSingle receiverRotation = BuildReceiverRotation(m_animationTime);
         updateReceiverTransforms(receiverRotation);
         updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));

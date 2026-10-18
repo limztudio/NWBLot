@@ -6,6 +6,8 @@
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
+#include <global/simdmath.h>
+
 #include <gtest/gtest.h>
 
 
@@ -58,7 +60,9 @@ HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, cons
     HitTarget target;
     target.id = { scope.token.widget.value + offset };
     target.declarationGeneration = 10u;
-    target.rectangle = { scope.bounds.x + 4.0f + static_cast<f32>(offset - 1u) * 35.0f, scope.bounds.y + 4.0f, 24.0f, 18.0f };
+    const SIMDVectorSingle inset = VectorAdd(VectorSet(scope.bounds.x, scope.bounds.y, 0.0f, 0.0f), VectorReplicate(4.0f));
+    const SIMDVectorSingle shifted = VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(offset - 1u)), VectorReplicate(35.0f), inset);
+    target.rectangle = { VectorGetX(shifted), VectorGetY(inset), 24.0f, 18.0f };
     target.clip = scope.bounds;
     target.paintOrder = order;
     target.popup = scope.token;

@@ -5,6 +5,8 @@
 #include "timing.h"
 #include "named_registry.h"
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,7 +47,7 @@ void TimingAccumulator::record(const f64 seconds, const u64 sampleFrameIndex)noe
             m_currentStats.maxSeconds = seconds;
     }
     m_currentStats.lastSeconds = seconds;
-    m_currentStats.seconds += seconds;
+    m_currentStats.seconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_currentStats.seconds), VectorDoubleReplicate(seconds)));
     ++m_currentStats.sampleCount;
 }
 

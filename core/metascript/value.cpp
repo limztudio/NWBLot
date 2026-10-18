@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <global/allocation_size.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,7 +106,7 @@ Value Value::operator+(const Value& rhs)const{
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(toDouble() + rhs.toDouble(), m_arena);
+        return Value(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         const auto lsv = asString();
@@ -156,7 +157,7 @@ Value Value::operator-(const Value& rhs)const noexcept{
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(toDouble() - rhs.toDouble(), m_arena);
+        return Value(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
 
     NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator-"));
     return Value(m_arena);
@@ -172,7 +173,7 @@ Value Value::operator*(const Value& rhs)const noexcept{
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(toDouble() * rhs.toDouble(), m_arena);
+        return Value(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
 
     NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator*"));
     return Value(m_arena);
@@ -196,7 +197,7 @@ Value Value::operator/(const Value& rhs)const noexcept{
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return Value(m_arena);
         }
-        return Value(toDouble() / rhs.toDouble(), m_arena);
+        return Value(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
     }
 
     NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator/"));
@@ -214,7 +215,7 @@ Value& Value::operator+=(const Value& rhs){
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(toDouble() + rhs.toDouble());
+        setDouble(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
         return *this;
     }
 
@@ -271,7 +272,7 @@ Value& Value::operator-=(const Value& rhs)noexcept{
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(toDouble() - rhs.toDouble());
+        setDouble(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
         return *this;
     }
 
@@ -290,7 +291,7 @@ Value& Value::operator*=(const Value& rhs)noexcept{
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(toDouble() * rhs.toDouble());
+        setDouble(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
         return *this;
     }
 
@@ -317,7 +318,7 @@ Value& Value::operator/=(const Value& rhs)noexcept{
             NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return *this;
         }
-        setDouble(toDouble() / rhs.toDouble());
+        setDouble(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
         return *this;
     }
 

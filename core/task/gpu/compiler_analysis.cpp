@@ -7,6 +7,7 @@
 #include "dependency_pair_hash.h"
 
 #include <global/hash_utils.h>
+#include <global/simd/vector.h>
 #include <global/timer.h>
 #include <global/termination.h>
 
@@ -291,7 +292,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
         }
     }
-    f64 validationSeconds = DurationInSeconds<f64>(TimerNow(), validationBegin);
+    SIMDVectorDouble validationSeconds = VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), validationBegin));
 
     const Timer dependencyAnalysisBegin = TimerNow();
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena> resourceVersionDependencyEdges(scratchArena);
@@ -501,7 +502,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
         ))
             return fail(GpuTaskGraphAnalysisStatus::InvalidTaskDependency);
     }
-    const f64 topologicalOrderSeconds = semanticTopologySeconds + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin);
+    const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), finalTopologyBegin))));
 
     const Timer acceptedQueueFrontierValidationBegin = TimerNow();
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
@@ -532,7 +533,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
             }
         }
     }
-    validationSeconds += DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin);
+    validationSeconds = VectorDoubleAdd(validationSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin)));
 
     const Timer presentationValidationBegin = TimerNow();
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
@@ -586,9 +587,9 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
         if(!hasBackBufferWriter)
             return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
     }
-    validationSeconds += DurationInSeconds<f64>(TimerNow(), presentationValidationBegin);
+    validationSeconds = VectorDoubleAdd(validationSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), presentationValidationBegin)));
 
-    outAnalysis.m_validationSeconds = validationSeconds;
+    outAnalysis.m_validationSeconds = VectorDoubleGetX(validationSeconds);
     outAnalysis.m_dependencyAnalysisSeconds = dependencyAnalysisSeconds;
     outAnalysis.m_hazardAnalysisSeconds = hazardAnalysisSeconds;
     outAnalysis.m_topologicalOrderSeconds = topologicalOrderSeconds;

@@ -393,7 +393,7 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         const auto updated = m_world->tick(safeDelta);
         if(!updated){
@@ -436,7 +436,7 @@ private:
                 auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
                 if(!transform)
                     return false;
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, box.yawDegrees * (s_PI / 180.0f), 0.0f), transform->rotation);
+                StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, box.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f)), transform->rotation);
             }
         }
 
@@ -457,9 +457,10 @@ private:
         ComplexSceneBox placedBodies[s_ComplexRandomBodyCount] = {};
         u32 placedBodyCount = 0u;
         u32 randomState = s_ComplexRandomBodySeed;
-        const auto nextRandom01 = [&randomState]()noexcept -> f32{
+        // Returns the top 24 random bits; scale by 1 / 2^24 for a 0..1 value.
+        const auto nextRandom24 = [&randomState]()noexcept -> f32{
             randomState = randomState * 1664525u + 1013904223u;
-            return static_cast<f32>(randomState >> 8u) * (1.0f / 16777216.0f);
+            return static_cast<f32>(randomState >> 8u);
         };
         const auto absolute = [](f32 value)noexcept -> f32{ return value < 0.0f ? -value : value; };
         const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b)noexcept -> bool{
@@ -486,13 +487,27 @@ private:
             return (VectorMoveMask(VectorLess(separation, combinedHalfExtents)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
         };
         for(u32 attempt = 0u; placedBodyCount < s_ComplexRandomBodyCount && attempt < 4096u; ++attempt){
-            const f32 x = -1.70f + 3.40f * nextRandom01();
-            const f32 z = -2.70f + 4.45f * nextRandom01();
-            const f32 width = 0.18f + 0.26f * nextRandom01();
-            const f32 depth = 0.18f + 0.36f * nextRandom01();
-            const f32 height = (z < -1.8f ? 0.22f : 0.30f) + (z < -1.8f ? 0.34f : 0.68f) * nextRandom01();
-            const f32 shade = 0.62f + 0.32f * nextRandom01();
-            const f32 yawDegrees = (static_cast<f32>(static_cast<u32>(nextRandom01() * 7.0f)) - 3.0f) * 15.0f;
+            // Draw order is x, z, width, depth, height, shade, yaw.
+            const f32 xRandom = nextRandom24();
+            const f32 zRandom = nextRandom24();
+            const f32 widthRandom = nextRandom24();
+            const f32 depthRandom = nextRandom24();
+            const f32 heightRandom = nextRandom24();
+            const f32 shadeRandom = nextRandom24();
+            const f32 yawRandom = nextRandom24();
+            const SIMDVectorSingle footprint = VectorMultiplyAddExpression(VectorSet(3.40f, 4.45f, 0.26f, 0.36f), VectorScale(VectorSet(xRandom, zRandom, widthRandom, depthRandom), 1.0f / 16777216.0f), VectorSet(-1.70f, -2.70f, 0.18f, 0.18f));
+            const f32 x = VectorGetX(footprint);
+            const f32 z = VectorGetY(footprint);
+            const bool frontRow = z < -1.8f;
+            const SIMDVectorSingle unitRandom = VectorScale(VectorSet(heightRandom, shadeRandom, yawRandom, 0.0f), 1.0f / 16777216.0f);
+            const SIMDVectorSingle heightShade = VectorMultiplyAddExpression(VectorSet(frontRow ? 0.34f : 0.68f, 0.32f, 0.0f, 0.0f), unitRandom, VectorSet(frontRow ? 0.22f : 0.30f, 0.62f, 0.0f, 0.0f));
+            // Truncate equals a u32 cast here because the scaled value is in 0..7.
+            const SIMDVectorSingle yawSteps = VectorScale(VectorSubtract(VectorTruncate(VectorScale(unitRandom, 7.0f)), VectorReplicate(3.0f)), 15.0f);
+            const f32 width = VectorGetZ(footprint);
+            const f32 depth = VectorGetW(footprint);
+            const f32 height = VectorGetX(heightShade);
+            const f32 shade = VectorGetY(heightShade);
+            const f32 yawDegrees = VectorGetZ(yawSteps);
             Float4 position;
             StoreFloat(VectorMultiply(VectorSet(x, height, z, 0.0f), VectorSet(1.0f, 0.5f, 1.0f, 1.0f)), position);
             const ComplexSceneBox body{ position, Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
@@ -522,7 +537,7 @@ private:
                 auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
                 if(!transform)
                     return false;
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, body.yawDegrees * (s_PI / 180.0f), 0.0f), transform->rotation);
+                StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, body.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f)), transform->rotation);
             }
             placedBodies[placedBodyCount++] = body;
         }
@@ -557,8 +572,7 @@ private:
     // The source plane spans -1..+1 in XZ, so wall scales are half-extents.
     NWB::Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 width = s_BoxScale, const f32 height = s_BoxHeight){
         const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
-        const f32 yawRad = yawDeg * (s_PI / 180.0f);
-        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
+        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
         const SIMDVectorSingle wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
 
         auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_GroundMesh, m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(width, 1.0f, height, 0.0f));

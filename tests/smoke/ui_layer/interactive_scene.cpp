@@ -11,6 +11,7 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -97,7 +98,7 @@ void UiInteractiveSmokeScene::logAction(const TStringView action){
 }
 
 void UiInteractiveSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const f32 y = context.display.logicalHeight - 20.0f;
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
     const auto positions = BuildSmokeMarkerPositions<8u, 18u, 20u>();
     for(u32 bit = 0u; bit < 8u; ++bit){
         const bool set = (m_count & (1u << bit)) != 0u;

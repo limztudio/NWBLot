@@ -4,6 +4,7 @@
 
 #include "paint.h"
 
+#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -25,7 +26,7 @@ bool PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channe
     if(
         !page || channel >= page->binding().channelCount || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
         || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
-        || uv.x + uv.width > 1.0f || uv.y + uv.height > 1.0f
+        || VectorGetX(VectorAdd(VectorReplicate(uv.x), VectorReplicate(uv.width))) > 1.0f || VectorGetX(VectorAdd(VectorReplicate(uv.y), VectorReplicate(uv.height))) > 1.0f
     )
         return false;
     u32 index = 0u;

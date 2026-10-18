@@ -7,6 +7,7 @@
 
 #include <core/common/global.h>
 
+#include <global/simd/vector.h>
 #include <global/timer.h>
 
 
@@ -42,7 +43,7 @@ struct PresentationFpsSample{
 
 public:
     [[nodiscard]] u64 presentations()const noexcept{ return lastPresentationCount - firstPresentationCount; }
-    [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? presentations() / wallSeconds : 0.0; }
+    [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(presentations())), VectorDoubleReplicate(wallSeconds))) : 0.0; }
 };
 
 // Observes an owning runtime's cumulative accepted-present count against steady-clock timestamps.

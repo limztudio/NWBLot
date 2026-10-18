@@ -4,6 +4,8 @@
 
 #include "multiline_view_fixture.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -166,7 +168,7 @@ TEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeO
     EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
     ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
     Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ m_placement.caret.x, m_placement.caret.y + 6.0f }, m_placement);
+    hit = m_view.hitTest({ m_placement.caret.x, VectorGetX(VectorAdd(VectorReplicate(m_placement.caret.y), VectorReplicate(6.0f))) }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, m_model.caret());
     const Point previous{ m_placement.scroll, m_placement.scrollY };
@@ -202,8 +204,9 @@ TEST_F(UiMultilineViewTests, ZeroViewportKeepsFiniteCaretAndScrollAndProducesAnE
     EXPECT_FLOAT_EQ(m_placement.clip.height, 0.0f);
     EXPECT_FLOAT_EQ(m_placement.scroll, 71.0f);
     EXPECT_FLOAT_EQ(m_placement.scrollY, 36.0f);
-    EXPECT_FLOAT_EQ(m_placement.caret.x + m_placement.caret.width, m_placement.content.x);
-    EXPECT_FLOAT_EQ(m_placement.caret.y + m_placement.caret.height, m_placement.content.y);
+    const SIMDVectorSingle caretEnd = VectorAdd(VectorSet(m_placement.caret.x, m_placement.caret.y, 0.0f, 0.0f), VectorSet(m_placement.caret.width, m_placement.caret.height, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(VectorGetX(caretEnd), m_placement.content.x);
+    EXPECT_FLOAT_EQ(VectorGetY(caretEnd), m_placement.content.y);
 }
 
 TEST_F(UiMultilineViewTests, FailedPlacementPreservesStateAndInvalidHitsAreRejected){
@@ -304,7 +307,7 @@ TEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedH
     CollectSolidRects(*snapshot, style.selection, selected);
     ASSERT_EQ(selected.size(), 3u);
     for(u32 line = 0u; line < 3u; ++line){
-        EXPECT_FLOAT_EQ(selected[line].y, m_placement.textOrigin.y + m_view.caretGeometry().lines()[line].top);
+        EXPECT_FLOAT_EQ(selected[line].y, VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(m_view.caretGeometry().lines()[line].top))));
         EXPECT_FLOAT_EQ(selected[line].height, m_view.caretGeometry().lines()[line].height);
     }
     EXPECT_FLOAT_EQ(selected[1u].x, m_placement.textOrigin.x);
@@ -338,7 +341,7 @@ TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLine)
     ASSERT_EQ(underlines.size(), 3u);
     for(u32 index = 0u; index < 3u; ++index){
         const EditCaretLine& line = m_view.caretGeometry().lines()[index + 1u];
-        EXPECT_FLOAT_EQ(underlines[index].y, m_placement.textOrigin.y + line.top + line.height - 1.0f);
+        EXPECT_FLOAT_EQ(underlines[index].y, VectorGetX(VectorSubtract(VectorAdd(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(line.top)), VectorReplicate(line.height)), VectorReplicate(1.0f))));
         EXPECT_FLOAT_EQ(underlines[index].height, 1.0f);
     }
     EXPECT_FLOAT_EQ(underlines[1u].width, 1.0f);

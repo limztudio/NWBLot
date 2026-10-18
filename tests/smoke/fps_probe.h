@@ -40,7 +40,8 @@ public:
         if(safeDelta <= 0.0)
             return;
 
-        m_elapsedSeconds += safeDelta;
+        const SIMDVectorDouble frameSeconds = VectorDoubleReplicate(safeDelta);
+        m_elapsedSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_elapsedSeconds), frameSeconds));
         if(m_elapsedSeconds < s_WarmupSeconds)
             return;
 
@@ -52,18 +53,21 @@ public:
             m_maxFrameSeconds = 0.0;
         }
 
-        m_intervalSeconds += safeDelta;
+        m_intervalSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_intervalSeconds), frameSeconds));
         ++m_intervalFrames;
-        m_minFrameSeconds = m_intervalFrames == 1u ? safeDelta : Min(m_minFrameSeconds, safeDelta);
-        m_maxFrameSeconds = Max(m_maxFrameSeconds, safeDelta);
+        const SIMDVectorDouble extremaSeconds = VectorDoubleSet(m_minFrameSeconds, m_maxFrameSeconds, 0.0, 0.0);
+        const SIMDVectorDouble nextExtremaSeconds = VectorDoubleSelect(VectorDoubleMin(extremaSeconds, frameSeconds), VectorDoubleMax(extremaSeconds, frameSeconds), s_DoubleSIMDMaskY);
+        m_minFrameSeconds = m_intervalFrames == 1u ? safeDelta : VectorDoubleGetX(nextExtremaSeconds);
+        m_maxFrameSeconds = VectorDoubleGetY(nextExtremaSeconds);
 
         if(m_intervalSeconds < s_ReportIntervalSeconds || m_intervalFrames == 0u)
             return;
 
-        const f64 averageFrameSeconds = m_intervalSeconds / static_cast<f64>(m_intervalFrames);
-        const f64 averageFps = 1.0 / averageFrameSeconds;
-        const SIMDVectorDouble rangeMs = SIMDVectorDouble{ m_minFrameSeconds, m_maxFrameSeconds } * s_MillisecondsPerSecond;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}"), m_label, averageFps, averageFrameSeconds * s_MillisecondsPerSecond, rangeMs.x, rangeMs.y, m_intervalFrames, m_intervalSeconds);
+        const SIMDVectorDouble averageFrameSeconds = VectorDoubleDivide(VectorDoubleReplicate(m_intervalSeconds), VectorDoubleReplicate(static_cast<f64>(m_intervalFrames)));
+        const f64 averageFps = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSplatOne(), averageFrameSeconds));
+        // Lanes are average, min and max frame time.
+        const SIMDVectorDouble frameMs = VectorDoubleScale(VectorDoubleSelect(VectorDoubleSet(0.0, m_minFrameSeconds, m_maxFrameSeconds, 0.0), averageFrameSeconds, s_DoubleSIMDMaskX), s_MillisecondsPerSecond);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}"), m_label, averageFps, VectorDoubleGetX(frameMs), VectorDoubleGetY(frameMs), VectorDoubleGetZ(frameMs), m_intervalFrames, m_intervalSeconds);
 
         m_intervalSeconds = 0.0;
         m_intervalFrames = 0u;

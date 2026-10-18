@@ -11,6 +11,7 @@
 
 #include <global/floating_point_environment.h>
 #include <global/scope_exit.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,11 +176,11 @@ TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslatio
     for(u32 corner = 0u; corner < 8u; ++corner){
         const f64 coordinates[] = { (corner & 1u) ? localMax.x : localMin.x, (corner & s_ExpectedDualCount) ? localMax.y : localMin.y, (corner & 4u) ? localMax.z : localMin.z, };
         for(usize row = 0u; row < 3u; ++row){
-            f64 exact = transform.m[row][3u];
+            SIMDVectorDouble exact = VectorDoubleReplicate(transform.m[row][3u]);
             for(usize column = 0u; column < 3u; ++column)
-                exact += static_cast<f64>(transform.m[row][column]) * coordinates[column];
-            EXPECT_LT(static_cast<f64>(minimum.raw[row]), exact);
-            EXPECT_GT(static_cast<f64>(maximum.raw[row]), exact);
+                exact = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(static_cast<f64>(transform.m[row][column])), VectorDoubleReplicate(coordinates[column]), exact);
+            EXPECT_LT(static_cast<f64>(minimum.raw[row]), VectorDoubleGetX(exact));
+            EXPECT_GT(static_cast<f64>(maximum.raw[row]), VectorDoubleGetX(exact));
         }
     }
 }
@@ -215,10 +216,11 @@ TEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure){
     for(usize lane = 1u; lane < 3u; ++lane){
         EXPECT_LT(minimum.raw[lane], 0.0f);
         EXPECT_GT(maximum.raw[lane], 0.0f);
-        EXPECT_LT(Abs(minimum.raw[lane]), 0x1p-16f);
-        EXPECT_LT(Abs(maximum.raw[lane]), 0x1p-16f);
+        const SIMDVectorSingle magnitude = VectorAbs(VectorSet(minimum.raw[lane], maximum.raw[lane], 0.0f, 0.0f));
+        EXPECT_LT(VectorGetX(magnitude), 0x1p-16f);
+        EXPECT_LT(VectorGetY(magnitude), 0x1p-16f);
     }
-    EXPECT_LT(maximum.x - minimum.x, 0x1p-16f);
+    EXPECT_LT(VectorGetX(VectorSubtract(VectorReplicate(maximum.x), VectorReplicate(minimum.x))), 0x1p-16f);
 }
 
 TEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags){

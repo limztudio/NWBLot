@@ -103,7 +103,8 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
         origin = VectorDoubleSelect(origin, VectorDoubleSubtract(VectorDoubleSplatX(origin), VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(options.gap)), VectorDoubleReplicate(static_cast<f64>(width)))), s_DoubleSIMDMaskX);
         break;
     case PopupPlacementSide::Center:
-        origin = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0)), VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
+        origin = VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0));
+        origin = VectorDoubleMultiply(origin, VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
         break;
     }
     const SIMDVectorDouble maximum = VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0));

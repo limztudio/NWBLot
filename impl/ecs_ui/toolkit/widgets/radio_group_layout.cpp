@@ -149,7 +149,8 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         const SIMDVectorDouble rowOffset = VectorDoubleMultiply(VectorDoubleReplicate(index), VectorDoubleAdd(VectorDoubleReplicate(metrics.rowHeight), VectorDoubleReplicate(metrics.rowGap)));
         const SIMDVectorDouble rowOrigin = VectorDoubleAdd(VectorDoubleReplicate(y), rowOffset);
         const f64 rowY = VectorDoubleGetX(rowOrigin);
-        const f64 indicatorY = VectorDoubleGetY(VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(metrics.rowHeight), indicatorExtent), VectorDoubleReplicate(0.5))));
+        const SIMDVectorDouble indicatorSpace = VectorDoubleSubtract(VectorDoubleReplicate(metrics.rowHeight), indicatorExtent);
+        const f64 indicatorY = VectorDoubleGetY(VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(indicatorSpace, VectorDoubleReplicate(0.5))));
         const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, rowY, width, metrics.rowHeight));
         if(!rectangle)
             return MakeUnexpected(Failure{});

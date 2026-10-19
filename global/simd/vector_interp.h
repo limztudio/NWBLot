@@ -81,7 +81,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCatmullRomV(SIMDVectorSingle p0,
     SIMDVectorSingle t2 = VectorMultiply(t, t);
     SIMDVectorSingle t3 = VectorMultiply(t, t2);
     SIMDVectorSingle result = VectorSubtract(VectorAdd(t2, t2), t);
-    result = VectorMultiply(VectorSubtract(result, t3), p0);
+    result = VectorSubtract(result, t3);
+    result = VectorMultiply(result, p0);
     SIMDVectorSingle temp = VectorNegativeMultiplySubtract(t2, five, VectorMultiply(t3, three));
     temp = VectorAdd(temp, s_SIMDTwo);
     result = VectorMultiplyAdd(temp, p1, result);
@@ -99,7 +100,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCatmullRomV(SIMDVectorDoub
     SIMDVectorDouble t2 = VectorDoubleMultiply(t, t);
     SIMDVectorDouble t3 = VectorDoubleMultiply(t, t2);
     SIMDVectorDouble result = VectorDoubleSubtract(VectorDoubleAdd(t2, t2), t);
-    result = VectorDoubleMultiply(VectorDoubleSubtract(result, t3), p0);
+    result = VectorDoubleSubtract(result, t3);
+    result = VectorDoubleMultiply(result, p0);
     SIMDVectorDouble temp = VectorDoubleNegativeMultiplySubtract(t2, five, VectorDoubleMultiply(t3, three));
     temp = VectorDoubleAdd(temp, s_DoubleSIMDTwo);
     result = VectorDoubleMultiplyAdd(temp, p1, result);

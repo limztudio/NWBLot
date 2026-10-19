@@ -230,7 +230,8 @@ private:
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
         const SIMDVectorDouble scale = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(fontSize), static_cast<f64>(fontSize), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_face->units_per_EM), static_cast<f64>(m_face->units_per_EM), 1.0, 1.0));
         const SIMDVectorDouble leftTopUnits = VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMax), 0.0, 0.0);
-        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(1.0, 1.0, 0.0, 0.0)), scale);
+        const SIMDVectorDouble leftTopBounds = VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(1.0, 1.0, 0.0, 0.0));
+        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(leftTopBounds, scale);
         const f64 left = VectorDoubleGetX(leftTopValue);
         const f64 top = VectorDoubleGetY(leftTopValue);
         const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(

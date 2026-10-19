@@ -98,7 +98,8 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(const Rect& bounds, const Rect
         const SIMDVectorDouble minimumSize = VectorDoubleMin(VectorDoubleReplicate(minimumThumb), heightValue);
         const SIMDVectorDouble thumbSize = VectorDoubleSelect(minimumSize, VectorDoubleMin(heightValue, proportionalHeight), VectorDoubleGreater(proportionalHeight, minimumSize));
         const f64 thumbHeight = VectorDoubleGetX(thumbSize);
-        const f64 thumbY = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(VectorDoubleSubtract(heightValue, thumbSize), VectorDoubleDivide(VectorDoubleReplicate(candidate.offset), VectorDoubleReplicate(candidate.maxOffset)))));
+        const SIMDVectorDouble thumbTravel = VectorDoubleSubtract(heightValue, thumbSize);
+        const f64 thumbY = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(thumbTravel, VectorDoubleDivide(VectorDoubleReplicate(candidate.offset), VectorDoubleReplicate(candidate.maxOffset)))));
         candidate.thumb = { candidate.track.x, static_cast<f32>(thumbY), candidate.track.width, static_cast<f32>(thumbHeight) };
         if(!IsValidUiRect(candidate.track) || !IsValidUiRect(candidate.thumb))
             return MakeUnexpected(Failure{});

@@ -130,7 +130,8 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(centerStart, y, travel, height));
     if(!centerTravel)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble centeredY = VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(height), VectorDoubleSet(trackHeight, thumbHeight, height, height)), VectorDoubleReplicate(0.5)));
+    const SIMDVectorDouble verticalSpace = VectorDoubleSubtract(VectorDoubleReplicate(height), VectorDoubleSet(trackHeight, thumbHeight, height, height));
+    const SIMDVectorDouble centeredY = VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(verticalSpace, VectorDoubleReplicate(0.5)));
     const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(centerStart, VectorDoubleGetX(centeredY), travel, trackHeight));
     if(!track)
         return MakeUnexpected(Failure{});

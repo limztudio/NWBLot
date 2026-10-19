@@ -183,6 +183,64 @@ TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
     EXPECT_FALSE(SignBit(signedZero.w));
 }
 
+TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
+            NWB_ASSERT(false);
+    }
+    );
+    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
+
+    // FMA retains the 2^-54 residual; negating c-a*b would reverse an exact cancellation's zero sign.
+    volatile f64 doubleInputs[][4]{
+        { 0x1.0000002p+0, -0x1.0000002p+0, 1.0, -0.0 },
+        { 0x1.ffffffcp-1, 0x1.ffffffcp-1, 1.0, 1.0 },
+        { 1.0, -1.0, 1.0, 0.0 }
+    };
+    const SIMDVectorDouble first = VectorDoubleSet(doubleInputs[0][0], doubleInputs[0][1], doubleInputs[0][2], doubleInputs[0][3]);
+    const SIMDVectorDouble second = VectorDoubleSet(doubleInputs[1][0], doubleInputs[1][1], doubleInputs[1][2], doubleInputs[1][3]);
+    const SIMDVectorDouble difference = VectorDoubleSet(doubleInputs[2][0], doubleInputs[2][1], doubleInputs[2][2], doubleInputs[2][3]);
+    const SIMDVectorDouble productMinusDifference = VectorDoubleMultiplySubtract(first, second, difference);
+    const SIMDVectorDouble productPlusNegativeDifference = VectorDoubleMultiplyAdd(first, second, VectorDoubleNegate(difference));
+    const SIMDVectorDouble differenceMinusProduct = VectorDoubleNegativeMultiplySubtract(first, second, difference);
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON)
+    constexpr u64 s_NegativeDoubleResidual = BitCast<u64>(-0x1p-54);
+    constexpr u64 s_PositiveDoubleResidual = BitCast<u64>(0x1p-54);
+#else
+    constexpr u64 s_NegativeDoubleResidual = 0u;
+    constexpr u64 s_PositiveDoubleResidual = 0u;
+#endif
+    constexpr u64 s_DoubleExpected[]{ s_NegativeDoubleResidual, s_PositiveDoubleResidual, 0u, 0x8000000000000000u };
+    constexpr u64 s_DoubleNegativeExpected[]{ s_PositiveDoubleResidual, s_NegativeDoubleResidual, 0u, 0u };
+
+    volatile f32 singleInputs[][4]{
+        { 0x1.0008p+0f, -0x1.0008p+0f, 1.0f, -0.0f },
+        { 0x1.fffp-1f, 0x1.fffp-1f, 1.0f, 1.0f },
+        { 1.0f, -1.0f, 1.0f, 0.0f }
+    };
+    const SIMDVectorSingle singleFirst = VectorSet(singleInputs[0][0], singleInputs[0][1], singleInputs[0][2], singleInputs[0][3]);
+    const SIMDVectorSingle singleSecond = VectorSet(singleInputs[1][0], singleInputs[1][1], singleInputs[1][2], singleInputs[1][3]);
+    const SIMDVectorSingle singleDifference = VectorSet(singleInputs[2][0], singleInputs[2][1], singleInputs[2][2], singleInputs[2][3]);
+    const SIMDVectorSingle singleResult = VectorMultiplySubtract(singleFirst, singleSecond, singleDifference);
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+    constexpr u32 s_NegativeSingleResidual = BitCast<u32>(-0x1p-26f);
+    constexpr u32 s_PositiveSingleResidual = BitCast<u32>(0x1p-26f);
+#else
+    constexpr u32 s_NegativeSingleResidual = 0u;
+    constexpr u32 s_PositiveSingleResidual = 0u;
+#endif
+    constexpr u32 s_SingleExpected[]{ s_NegativeSingleResidual, s_PositiveSingleResidual, 0u, 0x80000000u };
+    for(usize lane = 0u; lane < 4u; ++lane){
+        EXPECT_EQ(VectorDoubleGetIntByIndex(productMinusDifference, lane), s_DoubleExpected[lane]) << lane;
+        EXPECT_EQ(VectorDoubleGetIntByIndex(productPlusNegativeDifference, lane), s_DoubleExpected[lane]) << lane;
+        EXPECT_EQ(VectorDoubleGetIntByIndex(differenceMinusProduct, lane), s_DoubleNegativeExpected[lane]) << lane;
+        EXPECT_EQ(VectorGetIntByIndex(singleResult, lane), s_SingleExpected[lane]) << lane;
+    }
+}
+
 TEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues){
     const SIMDVectorDouble inputs[]{
         { 0.0, -0.0, 0x1p-1022, -0x1p-1022 },

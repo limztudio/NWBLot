@@ -153,10 +153,14 @@ Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, 
     if(normalized == 1.0)
         value = upper;
     else if(normalized > 0.0 && minimum != maximum){
-        if(minimum < 0.0 && maximum > 0.0)
-            value = VectorDoubleAdd(VectorDoubleMultiply(lower, VectorDoubleSubtract(VectorDoubleSplatOne(), fraction)), VectorDoubleMultiply(upper, fraction));
-        else
-            value = VectorDoubleAdd(lower, VectorDoubleMultiply(VectorDoubleSubtract(upper, lower), fraction));
+        if(minimum < 0.0 && maximum > 0.0){
+            const SIMDVectorDouble lowerWeight = VectorDoubleSubtract(VectorDoubleSplatOne(), fraction);
+            value = VectorDoubleAdd(VectorDoubleMultiply(lower, lowerWeight), VectorDoubleMultiply(upper, fraction));
+        }
+        else{
+            const SIMDVectorDouble span = VectorDoubleSubtract(upper, lower);
+            value = VectorDoubleAdd(lower, VectorDoubleMultiply(span, fraction));
+        }
         value = ClampValue(value, lower, upper);
     }
     const f64 result = VectorDoubleGetX(value);

@@ -146,7 +146,8 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     for(usize index = 0u; index < LengthOf(aligned); ++index){
         const SIMDVectorDouble position = VectorDoubleReplicate(static_cast<f64>(index));
         const SIMDVectorDouble x = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), position, VectorDoubleReplicate(0x1p+40 + 0.25));
-        const SIMDVectorDouble y = VectorDoubleMultiply(VectorDoubleSubtract(position, VectorDoubleSplatOne()), VectorDoubleReplicate(0x1p-40));
+        const SIMDVectorDouble previousPosition = VectorDoubleSubtract(position, VectorDoubleSplatOne());
+        const SIMDVectorDouble y = VectorDoubleMultiply(previousPosition, VectorDoubleReplicate(0x1p-40));
         StoreDouble(VectorDoubleMergeX(x, y, VectorDoubleReplicate(1.0 + 0x1p-52), VectorDoubleReplicate(Limit<f64>::s_Infinity)), aligned[index].value);
         NWB_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
     }

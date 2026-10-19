@@ -769,7 +769,8 @@ NWB_INLINE void MinMaxFromCenterExtents(const SIMDVectorDouble center, const SIM
 
 NWB_INLINE void CenterExtentsFromMinMax(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents)noexcept{
     outCenter = VectorDoubleSetW(VectorDoubleMultiply(VectorDoubleAdd(minBounds, maxBounds), VectorDoubleReplicate(CollisionDoubleDetail::s_DoubleHalf)), 0.0);
-    outExtents = VectorDoubleSetW(VectorDoubleMultiply(VectorDoubleSubtract(maxBounds, minBounds), VectorDoubleReplicate(CollisionDoubleDetail::s_DoubleHalf)), 0.0);
+    const SIMDVectorDouble extentSpan = VectorDoubleSubtract(maxBounds, minBounds);
+    outExtents = VectorDoubleSetW(VectorDoubleMultiply(extentSpan, VectorDoubleReplicate(CollisionDoubleDetail::s_DoubleHalf)), 0.0);
 }
 
 NWB_INLINE void ExpandMinMax(const SIMDVectorDouble point, SIMDVectorDouble& inOutMinBounds, SIMDVectorDouble& inOutMaxBounds)noexcept{
@@ -863,7 +864,8 @@ inline void FastIntersectPointsPlane(const SIMDVectorDouble* points, const usize
     const SIMDVectorDouble axisOrigin = VectorDoubleSubtract(center, origin);
     const SIMDVectorDouble isParallel = VectorDoubleLessOrEqual(VectorDoubleAbs(direction), VectorDoubleReplicate(s_DoubleRayEpsilon));
     const SIMDVectorDouble inverseDirection = VectorDoubleReciprocal(direction);
-    const SIMDVectorDouble t1 = VectorDoubleMultiply(VectorDoubleSubtract(axisOrigin, extents), inverseDirection);
+    const SIMDVectorDouble nearOffset = VectorDoubleSubtract(axisOrigin, extents);
+    const SIMDVectorDouble t1 = VectorDoubleMultiply(nearOffset, inverseDirection);
     const SIMDVectorDouble t2 = VectorDoubleMultiply(VectorDoubleAdd(axisOrigin, extents), inverseDirection);
     const SIMDVectorDouble negativeMax = VectorDoubleReplicate(-Limit<f64>::s_Max);
     const SIMDVectorDouble positiveMax = VectorDoubleReplicate(Limit<f64>::s_Max);

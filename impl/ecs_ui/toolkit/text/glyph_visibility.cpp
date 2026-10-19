@@ -161,7 +161,8 @@ Expected<Rect> TextGlyphVisibility::AtlasRectangle(const PlacedGlyph& glyph, con
     const f64 x = VectorDoubleGetX(xYValue);
     const f64 y = VectorDoubleGetY(xYValue);
     const SIMDVectorDouble planeEnd = VectorDoubleSet(record->planeRight, record->planeBottom, 0.0, 0.0);
-    const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(VectorDoubleSubtract(planeEnd, planeOrigin), scaleVector);
+    const SIMDVectorDouble planeExtent = VectorDoubleSubtract(planeEnd, planeOrigin);
+    const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(planeExtent, scaleVector);
     const f64 width = VectorDoubleGetX(widthHeightValue);
     const f64 height = VectorDoubleGetY(widthHeightValue);
     return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoubleSet(x, y, width, height));

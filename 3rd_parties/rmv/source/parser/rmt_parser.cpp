@@ -563,6 +563,7 @@ static RmtErrorCode ParseUserdata(RmtParser* rmt_parser, const uint16_t token_he
     {
         // Allocate memory for the payload cache.
         out_userdata_token->payload_cache = RmtTokenAllocatePayloadCache(out_userdata_token->size_in_bytes);
+        RMT_RETURN_ON_ERROR(out_userdata_token->payload_cache != nullptr, kRmtErrorOutOfMemory);
         memcpy(out_userdata_token->payload_cache, payload, out_userdata_token->size_in_bytes);
 
         const uintptr_t id_address = ((uintptr_t)payload) + (out_userdata_token->size_in_bytes - 4);
@@ -580,6 +581,7 @@ static RmtErrorCode ParseUserdata(RmtParser* rmt_parser, const uint16_t token_he
     {
         // Allocate memory for the payload cache.
         out_userdata_token->payload_cache = RmtTokenAllocatePayloadCache(out_userdata_token->size_in_bytes);
+        RMT_RETURN_ON_ERROR(out_userdata_token->payload_cache != nullptr, kRmtErrorOutOfMemory);
         memcpy(out_userdata_token->payload_cache, payload, out_userdata_token->size_in_bytes);
 
         typedef uint32_t     NameIdentifier;

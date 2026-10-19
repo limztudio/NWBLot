@@ -126,16 +126,21 @@ static RmtVirtualAllocationInterval* InsertNode(RmtVirtualAllocationList*     vi
         else
         {
             RMT_ASSERT_FAIL("RmtVirtualAllocationInterval InsertNode alloc failed");
+            return nullptr;
         }
     }
 
     if (gpu_address < node->base_address)
     {
-        node->left = InsertNode(virtual_allocation_list, node->left, gpu_address, size_in_pages, allocation);
+        RmtVirtualAllocationInterval* inserted = InsertNode(virtual_allocation_list, node->left, gpu_address, size_in_pages, allocation);
+        RMT_RETURN_ON_ERROR(inserted != nullptr, nullptr);
+        node->left = inserted;
     }
     else
     {
-        node->right = InsertNode(virtual_allocation_list, node->right, gpu_address, size_in_pages, allocation);
+        RmtVirtualAllocationInterval* inserted = InsertNode(virtual_allocation_list, node->right, gpu_address, size_in_pages, allocation);
+        RMT_RETURN_ON_ERROR(inserted != nullptr, nullptr);
+        node->right = inserted;
     }
 
     return node;
@@ -219,7 +224,9 @@ static RmtErrorCode AddAllocationToTree(RmtVirtualAllocationList* virtual_alloca
                                         RmtVirtualAllocation*     virtual_allocation)
 {
     const size_t pool_count       = virtual_allocation_list->allocation_interval_pool.allocated;
-    virtual_allocation_list->root = InsertNode(virtual_allocation_list, virtual_allocation_list->root, gpu_address, size_in_4kb_pages, virtual_allocation);
+    RmtVirtualAllocationInterval* inserted = InsertNode(virtual_allocation_list, virtual_allocation_list->root, gpu_address, size_in_4kb_pages, virtual_allocation);
+    RMT_RETURN_ON_ERROR(inserted != nullptr, kRmtErrorOutOfMemory);
+    virtual_allocation_list->root = inserted;
     RMT_ASSERT(virtual_allocation_list->allocation_interval_pool.allocated == pool_count + 1);
     return kRmtOk;
 }
@@ -457,7 +464,7 @@ RmtErrorCode RmtVirtualAllocationListAddAllocation(RmtVirtualAllocationList* vir
     }
     RMT_RETURN_ON_ERROR(error_code != kRmtOk, error_code);
 
-    const int32_t next_allocation_index = virtual_allocation_list->allocation_count++;
+    const int32_t next_allocation_index = virtual_allocation_list->allocation_count;
 
     // fill out the details.
     RmtVirtualAllocation* allocation_details    = &virtual_allocation_list->allocation_details[next_allocation_index];
@@ -487,7 +494,13 @@ RmtErrorCode RmtVirtualAllocationListAddAllocation(RmtVirtualAllocationList* vir
 
     // fill out the allocation interval
     const RmtGpuAddress hashed_address = HashGpuAddress(address);
-    AddAllocationToTree(virtual_allocation_list, hashed_address, size_in_4kb_pages, allocation_details);
+    const RmtErrorCode  add_result     = AddAllocationToTree(virtual_allocation_list, hashed_address, size_in_4kb_pages, allocation_details);
+    if (add_result != kRmtOk)
+    {
+        memset(allocation_details, 0, sizeof(*allocation_details));
+        return add_result;
+    }
+    virtual_allocation_list->allocation_count++;
 
     const uint64_t size_in_bytes = (static_cast<uint64_t>(size_in_4kb_pages) << 12);
     virtual_allocation_list->total_allocated_bytes += size_in_bytes;

@@ -488,6 +488,7 @@ RmtErrorCode RmtResourceUserdataTrackResourceNameToken(const RmtCorrelationIdent
         size_t name_length        = strlen(resource_name) + 1;
         result                    = resource_name_string_pool.Allocate(name_length, &token_data.resource_name);
         RMT_ASSERT(result == kRmtOk);
+        RMT_RETURN_ON_ERROR(result == kRmtOk, result);
         memcpy(token_data.resource_name, resource_name, name_length);
         tokens.insert(std::make_pair(timestamp - delay_time, token_data));
     }

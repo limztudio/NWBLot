@@ -51,15 +51,23 @@ RmtErrorCode RmtRdfSnapshotInfo::LoadChunk(rdfChunkFile* chunk_file, int chunk_i
     {
         result                   = kRmtEof;
         std::int64_t chunk_count = 0;
-        rdfChunkFileGetChunkCount(chunk_file, identifier, &chunk_count);
+        rdf_result = rdfChunkFileGetChunkCount(chunk_file, identifier, &chunk_count);
+        RMT_RETURN_ON_ERROR(rdf_result == rdfResult::rdfResultOk, kRmtErrorMalformedData);
         if (chunk_count > 0)
         {
-            int64_t payload_size = 0;
-            rdf_result           = rdfChunkFileGetChunkDataSize(chunk_file, identifier, 0, &payload_size);
+            RMT_RETURN_ON_ERROR(chunk_index >= 0, kRmtErrorIndexOutOfRange);
+            RMT_RETURN_ON_ERROR(static_cast<std::int64_t>(chunk_index) < chunk_count, kRmtErrorIndexOutOfRange);
 
-            if ((rdf_result == rdfResult::rdfResultOk) && (payload_size > 0))
+            int64_t payload_size = 0;
+            rdf_result           = rdfChunkFileGetChunkDataSize(chunk_file, identifier, chunk_index, &payload_size);
+
+            if ((rdf_result == rdfResult::rdfResultOk) && (payload_size == static_cast<int64_t>(sizeof(snapshot_data_))))
             {
                 rdf_result = rdfChunkFileReadChunkData(chunk_file, identifier, chunk_index, &snapshot_data_);
+            }
+            else if (rdf_result == rdfResult::rdfResultOk)
+            {
+                rdf_result = rdfResult::rdfResultError;
             }
 
             if (rdf_result == rdfResult::rdfResultOk)

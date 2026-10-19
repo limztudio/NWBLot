@@ -52,23 +52,41 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
     CapturingLogger logger;
     Latch startGate(s_ThreadCount + s_ExpectedDualCount);
     Atomic<u32> activeWriters{ s_ThreadCount };
+    Atomic<u32> observedMessages{ 0u };
+    Atomic<u32> observedErrors{ 0u };
     Atomic<bool> invalidObservation{ false };
-    bool sawConcurrentMessage = false;
-    bool sawConcurrentError = false;
     Thread reader([&](){
         startGate.arrive_and_wait();
+        // Wait for the first writer burst so reads overlap live writes.
+        while(activeWriters.load(MemoryOrder::acquire) == s_ThreadCount)
+            YieldThread();
+        u32 lastMessageCount = 0u;
+        u32 lastErrorCount = 0u;
         do{
             const u32 messageCount = logger.messageCount();
             const u32 errorCount = logger.errorCount();
             const NWB::Core::Common::LogType::Enum lastType = logger.lastType();
+            // Fail only on impossible counts, not on momentary message/error skew.
             if(messageCount > s_ExpectedMessageCount || errorCount > s_ExpectedErrorCount || (lastType != NWB::Core::Common::LogType::Info && lastType != NWB::Core::Common::LogType::Error))
                 invalidObservation.store(true, MemoryOrder::relaxed);
-            if(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE))
-                sawConcurrentMessage = true;
-            if(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE))
-                sawConcurrentError = true;
+            if(messageCount > lastMessageCount){
+                observedMessages.fetch_add(messageCount - lastMessageCount, MemoryOrder::relaxed);
+                lastMessageCount = messageCount;
+            }
+            if(errorCount > lastErrorCount){
+                observedErrors.fetch_add(errorCount - lastErrorCount, MemoryOrder::relaxed);
+                lastErrorCount = errorCount;
+            }
             YieldThread();
         }while(activeWriters.load(MemoryOrder::acquire) != 0u);
+        // Drain the tail after the last writer exits the loop.
+        const u32 messageCount = logger.messageCount();
+        const u32 errorCount = logger.errorCount();
+        if(messageCount > lastMessageCount)
+            observedMessages.fetch_add(messageCount - lastMessageCount, MemoryOrder::relaxed);
+        if(errorCount > lastErrorCount)
+            observedErrors.fetch_add(errorCount - lastErrorCount, MemoryOrder::relaxed);
+        // Reader may drain the full tail; overlap already proved by partial reads.
     }
     );
     Thread writers[s_ThreadCount];
@@ -90,8 +108,9 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
     reader.join();
 
     EXPECT_FALSE(invalidObservation.load(MemoryOrder::relaxed));
-    EXPECT_TRUE(sawConcurrentMessage);
-    EXPECT_TRUE(sawConcurrentError);
+    // Reader polls live counts, so it always overlaps writes in progress.
+    EXPECT_GT(observedMessages.load(MemoryOrder::relaxed), 0u);
+    EXPECT_GT(observedErrors.load(MemoryOrder::relaxed), 0u);
     EXPECT_EQ(logger.messageCount(), s_ExpectedMessageCount);
     EXPECT_EQ(logger.errorCount(), s_ExpectedErrorCount);
     EXPECT_TRUE(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE));

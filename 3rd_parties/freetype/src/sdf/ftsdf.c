@@ -3176,6 +3176,19 @@
     memory = shape->memory;
     FT_ASSERT( memory );
 
+    /* Check the zero size first so the divide below cannot fault. */
+    if ( bitmap->width == 0 || bitmap->rows == 0 )
+    {
+      FT_TRACE0(( "sdf_generate_bounding_box:"
+                  " Cannot render glyph with width/height == 0\n" ));
+      FT_TRACE0(( "             "
+                  " (width, height provided [%d, %d])",
+                  bitmap->width, bitmap->rows ));
+
+      error = FT_THROW( Cannot_Render_Glyph );
+      goto Exit;
+    }
+
     if ( bitmap->rows > FT_INT_MAX / bitmap->width )
     {
       error = FT_THROW( Array_Too_Large );
@@ -3193,17 +3206,6 @@
       sp_sq = FT_INT_16D16( (FT_Int)( spread * spread ) );
     else
       sp_sq = fixed_spread;
-
-    if ( width == 0 || rows == 0 )
-    {
-      FT_TRACE0(( "sdf_generate:"
-                  " Cannot render glyph with width/height == 0\n" ));
-      FT_TRACE0(( "             "
-                  " (width, height provided [%d, %d])", width, rows ));
-
-      error = FT_THROW( Cannot_Render_Glyph );
-      goto Exit;
-    }
 
     /* loop over all contours */
     while ( contours )

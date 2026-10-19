@@ -8,6 +8,7 @@
 #include "rmt_token.h"
 
 #include "rmt_assert.h"
+#include "rmt_error.h"
 #include "rmt_string_memory_pool.h"
 
 // 1MB memory pool for resource name strings.
@@ -19,7 +20,8 @@ static RmtStringMemoryPool resource_name_string_pool(kMemoryPoolBlockSize);
 uint8_t* RmtTokenAllocatePayloadCache(size_t size)
 {
     char* buffer = nullptr;
-    resource_name_string_pool.Allocate(size, &buffer);
+    if (resource_name_string_pool.Allocate(size, &buffer) != kRmtOk)
+        return nullptr;
     return reinterpret_cast<uint8_t*>(buffer);
 }
 

@@ -8,6 +8,8 @@
 
 #include "rmt_string_memory_pool.h"
 
+#include <new>
+
 #include "rmt_assert.h"
 #include "rmt_error.h"
 
@@ -26,10 +28,13 @@ RmtStringMemoryPool::~RmtStringMemoryPool()
 RmtErrorCode RmtStringMemoryPool::Allocate(const size_t buffer_size, char** out_buffer)
 {
     RMT_RETURN_ON_ERROR(out_buffer != nullptr, kRmtErrorInvalidPointer);
+    RMT_RETURN_ON_ERROR(buffer_size != 0, kRmtErrorInvalidSize);
+    RMT_RETURN_ON_ERROR(buffer_size <= memory_pool_block_size_, kRmtErrorInvalidSize);
 
-    // Check to see if there is enough room in the buffer.
-    // If not, set things up to allocate a new buffer block.
-    if ((memory_pool_buffer_offset_ + buffer_size) >= memory_pool_block_size_)
+    // Guard the offset add so a crafted size cannot wrap the room test.
+    RMT_RETURN_ON_ERROR(memory_pool_buffer_offset_ <= memory_pool_block_size_, kRmtErrorMalformedData);
+    const size_t remaining = memory_pool_block_size_ - memory_pool_buffer_offset_;
+    if (buffer_size > remaining)
     {
         memory_pool_buffer_ = nullptr;
     }
@@ -37,7 +42,9 @@ RmtErrorCode RmtStringMemoryPool::Allocate(const size_t buffer_size, char** out_
     // If no buffer, allocate one and add it to the buffer cache.
     if (memory_pool_buffer_ == nullptr)
     {
-        memory_pool_buffer_ = new char[memory_pool_block_size_];
+        char* new_block = new (std::nothrow) char[memory_pool_block_size_];
+        RMT_RETURN_ON_ERROR(new_block != nullptr, kRmtErrorOutOfMemory);
+        memory_pool_buffer_ = new_block;
         memory_pool_blocks_.push_back(memory_pool_buffer_);
         memory_pool_buffer_offset_ = 0;
     }

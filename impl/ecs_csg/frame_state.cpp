@@ -113,8 +113,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
                 return;
 
             const auto foundRange = m_cutterRanges.find(cutter.receiverGroup);
-            if(foundRange == m_cutterRanges.end())
-                return;
+            NWB_ASSERT(foundRange != m_cutterRanges.end());
 
             CutterRangeEntry& entry = foundRange.value();
             u32& writtenCount = entry.writtenCount;
@@ -139,7 +138,8 @@ Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(
     if(!resolvedReceiver)
         return MakeUnexpected(Failure{});
     const CsgReceiverComponent* receiver = resolvedReceiver->receiver;
-    if(!receiver || !receiver->enabled || !__hidden_frame_state::ReceiverPassEnabled(*receiver, receiverPass))
+    NWB_ASSERT(receiver);
+    if(!receiver->enabled || !__hidden_frame_state::ReceiverPassEnabled(*receiver, receiverPass))
         return MakeUnexpected(Failure{});
 
     const auto foundCutterRange = m_cutterRanges.find(receiver->receiverGroup);
@@ -162,7 +162,8 @@ Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange
     if(!resolvedReceiver)
         return MakeUnexpected(Failure{});
     const CsgReceiverComponent* receiver = resolvedReceiver->receiver;
-    if(!receiver || !receiver->enabled)
+    NWB_ASSERT(receiver);
+    if(!receiver->enabled)
         return MakeUnexpected(Failure{});
 
     const auto foundCutterRange = m_cutterRanges.find(receiver->receiverGroup);

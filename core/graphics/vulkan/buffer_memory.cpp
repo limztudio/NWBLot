@@ -148,7 +148,7 @@ void Device::unmapBuffer(Buffer& buffer){
         return;
     }
 
-    if(buffer.m_mappedMemory && !buffer.m_persistentlyMapped){
+    if(!buffer.m_persistentlyMapped){
         buffer.m_allocator.unmapBufferMemory(buffer);
         buffer.m_mappedMemory = nullptr;
     }
@@ -285,9 +285,9 @@ bool Device::isBufferReadyForGpuUse(Buffer* bufferResource, const VkBufferUsageF
 
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator)
         return false;
-    if(!buffer.descriptionMatchesCreation())
-        return false;
-    if(!VulkanBufferDetail::IsBufferUsageConsistent(m_context, buffer.m_creationDesc, buffer.m_managed, buffer.m_bufferInfo.usage, requiredUsage))
+    NWB_ASSERT(buffer.descriptionMatchesCreation());
+    NWB_ASSERT(VulkanBufferDetail::IsBufferUsageConsistent(m_context, buffer.m_creationDesc, buffer.m_managed, buffer.m_bufferInfo.usage));
+    if((buffer.m_bufferInfo.usage & requiredUsage) != requiredUsage)
         return false;
     if((requiredUsage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) && buffer.m_deviceAddress == 0u)
         return false;

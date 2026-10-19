@@ -151,9 +151,10 @@ Name TimingRecorder::scopeNameAt(const usize index)const noexcept{
 }
 
 const TimingStats& TimingRecorder::statsAt(const usize index)const noexcept{
-    if(index >= m_scopes.size() || !m_scopes[index])
+    if(index >= m_scopes.size())
         return m_emptyStats;
 
+    NWB_ASSERT(m_scopes[index]);
     return m_scopes[index]->accumulator.lastStats();
 }
 

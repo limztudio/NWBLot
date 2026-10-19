@@ -286,6 +286,19 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     ;
 }
 
+// Creation copies the cached aspect and block layout from the creation format.
+[[nodiscard]] inline bool TextureFormatMetadataMatches(const Format::Enum format, const VkImageAspectFlags aspectMask, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
+    const FormatInfo& formatInfo = GetFormatInfo(format);
+    const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
+    return
+        expectedFormatLayout
+        && aspectMask == VulkanDetail::GetImageAspectMask(formatInfo)
+        && formatLayout.blockWidth == expectedFormatLayout->blockWidth
+        && formatLayout.blockHeight == expectedFormatLayout->blockHeight
+        && formatLayout.bytesPerBlock == expectedFormatLayout->bytesPerBlock
+    ;
+}
+
 [[nodiscard]] inline bool IsTextureImageWithinFormatLimits(const VkImageCreateInfo& imageInfo, const VkImageFormatProperties& formatProperties)noexcept{
     return
         imageInfo.extent.width <= formatProperties.maxExtent.width

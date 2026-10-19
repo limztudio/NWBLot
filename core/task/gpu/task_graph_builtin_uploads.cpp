@@ -38,8 +38,7 @@ struct UploadBufferPayload{
 struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadBufferPayload>{
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
-        if(!payload.destination || !bytes || bytes->empty() || payload.finalState == ResourceStates::Unknown)
-            return false;
+        NWB_ASSERT(payload.destination && bytes && !bytes->empty() && payload.finalState != ResourceStates::Unknown);
 
         if(context.commandIrCapture && !context.commandIrCapture->captureUploadBuffer(context.task, context.packet, context.queue, payload.source, payload.destinationResource, payload.destinationOffsetBytes, *bytes, payload.finalState))
             return false;
@@ -78,8 +77,7 @@ struct UploadTexturePayload{
 struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
-        if(!payload.destination || !bytes || payload.requiredBytes == 0u || bytes->size() < payload.requiredBytes || payload.finalState == ResourceStates::Unknown)
-            return false;
+        NWB_ASSERT(payload.destination && bytes && payload.requiredBytes != 0u && bytes->size() >= payload.requiredBytes && payload.finalState != ResourceStates::Unknown);
 
         if(
             context.commandIrCapture
@@ -136,8 +134,7 @@ Expected<GpuUploadBlobId> GpuTaskGraph::copyUploadData(const void* const data, c
     const u8* const sourceBytes = static_cast<const u8*>(data);
     blob.bytes.reserve(byteSize);
     blob.bytes.assign(sourceBytes, sourceBytes + byteSize);
-    if(blob.bytes.size() != byteSize)
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(blob.bytes.size() == byteSize);
 
     const u32 index = static_cast<u32>(m_uploadBlobs.size());
     m_uploadBlobs.push_back(Move(blob));
@@ -158,7 +155,8 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, c
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    if(!source || source->bytes.empty() || destinationResource.type != GpuGraphResourceType::Buffer || !destinationResource.buffer)
+    NWB_ASSERT(source && !source->bytes.empty());
+    if(destinationResource.type != GpuGraphResourceType::Buffer || !destinationResource.buffer)
         return MakeUnexpected(Failure{});
 
     const BufferDesc& destinationDesc = destinationResource.buffer->getCreationDescription();
@@ -220,7 +218,8 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, 
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    if(!source || source->bytes.empty() || destinationResource.type != GpuGraphResourceType::Texture || !destinationResource.texture)
+    NWB_ASSERT(source && !source->bytes.empty());
+    if(destinationResource.type != GpuGraphResourceType::Texture || !destinationResource.texture)
         return MakeUnexpected(Failure{});
 
     Expected<usize> requiredBytes = MakeUnexpected(Failure{});

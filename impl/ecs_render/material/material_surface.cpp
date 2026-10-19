@@ -36,8 +36,8 @@ namespace __hidden_material_surface{
 template<typename CacheT, typename ReleaseFn>
 static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem){
     for(auto it = cache.begin(); it != cache.end(); ++it){
-        if(it.value())
-            releaseItem(*it.value());
+        NWB_ASSERT(it.value());
+        releaseItem(*it.value());
     }
     cache.clear();
 }
@@ -56,24 +56,12 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
 }
 
 template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
-[[nodiscard]] static Expected<ResourceT*> FindOrCreateCachedAsset(
-    CacheT& cache,
-    const Core::Assets::AssetRef<AssetT>& assetRef,
-    const AStringView emptyKindText,
-    Core::GpuDescriptorHeap& heap,
-    Core::GpuDescriptorHandle ResourceT::* descriptorMember,
-    LoadFn&& loadResource
-){
-    if(!assetRef.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText));
-        return MakeUnexpected(Failure{});
-    }
+[[nodiscard]] static Expected<ResourceT*> FindOrCreateCachedAsset(CacheT& cache, const Core::Assets::AssetRef<AssetT>& assetRef, Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle ResourceT::* descriptorMember, LoadFn&& loadResource){
+    NWB_ASSERT(assetRef.valid());
     const Name& assetPath = assetRef.name();
     auto assetIt = cache.find(assetPath);
     if(assetIt == cache.end()){
         UniquePtr<ResourceT> resource = MakeUnique<ResourceT>();
-        if(!resource)
-            return MakeUnexpected(Failure{});
         Core::GpuDescriptorRetirementGuard retireLoading(heap, resource.get()->*descriptorMember);
         if(!loadResource(*resource, assetRef, assetPath))
             return MakeUnexpected(Failure{});
@@ -86,8 +74,6 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
             retireUnpublished.release();
     }
     NWB_ASSERT(assetIt.value());
-    if(!assetIt.value())
-        return MakeUnexpected(Failure{});
     return assetIt.value().get();
 }
 
@@ -95,7 +81,6 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     const auto textureResourceResult = FindOrCreateCachedAsset<Texture, TextureGpuResource>(
         resources.textureAssetCache,
         textureAsset,
-        "Texture2D",
         graphics.getDevice().getDescriptorHeap(),
         &TextureGpuResource::sampledImageHeapHandle,
         [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
@@ -111,13 +96,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     if(!textureResourceResult)
         return MakeUnexpected(textureResourceResult.error());
     TextureGpuResource* const textureResource = *textureResourceResult;
-
-    const Name& texturePath = textureAsset.name();
-    if(!textureResource->valid() || textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached Texture2D asset '{}' is invalid"), StringConvert(texturePath.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-
+    NWB_ASSERT(textureResource->valid() && textureResource->sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
     return textureResource->sampledImageHeapHandle.slot();
 }
 
@@ -125,7 +104,6 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     const auto samplerResourceResult = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
         resources.samplerAssetCache,
         samplerAsset,
-        Sampler::s_AssetTypeText,
         graphics.getDevice().getDescriptorHeap(),
         &SamplerGpuResource::samplerHeapHandle,
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
@@ -135,13 +113,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     if(!samplerResourceResult)
         return MakeUnexpected(samplerResourceResult.error());
     SamplerGpuResource* const samplerResource = *samplerResourceResult;
-
-    const Name& samplerPath = samplerAsset.name();
-    if(!samplerResource->valid() || samplerResource->samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached sampler asset '{}' is invalid"), StringConvert(samplerPath.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-
+    NWB_ASSERT(samplerResource->valid() && samplerResource->samplerHeapHandle.descriptorClass() == Core::GpuDescriptorClass::Sampler);
     return samplerResource->samplerHeapHandle.slot();
 }
 
@@ -204,11 +176,10 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::createMaterialSurfaceInfo
     }
 
     auto loadedAsset = m_assetManager.loadTypedSync<Material>(materialPath, NWB_TEXT("RendererSystem"), "material");
-    const Material* loadedMaterial = loadedAsset ? loadedAsset->get() : nullptr;
-    if(!loadedMaterial)
+    if(!loadedAsset)
         return MakeUnexpected(Failure{});
 
-    const Material& material = *loadedMaterial;
+    const Material& material = **loadedAsset;
 
     MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
@@ -321,15 +292,12 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
             }
             break;
         default:
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.resolvedText()));
+            NWB_ASSERT(false);
             return false;
         }
 
         const u32 resolvedHeapSlot = *heapSlot;
-        if(resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size() || sizeof(resolvedHeapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
-            return false;
-        }
+        NWB_ASSERT(resourceReference.constantByteOffset <= materialInfo.constantTypedBytes.size() && sizeof(resolvedHeapSlot) <= materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset);
         NWB_MEMCPY(materialInfo.constantTypedBytes.data() + resourceReference.constantByteOffset, materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset, &resolvedHeapSlot, sizeof(resolvedHeapSlot));
     }
 

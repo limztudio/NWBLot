@@ -9,7 +9,6 @@
 
 #include <global/allocation_size.h>
 #include <global/scope_exit.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,10 +57,8 @@ public:
         static_assert(noexcept(m_container.pop_back()));
         if(m_committed)
             return;
-        if(m_container.size() < m_initialSize){
+        if(m_container.size() < m_initialSize)
             NWB_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
-            TerminateInvariant();
-        }
         while(m_container.size() > m_initialSize)
             m_container.pop_back();
     }
@@ -97,10 +94,8 @@ GpuTaskGraph::TaskPayloadDestroyScope::~TaskPayloadDestroyScope()noexcept{
 }
 
 void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
-    if(m_active){
+    if(m_active)
         NWB_FATAL_ASSERT_MSG(false, "GPU task payload destruction ownership cannot be activated twice");
-        TerminateInvariant();
-    }
     m_active = true;
 }
 
@@ -203,17 +198,15 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceVersionUseRollback(m_resourceVersionUses);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope taskRollback(m_tasks);
 
-    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
-    if(!markerLabelRange)
-        return MakeUnexpected(Failure{});
+    const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
     GpuTaskNode task;
     task.identity = desc.identity;
     task.commands = commands;
     task.scheduling = desc.scheduling;
     task.timing = desc.timing;
-    task.markerLabelOffset = markerLabelRange->offset;
-    task.markerLabelSize = markerLabelRange->size;
+    task.markerLabelOffset = markerLabelRange.offset;
+    task.markerLabelSize = markerLabelRange.size;
     task.dependencyOffset = static_cast<u32>(m_dependencies.size());
     task.dependencyCount = static_cast<u32>(desc.dependencyCount + preludeDependencyCount);
     task.externalDependencyOffset = static_cast<u32>(m_externalDependencies.size());
@@ -405,9 +398,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceRollback(m_resources);
 
-    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
-    if(!markerLabelRange)
-        return MakeUnexpected(Failure{});
+    const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
     for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
         const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
@@ -442,8 +433,8 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);
     resource.initialOwnerHandoffSourceCount = static_cast<u32>(desc.initialOwnerHandoffSourceCount);
     resource.queueSharing = desc.queueSharing;
-    resource.markerLabelOffset = markerLabelRange->offset;
-    resource.markerLabelSize = markerLabelRange->size;
+    resource.markerLabelOffset = markerLabelRange.offset;
+    resource.markerLabelSize = markerLabelRange.size;
     if(queueAdmission){
         resource.queueFamilyIndexOffset = static_cast<u32>(m_queueFamilyIndices.size());
         resource.queueFamilyIndexCount = queueAdmission->queueFamilyIndexCount;
@@ -562,14 +553,12 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope memberRollback(m_resourceSetMembers);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope setRollback(m_resourceSets);
 
-    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
-    if(!markerLabelRange)
-        return MakeUnexpected(Failure{});
+    const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
     GpuGraphResourceSetNode resourceSet;
     resourceSet.identity = desc.identity;
-    resourceSet.markerLabelOffset = markerLabelRange->offset;
-    resourceSet.markerLabelSize = markerLabelRange->size;
+    resourceSet.markerLabelOffset = markerLabelRange.offset;
+    resourceSet.markerLabelSize = markerLabelRange.size;
     resourceSet.memberOffset = static_cast<u32>(m_resourceSetMembers.size());
     resourceSet.memberCount = static_cast<u32>(desc.memberCount);
     for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex)
@@ -612,15 +601,13 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::appendExternalCompletion(const G
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope completionRollback(m_externalCompletions);
 
-    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
-    if(!markerLabelRange)
-        return MakeUnexpected(Failure{});
+    const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
     GpuExternalCompletionNode completion;
     completion.identity = desc.identity;
     completion.token = desc.token;
-    completion.markerLabelOffset = markerLabelRange->offset;
-    completion.markerLabelSize = markerLabelRange->size;
+    completion.markerLabelOffset = markerLabelRange.offset;
+    completion.markerLabelSize = markerLabelRange.size;
     completion.hasToken = desc.token.valid() && desc.token.hasPhysicalQueueIdentity();
     const u16 tokenDeviceGeneration = completion.hasToken ? desc.token.deviceGeneration : 0u;
 
@@ -657,9 +644,9 @@ const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(const GpuUpl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuTaskGraph::MarkerLabelRange> GpuTaskGraph::appendMarkerLabel(const AStringView text){
-    if(text.empty() || !text.data() || text.size() > Limit<u32>::s_Max || text.size() > Limit<u32>::s_Max - m_markerText.size())
-        return MakeUnexpected(Failure{});
+GpuTaskGraph::MarkerLabelRange GpuTaskGraph::appendMarkerLabel(const AStringView text){
+    // Callers admit a nonempty label that fits the u32 marker storage.
+    NWB_ASSERT(!text.empty() && text.size() <= Limit<u32>::s_Max - m_markerText.size());
 
     const MarkerLabelRange range{ static_cast<u32>(m_markerText.size()), static_cast<u32>(text.size()) };
     const usize nextSize = m_markerText.size() + text.size();

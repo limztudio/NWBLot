@@ -278,8 +278,7 @@ bool ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& mode
 
 bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
     const Name skeletonName = object.skeleton.name();
-    if(!skeletonName)
-        return false;
+    NWB_ASSERT(skeletonName);
     auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, NWB_TEXT("ModelSystem"), "skeleton");
     if(!skeletonAsset)
         return false;
@@ -324,11 +323,7 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     attachment.parentJoint = object.parentJoint;
     attachment.localTransform = object.transform;
 
-    if(!object.parentObject && object.parentJoint){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' uses parent_joint '{}' without parent_object"), StringConvert(object.name.resolvedText()), StringConvert(object.parentJoint.resolvedText()));
-        return false;
-    }
-
+    NWB_ASSERT(object.parentObject || !object.parentJoint);
     if(object.parentObject){
         attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
         if(!attachment.parentEntity.valid()){

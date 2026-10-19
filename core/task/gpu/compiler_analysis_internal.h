@@ -55,7 +55,7 @@ void BuildSchedulingEdges(
     Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] bool BuildSchedulingTaskAdjacency(
+void BuildSchedulingTaskAdjacency(
     const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges,
     usize taskCount,
     u64 graphGeneration,

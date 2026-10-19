@@ -96,9 +96,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskResourceRange& firstUseRange,
     const GpuPhysicalQueueId& destinationQueue
 )noexcept{
-    if(resource.initialOwnerHandoffSourceCount == 0u || !resource.initialOwnerHandoffSources)
-        return nullptr;
-
+    // Callers pass only resources with handoff sources, and compile() already rejected a missing source span.
+    NWB_ASSERT(resource.initialOwnerHandoffSourceCount != 0u && resource.initialOwnerHandoffSources);
     const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
     for(usize sourceIndex = 0u; sourceIndex < resource.initialOwnerHandoffSourceCount; ++sourceIndex){
         const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
@@ -155,10 +154,10 @@ namespace GpuTaskGraphCompilerDetail{
             if(requiresExclusiveOwnershipHandoff){
                 if(previousState->access == GpuTaskResourceAccess::Read && !AppendOverlappingReaderDependencies(plan, resource, readerDependencyRange, *previousState, sourcePacket))
                     return MakeUnexpected(Failure{});
+                // HazardDomain uses never reach state planning, so the type is texture, buffer or acceleration structure.
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
                 const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
-                if(releaseType >= GpuCompiledBarrierType::kCount || acquireType >= GpuCompiledBarrierType::kCount)
-                    return MakeUnexpected(Failure{});
+                NWB_ASSERT(releaseType < GpuCompiledBarrierType::kCount && acquireType < GpuCompiledBarrierType::kCount);
                 if(!AppendCompiledOwnershipTransfer(plan, resource, barrierRange, previousState->task, compiledTask.task, previousState->queue, compiledTask.queue, GpuOwnershipTransferRoute::Internal))
                     return MakeUnexpected(Failure{});
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
@@ -216,24 +215,25 @@ namespace GpuTaskGraphCompilerDetail{
     TaskResourceUseIndex taskUseHistory(graph.resourceCount(), graph.generation(), taskUseCapacity, scratchArena);
 
     // The construction pass appended one compiled task for each entry in this stable order, and no later phase mutates that vector.
-    // Preserve the prior fail-closed contract while avoiding a re-scan for every task.
     for(usize taskIndex = 0u; taskIndex < topologicalOrder.size(); ++taskIndex){
         const GpuTaskId taskID = topologicalOrder[taskIndex];
-        if(taskIndex >= compiledPlan.tasks.size() || compiledPlan.tasks[taskIndex].task != taskID)
-            return false;
+        NWB_ASSERT(taskIndex < compiledPlan.tasks.size() && compiledPlan.tasks[taskIndex].task == taskID);
         GpuCompiledTask* const compiledTask = &compiledPlan.tasks[taskIndex];
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const GpuPhysicalQueueInfo* const taskQueue = FindCompiledQueueInfo(compiledPlan, compiledTask->queue);
-        if(!taskQueue || !taskUseHistory.build(task))
+        NWB_ASSERT(taskQueue);
+        if(!taskUseHistory.build(task))
             return false;
         compiledTask->prologueStateSeedOffset = static_cast<u32>(compiledPlan.prologueStateSeeds.size());
         compiledTask->prologueBarrierOffset = static_cast<u32>(compiledPlan.prologueBarriers.size());
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
-            if(resource.type == GpuGraphResourceType::HazardDomain || use.requiredState == ResourceStates::Unknown)
+            if(resource.type == GpuGraphResourceType::HazardDomain)
                 continue;
+            // Analysis rejects an unknown required state on every non-HazardDomain use.
+            NWB_ASSERT(use.requiredState != ResourceStates::Unknown);
             if(
                 (resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer || resource.type == GpuGraphResourceType::AccelStruct)
                 && ResourceUsesConcurrentQueueSharing(resource, topology)
@@ -295,8 +295,7 @@ namespace GpuTaskGraphCompilerDetail{
                             if(!initialOwnerHandoffSource)
                                 return false;
                             initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
-                            if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount)
-                                return false;
+                            NWB_ASSERT(initialOwnerAcquireType < GpuCompiledBarrierType::kCount);
                             initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{ .completion = initialOwnerHandoffSource->completion, .consumer = taskID, });
                         }
                         else if(resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue)

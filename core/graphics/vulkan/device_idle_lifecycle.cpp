@@ -34,10 +34,9 @@ bool Device::waitForIdle(){
     }
 
     for(Queue* queue : m_physicalQueues){
-        if(queue){
-            ScopedLock lock(queue->m_mutex);
-            queue->collectCompletedCommandBuffers();
-        }
+        NWB_ASSERT(queue);
+        ScopedLock lock(queue->m_mutex);
+        queue->collectCompletedCommandBuffers();
     }
     m_scratchManager.collectCompletedChunks();
     m_gpuDescriptorHeap.collectRetired();
@@ -51,22 +50,21 @@ void Device::runGarbageCollection(){
         return;
 
     for(Queue* queue : m_physicalQueues){
-        if(queue){
-            VkResult completionResult = VK_SUCCESS;
-            {
-                ScopedLock lock(queue->m_mutex);
-                completionResult = queue->updateLastFinishedID();
-                if(completionResult == VK_SUCCESS)
-                    queue->collectCompletedCommandBuffers();
-            }
-            if(completionResult == VK_ERROR_DEVICE_LOST){
-                captureDeviceLoss("queue timeline query");
-                return;
-            }
-            if(completionResult != VK_SUCCESS){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
-                return;
-            }
+        NWB_ASSERT(queue);
+        VkResult completionResult = VK_SUCCESS;
+        {
+            ScopedLock lock(queue->m_mutex);
+            completionResult = queue->updateLastFinishedID();
+            if(completionResult == VK_SUCCESS)
+                queue->collectCompletedCommandBuffers();
+        }
+        if(completionResult == VK_ERROR_DEVICE_LOST){
+            captureDeviceLoss("queue timeline query");
+            return;
+        }
+        if(completionResult != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
+            return;
         }
     }
     m_scratchManager.collectCompletedChunks();
@@ -75,32 +73,24 @@ void Device::runGarbageCollection(){
 
 VkResult Device::waitForNativeIdle()noexcept{
     for(Queue* queue : m_physicalQueues){
-        if(queue)
-            queue->m_mutex.lock();
+        NWB_ASSERT(queue);
+        queue->m_mutex.lock();
     }
     for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
-        if(nativeQueueState)
-            nativeQueueState->hostMutex.lock();
+        NWB_ASSERT(nativeQueueState);
+        nativeQueueState->hostMutex.lock();
     }
 
     const VkResult result = isDeviceLost() ? VK_ERROR_DEVICE_LOST : m_context.deviceDispatch.vkDeviceWaitIdle(m_context.device);
     if(result == VK_SUCCESS){
-        for(Queue* queue : m_physicalQueues){
-            if(queue)
-                queue->m_lastFinishedID = queue->m_lastSubmittedID;
-        }
+        for(Queue* queue : m_physicalQueues)
+            queue->m_lastFinishedID = queue->m_lastSubmittedID;
     }
 
-    for(usize nativeQueueIndex = m_nativeQueueStates.size(); nativeQueueIndex > 0u; --nativeQueueIndex){
-        NativeQueueState* const nativeQueueState = m_nativeQueueStates[nativeQueueIndex - 1u];
-        if(nativeQueueState)
-            nativeQueueState->hostMutex.unlock();
-    }
-    for(usize queueIndex = m_physicalQueues.size(); queueIndex > 0u; --queueIndex){
-        Queue* const queue = m_physicalQueues[queueIndex - 1u];
-        if(queue)
-            queue->m_mutex.unlock();
-    }
+    for(usize nativeQueueIndex = m_nativeQueueStates.size(); nativeQueueIndex > 0u; --nativeQueueIndex)
+        m_nativeQueueStates[nativeQueueIndex - 1u]->hostMutex.unlock();
+    for(usize queueIndex = m_physicalQueues.size(); queueIndex > 0u; --queueIndex)
+        m_physicalQueues[queueIndex - 1u]->m_mutex.unlock();
     return result;
 }
 

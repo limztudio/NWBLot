@@ -158,8 +158,6 @@ static void InitializeBasisTranscoder(){
 bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName){
     const TStringView owner = ownerName;
     NWB_ASSERT(!outResource.valid());
-    if(outResource.valid())
-        return true;
     if(outResource.texture || outResource.sampledImageHeapHandle.valid() || outResource.format != Core::Format::UNKNOWN){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: texture resource is partially initialized; release it before recreating"), owner);
         return false;
@@ -250,10 +248,7 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
         const TextureMipLevel& mip = textureAsset.mipLevels()[mipIndex];
         const TextureDecodedMipUpload& decoded = decodedMips[mipIndex];
-        if(decoded.bytes.empty() || decoded.rowPitch == 0u || decoded.sliceByteCount == 0u || mip.sliceCount == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: decoded texture '{}' mip {} has an empty upload region"), owner, StringConvert(imageName.resolvedText()), static_cast<u32>(mipIndex));
-            return false;
-        }
+        NWB_ASSERT(!decoded.bytes.empty() && decoded.rowPitch != 0u && decoded.sliceByteCount != 0u && mip.sliceCount != 0u);
 
         if(textureAsset.dimension() == TextureDimension::Texture3D){
             uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(decoded.bytes.data(), decoded.bytes.size(), decoded.rowPitch, decoded.sliceByteCount, 0u, static_cast<u32>(mipIndex)));

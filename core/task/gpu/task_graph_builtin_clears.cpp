@@ -74,8 +74,7 @@ struct ClearBufferPayload{
 
 struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ClearBufferPayload>{
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        if(!payload.destination)
-            return false;
+        NWB_ASSERT(payload.destination);
         if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.destinationResource, payload.clearValue))
             return false;
         commandList.endRenderPass();
@@ -92,8 +91,7 @@ struct ClearTextureTask{
     };
 
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        if(!payload.destination || payload.clearDesc.valueType >= GpuClearTextureTaskValueType::kCount)
-            return false;
+        NWB_ASSERT(payload.destination && payload.clearDesc.valueType < GpuClearTextureTaskValueType::kCount);
         if(context.commandIrCapture && !context.commandIrCapture->captureClearTexture(context.task, context.packet, context.queue, payload.destinationResource, payload.clearDesc))
             return false;
         if(payload.clearDesc.recordHooks.beforeClear && !payload.clearDesc.recordHooks.beforeClear(payload.clearDesc.recordHooks.context, commandList, context))
@@ -104,30 +102,26 @@ struct ClearTextureTask{
         commandList.endRenderPass();
         if(commandList.commandRecordingFailed())
             return false;
-        bool clearRecorded = false;
         switch(payload.clearDesc.valueType){
         case GpuClearTextureTaskValueType::Float:
             commandList.clearTextureFloat(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.floatValue);
-            clearRecorded = true;
             break;
         case GpuClearTextureTaskValueType::UInt:
             commandList.clearTextureUInt(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.uintValue);
-            clearRecorded = true;
             break;
         case GpuClearTextureTaskValueType::Int:
             commandList.clearTextureInt(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.intValue);
-            clearRecorded = true;
             break;
         case GpuClearTextureTaskValueType::DepthStencil:
             commandList.clearDepthStencilTexture(*payload.destination, payload.clearDesc.subresources, payload.clearDesc.clearDepth, payload.clearDesc.depthValue, payload.clearDesc.clearStencil, payload.clearDesc.stencilValue);
-            clearRecorded = true;
             break;
         default:
-            return false;
+            NWB_ASSERT(false);
+            break;
         }
         if(commandList.commandRecordingFailed())
             return false;
-        return clearRecorded && (!payload.clearDesc.recordHooks.afterClear || payload.clearDesc.recordHooks.afterClear(payload.clearDesc.recordHooks.context, commandList, context));
+        return !payload.clearDesc.recordHooks.afterClear || payload.clearDesc.recordHooks.afterClear(payload.clearDesc.recordHooks.context, commandList, context);
     }
 
     static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept{
@@ -149,8 +143,7 @@ struct ClearTextureRectUIntTask{
     };
 
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        if(!payload.destination)
-            return false;
+        NWB_ASSERT(payload.destination);
         if(context.commandIrCapture && !context.commandIrCapture->captureClearTextureRectUInt(context.task, context.packet, context.queue, payload.destinationResource, payload.clearDesc))
             return false;
         if(payload.clearDesc.recordHooks.beforeClear && !payload.clearDesc.recordHooks.beforeClear(payload.clearDesc.recordHooks.context, commandList, context))
@@ -249,8 +242,9 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, c
     )
         return MakeUnexpected(Failure{});
     const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType);
-    Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
-    if(!valueKind || !(clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, *valueKind, clearDesc.clearDepth, clearDesc.clearStencil)))
+    NWB_ASSERT(valueKind);
+    const Expected<GraphicsBackend::TextureClearContract> clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, *valueKind, clearDesc.clearDepth, clearDesc.clearStencil);
+    if(!clearContract)
         return MakeUnexpected(Failure{});
     const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
 

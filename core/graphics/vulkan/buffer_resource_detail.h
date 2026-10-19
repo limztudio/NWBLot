@@ -225,14 +225,12 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     return (usage & requiredUsage) == requiredUsage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageConsistent(const VulkanContext& context, const BufferDesc& desc, const bool managed, const VkBufferUsageFlags usage, const VkBufferUsageFlags requiredUsage = 0u)noexcept{
+[[nodiscard]] inline bool IsBufferUsageConsistent(const VulkanContext& context, const BufferDesc& desc, const bool managed, const VkBufferUsageFlags usage)noexcept{
     if(!IsBufferUsageSupportedByDevice(context, usage))
         return false;
     if(!IsBufferUsageCompatibleWithDescription(desc, usage))
         return false;
     if(!IsBufferUsageCompatibleWithResourceStates(desc, usage, desc.initialState))
-        return false;
-    if((usage & requiredUsage) != requiredUsage)
         return false;
     return !managed || usage == PickManagedBufferUsage(context, desc);
 }

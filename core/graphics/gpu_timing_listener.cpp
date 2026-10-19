@@ -5,7 +5,6 @@
 #include "gpu_timing.h"
 
 #include <global/exception.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,8 +62,6 @@ public:
             NothrowScopedLock listenerLock(m_recorder.m_sampleListenerMutex);
             const bool callbackClaimValid = m_record && m_record->activeCallbackCount != 0u;
             NWB_FATAL_ASSERT_MSG(callbackClaimValid, "GPU timing listener callback claim underflow");
-            if(!callbackClaimValid)
-                TerminateInvariant();
             --m_record->activeCallbackCount;
             m_recorder.eraseSampleListenerLocked(*m_record);
         }
@@ -234,8 +231,8 @@ void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         if(demandIndex != m_feedbackScopeDemands.size()){
-            if(m_feedbackScopeDemands[demandIndex].ownerCount != Limit<u64>::s_Max)
-                ++m_feedbackScopeDemands[demandIndex].ownerCount;
+            NWB_ASSERT(m_feedbackScopeDemands[demandIndex].ownerCount != Limit<u64>::s_Max);
+            ++m_feedbackScopeDemands[demandIndex].ownerCount;
             continue;
         }
         m_feedbackScopeDemands.push_back(FeedbackScopeDemand{ .scopeName = scopeName, .ownerCount = 1u, });
@@ -246,8 +243,6 @@ void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(const Vector<Name, Allo
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         NWB_ASSERT(demandIndex != m_feedbackScopeDemands.size());
-        if(demandIndex == m_feedbackScopeDemands.size())
-            continue;
 
         FeedbackScopeDemand& demand = m_feedbackScopeDemands[demandIndex];
         NWB_ASSERT(demand.ownerCount > 0u);
@@ -268,7 +263,8 @@ GpuTimingRecorder::SampleListenerRecordPtr GpuTimingRecorder::findSampleListener
         return {};
 
     for(const SampleListenerRecordPtr& record : m_sampleListeners){
-        if(record && record->subscription == subscription && record->listener.valid())
+        NWB_ASSERT(record && record->listener.valid());
+        if(record->subscription == subscription)
             return record;
     }
     return {};
@@ -277,7 +273,8 @@ GpuTimingRecorder::SampleListenerRecordPtr GpuTimingRecorder::findSampleListener
 u64 GpuTimingRecorder::sampleSubscriptionIdentityLimitLocked()const noexcept{
     u64 result = 0u;
     for(const SampleListenerRecordPtr& record : m_sampleListeners){
-        if(record && !record->removing && record->subscription.valid() && record->listener.valid())
+        NWB_ASSERT(record && record->subscription.valid() && record->listener.valid());
+        if(!record->removing)
             result = Max(result, record->subscription.m_identity);
     }
     return result;
@@ -307,10 +304,11 @@ void GpuTimingRecorder::dispatchCompletedSample(const GpuTimingSample& sample, c
             ScopedLock listenerLock(m_sampleListenerMutex);
             u64 nextIdentity = Limit<u64>::s_Max;
             for(const SampleListenerRecordPtr& record : m_sampleListeners){
-                if(!record || record->removing)
+                NWB_ASSERT(record && record->listener.valid());
+                if(record->removing)
                     continue;
                 const u64 identity = record->subscription.m_identity;
-                if(identity > dispatchedIdentity && identity <= subscriptionIdentityLimit && identity < nextIdentity && record->listener.valid()){
+                if(identity > dispatchedIdentity && identity <= subscriptionIdentityLimit && identity < nextIdentity){
                     nextRecord = record;
                     nextIdentity = identity;
                 }
@@ -324,10 +322,10 @@ void GpuTimingRecorder::dispatchCompletedSample(const GpuTimingSample& sample, c
         GpuTimingSampleListener listener;
         {
             ScopedLock listenerLock(m_sampleListenerMutex);
-            if(nextRecord->removing || !nextRecord->listener.valid())
+            NWB_ASSERT(nextRecord->listener.valid());
+            if(nextRecord->removing)
                 continue;
-            if(nextRecord->activeCallbackCount == Limit<u32>::s_Max)
-                continue;
+            NWB_ASSERT(nextRecord->activeCallbackCount != Limit<u32>::s_Max);
             ++nextRecord->activeCallbackCount;
             listener = nextRecord->listener;
         }

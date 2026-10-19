@@ -104,7 +104,8 @@ template<typename SourceJointVector, typename JointPaletteVector>
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skinning mode {} is invalid"), instance.handle.value, skinningMode);
         return false;
     }
-    if(instance.skeletonJointCount == 0u || instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u || instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max) || sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)){
+    NWB_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u && instance.skin.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    if(sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid"), instance.handle.value);
         return false;
     }

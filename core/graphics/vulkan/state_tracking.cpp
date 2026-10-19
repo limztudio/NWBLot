@@ -157,21 +157,17 @@ bool StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, co
     return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
 }
 
-void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    if(!texture)
+void StateTracker::beginTrackingTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
+    if(m_permanentTextureStates.find(&texture) != m_permanentTextureStates.end())
         return;
 
-    if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
-        return;
-
-    beginTrackingTransientTexture(*texture, subresources, state);
+    beginTrackingTransientTexture(texture, subresources, state);
 }
 
 void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandBuffer, Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers, Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers){
     for(auto it = m_textureStates.begin(); it != m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
-        if(!key.texture)
-            continue;
+        NWB_ASSERT(key.texture);
 
         const TextureDesc& desc = key.texture->getCreationDescription();
         const ResourceStates::Mask currentState = it.value();
@@ -198,7 +194,8 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
 
     for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){
         Buffer* const buffer = it->first;
-        if(!buffer || !buffer->m_creationDesc.keepInitialState)
+        NWB_ASSERT(buffer);
+        if(!buffer->m_creationDesc.keepInitialState)
             continue;
 
         const BufferDesc& desc = buffer->m_creationDesc;
@@ -333,7 +330,7 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
         return;
     }
 
-    m_stateTracker.beginTrackingTexture(texture, resolvedSubresources, stateBits);
+    m_stateTracker.beginTrackingTexture(*texture, resolvedSubresources, stateBits);
     retainResource(texture);
 }
 

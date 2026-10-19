@@ -81,7 +81,8 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
         }
     }
     for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
-        if(!heap || !heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
+        NWB_ASSERT(heap);
+        if(!heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue"));
             return false;
         }
@@ -104,8 +105,9 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
 
 void CommandList::collectHostReadbackBuffers(){
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
+        NWB_ASSERT(it->first);
         for(const StateTracker::BufferRangeState& state : it.value()){
-            if(it->first && VulkanDetail::HasBufferDeviceWriteState(state.state)){
+            if(VulkanDetail::HasBufferDeviceWriteState(state.state)){
                 registerHostReadbackBuffer(*it->first);
                 break;
             }
@@ -113,7 +115,8 @@ void CommandList::collectHostReadbackBuffers(){
     }
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         Buffer* const buffer = it.value().buffer.get();
-        if(buffer && VulkanDetail::HasBufferDeviceWriteState(it.value().state))
+        NWB_ASSERT(buffer);
+        if(VulkanDetail::HasBufferDeviceWriteState(it.value().state))
             registerHostReadbackBuffer(*buffer);
     }
 }
@@ -149,8 +152,8 @@ void CommandList::retainResource(Framebuffer* resource){
 
     m_currentCmdBuf->m_resourceReferences.retainResource(*resource);
     for(const TextureHandle& texture : resource->m_resources){
-        if(texture)
-            m_currentCmdBuf->m_resourceReferences.trackRetainedTexture(*texture);
+        NWB_ASSERT(texture);
+        m_currentCmdBuf->m_resourceReferences.trackRetainedTexture(*texture);
     }
 }
 
@@ -175,7 +178,7 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
-    const bool validExactQueue = m_creationDesc.physicalQueue.valid() && queueInfo && queueInfo->id == m_creationDesc.physicalQueue && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & s_KnownCapabilityBits) != 0u;
+    const bool validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & s_KnownCapabilityBits) != 0u;
     if(validRecordingScope && validExactQueue)
         return true;
 
@@ -201,17 +204,15 @@ bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::M
     }
 #endif
 
-    if(m_commandRecordingFailed)
-        return false;
-
     constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
     const u8 requiredBits = static_cast<u8>(requiredCapabilities);
     if(!validateCommandRecordingScope(operationName))
         return false;
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
-    const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
+    NWB_ASSERT(queueInfo);
+    const u8 availableBits = static_cast<u8>(queueInfo->capabilities);
+    const CommandQueue::Enum exactQueueClass = queueInfo->queueClass;
     const bool validRequiredMask = requiredBits != 0u && (requiredBits & ~s_KnownCapabilityBits) == 0u;
     const bool supported = validRequiredMask && (availableBits & requiredBits) == requiredBits;
     if(supported)

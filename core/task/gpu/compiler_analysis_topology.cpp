@@ -361,7 +361,7 @@ void BuildSchedulingEdges(
     }
 }
 
-[[nodiscard]] bool BuildSchedulingTaskAdjacency(
+void BuildSchedulingTaskAdjacency(
     const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges,
     const usize taskCount,
     const u64 graphGeneration,
@@ -371,6 +371,8 @@ void BuildSchedulingEdges(
     GraphicsVector<u32>& outIncomingProducers,
     Alloc::ScratchArena& scratchArena
 ){
+    static_cast<void>(graphGeneration);
+
     outOutgoingOffsets.clear();
     outOutgoingConsumers.clear();
     outIncomingOffsets.clear();
@@ -378,8 +380,16 @@ void BuildSchedulingEdges(
     outOutgoingOffsets.resize(taskCount + 1u, 0u);
     outIncomingOffsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : schedulingEdges){
-        if(!edge.producer.valid() || !edge.consumer.valid() || edge.producer.generation != graphGeneration || edge.consumer.generation != graphGeneration || edge.producer.index >= taskCount || edge.consumer.index >= taskCount || edge.producer == edge.consumer)
-            return false;
+        // Scheduling edges are a subset of current-graph raw edges after a successful topological sort, so they are bounded and acyclic.
+        NWB_ASSERT(
+            edge.producer.valid()
+            && edge.consumer.valid()
+            && edge.producer.generation == graphGeneration
+            && edge.consumer.generation == graphGeneration
+            && edge.producer.index < taskCount
+            && edge.consumer.index < taskCount
+            && edge.producer != edge.consumer
+        );
         ++outOutgoingOffsets[edge.producer.index + 1u];
         ++outIncomingOffsets[edge.consumer.index + 1u];
     }
@@ -400,7 +410,6 @@ void BuildSchedulingEdges(
         writeOffsets[taskIndex] = outIncomingOffsets[taskIndex];
     for(const GpuTaskDependencyEdge& edge : schedulingEdges)
         outIncomingProducers[writeOffsets[edge.consumer.index]++] = edge.producer.index;
-    return true;
 }
 
 

@@ -288,10 +288,6 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
         const u64 clearDepth = static_cast<u64>(mipPlan.resolvedBox.depth());
         const u64 clearBlockCountX = DivideUp(clearWidth, blockWidth);
         const u64 clearBlockCountY = DivideUp(clearHeight, blockHeight);
-        if(clearBlockCountX > Limit<u64>::s_Max / clearBlockCountY){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear byte size overflows"));
-            return;
-        }
         const u64 clearSliceBlockCount = clearBlockCountX * clearBlockCountY;
         if(clearDepth > 1ull && clearSliceBlockCount > Limit<u64>::s_Max / clearDepth){
             rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear byte size overflows"));

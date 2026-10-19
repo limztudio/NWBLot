@@ -224,8 +224,7 @@ Expected<DescriptorBufferSegmentKind::Enum> TryResolveBindlessDescriptorBufferLa
     bool hasDescriptors = false;
 
     for(const auto& item : desc.registerSpaces){
-        if(!IsSupportedDescriptorBindingType(item.type))
-            return MakeUnexpected(Failure{});
+        NWB_ASSERT(IsSupportedDescriptorBindingType(item.type));
 
         const DescriptorBufferSegmentKind::Enum itemSegmentKind = GetDescriptorBufferSegmentKind(item.type);
         if(!hasDescriptors){
@@ -250,8 +249,9 @@ bool ValidateDescriptorBufferBindingFootprint(
     const u32 bindingSlot,
     TStringView operationName
 ){
+    NWB_ASSERT(descriptorCount != 0u && setSizeBytes != 0u && setSizeBytes <= UINT32_MAX);
     const u32 descriptorSize = manager.getDescriptorSize(descriptorType);
-    if(descriptorSize == 0u || descriptorCount == 0u || setSizeBytes == 0u || setSizeBytes > UINT32_MAX || bindingOffsetBytes > UINT32_MAX || bindingOffsetBytes >= setSizeBytes){
+    if(descriptorSize == 0u || bindingOffsetBytes >= setSizeBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer binding {} has an invalid footprint."), operationName, bindingSlot);
         return false;
     }
@@ -309,8 +309,7 @@ Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, co
 
     VkPushConstantRange pushConstantRange = {};
     if(pushConstantByteSize > 0){
-        if(!ValidatePushConstantByteSize(context, pushConstantByteSize, operationName))
-            return MakeUnexpected(Failure{});
+        NWB_ASSERT(IsPushConstantByteSizeValid(pushConstantByteSize, context.physicalDeviceProperties.limits.maxPushConstantsSize));
 
         pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
         pushConstantRange.offset = 0;

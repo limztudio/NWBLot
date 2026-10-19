@@ -29,7 +29,8 @@ void GpuTaskGraphQueueAssignments::reset()noexcept{
 }
 
 bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
-    return m_valid && m_generation == graph.generation() && m_declarationRevision == graph.declarationRevision() && m_taskCount == graph.taskCount() && m_assignments.size() == m_taskCount && m_assignmentIndicesByTask.size() == m_taskCount;
+    NWB_ASSERT(!m_valid || (m_assignments.size() == m_taskCount && m_assignmentIndicesByTask.size() == m_taskCount));
+    return m_valid && m_generation == graph.generation() && m_declarationRevision == graph.declarationRevision() && m_taskCount == graph.taskCount();
 }
 
 bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept{
@@ -134,14 +135,14 @@ bool GpuTaskGraphCompiler::assignQueues(
         NWB_ASSERT(selectedQueue);
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
-            if(
-                !taskID.valid()
-                || taskID.generation != outAssignments.m_generation
-                || taskID.index >= outAssignments.m_assignmentIndicesByTask.size()
-                || outAssignments.m_assignmentIndicesByTask[taskID.index] != Limit<u32>::s_Max
-                || outAssignments.m_assignments.size() >= Limit<u32>::s_Max
-            )
-                return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis, taskID);
+            // Groups partition the unique topological order of current graph tasks.
+            NWB_ASSERT(
+                taskID.valid()
+                && taskID.generation == outAssignments.m_generation
+                && taskID.index < outAssignments.m_assignmentIndicesByTask.size()
+                && outAssignments.m_assignmentIndicesByTask[taskID.index] == Limit<u32>::s_Max
+                && outAssignments.m_assignments.size() < Limit<u32>::s_Max
+            );
             const u32 assignmentIndex = static_cast<u32>(outAssignments.m_assignments.size());
             outAssignments.m_assignments.push_back(GpuTaskQueueAssignment{
                 .task = taskID,
@@ -157,8 +158,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             outAssignments.m_assignmentIndicesByTask[taskID.index] = assignmentIndex;
         }
     }
-    if(outAssignments.m_assignments.size() != outAssignments.m_assignmentIndicesByTask.size())
-        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
+    NWB_ASSERT(outAssignments.m_assignments.size() == outAssignments.m_assignmentIndicesByTask.size());
     scoringData.rebuildAssignmentLoads(outAssignments.m_assignments, topology);
 
     // Score complete groups against the same provisional plan, omitting group-local work from crossing/overlap costs.

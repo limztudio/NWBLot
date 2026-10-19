@@ -97,15 +97,11 @@ public:
             if(m_deferredAbort){
                 const bool abortDeferred = m_graph.deferPacketRecordingAbort(m_compiledGraph, m_planAccess, m_packet, m_recordingLease, *m_deferredAbort);
                 NWB_FATAL_ASSERT_MSG(abortDeferred, "throwing packet recorder must transfer its exact recording claim");
-                if(!abortDeferred)
-                    TerminateInvariant();
             }
             else{
                 m_recordedGraph.abandonPacketTimingTicketWithoutCallbacks(m_packet, m_artifactAccess);
                 const bool recordingAbandoned = m_graph.abandonPacketRecordingWithoutCallbacks(m_compiledGraph, m_planAccess, m_packet, m_recordingLease);
                 NWB_FATAL_ASSERT_MSG(recordingAbandoned, "throwing packet recorder must abandon its exact recording claim");
-                if(!recordingAbandoned)
-                    TerminateInvariant();
             }
         }
         if(m_deferredAbort)
@@ -113,8 +109,6 @@ public:
 
         const bool recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
         NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "throwing packet recorder must resolve a terminal recording-plan lease");
-        if(!recordingAttemptResolved)
-            TerminateInvariant();
     }
 
 
@@ -205,8 +199,6 @@ bool GpuNativePacketRecorder::recordPacket(
         if(deferredAbort){
             const bool abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *deferredAbort);
             NWB_FATAL_ASSERT_MSG(abortDeferred, "failed to transfer an active packet recording abort");
-            if(!abortDeferred)
-                TerminateInvariant();
             return;
         }
         outRecordedGraph.discardPacketTimingTicket(packetID, artifactAccess);
@@ -491,8 +483,6 @@ bool GpuNativePacketRecorder::recordPacket(
     const Timer recordingEnd = TimerNow();
     GpuRecordedPacket* const recordedPacketStorage = outRecordedGraph.packetStorage(packetID, artifactAccess);
     NWB_FATAL_ASSERT_MSG(recordedPacketStorage, "recorded packet publication requires exact artifact storage");
-    if(!recordedPacketStorage)
-        TerminateInvariant();
     GpuRecordedPacket& recordedPacket = *recordedPacketStorage;
     recordedPacket.packet = packetID;
     recordedPacket.commandLists[0u] = commandList.get();
@@ -512,10 +502,8 @@ bool GpuNativePacketRecorder::recordPacket(
     graphRecordingOwnership.publish();
     recordedPacket.commandListCount = 1u;
     PacketArtifactPublicationScope artifactPublication(outRecordedGraph, packetID, artifactAccess);
-    if(!graph.completePacketRecording(compiledGraph, planAccess, packetID, recordingLease)){
-        NWB_FATAL_ASSERT_MSG(false, "recorded artifact publication must retain its exact graph packet claim");
-        TerminateInvariant();
-    }
+    const bool packetRecordingCompleted = graph.completePacketRecording(compiledGraph, planAccess, packetID, recordingLease);
+    NWB_FATAL_ASSERT_MSG(packetRecordingCompleted, "recorded artifact publication must retain its exact graph packet claim");
     artifactPublication.complete();
     return true;
 }

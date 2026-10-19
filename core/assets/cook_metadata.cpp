@@ -264,8 +264,7 @@ Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoColl
     __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue().copyTo(functions);
 
     for(const AssetBunchExpandFunction function : functions){
-        if(!function)
-            continue;
+        NWB_ASSERT(function);
 
         auto result = function(context);
         if(!result && result.error() == AssetBunchExpandFailure::Unsupported)

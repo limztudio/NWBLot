@@ -284,8 +284,6 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         if(!precedingMajorBytes || AddOverflows<usize>(*precedingMajorBytes, *minorByteSize))
             return MakeUnexpected(Failure{});
         const usize byteSize = *precedingMajorBytes + *minorByteSize;
-        if(byteSize == 0u)
-            return MakeUnexpected(Failure{});
         return StandardMatrixLayout{ stride, byteSize };
     };
 
@@ -321,9 +319,6 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     };
 
     const auto resolveMatrixLayout = [&getStandardLayoutSize, &queryOptimalLayoutSize](const CooperativeVectorMatrixLayoutDesc& layoutDesc, const u32 numRows, const u32 numColumns)noexcept -> Expected<MatrixLayout>{
-        if(layoutDesc.type > CooperativeVectorDataType::Float64 || layoutDesc.layout > CooperativeVectorMatrixLayout::TrainingOptimal || layoutDesc.type == CooperativeVectorDataType::UInt8Packed || layoutDesc.type == CooperativeVectorDataType::SInt8Packed)
-            return MakeUnexpected(Failure{});
-
         MatrixLayout resolved;
         resolved.componentType = VulkanDetail::ConvertCoopVecDataType(layoutDesc.type);
         resolved.layout = VulkanDetail::ConvertCoopVecMatrixLayout(layoutDesc.layout);
@@ -374,9 +369,10 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     };
 
     const auto getCheckedDeviceRange = [](Buffer& buffer, const u64 offset, const usize declaredByteSize, const usize requiredByteSize)noexcept -> Expected<DeviceAddressRange>{
-        if(declaredByteSize == 0u || requiredByteSize == 0u || declaredByteSize < requiredByteSize)
+        NWB_ASSERT(requiredByteSize != 0u);
+        if(declaredByteSize < requiredByteSize)
             return MakeUnexpected(Failure{});
-        if(!VulkanDetail::IsBufferRangeInBounds(buffer.getCreationDescription(), offset, declaredByteSize) || !VulkanDetail::IsBufferRangeInBounds(buffer.getCreationDescription(), offset, requiredByteSize))
+        if(!VulkanDetail::IsBufferRangeInBounds(buffer.getCreationDescription(), offset, declaredByteSize))
             return MakeUnexpected(Failure{});
 
         const VkDeviceAddress baseAddress = buffer.getGpuVirtualAddress();
@@ -385,7 +381,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
         constexpr VkDeviceAddress s_MatrixRangeAlignment = 64u;
         const VkDeviceAddress address = baseAddress + offset;
-        if(address == 0u || address % s_MatrixRangeAlignment != 0u)
+        if(address % s_MatrixRangeAlignment != 0u)
             return MakeUnexpected(Failure{});
         if(static_cast<u64>(requiredByteSize) > Limit<u64>::s_Max - address)
             return MakeUnexpected(Failure{});

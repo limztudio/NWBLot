@@ -160,23 +160,14 @@ Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     TStringView operationName
 ){
     BufferImageCopyLayout outLayout{};
-    if(formatLayout.blockWidth == 0 || formatLayout.blockHeight == 0 || formatLayout.bytesPerBlock == 0){
-        if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid texture format"), operationName);
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(formatLayout.blockWidth != 0u && formatLayout.blockHeight != 0u && formatLayout.bytesPerBlock != 0u);
 
     const u64 blockCountX = Max<u64>(DivideUp(static_cast<u64>(extent.width), static_cast<u64>(formatLayout.blockWidth)), 1ull);
     const u64 blockCountY = Max<u64>(DivideUp(static_cast<u64>(extent.height), static_cast<u64>(formatLayout.blockHeight)), 1ull);
-    if(blockCountX > Limit<u64>::s_Max / formatLayout.bytesPerBlock){
-        if(!operationName.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: natural row pitch overflows"), operationName);
-        return MakeUnexpected(Failure{});
-    }
 
     const u64 naturalRowPitch = blockCountX * formatLayout.bytesPerBlock;
     const u64 effectiveRowPitch = rowPitch != 0 ? rowPitch : naturalRowPitch;
-    if(effectiveRowPitch == 0 || blockCountY > UINT64_MAX / effectiveRowPitch){
+    if(blockCountY > UINT64_MAX / effectiveRowPitch){
         if(!operationName.empty())
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture pitch size overflows"), operationName);
         return MakeUnexpected(Failure{});
@@ -316,8 +307,6 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
         return result;
 
     NWB_ASSERT(imageInfo.pQueueFamilyIndices != nullptr);
-    if(!imageInfo.pQueueFamilyIndices)
-        return result;
     result.assign(imageInfo.pQueueFamilyIndices, imageInfo.pQueueFamilyIndices + imageInfo.queueFamilyIndexCount);
     return result;
 }
@@ -405,19 +394,17 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const noexcept
     }
 
     const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
-    if(subresourceCount == 0u)
-        return ResourceStates::Unknown;
+    NWB_ASSERT(subresourceCount != 0u);
 
     ScopedLock lock(m_retainedSubresourceStatesMutex);
-    const usize trackedSubresourceCount = Min(subresourceCount, m_retainedSubresourceStates.size());
+    NWB_ASSERT(subresourceCount == m_retainedSubresourceStates.size());
     bool hasKnownState = false;
-    bool hasUnknownState = trackedSubresourceCount < subresourceCount;
-    for(usize subresourceIndex = 0u; subresourceIndex < trackedSubresourceCount; ++subresourceIndex){
+    bool hasUnknownState = false;
+    for(usize subresourceIndex = 0u; subresourceIndex < subresourceCount; ++subresourceIndex){
         if(m_retainedSubresourceStates[subresourceIndex] != 0u)
             hasKnownState = true;
         else
             hasUnknownState = true;
-
     }
     return !hasUnknownState || (!hasKnownState && m_managed) ? m_creationDesc.initialState : ResourceStates::Unknown;
 }
@@ -493,8 +480,6 @@ bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)no
     NothrowScopedLock bindingLock(m_memoryBindingMutex);
     if(m_managed || m_image != expectedNativeImage)
         return false;
-    if(m_preparedRevokedNativeImage == expectedNativeImage)
-        return true;
 
     return true;
 }
@@ -532,8 +517,6 @@ void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage ex
     NothrowScopedLock bindingLock(m_memoryBindingMutex);
     const bool identityMatches = expectedNativeImage != VK_NULL_HANDLE && !m_managed && m_image == VK_NULL_HANDLE && m_preparedRevokedNativeImage == expectedNativeImage;
     NWB_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
-    if(!identityMatches)
-        TerminateInvariant();
 
     m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);
     m_preparedRevokedNativeImage = VK_NULL_HANDLE;
@@ -546,7 +529,7 @@ bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
-    return index < m_retainedSubresourceStates.size() && m_retainedSubresourceStates[index] != 0u;
+    return m_retainedSubresourceStates[index] != 0u;
 }
 
 void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const bool known)noexcept{
@@ -556,9 +539,6 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
-    if(index >= m_retainedSubresourceStates.size())
-        return;
-
     m_retainedSubresourceStates[index] = known ? 1u : 0u;
 }
 

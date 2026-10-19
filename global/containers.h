@@ -235,8 +235,6 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
     if(aliasOffset){
         const usize sourceOffset = *aliasOffset;
         NWB_ASSERT(sourceSize <= destination.size() - sourceOffset);
-        if(sourceSize > destination.size() - sourceOffset)
-            return;
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){
             const usize byteCount = sourceSize * sizeof(DestinationValue);
             if(sourceOffset > 0u)
@@ -282,8 +280,6 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     if(aliasOffset){
         const usize sourceOffset = *aliasOffset;
         NWB_ASSERT(sourceSize <= destinationSize - sourceOffset);
-        if(sourceSize > destinationSize - sourceOffset)
-            return;
         const usize requiredSize = destinationSize + sourceSize;
         ContainerDetail::ReserveGrowingCapacity(destination, requiredSize);
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){

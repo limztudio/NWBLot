@@ -188,8 +188,7 @@ struct TextureUploadBatchSubmissionData{
         const GpuTaskId uploadTask = *uploadTaskResult;
         previousTask = uploadTask;
     }
-    if(!previousTask.valid())
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(previousTask.valid());
     return previousTask;
 }
 
@@ -246,7 +245,7 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
 
     if(desc.acceptedToken)
         *desc.acceptedToken = uploadToken;
-    return uploadToken.valid();
+    return true;
 }
 
 

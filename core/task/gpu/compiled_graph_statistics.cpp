@@ -88,8 +88,9 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         );
     }
     const auto countOwnershipBarriers = [](GpuTaskGraphPhysicalQueueCompileStatistics& physical, const GraphicsVector<GpuCompiledBarrier>& barriers, const u32 barrierOffset, const u32 barrierCount)noexcept{
-        if(barrierCount == 0u || barrierOffset > barriers.size() || barrierCount > barriers.size() - barrierOffset)
+        if(barrierCount == 0u)
             return;
+        NWB_ASSERT(barrierOffset <= barriers.size() && barrierCount <= barriers.size() - barrierOffset);
 
         const GpuCompiledBarrier* const taskBarriers = barriers.data() + barrierOffset;
         for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
@@ -119,48 +120,48 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             ++statistics.payloadObjectCount;
             statistics.payloadObjectBytes += task.payloadObjectSize;
         }
-        if(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::kCount)
-            ++statistics.packetizationDecisionCounts[compiledTask.packetizationDecision];
+        NWB_ASSERT(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::kCount);
+        ++statistics.packetizationDecisionCounts[compiledTask.packetizationDecision];
 
         const GpuPhysicalQueueInfo* const queue = queueInfo(compiledTask.queue);
-        if(queue && queue->queueClass < CommandQueue::kCount){
-            ++statistics.taskCountByQueueClass[queue->queueClass];
-            auto& physical = m_physicalQueueCompileStatistics[static_cast<usize>(queue - m_queueTopology.data())];
-            ++physical.taskCount;
-            physical.prologueBarrierCount += compiledTask.prologueBarrierCount;
-            physical.epilogueBarrierCount += compiledTask.epilogueBarrierCount;
-            countOwnershipBarriers(physical, m_prologueBarriers, compiledTask.prologueBarrierOffset, compiledTask.prologueBarrierCount);
-            countOwnershipBarriers(physical, m_epilogueBarriers, compiledTask.epilogueBarrierOffset, compiledTask.epilogueBarrierCount);
-        }
+        NWB_ASSERT(queue && queue->queueClass < CommandQueue::kCount);
+        ++statistics.taskCountByQueueClass[queue->queueClass];
+        auto& physical = m_physicalQueueCompileStatistics[static_cast<usize>(queue - m_queueTopology.data())];
+        ++physical.taskCount;
+        physical.prologueBarrierCount += compiledTask.prologueBarrierCount;
+        physical.epilogueBarrierCount += compiledTask.epilogueBarrierCount;
+        countOwnershipBarriers(physical, m_prologueBarriers, compiledTask.prologueBarrierOffset, compiledTask.prologueBarrierCount);
+        countOwnershipBarriers(physical, m_epilogueBarriers, compiledTask.epilogueBarrierOffset, compiledTask.epilogueBarrierCount);
     }
     for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){
         const GpuSubmissionPacket& packet = m_packets[packetIndex];
         if(packet.taskCount > 1u)
             statistics.mergedTaskCount += packet.taskCount - 1u;
-        if(packet.recordingFrontier != Limit<u32>::s_Max)
-            statistics.recordingFrontierCount = Max(statistics.recordingFrontierCount, static_cast<usize>(packet.recordingFrontier) + 1u);
+        // A frontier only grows from earlier packets, so it never passes the packet index.
+        NWB_ASSERT(packet.recordingFrontier <= packetIndex);
+        statistics.recordingFrontierCount = Max(statistics.recordingFrontierCount, static_cast<usize>(packet.recordingFrontier) + 1u);
 
         const GpuPhysicalQueueInfo* const queue = queueInfo(packet.queue);
-        if(queue && queue->queueClass < CommandQueue::kCount){
-            ++statistics.packetCountByQueueClass[queue->queueClass];
-            auto& physical = m_physicalQueueCompileStatistics[static_cast<usize>(queue - m_queueTopology.data())];
-            ++physical.packetCount;
-            if(packet.taskCount > 1u)
-                physical.mergedTaskCount += packet.taskCount - 1u;
-        }
+        NWB_ASSERT(queue && queue->queueClass < CommandQueue::kCount);
+        ++statistics.packetCountByQueueClass[queue->queueClass];
+        auto& physical = m_physicalQueueCompileStatistics[static_cast<usize>(queue - m_queueTopology.data())];
+        ++physical.packetCount;
+        if(packet.taskCount > 1u)
+            physical.mergedTaskCount += packet.taskCount - 1u;
 
         const GpuPacketDependency* const dependencies = packet.dependencyCount > 0u ? m_packetDependencies.data() + packet.dependencyOffset : nullptr;
-        for(u32 dependencyIndex = 0u; dependencies && dependencyIndex < packet.dependencyCount; ++dependencyIndex){
+        for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
             const GpuPacketDependency& dependency = dependencies[dependencyIndex];
-            if(!dependency.producer.valid() || dependency.producer.generation != m_planGeneration || dependency.producer.index >= m_packets.size())
-                continue;
+            // This runs before publish, so validPacket() would reject every packet here.
+            NWB_ASSERT(dependency.producer.valid() && dependency.producer.generation == m_planGeneration && dependency.producer.index < m_packets.size());
             const GpuSubmissionPacket& producer = m_packets[dependency.producer.index];
             if(producer.queue == packet.queue)
                 continue;
 
             ++statistics.crossQueuePacketDependencyCount;
             const GpuPhysicalQueueInfo* const producerQueue = queueInfo(producer.queue);
-            if(producerQueue && queue && producerQueue->familyIndex != queue->familyIndex)
+            NWB_ASSERT(producerQueue);
+            if(producerQueue->familyIndex != queue->familyIndex)
                 ++statistics.crossFamilyPacketDependencyCount;
         }
     }
@@ -206,25 +207,22 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
     HashMap<GpuGraphResourceId, OwnershipResourceStatistics, Alloc::ScratchArena, OwnershipResourceHasher, EqualTo<GpuGraphResourceId>> resources(0u, OwnershipResourceHasher(), EqualTo<GpuGraphResourceId>(), scratchArena);
     signatures.reserve(m_ownershipTransfers.size());
     resources.reserve(Min(graph.resourceCount(), m_ownershipTransfers.size()));
-    const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id)noexcept -> GpuTaskGraphPhysicalQueueCompileStatistics*{
+    const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id)noexcept -> GpuTaskGraphPhysicalQueueCompileStatistics&{
         const GpuPhysicalQueueInfo* const queue = queueInfo(id);
-        if(!queue || queue->queueClass >= CommandQueue::kCount)
-            return nullptr;
-        return &m_physicalQueueCompileStatistics[static_cast<usize>(queue - m_queueTopology.data())];
+        NWB_ASSERT(queue && queue->queueClass < CommandQueue::kCount);
+        return m_physicalQueueCompileStatistics[static_cast<usize>(queue - m_queueTopology.data())];
     };
     statistics.logicalOwnershipTransferCount = m_ownershipTransfers.size();
     for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
-        if(transfer.route < GpuOwnershipTransferRoute::kCount)
-            ++statistics.logicalOwnershipTransferCountByRoute[transfer.route];
+        NWB_ASSERT(transfer.route < GpuOwnershipTransferRoute::kCount);
+        ++statistics.logicalOwnershipTransferCountByRoute[transfer.route];
         if(transfer.concurrentSharingCouldAvoid)
             ++statistics.concurrentSharingCouldAvoidTransferCount;
 
-        GpuTaskGraphPhysicalQueueCompileStatistics* const source = statisticsForQueue(transfer.sourceQueue);
-        GpuTaskGraphPhysicalQueueCompileStatistics* const destination = statisticsForQueue(transfer.destinationQueue);
-        if(source)
-            ++source->outgoingLogicalOwnershipTransferCount;
-        if(destination)
-            ++destination->incomingLogicalOwnershipTransferCount;
+        GpuTaskGraphPhysicalQueueCompileStatistics& source = statisticsForQueue(transfer.sourceQueue);
+        GpuTaskGraphPhysicalQueueCompileStatistics& destination = statisticsForQueue(transfer.destinationQueue);
+        ++source.outgoingLogicalOwnershipTransferCount;
+        ++destination.incomingLogicalOwnershipTransferCount;
 
         const auto resourceInsertion = resources.try_emplace(transfer.resource);
         if(!signatures.insert(OwnershipTransferKey{ &transfer }).second)
@@ -234,36 +232,33 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         const bool repeatedSignature = !resourceInsertion.second;
         if(repeatedSignature)
             ++statistics.repeatedOwnershipTransferSignatureCount;
-        if(source){
-            ++source->outgoingLogicalOwnershipTransferSignatureCount;
-            if(repeatedSignature)
-                ++source->outgoingRepeatedOwnershipTransferSignatureCount;
-        }
-        if(destination){
-            ++destination->incomingLogicalOwnershipTransferSignatureCount;
-            if(repeatedSignature)
-                ++destination->incomingRepeatedOwnershipTransferSignatureCount;
-        }
+        ++source.outgoingLogicalOwnershipTransferSignatureCount;
+        if(repeatedSignature)
+            ++source.outgoingRepeatedOwnershipTransferSignatureCount;
+        ++destination.incomingLogicalOwnershipTransferSignatureCount;
+        if(repeatedSignature)
+            ++destination.incomingRepeatedOwnershipTransferSignatureCount;
 
         // Only the first occurrence of a signature contributes avoidability, even when later fragments differ.
         OwnershipResourceStatistics& resource = resourceInsertion.first.value();
         if(transfer.concurrentSharingCouldAvoid && resource.avoidableSignatureCount < 2u){
             ++resource.avoidableSignatureCount;
-            if(resource.avoidableSignatureCount == 2u && transfer.resource.generation == graph.generation() && transfer.resource.index < graph.resourceCount() && graph.resourceAt(transfer.resource.index).id == transfer.resource)
+            if(resource.avoidableSignatureCount == 2u){
+                NWB_ASSERT(transfer.resource.generation == graph.generation() && transfer.resource.index < graph.resourceCount() && graph.resourceAt(transfer.resource.index).id == transfer.resource);
                 ++statistics.concurrentSharingAdviceResourceCount;
+            }
         }
     }
     for(usize queueIndex = 0u; queueIndex < m_physicalQueueCompileStatistics.size(); ++queueIndex){
         GpuTaskGraphPhysicalQueueCompileStatistics& physical = m_physicalQueueCompileStatistics[queueIndex];
-        if(physical.queueClass >= CommandQueue::kCount)
-            continue;
+        NWB_ASSERT(physical.queueClass < CommandQueue::kCount);
         for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
             if(!transfer.concurrentSharingCouldAvoid || (transfer.sourceQueue != physical.queue && transfer.destinationQueue != physical.queue))
                 continue;
 
+            // Every transfer resource was added by try_emplace in the loop above.
             const auto resource = resources.find(transfer.resource);
-            if(resource == resources.end())
-                continue;
+            NWB_ASSERT(resource != resources.end());
             OwnershipResourceStatistics& resourceStatistics = resource.value();
             if(resourceStatistics.avoidableSignatureCount < 2u || resourceStatistics.lastAdviceQueueIndex == queueIndex)
                 continue;

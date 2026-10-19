@@ -5,6 +5,7 @@
 #include "gpu_timing_metrics.h"
 
 #include <global/algorithm.h>
+#include <global/assert.h>
 #include <global/overflow.h>
 
 
@@ -123,8 +124,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
             }
 
             const u64 idleTicks = range.beginTicks - mergedEnd;
-            if(AddOverflows<u64>(queueMetrics.internalIdleTicks, idleTicks))
-                return reject();
+            NWB_ASSERT(!AddOverflows<u64>(queueMetrics.internalIdleTicks, idleTicks));
             queueMetrics.internalIdleTicks += idleTicks;
             events.push_back(TimestampEvent{ .ticks = mergedBegin, .begins = true });
             events.push_back(TimestampEvent{ .ticks = mergedEnd, .begins = false });
@@ -148,8 +148,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
         const u64 eventTicks = events[eventIndex].ticks;
         if(activeQueueCount >= 2u){
             const u64 intervalTicks = eventTicks - previousTicks;
-            if(AddOverflows<u64>(overlapTicks, intervalTicks))
-                return reject();
+            NWB_ASSERT(!AddOverflows<u64>(overlapTicks, intervalTicks));
             overlapTicks += intervalTicks;
         }
 
@@ -157,28 +156,23 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
         usize endCount = 0u;
         while(eventIndex < events.size() && events[eventIndex].ticks == eventTicks){
             if(events[eventIndex].begins){
-                if(AddOverflows<usize>(beginCount, usize{ 1u }))
-                    return reject();
+                NWB_ASSERT(!AddOverflows<usize>(beginCount, usize{ 1u }));
                 ++beginCount;
             }
             else{
-                if(AddOverflows<usize>(endCount, usize{ 1u }))
-                    return reject();
+                NWB_ASSERT(!AddOverflows<usize>(endCount, usize{ 1u }));
                 ++endCount;
             }
             ++eventIndex;
         }
 
-        if(endCount > activeQueueCount)
-            return reject();
+        NWB_ASSERT(endCount <= activeQueueCount);
         activeQueueCount -= endCount;
-        if(AddOverflows<usize>(activeQueueCount, beginCount))
-            return reject();
+        NWB_ASSERT(!AddOverflows<usize>(activeQueueCount, beginCount));
         activeQueueCount += beginCount;
         previousTicks = eventTicks;
     }
-    if(activeQueueCount != 0u)
-        return reject();
+    NWB_ASSERT(activeQueueCount == 0u);
 
     metrics.secondsPerTick = secondsPerTick;
     metrics.queueOverlapTicks = overlapTicks;

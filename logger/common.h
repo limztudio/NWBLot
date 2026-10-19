@@ -127,7 +127,6 @@ namespace MessagePayloadError{
     enum Enum : u8{
         InvalidType,
         SizeOverflow,
-        SizeMismatch,
     };
 };
 
@@ -154,8 +153,6 @@ template<typename PayloadContainer>
     AppendPOD(outPayload, s_NullTerminator);
 
     NWB_ASSERT(outPayload.size() == payloadBytes);
-    if(outPayload.size() != payloadBytes)
-        return MakeUnexpected(MessagePayloadError::SizeMismatch);
     return {};
 }
 
@@ -181,7 +178,7 @@ template<typename PayloadContainer>
     }
 
     const usize textBytes = totalSize - cursor;
-    if(textBytes < sizeof(tchar) || (textBytes % sizeof(tchar)) != 0u){
+    if((textBytes % sizeof(tchar)) != 0u){
         return MakeUnexpected(TStringView(NWB_TEXT("Received a malformed message payload")));
     }
 

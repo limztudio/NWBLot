@@ -172,8 +172,7 @@ void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type
 
 void InputDispatcher::applyPendingHandlerMutations(){
     for(const HandlerMutation& mutation : m_pendingHandlerMutations){
-        if(!mutation.handler)
-            continue;
+        NWB_ASSERT(mutation.handler);
         queueOrApplyHandlerMutation(mutation.type, *mutation.handler);
     }
     m_pendingHandlerMutations.clear();

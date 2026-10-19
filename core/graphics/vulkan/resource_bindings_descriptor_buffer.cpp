@@ -291,19 +291,15 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
     }
 
     SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
-    if(!segment.storageIdentity)
-        return result;
-    auto clearAllocation = [&](const DescriptorBufferSegment& allocation)noexcept{
-        if(allocation.valid() && segment.mappedMemory)
-            NWB_MEMSET(static_cast<u8*>(segment.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
-    };
+    NWB_ASSERT(segment.storageIdentity);
     auto finishAllocation = [&](const u32 offsetBytes) -> DescriptorBufferSegment{
         result.kind = kind;
         result.offsetBytes = offsetBytes;
         result.sizeBytes = sizeBytes;
         result.storageIdentity = *segment.storageIdentity;
         result.allocationSerial = segment.nextAllocationSerial++;
-        clearAllocation(result);
+        NWB_ASSERT(result.valid() && segment.mappedMemory);
+        NWB_MEMSET(static_cast<u8*>(segment.mappedMemory) + result.offsetBytes, 0, result.sizeBytes);
         // Ordered live ranges allow binary-search ownership checks.
         usize insertIndex = 0u;
         while(insertIndex < segment.liveAllocations.size() && segment.liveAllocations[insertIndex].offsetBytes < result.offsetBytes)
@@ -321,8 +317,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
 
     for(usize i = 0u; i < segment.freeRanges.size(); ++i){
         FreeRange range = segment.freeRanges[i];
-        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
-            continue;
+        NWB_ASSERT(range.sizeBytes <= UINT32_MAX - range.offsetBytes);
 
         const auto alignedOffset = AlignUpU32Checked(range.offsetBytes, alignmentBytes);
         if(!alignedOffset)
@@ -335,8 +330,6 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
         const u32 consumedPrefix = *alignedOffset - range.offsetBytes;
         const u32 remainingBytes = range.sizeBytes - consumedPrefix;
         if(remainingBytes < sizeBytes)
-            continue;
-        if(sizeBytes > UINT32_MAX - *alignedOffset)
             continue;
 
         const u32 allocEnd = *alignedOffset + sizeBytes;
@@ -393,7 +386,8 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
 
     ScopedLock lock(storage.mutex);
 
-    if(!storage.storageIdentity || segment.storageIdentity != *storage.storageIdentity){
+    NWB_ASSERT(storage.storageIdentity);
+    if(segment.storageIdentity != *storage.storageIdentity){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: allocation belongs to another storage."));
         return;
     }
@@ -418,16 +412,15 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
         return;
     }
 
-    const auto rangeEnd = [](const FreeRange& range)noexcept -> Expected<u32>{
-        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
-            return MakeUnexpected(Failure{});
+    // Free ranges stay inside the u32 segment capacity.
+    const auto rangeEnd = [](const FreeRange& range)noexcept -> u32{
+        NWB_ASSERT(range.sizeBytes <= UINT32_MAX - range.offsetBytes);
         return range.offsetBytes + range.sizeBytes;
     };
 
     FreeRange freedRange{ segment.offsetBytes, segment.sizeBytes };
     for(const FreeRange& range : storage.freeRanges){
-        const auto rangeEndBytes = rangeEnd(range);
-        if(!rangeEndBytes || (freedRange.offsetBytes < *rangeEndBytes && range.offsetBytes < freedRange.offsetBytes + freedRange.sizeBytes)){
+        if(freedRange.offsetBytes < rangeEnd(range) && range.offsetBytes < freedRange.offsetBytes + freedRange.sizeBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} overlaps a free range."), segment.offsetBytes, segment.sizeBytes);
             return;
         }
@@ -447,10 +440,10 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
         FreeRange& left = storage.freeRanges[leftIndex];
         const FreeRange right = storage.freeRanges[leftIndex + 1u];
 
-        const auto leftEnd = rangeEnd(left);
-        if(!leftEnd || *leftEnd != right.offsetBytes || right.sizeBytes > UINT32_MAX - left.sizeBytes)
+        if(rangeEnd(left) != right.offsetBytes)
             return false;
 
+        NWB_ASSERT(right.sizeBytes <= UINT32_MAX - left.sizeBytes);
         left.sizeBytes += right.sizeBytes;
         storage.freeRanges.erase(storage.freeRanges.begin() + leftIndex + 1u);
         return true;
@@ -464,50 +457,48 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
 
 Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::captureBindingSnapshotLocked()const noexcept{
     BindingSnapshot snapshot;
+    if(!m_enabled || m_lifecycleTransitioning || m_bindingGeneration == 0u)
+        return MakeUnexpected(Failure{});
+
+    // Enabled storage keeps both segments fully initialized; every segment rebuild disables storage on failure.
+    NWB_ASSERT(
+        m_resourceSegment.storageIdentity
+        && m_samplerSegment.storageIdentity
+        && *m_resourceSegment.storageIdentity != *m_samplerSegment.storageIdentity
+        && m_resourceSegment.buffer != VK_NULL_HANDLE
+        && m_samplerSegment.buffer != VK_NULL_HANDLE
+        && m_resourceSegment.allocation
+        && m_samplerSegment.allocation
+        && m_resourceSegment.mappedMemory
+        && m_samplerSegment.mappedMemory
+        && m_resourceSegment.deviceAddress != 0u
+        && m_samplerSegment.deviceAddress != 0u
+        && m_resourceSegment.capacityBytes != 0u
+        && m_samplerSegment.capacityBytes != 0u
+        && m_resourceSegment.bindingInfo.sType == VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT
+        && m_samplerSegment.bindingInfo.sType == VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT
+        && m_resourceSegment.bindingInfo.address == m_resourceSegment.deviceAddress
+        && m_samplerSegment.bindingInfo.address == m_samplerSegment.deviceAddress
+        && m_resourceSegment.bindingInfo.usage == VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
+        && m_samplerSegment.bindingInfo.usage == VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT
+    );
+
     const u32 offsetAlignmentBytes = VulkanDetail::GetDescriptorBufferOffsetAlignmentBytes(m_context);
-    if(
-        !m_enabled
-        || m_lifecycleTransitioning
-        || m_bindingGeneration == 0u
-        || offsetAlignmentBytes == 0u
-        || !m_resourceSegment.storageIdentity
-        || !m_samplerSegment.storageIdentity
-        || *m_resourceSegment.storageIdentity == *m_samplerSegment.storageIdentity
-        || m_resourceSegment.buffer == VK_NULL_HANDLE
-        || m_samplerSegment.buffer == VK_NULL_HANDLE
-        || !m_resourceSegment.allocation
-        || !m_samplerSegment.allocation
-        || !m_resourceSegment.mappedMemory
-        || !m_samplerSegment.mappedMemory
-        || m_resourceSegment.deviceAddress == 0u
-        || m_samplerSegment.deviceAddress == 0u
-        || (m_resourceSegment.deviceAddress % offsetAlignmentBytes) != 0u
-        || (m_samplerSegment.deviceAddress % offsetAlignmentBytes) != 0u
-        || m_resourceSegment.capacityBytes == 0u
-        || m_samplerSegment.capacityBytes == 0u
-        || m_resourceSegment.bindingInfo.sType != VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT
-        || m_samplerSegment.bindingInfo.sType != VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT
-        || m_resourceSegment.bindingInfo.address != m_resourceSegment.deviceAddress
-        || m_samplerSegment.bindingInfo.address != m_samplerSegment.deviceAddress
-        || m_resourceSegment.bindingInfo.usage != VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
-        || m_samplerSegment.bindingInfo.usage != VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT
-    )
+    if((m_resourceSegment.deviceAddress % offsetAlignmentBytes) != 0u || (m_samplerSegment.deviceAddress % offsetAlignmentBytes) != 0u)
         return MakeUnexpected(Failure{});
 
     snapshot.bindingInfos[s_ResourceDescriptorBufferIndex] = m_resourceSegment.bindingInfo;
     snapshot.bindingInfos[s_SamplerDescriptorBufferIndex] = m_samplerSegment.bindingInfo;
     snapshot.generation = m_bindingGeneration;
-    snapshot.resourceStorageIdentity = *m_resourceSegment.storageIdentity;
-    snapshot.samplerStorageIdentity = *m_samplerSegment.storageIdentity;
     snapshot.offsetAlignmentBytes = offsetAlignmentBytes;
     return snapshot;
 }
 
 bool DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, const DescriptorBufferSegmentKind::Enum expectedKind)const noexcept{
+    NWB_ASSERT(storage.storageIdentity);
     if(
         !segment.valid()
         || segment.kind != expectedKind
-        || !storage.storageIdentity
         || segment.storageIdentity != *storage.storageIdentity
         || segment.offsetBytes > storage.capacityBytes
         || segment.sizeBytes > storage.capacityBytes - segment.offsetBytes

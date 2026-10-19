@@ -42,13 +42,13 @@ namespace __hidden_texture_transfer{
 }
 
 // Buffer-image copies address exactly one image aspect.
-// Validate against the texture's full native metadata, then lower the selected upload plane into its own Vulkan aspect and byte layout.
+// Lower the selected upload plane into its own Vulkan aspect and byte layout.
 struct TextureUploadCopyAspect{
     VkImageAspectFlags aspectMask = 0u;
     VulkanDetail::TextureFormatBlockLayout formatLayout;
 };
 
-[[nodiscard]] inline Expected<TextureUploadCopyAspect> ResolveTextureUploadCopyAspect(const TextureDesc& textureDesc, const VkImageAspectFlags textureAspectMask, const TextureUploadAspect::Enum requestedAspect)noexcept{
+[[nodiscard]] inline Expected<TextureUploadCopyAspect> ResolveTextureUploadCopyAspect(const TextureDesc& textureDesc, const TextureUploadAspect::Enum requestedAspect)noexcept{
     TextureUploadCopyAspect result{};
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
@@ -72,14 +72,10 @@ struct TextureUploadCopyAspect{
     default:
         return MakeUnexpected(Failure{});
     }
-    if((textureAspectMask & result.aspectMask) != result.aspectMask)
-        return MakeUnexpected(Failure{});
 
     result.formatLayout.blockWidth = uploadLayout->blockWidth;
     result.formatLayout.blockHeight = uploadLayout->blockHeight;
     result.formatLayout.bytesPerBlock = uploadLayout->bytesPerBlock;
-    if(result.formatLayout.blockWidth == 0u || result.formatLayout.blockHeight == 0u || result.formatLayout.bytesPerBlock == 0u)
-        return MakeUnexpected(Failure{});
     return result;
 }
 
@@ -117,32 +113,23 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the image-copy contract"));
         return;
     }
-    if(
-        src.m_aspectMask != contract->aspectMask
-        || dest.m_aspectMask != contract->aspectMask
-        || src.m_formatLayout.blockWidth != contract->formatLayout.blockWidth
-        || src.m_formatLayout.blockHeight != contract->formatLayout.blockHeight
-        || src.m_formatLayout.bytesPerBlock != contract->formatLayout.bytesPerBlock
-        || dest.m_formatLayout.blockWidth != contract->formatLayout.blockWidth
-        || dest.m_formatLayout.blockHeight != contract->formatLayout.blockHeight
-        || dest.m_formatLayout.bytesPerBlock != contract->formatLayout.bytesPerBlock
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture aspect or block metadata disagrees with its format"));
-        return;
-    }
-    if(
-        !VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
-        || !VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
-        || src.m_imageInfo.imageType != contract->imageType
-        || dest.m_imageInfo.imageType != contract->imageType
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture descriptions and native image metadata must agree"));
-        return;
-    }
-    if((src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u || (dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination images require transfer usage"));
-        return;
-    }
+    NWB_ASSERT(
+        src.m_aspectMask == contract->aspectMask
+        && dest.m_aspectMask == contract->aspectMask
+        && src.m_formatLayout.blockWidth == contract->formatLayout.blockWidth
+        && src.m_formatLayout.blockHeight == contract->formatLayout.blockHeight
+        && src.m_formatLayout.bytesPerBlock == contract->formatLayout.bytesPerBlock
+        && dest.m_formatLayout.blockWidth == contract->formatLayout.blockWidth
+        && dest.m_formatLayout.blockHeight == contract->formatLayout.blockHeight
+        && dest.m_formatLayout.bytesPerBlock == contract->formatLayout.bytesPerBlock
+    );
+    NWB_ASSERT(
+        VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
+        && VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
+        && src.m_imageInfo.imageType == contract->imageType
+        && dest.m_imageInfo.imageType == contract->imageType
+    );
+    NWB_ASSERT((src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u && (dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0u);
 
     VkFormatProperties formatProperties{};
     m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
@@ -215,31 +202,11 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
     if(!validateTextureForGpuState(&dest, ResourceStates::CopyDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
         return false;
 
-    if(!VulkanTextureDetail::IsTextureImageInfoConsistent(texDesc, dest.m_imageInfo)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture description and native image metadata must agree"));
-        return false;
-    }
+    NWB_ASSERT(VulkanTextureDetail::IsTextureImageInfoConsistent(texDesc, dest.m_imageInfo));
+    NWB_ASSERT(VulkanTextureDetail::TextureFormatMetadataMatches(texDesc.format, dest.m_aspectMask, dest.m_formatLayout));
+    NWB_ASSERT((dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0u);
 
-    const FormatInfo& formatInfo = GetFormatInfo(texDesc.format);
-    const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
-    const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
-    if(
-        !expectedFormatLayout
-        || expectedAspectMask == 0u
-        || dest.m_aspectMask != expectedAspectMask
-        || dest.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
-        || dest.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
-        || dest.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture description and native format metadata must agree"));
-        return false;
-    }
-    if((dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("destination image requires transfer-destination usage"));
-        return false;
-    }
-
-    const auto copyAspect = __hidden_texture_transfer::ResolveTextureUploadCopyAspect(texDesc, dest.m_aspectMask, aspect);
+    const auto copyAspect = __hidden_texture_transfer::ResolveTextureUploadCopyAspect(texDesc, aspect);
     if(!copyAspect){
         rejectCommandRecording(s_OperationName, NWB_TEXT("upload aspect is not present in the destination format"));
         return false;
@@ -248,11 +215,7 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
     const VulkanDetail::TextureFormatBlockLayout& copyFormatLayout = copyAspect->formatLayout;
 
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
-
-    if(!VulkanDetail::IsBufferImageCopyAspectMaskSupported(copyAspectMask)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("destination aspect mask is invalid for a buffer-image copy"));
-        return false;
-    }
+    NWB_ASSERT(VulkanDetail::IsBufferImageCopyAspectMaskSupported(copyAspectMask));
 
     const auto copyLayout = VulkanDetail::BuildBufferImageCopyLayout(
             mipExtent,
@@ -344,47 +307,35 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         return;
     if(!validateTextureForGpuState(&dest, ResourceStates::ResolveDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
         return;
-    if(
-        !VulkanTextureDetail::IsTextureDescShapeValid(src.m_creationDesc)
-        || !VulkanTextureDetail::IsTextureDescShapeValid(dest.m_creationDesc)
-        || !VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
-        || !VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
-        || src.m_imageInfo.imageType != dest.m_imageInfo.imageType
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture descriptions and native image metadata must agree"));
+    NWB_ASSERT(
+        VulkanTextureDetail::IsTextureDescShapeValid(src.m_creationDesc)
+        && VulkanTextureDetail::IsTextureDescShapeValid(dest.m_creationDesc)
+        && VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
+        && VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
+    );
+    if(src.m_imageInfo.imageType != dest.m_imageInfo.imageType){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination image types must match"));
         return;
     }
-    if(src.m_creationDesc.sampleCount <= 1u || dest.m_creationDesc.sampleCount != 1u || !VulkanDetail::IsSupportedSampleCount(src.m_creationDesc.sampleCount)){
+    if(src.m_creationDesc.sampleCount <= 1u || dest.m_creationDesc.sampleCount != 1u){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source must be multisampled and destination must be single-sampled"));
         return;
     }
-    if(src.m_creationDesc.format != dest.m_creationDesc.format || src.m_imageInfo.format == VK_FORMAT_UNDEFINED || src.m_imageInfo.format != dest.m_imageInfo.format){
+    if(src.m_creationDesc.format != dest.m_creationDesc.format){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native formats must match exactly"));
         return;
     }
+    NWB_ASSERT(src.m_imageInfo.format == dest.m_imageInfo.format);
+    NWB_ASSERT(
+        VulkanTextureDetail::TextureFormatMetadataMatches(src.m_creationDesc.format, src.m_aspectMask, src.m_formatLayout)
+        && VulkanTextureDetail::TextureFormatMetadataMatches(dest.m_creationDesc.format, dest.m_aspectMask, dest.m_formatLayout)
+    );
 
-    const FormatInfo& formatInfo = GetFormatInfo(src.m_creationDesc.format);
-    const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
-    const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
-    if(
-        !expectedFormatLayout
-        || expectedAspectMask != VK_IMAGE_ASPECT_COLOR_BIT
-        || src.m_aspectMask != expectedAspectMask
-        || dest.m_aspectMask != expectedAspectMask
-        || src.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
-        || src.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
-        || src.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
-        || dest.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
-        || dest.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
-        || dest.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture aspect or block metadata disagrees with its format"));
+    if(src.m_aspectMask != VK_IMAGE_ASPECT_COLOR_BIT){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("resolve requires a color format"));
         return;
     }
-    if((dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u || (src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination images require transfer usage"));
-        return;
-    }
+    NWB_ASSERT((dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0u && (src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u);
 
     const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src.m_creationDesc, TextureSubresourceMipResolve::Range);
     const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest.m_creationDesc, TextureSubresourceMipResolve::Range);

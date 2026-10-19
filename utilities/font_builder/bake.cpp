@@ -56,8 +56,6 @@ bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scra
 }
 
 Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
-    if(!ValidateOptions(options, scratch))
-        return MakeUnexpected(Failure{});
     Impl::FontAtlasPayload candidate(arena);
     FontSource source(candidate.glyphs.get_allocator().arena());
     if(!source.open(options, candidate, scratch))

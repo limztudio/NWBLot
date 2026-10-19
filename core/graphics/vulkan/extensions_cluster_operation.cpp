@@ -137,7 +137,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     case RayTracingClusterOperationType::ClasBuildTemplates:       sourceInfoSize = sizeof(VkClusterAccelerationStructureBuildTriangleClusterTemplateInfoNV); break;
     case RayTracingClusterOperationType::ClasInstantiateTemplates: sourceInfoSize = sizeof(VkClusterAccelerationStructureInstantiateClusterInfoNV); break;
     case RayTracingClusterOperationType::BlasBuild:                sourceInfoSize = sizeof(VkClusterAccelerationStructureBuildClustersBottomLevelInfoNV); break;
-    default:                                                       return;
     }
 
     const auto computeStridedRangeSize = [s_OperationName](const u64 stride, const u64 elementSize, const u32 count, const TStringView rangeName) -> Expected<u64>{
@@ -155,7 +154,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             return MakeUnexpected(Failure{});
         }
         const VkDeviceAddress address = baseAddress + offset;
-        if(address == 0u || alignment == 0u || (address % alignment) != 0u){
+        if(alignment == 0u || (address % alignment) != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} device address is not aligned to {} bytes"), s_OperationName, rangeName, alignment);
             return MakeUnexpected(Failure{});
         }
@@ -285,14 +284,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             case RayTracingClusterOperationMoveType::BottomLevel:  destinationAlignment = properties.clusterBottomLevelByteAlignment; break;
             case RayTracingClusterOperationMoveType::ClusterLevel: destinationAlignment = properties.clusterByteAlignment; break;
             case RayTracingClusterOperationMoveType::Template:     destinationAlignment = properties.clusterTemplateByteAlignment; break;
-            default:                                               return;
             }
             break;
         case RayTracingClusterOperationType::ClasBuild:                destinationAlignment = properties.clusterByteAlignment; break;
         case RayTracingClusterOperationType::ClasBuildTemplates:       destinationAlignment = properties.clusterTemplateByteAlignment; break;
         case RayTracingClusterOperationType::ClasInstantiateTemplates: destinationAlignment = properties.clusterByteAlignment; break;
         case RayTracingClusterOperationType::BlasBuild:                destinationAlignment = properties.clusterBottomLevelByteAlignment; break;
-        default:                                                       return;
         }
         const auto address = getCheckedAddress(*outAccelerationStructuresBuffer, opDesc.outAccelerationStructuresOffsetInBytes, destinationSize, destinationAlignment, NWB_TEXT("implicit destination"));
         if(!address){

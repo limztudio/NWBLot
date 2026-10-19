@@ -508,8 +508,6 @@ bool GpuTimingRecorder::collectLocked(Device& device, const u64 subscriptionIden
 bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissionToken& token){
     const GpuPhysicalQueueId physicalQueue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
     NWB_ASSERT(static_cast<usize>(physicalQueue.index) < m_queueCompletions.size());
-    if(static_cast<usize>(physicalQueue.index) >= m_queueCompletions.size())
-        return false;
 
     QueueCompletion& completion = m_queueCompletions[physicalQueue.index];
     if(completion.queue != physicalQueue){
@@ -525,8 +523,8 @@ void GpuTimingRecorder::discardFrameResetLocked()noexcept{
 }
 
 void GpuTimingRecorder::noteSkippedScope(const GpuTimingScopeSkipReason::Enum reason)noexcept{
-    if(reason < GpuTimingScopeSkipReason::kCount)
-        ++m_statistics.skippedScopeCountByReason[reason];
+    NWB_ASSERT(reason < GpuTimingScopeSkipReason::kCount);
+    ++m_statistics.skippedScopeCountByReason[reason];
 }
 
 void GpuTimingRecorder::syncActiveState(const u64 subscriptionIdentityLimit)noexcept{

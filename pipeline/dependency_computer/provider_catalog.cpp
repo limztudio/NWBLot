@@ -163,8 +163,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const
 
 Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const{
     using namespace __hidden_dependency_provider_catalog;
-    if(index >= m_files.size())
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(index < m_files.size());
     Assets::ScratchString text(scratchArena);
     Core::Metascript::Document document(m_arena);
     if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, text, document, [&](const AStringView source){ return document.parse(source); }))

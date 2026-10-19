@@ -21,8 +21,6 @@ bool SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& 
     const TStringView owner = ownerName;
     const Name samplerName = debugName ? debugName : samplerAsset.virtualPath();
     NWB_ASSERT(!outResource.valid());
-    if(outResource.valid())
-        return true;
     if(outResource.sampler || outResource.samplerHeapHandle.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler resource is partially initialized; release it before recreating"), owner);
         return false;

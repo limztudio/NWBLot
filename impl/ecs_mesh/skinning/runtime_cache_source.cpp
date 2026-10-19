@@ -209,10 +209,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     MeshSkinningSource& source = **sourceResult;
     const Mesh* mesh = source.mesh();
     const Skin* skin = source.skin();
-    if(!mesh || !skin){
-        NWB_ASSERT(false);
-        return false;
-    }
+    NWB_ASSERT(mesh && skin);
 
     MeshSkinningRuntimeInstance instance(m_arena);
     instance.entity = entity;
@@ -274,28 +271,22 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
 }
 
 Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
-    if(!skinAsset.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning binding source assets are incomplete"));
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(skinAsset.valid());
 
     const Name& sourceName = skinAsset.name();
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end()){
         MeshSkinningSource& cachedSource = foundSource.value();
-        if(!cachedSource.mesh() || !cachedSource.skin())
-            return MakeUnexpected(Failure{});
+        NWB_ASSERT(cachedSource.mesh() && cachedSource.skin());
         return &cachedSource;
     }
 
     auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), NWB_TEXT("MeshSkinningRuntimeCache"), "skin");
-    const Skin* loadedSkin = loadedSkinAsset ? loadedSkinAsset->get() : nullptr;
-    if(!loadedSkin)
+    if(!loadedSkinAsset)
         return MakeUnexpected(Failure{});
 
-    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>(loadedSkin->mesh().name(), NWB_TEXT("MeshSkinningRuntimeCache"), Mesh::s_AssetTypeText);
-    const Mesh* loadedMesh = loadedMeshAsset ? loadedMeshAsset->get() : nullptr;
-    if(!loadedMesh)
+    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>((*loadedSkinAsset)->mesh().name(), NWB_TEXT("MeshSkinningRuntimeCache"), Mesh::s_AssetTypeText);
+    if(!loadedMeshAsset)
         return MakeUnexpected(Failure{});
 
     MeshSkinningSource source;
@@ -308,8 +299,7 @@ Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache
         return MakeUnexpected(Failure{});
     }
     MeshSkinningSource& storedSource = stored.value();
-    if(!storedSource.mesh() || !storedSource.skin())
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(storedSource.mesh() && storedSource.skin());
     return &storedSource;
 }
 

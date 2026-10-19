@@ -150,14 +150,8 @@ ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::A
 Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     SkeletonOutputData outData;
 
-    if(joints.size() != bindPoseMatrices.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint count must match bind-pose matrix count"));
-        return MakeUnexpected(Failure{});
-    }
-    if(!inverseBindMatrices.empty() && inverseBindMatrices.size() != joints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint count must match inverse bind matrix count"));
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(joints.size() == bindPoseMatrices.size());
+    NWB_ASSERT(inverseBindMatrices.size() == joints.size());
     if(joints.size() > s_MaxSkeletonJointCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
         return MakeUnexpected(Failure{});
@@ -250,8 +244,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
         outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
         outData.joints.push_back(joints[oldJointIndex]);
         outData.bindPoseMatrices.push_back(localBindPose);
-        if(!inverseBindMatrices.empty())
-            outData.inverseBindMatrices.push_back(inverseBindMatrices[oldJointIndex]);
+        outData.inverseBindMatrices.push_back(inverseBindMatrices[oldJointIndex]);
     }
 
     return outData;

@@ -36,9 +36,9 @@ struct TextStep{
 }
 
 [[nodiscard]] static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
+    // Callers admit the whole source with GraphemeSegmentation::Validate first.
     const auto decoded = DecodeUtf8CodePoint(source.substr(offset, 4u));
-    if(!decoded || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(decoded && !(decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu));
     const u32 scalar = decoded->codePoint;
     TextStep step;
     step.sourceBytes = static_cast<usize>(decoded->byteCount);
@@ -73,7 +73,8 @@ bool ValidateMultilineText(const AStringView text)noexcept{
     usize offset = 0u;
     while(offset < text.size()){
         const auto decoded = DecodeUtf8CodePoint(text.substr(offset, 4u));
-        if(!decoded || !__hidden_ui_multiline_text::IsCanonicalScalar(decoded->codePoint))
+        NWB_ASSERT(decoded);
+        if(!__hidden_ui_multiline_text::IsCanonicalScalar(decoded->codePoint))
             return false;
         offset += static_cast<usize>(decoded->byteCount);
     }
@@ -99,8 +100,7 @@ Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMulti
     offset = 0u;
     while(offset < source.size()){
         const auto step = __hidden_ui_multiline_text::ReadStep(source, offset);
-        if(!step)
-            return MakeUnexpected(EditTextStatus::InvalidText);
+        NWB_ASSERT(step);
         if(step->replacement != 0)
             candidate.push_back(step->replacement);
         else

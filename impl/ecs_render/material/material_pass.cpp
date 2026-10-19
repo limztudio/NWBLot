@@ -360,10 +360,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
     auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const Core::Assets::AssetRef<Material>& material, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> bool{
         NWB_ASSERT(mesh.valid());
-
-        // Mesh creation establishes source-stream descriptors; preparation only validates them.
-        if(!m_meshSystem.meshGeometryHeapHandlesReady(mesh))
-            return false;
+        // Mesh creation establishes source-stream descriptors before draw gathering.
+        NWB_ASSERT(m_meshSystem.meshGeometryHeapHandlesReady(mesh));
 
         const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 

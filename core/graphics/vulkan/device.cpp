@@ -11,7 +11,6 @@
 
 #include <global/exception.h>
 #include <global/scope_exit.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,10 +37,8 @@ static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
 [[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{
     const auto generation = s_DeviceGenerationAllocator.allocate();
-    if(!generation){
+    if(!generation)
         NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Vulkan: Device-generation identity space is exhausted."));
-        TerminateInvariant();
-    }
     return *generation;
 }
 
@@ -568,8 +565,6 @@ Device::~Device()noexcept{
     const VkResult nativeIdleResult = lifecycleDestructionPrepared ? VK_SUCCESS : waitForNativeIdle();
     const bool nativeTeardownSafe = nativeIdleResult == VK_SUCCESS || nativeIdleResult == VK_ERROR_DEVICE_LOST;
     NWB_FATAL_ASSERT_MSG(nativeTeardownSafe, "Vulkan Device destruction requires a completed native idle join or terminal device loss");
-    if(!nativeTeardownSafe)
-        TerminateInvariant();
     if(nativeIdleResult == VK_ERROR_DEVICE_LOST)
         markDeviceLost();
 
@@ -584,15 +579,15 @@ void Device::releaseOwnedResources()noexcept{
     m_descriptorBufferManager.shutdownForDeviceTeardown();
 
     for(Queue* queue : m_physicalQueues){
-        if(queue)
-            DestroyArenaObjectNoexcept(m_context.objectArena, queue);
+        NWB_ASSERT(queue);
+        DestroyArenaObjectNoexcept(m_context.objectArena, queue);
     }
     m_physicalQueues.clear();
     m_physicalQueueInfos.clear();
 
     for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
-        if(nativeQueueState)
-            DestroyArenaObjectNoexcept(m_context.objectArena, nativeQueueState);
+        NWB_ASSERT(nativeQueueState);
+        DestroyArenaObjectNoexcept(m_context.objectArena, nativeQueueState);
     }
     m_nativeQueueStates.clear();
 

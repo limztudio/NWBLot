@@ -188,15 +188,11 @@ struct RenderPassAttachmentOperations{
         return true;
     if(elementStrideBytes == 0u || requiredElementBytes == 0u || requiredElementBytes > elementStrideBytes)
         return false;
-    if(static_cast<u64>(firstElement) > Limit<u64>::s_Max / elementStrideBytes)
-        return false;
     const u64 firstElementOffsetBytes = static_cast<u64>(firstElement) * elementStrideBytes;
     if(bindingOffsetBytes > Limit<u64>::s_Max - firstElementOffsetBytes)
         return false;
     const u64 firstRequiredByte = bindingOffsetBytes + firstElementOffsetBytes;
     const u64 remainingElementCount = static_cast<u64>(elementCount) - 1u;
-    if(remainingElementCount > Limit<u64>::s_Max / elementStrideBytes)
-        return false;
     const u64 remainingElementBytes = remainingElementCount * elementStrideBytes;
     if(firstRequiredByte > Limit<u64>::s_Max - remainingElementBytes)
         return false;
@@ -228,10 +224,6 @@ struct RenderPassAttachmentOperations{
 [[nodiscard]] constexpr bool IsIndexDrawRangeValid(const BufferDesc& desc, const u64 bindingOffsetBytes, const u32 startIndex, const u32 indexCount, const u32 indexElementByteSize)noexcept{
     if(indexElementByteSize == 0u || (bindingOffsetBytes % indexElementByteSize) != 0u)
         return false;
-    if(static_cast<u64>(startIndex) > Limit<u64>::s_Max / indexElementByteSize)
-        return false;
-    if(static_cast<u64>(indexCount) > Limit<u64>::s_Max / indexElementByteSize)
-        return false;
 
     const u64 startOffsetBytes = static_cast<u64>(startIndex) * indexElementByteSize;
     const u64 indexBytes = static_cast<u64>(indexCount) * indexElementByteSize;
@@ -255,9 +247,7 @@ struct RenderPassAttachmentOperations{
 }
 
 [[nodiscard]] constexpr bool AreMeshDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32* const maximumGroupCounts, const u32 maximumTotalGroupCount)noexcept{
-    if(!maximumGroupCounts || groupsX == 0u || groupsY == 0u || groupsZ == 0u || groupsX > maximumGroupCounts[0u] || groupsY > maximumGroupCounts[1u] || groupsZ > maximumGroupCounts[2u])
-        return false;
-    if(groupsX > maximumTotalGroupCount || groupsY > maximumTotalGroupCount || groupsZ > maximumTotalGroupCount)
+    if(groupsX == 0u || groupsY == 0u || groupsZ == 0u || groupsX > maximumGroupCounts[0u] || groupsY > maximumGroupCounts[1u] || groupsZ > maximumGroupCounts[2u])
         return false;
 
     const u64 xy = static_cast<u64>(groupsX) * groupsY;

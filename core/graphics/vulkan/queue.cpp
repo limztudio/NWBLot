@@ -303,24 +303,22 @@ void Queue::commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuff
         m_leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         if(commandBuffer.m_recordingWorkerIndex == 0u)
             m_directLeasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
-        else if(workerArena)
+        else
             workerArena->leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         break;
     case TrackedCommandBufferArenaState::Reusable:
         m_reusableCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         if(commandBuffer.m_recordingWorkerIndex == 0u)
             m_directReusableCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
-        else if(workerArena)
+        else
             workerArena->reusableCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         break;
     case TrackedCommandBufferArenaState::Pending:
         m_pendingCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         if(commandBuffer.m_recordingWorkerIndex == 0u)
             m_pendingDirectCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
-        else{
-            if(workerArena && workerArena->pendingCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) == 0u)
-                m_pendingWorkerEpochCount.fetch_add(1u, MemoryOrder::relaxed);
-        }
+        else if(workerArena->pendingCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) == 0u)
+            m_pendingWorkerEpochCount.fetch_add(1u, MemoryOrder::relaxed);
         break;
     default:
         break;
@@ -393,7 +391,7 @@ Queue::WorkerCommandArena* Queue::findWorkerCommandArena(const u64 recordingWork
         return nullptr;
 
     for(WorkerCommandArena* arena = m_workerCommandArenaHead.load(MemoryOrder::acquire); arena; arena = arena->next.load(MemoryOrder::acquire)){
-        if(arena && arena->recordingWorkerDomain == recordingWorkerDomain && arena->recordingWorkerIndex == recordingWorkerIndex)
+        if(arena->recordingWorkerDomain == recordingWorkerDomain && arena->recordingWorkerIndex == recordingWorkerIndex)
             return arena;
     }
     return nullptr;
@@ -459,7 +457,8 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
 
     auto available = m_commandBuffersPool.end();
     for(auto it = m_commandBuffersPool.begin(); it != m_commandBuffersPool.end(); ++it){
-        if(*it && (*it)->m_recordingWorkerIndex == 0u){
+        NWB_ASSERT(*it);
+        if((*it)->m_recordingWorkerIndex == 0u){
             available = it;
             break;
         }
@@ -467,9 +466,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
     if(available != m_commandBuffersPool.end()){
         TrackedCommandBufferPtr cmdBuf = Move(*available);
         m_commandBuffersPool.erase(available);
-
-        if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
-            return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
+        NWB_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
 
         const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
@@ -504,12 +501,9 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
     if(!arena->commandBuffersPool.empty()){
         auto available = arena->commandBuffersPool.begin();
         TrackedCommandBufferPtr cmdBuf = Move(*available);
-        if(cmdBuf)
-            cmdBuf->m_sharedCommandPoolMutex = nullptr;
+        NWB_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
+        cmdBuf->m_sharedCommandPoolMutex = nullptr;
         arena->commandBuffersPool.erase(available);
-
-        if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
-            return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
 
         const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
@@ -538,14 +532,12 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
 void Queue::destroyWorkerCommandArenas()noexcept{
     NothrowScopedLock workerArenasLock(m_workerCommandArenasMutex);
     for(WorkerCommandArena* const arena : m_workerCommandArenas){
-        if(!arena)
-            continue;
+        NWB_ASSERT(arena);
 
         {
             NothrowScopedLock arenaLock(arena->mutex);
             for(TrackedCommandBufferPtr& commandBuffer : arena->commandBuffersPool){
-                if(!commandBuffer)
-                    continue;
+                NWB_ASSERT(commandBuffer);
                 commandBuffer->m_cmdBuf = VK_NULL_HANDLE;
                 commandBuffer->m_cmdPool = VK_NULL_HANDLE;
                 commandBuffer->m_sharedCommandPoolMutex = nullptr;
@@ -560,8 +552,7 @@ void Queue::destroyWorkerCommandArenas()noexcept{
 
     m_workerCommandArenaHead.store(nullptr, MemoryOrder::release);
     for(WorkerCommandArena* const arena : m_workerCommandArenas){
-        if(!arena)
-            continue;
+        NWB_ASSERT(arena);
         DestroyArenaObject(m_context.objectArena, arena);
     }
     m_workerCommandArenas.clear();

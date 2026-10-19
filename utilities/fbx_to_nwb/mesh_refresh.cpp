@@ -172,11 +172,7 @@ template<typename Value>
     u32 compactIndex = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
         if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
-            if(compact.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
-                return MakeUnexpected(Failure{});
-            }
-
+            NWB_ASSERT(compact.size() < static_cast<usize>(s_MissingSourceStreamIndex));
             compactIndex = static_cast<u32>(compact.size());
             compact.push_back(sortedEntries[sortedIndex].value);
         }
@@ -439,10 +435,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         return MakeUnexpected(Failure{});
     }
 
-    if(!MeshRefreshTextDetail::ApplyTextReplacements(source, replacements)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to apply text replacements for '{}'"), PathToString<tchar>(inputPath));
-        return MakeUnexpected(Failure{});
-    }
+    MeshRefreshTextDetail::ApplyTextReplacements(source, replacements);
     NormalizeLineEndingsInPlace(source, useCrlf);
 
     const auto written = WriteTextFile(outputPath, AStringView(source.data(), source.size()));

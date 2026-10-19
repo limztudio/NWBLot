@@ -245,18 +245,15 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     const auto foundMesh = m_meshState.m_meshes.find(meshPath);
     if(foundMesh != m_meshState.m_meshes.end()){
         NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
-        if(!meshRenderBindingsReady(foundMesh.value()))
-            return MakeUnexpected(Failure{});
         NWB_ASSERT(foundMesh.value().valid());
         return &foundMesh.value();
     }
 
     auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(meshPath, NWB_TEXT("RendererSystem"), Mesh::s_AssetTypeText);
-    const Mesh* loadedMesh = loadedAsset ? loadedAsset->get() : nullptr;
-    if(!loadedMesh)
+    if(!loadedAsset)
         return MakeUnexpected(Failure{});
 
-    const Mesh& mesh = *loadedMesh;
+    const Mesh& mesh = **loadedAsset;
     // Mesh::loadBinary already ran the full payload validation (including u32 stream limits).
     NWB_ASSERT(mesh.validatePayload(scratchArena));
     NWB_ASSERT(mesh.meshlets().size() <= static_cast<usize>(Limit<u32>::s_Max));
@@ -447,9 +444,6 @@ Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshK
         return MakeUnexpected(Failure{});
 
     NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
-    if(!meshRenderBindingsReady(foundMesh.value()))
-        return MakeUnexpected(Failure{});
-
     NWB_ASSERT(foundMesh.value().valid());
     return &foundMesh.value();
 }
@@ -457,8 +451,6 @@ Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshK
 Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc){
 
     NWB_ASSERT(desc.valid());
-    if(!desc.valid())
-        return MakeUnexpected(Failure{});
 
     const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
     if(foundMesh != m_meshState.m_meshes.end()){
@@ -472,8 +464,6 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
         }
         else{
             NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
-            if(!meshRenderBindingsReady(foundMesh.value()))
-                return MakeUnexpected(Failure{});
             MeshResources& mesh = foundMesh.value();
             __hidden_mesh::RefreshRuntimeMeshContent(mesh, desc);
             NWB_ASSERT(mesh.valid());
@@ -542,9 +532,6 @@ Expected<MeshResources*> RendererMeshSystem::findRuntimeMeshResources(const Runt
         return MakeUnexpected(Failure{});
 
     NWB_ASSERT(meshRenderBindingsReady(mesh));
-    if(!meshRenderBindingsReady(mesh))
-        return MakeUnexpected(Failure{});
-
     __hidden_mesh::RefreshRuntimeMeshContent(mesh, desc);
     NWB_ASSERT(mesh.valid());
     return &mesh;

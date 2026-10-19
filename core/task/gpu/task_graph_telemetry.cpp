@@ -179,8 +179,7 @@ namespace __hidden_task_graph_telemetry{
     if(!decision)
         return MakeUnexpected(Failure{});
     result.packetizationDecision = *decision;
-    if(!Telemetry::IsValidFrameGraphCompiledTask(result))
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(Telemetry::IsValidFrameGraphCompiledTask(result));
     return result;
 }
 
@@ -259,7 +258,8 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(Telemetry::Frame
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedTransferQueue;
                 break;
             default:
-                return false;
+                NWB_ASSERT(false);
+                break;
             }
             if(assignment->dedicated)
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedDedicatedQueue;

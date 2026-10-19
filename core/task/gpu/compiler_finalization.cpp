@@ -96,9 +96,9 @@ namespace GpuTaskGraphCompilerDetail{
 
         const bool hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
 
+        // Graph storage admits a known external final state only for texture, buffer and acceleration structure resources.
         const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
-        if(exportType >= GpuCompiledBarrierType::kCount)
-            return false;
+        NWB_ASSERT(exportType < GpuCompiledBarrierType::kCount);
 
         bool hasTerminalDeclaredRange = false;
         GpuTaskId externalExportTask;
@@ -108,8 +108,7 @@ namespace GpuTaskGraphCompilerDetail{
         const u32 externalExportSourceOffset = static_cast<u32>(compiledPlan.externalResourceExportSources.size());
         u32 externalExportSourceCount = 0u;
         const auto appendTerminalState = [&](const TrackedCompiledResourceState& state, const usize terminalStateIndex, const GpuTaskResourceRange& terminalRange){
-            if(terminalStateIndex >= trackedResourceStates.size() || &trackedResourceStates[terminalStateIndex] != &state)
-                return false;
+            NWB_ASSERT(terminalStateIndex < trackedResourceStates.size() && &trackedResourceStates[terminalStateIndex] == &state);
 
             const GpuSubmissionPacketId terminalPacket = FindCompiledPacketForTask(compiledPlan, state.task);
             if(!terminalPacket.valid() || terminalPacket.generation != compiledPlan.planGeneration || terminalPacket.index >= compiledPlan.packets.size())
@@ -164,8 +163,7 @@ namespace GpuTaskGraphCompilerDetail{
             );
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
-                if(releaseType >= GpuCompiledBarrierType::kCount)
-                    return false;
+                NWB_ASSERT(releaseType < GpuCompiledBarrierType::kCount);
                 // Export the exact final state before ownership moves.
                 // Native lowering therefore captures the same state in the released snapshot and the paired Vulkan queue-family release barrier.
                 if(!AppendCompiledOwnershipTransfer(plan, resource, terminalRange, state.task, GpuTaskId{}, state.queue, resource.externalFinalReleaseDestinationQueue, GpuOwnershipTransferRoute::ExternalExport))
@@ -193,7 +191,8 @@ namespace GpuTaskGraphCompilerDetail{
             if(!CollectTerminalResourceStateFragments(trackedResourceStates, resourceHistory, resource, scratchArena, stateFragments))
                 return false;
             for(const TrackedResourceStateFragment& fragment : stateFragments){
-                if(!fragment.state || !appendTerminalState(*fragment.state, fragment.stateIndex, fragment.range))
+                NWB_ASSERT(fragment.state);
+                if(!appendTerminalState(*fragment.state, fragment.stateIndex, fragment.range))
                     return false;
             }
         }
@@ -255,10 +254,11 @@ namespace GpuTaskGraphCompilerDetail{
 
     for(GpuCompiledTask& compiledTask : compiledPlan.tasks)
         compiledTask.epilogueBarrierCount = 0u;
+    // Every pending barrier belongs to a task that packetization already published.
     for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
         GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, pending.task);
-        if(compiledTask)
-            ++compiledTask->epilogueBarrierCount;
+        NWB_ASSERT(compiledTask);
+        ++compiledTask->epilogueBarrierCount;
     }
 
     usize barrierCount = compiledPlan.epilogueBarriers.size();
@@ -273,8 +273,7 @@ namespace GpuTaskGraphCompilerDetail{
     // Traversing discovery order keeps exports before their paired ownership releases without allocating a separate grouping table.
     for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
         GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, pending.task);
-        if(!compiledTask)
-            continue;
+        NWB_ASSERT(compiledTask);
         const usize barrierIndex = static_cast<usize>(compiledTask->epilogueBarrierOffset) + compiledTask->epilogueBarrierCount;
         compiledPlan.epilogueBarriers[barrierIndex] = pending.barrier;
         ++compiledTask->epilogueBarrierCount;

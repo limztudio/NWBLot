@@ -23,8 +23,6 @@
 #include <core/task/gpu/compiler.h>
 #include <core/task/gpu/scheduler.h>
 
-#include <global/termination.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1020,10 +1018,8 @@ void MeshSkinningSystem::resolveFrameTaskGraphAttempt(const Core::GpuCompiledGra
     if(!planAccess.valid())
         return;
     const u64 recordingAttemptGeneration = m_frameRecordedGraph.recordingAttemptGeneration();
-    if(recordingAttemptGeneration != 0u && !m_frameSubmissionTransaction.discardUnaccepted(m_frameTaskGraph, m_frameCompiledGraph, recordingAttemptGeneration)){
+    if(recordingAttemptGeneration != 0u && !m_frameSubmissionTransaction.discardUnaccepted(m_frameTaskGraph, m_frameCompiledGraph, recordingAttemptGeneration))
         NWB_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
-        TerminateInvariant();
-    }
 }
 
 void MeshSkinningSystem::resetFrameTaskGraph(){

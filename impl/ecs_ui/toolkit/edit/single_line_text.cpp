@@ -28,9 +28,9 @@ struct TextStep{
 };
 
 static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
+    // Callers admit the whole source with GraphemeSegmentation::Validate first.
     const auto decoded = DecodeUtf8CodePoint(source.substr(offset, 4u));
-    if(!decoded || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(decoded && !(decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu));
     const u32 scalar = decoded->codePoint;
     const bool space = (scalar >= 0x9u && scalar <= 0xDu) || scalar == 0x85u || scalar == 0x2028u || scalar == 0x2029u;
     if(!space && (scalar < 0x20u || scalar == 0x7Fu))
@@ -73,8 +73,7 @@ Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingl
     offset = 0u;
     while(offset < source.size()){
         const auto step = __hidden_ui_single_line_text::ReadStep(source, offset);
-        if(!step)
-            return MakeUnexpected(EditTextStatus::InvalidText);
+        NWB_ASSERT(step);
         if(step->space)
             candidate.push_back(' ');
         else

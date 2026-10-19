@@ -36,8 +36,8 @@ namespace __hidden_texture_transfer_staging{
     const auto range = VulkanDetail::BuildStagingTextureRange(stagingSlice, stagingMipLayout, stagingFormatLayout, stagingArrayByteSize, stagingTotalByteSize, requiredOffsetAlignment, false);
     if(!range)
         return MakeUnexpected(Failure{});
-    if((range->byteOffset % s_BufferAlignmentBytes) != 0u || (range->byteOffset % stagingFormatLayout.bytesPerBlock) != 0u)
-        return MakeUnexpected(Failure{});
+    // The required alignment is the common multiple of both copy alignments.
+    NWB_ASSERT((range->byteOffset % s_BufferAlignmentBytes) == 0u && (range->byteOffset % stagingFormatLayout.bytesPerBlock) == 0u);
 
     VkBufferImageCopy region{};
     region.bufferOffset = range->byteOffset;
@@ -176,34 +176,26 @@ bool CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTex
         return false;
     }
 
-    const auto expectedTotalByteSize = TryMultiply<u64>(stagingTexture.m_arrayByteSize, static_cast<u64>(stagingTexture.m_creationDesc.arraySize));
-    if(
-        stagingTexture.m_creationDesc.arraySize == 0u
-        || stagingTexture.m_creationDesc.mipLevels == 0u
-        || stagingTexture.m_mipLayouts.size() != stagingTexture.m_creationDesc.mipLevels
-        || stagingTexture.m_creationQueueSharing != stagingTexture.m_creationDesc.queueSharing
-        || !expectedTotalByteSize
-        || *expectedTotalByteSize != stagingTexture.m_totalByteSize
-    ){
-        rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable layout provenance"));
-        return false;
-    }
+    NWB_ASSERT(
+        stagingTexture.m_creationDesc.arraySize != 0u
+        && stagingTexture.m_creationDesc.mipLevels != 0u
+        && stagingTexture.m_mipLayouts.size() == stagingTexture.m_creationDesc.mipLevels
+        && stagingTexture.m_creationQueueSharing == stagingTexture.m_creationDesc.queueSharing
+        && TryMultiply<u64>(stagingTexture.m_arrayByteSize, static_cast<u64>(stagingTexture.m_creationDesc.arraySize)) == stagingTexture.m_totalByteSize
+    );
 
     const GpuPhysicalQueueInfo* const exactQueue = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    if(!exactQueue || exactQueue->id != m_creationDesc.physicalQueue){
+    if(!exactQueue){
         rejectCommandRecording(operationName, NWB_TEXT("command list has no valid exact physical queue"));
         return false;
     }
-    if(
-        stagingTexture.m_admittedQueueFamilies.empty()
-        || stagingTexture.m_admittedQueueFamilies.size() > Limit<u32>::s_Max
-        || (stagingTexture.m_creationSharingMode != VK_SHARING_MODE_EXCLUSIVE && stagingTexture.m_creationSharingMode != VK_SHARING_MODE_CONCURRENT)
-        || (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_EXCLUSIVE && stagingTexture.m_admittedQueueFamilies.size() != 1u)
-        || (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT && stagingTexture.m_admittedQueueFamilies.size() < 2u)
-    ){
-        rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable sharing provenance"));
-        return false;
-    }
+    NWB_ASSERT(
+        stagingTexture.m_admittedQueueFamilies.size() <= Limit<u32>::s_Max
+        && (
+            (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_EXCLUSIVE && stagingTexture.m_admittedQueueFamilies.size() == 1u)
+            || (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT && stagingTexture.m_admittedQueueFamilies.size() >= 2u)
+        )
+    );
 
     bool familyAdmitted = false;
     for(const u32 familyIndex : stagingTexture.m_admittedQueueFamilies){
@@ -230,29 +222,15 @@ Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTextur
         return MakeUnexpected(Failure{});
     if(textureDesc.format != stagingDesc.format)
         return MakeUnexpected(Failure{});
-    if(!VulkanTextureDetail::IsTextureImageInfoConsistent(textureDesc, textureResource.m_imageInfo))
-        return MakeUnexpected(Failure{});
-
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
-    const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
-    if(
-        !expectedFormatLayout
-        || expectedAspectMask == 0u
-        || stagingResource.m_aspectMask != expectedAspectMask
-        || textureResource.m_aspectMask != expectedAspectMask
-        || stagingResource.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
-        || stagingResource.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
-        || stagingResource.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
-        || stagingResource.m_creationQueueSharing != stagingDesc.queueSharing
-        || stagingResource.m_totalByteSize == 0u
-        || stagingResource.m_arrayByteSize == 0u
-        || stagingResource.m_bufferOffsetAlignment == 0u
-        || textureResource.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
-        || textureResource.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
-        || textureResource.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
-    )
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(VulkanTextureDetail::IsTextureImageInfoConsistent(textureDesc, textureResource.m_imageInfo));
+    NWB_ASSERT(
+        VulkanTextureDetail::TextureFormatMetadataMatches(stagingDesc.format, stagingResource.m_aspectMask, stagingResource.m_formatLayout)
+        && VulkanTextureDetail::TextureFormatMetadataMatches(textureDesc.format, textureResource.m_aspectMask, textureResource.m_formatLayout)
+        && stagingResource.m_creationQueueSharing == stagingDesc.queueSharing
+        && stagingResource.m_totalByteSize != 0u
+        && stagingResource.m_arrayByteSize != 0u
+        && stagingResource.m_bufferOffsetAlignment != 0u
+    );
     if(!VulkanDetail::IsBufferImageCopyAspectMaskSupported(stagingResource.m_aspectMask))
         return MakeUnexpected(Failure{});
 
@@ -264,8 +242,7 @@ Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(StagingTextur
     if(resolvedStaging->width != resolvedTexture->width || resolvedStaging->height != resolvedTexture->height || resolvedStaging->depth != resolvedTexture->depth)
         return MakeUnexpected(Failure{});
 
-    if(resolvedStaging->mipLevel >= stagingResource.m_mipLayouts.size())
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(resolvedStaging->mipLevel < stagingResource.m_mipLayouts.size());
     return __hidden_texture_transfer_staging::BuildStagingTextureCopyRegion(
         *resolvedStaging,
         *resolvedTexture,

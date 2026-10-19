@@ -811,7 +811,7 @@ extern "C" unsigned char *stbi_zlib_compress(unsigned char *data, int data_len, 
 // err: std::string*
 #define TINYEXR_CHECK_AND_RETURN_MSG(cond, msg, err) do { \
   if (!(cond)) { \
-    if (!err) { \
+    if (err) { \
       std::ostringstream ss_e; \
       ss_e << __func__ << "():" << __LINE__ << msg << "\n"; \
       (*err) += ss_e.str(); \

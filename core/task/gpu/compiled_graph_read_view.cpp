@@ -5,8 +5,6 @@
 #include "compiled_graph.h"
 #include "task_graph.h"
 
-#include <global/termination.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -61,30 +59,18 @@ bool GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView&
     if(!m_graph || !graph.valid())
         return false;
 
+    // An admitted plan is published and frozen, so its own sizes and present endpoint stay in step.
+    NWB_ASSERT(m_graph->m_tasks.size() == m_graph->m_graphTaskCount && m_graph->m_compiledTaskIndexByTask.size() == m_graph->m_graphTaskCount && m_graph->m_packetTasks.size() == m_graph->m_graphTaskCount);
+    NWB_ASSERT((m_graph->m_graphTaskCount == 0u) == m_graph->m_packets.empty() && m_graph->m_packets.size() <= m_graph->m_graphTaskCount);
+    NWB_ASSERT(!m_graph->m_hasPresentEndpoint || (m_graph->m_presentEndpoint.valid() && m_graph->m_presentEndpoint.producer.generation == m_graph->m_generation && m_graph->m_presentEndpoint.backBuffer.generation == m_graph->m_generation));
+    NWB_ASSERT(!m_graph->m_hasPresentEndpoint || (m_graph->validPacket(m_graph->m_presentEndpoint.packet) && m_graph->m_presentEndpoint.packet == m_graph->packetForTask(m_graph->m_presentEndpoint.producer) && m_graph->queueInfo(m_graph->m_presentEndpoint.queue) != nullptr));
     const GpuPresentEndpoint* const graphEndpoint = graph.presentEndpoint();
     return
-        m_graph->valid()
-        && m_graph->m_generation == graph.generation()
+        m_graph->m_generation == graph.generation()
         && m_graph->m_declarationRevision == graph.declarationRevision()
         && m_graph->m_graphTaskCount == graph.taskCount()
-        && m_graph->m_tasks.size() == m_graph->m_graphTaskCount
-        && m_graph->m_compiledTaskIndexByTask.size() == m_graph->m_graphTaskCount
-        && m_graph->m_packetTasks.size() == m_graph->m_graphTaskCount
-        && ((m_graph->m_graphTaskCount == 0u && m_graph->m_packets.empty()) || (m_graph->m_graphTaskCount > 0u && !m_graph->m_packets.empty() && m_graph->m_packets.size() <= m_graph->m_graphTaskCount))
-        && (m_graph->m_hasPresentEndpoint == (graphEndpoint != nullptr))
-        && (
-            !graphEndpoint
-            || (
-                m_graph->m_presentEndpoint.valid()
-                && m_graph->m_presentEndpoint.producer == graphEndpoint->producer
-                && m_graph->m_presentEndpoint.backBuffer == graphEndpoint->backBuffer
-                && m_graph->m_presentEndpoint.producer.generation == m_graph->m_generation
-                && m_graph->m_presentEndpoint.backBuffer.generation == m_graph->m_generation
-                && m_graph->validPacket(m_graph->m_presentEndpoint.packet)
-                && m_graph->m_presentEndpoint.packet == m_graph->packetForTask(m_graph->m_presentEndpoint.producer)
-                && m_graph->queueInfo(m_graph->m_presentEndpoint.queue) != nullptr
-            )
-        )
+        && m_graph->m_hasPresentEndpoint == (graphEndpoint != nullptr)
+        && (!graphEndpoint || (m_graph->m_presentEndpoint.producer == graphEndpoint->producer && m_graph->m_presentEndpoint.backBuffer == graphEndpoint->backBuffer))
     ;
 }
 
@@ -118,13 +104,11 @@ GpuCompiledTaskView GpuCompiledGraph::ReadView::findTask(const GpuTaskId& task)c
     if(!m_graph)
         return {};
     const GpuCompiledTask* const plan = m_graph->findTask(task);
-    if(
-        !plan
-        || (plan->prologueStateSeedCount != 0u && (plan->prologueStateSeedOffset > m_graph->m_prologueStateSeeds.size() || plan->prologueStateSeedCount > m_graph->m_prologueStateSeeds.size() - plan->prologueStateSeedOffset))
-        || (plan->prologueBarrierCount != 0u && (plan->prologueBarrierOffset > m_graph->m_prologueBarriers.size() || plan->prologueBarrierCount > m_graph->m_prologueBarriers.size() - plan->prologueBarrierOffset))
-        || (plan->epilogueBarrierCount != 0u && (plan->epilogueBarrierOffset > m_graph->m_epilogueBarriers.size() || plan->epilogueBarrierCount > m_graph->m_epilogueBarriers.size() - plan->epilogueBarrierOffset))
-    )
+    if(!plan)
         return {};
+    NWB_ASSERT(plan->prologueStateSeedCount == 0u || (plan->prologueStateSeedOffset <= m_graph->m_prologueStateSeeds.size() && plan->prologueStateSeedCount <= m_graph->m_prologueStateSeeds.size() - plan->prologueStateSeedOffset));
+    NWB_ASSERT(plan->prologueBarrierCount == 0u || (plan->prologueBarrierOffset <= m_graph->m_prologueBarriers.size() && plan->prologueBarrierCount <= m_graph->m_prologueBarriers.size() - plan->prologueBarrierOffset));
+    NWB_ASSERT(plan->epilogueBarrierCount == 0u || (plan->epilogueBarrierOffset <= m_graph->m_epilogueBarriers.size() && plan->epilogueBarrierCount <= m_graph->m_epilogueBarriers.size() - plan->epilogueBarrierOffset));
     return GpuCompiledTaskView{
         .plan = plan,
         .prologueStateSeeds = plan->prologueStateSeedCount != 0u ? m_graph->m_prologueStateSeeds.data() + plan->prologueStateSeedOffset : nullptr,
@@ -160,16 +144,9 @@ GpuCompiledPacketView GpuCompiledGraph::ReadView::packet(const GpuSubmissionPack
     if(!m_graph || !m_graph->validPacket(packet))
         return {};
     const GpuSubmissionPacket& plan = m_graph->m_packets[packet.index];
-    if(
-        plan.taskOffset > m_graph->m_packetTasks.size()
-        || plan.taskCount > m_graph->m_packetTasks.size() - plan.taskOffset
-        || plan.dependencyOffset > m_graph->m_packetDependencies.size()
-        || plan.dependencyCount > m_graph->m_packetDependencies.size() - plan.dependencyOffset
-        || plan.externalDependencyOffset > m_graph->m_packetExternalDependencies.size()
-        || plan.externalDependencyCount
-            > m_graph->m_packetExternalDependencies.size() - plan.externalDependencyOffset
-    )
-        return {};
+    NWB_ASSERT(plan.taskOffset <= m_graph->m_packetTasks.size() && plan.taskCount <= m_graph->m_packetTasks.size() - plan.taskOffset);
+    NWB_ASSERT(plan.dependencyOffset <= m_graph->m_packetDependencies.size() && plan.dependencyCount <= m_graph->m_packetDependencies.size() - plan.dependencyOffset);
+    NWB_ASSERT(plan.externalDependencyOffset <= m_graph->m_packetExternalDependencies.size() && plan.externalDependencyCount <= m_graph->m_packetExternalDependencies.size() - plan.externalDependencyOffset);
     return GpuCompiledPacketView{
         .id = packet,
         .plan = &plan,
@@ -180,8 +157,9 @@ GpuCompiledPacketView GpuCompiledGraph::ReadView::packet(const GpuSubmissionPack
 }
 GpuCompiledPacketView GpuCompiledGraph::ReadView::packetWithTasks(const GpuSubmissionPacketId& packetId)const & noexcept{
     const GpuCompiledPacketView packetView = packet(packetId);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+    if(!packetView.valid())
         return {};
+    NWB_ASSERT(packetView.plan->taskCount != 0u);
     return packetView;
 }
 usize GpuCompiledGraph::ReadView::logicalOwnershipTransferCount()const noexcept{
@@ -202,7 +180,7 @@ GpuCompiledExternalResourceExportView GpuCompiledGraph::ReadView::externalResour
     return GpuCompiledExternalResourceExportView{ .plan = plan, .sources = m_graph->externalResourceExportSources(*plan), };
 }
 const GpuCompiledPresentEndpoint* GpuCompiledGraph::ReadView::presentEndpoint()const & noexcept{
-    return m_graph && m_graph->valid() && m_graph->m_hasPresentEndpoint ? &m_graph->m_presentEndpoint : nullptr;
+    return m_graph && m_graph->m_hasPresentEndpoint ? &m_graph->m_presentEndpoint : nullptr;
 }
 GpuTaskGraphCompileStatistics GpuCompiledGraph::ReadView::compileStatistics()const noexcept{
     return m_graph ? m_graph->m_compileStatistics : GpuTaskGraphCompileStatistics{};
@@ -231,16 +209,12 @@ void GpuCompiledGraph::ReadView::release()noexcept{
         return;
 
     NWB_FATAL_ASSERT_MSG(s_ActiveView == this, "GpuCompiledGraph read views must unwind in lexical order");
-    if(s_ActiveView != this)
-        TerminateInvariant();
     s_ActiveView = m_previousView;
     if(m_ownsAdmission){
         u32 planAccessState = m_graph->m_planAccessState.load(MemoryOrder::acquire);
         for(;;){
-            if((planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask) == 0u){
+            if((planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask) == 0u)
                 NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph plan read admission must retain its exact reader claim");
-                TerminateInvariant();
-            }
             if(m_graph->m_planAccessState.compare_exchange_weak(planAccessState, planAccessState - 1u, MemoryOrder::release, MemoryOrder::relaxed))
                 break;
         }

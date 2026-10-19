@@ -23,8 +23,6 @@ Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
     if(!m_device)
         return;
     NWB_FATAL_ASSERT(ActiveLease() == this);
-    if(ActiveLease() != this)
-        TerminateInvariant();
     ActiveLease() = m_previousActiveLease;
     m_device->endSubmissionOperation();
 }
@@ -74,8 +72,6 @@ bool Device::beginLifecycleDrain()noexcept{
         m_submissionOperationState.wait(state, MemoryOrder::acquire);
         state = m_submissionOperationState.load(MemoryOrder::acquire);
         NWB_FATAL_ASSERT((state & s_SubmissionDrainBit) != 0u);
-        if((state & s_SubmissionDrainBit) == 0u)
-            TerminateInvariant();
     }
     return true;
 }
@@ -85,8 +81,6 @@ void Device::endLifecycleDrain()noexcept{
     const u64 submissionOperationState = m_submissionOperationState.load(MemoryOrder::acquire);
     NWB_FATAL_ASSERT(!lifecycleDestructionPrepared);
     NWB_FATAL_ASSERT(submissionOperationState == s_SubmissionDrainBit);
-    if(lifecycleDestructionPrepared || submissionOperationState != s_SubmissionDrainBit)
-        TerminateInvariant();
     m_submissionOperationState.store(0u, MemoryOrder::release);
 }
 
@@ -119,11 +113,12 @@ Expected<VkResult> Device::presentNativeQueue(const u32 nativeQueueIndex, const 
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid())
         return MakeUnexpected(Failure{});
-    if(nativeQueueIndex >= m_nativeQueueStates.size() || !m_nativeQueueStates[nativeQueueIndex] || m_nativeQueueStates[nativeQueueIndex]->queue == VK_NULL_HANDLE){
+    if(nativeQueueIndex >= m_nativeQueueStates.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
         return MakeUnexpected(Failure{});
     }
 
+    NWB_ASSERT(m_nativeQueueStates[nativeQueueIndex] && m_nativeQueueStates[nativeQueueIndex]->queue != VK_NULL_HANDLE);
     NativeQueueState& nativeQueue = *m_nativeQueueStates[nativeQueueIndex];
     ScopedLock hostLock(nativeQueue.hostMutex);
     if(submissionsBlocked())

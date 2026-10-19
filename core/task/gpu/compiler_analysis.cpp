@@ -9,7 +9,6 @@
 #include <global/hash_utils.h>
 #include <global/simd/vector.h>
 #include <global/timer.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -166,6 +165,21 @@ void GpuTaskGraphAnalysis::reset()noexcept{
 }
 
 bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
+    // A successful analyze() publishes complete topology and scheduling adjacency before setting m_valid.
+    NWB_ASSERT(
+        !m_valid
+        || (
+            m_topologicalOrder.size() == m_taskCount
+            && m_schedulingOutgoingOffsets.size() == m_taskCount + 1u
+            && m_schedulingIncomingOffsets.size() == m_taskCount + 1u
+            && m_schedulingOutgoingOffsets.front() == 0u
+            && m_schedulingIncomingOffsets.front() == 0u
+            && m_schedulingOutgoingConsumers.size() == m_schedulingEdges.size()
+            && m_schedulingIncomingProducers.size() == m_schedulingEdges.size()
+            && m_schedulingOutgoingOffsets.back() == m_schedulingEdges.size()
+            && m_schedulingIncomingOffsets.back() == m_schedulingEdges.size()
+        )
+    );
     return
         m_valid
         && m_generation == graph.generation()
@@ -174,35 +188,26 @@ bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph::DeclarationReadView& gra
         && m_resourceCount == graph.resourceCount()
         && m_resourceVersionCount == graph.resourceVersionCount()
         && m_externalCompletionCount == graph.externalCompletionCount()
-        && m_topologicalOrder.size() == m_taskCount
-        && m_schedulingOutgoingOffsets.size() == m_taskCount + 1u
-        && m_schedulingIncomingOffsets.size() == m_taskCount + 1u
-        && m_schedulingOutgoingOffsets.front() == 0u
-        && m_schedulingIncomingOffsets.front() == 0u
-        && m_schedulingOutgoingConsumers.size() == m_schedulingEdges.size()
-        && m_schedulingIncomingProducers.size() == m_schedulingEdges.size()
-        && m_schedulingOutgoingOffsets.back() == m_schedulingEdges.size()
-        && m_schedulingIncomingOffsets.back() == m_schedulingEdges.size()
     ;
 }
 
 GpuTaskGraphSchedulingTaskIndexView GpuTaskGraphAnalysis::schedulingConsumers(const GpuTaskId& producer)const noexcept{
-    if(!m_valid || !producer.valid() || producer.generation != m_generation || producer.index >= m_taskCount || m_schedulingOutgoingOffsets.size() != m_taskCount + 1u)
+    if(!m_valid || !producer.valid() || producer.generation != m_generation || producer.index >= m_taskCount)
         return {};
+    NWB_ASSERT(m_schedulingOutgoingOffsets.size() == m_taskCount + 1u);
     const usize firstConsumer = m_schedulingOutgoingOffsets[producer.index];
     const usize consumerEnd = m_schedulingOutgoingOffsets[producer.index + 1u];
-    if(consumerEnd < firstConsumer || consumerEnd > m_schedulingOutgoingConsumers.size())
-        return {};
+    NWB_ASSERT(firstConsumer <= consumerEnd && consumerEnd <= m_schedulingOutgoingConsumers.size());
     return GpuTaskGraphSchedulingTaskIndexView{ .taskIndices = consumerEnd != firstConsumer ? m_schedulingOutgoingConsumers.data() + firstConsumer : nullptr, .taskCount = consumerEnd - firstConsumer, };
 }
 
 GpuTaskGraphSchedulingTaskIndexView GpuTaskGraphAnalysis::schedulingProducers(const GpuTaskId& consumer)const noexcept{
-    if(!m_valid || !consumer.valid() || consumer.generation != m_generation || consumer.index >= m_taskCount || m_schedulingIncomingOffsets.size() != m_taskCount + 1u)
+    if(!m_valid || !consumer.valid() || consumer.generation != m_generation || consumer.index >= m_taskCount)
         return {};
+    NWB_ASSERT(m_schedulingIncomingOffsets.size() == m_taskCount + 1u);
     const usize firstProducer = m_schedulingIncomingOffsets[consumer.index];
     const usize producerEnd = m_schedulingIncomingOffsets[consumer.index + 1u];
-    if(producerEnd < firstProducer || producerEnd > m_schedulingIncomingProducers.size())
-        return {};
+    NWB_ASSERT(firstProducer <= producerEnd && producerEnd <= m_schedulingIncomingProducers.size());
     return GpuTaskGraphSchedulingTaskIndexView{ .taskIndices = producerEnd != firstProducer ? m_schedulingIncomingProducers.data() + firstProducer : nullptr, .taskCount = producerEnd - firstProducer, };
 }
 
@@ -250,18 +255,19 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
         outAnalysis.m_diagnostic.resourceVersion = resourceVersion;
         return false;
     };
+    // Graph storage admits resource and completion identities and resource types before publication.
+#if defined(NWB_DEBUG)
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
-        if(!resource.identity || resource.type >= GpuGraphResourceType::kCount)
-            return fail(GpuTaskGraphAnalysisStatus::InvalidResource, {}, {}, resource.id);
+        NWB_ASSERT(resource.identity && resource.type < GpuGraphResourceType::kCount);
     }
-    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex){
-        if(!graph.externalCompletionAt(completionIndex).identity)
-            return fail(GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency);
-    }
+    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
+        NWB_ASSERT(graph.externalCompletionAt(completionIndex).identity);
+#endif
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-        if(!task.identity || !IsValidCommandRequirements(task.commands) || !IsValidSchedulingHint(task.scheduling) || task.timing.policy >= GpuTaskTimingPolicy::kCount)
+        NWB_ASSERT(task.identity);
+        if(!IsValidCommandRequirements(task.commands) || !IsValidSchedulingHint(task.scheduling) || task.timing.policy >= GpuTaskTimingPolicy::kCount)
             return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
         for(usize dependencyIndex = 0u; dependencyIndex < task.dependencyCount; ++dependencyIndex){
             if(!graph.validTask(task.dependencies[dependencyIndex]))
@@ -272,21 +278,23 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
                 return fail(GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency, task.id);
             }
         }
-        if(task.externalStateSourceCount != 0u && !task.externalStateSources)
-            return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
-        for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
-            if(!task.externalStateSources[sourceIndex].states || task.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount)
-                return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
-        }
+        // Task storage owns non-null external state snapshots with admitted consumer queue classes.
+        NWB_ASSERT(task.externalStateSourceCount == 0u || task.externalStateSources);
+#if defined(NWB_DEBUG)
+        for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex)
+            NWB_ASSERT(task.externalStateSources[sourceIndex].states && task.externalStateSources[sourceIndex].applicableConsumerQueueClass <= CommandQueue::kCount);
+#endif
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             if(!graph.validResource(use.resource) || use.access >= GpuTaskResourceAccess::kCount)
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
 
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+            // Only typed imports bind backend objects, and they never use HazardDomain.
+            NWB_ASSERT(resource.type != GpuGraphResourceType::HazardDomain || !resource.hasBackendResource);
             if(
-                (resource.type == GpuGraphResourceType::HazardDomain && resource.hasBackendResource)
-                || (resource.type != GpuGraphResourceType::HazardDomain && use.requiredState == ResourceStates::Unknown) || (resource.type == GpuGraphResourceType::Texture && !use.range.textureSubresources.hasExtent())
+                (resource.type != GpuGraphResourceType::HazardDomain && use.requiredState == ResourceStates::Unknown)
+                || (resource.type == GpuGraphResourceType::Texture && !use.range.textureSubresources.hasExtent())
                 || (resource.type == GpuGraphResourceType::Buffer && !use.range.bufferRange.hasExtent())
             )
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
@@ -352,10 +360,8 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
                 if(inferredEdgeIndices.empty())
                     inferredEdgeIndices.reserve(expectedEdgeCount / 2u + 1u);
                 for(usize index = pair.firstInferredEdge; index != Limit<usize>::s_Max; index = nextInferredEdges[index]){
-                    if(!inferredEdgeIndices.insert(index).second){
+                    if(!inferredEdgeIndices.insert(index).second)
                         NWB_FATAL_ASSERT_MSG(false, "Inferred dependency promotion requires unique existing reasons");
-                        TerminateInvariant();
-                    }
                 }
                 // Edge vectors cannot reach this reserved ordinal; it marks a pair promoted to indexed lookup.
                 pair.firstInferredEdge = s_IndexedInferredEdges;
@@ -490,7 +496,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
         // Physical hazards only connect earlier semantic-order accesses to the current task.
         // Those forward edges preserve the already smallest stable topological order and cannot introduce a cycle.
         BuildSchedulingEdges(outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingEdges, scratchArena);
-        if(!BuildSchedulingTaskAdjacency(
+        BuildSchedulingTaskAdjacency(
             outAnalysis.m_schedulingEdges,
             graph.taskCount(),
             graph.generation(),
@@ -499,8 +505,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
             outAnalysis.m_schedulingIncomingOffsets,
             outAnalysis.m_schedulingIncomingProducers,
             scratchArena
-        ))
-            return fail(GpuTaskGraphAnalysisStatus::InvalidTaskDependency);
+        );
     }
     const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), finalTopologyBegin))));
 
@@ -537,8 +542,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
 
     const Timer presentationValidationBegin = TimerNow();
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
-        if(!graph.validTask(endpoint->producer) || !graph.validResource(endpoint->backBuffer))
-            return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
+        NWB_ASSERT(graph.validTask(endpoint->producer) && graph.validResource(endpoint->backBuffer));
 
         const GpuTaskGraphTaskView producer = graph.taskAt(endpoint->producer.index);
         const GpuTaskGraphResourceView backBuffer = graph.resourceAt(endpoint->backBuffer.index);

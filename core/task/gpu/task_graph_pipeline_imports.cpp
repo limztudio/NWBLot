@@ -9,7 +9,6 @@
 #include <global/allocation_size.h>
 #include <global/hash_utils.h>
 #include <global/scope_exit.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,10 +210,8 @@ void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPoint
         usize pointerCount = pendingPointer.pointer ? 1u : 0u;
         for(usize index = 0u; index < m_pipelines.size(); ++index){
             const GpuGraphPipelineNode& pipeline = m_pipelines[index];
-            if(!identities.emplace(pipeline.identity.identityHash(), static_cast<u32>(index)).second){
+            if(!identities.emplace(pipeline.identity.identityHash(), static_cast<u32>(index)).second)
                 NWB_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained identities");
-                TerminateInvariant();
-            }
             if(MakePipelinePointerKey(pipeline).pointer)
                 ++pointerCount;
         }
@@ -223,10 +220,8 @@ void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPoint
             pointers.emplace(AddSize(pointerCount, pointerCount), m_arena);
             for(usize index = 0u; index < m_pipelines.size(); ++index){
                 const PipelinePointerKey key = MakePipelinePointerKey(m_pipelines[index]);
-                if(key.pointer && !pointers->emplace(key, static_cast<u32>(index)).second){
+                if(key.pointer && !pointers->emplace(key, static_cast<u32>(index)).second)
                     NWB_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained typed pointers");
-                    TerminateInvariant();
-                }
             }
         }
 
@@ -283,11 +278,9 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipeline
             m_markerText.pop_back();
     }
     );
-    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
-    if(!markerLabelRange)
-        return MakeUnexpected(Failure{});
-    pipeline.markerLabelOffset = markerLabelRange->offset;
-    pipeline.markerLabelSize = markerLabelRange->size;
+    const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
+    pipeline.markerLabelOffset = markerLabelRange.offset;
+    pipeline.markerLabelSize = markerLabelRange.size;
 
     const u32 index = static_cast<u32>(m_pipelines.size());
     m_pipelines.push_back(Move(pipeline));

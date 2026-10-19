@@ -38,7 +38,8 @@ namespace __hidden_csg_resources{
         return true;
     if(buffer && inOutCapacity >= requiredCount)
         return true;
-    if(elementByteSize == 0u || requiredCount > Limit<usize>::s_Max / elementByteSize)
+    NWB_ASSERT(elementByteSize != 0u);
+    if(requiredCount > Limit<usize>::s_Max / elementByteSize)
         return false;
 
     const usize capacity = ::NextGrowingCapacity(inOutCapacity, requiredCount);
@@ -70,8 +71,6 @@ namespace __hidden_csg_resources{
         return MakeUnexpected(Failure{});
 
     NWB_ASSERT(descriptorClass == Core::GpuDescriptorClass::StorageBuffer || descriptorClass == Core::GpuDescriptorClass::UniformBuffer);
-    if(descriptorClass != Core::GpuDescriptorClass::StorageBuffer && descriptorClass != Core::GpuDescriptorClass::UniformBuffer)
-        return MakeUnexpected(Failure{});
     const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer);
     const Core::GpuDescriptorHandle acquired = heap.allocate(descriptorClass);
     if(!acquired.valid() || !heap.write(acquired, descriptorWrite)){

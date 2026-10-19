@@ -42,7 +42,8 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
         return false;
     }
     SegmentStorage& storage = isSampler ? m_samplerSegment : m_resourceSegment;
-    if(!storage.storageIdentity || allocation.storageIdentity != *storage.storageIdentity){
+    NWB_ASSERT(storage.storageIdentity);
+    if(allocation.storageIdentity != *storage.storageIdentity){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation belongs to another storage."));
         return false;
     }
@@ -69,8 +70,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
     ScopedLock lock(storage.mutex);
 
     auto* dstBytes = static_cast<u8*>(storage.mappedMemory);
-    if(!dstBytes)
-        return false;
+    NWB_ASSERT(dstBytes);
     if(dstOffsetBytes > storage.capacityBytes || descriptorSize > storage.capacityBytes - dstOffsetBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds segment capacity {}."), dstOffsetBytes, descriptorSize, storage.capacityBytes);
         return false;
@@ -118,10 +118,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
             return false;
         }
         const BufferDesc& bufferDesc = buffer->getCreationDescription();
-        if((buffer->m_bufferInfo.usage & requiredUsage) != requiredUsage){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks native descriptor usage."));
-            return false;
-        }
+        NWB_ASSERT((buffer->m_bufferInfo.usage & requiredUsage) == requiredUsage);
         if(isUniform && (!bufferDesc.isConstantBuffer || bufferDesc.isVolatile)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer is not a persistent constant buffer."));
             return false;
@@ -142,8 +139,9 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
         if(!range)
             return false;
         const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress());
-        if(bufferAddress == 0u || range->byteOffset > UINT64_MAX - bufferAddress){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: buffer has no valid device address."));
+        NWB_ASSERT(bufferAddress != 0u);
+        if(range->byteOffset > UINT64_MAX - bufferAddress){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: buffer device address range overflows."));
             return false;
         }
         const VkDeviceAddress descriptorAddress = bufferAddress + range->byteOffset;
@@ -174,7 +172,8 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
                 return false;
             }
             const BufferDesc& bufferDesc = buffer->getCreationDescription();
-            if(!bufferDesc.canHaveTypedViews || (item.type == ResourceType::TypedBuffer_UAV && !bufferDesc.canHaveUAVs) || (buffer->m_bufferInfo.usage & requiredUsage) != requiredUsage){
+            NWB_ASSERT((buffer->m_bufferInfo.usage & requiredUsage) == requiredUsage);
+            if(!bufferDesc.canHaveTypedViews || (item.type == ResourceType::TypedBuffer_UAV && !bufferDesc.canHaveUAVs)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks typed-view capability."));
                 return false;
             }
@@ -182,8 +181,9 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
             if(!range)
                 return false;
             const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress());
-            if(bufferAddress == 0u || range->byteOffset > UINT64_MAX - bufferAddress){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed buffer has no valid device address."));
+            NWB_ASSERT(bufferAddress != 0u);
+            if(range->byteOffset > UINT64_MAX - bufferAddress){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed buffer device address range overflows."));
                 return false;
             }
             const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
@@ -272,12 +272,12 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
                 return false;
             }
             accelStructAddress = static_cast<VkDeviceAddress>(as->getDeviceAddress());
-            if(accelStructAddress == 0u)
-                return false;
+            NWB_ASSERT(accelStructAddress != 0u);
             getInfo.data.accelerationStructure = accelStructAddress;
             break;
         }
         default:
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Admitted descriptor-buffer resource type has no writer"));
             return false;
         }
     }

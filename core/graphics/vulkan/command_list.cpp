@@ -8,8 +8,6 @@
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
 
-#include <global/termination.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -183,8 +181,6 @@ bool CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
 void CommandList::publishGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
     const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationRecording && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "task-graph command recording ownership changed without its capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
     m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
 }
 
@@ -193,8 +189,6 @@ void CommandList::cancelGraphRecordingOwnership(const u64 recordingLeaseSerial)n
     const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
     const bool ownershipMatches = (publicationState == s_GraphPublicationRecording && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "cancelled task-graph recording must retain its exact command-list capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
     if(publicationState != s_GraphPublicationRecording)
         return;
     m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
@@ -250,8 +244,6 @@ Expected<u64> CommandList::beginGraphSubmissionOwnership()noexcept{
 void CommandList::acceptGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
     const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationSubmitting && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "accepted graph submission must retain its exact command-list capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
     m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
     m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
 }
@@ -261,8 +253,6 @@ void CommandList::endGraphSubmissionOwnership(const u64 recordingLeaseSerial)noe
     const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
     const bool ownershipMatches = (publicationState == s_GraphPublicationSubmitting && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "graph submission ownership changed without its exact capability");
-    if(!ownershipMatches)
-        TerminateInvariant();
     if(publicationState == s_GraphPublicationSubmitting)
         m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
 }
@@ -419,7 +409,7 @@ bool CommandList::matchesNativeLeaseIdentity()const noexcept{
         return false;
 
     Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
-    return expectedQueue && expectedQueue->m_physicalQueue == m_creationDesc.physicalQueue && expectedQueue->m_queueID == m_creationDesc.queueType && &m_currentCmdBuf->m_queue == expectedQueue;
+    return expectedQueue && expectedQueue->m_queueID == m_creationDesc.queueType && &m_currentCmdBuf->m_queue == expectedQueue;
 }
 
 bool CommandList::matchesActiveNativeLeaseIdentity()const noexcept{
@@ -489,7 +479,8 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
         }
     }
     for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
-        if(!heap || !heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
+        NWB_ASSERT(heap);
+        if(!heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("descriptor heap contains a resource unavailable to this exact command queue"));
             return false;
         }

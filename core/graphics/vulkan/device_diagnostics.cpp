@@ -39,13 +39,7 @@ void Device::captureDeviceLoss(const AStringView context){
 
     const bool hasCheckpoints = m_context.extensions.nvDeviceDiagnosticCheckpoints;
     const bool hasDeviceFault = m_context.extensions.extDeviceFault;
-    const bool hasBufferMarker =
-        m_context.extensions.amdBufferMarker
-        && m_amdBreadcrumb.metadata
-        && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount
-        && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount
-        && m_amdBreadcrumb.buffer != VK_NULL_HANDLE
-    ;
+    const bool hasBufferMarker = m_context.extensions.amdBufferMarker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
 
     // Capture only the first concurrent device-loss report.
     if(m_gpuCrashCaptured.exchange(true))
@@ -64,7 +58,8 @@ void Device::captureDeviceLoss(const AStringView context){
 
         if(hasCheckpoints){
             for(Queue* physicalQueue : m_physicalQueues){
-                if(!physicalQueue || remainingEntries == 0u)
+                NWB_ASSERT(physicalQueue);
+                if(remainingEntries == 0u)
                     continue;
 
                 // Vulkan checkpoint retrieval is a device-loss diagnostic and has no VkQueue host-synchronization requirement.
@@ -98,66 +93,65 @@ void Device::captureDeviceLoss(const AStringView context){
         }
 
         if(hasBufferMarker && remainingEntries > 0u){
+            NWB_ASSERT(m_amdBreadcrumb.mappedMemory && m_amdBreadcrumb.metadata && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount);
             const u32* breadcrumbSlots = static_cast<const u32*>(m_amdBreadcrumb.mappedMemory);
-            if(breadcrumbSlots){
-                // Select each exact queue independently because physical queues remain unordered globally.
-                for(usize queueIndex = 0u; queueIndex < m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u; ++queueIndex){
-                    const GpuPhysicalQueueId& queue = m_physicalQueueInfos[queueIndex].id;
-                    const auto firstSlot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(m_amdBreadcrumb.layout, queue, 0u);
-                    if(!firstSlot)
-                        continue;
+            // Select each exact queue independently because physical queues remain unordered globally.
+            for(usize queueIndex = 0u; queueIndex < m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u; ++queueIndex){
+                const GpuPhysicalQueueId& queue = m_physicalQueueInfos[queueIndex].id;
+                const auto firstSlot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(m_amdBreadcrumb.layout, queue, 0u);
+                if(!firstSlot)
+                    continue;
 
-                    AmdBreadcrumbSlotRecord newestRecord;
-                    bool hasObservedMarker = false;
-                    {
-                        // Lock with breadcrumb reservations to avoid pairing an observation with a torn record.
-                        ScopedLock lock(m_amdBreadcrumb.slotMutex);
-                        for(usize localSlot = 0u; localSlot < m_amdBreadcrumb.layout.slotsPerQueue; ++localSlot){
-                            const usize flatSlot = firstSlot->flatSlot + localSlot;
-                            const u32 observedMarker = breadcrumbSlots[flatSlot];
-                            if(observedMarker == 0u)
-                                continue;
+                AmdBreadcrumbSlotRecord newestRecord;
+                bool hasObservedMarker = false;
+                {
+                    // Lock with breadcrumb reservations to avoid pairing an observation with a torn record.
+                    ScopedLock lock(m_amdBreadcrumb.slotMutex);
+                    for(usize localSlot = 0u; localSlot < m_amdBreadcrumb.layout.slotsPerQueue; ++localSlot){
+                        const usize flatSlot = firstSlot->flatSlot + localSlot;
+                        const u32 observedMarker = breadcrumbSlots[flatSlot];
+                        if(observedMarker == 0u)
+                            continue;
 
-                            hasObservedMarker = true;
-                            const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.metadata->slotRecords[flatSlot];
-                            if(VulkanDetail::MatchesAmdBreadcrumbObservation(observedMarker, record.marker) && record.serial > newestRecord.serial)
-                                newestRecord = record;
-                        }
+                        hasObservedMarker = true;
+                        const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.metadata->slotRecords[flatSlot];
+                        if(VulkanDetail::MatchesAmdBreadcrumbObservation(observedMarker, record.marker) && record.serial > newestRecord.serial)
+                            newestRecord = record;
                     }
+                }
 
-                    if(!hasObservedMarker)
-                        continue;
+                if(!hasObservedMarker)
+                    continue;
 
-                    if(newestRecord.serial != 0u){
-                        const auto resolved = m_gpuCrashTracker.resolveMarker(newestRecord.markerHash);
-                        if(resolved.first()){
-                            report.details.append(StringFormat(
-                                m_gpuCrashReportArena,
-                                "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): {}\n",
-                                queue.index,
-                                queue.deviceGeneration,
-                                newestRecord.serial,
-                                newestRecord.marker,
-                                TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)
-                            ));
-                        }
-                        else{
-                            report.details.append(StringFormat(
-                                m_gpuCrashReportArena,
-                                "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): "
-                                "<unresolved marker>\n",
-                                queue.index,
-                                queue.deviceGeneration,
-                                newestRecord.serial,
-                                newestRecord.marker
-                            ));
-                        }
+                if(newestRecord.serial != 0u){
+                    const auto resolved = m_gpuCrashTracker.resolveMarker(newestRecord.markerHash);
+                    if(resolved.first()){
+                        report.details.append(StringFormat(
+                            m_gpuCrashReportArena,
+                            "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): {}\n",
+                            queue.index,
+                            queue.deviceGeneration,
+                            newestRecord.serial,
+                            newestRecord.marker,
+                            TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)
+                        ));
                     }
                     else{
-                        report.details.append(StringFormat(m_gpuCrashReportArena, "best-effort last-observed breadcrumb (queue {}:{}): <label overwritten>\n", queue.index, queue.deviceGeneration));
+                        report.details.append(StringFormat(
+                            m_gpuCrashReportArena,
+                            "best-effort last-observed breadcrumb (queue {}:{}, reservation {}, marker {}): "
+                            "<unresolved marker>\n",
+                            queue.index,
+                            queue.deviceGeneration,
+                            newestRecord.serial,
+                            newestRecord.marker
+                        ));
                     }
-                    --remainingEntries;
                 }
+                else{
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "best-effort last-observed breadcrumb (queue {}:{}): <label overwritten>\n", queue.index, queue.deviceGeneration));
+                }
+                --remainingEntries;
             }
         }
 
@@ -262,16 +256,11 @@ void Device::captureDeviceLoss(const AStringView context){
 
 Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, const usize markerHash)noexcept{
     AmdBreadcrumbWrite write;
-    const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
-    if(
-        m_amdBreadcrumb.buffer == VK_NULL_HANDLE
-        || !queueInfo
-        || queueInfo->id != queue
-        || !m_amdBreadcrumb.metadata
-        || static_cast<usize>(queue.index) >= m_amdBreadcrumb.metadata->nextSerialCount
-        || m_amdBreadcrumb.metadata->slotRecordCount != m_amdBreadcrumb.layout.totalSlotCount
-        || m_amdBreadcrumb.metadata->nextSerialCount != m_amdBreadcrumb.layout.physicalQueueCount
-    )
+    if(m_amdBreadcrumb.buffer == VK_NULL_HANDLE || !getPhysicalQueueInfo(queue))
+        return write;
+    // A live breadcrumb buffer exists only after its metadata was built from the same layout.
+    NWB_ASSERT(m_amdBreadcrumb.metadata && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount);
+    if(static_cast<usize>(queue.index) >= m_amdBreadcrumb.metadata->nextSerialCount)
         return write;
 
     {

@@ -499,10 +499,6 @@ const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentSta
 
 void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
     NWB_ASSERT(!record.samples.empty());
-    if(record.samples.empty()){
-        record.entry.history = {};
-        return;
-    }
 
     SIMDVectorDouble averageSeconds = VectorDoubleZero();
     // Keep the incremental average in sample order; extrema occupy X (minimum) and Y (maximum).

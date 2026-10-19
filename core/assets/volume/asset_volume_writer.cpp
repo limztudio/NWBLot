@@ -41,6 +41,8 @@ static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 static constexpr u64 s_SegmentGrowthFactor = 2ull;
 
+static_assert(AssetsVolumeCookDetail::s_AssetVolumeName.size() <= ACompactString::s_MaxLength, "asset volume name must fit ACompactString");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,10 +65,7 @@ static Expected<u64> EstimateRequiredMetadataBytes(const u64 fileCount)noexcept{
 
 static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const u64 plannedFileCount){
     Core::Filesystem::VolumeBuildConfig config;
-    if(!config.volumeName.assign(AssetsVolumeCookDetail::s_AssetVolumeName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: volume name '{}' exceeds ACompactString capacity"), StringConvert(AssetsVolumeCookDetail::s_AssetVolumeName));
-        return MakeUnexpected(Failure{});
-    }
+    config.volumeName = ACompactString(AssetsVolumeCookDetail::s_AssetVolumeName);
     const auto metadataSize = EstimateRequiredMetadataBytes(plannedFileCount);
     if(!metadataSize || *metadataSize == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: metadata size overflow while planning volume"));
@@ -209,10 +208,7 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& aren
         return MakeUnexpected(Failure{});
     stageDirectoryCleanup.dismiss();
 
-    if(!result.volumeName.assign(s_AssetVolumeName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: volume name exceeds ACompactString capacity"));
-        return MakeUnexpected(Failure{});
-    }
+    result.volumeName = volumeConfig->volumeName;
     result.fileCount = stagedFileCount;
     result.segmentCount = static_cast<u64>(stagedSegmentCount);
     return result;

@@ -40,8 +40,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
 
     ScopedLock lock(m_mutex);
     QueueChunkLedger* const ledger = findOrCreateQueueLedgerLocked(queue);
-    if(!ledger)
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(ledger);
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk)noexcept -> Expected<BufferSuballocation>{
         const auto alignedOffset = AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment));
@@ -66,7 +65,9 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     }
 
     for(BufferChunkPtr& retiredChunk : ledger->chunks){
-        if(retiredChunk && !retiredChunk->owner && retiredChunk->nativeRecordingID == 0u && retiredChunk->physicalQueue == queue && retiredChunk->size >= size && retiredChunk->version <= completedVersion){
+        NWB_ASSERT(retiredChunk);
+        NWB_ASSERT(retiredChunk->physicalQueue == queue && (retiredChunk->owner == nullptr) == (retiredChunk->nativeRecordingID == 0u));
+        if(!retiredChunk->owner && retiredChunk->size >= size && retiredChunk->version <= completedVersion){
             if(m_retiredChunkBytes >= retiredChunk->size)
                 m_retiredChunkBytes -= retiredChunk->size;
             else
@@ -158,11 +159,9 @@ void UploadManager::trimRetiredChunksLocked(const GpuPhysicalQueueId queue, cons
     auto it = ledger->chunks.begin();
     while(m_retiredChunkBytes > m_memoryLimit && it != ledger->chunks.end()){
         BufferChunkPtr& chunk = *it;
-        if(!chunk){
-            it = ledger->chunks.erase(it);
-            continue;
-        }
-        if(chunk->owner || chunk->physicalQueue != queue || chunk->version > completedVersion){
+        NWB_ASSERT(chunk);
+        NWB_ASSERT(chunk->physicalQueue == queue);
+        if(chunk->owner || chunk->version > completedVersion){
             ++it;
             continue;
         }
@@ -237,17 +236,16 @@ void UploadManager::retireSubmittedChunksLocked(
     BufferChunk* chunk = ledger->firstActiveChunk;
     while(chunk){
         BufferChunk* const nextChunk = chunk->nextActiveChunk;
+        NWB_ASSERT(chunk->owner && chunk->nativeRecordingID != 0u);
         bool submitted = false;
-        if(chunk->owner){
-            if(submittedOwners.indexed())
-                submitted = submittedOwners.contains(*chunk->owner, chunk->nativeRecordingID);
-            else{
-                for(usize i = 0u; i < submittedCommandListCount; ++i){
-                    const Queue::SubmissionCommandListIdentity& commandList = submittedCommandLists[i];
-                    if(commandList.owner == chunk->owner && commandList.nativeRecordingID == chunk->nativeRecordingID){
-                        submitted = true;
-                        break;
-                    }
+        if(submittedOwners.indexed())
+            submitted = submittedOwners.contains(*chunk->owner, chunk->nativeRecordingID);
+        else{
+            for(usize i = 0u; i < submittedCommandListCount; ++i){
+                const Queue::SubmissionCommandListIdentity& commandList = submittedCommandLists[i];
+                if(commandList.owner == chunk->owner && commandList.nativeRecordingID == chunk->nativeRecordingID){
+                    submitted = true;
+                    break;
                 }
             }
         }

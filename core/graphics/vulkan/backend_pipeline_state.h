@@ -164,8 +164,6 @@ private:
     struct BindingSnapshot{
         Array<VkDescriptorBufferBindingInfoEXT, s_PersistentDescriptorBufferCount> bindingInfos{};
         u64 generation = 0u;
-        u64 resourceStorageIdentity = 0u;
-        u64 samplerStorageIdentity = 0u;
         u32 offsetAlignmentBytes = 0u;
     };
 

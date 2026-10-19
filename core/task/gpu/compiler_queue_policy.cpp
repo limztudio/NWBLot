@@ -7,7 +7,6 @@
 #include <core/graphics/rhi/queue_sharing.h>
 
 #include <global/atomic.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,10 +42,8 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept{
     u64 nextGeneration = s_NextCompiledPlanGeneration.load(MemoryOrder::relaxed);
     for(;;){
-        if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max){
+        if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max)
             NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
-            TerminateInvariant();
-        }
         if(s_NextCompiledPlanGeneration.compare_exchange_weak(nextGeneration, nextGeneration + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return nextGeneration;
     }
@@ -56,10 +53,6 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     const u8 availableMask = static_cast<u8>(available);
     const u8 requiredMask = static_cast<u8>(required);
     return (availableMask & requiredMask) == requiredMask;
-}
-
-[[nodiscard]] static bool IsKnownQueueClass(const CommandQueue::Enum queueClass)noexcept{
-    return queueClass < CommandQueue::kCount;
 }
 
 [[nodiscard]] static bool LogicalSharingIncludesQueueFamily(const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueTopology& topology, const u32 familyIndex)noexcept{
@@ -118,7 +111,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         const u8 capabilityMask = static_cast<u8>(queue.capabilities);
-        if(!queue.id.valid() || !IsKnownQueueClass(queue.queueClass) || queue.familyIndex == Limit<u32>::s_Max || capabilityMask == 0u || (capabilityMask & ~s_ValidQueueCapabilityMask) != 0u)
+        if(!queue.id.valid() || queue.familyIndex == Limit<u32>::s_Max || capabilityMask == 0u || (capabilityMask & ~s_ValidQueueCapabilityMask) != 0u)
             return false;
 
         switch(queue.queueClass){

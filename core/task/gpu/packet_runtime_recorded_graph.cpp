@@ -10,7 +10,6 @@
 #include <core/graphics/gpu_timing.h>
 
 #include <global/simd/vector.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,18 +220,12 @@ GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
 
 
 GpuRecordedGraph::~GpuRecordedGraph()noexcept{
-    if(ArtifactOperation::ActiveFor(*this)){
-        NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph destruction requires active artifact operations to finish first");
-        TerminateInvariant();
-    }
+    NWB_FATAL_ASSERT_MSG(!ArtifactOperation::ActiveFor(*this), "GpuRecordedGraph destruction requires active artifact operations to finish first");
 
     // Destruction normally joins existing readers. A callback that already owns another artifact or transaction cannot wait here without permitting a symmetric cross-object destruction deadlock.
     if(ArtifactOperation::Active() || GpuGraphSubmissionTransaction::SubmissionOperation::Active()){
         ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
-        if(!artifactOperation.valid()){
-            NWB_FATAL_ASSERT_MSG(false, "nested GpuRecordedGraph destruction cannot wait for active artifact operations");
-            TerminateInvariant();
-        }
+        NWB_FATAL_ASSERT_MSG(artifactOperation.valid(), "nested GpuRecordedGraph destruction cannot wait for active artifact operations");
 
         if(m_activeStorage)
             revokeCommandListPublicationsWithoutCallbacks(*m_activeStorage);
@@ -295,7 +288,6 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
         return;
 
     NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt");
-    TerminateInvariant();
 }
 
 void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactStorage& storage)noexcept{
@@ -420,8 +412,6 @@ void GpuRecordedGraph::publishStorageCandidate(const GpuTaskGraph* const graphId
         && m_candidateStorage->deviceGeneration == planAccess.deviceGeneration()
     ;
     NWB_FATAL_ASSERT_MSG(candidateValid, "recorded artifact publication requires one complete exact-plan candidate");
-    if(!candidateValid)
-        TerminateInvariant();
 
     m_candidateStorage->graphIdentity = graphIdentity;
     m_candidateStorage->recordingAttemptGeneration = recordingAttemptGeneration;
@@ -679,8 +669,6 @@ void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(const GpuSubmissio
     CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactAccess);
     const bool publicationValid = recordedPacket && stateSeed && artifactAccess.exclusiveFor(*this);
     NWB_FATAL_ASSERT_MSG(publicationValid, "recorded packet rollback requires its exact artifact writer");
-    if(!publicationValid)
-        TerminateInvariant();
 
     for(usize commandListIndex = 0u; commandListIndex < GpuRecordedPacket::s_MaxCommandLists; ++commandListIndex){
         CommandList* const commandList = recordedPacket->ownedCommandLists[commandListIndex].get();
@@ -735,8 +723,6 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph::PacketRecordingIntervalEntry;
     const bool artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;
     NWB_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
-    if(!artifactAccessValid)
-        TerminateInvariant();
     if(packetIndices.size() < 2u)
         return;
     ArtifactStorage& storage = *m_activeStorage;

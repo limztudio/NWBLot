@@ -133,16 +133,18 @@ Name MemoryRecorder::scopeNameAt(const usize index)const noexcept{
 }
 
 const MemorySnapshot& MemoryRecorder::snapshotAt(const usize index)const noexcept{
-    if(index >= m_scopes.size() || !m_scopes[index])
+    if(index >= m_scopes.size())
         return m_emptySnapshot;
 
+    NWB_ASSERT(m_scopes[index]);
     return m_scopes[index]->lastSnapshot;
 }
 
 const MemoryDelta& MemoryRecorder::deltaAt(const usize index)const noexcept{
-    if(index >= m_scopes.size() || !m_scopes[index])
+    if(index >= m_scopes.size())
         return m_emptyDelta;
 
+    NWB_ASSERT(m_scopes[index]);
     return m_scopes[index]->lastDelta;
 }
 

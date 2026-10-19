@@ -63,8 +63,6 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
         return result;
 
     NWB_ASSERT(bufferInfo.pQueueFamilyIndices != nullptr);
-    if(!bufferInfo.pQueueFamilyIndices)
-        return result;
     result.assign(bufferInfo.pQueueFamilyIndices, bufferInfo.pQueueFamilyIndices + bufferInfo.queueFamilyIndexCount);
     return result;
 }
@@ -216,14 +214,6 @@ Expected<BufferHandle> Device::createBuffer(const BufferDesc& d){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
         return MakeUnexpected(Failure{});
-    }
-    if(d.isShaderBindingTable){
-        if(!m_context.extensions.khrRayTracingPipeline || !m_context.extensions.bufferDeviceAddress){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
-            return MakeUnexpected(Failure{});
-        }
-
     }
 
     u64 size = d.byteSize;

@@ -6,7 +6,6 @@
 #include "backend_selection.h"
 
 #include <global/exception.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -357,8 +356,8 @@ void GpuTimingSubmissionTicket::cancelScopePublication(const usize publicationIn
     ScopePublication& publication = m_scopePublications[publicationIndex];
     publication.scope = {};
     publication.state = ScopePublicationState::Cancelled;
-    if(m_reservedScopePublicationCount > 0u)
-        --m_reservedScopePublicationCount;
+    NWB_ASSERT(m_reservedScopePublicationCount > 0u);
+    --m_reservedScopePublicationCount;
 }
 
 bool GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const CommandList& commandList)noexcept{
@@ -382,8 +381,8 @@ bool GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const 
 
     publication.endEndpoint = CommandListRecordingEndpoint{ .commandList = &commandList, .recordingLeaseSerial = commandList.recordingLeaseSerial(), };
     publication.state = ScopePublicationState::Published;
-    if(m_reservedScopePublicationCount > 0u)
-        --m_reservedScopePublicationCount;
+    NWB_ASSERT(m_reservedScopePublicationCount > 0u);
+    --m_reservedScopePublicationCount;
     return true;
 }
 
@@ -420,8 +419,6 @@ Expected<GpuTimingSubmissionTicket*, GpuTimingSubmissionTicket::ActivationFailur
     }
     const bool countAvailable = m_recordingScopeCount != Limit<u32>::s_Max;
     NWB_FATAL_ASSERT_MSG(countAvailable, "GPU timing submission ticket recording-scope count exhausted");
-    if(!countAvailable)
-        TerminateInvariant();
 
     GpuTimingRecorder::s_ActiveSubmissionTicket = this;
     ++m_recordingScopeCount;
@@ -432,8 +429,6 @@ void GpuTimingSubmissionTicket::deactivateOnCurrentThread(GpuTimingSubmissionTic
     GpuTimingSubmissionTicket* const expectedTicket = activated ? this : nullptr;
     const bool tlsValid = GpuTimingRecorder::s_ActiveSubmissionTicket == expectedTicket;
     NWB_FATAL_ASSERT_MSG(tlsValid, "GPU timing submission ticket recording scope closed out of order");
-    if(!tlsValid)
-        TerminateInvariant();
     if(!activated){
         GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
         return;
@@ -441,8 +436,6 @@ void GpuTimingSubmissionTicket::deactivateOnCurrentThread(GpuTimingSubmissionTic
     NothrowScopedLock lock(m_mutex);
     const bool countValid = m_recordingScopeCount != 0u;
     NWB_FATAL_ASSERT_MSG(countValid, "GPU timing submission ticket recording-scope count underflow");
-    if(!countValid)
-        TerminateInvariant();
     --m_recordingScopeCount;
     GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
 }

@@ -51,8 +51,7 @@ struct ViewTupleAccess{
             return static_cast<u32>(anchorDenseIndex);
 
         auto* pool = Get<I>(pools);
-        if(!pool)
-            return MakeUnexpected(Failure{});
+        NWB_ASSERT(pool);
         return pool->findDenseIndex(entityId);
     }
 

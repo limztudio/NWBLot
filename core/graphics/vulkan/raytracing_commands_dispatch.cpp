@@ -38,7 +38,7 @@ bool ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& argume
     for(u32 axis = 0u; axis < dimensions.size(); ++axis){
         const u64 maxAxisCount = limits.maxAxisCounts[axis];
         const u64 maxAxisSize = limits.maxAxisSizes[axis];
-        if(maxAxisCount == 0u || maxAxisSize == 0u || maxAxisCount > Limit<u64>::s_Max / maxAxisSize)
+        if(maxAxisCount == 0u || maxAxisSize == 0u)
             return false;
         if(static_cast<u64>(dimensions[axis]) > maxAxisCount * maxAxisSize)
             return false;
@@ -62,14 +62,12 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 
     ShaderTable* const shaderTable = state.shaderTable;
     RayTracingPipeline* const pipeline = shaderTable ? shaderTable->m_pipeline.get() : nullptr;
+    NWB_ASSERT(!shaderTable || (pipeline && &pipeline->m_context == &shaderTable->m_context && &pipeline->m_device == &shaderTable->m_device));
     if(
         shaderTable
         && (
             &shaderTable->m_context != &m_context
             || &shaderTable->m_device != &m_device
-            || !pipeline
-            || &pipeline->m_context != &m_context
-            || &pipeline->m_device != &m_device
             || pipeline->m_pipeline == VK_NULL_HANDLE
             || pipeline->m_pipelineLayout == VK_NULL_HANDLE
             || !m_context.extensions.khrRayTracingPipeline
@@ -132,8 +130,9 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     const auto snapshot = shaderTable->captureDispatchSnapshot();
 
     RayTracingPipeline* const pipeline = snapshot.pipeline.get();
-    if(!pipeline || &pipeline->m_context != &m_context || &pipeline->m_device != &m_device || pipeline->getDeviceGeneration() != m_context.deviceGeneration || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table pipeline is foreign or not ready"));
+    NWB_ASSERT(pipeline && &pipeline->m_context == &m_context && &pipeline->m_device == &m_device);
+    if(pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_pipelineLayout == VK_NULL_HANDLE){
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table pipeline is not ready"));
         return;
     }
 
@@ -153,12 +152,10 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader group handle layout is invalid"));
         return;
     }
-    const u32 handleSize = handleLayout->handleSize;
     const u32 handleSizeAligned = handleLayout->handleSizeAligned;
     const u32 baseAlignment = handleLayout->baseAlignment;
-    const u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     const u32 maxShaderGroupStride = m_context.rayTracingPipelineProperties.maxShaderGroupStride;
-    if(handleSize == 0u || handleSizeAligned < handleSize || handleAlignment == 0u || handleSizeAligned % handleAlignment != 0u || maxShaderGroupStride == 0u || handleSizeAligned > maxShaderGroupStride){
+    if(maxShaderGroupStride == 0u || handleSizeAligned > maxShaderGroupStride){
         rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table stride is invalid"));
         return;
     }
@@ -190,7 +187,6 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             || (static_cast<u8>(creationDesc.queueSharing) & s_RequiredQueueSharing) != s_RequiredQueueSharing
             || (buffer->m_bufferInfo.usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR) == 0u
             || (buffer->m_bufferInfo.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == 0u
-            || static_cast<u64>(regionSnapshot.recordCount) > Limit<u64>::s_Max / handleSizeAligned
         )
             return MakeUnexpected(Failure{});
 
@@ -199,7 +195,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             return MakeUnexpected(Failure{});
 
         const u64 deviceAddress = buffer->m_deviceAddress + regionSnapshot.offset;
-        if(deviceAddress == 0u || deviceAddress % baseAlignment != 0u || regionSize > Limit<u64>::s_Max - deviceAddress)
+        if(deviceAddress % baseAlignment != 0u || regionSize > Limit<u64>::s_Max - deviceAddress)
             return MakeUnexpected(Failure{});
 
         return VkStridedDeviceAddressRegionKHR{ deviceAddress, handleSizeAligned, regionSize };

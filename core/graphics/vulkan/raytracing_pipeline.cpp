@@ -208,6 +208,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
             recordKind = ShaderTableRecordKind::Callable;
             break;
         default:
+            NWB_ASSERT(false);
             continue;
         }
         addShaderSpecialization(*s, stageInfo);
@@ -281,17 +282,9 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: no shader stages or groups were provided"));
         return MakeUnexpected(Failure{});
     }
-    if(pso->m_shaderGroups.size() != groups.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata count mismatch"));
-        return MakeUnexpected(Failure{});
-    }
-    for(usize groupIndex = 0u; groupIndex < pso->m_shaderGroups.size(); ++groupIndex){
-        if(pso->m_shaderGroups[groupIndex].groupIndex == groupIndex)
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata order mismatch"));
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(pso->m_shaderGroups.size() == groups.size());
+    for(usize groupIndex = 0u; groupIndex < pso->m_shaderGroups.size(); ++groupIndex)
+        NWB_ASSERT(pso->m_shaderGroups[groupIndex].groupIndex == groupIndex);
 
     // Group storage is final; retained descriptions borrow owned export text after all vector growth is complete.
     for(usize shaderIndex = 0u; shaderIndex < pso->m_desc.shaders.size(); ++shaderIndex){
@@ -346,9 +339,10 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
         return MakeUnexpected(Failure{});
     }
     const u32 handleSize = handleLayout->handleSize;
+    NWB_ASSERT(handleSize != 0u);
 
     u32 groupCount = static_cast<u32>(groups.size());
-    if(handleSize == 0 || static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSize)){
+    if(static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle table size overflows"));
         return MakeUnexpected(Failure{});
     }

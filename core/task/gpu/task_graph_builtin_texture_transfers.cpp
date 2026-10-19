@@ -43,11 +43,12 @@ struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTe
 public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         return GpuTaskGraphBuiltinDetail::RecordCopies(
-            payload, commandList, context, [](const Copy& copy)noexcept{ return copy.source && copy.destination; },
+            payload, commandList, context,
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
                 return captureContext.commandIrCapture->captureCopyTexture(captureContext.task, captureContext.packet, captureContext.queue, copy.sourceResource, copy.sourceSlice, copy.destinationResource, copy.destinationSlice);
             },
             [](CommandList& emitCommandList, const Copy& copy){
+                NWB_ASSERT(copy.source && copy.destination);
                 emitCommandList.copyTexture(*copy.destination, copy.destinationSlice, *copy.source, copy.sourceSlice);
                 return !emitCommandList.commandRecordingFailed();
             }
@@ -81,12 +82,12 @@ struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTask
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
-        if(payload.resolves.empty() || context.commandIrCapture)
+        NWB_ASSERT(!payload.resolves.empty());
+        if(context.commandIrCapture)
             return false;
 
         for(const Resolve& resolve : payload.resolves){
-            if(!resolve.source || !resolve.destination)
-                return false;
+            NWB_ASSERT(resolve.source && resolve.destination);
             commandList.resolveTexture(*resolve.destination, resolve.destinationSubresources, *resolve.source, resolve.sourceSubresources);
             if(commandList.commandRecordingFailed())
                 return false;

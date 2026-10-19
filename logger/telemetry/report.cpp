@@ -219,13 +219,12 @@ AStringView PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
 }
 
 Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, Core::Alloc::ScratchArena& scratchArena){
-    TelemetryReport report(arena);
-    if(events.valid())
-        report.perfCsv.reserve(TelemetryReportDetail::EstimatePerfCsvReserve(events.eventCount()));
-    TelemetryReportDetail::AppendPerfCsvHeader(report.perfCsv);
-
     if(!events.valid())
         return MakeUnexpected(Failure{});
+
+    TelemetryReport report(arena);
+    report.perfCsv.reserve(TelemetryReportDetail::EstimatePerfCsvReserve(events.eventCount()));
+    TelemetryReportDetail::AppendPerfCsvHeader(report.perfCsv);
 
     report.summary.eventCount = events.eventCount();
     AString<Core::Alloc::ScratchArena> memoryRecords(scratchArena);
@@ -237,10 +236,7 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
 
     for(usize i = 0u; i < events.eventCount(); ++i){
         const Telemetry::EventRecord* const event = events.eventAt(i);
-        if(!event){
-            ++report.summary.parseFailureCount;
-            continue;
-        }
+        NWB_ASSERT(event);
 
         ++report.summary.eventKindCounts[TelemetryReportDetail::EventKindBucket(event->header.kind)];
         TelemetryReportDetail::RecordFrameRange(report.summary, event->header.frameIndex);

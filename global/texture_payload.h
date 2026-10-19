@@ -120,8 +120,6 @@ struct TextureMipPlaneBlockLayout{
     u32 mipHeight = height;
     u32 mipDepth = depth;
     for(;;){
-        if(mipCount == Limit<u32>::s_Max)
-            return MakeUnexpected(Failure{});
         ++mipCount;
 
         if(mipWidth == 1u && mipHeight == 1u && (dimension != TextureDimension::Texture3D || mipDepth == 1u))
@@ -156,9 +154,7 @@ struct TextureMipPlaneBlockLayout{
 
     const u64 blocksX64 = DivideUp(static_cast<u64>(width), static_cast<u64>(s_UastcBlockWidth));
     const u64 blocksY64 = DivideUp(static_cast<u64>(height), static_cast<u64>(s_UastcBlockHeight));
-    if(blocksX64 > Limit<u32>::s_Max || blocksY64 > Limit<u32>::s_Max || blocksX64 > Limit<u64>::s_Max / blocksY64)
-        return MakeUnexpected(Failure{});
-
+    // u32 extents keep each block axis within u32, so the block count fits u64.
     const u64 blockCount = blocksX64 * blocksY64;
     if(blockCount > Limit<u64>::s_Max / s_UastcBytesPerBlock)
         return MakeUnexpected(Failure{});

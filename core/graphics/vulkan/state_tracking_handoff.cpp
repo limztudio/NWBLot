@@ -195,10 +195,6 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
             return false;
         }
 
-        if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
-            return false;
-        }
         if(sourceQueueFamily != destinationQueueFamily){
             acquireImageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureOwnershipAcquireBarrier(texture.m_image, texture.m_aspectMask, subresources, state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline));
         }
@@ -249,10 +245,6 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
             return false;
         }
 
-        if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
-            return false;
-        }
         if(sourceQueueFamily != destinationQueueFamily){
             acquireBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipAcquireBarrier(buffer.m_buffer, state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline, range));
         }
@@ -400,15 +392,15 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         const auto release = m_textureOwnershipReleaseDestinations.find(key);
         return QueueOwnership{ m_creationDesc.physicalQueue, release != m_textureOwnershipReleaseDestinations.end() ? release.value() : GpuPhysicalQueueId{} };
     };
-    const auto getBufferOwnership = [&](Buffer* buffer)noexcept -> GpuPhysicalQueueId{
-        return buffer && buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT ? m_creationDesc.physicalQueue : GpuPhysicalQueueId{};
+    const auto getBufferOwnership = [&](const Buffer& buffer)noexcept -> GpuPhysicalQueueId{
+        return buffer.m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT ? m_creationDesc.physicalQueue : GpuPhysicalQueueId{};
     };
 
+    // State ledgers only key live resources: tracking inserts references and handoff import skips null entries.
     states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
     for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
-        if(!key.texture)
-            continue;
+        NWB_ASSERT(key.texture);
 
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
         states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{ key.texture, key.mipLevel, key.arraySlice, it.value(), key.texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue });
@@ -417,9 +409,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
     states.m_bufferStates.reserve(m_stateTracker.m_bufferStates.size());
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
         Buffer* const buffer = it->first;
-        if(!buffer)
-            continue;
-        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
+        NWB_ASSERT(buffer);
+        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(*buffer);
         const auto releases = m_bufferOwnershipReleaseDestinations.find(buffer);
         const auto append = [&](const BufferRange range, const ResourceStates::Mask state, const GpuPhysicalQueueId destination){
             if(range.hasExtent()){
@@ -447,8 +438,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
     states.m_permanentTextureStates.reserve(m_stateTracker.m_permanentTextureStates.size());
     for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
         Texture* const texture = it.value().texture.get();
-        if(!texture)
-            continue;
+        NWB_ASSERT(texture);
 
         const TextureSubresourceStateKey key{ texture, 0u, 0u };
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
@@ -458,10 +448,9 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
     states.m_permanentBufferStates.reserve(m_stateTracker.m_permanentBufferStates.size());
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         Buffer* const buffer = it.value().buffer.get();
-        if(!buffer)
-            continue;
+        NWB_ASSERT(buffer);
 
-        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
+        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(*buffer);
         states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{ buffer, it.value().state, buffer->m_creationDesc.queueSharing, ownerQueue, {} });
     }
 
@@ -485,7 +474,8 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     // Validate all pending releases first so a late failure never partially mutates the transaction.
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         Buffer* const buffer = it->first;
-        if(!buffer || buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(*buffer)){
+        NWB_ASSERT(buffer);
+        if(buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(*buffer)){
             rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("pending buffer release has an invalid resource contract"));
             return;
         }
@@ -513,10 +503,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
         Texture* const texture = key.texture;
-        if(!texture){
-            rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("pending texture release has no resource"));
-            return;
-        }
+        NWB_ASSERT(texture);
         if(texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("concurrent texture has a pending exclusive release"));
             return;

@@ -64,10 +64,7 @@ bool AssignMaterialShadingModelIdsImpl(CookVector<MaterialCookEntry>& materialEn
     for(MaterialCookEntry& entry : materialEntries){
         const AStringView source(entry.bxdfSource);
         const auto sourceIt = LowerBound(uniqueSources.begin(), uniqueSources.end(), source);
-        if(sourceIt == uniqueSources.end() || *sourceIt != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
-            return false;
-        }
+        NWB_ASSERT(sourceIt != uniqueSources.end() && *sourceIt == source);
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
     }
 
@@ -94,10 +91,7 @@ bool AssignMaterialShadingModelIdsImpl(CookVector<MaterialCookEntry>& materialEn
 
         const AStringView surface(entry.surfaceSource);
         const auto surfaceIt = LowerBound(uniqueSurfaces.begin(), uniqueSurfaces.end(), surface);
-        if(surfaceIt == uniqueSurfaces.end() || *surfaceIt != surface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign surface dispatch id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
-            return false;
-        }
+        NWB_ASSERT(surfaceIt != uniqueSurfaces.end() && *surfaceIt == surface);
         entry.surfaceDispatchId = static_cast<u32>(static_cast<usize>(surfaceIt - uniqueSurfaces.begin()));
     }
     return true;

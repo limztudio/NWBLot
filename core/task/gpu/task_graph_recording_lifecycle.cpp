@@ -5,8 +5,6 @@
 #include "task_graph.h"
 #include "compiler.h"
 
-#include <global/termination.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,8 +33,6 @@ void GpuTaskGraph::RecordingAttemptScope::complete()noexcept{
 void GpuTaskGraph::RecordingAttemptScope::activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial, const bool previousPlanWasActive)noexcept{
     NWB_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
     NWB_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
-    if(m_graph || preparationSerial == 0u)
-        TerminateInvariant();
     m_graph = &graph;
     m_compiledGraph = &compiledGraph;
     m_recordingAttemptGeneration = recordingAttemptGeneration;
@@ -143,8 +139,7 @@ bool GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, 
     const bool previousPlanWasActive = m_activeRecordingPlanGeneration != 0u;
     const u64 nextRecordingAttemptGeneration = AllocateGeneration();
     const u64 preparationSerial = AllocateGeneration();
-    if(nextRecordingAttemptGeneration == 0u || preparationSerial == 0u)
-        return false;
+    NWB_ASSERT(nextRecordingAttemptGeneration != 0u && preparationSerial != 0u);
     const u64 previousRecordingAttemptGeneration = samePlan && m_submissionBindingState == SubmissionBindingState::None ? m_activeRecordingAttemptGeneration : 0u;
     if(!compiledGraph.beginRecordingAttempt(*this, declarationAccess, packet, requestedPlanGeneration, nextRecordingAttemptGeneration, previousRecordingAttemptGeneration, planAccess))
         return false;
@@ -154,8 +149,6 @@ bool GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, 
         if(!previousAttemptResolved){
             const bool candidateResolved = compiledGraph.resolveRecordingAttempt(*this, requestedPlanGeneration, nextRecordingAttemptGeneration);
             NWB_FATAL_ASSERT_MSG(candidateResolved, "Failed plan switch must release its candidate exact-plan lease");
-            if(!candidateResolved)
-                TerminateInvariant();
             return false;
         }
     }
@@ -203,13 +196,9 @@ void GpuTaskGraph::cancelRecordingAttempt(RecordingAttemptScope& attempt)const n
         ;
     }
     NWB_FATAL_ASSERT_MSG(tasksUnclaimed, "provisional recording attempt cancellation requires unclaimed graph tasks");
-    if(!tasksUnclaimed)
-        TerminateInvariant();
 
     const bool candidateResolved = attempt.m_compiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, attempt.m_recordingAttemptGeneration);
     NWB_FATAL_ASSERT_MSG(candidateResolved, "provisional recording attempt cancellation must release its exact plan lease");
-    if(!candidateResolved)
-        TerminateInvariant();
 
     const bool restoreDiscardedTasks = attempt.m_previousPlanWasActive;
     m_activeCompiledGraph = nullptr;
@@ -235,8 +224,6 @@ void GpuTaskGraph::completeRecordingPreparation(RecordingAttemptScope& attempt)c
     NothrowScopedLock lock(m_lifecycleMutex);
     const bool preparationValid = attempt.m_compiledGraph && attempt.validPreparationWithinLock(*this, *attempt.m_compiledGraph, m_activeRecordingAttemptGeneration, m_activeRecordingPreparationSerial);
     NWB_FATAL_ASSERT_MSG(preparationValid, "Recording preparation completion requires its exact active capability");
-    if(!preparationValid)
-        TerminateInvariant();
 
     m_activeRecordingPreparationSerial = 0u;
     attempt.completeWithinLock();

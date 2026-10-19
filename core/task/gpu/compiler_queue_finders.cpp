@@ -65,23 +65,23 @@ namespace GpuTaskGraphCompilerDetail{
     const usize assignedPrefixCount,
     const bool allowCrossFamilyRouting
 )noexcept{
+    // Balancing runs after every task has a dense assignment from the same topology; the prefix ends at the current group.
+    NWB_ASSERT(assignedPrefixCount <= assignments.size());
     const GpuPhysicalQueueInfo* result = nullptr;
     usize resultAssignmentIndex = 0u;
     const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(task.id);
     for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
         const u32 producerTaskIndex = producerIndices[producerIndex];
-        if(producerTaskIndex >= assignmentIndicesByTask.size())
-            continue;
+        NWB_ASSERT(producerTaskIndex < assignmentIndicesByTask.size());
 
         const u32 producerAssignmentIndex = assignmentIndicesByTask[producerTaskIndex];
-        if(producerAssignmentIndex >= assignedPrefixCount || producerAssignmentIndex >= assignments.size())
+        if(producerAssignmentIndex >= assignedPrefixCount)
             continue;
-        const GpuTaskId producerTask{ .generation = task.id.generation, .index = static_cast<u32>(producerTaskIndex) };
         const GpuTaskQueueAssignment& assignment = assignments[producerAssignmentIndex];
-        if(assignment.task != producerTask)
-            continue;
+        NWB_ASSERT(assignment.task.generation == task.id.generation && assignment.task.index == producerTaskIndex);
         const GpuPhysicalQueueInfo* const candidate = FindPhysicalQueueInfo(topology, assignment.queue);
-        if(!candidate || candidate->queueClass != baseQueue.queueClass || (!allowCrossFamilyRouting && candidate->familyIndex != baseQueue.familyIndex) || !IsLegalQueueAssignmentCandidate(graph, topology, task, *candidate))
+        NWB_ASSERT(candidate);
+        if(candidate->queueClass != baseQueue.queueClass || (!allowCrossFamilyRouting && candidate->familyIndex != baseQueue.familyIndex) || !IsLegalQueueAssignmentCandidate(graph, topology, task, *candidate))
             continue;
         if(!result || producerAssignmentIndex > resultAssignmentIndex){
             result = candidate;
@@ -133,7 +133,9 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] bool HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
-    return options.timingFeedbackPolicy.enabled && options.timingFeedbackPolicy.valid() && options.timingHistory && options.timingHistory->valid() && options.timingHistory->deviceGeneration() == deviceGeneration;
+    // assignQueues() rejects an enabled invalid policy before this query.
+    NWB_ASSERT(!options.timingFeedbackPolicy.enabled || options.timingFeedbackPolicy.valid());
+    return options.timingFeedbackPolicy.enabled && options.timingHistory && options.timingHistory->valid() && options.timingHistory->deviceGeneration() == deviceGeneration;
 }
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackQueue(

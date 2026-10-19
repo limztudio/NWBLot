@@ -6,7 +6,6 @@
 #include "compiler.h"
 
 #include <global/exception.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,8 +28,6 @@ GpuTaskGraph::ResetCompletionScope::~ResetCompletionScope()noexcept{
 void GpuTaskGraph::ResetCompletionScope::activateWithinLock()noexcept{
     const bool activationValid = !m_active && m_graph.m_teardownInProgress;
     NWB_FATAL_ASSERT_MSG(activationValid, "GPU task graph reset completion requires fresh teardown ownership");
-    if(!activationValid)
-        TerminateInvariant();
     m_active = true;
 }
 
@@ -80,14 +77,11 @@ void GpuTaskGraph::reset(){
         return;
 
     NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph::reset requires every bound or in-flight task to resolve first");
-    TerminateInvariant();
 }
 
 void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
     const bool taskPayloadsDestroyed = destroyTaskPayloadsWithoutCallbacks();
     NWB_FATAL_ASSERT_MSG(taskPayloadsDestroyed, "GPU task graph reset cleanup requires terminal task payloads");
-    if(!taskPayloadsDestroyed)
-        TerminateInvariant();
 
     destroyTaskStateSnapshots();
     destroyResourceStateSnapshots();
@@ -96,8 +90,6 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         if(m_activeCompiledGraph && m_activeRecordingPlanGeneration != 0u && m_submissionBindingState == SubmissionBindingState::None){
             const bool recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, m_activeRecordingAttemptGeneration);
             NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "GPU task graph reset cleanup must release its exact recording-plan lease");
-            if(!recordingAttemptResolved)
-                TerminateInvariant();
         }
         m_tasks.clear();
         m_dependencies.clear();
@@ -136,8 +128,6 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_activeRecordingPlanGeneration = 0u;
         m_activeRecordingPreparationSerial = 0u;
         NWB_FATAL_ASSERT_MSG(m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) == 0u, "GPU task graph reset publication requires every packet recording claim to drain");
-        if(m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) != 0u)
-            TerminateInvariant();
         m_activeCompiledGraph = nullptr;
         m_activeSubmissionBinding = {};
         m_submissionBindingState = SubmissionBindingState::None;

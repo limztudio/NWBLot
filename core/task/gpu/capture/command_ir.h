@@ -465,7 +465,6 @@ namespace GpuCommandIrReplayError{
         MissingTransferCapability,
         GraphGenerationMismatch,
         PlanGenerationMismatch,
-        RecordPacketMismatch,
         RecordQueueMismatch,
         InvalidTask,
         CompiledTaskMismatch,

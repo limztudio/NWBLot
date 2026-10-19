@@ -5,7 +5,6 @@
 #include "task_graph.h"
 
 #include <global/allocation_size.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,10 +94,8 @@ void GpuTaskGraph::prepareExternalCompletionIndex(){
     const usize identityCount = AddSize(m_externalCompletions.size(), 1u);
     ImportIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
     for(usize index = 0u; index < m_externalCompletions.size(); ++index){
-        if(!identities.emplace(m_externalCompletions[index].identity.identityHash(), static_cast<u32>(index)).second){
+        if(!identities.emplace(m_externalCompletions[index].identity.identityHash(), static_cast<u32>(index)).second)
             NWB_FATAL_ASSERT_MSG(false, "Completion import index requires unique retained identities");
-            TerminateInvariant();
-        }
     }
     static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
     m_externalCompletionIdentityIndex.emplace(Move(identities));

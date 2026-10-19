@@ -29,7 +29,6 @@ namespace GpuTaskGraphAnalysisStatus{
         InputGraphInUse,
         InvalidTask,
         MissingTaskRecordPayload,
-        InvalidResource,
         InvalidTaskDependency,
         InvalidExternalCompletionDependency,
         InvalidResourceUse,

@@ -60,17 +60,13 @@ namespace __hidden_telemetry_codec{
     return header;
 }
 
-[[nodiscard]] static bool AppendEncodedEvent(TelemetryBytes& outBytes, const EventHeader& header, const void* const payload, const usize payloadBytes){
-    if(!ValidateEventPayload(header, payload, payloadBytes))
-        return false;
-    if(payloadBytes > Limit<usize>::s_Max - sizeof(EncodedEventHeader))
-        return false;
+static void AppendEncodedEvent(TelemetryBytes& outBytes, const EventHeader& header, const void* const payload, const usize payloadBytes){
+    NWB_ASSERT(payloadBytes <= Limit<usize>::s_Max - sizeof(EncodedEventHeader));
 
     const EncodedEventHeader encodedHeader = EncodeHeader(header);
     AppendPOD(outBytes, encodedHeader);
     if(payloadBytes != 0u)
         BinaryDetail::AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
-    return true;
 }
 
 
@@ -102,8 +98,9 @@ bool EncodeEvent(const EventHeader& header, const void* payload, const usize pay
         AssignTriviallyCopyableVector(outBytes, BinaryByteView{ outBytes.data() + *aliasOffset, payloadBytes });
         outBytes.reserve(encodedBytes);
         const auto* const headerBytes = reinterpret_cast<const u8*>(&encodedHeader);
-        const auto firstHeaderByte = outBytes.insert(outBytes.begin(), headerBytes, headerBytes + sizeof(encodedHeader));
-        return firstHeaderByte == outBytes.begin() && outBytes.size() == encodedBytes;
+        outBytes.insert(outBytes.begin(), headerBytes, headerBytes + sizeof(encodedHeader));
+        NWB_ASSERT(outBytes.size() == encodedBytes);
+        return true;
     }
 
     outBytes.clear();
@@ -111,7 +108,8 @@ bool EncodeEvent(const EventHeader& header, const void* payload, const usize pay
     AppendPOD(outBytes, encodedHeader);
     if(payloadBytes != 0u)
         BinaryDetail::AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
-    return outBytes.size() == encodedBytes;
+    NWB_ASSERT(outBytes.size() == encodedBytes);
+    return true;
 }
 
 bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
@@ -122,10 +120,8 @@ bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     usize payloadBytes = 0u;
     for(usize i = 0u; i < eventCount; ++i){
         const EventRecord* event = events.eventAt(i);
-        if(!event)
-            return false;
-        if(!__hidden_telemetry_codec::ValidateEventPayload(event->header, event->payload.data(), event->payload.size()))
-            return false;
+        NWB_ASSERT(event);
+        NWB_ASSERT(__hidden_telemetry_codec::ValidateEventPayload(event->header, event->payload.data(), event->payload.size()));
         if(!AddBinaryReserveBytes(payloadBytes, sizeof(EncodedEventHeader)))
             return false;
         if(!AddBinaryReserveBytes(payloadBytes, event->payload.size()))
@@ -146,15 +142,15 @@ bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
 
     for(usize i = 0u; i < eventCount; ++i){
         const EventRecord* event = events.eventAt(i);
-        if(!__hidden_telemetry_codec::AppendEncodedEvent(outBytes, event->header, event->payload.data(), event->payload.size()))
-            return false;
+        __hidden_telemetry_codec::AppendEncodedEvent(outBytes, event->header, event->payload.data(), event->payload.size());
     }
 
-    return outBytes.size() == encodedBytes;
+    NWB_ASSERT(outBytes.size() == encodedBytes);
+    return true;
 }
 
 Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const void* const bytes, const usize byteCount){
-    if(byteCount < sizeof(EncodedEventHeader) || !bytes)
+    if(!bytes)
         return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });
 
     const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };
@@ -182,7 +178,7 @@ Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const vo
 
 Expected<usize, DecodeResult> DecodeEventStream(TelemetryArena& arena, const void* const bytes, const usize byteCount, Recorder& inOutRecorder){
     inOutRecorder.clear();
-    if(byteCount < sizeof(EncodedStreamHeader) || !bytes)
+    if(!bytes)
         return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });
 
     const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };

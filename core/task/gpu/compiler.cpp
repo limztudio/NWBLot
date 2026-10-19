@@ -154,7 +154,8 @@ bool GpuTaskGraphCompiler::compile(
     const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
     const Timer planningBegin = TimerNow();
 
-    if(topology.queueCount == 0u || !topology.queues || options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::kCount || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
+    NWB_ASSERT(topology.queues && topology.queueCount != 0u);
+    if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::kCount || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
         return false;
 
     for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex){
@@ -415,8 +416,7 @@ bool GpuTaskGraphCompiler::compile(
     statistics.uploadBlobCount = graph.uploadBlobCount();
     for(usize uploadBlobIndex = 0u; uploadBlobIndex < graph.uploadBlobCount(); ++uploadBlobIndex){
         const auto bytes = graph.uploadBlobData(GpuUploadBlobId{ .generation = graph.generation(), .index = static_cast<u32>(uploadBlobIndex) });
-        if(!bytes)
-            return false;
+        NWB_ASSERT(bytes);
         statistics.uploadBlobBytes += bytes->size();
     }
     statistics.explicitDependencyCount = outAnalysis.explicitEdgeCount();

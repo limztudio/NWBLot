@@ -317,7 +317,7 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
     if(!GraphicsModuleDetail::ValidateBufferSetupUpload(desc))
         return MakeUnexpected(Failure{});
 
-    if(!desc.data || desc.dataSize == 0){
+    if(desc.dataSize == 0){
         auto buffer = device.createBuffer(desc.bufferDesc);
         if(!buffer)
             return MakeUnexpected(Failure{});
@@ -371,7 +371,7 @@ Expected<TextureHandle> GraphicsRuntime::setupTexture(const TextureSetupDesc& de
     if(!GraphicsModuleDetail::ValidateTextureSetupUpload(desc))
         return MakeUnexpected(Failure{});
 
-    if(!desc.data || desc.uploadDataSize == 0){
+    if(desc.uploadDataSize == 0){
         auto texture = device.createTexture(desc.textureDesc);
         if(!texture)
             return MakeUnexpected(Failure{});
@@ -428,31 +428,33 @@ Expected<GraphicsRuntime::MeshResource> GraphicsRuntime::setupMesh(const MeshSet
     if(!GraphicsModuleDetail::ValidateMeshSetupDesc(desc))
         return MakeUnexpected(Failure{});
 
+    NWB_ASSERT(desc.vertexData && desc.vertexDataSize > 0 && desc.vertexStride > 0);
+
     MeshResource output;
     output.vertexStride = desc.vertexStride;
 
-    if(desc.vertexData && desc.vertexDataSize > 0){
-        BufferDesc vertexBufferDesc;
-        vertexBufferDesc.setByteSize(static_cast<u64>(desc.vertexDataSize));
-        vertexBufferDesc.setIsVertexBuffer(true);
-        vertexBufferDesc.setDebugName(desc.vertexBufferName);
-        vertexBufferDesc.enableAutomaticStateTracking(ResourceStates::VertexBuffer);
+    BufferDesc vertexBufferDesc;
+    vertexBufferDesc.setByteSize(static_cast<u64>(desc.vertexDataSize));
+    vertexBufferDesc.setIsVertexBuffer(true);
+    vertexBufferDesc.setDebugName(desc.vertexBufferName);
+    vertexBufferDesc.enableAutomaticStateTracking(ResourceStates::VertexBuffer);
 
-        BufferSetupDesc vertexSetup;
-        vertexSetup.bufferDesc = vertexBufferDesc;
-        vertexSetup.data = desc.vertexData;
-        vertexSetup.dataSize = desc.vertexDataSize;
-        vertexSetup.queue = desc.queue;
+    BufferSetupDesc vertexSetup;
+    vertexSetup.bufferDesc = vertexBufferDesc;
+    vertexSetup.data = desc.vertexData;
+    vertexSetup.dataSize = desc.vertexDataSize;
+    vertexSetup.queue = desc.queue;
 
-        auto vertexBufferResult = setupBuffer(vertexSetup);
-        if(!vertexBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up mesh vertex buffer '{}'"), StringConvert(desc.vertexBufferName.resolvedText()));
-            return MakeUnexpected(Failure{});
-        }
-        output.vertexBuffer = Move(*vertexBufferResult);
+    auto vertexBufferResult = setupBuffer(vertexSetup);
+    if(!vertexBufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up mesh vertex buffer '{}'"), StringConvert(desc.vertexBufferName.resolvedText()));
+        return MakeUnexpected(Failure{});
     }
+    output.vertexBuffer = Move(*vertexBufferResult);
 
-    if(desc.indexData && desc.indexDataSize > 0){
+    if(desc.indexDataSize > 0){
+        NWB_ASSERT(desc.indexData);
+
         BufferDesc indexBufferDesc;
         indexBufferDesc.setByteSize(static_cast<u64>(desc.indexDataSize));
         indexBufferDesc.setIsIndexBuffer(true);
@@ -473,8 +475,7 @@ Expected<GraphicsRuntime::MeshResource> GraphicsRuntime::setupMesh(const MeshSet
         output.indexBuffer = Move(*indexBufferResult);
     }
 
-    if(output.vertexStride > 0 && desc.vertexDataSize > 0)
-        output.vertexCount = static_cast<u32>(desc.vertexDataSize / static_cast<usize>(output.vertexStride));
+    output.vertexCount = static_cast<u32>(desc.vertexDataSize / static_cast<usize>(output.vertexStride));
 
     if(desc.indexDataSize > 0){
         const usize indexStride = desc.use32BitIndices ? sizeof(u32) : sizeof(u16);

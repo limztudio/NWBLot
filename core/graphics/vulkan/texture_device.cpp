@@ -184,9 +184,9 @@ bool Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsag
 
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
         return false;
-    if(!texture.descriptionMatchesCreation())
-        return false;
-    if(!VulkanTextureDetail::IsTextureImageInfoConsistent(texture.m_creationDesc, texture.m_imageInfo, requiredUsage))
+    NWB_ASSERT(texture.descriptionMatchesCreation());
+    NWB_ASSERT(VulkanTextureDetail::IsTextureImageInfoConsistent(texture.m_creationDesc, texture.m_imageInfo));
+    if((texture.m_imageInfo.usage & requiredUsage) != requiredUsage)
         return false;
     if(texture.m_image == VK_NULL_HANDLE)
         return false;

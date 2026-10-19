@@ -170,8 +170,6 @@ bool GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const Gp
         if(framebuffer.colorAttachments.size() != 1u || framebuffer.depthAttachment.valid() || framebuffer.shadingRateAttachment.valid())
             return false;
     }
-    if(m_rasterOwners && m_rasterOwners->stateOwners.size() >= Limit<u32>::s_Max)
-        return false;
     GpuCommandIrRasterVertexWire wires[s_MaxVertexAttributes]{};
     GpuCommandIrRasterStateOwner owner;
     owner.pipeline = state.pipelineOwner;
@@ -225,8 +223,6 @@ bool GpuCommandIrCapture::captureBindGraphicsHeap(
 ){
     if(!pipeline.valid() || pipeline.generation != task.generation || !pipelineOwner || !descriptorOwner.valid() || !heap.isInitialized())
         return false;
-    if(m_rasterOwners && m_rasterOwners->heapOwners.size() >= Limit<u32>::s_Max)
-        return false;
     auto* const lease = NewArenaObject<__hidden_gpu_command_ir_raster_capture::HeapLeaseOwner>(ownerArena, ownerArena, heap);
     GpuCommandIrOwnerAnchor leaseAnchor(lease, s_AdoptRef);
     if(!lease->valid())
@@ -279,11 +275,11 @@ bool GpuCommandIrCapture::appendRasterBytes(
     const GpuCommandIrRasterStateOwner* const stateOwner,
     const GpuCommandIrRasterHeapOwner* const heapOwner
 ){
+    NWB_ASSERT(encoded.size() >= sizeof(GpuCommandIrHeader) && encoded.data());
+    NWB_ASSERT(blob.empty() || blob.data());
+    NWB_ASSERT(!(stateOwner && heapOwner));
     if(
         !task.valid() || !packet.valid() || !queue.valid()
-        || encoded.size() < sizeof(GpuCommandIrHeader) || !encoded.data()
-        || (!blob.empty() && !blob.data())
-        || (stateOwner && heapOwner)
         || (m_graphGeneration != 0u && m_graphGeneration != task.generation)
         || (m_planGeneration != 0u && m_planGeneration != packet.generation)
         || m_nextSerial == Limit<u64>::s_Max

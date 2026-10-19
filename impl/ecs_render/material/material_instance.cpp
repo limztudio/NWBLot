@@ -35,10 +35,7 @@ namespace __hidden_material_instance{
     Vector<u8, Core::Alloc::ScratchArena>& inOutMutableTypedBytes
 ){
     const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
-    if(fieldByteSize == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} has invalid field size"), StringConvert(parameter.parameterName.resolvedText()), entity.id);
-        return false;
-    }
+    NWB_ASSERT(fieldByteSize != 0u);
     if(byteOffset > inOutMutableTypedBytes.size() || static_cast<usize>(fieldByteSize) > inOutMutableTypedBytes.size() - static_cast<usize>(byteOffset)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'"), StringConvert(parameter.parameterName.resolvedText()), entity.id, StringConvert(materialName.resolvedText()));
         return false;
@@ -146,11 +143,7 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Ent
             return false;
         }
 
-        if(field.offset > Limit<u32>::s_Max - resolvedField->blockByteBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} byte offset exceeds u32"), StringConvert(parameter.parameterName.resolvedText()), entity.id);
-            return false;
-        }
-
+        NWB_ASSERT(field.offset <= Limit<u32>::s_Max - resolvedField->blockByteBegin);
         const u32 fieldByteOffset = resolvedField->blockByteBegin + field.offset;
         if(!__hidden_material_instance::WriteMaterialInstanceOverrideBytes(entity, materialInfo.materialName, parameter, field, fieldByteOffset, inOutMutableTypedBytes))
             return false;

@@ -87,10 +87,6 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         fail(GpuCommandIrStreamValidationError::NullData, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(m_bytes.size() < sizeof(GpuCommandIrStreamHeaderPrefix)){
-        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
-        return;
-    }
 
     usize cursor = 0u;
     const auto wirePrefix = ReadPOD<GpuCommandIrStreamHeaderPrefix>(m_bytes, cursor);
@@ -109,10 +105,6 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
     }
     if(prefix.reserved != 0u){
         fail(GpuCommandIrStreamValidationError::InvalidHeaderReserved, 0u, Limit<u64>::s_Max);
-        return;
-    }
-    if(m_bytes.size() < sizeof(GpuCommandIrStreamHeader)){
-        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
         return;
     }
 

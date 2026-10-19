@@ -225,11 +225,9 @@ struct EncodedMip{
             return false;
         slices[desc.m_source_file_index] = index;
     }
-    if(mip.sizeBytes > Limit<usize>::s_Max || bytes.size() > Limit<usize>::s_Max - static_cast<usize>(mip.sizeBytes))
-        return false;
+    NWB_ASSERT(mip.sizeBytes <= Limit<usize>::s_Max && bytes.size() <= Limit<usize>::s_Max - static_cast<usize>(mip.sizeBytes));
     for(const usize index : slices){
-        if(index == s_InvalidSlice)
-            return false;
+        NWB_ASSERT(index != s_InvalidSlice);
         const basisu::uint8_vec& blocks = output.m_slice_image_data[index];
         bytes.insert(bytes.end(), blocks.get_ptr(), blocks.get_ptr() + blocks.size_in_bytes());
     }
@@ -356,10 +354,7 @@ Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::
                 return MakeUnexpected(Failure{});
         }
     }
-    if(prepared.bytes.size() != payloadByteCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: encoded texture does not match its binary payload layout."));
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(prepared.bytes.size() == payloadByteCount);
     return prepared;
 }
 

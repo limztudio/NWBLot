@@ -363,10 +363,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
             continue;
 
         const Core::ShaderType::Enum shaderType = static_cast<Core::ShaderType::Enum>(shaderIndex);
-        if(!Core::ShaderType::IsValid(shaderType)){
-            NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader stage index {} is invalid"), shaderIndex);
-            return false;
-        }
+        NWB_ASSERT(Core::ShaderType::IsValid(shaderType));
 
         AppendPOD(outBinary, shaderType);
         AppendPOD(outBinary, shaderAsset.name().hash());

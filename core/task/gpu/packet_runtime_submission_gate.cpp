@@ -38,10 +38,8 @@ static Atomic<u64> s_NextAcceptanceRevision{ 1u };
 u64 AllocateAcceptanceRevision()noexcept{
     u64 nextRevision = s_NextAcceptanceRevision.load(MemoryOrder::relaxed);
     for(;;){
-        if(nextRevision == 0u || nextRevision == Limit<u64>::s_Max){
+        if(nextRevision == 0u || nextRevision == Limit<u64>::s_Max)
             NWB_FATAL_ASSERT_MSG(false, "GPU task graph acceptance revision identity exhausted");
-            TerminateInvariant();
-        }
         if(s_NextAcceptanceRevision.compare_exchange_weak(nextRevision, nextRevision + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return nextRevision;
     }
@@ -73,10 +71,8 @@ bool GpuGraphSubmissionTransaction::SubmissionWriterReservation::acquire(const G
     else{
         u32 writerCount = transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire);
         for(;;){
-            if(writerCount == Limit<u32>::s_Max){
+            if(writerCount == Limit<u32>::s_Max)
                 NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer ownership overflowed");
-                TerminateInvariant();
-            }
             if(transaction.m_submissionGateWriterCount.compare_exchange_weak(writerCount, writerCount + 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
                 break;
         }
@@ -89,10 +85,8 @@ void GpuGraphSubmissionTransaction::SubmissionWriterReservation::reset()noexcept
     if(!m_transaction)
         return;
     const u32 previousWriterCount = m_transaction->m_submissionGateWriterCount.fetch_sub(1u, MemoryOrder::release);
-    if(previousWriterCount == 0u){
+    if(previousWriterCount == 0u)
         NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer ownership underflowed");
-        TerminateInvariant();
-    }
     if(previousWriterCount == 1u)
         m_transaction->m_submissionGateWriterCount.notify_all();
     m_transaction = nullptr;
@@ -130,15 +124,11 @@ thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmiss
 GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, const SubmissionOperationMode mode, const GpuRecordedGraph::ArtifactOperation* const borrowedArtifact)noexcept{
     constexpr u32 s_SubmissionGateWriterBit = __hidden_submission_gate::s_WriterBit;
     constexpr u32 s_SubmissionGateReaderMask = __hidden_submission_gate::s_ReaderMask;
-    for(const SubmissionOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
-        if(operation->m_transaction == &transaction)
-            return;
-    }
-    // Cross-transaction reentry is a prompt rejection regardless of target availability.
+    // Any reentry, for the same or another transaction, is a prompt rejection regardless of target availability.
     // An exception finalizer can therefore run after its local gates unwind without retaining an unrelated transaction gate on this thread.
     if(s_ActiveOperation)
         return;
-    if(GpuRecordedGraph::ArtifactOperation::Active() && (!borrowedArtifact || !GpuRecordedGraph::ArtifactOperation::ActiveScopeIs(*borrowedArtifact)))
+    if(GpuRecordedGraph::ArtifactOperation::Active() && !borrowedArtifact)
         return;
     if(borrowedArtifact && !GpuRecordedGraph::ArtifactOperation::ActiveScopeIs(*borrowedArtifact))
         return;
@@ -179,10 +169,8 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
                 transaction.m_submissionGateState.wait(operationState, MemoryOrder::acquire);
                 continue;
             }
-            if((operationState & s_SubmissionGateReaderMask) == s_SubmissionGateReaderMask){
+            if((operationState & s_SubmissionGateReaderMask) == s_SubmissionGateReaderMask)
                 NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership overflowed");
-                TerminateInvariant();
-            }
             if(!transaction.m_submissionGateState.compare_exchange_weak(operationState, operationState + 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
                 continue;
             if(transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire) == 0u)
@@ -227,28 +215,22 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
     if(!m_transaction)
         return;
 
-    if(s_ActiveOperation != this){
+    if(s_ActiveOperation != this)
         NWB_FATAL_ASSERT_MSG(false, "GPU graph submission operations must unwind in lexical order");
-        TerminateInvariant();
-    }
     s_ActiveOperation = m_previousOperation;
     if(m_composite)
         m_transaction->m_compositeOperationActive.clear(MemoryOrder::release);
     if(m_exclusive){
-        if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != __hidden_submission_gate::s_WriterBit){
+        if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != __hidden_submission_gate::s_WriterBit)
             NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer operation lost its exact gate claim");
-            TerminateInvariant();
-        }
         m_transaction->m_submissionGateState.store(0u, MemoryOrder::release);
         m_transaction->m_submissionGateState.notify_all();
         m_writerReservation.reset();
     }
     else{
         const u32 previousState = m_transaction->m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
-        if((previousState & __hidden_submission_gate::s_ReaderMask) == 0u){
+        if((previousState & __hidden_submission_gate::s_ReaderMask) == 0u)
             NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership underflowed");
-            TerminateInvariant();
-        }
         if((previousState & __hidden_submission_gate::s_ReaderMask) == 1u)
             m_transaction->m_submissionGateState.notify_all();
     }

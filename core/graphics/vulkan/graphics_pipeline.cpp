@@ -232,11 +232,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
 }
 
 bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
-    if(framebuffer.m_framebufferInfo.width == 0 || framebuffer.m_framebufferInfo.height == 0 || framebuffer.m_framebufferInfo.arraySize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
-        return false;
-    }
+    NWB_ASSERT(framebuffer.m_framebufferInfo.width != 0u && framebuffer.m_framebufferInfo.height != 0u && framebuffer.m_framebufferInfo.arraySize != 0u);
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
 

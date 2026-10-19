@@ -71,14 +71,16 @@ GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQue
     if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
         return {};
     const Queue* const physicalQueue = m_physicalQueues[queue.index];
-    return physicalQueue ? physicalQueue->commandArenaStatistics() : GpuCommandArenaStatistics{};
+    NWB_ASSERT(physicalQueue);
+    return physicalQueue->commandArenaStatistics();
 }
 
 GpuCommandArenaWorkerStatistics Device::getCommandArenaWorkerStatistics(const GpuPhysicalQueueId& queue, const u64 recordingWorkerDomain, const u32 recordingWorkerIndex)const noexcept{
     if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
         return {};
     const Queue* const physicalQueue = m_physicalQueues[queue.index];
-    return physicalQueue ? physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex) : GpuCommandArenaWorkerStatistics{};
+    NWB_ASSERT(physicalQueue);
+    return physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex);
 }
 
 bool Device::matchesPhysicalQueueIdentity(const CommandQueue::Enum queue, const u16 physicalQueueIndex, const u16 deviceGeneration)const noexcept{
@@ -100,7 +102,8 @@ Queue* Device::getQueue(const GpuPhysicalQueueId& queue)noexcept{
     if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration || queue.index >= m_physicalQueues.size())
         return nullptr;
     Queue* const result = m_physicalQueues[queue.index];
-    return result && result->m_physicalQueue == queue ? result : nullptr;
+    NWB_ASSERT(result);
+    return result->m_physicalQueue == queue ? result : nullptr;
 }
 
 

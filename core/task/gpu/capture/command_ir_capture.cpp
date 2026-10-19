@@ -4,8 +4,6 @@
 
 #include "command_ir_internal.h"
 
-#include <global/termination.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,7 +96,6 @@ namespace __hidden_gpu_command_ir_capture{
             return identity;
     }
     NWB_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
-    TerminateInvariant();
 }
 
 
@@ -108,7 +105,8 @@ template<typename RecordT>
     static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
     static_assert(sizeof(RecordT) <= Limit<u16>::s_Max, "Command IR record exceeds its u16 byte-size field");
 
-    if(outBytes.size() < sizeof(GpuCommandIrStreamHeader) || !BinaryDetail::CanAppendBytes(outBytes, sizeof(RecordT)) || outBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - sizeof(RecordT))
+    NWB_ASSERT(outBytes.size() >= sizeof(GpuCommandIrStreamHeader));
+    if(!BinaryDetail::CanAppendBytes(outBytes, sizeof(RecordT)) || outBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - sizeof(RecordT))
         return false;
 
     ContainerDetail::ReserveGrowingCapacity(outBytes, outBytes.size() + sizeof(RecordT));
@@ -199,8 +197,6 @@ void GpuCommandIrCapture::reset()noexcept{
     static_assert(noexcept(m_recordEndOffsets.clear()));
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
     NWB_FATAL_ASSERT_MSG(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader), "Command IR capture reset requires its reserved stream header storage");
-    if(m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
-        TerminateInvariant();
 
     // Shrinking resize keeps capacity without allocating.
     m_recordEndOffsets.clear();
@@ -213,10 +209,7 @@ void GpuCommandIrCapture::reset()noexcept{
         m_rasterOwners->heapOwners.clear();
     }
     m_packedDirty = true;
-    if(m_resetEpoch == Limit<u64>::s_Max){
-        NWB_FATAL_ASSERT_MSG(false, "Command IR capture reset epoch exhausted");
-        TerminateInvariant();
-    }
+    NWB_FATAL_ASSERT_MSG(m_resetEpoch != Limit<u64>::s_Max, "Command IR capture reset epoch exhausted");
     ++m_resetEpoch;
     m_graphGeneration = 0u;
     m_planGeneration = 0u;
@@ -580,10 +573,7 @@ void GpuCommandIrCapture::rollbackPrefix(const usize recordCount, const u64 grap
     m_planGeneration = planGeneration;
     m_recordingAttemptGeneration = attemptGeneration;
     if(recordCount == 0u){
-        if(m_resetEpoch == Limit<u64>::s_Max){
-            NWB_FATAL_ASSERT_MSG(false, "Command IR capture rollback epoch exhausted");
-            TerminateInvariant();
-        }
+        NWB_FATAL_ASSERT_MSG(m_resetEpoch != Limit<u64>::s_Max, "Command IR capture rollback epoch exhausted");
         ++m_resetEpoch;
     }
     writeStreamHeader();

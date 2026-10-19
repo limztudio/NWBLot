@@ -45,8 +45,6 @@ inline Expected<StagingTextureMip> BuildStagingTextureMipLayout(const TextureDes
 
     const u64 blocksX = Max<u64>(DivideUp(static_cast<u64>(mipExtent.width), static_cast<u64>(formatLayout.blockWidth)), 1ull);
     const u64 blocksY = Max<u64>(DivideUp(static_cast<u64>(mipExtent.height), static_cast<u64>(formatLayout.blockHeight)), 1ull);
-    if(blocksX > UINT64_MAX / blocksY)
-        return MakeUnexpected(Failure{});
 
     const u64 bufferRowLength = blocksX * formatLayout.blockWidth;
     const u64 bufferImageHeight = blocksY * formatLayout.blockHeight;
@@ -76,8 +74,7 @@ inline Expected<u64> AddAlignedStagingMipSize(const u64 size, const u64 mipSize,
 }
 
 inline Expected<StagingTextureLayout> BuildStagingTextureLayout(Alloc::GlobalArena& arena, const TextureDesc& desc, const VulkanDetail::TextureFormatBlockLayout& formatLayout, const u32 bufferOffsetAlignment){
-    if(desc.mipLevels == 0u)
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(desc.mipLevels != 0u);
     StagingTextureLayout result{ 0u, VulkanDetail::StagingTextureMipLayoutVector(arena) };
     result.mipLayouts.reserve(desc.mipLevels);
     for(u32 mip = 0u; mip < desc.mipLevels; ++mip){
@@ -128,10 +125,8 @@ inline Expected<StagingTextureQueueFamilies> BuildStagingTextureQueueFamilies(Al
             result.families.push_back(queue.familyIndex);
     }
 
-    if(result.families.empty() || result.families.size() > Limit<u32>::s_Max){
-        result.families.clear();
+    if(result.families.empty())
         return MakeUnexpected(Failure{});
-    }
     if(result.families.size() >= 2u)
         result.mode = VK_SHARING_MODE_CONCURRENT;
     return result;
@@ -302,13 +297,15 @@ Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d
         return MakeUnexpected(Failure{});
     }
     auto layout = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(m_context.objectArena, d, *formatLayout, *bufferOffsetAlignment);
-    if(!layout || layout->arrayByteSize == 0u){
+    if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         return MakeUnexpected(Failure{});
     }
+    // Every admitted mip has at least one byte, so the layout and the array total are nonzero.
+    NWB_ASSERT(layout->arrayByteSize != 0u);
     const auto totalSize = TryMultiply<u64>(layout->arrayByteSize, static_cast<u64>(d.arraySize));
-    if(!totalSize || *totalSize == 0u){
+    if(!totalSize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         return MakeUnexpected(Failure{});
@@ -371,22 +368,16 @@ Expected<StagingTextureMapping> Device::mapStagingTexture(StagingTexture& stagin
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: native buffer or allocation is null"));
         return MakeUnexpected(Failure{});
     }
-    if(staging.m_cpuAccess != CpuAccessMode::Read && staging.m_cpuAccess != CpuAccessMode::Write){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without valid CPU access"));
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(staging.m_cpuAccess == CpuAccessMode::Read || staging.m_cpuAccess == CpuAccessMode::Write);
     if(requestedAccess != staging.m_cpuAccess){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: requested access does not match the texture CPU access"));
         return MakeUnexpected(Failure{});
     }
 
-    const auto expectedTotalByteSize = TryMultiply<u64>(staging.m_arrayByteSize, static_cast<u64>(staging.m_creationDesc.arraySize));
-    if(staging.m_creationDesc.arraySize == 0u || staging.m_creationDesc.mipLevels == 0u || staging.m_mipLayouts.size() != staging.m_creationDesc.mipLevels || !expectedTotalByteSize || *expectedTotalByteSize != staging.m_totalByteSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: immutable layout provenance is invalid"));
-        return MakeUnexpected(Failure{});
-    }
+    // Creation sets the layout once: one mip layout per mip and an overflow-checked total size.
+    NWB_ASSERT(staging.m_mipLayouts.size() == staging.m_creationDesc.mipLevels && staging.m_totalByteSize == staging.m_arrayByteSize * static_cast<u64>(staging.m_creationDesc.arraySize));
 
-    if(slice.mipLevel >= staging.m_creationDesc.mipLevels || slice.mipLevel >= staging.m_mipLayouts.size()){
+    if(slice.mipLevel >= staging.m_creationDesc.mipLevels){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: mip is outside the creation layout"));
         return MakeUnexpected(Failure{});
     }
@@ -430,10 +421,7 @@ void Device::unmapStagingTexture(StagingTexture& staging){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: native buffer or allocation is null"));
         return;
     }
-    if(staging.m_cpuAccess != CpuAccessMode::Read && staging.m_cpuAccess != CpuAccessMode::Write){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture has invalid CPU access"));
-        return;
-    }
+    NWB_ASSERT(staging.m_cpuAccess == CpuAccessMode::Read || staging.m_cpuAccess == CpuAccessMode::Write);
 
     ScopedLock lock(staging.m_mappingMutex);
     if(!staging.m_mappedMemory){

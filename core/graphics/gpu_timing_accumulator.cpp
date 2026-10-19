@@ -311,15 +311,10 @@ bool GpuTimingAccumulator::validateQuerySubmission(const GpuTimingScope& scope, 
 }
 
 bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, const bool publishSample)noexcept{
-    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
-        return false;
-
-    QueryRecord& record = m_queries[scope.index];
-    if(record.epoch != scope.epoch || record.reservation != scope.reservation)
-        return false;
     if(!validateQuerySubmission(scope, token))
         return false;
 
+    QueryRecord& record = m_queries[scope.index];
     record.acceptedSubmission = token;
     if(record.state == QueryState::EndedUnaccepted){
         record.state = QueryState::PendingAccepted;
@@ -405,8 +400,8 @@ bool GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope, const u6
 bool GpuTimingAccumulator::quarantineRecord(QueryRecord& record, const u64 subscriptionIdentityLimit)noexcept{
     if(record.state != QueryState::Quarantined){
         if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
-            if(m_pendingAcceptedQueryCount > 0u)
-                --m_pendingAcceptedQueryCount;
+            NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
+            --m_pendingAcceptedQueryCount;
         }
         record.state = QueryState::Quarantined;
         record.publishSample = false;
@@ -468,8 +463,8 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     const u64 retirementSubscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit;
     const bool retirementNotificationPending = record.retirementNotificationPending;
     if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
-        if(m_pendingAcceptedQueryCount > 0u)
-            --m_pendingAcceptedQueryCount;
+        NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
+        --m_pendingAcceptedQueryCount;
     }
 
     record.physicalQueue = {};

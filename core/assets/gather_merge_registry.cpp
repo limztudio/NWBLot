@@ -54,12 +54,11 @@ AssetGatherMergeFunction QueryAutoCollectedAssetGatherMerge(Alloc::ScratchArena&
     Vector<AssetGatherMergeFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     __hidden_gather_merge_registry::QueryAutoMergeQueue().copyTo(functions);
 
-    for(const AssetGatherMergeFunction function : functions){
-        if(!function)
-            return nullptr;
-        return function;
-    }
-    return nullptr;
+    if(functions.empty())
+        return nullptr;
+
+    NWB_ASSERT(functions.front());
+    return functions.front();
 }
 
 

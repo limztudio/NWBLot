@@ -121,8 +121,7 @@ public:
 }
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareSetupUploadReadinessBridgeTasks(GpuTaskGraph& graph, GraphicsBackend::Device& device, const ResourceQueueSharing::Mask queueSharing, const CommandQueue::Enum directConsumerQueue, const GpuTaskId uploadTask){
-    if(!uploadTask.valid())
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(uploadTask.valid());
 
     GpuTaskId terminalTask = uploadTask;
     constexpr CommandQueue::Enum s_ConsumerQueues[] = { CommandQueue::Graphics, CommandQueue::Compute, CommandQueue::Transfer, };
@@ -161,9 +160,6 @@ struct SetupUploadSubmissionData{
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareSetupUploadGraph(void* const userData, GpuTaskGraph& graph){
     auto& submissionData = *static_cast<SetupUploadSubmissionData*>(userData);
-    if(!submissionData.declareTask)
-        return MakeUnexpected(Failure{});
-
     const auto uploadTask = submissionData.declareTask(submissionData.userData, graph);
     if(!uploadTask)
         return MakeUnexpected(uploadTask.error());
@@ -182,21 +178,21 @@ struct FrameTimingResetGraphTask{
 public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
-        if(!payload.timing)
-            return false;
+        NWB_ASSERT(payload.timing);
 
         payload.timing->recordFrameReset(commandList);
         return true;
     }
 
     static void Accepted(Payload& payload, const QueueSubmissionToken& token){
-        if(payload.timing && token.valid())
+        NWB_ASSERT(payload.timing);
+        if(token.valid())
             payload.timing->confirmFrameReset(token);
     }
 
     static void Discarded(Payload& payload)noexcept{
-        if(payload.timing)
-            payload.timing->discardFrameReset();
+        NWB_ASSERT(payload.timing);
+        payload.timing->discardFrameReset();
     }
 };
 
@@ -330,7 +326,8 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     GpuTimingRecorder* const timingRecorder,
     GpuTimingFrameTransaction* const frameTimingTransaction
 ){
-    if(!declareTask || (frameTimingTransaction && !timingRecorder))
+    NWB_ASSERT(declareTask);
+    if(frameTimingTransaction && !timingRecorder)
         return MakeUnexpected(Failure{});
 
     auto& device = graphics.getDevice();
@@ -483,8 +480,7 @@ bool SubmitGraphOwnedSetupUpload(
     const GpuPhysicalQueueId requiredTerminalQueue
 ){
     inOutUploadToken = {};
-    if(!declareTask)
-        return false;
+    NWB_ASSERT(declareTask);
 
     auto& device = graphics.getDevice();
     __hidden_graphics_graph_setup::SetupUploadSubmissionData submissionData{ .device = device, .userData = userData, .declareTask = declareTask, .queueSharing = queueSharing, .consumerQueue = consumerQueue, };

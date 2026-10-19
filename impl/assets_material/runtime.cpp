@@ -59,7 +59,8 @@ static bool ValidateMaterialTypedLayout(const u64 layoutHash, const Material::Ty
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has non-contiguous field range"), failureContext, blockIndex);
             return false;
         }
-        if(block.fieldCount == 0u || block.fieldBegin > fields.size() || block.fieldCount > fields.size() - block.fieldBegin){
+        // fieldBegin equals the running field total, so it never passes fields.size().
+        if(block.fieldCount == 0u || block.fieldCount > fields.size() - block.fieldBegin){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} field range exceeds field count"), failureContext, blockIndex);
             return false;
         }
@@ -164,7 +165,8 @@ static Expected<u64> ReadMaterialTypedLayout(
     }
     const u32 fieldCount = *fieldCountResult;
 
-    if(inOutCursor > binary.size() || blockCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_TypedLayoutBlockBytes){
+    // Successful reads keep the cursor inside the binary.
+    if(blockCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_TypedLayoutBlockBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: typed layout block count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
@@ -187,7 +189,7 @@ static Expected<u64> ReadMaterialTypedLayout(
         outBlocks.push_back(block);
     }
 
-    if(inOutCursor > binary.size() || fieldCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_TypedLayoutFieldBytes){
+    if(fieldCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_TypedLayoutFieldBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: typed layout field count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
@@ -216,7 +218,7 @@ static Expected<u64> ReadMaterialTypedLayout(
         return MakeUnexpected(Failure{});
     }
     blockByteCount = *blockByteCountResult;
-    if(inOutCursor > binary.size() || blockByteCount > binary.size() - inOutCursor){
+    if(blockByteCount > binary.size() - inOutCursor){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: typed block byte count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
@@ -234,7 +236,7 @@ static Expected<u64> ReadMaterialTypedLayout(
         return MakeUnexpected(Failure{});
     }
     resourceReferenceCount = *resourceReferenceCountResult;
-    if(inOutCursor > binary.size() || resourceReferenceCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_ResourceReferenceBytes){
+    if(resourceReferenceCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_ResourceReferenceBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
@@ -330,10 +332,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!layoutHash)
         return false;
     candidate.m_typedLayoutHash = *layoutHash;
-    if(candidate.m_typedLayoutHash == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: interface material is missing typed layout data"));
-        return false;
-    }
+    NWB_ASSERT(candidate.m_typedLayoutHash != 0u);
 
     u32 shaderCount = 0;
     const auto shaderCountResult = ReadPOD<u32>(binary, cursor);
@@ -350,7 +349,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds supported shader stage count"));
         return false;
     }
-    if(cursor > binary.size() || shaderCount > (binary.size() - cursor) / MaterialBinaryPayload::s_ShaderEntryBytes){
+    if(shaderCount > (binary.size() - cursor) / MaterialBinaryPayload::s_ShaderEntryBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds available data"));
         return false;
     }

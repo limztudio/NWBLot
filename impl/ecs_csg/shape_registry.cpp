@@ -215,16 +215,9 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
             return MakeUnexpected(Failure{});
         }
 
-        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(found.value()) && found.value() == canonicalId && m_shapeTypeIndices.find(found.value()) != m_shapeTypeIndices.end());
-    }
-
-    if(found != m_shapeTypeIds.end()){
         const CsgShapeTypeId existingId = found.value();
         const auto foundIndex = m_shapeTypeIndices.find(existingId);
-        if(foundIndex == m_shapeTypeIndices.end()){
-            NWB_ASSERT(false);
-            return MakeUnexpected(Failure{});
-        }
+        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
 
         CsgShapeTypeInfo& shapeType = m_shapeTypes[foundIndex.value()];
         shapeType.desc = desc;

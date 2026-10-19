@@ -180,8 +180,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
             requiresDescriptorBufferLifecycle |= tracked->m_descriptorBufferManager != nullptr;
             for(GpuDescriptorHeap* const heap : tracked->m_referencedDescriptorHeaps){
-                if(!heap)
-                    continue;
+                NWB_ASSERT(heap);
                 if(heap != &m_device.m_gpuDescriptorHeap){
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
                     return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
@@ -264,7 +263,8 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             }
             if(!acceptedWait){
                 for(const Queue* const producerQueue : m_device.m_physicalQueues){
-                    if(producerQueue && producerQueue->m_trackingSemaphore == wait.semaphore){
+                    NWB_ASSERT(producerQueue);
+                    if(producerQueue->m_trackingSemaphore == wait.semaphore){
                         m_acceptedTimelineWaits.reserve(m_device.m_physicalQueues.size());
                         m_acceptedTimelineWaits.push_back(SubmissionWait{ wait.semaphore, 0u });
                         acceptedWait = &m_acceptedTimelineWaits.back();
@@ -327,15 +327,14 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     NWB_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
     for(usize i = 0u; i < numCmd; ++i){
         TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
-        if(!tracked || !validateCommandBufferSubmissionState(*tracked))
+        if(!validateCommandBufferSubmissionState(*tracked))
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         if(!tracked->validatePendingAccelStructBuildCommits()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
         for(GpuDescriptorHeap* const heap : tracked->m_referencedDescriptorHeaps){
-            if(!heap)
-                continue;
+            NWB_ASSERT(heap);
 
             const auto heapUseIndex = heap->validateCommandBufferUseSubmissionLocked(*tracked, submissionToken);
             if(!heapUseIndex)
@@ -375,16 +374,16 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             return;
 
         Futex* const lifecycleMutex = descriptorBufferLifecycleLock.release();
-        if(lifecycleMutex)
-            lifecycleMutex->unlock();
+        NWB_ASSERT(lifecycleMutex);
+        lifecycleMutex->unlock();
     };
     const auto releaseDescriptorHeap = [&]()noexcept{
         if(!descriptorHeapLock.owns_lock())
             return;
 
         Futex* const heapMutex = descriptorHeapLock.release();
-        if(heapMutex)
-            heapMutex->unlock();
+        NWB_ASSERT(heapMutex);
+        heapMutex->unlock();
     };
 
     auto submittedBatchBegin = m_commandBuffersInFlight.end();
@@ -524,8 +523,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
     ++next;
 
     TrackedCommandBufferPtr& cmdBuf = *commandBuffer;
-    if(!cmdBuf)
-        return source.erase(commandBuffer);
+    NWB_ASSERT(cmdBuf);
     if(&cmdBuf->m_queue != this || &cmdBuf->m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer recycle owner mismatch"));
@@ -567,7 +565,8 @@ bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisit
         return false;
 
     const Queue* const producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
-    if(!producerQueue || producerQueue->m_physicalQueue.deviceGeneration != prerequisite.deviceGeneration || producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
+    NWB_ASSERT(producerQueue && producerQueue->m_physicalQueue.deviceGeneration == prerequisite.deviceGeneration);
+    if(producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
         return false;
 
     const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value)noexcept -> bool {

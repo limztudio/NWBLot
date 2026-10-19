@@ -6,7 +6,6 @@
 
 #include <global/atomic.h>
 #include <global/exception.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,10 +32,8 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
 
     u64 nextGeneration = s_NextGeneration.load(MemoryOrder::relaxed);
     for(;;){
-        if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max){
+        if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max)
             NWB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
-            TerminateInvariant();
-        }
         if(s_NextGeneration.compare_exchange_weak(nextGeneration, nextGeneration + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return nextGeneration;
     }
@@ -92,14 +89,10 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
         }
     }
     NWB_FATAL_ASSERT_MSG(teardownValid, "GpuTaskGraph destruction requires in-flight task work to resolve first");
-    if(!teardownValid)
-        TerminateInvariant();
 
     const bool taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
-    if(!taskPayloadsDestroyed){
+    if(!taskPayloadsDestroyed)
         NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
-        TerminateInvariant();
-    }
     resetCompletion.complete();
 }
 

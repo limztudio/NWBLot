@@ -27,10 +27,6 @@ Expected<u64> ComputeShaderTableByteSize(const u32 recordCount, const u32 handle
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count or stride is invalid"), operation);
         return MakeUnexpected(Failure{});
     }
-    if(static_cast<u64>(recordCount) > Limit<u64>::s_Max / static_cast<u64>(handleSizeAligned)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table size overflows"), operation);
-        return MakeUnexpected(Failure{});
-    }
 
     return static_cast<u64>(recordCount) * static_cast<u64>(handleSizeAligned);
 }
@@ -53,8 +49,7 @@ Expected<u64> ComputeShaderTableAlignedOffset(const u64 deviceAddress, const u64
     const auto alignedAddress = AlignUpU64Checked(deviceAddress, static_cast<u64>(baseAlignment));
     if(!alignedAddress)
         return MakeUnexpected(Failure{});
-    if(*alignedAddress < deviceAddress)
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(*alignedAddress >= deviceAddress);
 
     const u64 offset = *alignedAddress - deviceAddress;
     if(offset > allocationByteSize || recordByteSize > allocationByteSize - offset)
@@ -206,10 +201,7 @@ Expected<u32> ShaderTable::findGroupIndex(const AStringView exportName, const Sh
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} export name is empty"), operationName, exportKind);
         return MakeUnexpected(Failure{});
     }
-    if(!m_pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table has no pipeline"), operationName);
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(m_pipeline);
 
     u32 groupIndex = 0u;
     u32 matchingKindCount = 0u;
@@ -272,20 +264,11 @@ Expected<ShaderTable::ShaderRecordPreflight> ShaderTable::preflightShaderRecord(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table byte size exceeds host address range"), operationName);
         return MakeUnexpected(Failure{});
     }
-    if(preflight.groupIndex >= m_pipeline->m_shaderGroups.size() || m_pipeline->m_shaderGroups[preflight.groupIndex].groupIndex != preflight.groupIndex || m_pipeline->m_shaderGroups[preflight.groupIndex].kind != expectedKind){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: immutable shader group metadata index is invalid"), operationName);
-        return MakeUnexpected(Failure{});
-    }
-    if(static_cast<usize>(preflight.groupIndex) > Limit<usize>::s_Max / static_cast<usize>(preflight.handleSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle offset overflows"), operationName);
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(preflight.groupIndex < m_pipeline->m_shaderGroups.size() && m_pipeline->m_shaderGroups[preflight.groupIndex].groupIndex == preflight.groupIndex && m_pipeline->m_shaderGroups[preflight.groupIndex].kind == expectedKind);
+    NWB_ASSERT(static_cast<usize>(preflight.groupIndex) <= Limit<usize>::s_Max / static_cast<usize>(preflight.handleSize));
 
     preflight.handleOffset = static_cast<usize>(preflight.groupIndex) * static_cast<usize>(preflight.handleSize);
-    if(preflight.handleOffset > m_pipeline->m_shaderGroupHandles.size() || static_cast<usize>(preflight.handleSize) > m_pipeline->m_shaderGroupHandles.size() - preflight.handleOffset){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle range is invalid"), operationName);
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(preflight.handleOffset <= m_pipeline->m_shaderGroupHandles.size() && static_cast<usize>(preflight.handleSize) <= m_pipeline->m_shaderGroupHandles.size() - preflight.handleOffset);
     return preflight;
 }
 
@@ -308,20 +291,14 @@ Expected<ShaderTable::ShaderTableAllocation> ShaderTable::allocateSBTBuffer(cons
         return MakeUnexpected(Failure{});
     }
     const BufferDesc& createdDesc = newBuffer->getCreationDescription();
-    if(!createdDesc.isShaderBindingTable || createdDesc.cpuAccess != CpuAccessMode::Write || createdDesc.byteSize < preflight.allocationByteSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: new {} SBT buffer does not match its construction contract"), operationName, recordName);
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(createdDesc.isShaderBindingTable && createdDesc.cpuAccess == CpuAccessMode::Write && createdDesc.byteSize == preflight.allocationByteSize);
 
     const auto alignedOffset = VulkanDetail::ComputeShaderTableAlignedOffset(newBuffer->getGpuVirtualAddress(), createdDesc.byteSize, preflight.recordByteSize, preflight.baseAlignment);
     if(!alignedOffset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: new {} SBT buffer address or aligned range is invalid"), operationName, recordName);
         return MakeUnexpected(Failure{});
     }
-    if(*alignedOffset > Limit<usize>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: new {} SBT buffer offset exceeds host address range"), operationName, recordName);
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(*alignedOffset <= Limit<usize>::s_Max);
 
     return ShaderTableAllocation{ Move(newBuffer), *alignedOffset };
 }
@@ -341,14 +318,8 @@ Expected<u32> ShaderTable::appendShaderRecord(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count exceeds u32 range"), operationName);
         return MakeUnexpected(Failure{});
     }
-    if(groupIndices.size() != count){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} SBT CPU record shadow is inconsistent"), operationName, recordName);
-        return MakeUnexpected(Failure{});
-    }
-    if((count == 0u && (buffer || offset != 0u)) || (count != 0u && !buffer)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} SBT resource state is inconsistent"), operationName, recordName);
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(groupIndices.size() == count);
+    NWB_ASSERT((count == 0u && !buffer && offset == 0u) || (count != 0u && buffer));
 
     const u32 recordIndex = count;
     const u32 newCount = recordIndex + 1u;
@@ -359,21 +330,13 @@ Expected<u32> ShaderTable::appendShaderRecord(
     GraphicsVector<u32> candidateGroupIndices(m_context.objectArena);
     candidateGroupIndices.reserve(newCount);
     for(const u32 groupIndex : groupIndices){
-        if(
-            groupIndex >= m_pipeline->m_shaderGroups.size()
-            || m_pipeline->m_shaderGroups[groupIndex].groupIndex != groupIndex
-            || m_pipeline->m_shaderGroups[groupIndex].kind != expectedKind
-            || static_cast<usize>(groupIndex) > Limit<usize>::s_Max / static_cast<usize>(preflight->handleSize)
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} SBT CPU record shadow contains an invalid group"), operationName, recordName);
-            return MakeUnexpected(Failure{});
-        }
-
-        const usize handleOffset = static_cast<usize>(groupIndex) * static_cast<usize>(preflight->handleSize);
-        if(handleOffset > m_pipeline->m_shaderGroupHandles.size() || static_cast<usize>(preflight->handleSize) > m_pipeline->m_shaderGroupHandles.size() - handleOffset){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} SBT CPU record shadow handle range is invalid"), operationName, recordName);
-            return MakeUnexpected(Failure{});
-        }
+        NWB_ASSERT(
+            groupIndex < m_pipeline->m_shaderGroups.size()
+            && m_pipeline->m_shaderGroups[groupIndex].groupIndex == groupIndex
+            && m_pipeline->m_shaderGroups[groupIndex].kind == expectedKind
+            && static_cast<usize>(groupIndex) <= Limit<usize>::s_Max / static_cast<usize>(preflight->handleSize)
+        );
+        NWB_ASSERT(static_cast<usize>(preflight->handleSize) <= m_pipeline->m_shaderGroupHandles.size() && static_cast<usize>(groupIndex) * static_cast<usize>(preflight->handleSize) <= m_pipeline->m_shaderGroupHandles.size() - static_cast<usize>(preflight->handleSize));
         candidateGroupIndices.push_back(groupIndex);
     }
     candidateGroupIndices.push_back(preflight->groupIndex);

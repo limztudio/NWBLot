@@ -249,21 +249,12 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
 bool RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, const Core::GpuDescriptorHandle outputLayerImage){
     NWB_ASSERT(presentationFrame.valid());
     NWB_ASSERT(m_deferredState.m_presentPipeline);
-    if(!presentationFrame.valid() || !m_deferredState.m_presentPipeline)
-        return false;
     Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
-    const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
     NWB_ASSERT(
-        presentationFramebufferDesc.colorAttachments.size() == 1u
-        && presentationFramebufferDesc.colorAttachments[0].texture == presentationFrame.backBuffer.texture.get()
+        presentationFramebuffer.getDescription().colorAttachments.size() == 1u
+        && presentationFramebuffer.getDescription().colorAttachments[0].texture == presentationFrame.backBuffer.texture.get()
         && m_deferredState.m_presentPipeline->getFramebufferInfo() == presentationFramebuffer.getFramebufferInfo()
     );
-    if(
-        presentationFramebufferDesc.colorAttachments.size() != 1u
-        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
-        || m_deferredState.m_presentPipeline->getFramebufferInfo() != presentationFramebuffer.getFramebufferInfo()
-    )
-        return false;
 
     // Graph owns the composite transition and the acquired texture's render-target state.
 

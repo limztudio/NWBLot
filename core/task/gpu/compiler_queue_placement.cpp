@@ -81,8 +81,10 @@ using namespace GpuTaskGraphCompilerDetail;
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
-            if(resource.type == GpuGraphResourceType::HazardDomain || use.requiredState == ResourceStates::Unknown || (!resource.initialOwnerQueue.valid() && resource.initialOwnerHandoffSourceCount == 0u))
+            if(resource.type == GpuGraphResourceType::HazardDomain || (!resource.initialOwnerQueue.valid() && resource.initialOwnerHandoffSourceCount == 0u))
                 continue;
+            // Analysis rejects an unknown required state on every non-HazardDomain use.
+            NWB_ASSERT(use.requiredState != ResourceStates::Unknown);
 
             const auto plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range);
             if(!plannedRange)

@@ -22,16 +22,13 @@ bool AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& mat
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:{
-            if(!resourceReference.textureAsset.valid())
-                return false;
-
+            // Resolved references own valid 2D cache entries until release clears the flag.
+            NWB_ASSERT(resourceReference.textureAsset.valid());
             const auto foundTexture = resources.textureAssetCache.find(resourceReference.textureAsset.name());
-            if(foundTexture == resources.textureAssetCache.end() || !foundTexture.value())
-                return false;
+            NWB_ASSERT(foundTexture != resources.textureAssetCache.end() && foundTexture.value());
 
             const TextureGpuResource& textureResource = *foundTexture.value();
-            if(!textureResource.valid() || textureResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage || !textureResource.texture)
-                return false;
+            NWB_ASSERT(textureResource.valid() && textureResource.sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
 
             collector.append(textureResource.texture);
             break;
@@ -39,6 +36,7 @@ bool AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& mat
         case MaterialResourceKind::Sampler:
             break;
         default:
+            NWB_ASSERT(false);
             return false;
         }
     }

@@ -190,7 +190,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replacements){
+void ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replacements){
     Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
             return lhs.begin > rhs.begin;
         }
@@ -198,8 +198,7 @@ template<typename Value, typename WriteValue>
 
     usize capacity = inOutSource.size();
     for(const TextReplacement& replacement : replacements){
-        if(replacement.begin > replacement.end || replacement.end > inOutSource.size())
-            return false;
+        NWB_ASSERT(replacement.begin <= replacement.end && replacement.end <= inOutSource.size());
         const usize oldSize = replacement.end - replacement.begin;
         if(replacement.text.size() > oldSize)
             capacity = AddSize(capacity, replacement.text.size() - oldSize);
@@ -208,7 +207,6 @@ template<typename Value, typename WriteValue>
     for(const TextReplacement& replacement : replacements){
         inOutSource.replace(replacement.begin, replacement.end - replacement.begin, replacement.text);
     }
-    return true;
 }
 
 [[nodiscard]] bool IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{

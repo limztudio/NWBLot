@@ -92,8 +92,8 @@ struct CopiesTaskBase{
     }
 };
 
-template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, typename EmitCopyFn>
-[[nodiscard]] inline bool RecordCopies(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context, ValidateCopyFn&& isCopyValid, CaptureCopyFn&& captureCopy, EmitCopyFn&& emitCopy)noexcept(
+template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
+[[nodiscard]] inline bool RecordCopies(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context, CaptureCopyFn&& captureCopy, EmitCopyFn&& emitCopy)noexcept(
     noexcept(CopiesPayloadHasWork(payload))
     && []()constexpr noexcept{
     using Range = RemoveReference_T<decltype((DeclVal<const Payload&>().copies))>;
@@ -111,7 +111,6 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
             && noexcept(++DeclVal<Iterator&>())
             && noexcept(*DeclVal<Iterator&>())
             && noexcept(DeclVal<void(*)(Item)noexcept>()(*DeclVal<Iterator&>()))
-            && noexcept(static_cast<bool>(!DeclVal<ValidateCopyFn&>()(DeclVal<Item>())))
             && noexcept(static_cast<bool>(!DeclVal<CaptureCopyFn&>()(DeclVal<const GpuTaskRecordContext&>(), DeclVal<Item>())))
             && noexcept(static_cast<bool>(!DeclVal<EmitCopyFn&>()(DeclVal<CommandList&>(), DeclVal<Item>())))
         ;
@@ -120,11 +119,8 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
         return false;
 }()
 ){
-    if(!CopiesPayloadHasWork(payload))
-        return false;
+    NWB_ASSERT(CopiesPayloadHasWork(payload));
     for(const auto& copy : payload.copies){
-        if(!isCopyValid(copy))
-            return false;
         if(context.commandIrCapture && !captureCopy(context, copy))
             return false;
         if(!emitCopy(commandList, copy))

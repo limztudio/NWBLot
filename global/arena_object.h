@@ -100,8 +100,7 @@ Concrete* NewArenaObject(Arena& arena, Args&&... args)noexcept(noexcept(arena.te
     Concrete* object = nullptr;
     ArenaObjectDetail::ConstructionStorage<Concrete, Arena> storage(arena, MakeNotNull(mem), 1u, object);
     object = ::new(static_cast<void*>(mem)) Concrete(Forward<Args>(args)...);
-    if(object)
-        storage.release();
+    storage.release();
     return object;
 }
 
@@ -221,8 +220,7 @@ inline typename EnableIf<!IsArray<T>::value, ArenaUniquePtr<T, Arena>>::type Mak
         T* object = nullptr;
         ArenaObjectDetail::ConstructionStorage<T, Arena, true, true> storage(arena, MakeNotNull(mem), 1u, object);
         object = ::new(static_cast<void*>(mem)) T(Forward<Args>(args)...);
-        if(object)
-            storage.release();
+        storage.release();
         return ArenaUniquePtr<T, Arena>(object, typename ArenaUniquePtr<T, Arena>::deleter_type(arena));
     }
     else
@@ -243,8 +241,7 @@ inline typename EnableIf<IsUnboundedArray<T>::value, ArenaUniquePtr<T, Arena>>::
     TBase* objects = nullptr;
     ArenaObjectDetail::ConstructionStorage<TBase, Arena, false> storage(arena, MakeNotNull(mem), n, objects);
     objects = ::new(static_cast<void*>(mem)) TBase[n];
-    if(objects)
-        storage.release();
+    storage.release();
     return ArenaUniquePtr<T, Arena>(objects, typename ArenaUniquePtr<T, Arena>::deleter_type(arena, n));
 }
 template<typename T, typename Arena, typename... Args>

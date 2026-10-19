@@ -342,8 +342,7 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
         return false;
 
     Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
-    if(!producerQueue || producerQueue->m_queueID != token.queue || !token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration))
-        return false;
+    NWB_ASSERT(producerQueue && producerQueue->m_queueID == token.queue && token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration));
 
     NothrowScopedLock producerLock(producerQueue->m_mutex);
     return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_lastSubmittedID;
@@ -367,13 +366,12 @@ bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, c
         return false;
 
     Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
-    if(!producerQueue)
-        return false;
+    NWB_ASSERT(producerQueue && producerQueue->m_queueID == token.queue);
 
     VkResult result = VK_SUCCESS;
     {
         ScopedLock producerLock(producerQueue->m_mutex);
-        if(producerQueue->m_trackingSemaphore == VK_NULL_HANDLE || producerQueue->m_queueID != token.queue || token.value > producerQueue->m_lastSubmittedID)
+        if(producerQueue->m_trackingSemaphore == VK_NULL_HANDLE || token.value > producerQueue->m_lastSubmittedID)
             return false;
         if(token.value <= producerQueue->m_lastFinishedID)
             return true;
@@ -471,7 +469,8 @@ void Device::configureQueueSharingContext()noexcept{
         if(!primaryQueue)
             return s_InvalidQueueFamilyIndex;
         for(const Queue* const physicalQueue : m_physicalQueues){
-            if(physicalQueue && physicalQueue->m_queueID == queueClass && physicalQueue->m_queueFamilyIndex != primaryQueue->m_queueFamilyIndex)
+            NWB_ASSERT(physicalQueue);
+            if(physicalQueue->m_queueID == queueClass && physicalQueue->m_queueFamilyIndex != primaryQueue->m_queueFamilyIndex)
                 return static_cast<i32>(physicalQueue->m_queueFamilyIndex);
         }
         return s_InvalidQueueFamilyIndex;

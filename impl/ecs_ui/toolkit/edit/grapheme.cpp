@@ -116,8 +116,7 @@ Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalAren
     usize offset = 0u;
     while(offset < text.size()){
         const auto decoded = __hidden_ui_grapheme::Decode(text, offset);
-        if(!decoded)
-            return MakeUnexpected(Failure{});
+        NWB_ASSERT(decoded);
         const u32 scalar = decoded->codePoint;
         const GraphemeBreak::Enum current = LookupGraphemeBreak(scalar);
         const IndicConjunct::Enum indic = LookupIndicConjunct(scalar);

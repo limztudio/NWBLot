@@ -37,8 +37,7 @@ void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedba
     if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
         return;
 
-    if(transition.action >= RendererTaskTimingFeedbackCollectionAction::kCount)
-        return;
+    NWB_ASSERT(transition.action < RendererTaskTimingFeedbackCollectionAction::kCount);
     currentPolicy = collectionUpdated ? transition.requestedPolicy : transition.previousPolicy;
 }
 
@@ -183,8 +182,8 @@ void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingInd
 
 void RendererTaskTimingFeedback::OnGpuTimingSampleCallback(void* const context, const Core::GpuTimingSample& sample)noexcept{
     RendererTaskTimingFeedback* const feedback = static_cast<RendererTaskTimingFeedback*>(context);
-    if(feedback)
-        feedback->onGpuTimingSample(sample);
+    NWB_ASSERT(feedback);
+    feedback->onGpuTimingSample(sample);
 }
 
 
@@ -270,10 +269,6 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
             return true;
 
         NWB_ASSERT(m_active && m_subscription.valid());
-        if(!m_active || !m_subscription.valid()){
-            ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, false);
-            return false;
-        }
         subscription = m_subscription;
     }
 

@@ -4,8 +4,6 @@
 
 #include "task_graph.h"
 
-#include <global/termination.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,10 +33,8 @@ GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexcept{
         return;
 
     NothrowScopedLock lock(m_graph.m_lifecycleMutex);
-    if(m_graph.m_activeDeclarationAccessCount == 0u){
+    if(m_graph.m_activeDeclarationAccessCount == 0u)
         NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration mutation admission must retain its exact lifecycle claim");
-        TerminateInvariant();
-    }
     --m_graph.m_activeDeclarationAccessCount;
 }
 
@@ -63,10 +59,8 @@ GpuTaskGraphDeclarationReadView::~GpuTaskGraphDeclarationReadView()noexcept{
         return;
 
     NothrowScopedLock lock(m_graph->m_lifecycleMutex);
-    if(m_graph->m_activeDeclarationAccessCount == 0u || m_graph->m_activeDeclarationReadCount == 0u){
+    if(m_graph->m_activeDeclarationAccessCount == 0u || m_graph->m_activeDeclarationReadCount == 0u)
         NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration read admission must retain its exact lifecycle claim");
-        TerminateInvariant();
-    }
     --m_graph->m_activeDeclarationAccessCount;
     --m_graph->m_activeDeclarationReadCount;
 }

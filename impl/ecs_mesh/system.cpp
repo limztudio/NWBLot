@@ -53,9 +53,7 @@ Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolve
     RenderableMeshDesc mesh;
 
     for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
-        if(!provider)
-            continue;
-
+        NWB_ASSERT(provider);
         const auto runtimeMesh = provider->resolveRuntimeMesh(entity);
         if(runtimeMesh && runtimeMesh->valid()){
             mesh.runtimeMesh = *runtimeMesh;
@@ -79,7 +77,8 @@ bool MeshSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
     if(m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         return true;
     for(const IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
-        if(provider && provider->hasRuntimeMeshBinding(entity))
+        NWB_ASSERT(provider);
+        if(provider->hasRuntimeMeshBinding(entity))
             return true;
     }
     return false;
@@ -89,8 +88,9 @@ void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
     for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
         if(requests.complete())
             return;
-        if(provider)
-            provider->markLiveRuntimeMeshes(requests);
+
+        NWB_ASSERT(provider);
+        provider->markLiveRuntimeMeshes(requests);
     }
 }
 

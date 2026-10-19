@@ -1108,7 +1108,7 @@ private:
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
 
 
-    [[nodiscard]] Expected<MarkerLabelRange> appendMarkerLabel(AStringView text);
+    [[nodiscard]] MarkerLabelRange appendMarkerLabel(AStringView text);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const noexcept;
     [[nodiscard]] bool retireTaskPayloads();
     [[nodiscard]] bool destroyTaskPayloads();

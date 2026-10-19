@@ -44,7 +44,8 @@ struct PacketMergeSummary{
     for(usize consumerIndex = 0u; consumerIndex < consumers.taskCount; ++consumerIndex){
         const GpuTaskId consumer{ .generation = task.generation, .index = static_cast<u32>(consumers[consumerIndex]) };
         const GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        if(!consumerAssignment || !consumerAssignment->queue.valid() || consumerAssignment->queue != packetQueue)
+        NWB_ASSERT(consumerAssignment && consumerAssignment->queue.valid());
+        if(consumerAssignment->queue != packetQueue)
             return true;
     }
     return false;
@@ -182,8 +183,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphPacketTimingEnvelopeOptions& timingEnvelope,
     GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
-    if(!analysis.validFor(graph) || !assignments.validFor(graph) || compiledPlan.compiledTaskIndexByTask.size() != graph.taskCount() || !compiledPlan.tasks.empty())
-        return MakeUnexpected(Failure{});
+    // The sole compile() caller runs after successful analysis and queue assignment for this graph and sizes an empty task map.
+    NWB_ASSERT(analysis.validFor(graph) && assignments.validFor(graph) && compiledPlan.compiledTaskIndexByTask.size() == graph.taskCount() && compiledPlan.tasks.empty());
 
     // Default: one acceptance/sync point per task.
     // Opt-in successors may share the preceding compatible packet (FrontierScored absorbs only cheap successors with no cross-queue frontier).
@@ -191,19 +192,18 @@ namespace GpuTaskGraphCompilerDetail{
     __hidden_gpu_task_graph_compiler_packetization::PacketMergeSummary precedingPacketSummary;
     const bool trackConsumerFrontiers = policy == GpuTaskGraphPacketizationPolicy::FrontierSafe || policy == GpuTaskGraphPacketizationPolicy::FrontierScored;
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
-        if(
-            !taskID.valid()
-            || taskID.generation != compiledPlan.graphGeneration
-            || taskID.index >= compiledPlan.compiledTaskIndexByTask.size()
-            || compiledPlan.compiledTaskIndexByTask[taskID.index] != Limit<u32>::s_Max
-            || compiledPlan.tasks.size() >= Limit<u32>::s_Max
-        )
-            return MakeUnexpected(Failure{});
+        // The topological order is a unique permutation of current graph tasks, each with a published queue assignment.
+        NWB_ASSERT(
+            taskID.valid()
+            && taskID.generation == compiledPlan.graphGeneration
+            && taskID.index < compiledPlan.compiledTaskIndexByTask.size()
+            && compiledPlan.compiledTaskIndexByTask[taskID.index] == Limit<u32>::s_Max
+            && compiledPlan.tasks.size() < Limit<u32>::s_Max
+        );
         const u32 compiledTaskIndex = static_cast<u32>(compiledPlan.tasks.size());
 
         const GpuTaskQueueAssignment* const assignment = assignments.find(taskID);
-        if(!assignment || !assignment->queue.valid())
-            return MakeUnexpected(Failure{});
+        NWB_ASSERT(assignment && assignment->queue.valid());
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const bool taskRecordsTiming = task.timing.policy != GpuTaskTimingPolicy::None;
@@ -296,8 +296,7 @@ namespace GpuTaskGraphCompilerDetail{
         );
         compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;
     }
-    if(compiledPlan.tasks.size() != compiledPlan.compiledTaskIndexByTask.size())
-        return MakeUnexpected(Failure{});
+    NWB_ASSERT(compiledPlan.tasks.size() == compiledPlan.compiledTaskIndexByTask.size());
     return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(timingEnvelope, compiledPlan);
 }
 

@@ -149,10 +149,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
         return MakeUnexpected(Failure{});
     };
 
-    if(materialInfo.shaderVariant.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant"), StringConvert(materialKey.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
+    NWB_ASSERT(!materialInfo.shaderVariant.empty());
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
     Core::GraphicsString csgShaderVariant(m_arena);
     Core::GraphicsString avboitCsgShaderVariant(m_arena);
@@ -212,18 +209,13 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     const bool sharedObjectGeometry = materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms") && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
     const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
 
-    const bool hasPixelShader = materialInfo.pixelShader.valid();
-    const bool hasMeshShader = materialInfo.meshShader.valid();
     Core::ShaderHandle passPixelShader;
     Name passPixelShaderName = s_NameNone;
     NameText<char> passPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
     __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
     if(MaterialPipelinePassUsesRendererAvboit(pass)){
         avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(pass, materialInfo);
-        if(materialInfo.transparent && !avboitPixelShaderSelection.materialDriven()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: transparent material '{}' is missing its cook-generated AVBOIT pass pixel shader"), StringConvert(materialKey.resolvedText()));
-            return failMaterialPipeline();
-        }
+        NWB_ASSERT(!materialInfo.transparent || avboitPixelShaderSelection.materialDriven());
     }
     switch(pass){
     case MaterialPipelinePass::Opaque:
@@ -381,15 +373,9 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     };
 
     const bool meshSupported = m_graphics.queryFeatureSupport(Core::Feature::Meshlets);
-    if(pass == MaterialPipelinePass::Opaque && !hasPixelShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"), StringConvert(materialKey.resolvedText()));
-        return failMaterialPipeline();
-    }
-
-    if(!hasMeshShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requires a mesh shader; compute emulation is derived internally from that mesh shader"), StringConvert(materialKey.resolvedText()));
-        return failMaterialPipeline();
-    }
+    // Surface info admission already requires the mesh shader and the opaque pixel shader.
+    NWB_ASSERT(pass != MaterialPipelinePass::Opaque || materialInfo.pixelShader.valid());
+    NWB_ASSERT(materialInfo.meshShader.valid());
 
     if(meshSupported){
         if(!tryBuildMeshPipeline()){

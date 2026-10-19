@@ -109,13 +109,8 @@ static bool GetVariantBytecode(
         return true;
 
     HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>> mergedDefines(0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
-    if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: define count overflow for entry '{}'"), StringConvert(entry.name));
-        return false;
-    }
-
-    const usize mergedDefineCapacity = defineCombo.size() + entry.implicitDefines.size();
-    mergedDefines.reserve(mergedDefineCapacity);
+    // Two live container sizes cannot overflow usize.
+    mergedDefines.reserve(defineCombo.size() + entry.implicitDefines.size());
     for(const auto& [defineName, value] : defineCombo)
         mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
     for(const auto& [defineName, value] : entry.implicitDefines)
@@ -323,10 +318,7 @@ bool AppendPreparedShadersToManifest(
             record.sourceChecksum = sourceChecksum;
             record.bytecodeChecksum = bytecodeChecksum;
             record.virtualPathHash = virtualPathHash;
-            if(shaderIndexRecords.size() >= *shaderRecordCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count exceeded prepared capacity"));
-                return false;
-            }
+            NWB_ASSERT(shaderIndexRecords.size() < *shaderRecordCount);
             shaderIndexRecords.push_back(Move(record));
             return true;
         };
@@ -353,10 +345,7 @@ bool AppendPreparedShadersToManifest(
         }
     }
 
-    if(shaderIndexRecords.size() != *shaderRecordCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count mismatch after cook"));
-        return false;
-    }
+    NWB_ASSERT(shaderIndexRecords.size() == *shaderRecordCount);
     return __hidden_shader_volume_writer::AppendShaderIndexToManifest(cookArena, shaderIndexRecords, manifest, inOutSeenVirtualPathHashes, scratchArena);
 }
 

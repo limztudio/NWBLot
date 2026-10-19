@@ -116,36 +116,15 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits"), TStringView(sourceText));
         return false;
     }
-    if(instance.skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has skin but no skeleton joint count"), TStringView(sourceText));
-        return false;
-    }
-    if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits"), TStringView(sourceText), instance.skeletonJointCount);
-        return false;
-    }
-    if(!SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid"), TStringView(sourceText));
-        return false;
-    }
-    for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices){
-        const SIMDMatrix inverseBind = LoadFloat(storedInverseBind);
-        if(MatrixIsInvertibleAffine(inverseBind, SkinValidation::s_Epsilon, SkinValidation::s_Epsilon))
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid"), TStringView(sourceText));
-        return false;
-    }
-
-    for(usize skinIndex = 0u; skinIndex < instance.skin.size(); ++skinIndex){
-        const SkinInfluence4& skin = instance.skin[skinIndex];
-        const SIMDVectorSingle weights = LoadFloat(skin.weight);
-        if(SkinValidation::ValidSkinInfluenceWeights(weights) && SkinValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount))
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skin influence {} is invalid"), TStringView(sourceText), skinIndex);
-        return false;
-    }
+    // Skin::loadBinary already admitted the copied skin and inverse bind data.
+    NWB_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
+    NWB_ASSERT(SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
+#if defined(NWB_DEBUG)
+    for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices)
+        NWB_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), SkinValidation::s_Epsilon, SkinValidation::s_Epsilon));
+    for(const SkinInfluence4& skin : instance.skin)
+        NWB_ASSERT(SkinValidation::ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
+#endif
 
     usize logicalAttributeRefIndex = 0u;
     for(usize meshletIndex = 0u; meshletIndex < instance.meshlets.size(); ++meshletIndex){

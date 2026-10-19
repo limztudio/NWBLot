@@ -350,8 +350,6 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
 ){
     NWB_ASSERT(geometrySignatureCount <= UINT32_MAX);
     NWB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
-    if(geometrySignatureCount > UINT32_MAX || (geometrySignatureCount != 0u && !geometrySignatures))
-        return false;
 
     GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = MakeGlobalUnique<AccelStructBuildSignatureRole>(m_context.objectArena, m_context.objectArena);
     if(!preparedRole)
@@ -470,8 +468,8 @@ void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     discardPendingOpacityMicromapBuildCommits();
 
     for(GpuDescriptorHeap* heap : m_referencedDescriptorHeaps){
-        if(heap)
-            heap->discardCommandBufferUse(*this);
+        NWB_ASSERT(heap);
+        heap->discardCommandBufferUse(*this);
     }
     m_referencedDescriptorHeaps.clear();
     m_descriptorBufferManager = nullptr;

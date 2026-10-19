@@ -26,8 +26,8 @@ enum Enum : u32{ Move, EqualFloat, EqualDouble, EqualDoubleXYZ };
 };
 
 struct Dataset{
-    SIMDVectorDouble left[64];
-    SIMDVectorDouble right[64];
+    UInt64x4 left[64];
+    UInt64x4 right[64];
 };
 
 
@@ -148,9 +148,10 @@ NWB_NOINLINE void InitializeDataset(Dataset& dataset)noexcept{
     u64 state = 0x5629842965734193ull;
     for(usize i = 0u; i < 64u; ++i){
         const auto next = [&]()noexcept{ state ^= state << 13u; state ^= state >> 7u; state ^= state << 17u; return state; };
-        dataset.left[i] = VectorDoubleSetInt(next(), next(), next(), next());
+        const SIMDVectorDouble left = VectorDoubleSetInt(next(), next(), next(), next());
         const u64 differing = i % 3u == 0u ? 1u : 0u;
-        dataset.right[i] = VectorDoubleSetInt(VectorDoubleGetIntX(dataset.left[i]) ^ differing, VectorDoubleGetIntY(dataset.left[i]), VectorDoubleGetIntZ(dataset.left[i]), VectorDoubleGetIntW(dataset.left[i]));
+        StoreDoubleInt(left, dataset.left[i]);
+        StoreDoubleInt(VectorDoubleSetInt(VectorDoubleGetIntX(left) ^ differing, VectorDoubleGetIntY(left), VectorDoubleGetIntZ(left), VectorDoubleGetIntW(left)), dataset.right[i]);
     }
 }
 
@@ -172,7 +173,7 @@ NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const boo
     if(latency){
         usize index = 1u;
         for(usize i = 0u; i < iterations; ++i){
-            const u32 result = Apply<Kind, Candidate>(data.left[index], data.right[index]);
+            const u32 result = Apply<Kind, Candidate>(LoadDoubleInt(data.left[index]), LoadDoubleInt(data.right[index]));
             results[0] += result;
             index = (index + result + 1u) & 63u;
         }
@@ -181,7 +182,7 @@ NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const boo
         for(usize i = 0u; i < iterations; ++i){
             const usize index = i & 63u;
             for(usize lane = 0u; lane < 8u; ++lane)
-                results[lane] += Apply<Kind, Candidate>(data.left[(index + lane * 7u) & 63u], data.right[(index + lane * 7u) & 63u]);
+                results[lane] += Apply<Kind, Candidate>(LoadDoubleInt(data.left[(index + lane * 7u) & 63u]), LoadDoubleInt(data.right[(index + lane * 7u) & 63u]));
         }
     }
     u64 checksum = 0u;

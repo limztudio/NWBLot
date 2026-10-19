@@ -67,17 +67,15 @@ static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void StoreObjectWorldTransform(Core::ECS::World& world, const Core::ECS::EntityID owner, const SkeletonJointMatrix& localTransform, Scene::TransformComponent& transform)noexcept{
+[[nodiscard]] SIMDMatrix LoadOwnerWorldMatrix(Core::ECS::World& world, const Core::ECS::EntityID owner)noexcept{
     const Scene::TransformComponent* ownerTransform = world.tryGetComponent<Scene::TransformComponent>(owner);
-    const SIMDMatrix ownerMatrix = ownerTransform ? MatrixAffineTransformation(LoadFloat(ownerTransform->scale), VectorZero(), LoadFloat(ownerTransform->rotation), LoadFloat(ownerTransform->position)) : MatrixIdentity();
+    return ownerTransform ? MatrixAffineTransformation(LoadFloat(ownerTransform->scale), VectorZero(), LoadFloat(ownerTransform->rotation), LoadFloat(ownerTransform->position)) : MatrixIdentity();
+}
 
-    const auto decomposition = MatrixDecompose(MatrixMultiply(ownerMatrix, LoadFloat(localTransform)));
-    if(!decomposition)
-        return;
-
-    StoreFloat(VectorSetW(decomposition->translation, 0.0f), transform.position);
-    StoreFloat(decomposition->rotation, transform.rotation);
-    StoreFloat(VectorSetW(decomposition->scale, 0.0f), transform.scale);
+void StoreDecomposedTransform(const MatrixDecomposition& decomposition, Scene::TransformComponent& transform)noexcept{
+    StoreFloat(VectorSetW(decomposition.translation, 0.0f), transform.position);
+    StoreFloat(decomposition.rotation, transform.rotation);
+    StoreFloat(VectorSetW(decomposition.scale, 0.0f), transform.scale);
 }
 
 void TagObject(Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const Name model, const Name object, const SkeletonJointMatrix& localTransform, const ModelObjectKind::Enum kind){
@@ -290,7 +288,8 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::Skeleton);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    __hidden_model_system::StoreObjectWorldTransform(m_world, owner, object.transform, transform);
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
+        __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
 
     auto& pose = entity.addComponent<SkeletonPoseComponent>(m_arena);
     pose.parentJoints.clear();
@@ -312,7 +311,8 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::StaticMesh);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    __hidden_model_system::StoreObjectWorldTransform(m_world, owner, object.transform, transform);
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
+        __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
     if(m_applyRenderer)
         m_applyRenderer(m_world, m_arena, entity, owner, object.material);
 
@@ -376,7 +376,8 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::SkinnedMesh);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    __hidden_model_system::StoreObjectWorldTransform(m_world, owner, object.transform, transform);
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
+        __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
     if(m_applyRenderer)
         m_applyRenderer(m_world, m_arena, entity, owner, object.material);
 
@@ -395,7 +396,8 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObject
             if(object.kind == ModelObjectKind::StaticMesh)
                 return;
 
-            __hidden_model_system::StoreObjectWorldTransform(m_world, object.owner, object.localTransform, transform);
+            if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, object.owner), LoadFloat(object.localTransform))))
+                __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
         }
     );
 }
@@ -481,13 +483,8 @@ void ModelSystem::updateStaticMeshAttachments(){
                 worldTransform = MatrixMultiply(MatrixMultiply(parentMatrix, jointMatrix), localMatrix);
             }
 
-            const auto decomposition = MatrixDecompose(worldTransform);
-            if(!decomposition)
-                return;
-
-            StoreFloat(VectorSetW(decomposition->translation, 0.0f), transform.position);
-            StoreFloat(decomposition->rotation, transform.rotation);
-            StoreFloat(VectorSetW(decomposition->scale, 0.0f), transform.scale);
+            if(const auto decomposition = MatrixDecompose(worldTransform))
+                __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
         }
     );
 }

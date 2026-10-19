@@ -50,8 +50,8 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool DrawSkinGallery(PaintBuilder& paint, const f32 x, const f32 y, const f32 captionHeight){
-    const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
+// Origin lanes are x, y; caption height is splat across lanes.
+[[nodiscard]] static bool DrawSkinGallery(PaintBuilder& paint, const SIMDVectorSingle origin, const SIMDVectorSingle captionHeight){
     const SIMDVectorSingle buttonNormal = VectorAdd(origin, VectorSet(12.0f, 12.0f, 0.0f, 0.0f));
     const SIMDVectorSingle buttonHover = VectorAdd(origin, VectorSet(146.0f, 12.0f, 0.0f, 0.0f));
     const SIMDVectorSingle buttonPressed = VectorAdd(origin, VectorSet(12.0f, 50.0f, 0.0f, 0.0f));
@@ -64,7 +64,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
     const SIMDVectorSingle progressFill = VectorAdd(origin, VectorSet(14.0f, 134.0f, 0.0f, 0.0f));
     const SIMDVectorSingle editNormal = VectorAdd(origin, VectorSet(12.0f, 158.0f, 0.0f, 0.0f));
     return
-        paint.drawRegion(s_Panel, { x, y, s_PanelWidth, VectorGetX(VectorAdd(VectorReplicate(170.0f), VectorReplicate(captionHeight))) })
+        paint.drawRegion(s_Panel, { VectorGetX(origin), VectorGetY(origin), s_PanelWidth, VectorGetX(VectorAdd(VectorReplicate(170.0f), captionHeight)) })
         && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), 122.0f, 30.0f })
         && paint.drawRegion(s_ButtonHover, { VectorGetX(buttonHover), VectorGetY(buttonHover), 122.0f, 30.0f })
         && paint.drawRegion(s_ButtonPressed, { VectorGetX(buttonPressed), VectorGetY(buttonPressed), 122.0f, 30.0f })
@@ -75,7 +75,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
         && paint.drawRegion(s_CheckboxMark, { VectorGetX(checkboxMark), VectorGetY(checkboxMark), 16.0f, 16.0f })
         && paint.drawRegion(s_ProgressTrack, { VectorGetX(progressTrack), VectorGetY(progressTrack), 256.0f, 16.0f })
         && paint.drawRegion(s_ProgressFill, { VectorGetX(progressFill), VectorGetY(progressFill), 168.0f, 12.0f })
-        && paint.drawRegion(s_EditNormal, { VectorGetX(editNormal), VectorGetY(editNormal), 256.0f, captionHeight })
+        && paint.drawRegion(s_EditNormal, { VectorGetX(editNormal), VectorGetY(editNormal), 256.0f, VectorGetX(captionHeight) })
     ;
 }
 
@@ -145,7 +145,7 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     m_widgets.paint(context, *gallery);
     if(gallery->y < VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(y), VectorReplicate(170.0f)), captionHeight), VectorReplicate(12.0f))) || x < 390.0f)
         return;
-    if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, x, y, VectorGetX(captionHeight))){
+    if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, VectorSet(x, y, 0.0f, 0.0f), captionHeight)){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));
         return;
     }

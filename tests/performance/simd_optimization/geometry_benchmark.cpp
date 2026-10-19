@@ -30,7 +30,14 @@ namespace __hidden_simd_geometry_benchmark{
 
 using Intersection = bool (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
 
+// Fixture storage for one triangle pair.
 struct TrianglePair{
+    Double4 first[3];
+    Double4 second[3];
+};
+
+// Loaded triangle pair used by the checks.
+struct TrianglePairVectors{
     SIMDVectorDouble first[3];
     SIMDVectorDouble second[3];
 };
@@ -351,7 +358,7 @@ NWB_NOINLINE u64 Run(const Intersection implementation, const TrianglePair (&pai
     u64 result = 0u;
     for(u32 pass = 0u; pass < passes; ++pass){
         for(const TrianglePair& pair : pairs)
-            result += implementation(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]) ? 1u : 0u;
+            result += implementation(LoadDouble(pair.first[0]), LoadDouble(pair.first[1]), LoadDouble(pair.first[2]), LoadDouble(pair.second[0]), LoadDouble(pair.second[1]), LoadDouble(pair.second[2])) ? 1u : 0u;
     }
     s_Checksum = result;
     return result;
@@ -361,11 +368,22 @@ NWB_NOINLINE u64 Run(const Intersection implementation, const TrianglePair (&pai
     return VectorDoubleSet(x, y, z, 0.0);
 }
 
+[[nodiscard]] static TrianglePairVectors LoadTrianglePair(const TrianglePair& pair)noexcept{
+    return { { LoadDouble(pair.first[0]), LoadDouble(pair.first[1]), LoadDouble(pair.first[2]) }, { LoadDouble(pair.second[0]), LoadDouble(pair.second[1]), LoadDouble(pair.second[2]) } };
+}
+
+static void StoreTrianglePair(const TrianglePairVectors& vectors, TrianglePair& pair)noexcept{
+    for(u32 vertex = 0u; vertex < 3u; ++vertex){
+        StoreDouble(vectors.first[vertex], pair.first[vertex]);
+        StoreDouble(vectors.second[vertex], pair.second[vertex]);
+    }
+}
+
 static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     for(u32 index = 0u; index < s_FixtureCount; ++index){
         // index * -0.25 has the same bits as -(index * 0.25).
         const SIMDVectorDouble translation = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleSet(0.25, -0.25, 0.25, 0.0));
-        TrianglePair& pair = pairs[index];
+        TrianglePairVectors pair;
         if(kind == 0u){
             pair = { { LoadPosition(0.0, 0.0, 0.0), LoadPosition(4.0, 0.0, 0.0), LoadPosition(0.0, 4.0, 0.0) }, { LoadPosition(1.0, 1.0, 0.0), LoadPosition(3.0, 1.0, 0.0), LoadPosition(1.0, 3.0, 0.0) } };
         }
@@ -391,10 +409,11 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
             pair.first[vertex] = VectorDoubleAdd(pair.first[vertex], translation);
             pair.second[vertex] = VectorDoubleAdd(pair.second[vertex], translation);
         }
+        StoreTrianglePair(pair, pairs[index]);
     }
 }
 
-[[nodiscard]] static bool CheckPair(const TrianglePair& pair, const bool expected)noexcept{
+[[nodiscard]] static bool CheckPair(const TrianglePairVectors& pair, const bool expected)noexcept{
     constexpr u32 s_Permutations[][3] = { { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u }, { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u } };
     for(const auto& firstOrder : s_Permutations){
         for(const auto& secondOrder : s_Permutations){
@@ -422,7 +441,7 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     return state;
 }
 
-[[nodiscard]] static bool CheckExceptionEquivalence(const TrianglePair& pair)noexcept{
+[[nodiscard]] static bool CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     if(!originalEnvironment)
@@ -454,7 +473,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     _exit(32 + information->si_code);
 }
 
-[[nodiscard]] static Expected<i32, ErrorCode> TrapResult(const Intersection implementation, const TrianglePair& pair, const i32 mask)noexcept{
+[[nodiscard]] static Expected<i32, ErrorCode> TrapResult(const Intersection implementation, const TrianglePairVectors& pair, const i32 mask)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return MakeUnexpected(MakeErrorCode(static_cast<ErrorCondition>(errno)));
@@ -479,7 +498,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
 }
 #endif
 
-[[nodiscard]] static bool CheckTrapEquivalence(const TrianglePair& pair)noexcept{
+[[nodiscard]] static bool CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
 #if defined(NWB_PLATFORM_LINUX)
     const Intersection production = TriangleDoubleTests::Intersects;
     for(const i32 mask : { FE_INVALID, FE_OVERFLOW, FE_INVALID | FE_OVERFLOW, FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT }){
@@ -504,12 +523,12 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     TrianglePair pairs[s_FixtureCount];
     for(u32 kind = 0u; kind < 7u; ++kind){
         Fill(kind, pairs);
-        if(!CheckPair(pairs[0], kind != 4u && kind != 5u))
+        if(!CheckPair(LoadTrianglePair(pairs[0]), kind != 4u && kind != 5u))
             return false;
     }
     u64 state = 0x4f1bbcdc6762c13fu;
     for(u32 sample = 0u; sample < 200000u; ++sample){
-        TrianglePair pair{};
+        TrianglePairVectors pair{};
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
             f64 coordinates[3];
             for(f64& coordinate : coordinates)
@@ -546,26 +565,27 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
             return false;
     }
     Fill(0u, pairs);
-    for(SIMDVectorDouble& vertex : pairs[0].first)
+    TrianglePairVectors signaling = LoadTrianglePair(pairs[0]);
+    for(SIMDVectorDouble& vertex : signaling.first)
         vertex = VectorDoubleSetIntW(vertex, 0x7ff0000000000001u);
-    for(SIMDVectorDouble& vertex : pairs[0].second)
+    for(SIMDVectorDouble& vertex : signaling.second)
         vertex = VectorDoubleSetIntW(vertex, 0x7ff0000000000001u);
     const auto environment = HoldFloatingPointExceptions();
     if(!environment)
         return false;
-    const bool baseline = Baseline(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
+    const bool baseline = Baseline(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 baselineExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool candidate = ZeroAxis(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
+    const bool candidate = ZeroAxis(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 candidateExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool production = TriangleDoubleTests::Intersects(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
+    const bool production = TriangleDoubleTests::Intersects(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 productionExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool hoisted = AbsHoisted(pairs[0].first[0], pairs[0].first[1], pairs[0].first[2], pairs[0].second[0], pairs[0].second[1], pairs[0].second[2]);
+    const bool hoisted = AbsHoisted(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 hoistedExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!SetFloatingPointEnvironment(*environment))
         return false;
@@ -576,26 +596,29 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     const f64 scales[] = { 0.0, 0x1p-300, 0x1p-100, 0x1p+100, 0x1p+300, 0x1p+900 };
     for(const f64 scale : scales){
         Fill(3u, pairs);
+        TrianglePairVectors scaled = LoadTrianglePair(pairs[0]);
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
-            pairs[0].first[vertex] = VectorDoubleMultiply(pairs[0].first[vertex], VectorDoubleReplicate(scale));
-            pairs[0].second[vertex] = VectorDoubleMultiply(pairs[0].second[vertex], VectorDoubleReplicate(scale));
+            scaled.first[vertex] = VectorDoubleMultiply(scaled.first[vertex], VectorDoubleReplicate(scale));
+            scaled.second[vertex] = VectorDoubleMultiply(scaled.second[vertex], VectorDoubleReplicate(scale));
         }
-        if(!CheckExceptionEquivalence(pairs[0]))
+        if(!CheckExceptionEquivalence(scaled))
             return false;
     }
     for(u32 index = 0u; index < LengthOf(activeBits); ++index){
         Fill(3u, pairs);
-        pairs[0].first[0] = VectorDoubleSetIntX(pairs[0].first[0], activeBits[index]);
-        if(!CheckExceptionEquivalence(pairs[0]))
+        TrianglePairVectors active = LoadTrianglePair(pairs[0]);
+        active.first[0] = VectorDoubleSetIntX(active.first[0], activeBits[index]);
+        if(!CheckExceptionEquivalence(active))
             return false;
     }
     const f64 maximum = Limit<f64>::s_Max;
     const TrianglePair extreme[] = {
-        { { LoadPosition(0.0, 1.0, 1.0), LoadPosition(0.0, 1.0, 1.0), LoadPosition(0.0, 1.0, 1.0) }, { LoadPosition(Limit<f64>::s_Infinity, 1.0, 2.0), LoadPosition(-1.0, -1.0, -1.0), LoadPosition(1.0, 3.0, 4.0) } },
-        { { LoadPosition(maximum, 0.0, 0.0), LoadPosition(maximum, 0.0, 0.0), LoadPosition(maximum, 0.0, 0.0) }, { LoadPosition(-maximum, -1.0, -1.0), LoadPosition(0.0, 1.0, 1.0), LoadPosition(maximum, 0.0, 0.0) } }
+        { { Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0) }, { Double4(Limit<f64>::s_Infinity, 1.0, 2.0), Double4(-1.0, -1.0, -1.0), Double4(1.0, 3.0, 4.0) } },
+        { { Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0) }, { Double4(-maximum, -1.0, -1.0), Double4(0.0, 1.0, 1.0), Double4(maximum, 0.0, 0.0) } }
     };
     for(const TrianglePair& pair : extreme){
-        if(!CheckExceptionEquivalence(pair) || !CheckTrapEquivalence(pair))
+        const TrianglePairVectors vectors = LoadTrianglePair(pair);
+        if(!CheckExceptionEquivalence(vectors) || !CheckTrapEquivalence(vectors))
             return false;
     }
     return true;

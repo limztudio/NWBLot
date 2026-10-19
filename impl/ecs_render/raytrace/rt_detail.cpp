@@ -113,7 +113,7 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
     SIMDVectorSingle centroidMin = VectorReplicate(s_RayTracingFiniteInfinity);
     SIMDVectorSingle centroidMax = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 i = lo; i < hi; ++i){
-        const SIMDVectorSingle centroid = primitiveBounds[indices[i]].centroid;
+        const SIMDVectorSingle centroid = LoadFloat(primitiveBounds[indices[i]].centroid);
         centroidMin = VectorMin(centroidMin, centroid);
         centroidMax = VectorMax(centroidMax, centroid);
     }
@@ -145,12 +145,12 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
         }
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const SIMDVectorSingle c = VectorReplicate(VectorGetByIndex(primitiveBounds[instance].centroid, axis));
+            const SIMDVectorSingle c = VectorReplicate(primitiveBounds[instance].centroid.raw[axis]);
             u32 b = static_cast<u32>(VectorGetX(VectorMultiply(VectorSubtract(c, loExtent), invExtent)));
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
-            binMin[b] = VectorMin(binMin[b], primitiveBounds[instance].aabbMin);
-            binMax[b] = VectorMax(binMax[b], primitiveBounds[instance].aabbMax);
+            binMin[b] = VectorMin(binMin[b], LoadFloat(primitiveBounds[instance].aabbMin));
+            binMax[b] = VectorMax(binMax[b], LoadFloat(primitiveBounds[instance].aabbMax));
             binCost[b] = VectorGetX(VectorAdd(VectorReplicate(binCost[b]), VectorReplicate(static_cast<f32>(instanceLeafCost.get()[instance]))));
             ++binCount[b];
         }
@@ -221,7 +221,7 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
         mid = lo;
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const SIMDVectorSingle c = VectorReplicate(VectorGetByIndex(primitiveBounds[instance].centroid, bestAxis));
+            const SIMDVectorSingle c = VectorReplicate(primitiveBounds[instance].centroid.raw[bestAxis]);
             u32 b = static_cast<u32>(VectorGetX(VectorMultiply(VectorSubtract(c, loExtent), invExtent)));
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
@@ -241,8 +241,8 @@ u32 BuildSceneBvhNode(u32* indices, const u32 lo, const u32 hi, const SceneBvhPr
     const u32 rightChild = BuildSceneBvhNode(indices, mid, hi, primitiveBounds, nodes, instanceLeafCost);
 
     SceneBvhNodeCalculation& node = nodes[nodeIndex];
-    node.aabbMin = VectorMin(nodes[leftChild].aabbMin, nodes[rightChild].aabbMin);
-    node.aabbMax = VectorMax(nodes[leftChild].aabbMax, nodes[rightChild].aabbMax);
+    StoreFloat(VectorMin(LoadFloat(nodes[leftChild].aabbMin), LoadFloat(nodes[rightChild].aabbMin)), node.aabbMin);
+    StoreFloat(VectorMax(LoadFloat(nodes[leftChild].aabbMax), LoadFloat(nodes[rightChild].aabbMax)), node.aabbMax);
     node.leftChild = leftChild;
     node.rightChild = rightChild;
     node.containsTransparentOccluder = nodes[leftChild].containsTransparentOccluder || nodes[rightChild].containsTransparentOccluder;

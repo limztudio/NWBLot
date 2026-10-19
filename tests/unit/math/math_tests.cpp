@@ -530,7 +530,7 @@ TEST(Math, MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTies){
         EXPECT_FALSE(Vector4IsInfinite(decomposition->rotation));
         const SIMDMatrix reconstructed = MatrixAffineTransformation(decomposition->scale, VectorZero(), decomposition->rotation, decomposition->translation);
         for(usize row = 0u; row < 4u; ++row){
-            EXPECT_TRUE(NearlyEqual4(reconstructed.v[row], VectorGetX(matrices[index].v[row]), VectorGetY(matrices[index].v[row]), VectorGetZ(matrices[index].v[row]), VectorGetW(matrices[index].v[row]))) << row;
+            EXPECT_TRUE(Vector4LessOrEqual(VectorAbs(VectorSubtract(reconstructed.v[row], matrices[index].v[row])), VectorReplicate(NWB::Tests::s_DefaultNearlyEqualEpsilon))) << row;
         }
     }
 

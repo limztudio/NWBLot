@@ -63,12 +63,12 @@ struct PositionKeyEqual{
     }
 };
 
-// SIMD calculation scratch; serialized normals stay in SourceMesh's Float/Vec streams.
-struct alignas(Float4) PositionNormalCalculation{
-    SIMDVectorSingle value = {};
+// Summed normal for one source position. It stays in the map, so it uses Float storage.
+struct PositionNormalRecord{
+    Float4 value;
 };
 
-using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalCalculation, PositionKeyHasher, PositionKeyEqual>;
+using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalRecord, PositionKeyHasher, PositionKeyEqual>;
 
 
 struct MeshSkinInfluenceHasher{

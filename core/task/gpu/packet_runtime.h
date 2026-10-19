@@ -113,10 +113,11 @@ struct GpuTaskGraphRecordingStatistics{
 
 
 public:
-    [[nodiscard]] f64 readyFrontierWorkerUtilization()const noexcept{
+    // The utilization is splat across all lanes.
+    [[nodiscard]] SIMDVectorDouble readyFrontierWorkerUtilization()const noexcept{
         if(!(readyFrontierWorkerCapacitySeconds > 0.0))
-            return 0.0;
-        return VectorDoubleGetX(VectorDoubleSaturate(VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds))));
+            return VectorDoubleZero();
+        return VectorDoubleSaturate(VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds)));
     }
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };

@@ -79,7 +79,7 @@ public:
 )noexcept;
 
 void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, bool hardware);
-void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, Core::ECS::EntityID entity, bool transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
+void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, Core::ECS::EntityID entity, bool transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, SIMDVectorSingle localMin, SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
 [[nodiscard]] bool FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena);
 
 

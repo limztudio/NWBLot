@@ -28,9 +28,13 @@ namespace UiRectPrecision{
     };
 };
 
-// Preserve each consumer's endpoint admission and subprecision paint policy at compile time.
+// Preserve each consumer's endpoint admission and subprecision paint policy at compile time. Rectangle lanes are x, y, width, height.
 template<UiRectPrecision::Enum Precision>
-[[nodiscard]] NWB_INLINE Expected<Rect> MakeUiRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
+[[nodiscard]] NWB_INLINE Expected<Rect> MakeUiRect(const SIMDVectorDouble rectangle)noexcept{
+    const f64 x = VectorDoubleGetX(rectangle);
+    const f64 y = VectorDoubleGetY(rectangle);
+    const f64 width = VectorDoubleGetZ(rectangle);
+    const f64 height = VectorDoubleGetW(rectangle);
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -39,7 +43,7 @@ template<UiRectPrecision::Enum Precision>
     )
         return MakeUnexpected(Failure{});
     if constexpr(Precision != UiRectPrecision::RoundedEndpoints){
-        const SIMDVectorDouble end = VectorDoubleAdd(VectorDoubleSet(x, y, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0));
+        const SIMDVectorDouble end = VectorDoubleAdd(VectorDoubleAndInt(rectangle, s_DoubleSIMDMaskXY), VectorDoubleAndInt(VectorDoubleSwizzle<2, 3, 0, 1>(rectangle), s_DoubleSIMDMaskXY));
         if(VectorDoubleGetX(end) < -Limit<f32>::s_Max || VectorDoubleGetX(end) > Limit<f32>::s_Max || VectorDoubleGetY(end) < -Limit<f32>::s_Max || VectorDoubleGetY(end) > Limit<f32>::s_Max)
             return MakeUnexpected(Failure{});
     }
@@ -74,7 +78,7 @@ template<UiRectPrecision::Enum Precision>
     const SIMDVectorDouble extent = VectorDoubleSubtract(end, origin);
     const SIMDVectorDouble zero = VectorDoubleZero();
     const SIMDVectorDouble size = VectorDoubleSelect(extent, zero, VectorDoubleGreater(zero, extent));
-    return MakeUiRect<Precision>(VectorDoubleGetX(origin), VectorDoubleGetY(origin), VectorDoubleGetX(size), VectorDoubleGetY(size));
+    return MakeUiRect<Precision>(VectorDoublePermute<0, 1, 4, 5>(origin, size));
 }
 
 

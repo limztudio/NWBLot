@@ -126,7 +126,7 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
     const f64 y = VectorDoubleGetY(xYValue);
     const SIMDVectorDouble contentSize = VectorDoubleSubtract(geometryPair3Operand1, rightBottomValue);
     const f64 width = VectorDoubleGetX(contentSize);
-    const auto content = MakeUiRect<UiRectPrecision::PreciseExtents>(x, y, width, VectorDoubleGetY(contentSize));
+    const auto content = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, y, width, VectorDoubleGetY(contentSize)));
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
@@ -150,22 +150,22 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         const SIMDVectorDouble rowOrigin = VectorDoubleAdd(VectorDoubleReplicate(y), rowOffset);
         const f64 rowY = VectorDoubleGetX(rowOrigin);
         const f64 indicatorY = VectorDoubleGetY(VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(metrics.rowHeight), indicatorExtent), VectorDoubleReplicate(0.5))));
-        const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(x, rowY, width, metrics.rowHeight);
+        const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, rowY, width, metrics.rowHeight));
         if(!rectangle)
             return MakeUnexpected(Failure{});
         const auto rowClip = IntersectUiRects<UiRectPrecision::PreciseExtents>(*rectangle, candidate.clip);
         if(!rowClip)
             return MakeUnexpected(Failure{});
-        const auto indicator = MakeUiRect<UiRectPrecision::PreciseExtents>(x, indicatorY, extent, extent);
+        const auto indicator = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, indicatorY, extent, extent));
         if(!indicator)
             return MakeUnexpected(Failure{});
         const SIMDVectorDouble markOrigin = VectorDoubleAdd(VectorDoubleSet(x, indicatorY, 0.0, 0.0), VectorDoubleSet(markInset, markInset, 0.0, 0.0));
         const SIMDVectorDouble markSize = VectorDoubleSubtract(VectorDoubleSet(extent, extent, 0.0, 0.0), VectorDoubleMultiply(VectorDoubleSet(2.0, 2.0, 0.0, 0.0), VectorDoubleSet(markInset, markInset, 0.0, 0.0)));
-        const auto mark = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleGetX(markOrigin), VectorDoubleGetY(markOrigin), VectorDoubleGetX(markSize), VectorDoubleGetY(markSize));
+        const auto mark = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(markOrigin, markSize));
         if(!mark)
             return MakeUnexpected(Failure{});
         const SIMDVectorDouble labelBounds = VectorDoubleAdd(VectorDoubleSet(x, width, 0.0, 0.0), labelShift);
-        const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleGetX(labelBounds), rowY, VectorDoubleGetY(labelBounds), metrics.rowHeight);
+        const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(VectorDoubleGetX(labelBounds), rowY, VectorDoubleGetY(labelBounds), metrics.rowHeight));
         if(!label)
             return MakeUnexpected(Failure{});
         const auto textClip = IntersectUiRects<UiRectPrecision::PreciseExtents>(*label, *rowClip);

@@ -139,17 +139,17 @@ struct NwbBvhNodeGpu{
 static constexpr usize s_NwbBvhNodeGpuByteSize = 32u;
 static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
 
-// Scratch scene-BVH build values.
+// Scratch scene-BVH build records. They stay in memory during the build, so they use Float storage.
 struct SceneBvhPrimitiveCalculation{
-    SIMDVectorSingle aabbMin = {};
-    SIMDVectorSingle aabbMax = {};
-    SIMDVectorSingle centroid = {};
+    Float4 aabbMin;
+    Float4 aabbMax;
+    Float4 centroid;
     bool transparentOccluder = false;
 };
 
 struct SceneBvhNodeCalculation{
-    SIMDVectorSingle aabbMin = {};
-    SIMDVectorSingle aabbMax = {};
+    Float4 aabbMin;
+    Float4 aabbMax;
     u32 leftChild = 0u;
     u32 rightChild = 0u;
     bool containsTransparentOccluder = false;

@@ -517,8 +517,8 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     const u32 positionHeapSlot,
     const u32 triangleIndexHeapSlot,
     u32 primitiveCount,
-    const SIMDVectorSingle aabbMin,
-    const SIMDVectorSingle aabbMax,
+    const Float3Int& aabbMin,
+    const Float3Int& aabbMax,
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
     const Core::GpuDescriptorHandle nodeHeapHandle,
@@ -547,8 +547,8 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
-    StoreFloat(aabbMin, pushConstants.aabbMin);
-    StoreFloat(aabbMax, pushConstants.aabbMax);
+    pushConstants.aabbMin = Float3U(aabbMin.x, aabbMin.y, aabbMin.z);
+    pushConstants.aabbMax = Float3U(aabbMax.x, aabbMax.y, aabbMax.z);
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);

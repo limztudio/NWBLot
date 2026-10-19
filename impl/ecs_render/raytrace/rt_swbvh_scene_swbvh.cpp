@@ -228,20 +228,20 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
         instanceMaterial.nodeSlot = m_rayTracingState.m_swShadowMeshNodeHandles[meshSlot].slot();
         SceneBvhPrimitiveCalculation bvhPrimitive;
-        bvhPrimitive.aabbMin = worldMin;
-        bvhPrimitive.aabbMax = worldMax;
+        StoreFloat(worldMin, bvhPrimitive.aabbMin);
+        StoreFloat(worldMax, bvhPrimitive.aabbMax);
         constexpr f32 s_BoundsMidpointWeight = 0.5f;
-        bvhPrimitive.centroid = VectorScale(VectorAdd(worldMin, worldMax), s_BoundsMidpointWeight);
+        StoreFloat(VectorScale(VectorAdd(worldMin, worldMax), s_BoundsMidpointWeight), bvhPrimitive.centroid);
         bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
 
-        Float3U opticalMin{};
-        Float3U opticalMax{};
+        SIMDVectorSingle opticalMin = VectorZero();
+        SIMDVectorSingle opticalMax = VectorZero();
         bool opticalBoundsValid = false;
         if(bvhPrimitive.transparentOccluder && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh){
             const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
             if(bounds){
-                StoreFloat(bounds->minimum, opticalMin);
-                StoreFloat(bounds->maximum, opticalMax);
+                opticalMin = bounds->minimum;
+                opticalMax = bounds->maximum;
                 opticalBoundsValid = true;
             }
         }
@@ -290,7 +290,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         }
 
         if(m_lightSpaceShadow.m_csg.gathering){
-            AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, meshResult->meshResources);
+            AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, meshResult->meshResources);
         }
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
         sceneRefitRoots.push_back(meshResult->meshResources.swBvhNodeBuffer);
@@ -395,9 +395,9 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             )
                 return false;
             NwbBvhNodeGpu node;
-            StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, node.aabbMinLeftChild);
+            StoreFloatInt(LoadFloat(buildNode.aabbMin), buildNode.leftChild, node.aabbMinLeftChild);
             const u32 taggedRightChild = buildNode.rightChild | (buildNode.containsTransparentOccluder ? BvhNodeIndex::TransparentSubtreeFlag : 0u);
-            StoreFloatInt(buildNode.aabbMax, taggedRightChild, node.aabbMaxRightChild);
+            StoreFloatInt(LoadFloat(buildNode.aabbMax), taggedRightChild, node.aabbMaxRightChild);
             nodes.push_back(node);
         }
 

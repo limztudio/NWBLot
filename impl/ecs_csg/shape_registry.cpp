@@ -138,43 +138,31 @@ template<typename ParameterT>
     return CsgShapeBounds{};
 }
 
-[[nodiscard]] SIMDVectorSingle LoadBoxHalfExtents(const Float4& halfExtentsStorage)noexcept{
-    return VectorSetW(LoadFloat(halfExtentsStorage), s_CsgShapeBoundsW);
-}
-
 [[nodiscard]] Expected<CsgShapeBounds> BoxBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
     const auto parameters = LoadShapeParameters<CsgBoxShapeParameters>(parameterBytes, parameterByteSize);
     if(!parameters)
         return MakeUnexpected(Failure{});
-    const auto bounds = BuildBoxBounds(shapeToWorld, LoadBoxHalfExtents(parameters->halfExtents));
+    const auto bounds = BuildBoxBounds(shapeToWorld, VectorSetW(LoadFloat(parameters->halfExtents), s_CsgShapeBoundsW));
     if(!bounds)
         return MakeUnexpected(Failure{});
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
-}
-
-[[nodiscard]] SIMDVectorSingle LoadSphereRadius(const Float4& radiusStorage)noexcept{
-    return VectorSplatX(LoadFloat(radiusStorage));
 }
 
 [[nodiscard]] Expected<CsgShapeBounds> SphereBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
     const auto parameters = LoadShapeParameters<CsgSphereShapeParameters>(parameterBytes, parameterByteSize);
     if(!parameters)
         return MakeUnexpected(Failure{});
-    const auto bounds = BuildSphereBounds(shapeToWorld, LoadSphereRadius(parameters->radius));
+    const auto bounds = BuildSphereBounds(shapeToWorld, VectorSplatX(LoadFloat(parameters->radius)));
     if(!bounds)
         return MakeUnexpected(Failure{});
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
-}
-
-[[nodiscard]] SIMDVectorSingle LoadCapsuleRadiusHalfHeight(const Float4& radiusHalfHeightStorage)noexcept{
-    return LoadFloat(radiusHalfHeightStorage);
 }
 
 [[nodiscard]] Expected<CsgShapeBounds> CapsuleBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
     const auto parameters = LoadShapeParameters<CsgCapsuleShapeParameters>(parameterBytes, parameterByteSize);
     if(!parameters)
         return MakeUnexpected(Failure{});
-    const auto bounds = BuildCapsuleBounds(shapeToWorld, LoadCapsuleRadiusHalfHeight(parameters->radiusHalfHeight));
+    const auto bounds = BuildCapsuleBounds(shapeToWorld, LoadFloat(parameters->radiusHalfHeight));
     if(!bounds)
         return MakeUnexpected(Failure{});
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };

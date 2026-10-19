@@ -46,7 +46,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Path& path, const Value& map, const u32 glyphId, const f32 unitsPerPixel){
+[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Path& path, const Value& map, const u32 glyphId, const SIMDVectorSingle unitsPerPixel){
     FontAtlasGlyph glyph{};
 
     if(!Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix))
@@ -102,7 +102,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     }
     const SIMDVectorSingle size = VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), static_cast<f32>(glyph.width), static_cast<f32>(glyph.height));
     const SIMDVectorSingle origin = VectorSet(glyph.planeLeft, glyph.planeTop, glyph.planeLeft, glyph.planeTop);
-    const SIMDVectorSingle end = VectorMultiplyAddExpression(size, VectorReplicate(unitsPerPixel), origin);
+    const SIMDVectorSingle end = VectorMultiplyAddExpression(size, unitsPerPixel, origin);
     glyph.planeRight = VectorGetX(end);
     glyph.planeBottom = VectorGetY(end);
     glyph.drawable = 1u;
@@ -130,7 +130,7 @@ Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
     }
     Core::Assets::AssetVector<FontAtlasGlyph> candidate(payload.glyphs.get_allocator().arena());
     candidate.reserve(payload.sourceGlyphCount);
-    const f32 unitsPerPixel = VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(static_cast<f32>(payload.bakePpem))));
+    const SIMDVectorSingle unitsPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(static_cast<f32>(payload.bakePpem)));
     for(u32 index = 0u; index < payload.sourceGlyphCount; ++index){
         auto glyphResult = ReadGlyph(nwbFilePath, (*glyphs)->asList()[index], index, unitsPerPixel);
         if(!glyphResult)

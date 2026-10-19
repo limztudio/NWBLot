@@ -164,7 +164,7 @@ Expected<Rect> TextGlyphVisibility::AtlasRectangle(const PlacedGlyph& glyph, con
     const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(VectorDoubleSubtract(planeEnd, planeOrigin), scaleVector);
     const f64 width = VectorDoubleGetX(widthHeightValue);
     const f64 height = VectorDoubleGetY(widthHeightValue);
-    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(x, y, width, height);
+    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoubleSet(x, y, width, height));
 }
 
 Expected<Rect> TextGlyphVisibility::CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale)noexcept{
@@ -184,7 +184,7 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(const PlacedGlyph& glyph, 
     const SIMDVectorDouble biased = VectorDoubleMultiplyAddExpression(position, pixelScaleVector, VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
     const SIMDVectorDouble aligned = VectorDoubleDivide(VectorDoubleFloor(biased), VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0));
     const SIMDVectorDouble size = VectorDoubleDivide(VectorDoubleSet(record.pixels.width, record.pixels.height, 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(rasterScale)));
-    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoubleGetX(aligned), VectorDoubleGetY(aligned), VectorDoubleGetX(size), VectorDoubleGetY(size));
+    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(aligned, size));
 }
 
 TextGlyphIntersection::Enum TextGlyphVisibility::Intersect(const Rect& rectangle, const Rect& clip)noexcept{

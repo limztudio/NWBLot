@@ -168,7 +168,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair3Operand1, geometryPair3Operand0, VectorDoubleGreater(geometryPair3Operand0, geometryPair3Operand1));
     const f64 width = VectorDoubleGetX(widthHeightValue);
     const f64 height = VectorDoubleGetY(widthHeightValue);
-    const auto padded = MakeUiRect<UiRectPrecision::RoundedEndpoints>(x, y, width, height);
+    const auto padded = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(x, y, width, height));
     if(!padded)
         return MakeUnexpected(Failure{});
     const f64 availableWidth = padded->width;
@@ -200,7 +200,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     const f64 barHeight = horizontal ? horizontalHeight : 0.0;
     ScrollViewportPlacement candidate;
     const SIMDVectorDouble viewportSize = VectorDoubleSubtract(VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0), VectorDoubleSet(barWidth, barHeight, 0.0, 0.0));
-    const auto viewport = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, padded->y, VectorDoubleGetX(viewportSize), VectorDoubleGetY(viewportSize));
+    const auto viewport = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(padded->x, padded->y, VectorDoubleGetX(viewportSize), VectorDoubleGetY(viewportSize)));
     if(!viewport)
         return MakeUnexpected(Failure{});
     candidate.viewport = *viewport;
@@ -215,20 +215,20 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     Rect horizontalTrack;
     Rect verticalTrack;
     if(horizontal && viewportWidth > 0.0 && barHeight > 0.0){
-        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->y), VectorDoubleReplicate(viewportHeight))), viewportWidth, barHeight);
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(padded->x, VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->y), VectorDoubleReplicate(viewportHeight))), viewportWidth, barHeight));
         if(!track)
             return MakeUnexpected(Failure{});
         horizontalTrack = *track;
     }
     if(vertical && viewportHeight > 0.0 && barWidth > 0.0){
-        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->x), VectorDoubleReplicate(viewportWidth))), padded->y, barWidth, viewportHeight);
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->x), VectorDoubleReplicate(viewportWidth))), padded->y, barWidth, viewportHeight));
         if(!track)
             return MakeUnexpected(Failure{});
         verticalTrack = *track;
     }
     if(barWidth > 0.0 && barHeight > 0.0){
         const SIMDVectorDouble cornerOrigin = VectorDoubleAdd(VectorDoubleSet(padded->x, padded->y, 0.0, 0.0), VectorDoubleSet(viewportWidth, viewportHeight, 0.0, 0.0));
-        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleGetX(cornerOrigin), VectorDoubleGetY(cornerOrigin), barWidth, barHeight);
+        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(VectorDoubleGetX(cornerOrigin), VectorDoubleGetY(cornerOrigin), barWidth, barHeight));
         if(!corner)
             return MakeUnexpected(Failure{});
         candidate.corner = *corner;

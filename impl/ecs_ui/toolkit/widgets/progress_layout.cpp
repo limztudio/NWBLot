@@ -141,7 +141,7 @@ Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect
     const SIMDVectorDouble lastInset = VectorDoubleSelect(remaining, paddingEnd, VectorDoubleLess(paddingEnd, remaining));
     const SIMDVectorDouble origin = VectorDoubleAdd(VectorDoubleSet(bounds.x, bounds.y, 0.0, 0.0), firstInset);
     const SIMDVectorDouble size = VectorDoubleSubtract(remaining, lastInset);
-    const auto content = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleGetX(origin), VectorDoubleGetY(origin), VectorDoubleGetX(size), VectorDoubleGetY(size));
+    const auto content = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoublePermute<0, 1, 4, 5>(origin, size));
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
@@ -153,12 +153,12 @@ Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect
         candidate.fillCanvas.width = 0.0f;
     }
     else if(normalized != 1.0){
-        const auto fillReveal = MakeUiRect<UiRectPrecision::EmptyPaint>(candidate.content.x, candidate.content.y, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(candidate.content.width), VectorDoubleReplicate(normalized))), candidate.content.height);
+        const auto fillReveal = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleSet(candidate.content.x, candidate.content.y, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(candidate.content.width), VectorDoubleReplicate(normalized))), candidate.content.height));
         if(!fillReveal)
             return MakeUnexpected(Failure{});
         candidate.fillReveal = *fillReveal;
         const f64 canvasWidth = candidate.fillReveal.width == 0.0f ? 0.0 : VectorDoubleGetX(VectorDoubleMin(VectorDoubleReplicate(candidate.content.width), VectorDoubleMax(VectorDoubleReplicate(candidate.fillReveal.width), VectorDoubleReplicate(metrics.fillMinimum.x))));
-        const auto fillCanvas = MakeUiRect<UiRectPrecision::EmptyPaint>(candidate.content.x, candidate.content.y, canvasWidth, candidate.content.height);
+        const auto fillCanvas = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleSet(candidate.content.x, candidate.content.y, canvasWidth, candidate.content.height));
         if(!fillCanvas)
             return MakeUnexpected(Failure{});
         candidate.fillCanvas = *fillCanvas;

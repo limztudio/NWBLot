@@ -32,15 +32,15 @@ using TaskGraphTestUtils::TestArena;
 
 TEST(GpuTaskGraph, ClampsReadyFrontierWorkerUtilization){
     Graphics::GpuTaskGraphRecordingStatistics statistics;
-    EXPECT_EQ(statistics.readyFrontierWorkerUtilization(), 0.0);
+    EXPECT_EQ(VectorDoubleGetX(statistics.readyFrontierWorkerUtilization()), 0.0);
 
     statistics.readyFrontierWorkerCapacitySeconds = 1.0;
 
     statistics.readyFrontierWorkerBusySeconds = 2.0;
-    EXPECT_EQ(statistics.readyFrontierWorkerUtilization(), 1.0);
+    EXPECT_EQ(VectorDoubleGetX(statistics.readyFrontierWorkerUtilization()), 1.0);
 
     statistics.readyFrontierWorkerBusySeconds = -1.0;
-    EXPECT_EQ(statistics.readyFrontierWorkerUtilization(), 0.0);
+    EXPECT_EQ(VectorDoubleGetX(statistics.readyFrontierWorkerUtilization()), 0.0);
 }
 
 TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){

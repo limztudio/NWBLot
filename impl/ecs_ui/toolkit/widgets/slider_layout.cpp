@@ -124,17 +124,17 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     const SIMDVectorDouble centers = VectorDoubleAdd(VectorDoubleReplicate(x), offsets);
     const f64 centerStart = VectorDoubleGetX(centers);
     const f64 thumbX = normalized == 0.0 ? x : normalized == 1.0 ? VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(x), VectorDoubleReplicate(travel))) : VectorDoubleGetY(centers);
-    const auto travelBounds = MakeUiRect<UiRectPrecision::PreciseExtents>(x, y, width, height);
+    const auto travelBounds = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, y, width, height));
     if(!travelBounds)
         return MakeUnexpected(Failure{});
-    const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(centerStart, y, travel, height);
+    const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(centerStart, y, travel, height));
     if(!centerTravel)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble centeredY = VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(height), VectorDoubleSet(trackHeight, thumbHeight, height, height)), VectorDoubleReplicate(0.5)));
-    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(centerStart, VectorDoubleGetX(centeredY), travel, trackHeight);
+    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(centerStart, VectorDoubleGetX(centeredY), travel, trackHeight));
     if(!track)
         return MakeUnexpected(Failure{});
-    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(thumbX, VectorDoubleGetY(centeredY), thumbWidth, thumbHeight);
+    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(thumbX, VectorDoubleGetY(centeredY), thumbWidth, thumbHeight));
     if(!thumb)
         return MakeUnexpected(Failure{});
     candidate.travelBounds = *travelBounds;

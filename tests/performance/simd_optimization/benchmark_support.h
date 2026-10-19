@@ -37,8 +37,8 @@ inline constexpr u64 s_InitialSeed = 0x8923409102431291ull;
 
 
 struct Dataset{
-    SIMDVectorDouble left[s_DataCount];
-    SIMDVectorDouble right[s_DataCount];
+    Double4 left[s_DataCount];
+    Double4 right[s_DataCount];
     f64 angles[s_DataCount];
 };
 
@@ -58,8 +58,8 @@ NWB_NOINLINE inline void InitializeDataset(Dataset& dataset, u64 seed)noexcept{
             leftSteps[lane] = static_cast<f64>(NextSeed(seed) % 8192u);
             rightSteps[lane] = static_cast<f64>(NextSeed(seed) % 64u + 1u);
         }
-        dataset.left[index] = VectorDoubleMultiplyAddExpression(VectorDoubleSet(leftSteps[0], leftSteps[1], leftSteps[2], leftSteps[3]), step, VectorDoubleReplicate(-4.0));
-        dataset.right[index] = VectorDoubleMultiply(VectorDoubleSet(rightSteps[0], rightSteps[1], rightSteps[2], rightSteps[3]), step);
+        StoreDouble(VectorDoubleMultiplyAddExpression(VectorDoubleSet(leftSteps[0], leftSteps[1], leftSteps[2], leftSteps[3]), step, VectorDoubleReplicate(-4.0)), dataset.left[index]);
+        StoreDouble(VectorDoubleMultiply(VectorDoubleSet(rightSteps[0], rightSteps[1], rightSteps[2], rightSteps[3]), step), dataset.right[index]);
         dataset.angles[index] = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(NextSeed(seed) % 2048u + 1u)), step));
     }
 }

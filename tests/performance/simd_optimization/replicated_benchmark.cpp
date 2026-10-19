@@ -408,7 +408,7 @@ NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iteratio
 #pragma clang loop unroll(full)
         for(usize lane = 0u; lane < 4u; ++lane){
             const usize index = (iteration * 4u + lane) % s_DataCount;
-            accumulators[lane] = VectorDoubleAdd(accumulators[lane], Reduce<Kind, Candidate>(data.left[index], data.right[index]));
+            accumulators[lane] = VectorDoubleAdd(accumulators[lane], Reduce<Kind, Candidate>(LoadDouble(data.left[index]), LoadDouble(data.right[index])));
         }
     }
     SIMDVectorDouble result = accumulators[0];
@@ -459,16 +459,16 @@ int main(const int argc, const char* const* argv){
     InitializeDataset(data, SimdOptimizationBenchmark::s_InitialSeed);
     for(usize index = 0u; index < s_DataCount; ++index){
         if(StringView(argv[2]) == "normals2"){
-            data.left[index] = VectorDouble2Normalize(data.left[index]);
-            data.right[index] = VectorDouble2Normalize(data.right[index]);
+            StoreDouble(VectorDouble2Normalize(LoadDouble(data.left[index])), data.left[index]);
+            StoreDouble(VectorDouble2Normalize(LoadDouble(data.right[index])), data.right[index]);
         }
         else if(StringView(argv[2]) == "normals3"){
-            data.left[index] = VectorDouble3Normalize(data.left[index]);
-            data.right[index] = VectorDouble3Normalize(data.right[index]);
+            StoreDouble(VectorDouble3Normalize(LoadDouble(data.left[index])), data.left[index]);
+            StoreDouble(VectorDouble3Normalize(LoadDouble(data.right[index])), data.right[index]);
         }
         else if(StringView(argv[2]) == "normals4" || StringView(argv[2]) == "ln" || StringView(argv[2]) == "slerp"){
-            data.left[index] = VectorDouble4Normalize(data.left[index]);
-            data.right[index] = VectorDouble4Normalize(data.right[index]);
+            StoreDouble(VectorDouble4Normalize(LoadDouble(data.left[index])), data.left[index]);
+            StoreDouble(VectorDouble4Normalize(LoadDouble(data.right[index])), data.right[index]);
         }
     }
     for(u32 index = 0u; index < Operation::Count; ++index){

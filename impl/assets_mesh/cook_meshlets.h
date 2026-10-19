@@ -38,9 +38,11 @@ struct MeshletTriangleData{
 };
 
 
-// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary, the meshlet scoring helpers can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
+// CPU cook-scratch record kept for every triangle. It stays in memory, so it uses Float storage; the scoring callers load it into MeshletTriangleVectors.
 struct MeshletTriangleCalculation{
-    MeshletTriangleVectors vectors;
+    Float4 positions[s_MeshletTriangleIndexCount];
+    Float4 centroid;
+    Float4 areaNormal;
 };
 
 struct MeshletTrianglePrecompute{
@@ -658,7 +660,11 @@ Expected<MeshletTrianglePrecompute> MeshCookMeshlets::PrecomputeMeshletTriangleD
         const SIMDVectorSingle p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
         const SIMDVectorSingle centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / s_TriangleVertexCount);
         const SIMDVectorSingle areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
-        calculation.vectors = MakeMeshletTriangleVectors(p0, p1, p2, VectorSetW(centroid, 0.0f), VectorSetW(areaNormal, 0.0f));
+        StoreFloat(p0, calculation.positions[0u]);
+        StoreFloat(p1, calculation.positions[1u]);
+        StoreFloat(p2, calculation.positions[2u]);
+        StoreFloat(VectorSetW(centroid, 0.0f), calculation.centroid);
+        StoreFloat(VectorSetW(areaNormal, 0.0f), calculation.areaNormal);
 
         const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
         for(const u32 positionIndex : triangle.positions){
@@ -904,9 +910,10 @@ void MeshCookMeshlets::UpdateBestMeshletCandidateIfBetter(
     if(!vertexCounts)
         return;
 
-    const MeshletTriangleVectors& triangleVectors = trianglePrecompute.triangleCalculations[triangleIndex].vectors;
+    const MeshletTriangleCalculation& triangleCalculation = trianglePrecompute.triangleCalculations[triangleIndex];
+    const MeshletTriangleVectors triangleVectors = MakeMeshletTriangleVectors(LoadFloat(triangleCalculation.positions[0u]), LoadFloat(triangleCalculation.positions[1u]), LoadFloat(triangleCalculation.positions[2u]), LoadFloat(triangleCalculation.centroid), LoadFloat(triangleCalculation.areaNormal));
     const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex)noexcept{
-        return trianglePrecompute.triangleCalculations[otherTriangleIndex].vectors.areaNormal;
+        return LoadFloat(trianglePrecompute.triangleCalculations[otherTriangleIndex].areaNormal);
     };
     const f32 score = VectorGetX(ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, triangleVectors, triangleAreaNormalAt, vertexCounts->shared, vertexCounts->missing, disconnected));
     if(found && (score < outCandidate.score || (score == outCandidate.score && triangleIndex > outCandidate.triangleIndex)))

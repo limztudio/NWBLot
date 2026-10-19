@@ -147,17 +147,17 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
     StoreFloat(rotation, transform->rotation);
 }
 
-[[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot)noexcept{
-    const SIMDVectorSingle centerY = VectorReplicate(s_ShapeGridCenterY);
-    const SIMDVectorSingle halfSpacingY = VectorReplicate(s_ShapeGridHalfSpacing.y);
-    const f32 upperY = VectorGetX(VectorAdd(centerY, halfSpacingY));
-    const f32 lowerY = VectorGetX(VectorSubtract(centerY, halfSpacingY));
+[[nodiscard]] static SIMDVectorSingle CsgVisibleShapePosition(const usize shapeSlot)noexcept{
+    // Only lane Y moves; adding zero keeps the nonzero X and +0 Z/W lanes.
+    const SIMDVectorSingle offsetY = VectorSet(0.0f, s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
+    const SIMDVectorSingle left = VectorSet(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY, 0.0f, 0.0f);
+    const SIMDVectorSingle right = VectorSet(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY, 0.0f, 0.0f);
     switch(shapeSlot){
-    case CsgVisibleShapeSlot::Plane: return Float4(-s_ShapeGridHalfSpacing.x, upperY, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(s_ShapeGridHalfSpacing.x, upperY, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(-s_ShapeGridHalfSpacing.x, lowerY, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(s_ShapeGridHalfSpacing.x, lowerY, 0.0f, 0.0f);
-    default: return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Plane: return VectorAdd(left, offsetY);
+    case CsgVisibleShapeSlot::Box: return VectorAdd(right, offsetY);
+    case CsgVisibleShapeSlot::Sphere: return VectorSubtract(left, offsetY);
+    case CsgVisibleShapeSlot::Capsule: return VectorSubtract(right, offsetY);
+    default: return VectorSet(0.0f, s_CameraTargetY, 0.0f, 0.0f);
     }
 }
 
@@ -417,8 +417,9 @@ public:
         const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
 
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const Float4 receiverPosition = CsgVisibleShapePosition(shapeSlot);
-            const SIMDVectorSingle receiverPositionVector = LoadFloat(receiverPosition);
+            const SIMDVectorSingle receiverPositionVector = CsgVisibleShapePosition(shapeSlot);
+            Float4 receiverPosition;
+            StoreFloat(receiverPositionVector, receiverPosition);
             const SIMDVectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
             const SIMDVectorSingle cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
             m_receivers[shapeSlot] = CreateSolidCubeEntity(
@@ -437,8 +438,9 @@ public:
 
         bool allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
         if(overlapping){
-            Float4 receiverPosition = CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane);
-            receiverPosition.z = VectorGetX(VectorAdd(VectorReplicate(receiverPosition.z), VectorReplicate(s_OverlappingReceiverDepthOffset)));
+            // Only lane Z moves; the other lanes add +0.
+            Float4 receiverPosition;
+            StoreFloat(VectorAdd(CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane), VectorSet(0.0f, 0.0f, s_OverlappingReceiverDepthOffset, 0.0f)), receiverPosition);
             const auto receiver = CreateSolidCubeEntity(
                 *m_world,
                 m_context.objectArena,

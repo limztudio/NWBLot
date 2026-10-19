@@ -69,7 +69,7 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
     state.solidTriangleMasks.reserve(capacity);
 }
 
-void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::EntityID entity, const bool transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
+void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::EntityID entity, const bool transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
     if(!state.gathering)
         return;
     Fnv64AppendValue(state.captureGeometryIdentity, entity.id);
@@ -97,8 +97,6 @@ void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::Ent
     CsgShadowReceiverInput receiver;
     receiver.entity = entity;
     receiver.receiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
-    const SIMDVectorSingle localMin = LoadFloatInt(mesh.csgLocalBounds.minBounds);
-    const SIMDVectorSingle localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
     SIMDVectorSingle worldMin{};
     SIMDVectorSingle worldMax{};
     receiver.boundsValid = false;

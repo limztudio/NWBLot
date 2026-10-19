@@ -86,9 +86,11 @@ struct FieldRecord{
     int3 cell;
 };
 
-f32 GatherBoundaryValue(const float3 position, const bool validateCell)noexcept{
-    const float3 biasedPosition(position.x, position.y, VectorGetX(VectorAdd(VectorReplicate(position.z), VectorReplicate(0.05f))));
-    const SIMDVectorSingle biased = LoadFloat(biasedPosition);
+SIMDVectorSingle GatherBoundaryValue(const SIMDVectorSingle position, const bool validateCell)noexcept{
+    // Only lane Z moves; the fixture lanes are nonzero or +0, so adding +0 keeps them.
+    const SIMDVectorSingle biased = VectorAdd(position, VectorSet(0.0f, 0.0f, 0.05f, 0.0f));
+    float3 biasedPosition;
+    StoreFloat(biased, biasedPosition);
     const int3 baseCell = nwbSurfelCellCoord(biasedPosition, s_CellSize);
     const FieldRecord records[]{
         { float3(0.61f, 0.61f, 0.0f), 1.0f, nwbSurfelCellCoord(float3(0.61f, 0.61f, 0.0f), s_CellSize) },
@@ -116,7 +118,7 @@ f32 GatherBoundaryValue(const float3 position, const bool validateCell)noexcept{
             totalWeight = VectorAdd(totalWeight, weight);
         }
     }
-    return VectorGetX(VectorDivide(irradiance, totalWeight));
+    return VectorDivide(irradiance, totalWeight);
 }
 
 
@@ -152,8 +154,8 @@ TEST(SurfelHash, NeighborCellBoundaryPreservesTheNormalizedField){
     const float3 after(1.2f + 1e-6f, 0.61f, 0.0f);
     ASSERT_EQ(nwbSurfelCellCoord(before, s_CellSize).x, 1);
     ASSERT_EQ(nwbSurfelCellCoord(after, s_CellSize).x, 2);
-    EXPECT_GT(VectorGetX(VectorAbs(VectorSubtract(VectorReplicate(GatherBoundaryValue(before, false)), VectorReplicate(GatherBoundaryValue(after, false))))), 0.1f);
-    EXPECT_NEAR(GatherBoundaryValue(before, true), GatherBoundaryValue(after, true), 1e-5f);
+    EXPECT_GT(VectorGetX(VectorAbs(VectorSubtract(GatherBoundaryValue(LoadFloat(before), false), GatherBoundaryValue(LoadFloat(after), false)))), 0.1f);
+    EXPECT_NEAR(VectorGetX(GatherBoundaryValue(LoadFloat(before), true)), VectorGetX(GatherBoundaryValue(LoadFloat(after), true)), 1e-5f);
 }
 
 TEST(SurfelHash, CollidingDistantCellsRetainUpperCoordinateBits){

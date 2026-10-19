@@ -273,13 +273,13 @@ NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iteratio
         if constexpr(Kind <= Operation::Sum){
             if(latency){
                 const SIMDVectorDouble input = Kind == Operation::Sum ? VectorDoubleScale(accumulators[0], 0.125) : accumulators[0];
-                accumulators[0] = VectorDoubleAdd(Reduce<Kind, Candidate>(input, data.right[iteration % s_DataCount]), VectorDoubleReplicate(0.125));
+                accumulators[0] = VectorDoubleAdd(Reduce<Kind, Candidate>(input, LoadDouble(data.right[iteration % s_DataCount])), VectorDoubleReplicate(0.125));
             }
             else{
 #pragma clang loop unroll(full)
                 for(usize lane = 0u; lane < 8u; ++lane){
                     const usize index = (iteration * 8u + lane) % s_DataCount;
-                    accumulators[lane] = VectorDoubleAdd(accumulators[lane], Reduce<Kind, Candidate>(data.left[index], data.right[index]));
+                    accumulators[lane] = VectorDoubleAdd(accumulators[lane], Reduce<Kind, Candidate>(LoadDouble(data.left[index]), LoadDouble(data.right[index])));
                 }
             }
         }

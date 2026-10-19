@@ -32,8 +32,9 @@ public:
         }
     }
 
-    [[nodiscard]] f32 axis()const noexcept{
-        return VectorGetX(VectorSubtract(VectorReplicate(m_rightHeld ? 1.0f : 0.0f), VectorReplicate(m_leftHeld ? 1.0f : 0.0f)));
+    // The axis is splat across all lanes.
+    [[nodiscard]] SIMDVectorSingle axis()const noexcept{
+        return VectorSubtract(VectorReplicate(m_rightHeld ? 1.0f : 0.0f), VectorReplicate(m_leftHeld ? 1.0f : 0.0f));
     }
 
 

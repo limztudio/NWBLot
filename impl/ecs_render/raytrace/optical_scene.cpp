@@ -33,7 +33,7 @@ RayTracingOpticalSceneGather::RayTracingOpticalSceneGather(Core::Alloc::ScratchA
     instances.reserve(capacity);
 }
 
-void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const bool transparent, const Float3U& boundsMin, const Float3U& boundsMax, const bool boundsValid){
+void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const bool transparent, const SIMDVectorSingle boundsMin, const SIMDVectorSingle boundsMax, const bool boundsValid){
     RayTracingOpticalInstanceGpu instance;
     instance.entityId = entity.id;
     instance.mediumPriority = renderer.opticalMediumPriority;
@@ -43,19 +43,17 @@ void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, cons
             unspecifiedBoundariesOnly = false;
         instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT;
         ++header.transparentCount;
-        const SIMDVectorSingle boundsMinVector = LoadFloat(boundsMin);
-        const SIMDVectorSingle boundsMaxVector = LoadFloat(boundsMax);
-        const bool finiteBounds = boundsValid && Vector3IsFinite(boundsMinVector) && Vector3IsFinite(boundsMaxVector) && Vector3LessOrEqual(boundsMinVector, boundsMaxVector);
+        const bool finiteBounds = boundsValid && Vector3IsFinite(boundsMin) && Vector3IsFinite(boundsMax) && Vector3LessOrEqual(boundsMin, boundsMax);
         if(finiteBounds){
             instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
             if(!hasBounds){
-                header.boundsMin = boundsMin;
-                header.boundsMax = boundsMax;
+                StoreFloat(boundsMin, header.boundsMin);
+                StoreFloat(boundsMax, header.boundsMax);
                 hasBounds = true;
             }
             else{
-                StoreFloat(VectorMin(LoadFloat(header.boundsMin), boundsMinVector), header.boundsMin);
-                StoreFloat(VectorMax(LoadFloat(header.boundsMax), boundsMaxVector), header.boundsMax);
+                StoreFloat(VectorMin(LoadFloat(header.boundsMin), boundsMin), header.boundsMin);
+                StoreFloat(VectorMax(LoadFloat(header.boundsMax), boundsMax), header.boundsMax);
             }
         }
         else
@@ -67,7 +65,7 @@ void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, cons
 void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, const Core::GpuDescriptorHandle boundsDescriptor, const Float34& objectToWorld){
     const bool staticComplete = boundsCompleteExceptRuntime;
     const u32 instanceIndex = static_cast<u32>(instances.size());
-    append(entity, renderer, true, {}, {}, false);
+    append(entity, renderer, true, VectorZero(), VectorZero(), false);
     // The CPU upload stays deliberately incomplete. Only the GPU finalizer can validate this contributor.
     if(!boundsBuffer || !boundsDescriptor.valid() || boundsDescriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
         return;

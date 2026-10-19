@@ -135,11 +135,9 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
         const SIMDVectorSingle areaNormal = VectorSet(static_cast<f32>(areaNormal64.x), static_cast<f32>(areaNormal64.y), static_cast<f32>(areaNormal64.z), 0.0f);
         for(const SIMDVectorSingle position : positions){
             const PositionKey key = MakePositionKey(position);
-            auto result = outNormals.emplace(key, PositionNormalCalculation{ areaNormal });
-            if(!result.second){
-                PositionNormalCalculation& normal = result.first.value();
-                normal.value = VectorAdd(normal.value, areaNormal);
-            }
+            auto result = outNormals.emplace(key, PositionNormalRecord{});
+            PositionNormalRecord& normal = result.first.value();
+            StoreFloat(result.second ? areaNormal : VectorAdd(LoadFloat(normal.value), areaNormal), normal.value);
         }
         return true;
     }
@@ -147,12 +145,12 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
         return MakeUnexpected(Failure{});
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
-        const auto normal = Vector3TryNormalize(it.value().value);
+        const auto normal = Vector3TryNormalize(LoadFloat(it.value().value));
         if(!normal){
             NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
-        it.value().value = normal->value;
+        StoreFloat(normal->value, it.value().value);
     }
     return outNormals;
 }
@@ -236,7 +234,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
-                const auto generatedNormal = Vector3TryNormalize(foundNormal.value().value);
+                const auto generatedNormal = Vector3TryNormalize(LoadFloat(foundNormal.value().value));
                 if(!generatedNormal){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;

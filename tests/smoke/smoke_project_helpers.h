@@ -99,13 +99,13 @@ public:
             return;
         }
 
-        const f32 manualAxis = arrowYawInput.axis();
-        if(manualAxis != 0.0f)
+        const SIMDVectorSingle manualAxis = arrowYawInput.axis();
+        if(VectorGetX(manualAxis) != 0.0f)
             m_manualControl = true;
 
         const SIMDVectorSingle yaw = VectorReplicate(m_yaw);
         if(m_manualControl)
-            m_yaw = VectorGetX(VectorMultiplyAddExpression(VectorScale(VectorReplicate(manualAxis), manualYawSpeed), VectorReplicate(safeDelta), yaw));
+            m_yaw = VectorGetX(VectorMultiplyAddExpression(VectorScale(manualAxis, manualYawSpeed), VectorReplicate(safeDelta), yaw));
         else
             m_yaw = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(maxSpinDelta)), VectorReplicate(spinSpeed), yaw));
     }

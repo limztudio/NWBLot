@@ -801,7 +801,7 @@ private:
     [[nodiscard]] bool ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
     [[nodiscard]] bool meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
     [[nodiscard]] bool buildMeshSwBvhPrepared(
-        Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVectorSingle aabbMin, const SIMDVectorSingle aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer,
+        Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const Float3Int& aabbMin, const Float3Int& aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer,
         Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle
     );
     [[nodiscard]] bool refitMeshSwBvhPrepared(

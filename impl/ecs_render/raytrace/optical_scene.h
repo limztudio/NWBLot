@@ -76,7 +76,7 @@ public:
 
 
 public:
-    void append(Core::ECS::EntityID entity, const RendererComponent& renderer, bool transparent, const Float3U& boundsMin, const Float3U& boundsMax, bool boundsValid);
+    void append(Core::ECS::EntityID entity, const RendererComponent& renderer, bool transparent, SIMDVectorSingle boundsMin, SIMDVectorSingle boundsMax, bool boundsValid);
     void appendRuntime(Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, Core::GpuDescriptorHandle boundsDescriptor, const Float34& objectToWorld);
     void markIncomplete()noexcept{
         header.flags &= ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;

@@ -214,8 +214,8 @@ Expected<PerfTimingPayload> ParsePerfTimingPayload(TelemetryArena& arena, const 
 
 bool RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::PerfFrame, stats.publishFrameIndex, streamId, [source, &scopeName, scopeText, &stats](TelemetryArena& arena, TelemetryBytes& payload){
-            return BuildPerfTimingPayload(arena, source, scopeName, scopeText, stats, payload);
-        }
+        return BuildPerfTimingPayload(arena, source, scopeName, scopeText, stats, payload);
+    }
     );
 }
 
@@ -297,8 +297,8 @@ Expected<PerfMemoryPayload> ParsePerfMemoryPayload(TelemetryArena& arena, const 
 
 bool RecordPerfMemory(Recorder& recorder, const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::MemoryFrame, snapshot.frameIndex, streamId, [&scopeName, scopeText, &snapshot, &delta](TelemetryArena& arena, TelemetryBytes& payload){
-            return BuildPerfMemoryPayload(arena, scopeName, scopeText, snapshot, delta, payload);
-        }
+        return BuildPerfMemoryPayload(arena, scopeName, scopeText, snapshot, delta, payload);
+    }
     );
 }
 

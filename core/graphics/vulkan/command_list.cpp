@@ -547,10 +547,15 @@ void CommandList::discardUnsubmittedUploadChunks(){
     TrackedCommandBuffer* owner = m_currentCmdBuf.get();
     const u64 nativeRecordingID = m_nativeRecordingID;
     const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
-    const u64 reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
+    const Expected<u64> reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
+    if(!reusableVersion){
+        m_device.m_uploadManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
+        m_device.m_scratchManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
+        return;
+    }
 
-    m_device.m_uploadManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
-    m_device.m_scratchManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
+    m_device.m_uploadManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
+    m_device.m_scratchManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
 }
 
 void CommandList::abandonUnsubmittedUploadChunks()noexcept{

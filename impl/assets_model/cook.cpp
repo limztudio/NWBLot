@@ -276,24 +276,24 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
         return MakeUnexpected(Failure{});
 
     auto skeletonObjectsResult = ParseObjectMap<ModelSkeletonObject>(nwbFilePath, asset, s_SkeletonsField, AStringView("Model skeleton object"), arena, [&](const Core::Metascript::Value& objectValue){
-            return ParseSkeletonObject(nwbFilePath, objectValue);
-        }
+        return ParseSkeletonObject(nwbFilePath, objectValue);
+    }
     );
     if(!skeletonObjectsResult)
         return MakeUnexpected(Failure{});
     entry.skeletonObjects = Move(*skeletonObjectsResult);
 
     auto staticMeshObjectsResult = ParseObjectMap<ModelStaticMeshObject>(nwbFilePath, asset, s_StaticMeshesField, AStringView("Model static mesh object"), arena, [&](const Core::Metascript::Value& objectValue){
-            return ParseStaticMeshObject(nwbFilePath, objectValue);
-        }
+        return ParseStaticMeshObject(nwbFilePath, objectValue);
+    }
     );
     if(!staticMeshObjectsResult)
         return MakeUnexpected(Failure{});
     entry.staticMeshObjects = Move(*staticMeshObjectsResult);
 
     auto skinnedMeshObjectsResult = ParseObjectMap<ModelSkinnedMeshObject>(nwbFilePath, asset, s_SkinnedMeshesField, AStringView("Model skinned mesh object"), arena, [&](const Core::Metascript::Value& objectValue){
-            return ParseSkinnedMeshObject(nwbFilePath, objectValue);
-        }
+        return ParseSkinnedMeshObject(nwbFilePath, objectValue);
+    }
     );
     if(!skinnedMeshObjectsResult)
         return MakeUnexpected(Failure{});

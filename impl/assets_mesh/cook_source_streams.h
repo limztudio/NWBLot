@@ -59,13 +59,13 @@ public:
     template<typename CookEntryT>
     static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry);
     static Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    const bool includeSkin,
-    Core::Assets::AssetArena& assetArena,
-    const usize skinCount,
-    Core::Alloc::ScratchArena& scratchArena
+        const DiscoveredNwbFile& discoveredFile,
+        const Core::Metascript::Value& asset,
+        const TStringView metaKind,
+        const bool includeSkin,
+        Core::Assets::AssetArena& assetArena,
+        const usize skinCount,
+        Core::Alloc::ScratchArena& scratchArena
     );
 
 

@@ -73,7 +73,7 @@ TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
     ASSERT_TRUE(virtualPathResult1);
     virtualPath = *virtualPathResult1;
     EXPECT_EQ(virtualPath, Name(records[0].virtualPathHash));
-    EXPECT_EQ(NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_TEST_SHADER), "", Name(s_PS)), s_NameNone);
+    EXPECT_FALSE(NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_TEST_SHADER), "", Name(s_PS)));
 
     EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_PROJECT_SHADERS_TEST_SHADER), "NWB_FEATURE=1", Name(s_PS)));
 
@@ -750,8 +750,12 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"MainC\";\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "stage_cs.slang", "[numthreads(1, 1, 1)] void MainC(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    const Name pixelPath = Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_STANDALONE_PS), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
-    const Name computePath = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name("cs"));
+    const Expected<Name> pixelPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_STANDALONE_PS), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name("cs"));
+    ASSERT_TRUE(pixelPathResult);
+    ASSERT_TRUE(computePathResult);
+    const Name& pixelPath = *pixelPathResult;
+    const Name& computePath = *computePathResult;
     UniquePtr<Core::Assets::IAsset> pixelAsset;
     UniquePtr<Core::Assets::IAsset> computeAsset;
     auto pixelAssetLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(testArena, outputDirectory, pixelPath, 3u);
@@ -907,7 +911,9 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCle
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     EXPECT_EQ(logger.errorCount(), 0u);
     ExpectNoShaderCompilerWorkDirectories(root / "cache");
-    const Name shaderPath = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/bom_compiler_probe_ps"), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+    const Expected<Name> shaderPathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/bom_compiler_probe_ps"), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+    ASSERT_TRUE(shaderPathResult);
+    const Name& shaderPath = *shaderPathResult;
     UniquePtr<Core::Assets::IAsset> loadedShader;
     auto loadedShaderLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(testArena, outputDirectory, shaderPath, s_ExpectedDualCount);
     ASSERT_TRUE(loadedShaderLoadResult);
@@ -944,7 +950,9 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
     const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
     EXPECT_TRUE(cooked);
     if(cooked){
-        const Name shaderVirtualPath = NWB::Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/exact_entry_point_ps"), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+        const Expected<Name> shaderVirtualPathResult = NWB::Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/exact_entry_point_ps"), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+        ASSERT_TRUE(shaderVirtualPathResult);
+        const Name& shaderVirtualPath = *shaderVirtualPathResult;
         UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
         auto loadedShaderLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(testArena, outputDirectory, shaderVirtualPath, s_ExpectedDualCount);
         ASSERT_TRUE(loadedShaderLoadResult2);
@@ -1027,13 +1035,17 @@ TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCa
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / "shaders" / "cache_stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"main\";\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / "shaders" / "cache_stage_cs.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, computeRoot, computeOutput, { computeAssets }));
-    const Name computePath = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/cache_stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name("cs"));
+    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/cache_stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name("cs"));
+    ASSERT_TRUE(computePathResult);
+    const Name& computePath = *computePathResult;
     UniquePtr<Core::Assets::IAsset> computeAsset;
     auto computeAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(testArena, computeOutput, computePath, s_ExpectedDualCount);
     ASSERT_TRUE(computeAssetLoadResult2);
     computeAsset = Move(*computeAssetLoadResult2);
     const auto& compute = static_cast<const Impl::ComputeShader&>(*computeAsset);
-    const Name pixelPath = Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_STANDALONE_PS), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+    const Expected<Name> pixelPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_STANDALONE_PS), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+    ASSERT_TRUE(pixelPathResult);
+    const Name& pixelPath = *pixelPathResult;
     static constexpr AStringView s_CorruptionNames[] = { "magic", "truncated", "malformed tail", "wrong physical stage" };
     Core::Assets::AssetBytes corrupted(testArena.arena);
     Core::Assets::AssetBytes repaired(testArena.arena);

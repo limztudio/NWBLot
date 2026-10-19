@@ -226,8 +226,9 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     }
 
     const auto registerDescriptor = [&](Core::GpuDescriptorHandle& descriptor, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item){
-        descriptor = heap.allocate(descriptorClass);
-        return descriptor.valid() && heap.write(descriptor, item);
+        const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(descriptorClass);
+        descriptor = allocated ? *allocated : Core::GpuDescriptorHandle::Invalid();
+        return allocated && heap.write(descriptor, item);
     };
     if(
         !registerDescriptor(m_descriptors[OpaqueSampled], Core::GpuDescriptorClass::SampledImage, Core::DescriptorWriteItem::TextureSrv(0u, m_resources.opaqueRadiance.get()))
@@ -477,9 +478,10 @@ bool RendererReflectionSystem::prepareQueue(const u32 capacity){
         return false;
     Core::BufferHandle queue = Move(*queueResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!descriptor.valid())
+    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!descriptorResult)
         return false;
+    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
     if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, queue.get()))){
         heap.free(descriptor);
         return false;
@@ -515,9 +517,10 @@ bool RendererReflectionSystem::prepareArguments(const u32 capacity, const bool s
         return false;
     Core::BufferHandle arguments = Move(*argumentsResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!descriptor.valid())
+    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!descriptorResult)
         return false;
+    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
     if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, arguments.get()))){
         heap.free(descriptor);
         return false;

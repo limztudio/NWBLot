@@ -96,28 +96,28 @@ template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
 [[nodiscard]] inline bool RecordCopies(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context, CaptureCopyFn&& captureCopy, EmitCopyFn&& emitCopy)noexcept(
     noexcept(CopiesPayloadHasWork(payload))
     && []()constexpr noexcept{
-    using Range = RemoveReference_T<decltype((DeclVal<const Payload&>().copies))>;
-    if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-        using Returned = decltype(*DeclVal<Iterator&>());
-        using Item = const RemoveReference_T<Returned>&;
-        return
-            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-            && IsNothrowDestructible_V<Iterator>
-            && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-            && noexcept(++DeclVal<Iterator&>())
-            && noexcept(*DeclVal<Iterator&>())
-            && noexcept(DeclVal<void(*)(Item)noexcept>()(*DeclVal<Iterator&>()))
-            && noexcept(static_cast<bool>(!DeclVal<CaptureCopyFn&>()(DeclVal<const GpuTaskRecordContext&>(), DeclVal<Item>())))
-            && noexcept(static_cast<bool>(!DeclVal<EmitCopyFn&>()(DeclVal<CommandList&>(), DeclVal<Item>())))
-        ;
-    }
-    else
-        return false;
-}()
+        using Range = RemoveReference_T<decltype((DeclVal<const Payload&>().copies))>;
+        if constexpr(requires(Range& values){ values.begin(); values.end(); }){
+            using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
+            using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
+            using Returned = decltype(*DeclVal<Iterator&>());
+            using Item = const RemoveReference_T<Returned>&;
+            return
+                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
+                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
+                && IsNothrowDestructible_V<Iterator>
+                && IsNothrowDestructible_V<Sentinel>
+                && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+                && noexcept(++DeclVal<Iterator&>())
+                && noexcept(*DeclVal<Iterator&>())
+                && noexcept(DeclVal<void(*)(Item)noexcept>()(*DeclVal<Iterator&>()))
+                && noexcept(static_cast<bool>(!DeclVal<CaptureCopyFn&>()(DeclVal<const GpuTaskRecordContext&>(), DeclVal<Item>())))
+                && noexcept(static_cast<bool>(!DeclVal<EmitCopyFn&>()(DeclVal<CommandList&>(), DeclVal<Item>())))
+            ;
+        }
+        else
+            return false;
+    }()
 ){
     NWB_ASSERT(CopiesPayloadHasWork(payload));
     for(const auto& copy : payload.copies){

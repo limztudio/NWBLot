@@ -53,13 +53,11 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     Vector<Graphics::GpuGraphResourceId, Core::Alloc::ScratchArena> resources(declarationScratch);
     Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> readers(declarationScratch);
     Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> finalizers(declarationScratch);
-    Vector<Graphics::GpuTaskDiagnosticQueueOverride, Core::Alloc::ScratchArena> overrides(declarationScratch);
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
     const usize pairCount = scenario == TerminalDependencyScenario::ReadPairs ? readerCount : 1u;
     resources.reserve(pairCount * 2u);
     readers.reserve(readerCount);
     finalizers.reserve(pairCount);
-    overrides.reserve(readerCount + pairCount);
     for(usize resourceIndex = 0u; resourceIndex < pairCount * 2u; ++resourceIndex){
         char identityText[32u] = {};
         const auto derivedNameAt65Col30 = DeriveName(Name("tests/terminal_dependency/resource/"), FormatDecimal(resourceIndex, identityText));
@@ -114,7 +112,6 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         const Graphics::GpuTaskId reader = *readerResult;
         ASSERT_TRUE(reader.valid());
         readers.push_back(reader);
-        overrides.push_back({ .task = reader, .queue = queues[queueIndex].id });
     }
     for(usize pairIndex = 0u; pairIndex < pairCount; ++pairIndex){
         const Graphics::GpuTaskResourceUse uses[] = { resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u) };
@@ -133,7 +130,6 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         const Graphics::GpuTaskId finalizer = *finalizerResult;
         ASSERT_TRUE(finalizer.valid());
         finalizers.push_back(finalizer);
-        overrides.push_back({ .task = finalizer, .queue = queues[queueIndex].id });
     }
 
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
@@ -141,13 +137,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     Core::Alloc::ScratchArena scratchArena(Name("tests/terminal_dependency/compilation"));
-    const Graphics::GpuTaskGraphCompiler compiler;
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    Graphics::GpuTaskGraphCompileOptions options;
-    options.allowMetadataOnlyTasks = true;
-    options.queueAssignmentOptions.diagnosticQueueOverrides = overrides.data();
-    options.queueAssignmentOptions.diagnosticQueueOverrideCount = overrides.size();
-    ASSERT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(scratchArena, graph, analysis, topology, assignments, compiledGraph));
 
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     ASSERT_EQ(plan.taskCount(), readers.size() + finalizers.size());

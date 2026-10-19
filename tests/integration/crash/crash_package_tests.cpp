@@ -147,10 +147,10 @@ static void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::
 
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-static u32 g_NativeLifecycleDiagnostics = 0u;
-static u32 g_UnlockedLifecycleDiagnostics = 0u;
-static char g_LastLifecycleDiagnostic[192u] = {};
-static char g_LastLifecycleOperation[32u] = {};
+static u32 s_NativeLifecycleDiagnostics = 0u;
+static u32 s_UnlockedLifecycleDiagnostics = 0u;
+static char s_LastLifecycleDiagnostic[192u] = {};
+static char s_LastLifecycleOperation[32u] = {};
 #endif
 
 
@@ -161,11 +161,11 @@ static char g_LastLifecycleOperation[32u] = {};
 static void ObserveNativeLifecycle(const DiagnosticEventRecord& record)noexcept{
     if(record.category != AStringView("crash_native_lifecycle"))
         return;
-    ++g_NativeLifecycleDiagnostics;
-    CopyFixedBuffer(g_LastLifecycleDiagnostic, record.message);
-    CopyFixedBuffer(g_LastLifecycleOperation, record.expression);
+    ++s_NativeLifecycleDiagnostics;
+    CopyFixedBuffer(s_LastLifecycleDiagnostic, record.message);
+    CopyFixedBuffer(s_LastLifecycleOperation, record.expression);
     if(NWB::Core::Crash::Detail::g_State.mutex.try_lock()){
-        ++g_UnlockedLifecycleDiagnostics;
+        ++s_UnlockedLifecycleDiagnostics;
         NWB::Core::Crash::Detail::g_State.mutex.unlock();
     }
 }
@@ -193,8 +193,8 @@ TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){
     NWB::Core::Crash::UninstallCrashHandler();
     const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
     ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
-    g_NativeLifecycleDiagnostics = 0u;
-    g_UnlockedLifecycleDiagnostics = 0u;
+    s_NativeLifecycleDiagnostics = 0u;
+    s_UnlockedLifecycleDiagnostics = 0u;
     NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
     NWB::Core::Crash::CrashConfig config(installArena);
     config.applicationName = "bad-spool-admission";
@@ -203,11 +203,11 @@ TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){
     EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.installed);
     EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.handlerStarted);
     EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
-    EXPECT_EQ(g_NativeLifecycleDiagnostics, 1u);
-    EXPECT_EQ(g_UnlockedLifecycleDiagnostics, 1u);
-    EXPECT_EQ(AStringView(g_LastLifecycleOperation), AStringView("prepare_spool"));
-    EXPECT_NE(AStringView(g_LastLifecycleDiagnostic).find(AStringView(expectedCategory)), AStringView::npos);
-    EXPECT_NE(AStringView(g_LastLifecycleDiagnostic).find(AStringView(expectedCode)), AStringView::npos);
+    EXPECT_EQ(s_NativeLifecycleDiagnostics, 1u);
+    EXPECT_EQ(s_UnlockedLifecycleDiagnostics, 1u);
+    EXPECT_EQ(AStringView(s_LastLifecycleOperation), AStringView("prepare_spool"));
+    EXPECT_NE(AStringView(s_LastLifecycleDiagnostic).find(AStringView(expectedCategory)), AStringView::npos);
+    EXPECT_NE(AStringView(s_LastLifecycleDiagnostic).find(AStringView(expectedCode)), AStringView::npos);
     NWB::Core::Crash::UninstallCrashHandler();
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -226,8 +226,8 @@ TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnl
     NWB::Core::Crash::UninstallCrashHandler();
     const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
     ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
-    g_NativeLifecycleDiagnostics = 0u;
-    g_UnlockedLifecycleDiagnostics = 0u;
+    s_NativeLifecycleDiagnostics = 0u;
+    s_UnlockedLifecycleDiagnostics = 0u;
     NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
     const auto executableText = PathToString<char>(arena, invalidExecutable);
     NWB::Core::Crash::CrashConfig config(installArena);
@@ -258,9 +258,9 @@ TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnl
     ASSERT_TRUE(after);
     EXPECT_EQ(static_cast<usize>(after->end() - after->begin()), beforeCount);
 #endif
-    EXPECT_EQ(g_NativeLifecycleDiagnostics, 5u);
-    EXPECT_EQ(g_UnlockedLifecycleDiagnostics, g_NativeLifecycleDiagnostics);
-    EXPECT_NE(AStringView(g_LastLifecycleDiagnostic).find("code="), AStringView::npos);
+    EXPECT_EQ(s_NativeLifecycleDiagnostics, 5u);
+    EXPECT_EQ(s_UnlockedLifecycleDiagnostics, s_NativeLifecycleDiagnostics);
+    EXPECT_NE(AStringView(s_LastLifecycleDiagnostic).find("code="), AStringView::npos);
     NWB::Core::Crash::UninstallCrashHandler();
     RemoveTestArtifacts(arena, s_Group);
 }

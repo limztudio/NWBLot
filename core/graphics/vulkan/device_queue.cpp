@@ -163,12 +163,17 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
         return false;
     };
 
-    const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
+    const Expected<u64> reusableVersion = queueGetCompletedInstance(executionQueue);
     for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
         if(ownerStillRecorded(expected))
             continue;
-        m_uploadManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, reusableVersion);
-        m_scratchManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, reusableVersion);
+        if(!reusableVersion){
+            m_uploadManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
+            m_scratchManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
+            continue;
+        }
+        m_uploadManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
+        m_scratchManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
     }
 }
 

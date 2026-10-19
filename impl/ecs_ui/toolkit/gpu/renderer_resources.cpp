@@ -165,8 +165,11 @@ bool GpuRendererState::createResources(){
         resources->m_sampler.reset();
     if(!layoutResult || !outputLayoutResult || !samplerResult)
         return false;
-    resources->m_samplerDescriptor = heap.allocate(Core::GpuDescriptorClass::Sampler);
-    if(!resources->m_samplerDescriptor.valid() || !heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::Sampler(0u, resources->m_sampler.get())))
+    const Expected<Core::GpuDescriptorHandle> samplerDescriptor = heap.allocate(Core::GpuDescriptorClass::Sampler);
+    if(!samplerDescriptor)
+        return false;
+    resources->m_samplerDescriptor = *samplerDescriptor;
+    if(!heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::Sampler(0u, resources->m_sampler.get())))
         return false;
     Core::GraphicsPipelineDesc pipeline;
     pipeline
@@ -230,9 +233,12 @@ Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 
     if(!target->m_readinessToken.valid() || !target->m_readinessToken.hasPhysicalQueueIdentity())
         return MakeUnexpected(Failure{});
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    target->m_sampledImage = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    const Expected<Core::GpuDescriptorHandle> sampledImage = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    if(!sampledImage)
+        return MakeUnexpected(sampledImage.error());
+    target->m_sampledImage = *sampledImage;
     const Core::DescriptorWriteItem view = Core::DescriptorWriteItem::TextureSrv(0u, target->m_color.get(), Core::Format::RGBA16_FLOAT, Core::s_AllSubresources, Core::TextureDimension::Texture2D);
-    if(!target->m_sampledImage.valid() || !heap.write(target->m_sampledImage, view))
+    if(!heap.write(target->m_sampledImage, view))
         return MakeUnexpected(Failure{});
     return Move(target);
 }

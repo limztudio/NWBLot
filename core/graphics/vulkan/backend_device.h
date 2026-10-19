@@ -192,7 +192,7 @@ public:
     Expected<StagingTextureMapping> mapStagingTexture(StagingTexture& tex, const TextureSlice& slice, CpuAccessMode::Enum);
     void unmapStagingTexture(StagingTexture& tex);
     [[nodiscard]] Expected<BufferHandle> createBuffer(const BufferDesc& d);
-    void* mapBuffer(Buffer& buffer, CpuAccessMode::Enum);
+    [[nodiscard]] Expected<void*> mapBuffer(Buffer& buffer, CpuAccessMode::Enum);
     void unmapBuffer(Buffer& buffer);
     [[nodiscard]] Expected<MemoryRequirements> getBufferMemoryRequirements(Buffer& buffer);
     bool bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
@@ -228,7 +228,7 @@ public:
     [[nodiscard]] Expected<RayTracingOpacityMicromapHandle> createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc);
     [[nodiscard]] Expected<RayTracingAccelStructHandle> createAccelStruct(const RayTracingAccelStructDesc& desc);
     [[nodiscard]] Expected<MemoryRequirements> getAccelStructMemoryRequirements(RayTracingAccelStruct& as);
-    [[nodiscard]] RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
+    [[nodiscard]] Expected<RayTracingClusterOperationSizeInfo> getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
     bool bindAccelStructMemory(RayTracingAccelStruct& as, Heap& heap, u64 offset);
     // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
     [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* as)const noexcept;
@@ -314,8 +314,8 @@ public:
 
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
-    [[nodiscard]] u64 queueGetCompletedInstance(CommandQueue::Enum queue);
-    [[nodiscard]] u64 queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
+    [[nodiscard]] Expected<u64> queueGetCompletedInstance(CommandQueue::Enum queue);
+    [[nodiscard]] Expected<u64> queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
 
 public:

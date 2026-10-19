@@ -430,11 +430,12 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             return;
         }
 
-        auto* mappedTransforms = static_cast<u8*>(m_device.mapBuffer(*transformBuffer, CpuAccessMode::Write));
-        if(!mappedTransforms){
+        const Expected<void*> mappedTransformsResult = m_device.mapBuffer(*transformBuffer, CpuAccessMode::Write);
+        if(!mappedTransformsResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map BLAS transform buffer"));
             return;
         }
+        auto* mappedTransforms = static_cast<u8*>(*mappedTransformsResult);
 
         usize transformIndex = 0;
         for(usize i = 0u; i < numGeometries; ++i){
@@ -627,8 +628,9 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     const u64 scratchAllocationSize = buildScratchSize + scratchPadding;
 
     const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
-    const u64 completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
-    const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion, 1u);
+    // Without a completed value, no retired chunk is reused.
+    const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
+    const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
     if(!allocation){
         invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);

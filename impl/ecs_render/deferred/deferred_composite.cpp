@@ -73,8 +73,8 @@ public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
-                return deferredSystem.renderDeferredComposite(taskCommandList, targets, payload.reflectionInputs);
-            }
+            return deferredSystem.renderDeferredComposite(taskCommandList, targets, payload.reflectionInputs);
+        }
         );
     }
 };

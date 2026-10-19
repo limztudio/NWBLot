@@ -41,21 +41,25 @@ static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure:
 }
 
 static Expected<Core::GpuDescriptorHandle> RegisterStorageBuffer(Core::GpuDescriptorHeap& heap, const Core::DescriptorWriteItem& item){
-    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
-    if(!handle.valid() || !heap.write(handle, item))
+    const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!handle)
+        return MakeUnexpected(handle.error());
+    Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
+    if(!heap.write(*handle, item))
         return MakeUnexpected(Failure{});
     retireHandle.release();
-    return handle;
+    return *handle;
 }
 
 static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
-    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
-    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)))
+    const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    if(!handle)
+        return MakeUnexpected(handle.error());
+    Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
+    if(!heap.write(*handle, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)))
         return MakeUnexpected(Failure{});
     retireHandle.release();
-    return handle;
+    return *handle;
 }
 
 

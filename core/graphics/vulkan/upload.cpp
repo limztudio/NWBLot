@@ -141,10 +141,12 @@ void UploadManager::abandonChunks(const GpuPhysicalQueueId queue, TrackedCommand
 
 void UploadManager::collectCompletedChunks(){
     for(const GpuPhysicalQueueInfo& queueInfo : m_device.m_physicalQueueInfos){
-        const u64 completedVersion = m_device.queueGetCompletedInstance(queueInfo.id);
+        const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(queueInfo.id);
+        if(!completedVersion)
+            continue;
         ScopedLock lock(m_mutex);
 
-        trimRetiredChunksLocked(queueInfo.id, completedVersion);
+        trimRetiredChunksLocked(queueInfo.id, *completedVersion);
     }
 }
 

@@ -267,16 +267,7 @@ private:
         const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
         Float4 ceilingScale;
         StoreFloat(VectorMultiply(VectorSet(2.0f, 1.0f, 2.0f, 0.0f), VectorSet(s_BoxHalf.x, 1.0f, s_BoxHalf.y, 0.0f)), ceilingScale);
-        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
-            *m_world,
-            m_context.objectArena,
-            s_GroundMesh,
-            s_OpaqueMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            colorTint,
-            Float4(0.0f, s_BoxHeight, 0.0f, 0.0f),
-            ceilingScale
-        );
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale);
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
                 StoreFloat(ceilingRotation, transform->rotation);

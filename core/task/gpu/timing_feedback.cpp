@@ -129,45 +129,6 @@ bool GpuTaskTimingFeedbackPolicy::valid()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(const GpuTaskDiagnosticTimingQueueOverride* const overrides, const usize overrideCount, const u16 deviceGeneration)noexcept{
-    if(overrideCount == 0u)
-        return GpuTaskDiagnosticTimingQueueOverrideStatus::Success;
-    if(!overrides)
-        return GpuTaskDiagnosticTimingQueueOverrideStatus::MissingOverrides;
-    if(deviceGeneration == 0u)
-        return GpuTaskDiagnosticTimingQueueOverrideStatus::MismatchedDeviceGeneration;
-
-    for(usize overrideIndex = 0u; overrideIndex < overrideCount; ++overrideIndex){
-        const GpuTaskDiagnosticTimingQueueOverride& override = overrides[overrideIndex];
-        if(!override.key.valid())
-            return GpuTaskDiagnosticTimingQueueOverrideStatus::InvalidKey;
-        if(!override.queue.valid())
-            return GpuTaskDiagnosticTimingQueueOverrideStatus::InvalidQueue;
-        if(override.queue.deviceGeneration != deviceGeneration)
-            return GpuTaskDiagnosticTimingQueueOverrideStatus::MismatchedDeviceGeneration;
-
-        for(usize previousIndex = 0u; previousIndex < overrideIndex; ++previousIndex){
-            if(overrides[previousIndex].key == override.key)
-                return GpuTaskDiagnosticTimingQueueOverrideStatus::DuplicateTaskKey;
-        }
-    }
-    return GpuTaskDiagnosticTimingQueueOverrideStatus::Success;
-}
-
-
-const GpuTaskDiagnosticTimingQueueOverride* FindGpuTaskDiagnosticTimingQueueOverride(const GpuTaskDiagnosticTimingQueueOverride* const overrides, const usize overrideCount, const GpuTaskTimingKey& key)noexcept{
-    if(!overrides || !key.valid())
-        return nullptr;
-
-    for(usize overrideIndex = 0u; overrideIndex < overrideCount; ++overrideIndex){
-        const GpuTaskDiagnosticTimingQueueOverride& override = overrides[overrideIndex];
-        if(override.key == key)
-            return &override;
-    }
-    return nullptr;
-}
-
-
 bool GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
     return policy.valid() && history.valid() && history.sampleCount >= policy.minimumSampleCount;
 }

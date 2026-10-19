@@ -96,14 +96,14 @@ struct PhaseIdentities{
     result.sampledTexturesCollected = false;
     if(result.geometryOwned){
         const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(
-                m_materialSystem,
-                m_graph,
-                inputs.drawItemSets,
-                inputs.drawItemSetCount,
-                m_scratchArena,
-                Name(identities.sampledIdentity),
-                identities.sampledLabel
-            );
+            m_materialSystem,
+            m_graph,
+            inputs.drawItemSets,
+            inputs.drawItemSetCount,
+            m_scratchArena,
+            Name(identities.sampledIdentity),
+            identities.sampledLabel
+        );
         result.sampledTexturesCollected = materialSampledTextureSetResult.has_value();
         if(materialSampledTextureSetResult)
             result.materialSampledTextureSet = *materialSampledTextureSetResult;

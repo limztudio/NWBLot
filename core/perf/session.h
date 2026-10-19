@@ -30,7 +30,7 @@ public:
 public:
     void setCaptureOptions(const CaptureOptions& options)noexcept;
     void clear()noexcept;
-    void beginFrame(u64 frameIndex)noexcept;
+    void beginFrame(const u64 frameIndex)noexcept{ m_frameIndex = frameIndex; }
     void publishFrame();
 
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }

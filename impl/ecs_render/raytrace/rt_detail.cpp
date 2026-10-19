@@ -45,9 +45,10 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
 }
 
 [[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const bool writable){
-    const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
-    if(!handle.valid())
-        return MakeUnexpected(Failure{});
+    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(descriptorClass);
+    if(!allocated)
+        return MakeUnexpected(allocated.error());
+    const Core::GpuDescriptorHandle handle = *allocated;
 
     Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 

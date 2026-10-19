@@ -608,31 +608,33 @@ void Device::queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore
         q->addSignalSemaphore(semaphore, value);
 }
 
-u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
+Expected<u64> Device::queueGetCompletedInstance(CommandQueue::Enum queue){
     return queueGetCompletedInstance(getPrimaryPhysicalQueue(queue));
 }
 
-u64 Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
+Expected<u64> Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
     // Rejected-submit cleanup retires CPU-side bookkeeping; device-lost already marked the device terminal, so skip the second timeline query here.
     if(isDeviceLost())
-        return 0;
+        return MakeUnexpected(Failure{});
 
     Queue* q = getQueue(queue);
-    if(q){
-        VkResult result = VK_SUCCESS;
-        u64 completedInstance = 0u;
-        {
-            ScopedLock lock(q->m_mutex);
-            result = q->updateLastFinishedID();
-            completedInstance = q->m_lastFinishedID;
-        }
-        if(result == VK_ERROR_DEVICE_LOST)
-            captureDeviceLoss("queue timeline query");
-        if(result != VK_SUCCESS)
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(result));
-        return completedInstance;
+    if(!q)
+        return MakeUnexpected(Failure{});
+
+    VkResult result = VK_SUCCESS;
+    u64 completedInstance = 0u;
+    {
+        ScopedLock lock(q->m_mutex);
+        result = q->updateLastFinishedID();
+        completedInstance = q->m_lastFinishedID;
     }
-    return 0;
+    if(result == VK_ERROR_DEVICE_LOST)
+        captureDeviceLoss("queue timeline query");
+    if(result != VK_SUCCESS){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(result));
+        return MakeUnexpected(Failure{});
+    }
+    return completedInstance;
 }
 
 void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance){

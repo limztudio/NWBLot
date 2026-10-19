@@ -133,18 +133,25 @@ static bool ValidateMaterialTypedLayout(const u64 layoutHash, const Material::Ty
     return true;
 }
 
-static Expected<u64> ReadMaterialTypedLayout(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    Material::TypedLayoutBlockVector& outBlocks,
-    Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes,
-    Material::ResourceReferenceVector& outResourceReferences
-){
-    outBlocks.clear();
-    outFields.clear();
-    outBlockBytes.clear();
-    outResourceReferences.clear();
+struct MaterialTypedLayoutPayload final{
+    u64 layoutHash = 0u;
+    Material::TypedLayoutBlockVector blocks;
+    Material::TypedLayoutFieldVector fields;
+    Material::TypedBlockByteVector blockBytes;
+    Material::ResourceReferenceVector resourceReferences;
+
+
+public:
+    explicit MaterialTypedLayoutPayload(Core::Assets::AssetArena& arena)noexcept
+        : blocks(arena)
+        , fields(arena)
+        , blockBytes(arena)
+        , resourceReferences(arena)
+    {}
+};
+
+static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::Assets::AssetBytes& binary, usize& inOutCursor, Core::Assets::AssetArena& arena){
+    MaterialTypedLayoutPayload payload(arena);
 
     const auto layoutHashResult = ReadPOD<u64>(binary, inOutCursor);
     if(!layoutHashResult){
@@ -170,7 +177,7 @@ static Expected<u64> ReadMaterialTypedLayout(
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: typed layout block count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
-    outBlocks.reserve(blockCount);
+    payload.blocks.reserve(blockCount);
     for(u32 i = 0u; i < blockCount; ++i){
         MaterialBinaryPayload::MaterialTypedLayoutBlockBinary blockBinary;
         const auto blockBinaryResult = ReadPOD<MaterialBinaryPayload::MaterialTypedLayoutBlockBinary>(binary, inOutCursor);
@@ -186,14 +193,14 @@ static Expected<u64> ReadMaterialTypedLayout(
         block.fieldBegin = blockBinary.fieldBegin;
         block.fieldCount = blockBinary.fieldCount;
         block.byteSize = blockBinary.byteSize;
-        outBlocks.push_back(block);
+        payload.blocks.push_back(block);
     }
 
     if(fieldCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_TypedLayoutFieldBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: typed layout field count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
-    outFields.reserve(fieldCount);
+    payload.fields.reserve(fieldCount);
     for(u32 i = 0u; i < fieldCount; ++i){
         MaterialBinaryPayload::MaterialTypedLayoutFieldBinary fieldBinary;
         const auto fieldBinaryResult = ReadPOD<MaterialBinaryPayload::MaterialTypedLayoutFieldBinary>(binary, inOutCursor);
@@ -208,7 +215,7 @@ static Expected<u64> ReadMaterialTypedLayout(
         field.fieldType = static_cast<MaterialLayoutFieldType::Enum>(fieldBinary.fieldType);
         field.offset = fieldBinary.offset;
         field.defaultValue = fieldBinary.defaultValue;
-        outFields.push_back(field);
+        payload.fields.push_back(field);
     }
 
     u32 blockByteCount = 0u;
@@ -223,8 +230,8 @@ static Expected<u64> ReadMaterialTypedLayout(
         return MakeUnexpected(Failure{});
     }
 
-    outBlockBytes.resize(blockByteCount);
-    if(!BinaryDetail::ReadBytes(binary, inOutCursor, outBlockBytes.data(), blockByteCount)){
+    payload.blockBytes.resize(blockByteCount);
+    if(!BinaryDetail::ReadBytes(binary, inOutCursor, payload.blockBytes.data(), blockByteCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed typed block bytes"));
         return MakeUnexpected(Failure{});
     }
@@ -240,7 +247,7 @@ static Expected<u64> ReadMaterialTypedLayout(
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
-    outResourceReferences.reserve(resourceReferenceCount);
+    payload.resourceReferences.reserve(resourceReferenceCount);
     for(u32 i = 0u; i < resourceReferenceCount; ++i){
         MaterialBinaryPayload::MaterialResourceReferenceBinary resourceReferenceBinary;
         const auto resourceReferenceBinaryResult = ReadPOD<MaterialBinaryPayload::MaterialResourceReferenceBinary>(binary, inOutCursor);
@@ -263,17 +270,18 @@ static Expected<u64> ReadMaterialTypedLayout(
         resourceReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
         if(!AssignMaterialResourceReferenceAsset(resourceReference, resourceKind, resourceName))
             return MakeUnexpected(Failure{});
-        outResourceReferences.push_back(resourceReference);
+        payload.resourceReferences.push_back(resourceReference);
     }
 
-    if(!ValidateMaterialTypedLayout(layoutHash, outBlocks, outFields, outBlockBytes, NWB_TEXT("Material::loadBinary")))
+    if(!ValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, NWB_TEXT("Material::loadBinary")))
         return MakeUnexpected(Failure{});
-    if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(outBlocks, outFields, outResourceReferences)){
+    if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(payload.blocks, payload.fields, payload.resourceReferences)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));
         return MakeUnexpected(Failure{});
     }
 
-    return layoutHash;
+    payload.layoutHash = layoutHash;
+    return payload;
 }
 
 
@@ -328,10 +336,14 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    const auto layoutHash = __hidden_runtime::ReadMaterialTypedLayout(binary, cursor, candidate.m_typedLayoutBlocks, candidate.m_typedLayoutFields, candidate.m_typedBlockBytes, candidate.m_resourceReferences);
-    if(!layoutHash)
+    auto typedLayout = __hidden_runtime::ReadMaterialTypedLayout(binary, cursor, m_shaderVariant.get_allocator().arena());
+    if(!typedLayout)
         return false;
-    candidate.m_typedLayoutHash = *layoutHash;
+    candidate.m_typedLayoutHash = typedLayout->layoutHash;
+    candidate.m_typedLayoutBlocks = Move(typedLayout->blocks);
+    candidate.m_typedLayoutFields = Move(typedLayout->fields);
+    candidate.m_typedBlockBytes = Move(typedLayout->blockBytes);
+    candidate.m_resourceReferences = Move(typedLayout->resourceReferences);
     NWB_ASSERT(candidate.m_typedLayoutHash != 0u);
 
     u32 shaderCount = 0;

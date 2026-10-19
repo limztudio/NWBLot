@@ -72,14 +72,15 @@ namespace __hidden_csg_resources{
 
     NWB_ASSERT(descriptorClass == Core::GpuDescriptorClass::StorageBuffer || descriptorClass == Core::GpuDescriptorClass::UniformBuffer);
     const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer);
-    const Core::GpuDescriptorHandle acquired = heap.allocate(descriptorClass);
-    if(!acquired.valid() || !heap.write(acquired, descriptorWrite)){
-        if(acquired.valid())
-            heap.free(acquired);
+    const Expected<Core::GpuDescriptorHandle> acquired = heap.allocate(descriptorClass);
+    if(!acquired)
+        return MakeUnexpected(acquired.error());
+    if(!heap.write(*acquired, descriptorWrite)){
+        heap.free(*acquired);
         return MakeUnexpected(Failure{});
     }
 
-    return acquired;
+    return *acquired;
 }
 
 [[nodiscard]] static bool ReplaceCsgStorageBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){

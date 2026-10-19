@@ -392,8 +392,10 @@ public:
         }
         const Array<Core::BufferHandle, 3u> buffers{ m_coverage, m_warp, m_control };
         for(u32 index = 0u; index < buffers.size(); ++index){
-            m_descriptors[index] = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-            if(!m_descriptors[index].valid() || !heap.write(m_descriptors[index], Core::DescriptorWriteItem::StructuredBufferUav(0u, buffers[index].get()))){
+            const Expected<Core::GpuDescriptorHandle> descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+            if(descriptor)
+                m_descriptors[index] = *descriptor;
+            if(!descriptor || !heap.write(m_descriptors[index], Core::DescriptorWriteItem::StructuredBufferUav(0u, buffers[index].get()))){
                 NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: storage descriptor setup failed at index {}"), index);
                 return false;
             }
@@ -412,8 +414,10 @@ public:
             m_slots = Move(*slotsResult);
         else
             m_slots.reset();
-        m_descriptors[3] = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-        if(!slotsResult || !m_descriptors[3].valid() || !heap.write(m_descriptors[3], Core::DescriptorWriteItem::ConstantBuffer(0u, m_slots.get()))){
+        const Expected<Core::GpuDescriptorHandle> slotsDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+        if(slotsDescriptor)
+            m_descriptors[3] = *slotsDescriptor;
+        if(!slotsResult || !slotsDescriptor || !heap.write(m_descriptors[3], Core::DescriptorWriteItem::ConstantBuffer(0u, m_slots.get()))){
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: slot payload setup failed"));
             return false;
         }
@@ -465,11 +469,12 @@ public:
 private:
     [[nodiscard]] bool compareBatch(const ProbeBatchTask::Payload& payload){
         auto& device = m_context.graphics.getDevice();
-        const auto* mapped = static_cast<const u32*>(device.mapBuffer(*m_readback, Core::CpuAccessMode::Read));
-        if(!mapped){
+        const Expected<void*> mappedResult = device.mapBuffer(*m_readback, Core::CpuAccessMode::Read);
+        if(!mappedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: readback mapping failed at case {}"), payload.firstCase);
             return false;
         }
+        const auto* mapped = static_cast<const u32*>(*mappedResult);
         bool passed = true;
         for(u32 index = 0u; passed && index < payload.caseCount; ++index){
             const ProbeCase& probe = payload.cases[index];

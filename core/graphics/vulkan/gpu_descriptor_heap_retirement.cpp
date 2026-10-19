@@ -50,8 +50,12 @@ void GpuDescriptorHeap::collectRetired(){
         }
     }
 
-    for(QueueCompletion& completion : completions)
-        completion.value = m_device.queueGetCompletedInstance(completion.queue);
+    // A failed query keeps the queue's zero value, so its heap uses stay pending.
+    for(QueueCompletion& completion : completions){
+        const Expected<u64> completedValue = m_device.queueGetCompletedInstance(completion.queue);
+        if(completedValue)
+            completion.value = *completedValue;
+    }
 
     ScopedLock lock(m_mutex);
     const auto heapUseComplete = [&](const HeapUse& heapUse)noexcept -> bool {

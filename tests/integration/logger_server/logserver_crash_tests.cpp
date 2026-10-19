@@ -71,13 +71,6 @@ inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
 inline constexpr Name s_ArchiveScratch("tests/integration/logger_server/archive_scratch");
 inline constexpr Name s_AssertChildInstallArena("tests/integration/logger_server/assert_child_install");
 inline constexpr Name s_RecoverableErrorInstallArena("tests/integration/logger_server/recoverable_error_install");
-#if defined(_MSC_VER)
-#define NWB_LOGSERVER_TEST_NOINLINE __declspec(noinline)
-#elif defined(__GNUC__) || defined(__clang__)
-#define NWB_LOGSERVER_TEST_NOINLINE [[gnu::noinline]]
-#else
-#define NWB_LOGSERVER_TEST_NOINLINE
-#endif
 
 
 class LoggerServerCrash : public ::testing::Test{
@@ -166,7 +159,7 @@ static void LinuxSilenceExpectedCrashChildConsole(){
 #endif
 }
 
-NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation(){
+NWB_NOINLINE static void LinuxForceAssertFalseForCrashObservation(){
 #if NWB_OCCUR_ASSERT
     NWB_ASSERT(false);
 #else
@@ -178,7 +171,7 @@ NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation
 
 // Shared by Windows and Linux; match the test guard to avoid an unused Android helper.
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
+NWB_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Error,
         .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
@@ -778,12 +771,6 @@ TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, header));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, header.substr(0u, header.size() - 1u)));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef NWB_LOGSERVER_TEST_NOINLINE
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -30,10 +30,10 @@ struct PayloadBuildFailure{};
 
 [[nodiscard]] bool RecordFilledPayload(Telemetry::Recorder& recorder, const usize byteCount, const u8 value){
     return recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [byteCount, value](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-            EXPECT_TRUE(payload.empty());
-            payload.resize(byteCount, value);
-            return true;
-        }
+        EXPECT_TRUE(payload.empty());
+        payload.resize(byteCount, value);
+        return true;
+    }
     );
 }
 
@@ -53,18 +53,18 @@ void RunConcurrentReset(const bool disableCapture){
             workers[index] = Thread([&, index](){
                 bool enteredBuilder = false;
                 const bool recorded = recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 42u, static_cast<u32>(index), [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-                        enteredBuilder = true;
-                        payload.resize(256u, static_cast<u8>(index + 1u));
-                        payloadsReady.count_down();
-                        releasePayloads.wait();
-                        for(const u8 value : payload){
-                            if(value != index + 1u){
-                                damagedPayloads.fetch_add(1u, MemoryOrder::relaxed);
-                                break;
-                            }
+                    enteredBuilder = true;
+                    payload.resize(256u, static_cast<u8>(index + 1u));
+                    payloadsReady.count_down();
+                    releasePayloads.wait();
+                    for(const u8 value : payload){
+                        if(value != index + 1u){
+                            damagedPayloads.fetch_add(1u, MemoryOrder::relaxed);
+                            break;
                         }
-                        return true;
                     }
+                    return true;
+                }
                 );
                 if(!enteredBuilder)
                     payloadsReady.count_down();
@@ -139,20 +139,20 @@ TEST(Telemetry, RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 3u));
     ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 7u, [&](Telemetry::TelemetryArena& arena, Telemetry::TelemetryBytes& payload){
-            EXPECT_EQ(&arena, &testArena.arena);
-            EXPECT_TRUE(payload.empty());
-            payload.resize(128u, 42u);
-            const u8* const leasedData = payload.data();
-            recorder.clear();
-            EXPECT_TRUE(recorder.captureOptions().perfEnabled());
-            EXPECT_EQ(recorder.eventCount(), 0u);
-            const bool nested = recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload.data(), payload.size(), 5u);
-            EXPECT_TRUE(nested);
-            EXPECT_EQ(payload.data(), leasedData);
-            for(const u8 value : payload)
-                EXPECT_EQ(value, 42u);
-            return nested;
-        }
+        EXPECT_EQ(&arena, &testArena.arena);
+        EXPECT_TRUE(payload.empty());
+        payload.resize(128u, 42u);
+        const u8* const leasedData = payload.data();
+        recorder.clear();
+        EXPECT_TRUE(recorder.captureOptions().perfEnabled());
+        EXPECT_EQ(recorder.eventCount(), 0u);
+        const bool nested = recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload.data(), payload.size(), 5u);
+        EXPECT_TRUE(nested);
+        EXPECT_EQ(payload.data(), leasedData);
+        for(const u8 value : payload)
+            EXPECT_EQ(value, 42u);
+        return nested;
+    }
     ));
     ASSERT_EQ(recorder.eventCount(), s_ExpectedDualCount);
     const auto* nested = recorder.view().eventAt(0u);
@@ -173,13 +173,13 @@ TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const ArenaMemoryStats before = testArena.arena.memoryStats();
     EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-            payload.resize(256u, 19u);
-            recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
-            EXPECT_EQ(payload.front(), 19u);
-            payload.back() = 37u;
-            EXPECT_EQ(payload.back(), 37u);
-            return true;
-        }
+        payload.resize(256u, 19u);
+        recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
+        EXPECT_EQ(payload.front(), 19u);
+        payload.back() = 37u;
+        EXPECT_EQ(payload.back(), 37u);
+        return true;
+    }
     ));
     EXPECT_EQ(recorder.eventCount(), 0u);
     const ArenaMemoryStats disabled = testArena.arena.memoryStats();
@@ -198,19 +198,19 @@ TEST(Telemetry, RecorderPublicationUsesCaptureOptionsAtBuilderCompletion){
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-            payload.resize(64u, 71u);
-            recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
-            recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
-            return true;
-        }
+        payload.resize(64u, 71u);
+        recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
+        recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
+        return true;
+    }
     ));
     ASSERT_EQ(recorder.eventCount(), 1u);
     EXPECT_EQ(recorder.view().eventAt(0u)->payload.back(), 71u);
     EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-            payload.resize(64u, 29u);
-            recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
-            return true;
-        }
+        payload.resize(64u, 29u);
+        recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+        return true;
+    }
     ));
     EXPECT_EQ(recorder.eventCount(), 1u);
 }
@@ -357,9 +357,9 @@ TEST(Telemetry, RecorderBuilderForeignMovesKeepOwnershipWithinEachArena){
                 Telemetry::TelemetryBytes foreignPayload(foreignArena.arena);
                 foreignPayload.resize(64u, 83u);
                 ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 3u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)noexcept{
-                        payload = Move(foreignPayload);
-                        return true;
-                    }
+                    payload = Move(foreignPayload);
+                    return true;
+                }
                 ));
             }
             EXPECT_EQ(foreignArena.arena.memoryStats().usedBytes, foreignInitial.usedBytes);

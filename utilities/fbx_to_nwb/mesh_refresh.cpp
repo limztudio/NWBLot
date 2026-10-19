@@ -141,12 +141,12 @@ template<typename Value>
     }
 
     Sort(sortedEntries.begin(), sortedEntries.end(), [](const StreamSortEntry<Value>& lhs, const StreamSortEntry<Value>& rhs)noexcept(noexcept(LessValue(lhs.value, rhs.value))){
-            if(LessValue(lhs.value, rhs.value))
-                return true;
-            if(LessValue(rhs.value, lhs.value))
-                return false;
-            return lhs.sourceIndex < rhs.sourceIndex;
-        }
+        if(LessValue(lhs.value, rhs.value))
+            return true;
+        if(LessValue(rhs.value, lhs.value))
+            return false;
+        return lhs.sourceIndex < rhs.sourceIndex;
+    }
     );
 
     usize uniqueCount = 0u;

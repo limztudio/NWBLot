@@ -70,7 +70,7 @@ $perfCommon = @('--executable', $perfExe, '--working-directory', $perfRuntime, '
 ctest --test-dir $perfBuild -C opt -j 1 -L software_raytracing --output-on-failure
 ```
 
-`--minimum-fps 60` requires **strictly greater** count/time FPS; equality fails. Below-target acquisitions retain the complete result and raw evidence but return failure. Without this option, successful acquisition only establishes valid measurement and workload/settings checks. The threshold rejects `--cpu-diagnostics` and `--reflection-diagnostics`; run those separately without a performance target.
+`--minimum-fps 60` requires **strictly greater** count/time FPS; equality fails. Below-target acquisitions retain the complete result and raw evidence but return failure. Ten or fewer positive presentation intervals make the target inconclusive, which also returns failure. Without this option, successful acquisition only establishes valid measurement and workload/settings checks. The threshold rejects `--cpu-diagnostics` and `--reflection-diagnostics`; run those separately without a performance target.
 
 True no-RT runs must record `Loader: hardware ray tracing disabled before device creation`, show software renderer dispatch, and reject hardware dispatch. This exercises the selected device policy on the capable adapter; tests do not assert native provider feature or descriptor-layout log tuples. Other renderer device requirements still apply. See [software ray tracing qualification](../tests/smoke/software_raytracing.md).
 

@@ -29,10 +29,6 @@ void Session::clear()noexcept{
     m_frameIndex = 0u;
 }
 
-void Session::beginFrame(const u64 frameIndex)noexcept{
-    m_frameIndex = frameIndex;
-}
-
 void Session::publishFrame(){
     m_cpuTiming.publishFrame(m_frameIndex);
     if(!captureOptions().memoryActive())

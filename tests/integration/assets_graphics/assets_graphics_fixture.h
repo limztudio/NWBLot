@@ -785,13 +785,7 @@ public:
     static Expected<EntryT> ParseShaderMetadataFile(TestArena& testArena, NWB::Impl::ShaderCook& shaderCook, const Path& metadataPath, NWB::Core::Alloc::ScratchArena& scratchArena){
         NWB::Core::Metascript::Document document(testArena.arena);
         NWB::Impl::ShaderCook::CookString source(testArena.arena);
-        if(!NWB::Core::Assets::ParseMetadataDocumentText(
-            metadataPath,
-            "Meta",
-            source,
-            document,
-            [&document](const AStringView text){ return document.parse(text); }
-        ))
+        if(!NWB::Core::Assets::ParseMetadataDocumentText(metadataPath, "Meta", source, document, [&document](const AStringView text){ return document.parse(text); }))
             return MakeUnexpected(Failure{});
 
         if constexpr(IsSame_V<EntryT, NWB::Impl::ShaderCook::ShaderEntry>)

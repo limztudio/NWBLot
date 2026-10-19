@@ -28,8 +28,8 @@ namespace __hidden_graphics_gather{
 
 
 static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
-    const Name expectedPath = Core::ShaderArchive::BuildVirtualPathName(record.shaderName, record.variantName, record.stage);
-    if(expectedPath && expectedPath.hash() == record.virtualPathHash)
+    const Expected<Name> expectedPath = Core::ShaderArchive::BuildVirtualPathName(record.shaderName, record.variantName, record.stage);
+    if(expectedPath && expectedPath->hash() == record.virtualPathHash)
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: shader index record has an invalid runtime identity"));

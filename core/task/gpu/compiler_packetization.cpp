@@ -291,7 +291,7 @@ namespace GpuTaskGraphCompilerDetail{
             .queue = assignment->queue,
             .packetizationDecision = packetizationDecision,
             .timingPolicy = task.timing.policy,
-            .recordsNonCommittingTimingSample = static_cast<bool>(assignment->modifiers & (GpuTaskQueueAssignmentModifier::TimingCalibration | GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride)),
+            .recordsNonCommittingTimingSample = static_cast<bool>(assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration),
         }
         );
         compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;

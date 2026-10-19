@@ -81,7 +81,7 @@ public:
 
 
 public:
-    virtual bool shouldRenderUnfocused()noexcept override;
+    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
     virtual void backBufferResizing()override;

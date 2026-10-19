@@ -108,12 +108,13 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         return;
     }
 
-    auto* mappedInstanceData = static_cast<u8*>(m_device.mapBuffer(*instanceBuffer, CpuAccessMode::Write));
-    if(!mappedInstanceData){
+    const Expected<void*> mappedInstanceDataResult = m_device.mapBuffer(*instanceBuffer, CpuAccessMode::Write);
+    if(!mappedInstanceDataResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
         return;
     }
+    auto* mappedInstanceData = static_cast<u8*>(*mappedInstanceDataResult);
 
     auto buildVkInstance = [&](usize i)noexcept{
         const auto& inst = pInstances[i];

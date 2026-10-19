@@ -511,8 +511,10 @@ bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissio
 
     QueueCompletion& completion = m_queueCompletions[physicalQueue.index];
     if(completion.queue != physicalQueue){
+        // A failed query proves no completion for this pass.
+        const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
         completion.queue = physicalQueue;
-        completion.value = device.queueGetCompletedInstance(physicalQueue);
+        completion.value = completedValue ? *completedValue : 0u;
     }
     return completion.value >= token.value;
 }

@@ -163,11 +163,13 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
-    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, cache.buffer.get())))
+    const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!handle)
         return false;
-    cache.heapHandle = handle;
+    Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
+    if(!heap.write(*handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, cache.buffer.get())))
+        return false;
+    cache.heapHandle = *handle;
     retireHandle.release();
     return true;
 }

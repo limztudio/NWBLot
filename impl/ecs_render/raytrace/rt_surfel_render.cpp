@@ -277,14 +277,15 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         const u32 frameIndex = m_rayTracingState.m_surfelFrameIndex;
         Core::Buffer* readback = m_rayTracingState.m_surfelCounterReadback.get();
         const Core::QueueSubmissionToken submissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
-        const bool submissionComplete =
-            submissionToken.valid()
-            && submissionToken.hasPhysicalQueueIdentity()
-            && m_graphics.getDevice().queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration, }) >= submissionToken.value
-        ;
+        bool submissionComplete = false;
+        if(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity()){
+            const Expected<u64> completedValue = m_graphics.getDevice().queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration, });
+            submissionComplete = completedValue && *completedValue >= submissionToken.value;
+        }
         if(submissionToken.valid() && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay && submissionComplete){
-            const u32* counts = static_cast<const u32*>(m_graphics.getDevice().mapBuffer(*readback, Core::CpuAccessMode::Read));
-            if(counts){
+            const Expected<void*> mappedCounts = m_graphics.getDevice().mapBuffer(*readback, Core::CpuAccessMode::Read);
+            if(mappedCounts){
+                const u32* counts = static_cast<const u32*>(*mappedCounts);
                 const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
                 const u32 freeTop = counts[NWB_SURFEL_COUNTER_FREE_TOP];
                 const u32 geometryFailures = counts[NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE];

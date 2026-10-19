@@ -317,9 +317,9 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearBeginHooks{ .context = &intervalClearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearEndHooks{ .context = &intervalClearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const auto mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearFirstTaskResult = m_graph.addClearTextureRectUIntTask(
-                makeTransparentCsgIntervalClearTaskDesc(Name("render.avboit.transparent_csg.interval_clear"), "Transparent CSG Interval Id Clear", result.uploadTask),
-                Core::GpuClearTextureRectUIntTaskDesc{ .destination = inputs.csgIntervalId, .subresources = inputs.csgPeelSubresources, .rect = transparentCsgClearRect, .uintValue = Core::UIntColor(0u), .recordHooks = transparentCsgIntervalClearBeginHooks, }
-            );
+            makeTransparentCsgIntervalClearTaskDesc(Name("render.avboit.transparent_csg.interval_clear"), "Transparent CSG Interval Id Clear", result.uploadTask),
+            Core::GpuClearTextureRectUIntTaskDesc{ .destination = inputs.csgIntervalId, .subresources = inputs.csgPeelSubresources, .rect = transparentCsgClearRect, .uintValue = Core::UIntColor(0u), .recordHooks = transparentCsgIntervalClearBeginHooks, }
+        );
         if(!mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearFirstTaskResult){
             m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG interval-id clear"));

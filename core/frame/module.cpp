@@ -92,10 +92,6 @@ Frame::~Frame()noexcept(false){
     drainOnFailure.release();
 }
 
-
-void Frame::requestQuit()noexcept{
-    m_quitRequested = true;
-}
 bool Frame::startup(){
     const auto updateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
     if(!updateTimingScope){

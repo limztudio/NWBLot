@@ -58,7 +58,6 @@
 
 #include <global/compile.h>
 #include <global/algorithm.h>
-#include <global/environment.h>
 #include <global/not_null.h>
 #include <global/text_utils.h>
 

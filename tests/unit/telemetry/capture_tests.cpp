@@ -321,13 +321,13 @@ TEST(Telemetry, DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuild
     ASSERT_TRUE(guard.installed());
     bool captureDidNotAllocate = false;
     ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 7u, 3u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-            const auto before = testArena.arena.memoryStats();
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .message = "builder callback", });
-            const auto after = testArena.arena.memoryStats();
-            captureDidNotAllocate = before.allocationCount == after.allocationCount && before.reallocationCount == after.reallocationCount;
-            payload.push_back(17u);
-            return recorder.recordBinary(Telemetry::EventKind::MemoryFrame, 8u, nullptr, 0u);
-        }
+        const auto before = testArena.arena.memoryStats();
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .message = "builder callback", });
+        const auto after = testArena.arena.memoryStats();
+        captureDidNotAllocate = before.allocationCount == after.allocationCount && before.reallocationCount == after.reallocationCount;
+        payload.push_back(17u);
+        return recorder.recordBinary(Telemetry::EventKind::MemoryFrame, 8u, nullptr, 0u);
+    }
     ));
     ASSERT_TRUE(captureDidNotAllocate);
     ASSERT_EQ(recorder.eventCount(), 3u);

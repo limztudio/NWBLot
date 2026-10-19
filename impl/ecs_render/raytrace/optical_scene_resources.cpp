@@ -70,13 +70,14 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
             return false;
         }
         Core::BufferHandle buffer = Move(*bufferResult);
-        const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()))){
-            if(descriptor.valid())
-                heap.free(descriptor);
+        const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!descriptorResult || !heap.write(*descriptorResult, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()))){
+            if(descriptorResult)
+                heap.free(*descriptorResult);
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to register metadata buffer"));
             return false;
         }
+        const Core::GpuDescriptorHandle descriptor = *descriptorResult;
         auto uploadStateResult = CreateRayTracingOpticalUploadControl(m_arena, buffer, device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics));
         if(!uploadStateResult){
             heap.free(descriptor);

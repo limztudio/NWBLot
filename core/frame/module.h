@@ -71,7 +71,7 @@ public:
     bool init();
     bool showFrame();
     bool mainLoop();
-    void requestQuit()noexcept;
+    void requestQuit()noexcept{ m_quitRequested = true; }
 
     template<typename T>
     inline T& data()noexcept{ return static_cast<T&>(m_data); }

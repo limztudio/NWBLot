@@ -12,6 +12,8 @@ import sys
 import tempfile
 from types import SimpleNamespace
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
+from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS
 import renderer_ab_benchmark as ab
 from smoke_volume_identity import file_identity
 import caustic_quality_smoke
@@ -544,10 +546,14 @@ def validate_performance_target_request(args):
         raise SmokeFailure("minimum FPS cannot qualify CPU or reflection diagnostic runs")
 
 
-def performance_target(measurement, minimum):
+def performance_target(measurement, intervals, minimum):
     # Derive qualification from the validated accepted count and wall clock, not rounded log FPS or GPU samples.
     observed = measurement[LIT_PRESENTATIONS] / measurement[LIT_SECONDS]
-    return dict(requested=minimum is not None, minimum_fps=minimum, comparison=">", observed_fps=observed, source="accepted_native_presentations / steady_clock_seconds", passed=None if minimum is None else observed > minimum)
+    # A stalled window leaves few positive intervals, so its target result is inconclusive.
+    positive = sum(row[LIT_PRESENTATIONS] > 0 for row in intervals)
+    inconclusive = minimum is not None and positive <= MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS
+    return dict(requested=minimum is not None, minimum_fps=minimum, comparison=">", observed_fps=observed, positive_intervals=positive, inconclusive=inconclusive, source="accepted_native_presentations / steady_clock_seconds",
+        passed=None if minimum is None or inconclusive else observed > minimum)
 
 
 def acquire(args, output):
@@ -596,8 +602,8 @@ def acquire(args, output):
         after = identities(args, helpers)
         if before != after:
             raise SmokeFailure("renderer, resources, logger, interpreter or helper identity changed during acquisition")
-        result[LIT_PERFORMANCE_TARGET] = performance_target(result[LIT_MEASUREMENT], args.minimum_fps)
-        result.update(schema=1, passed=result[LIT_PERFORMANCE_TARGET][LIT_PASSED] is not False, capture_validated=True, exit_code=code, identity_before=before, identity_after=after,
+        result[LIT_PERFORMANCE_TARGET] = performance_target(result[LIT_MEASUREMENT], result[LIT_INTERVALS], args.minimum_fps)
+        result.update(schema=1, passed=result[LIT_PERFORMANCE_TARGET][LIT_PASSED] is not False and not result[LIT_PERFORMANCE_TARGET]["inconclusive"], capture_validated=True, exit_code=code, identity_before=before, identity_after=after,
             raw_files={name: file_identity(output / name) for name in (LIT_RUNTIME_LOG, LIT_PROCESS_TAIL_TXT, LIT_GPU_TIMING_TXT, LIT_CPU_GPU_TIMING_TXT, LIT_CPU_GPU_SUMMARY_JSON) if (output / name).is_file()})
         return result
     finally:
@@ -627,7 +633,7 @@ def parse_args(argv=None):
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE)
     parser.add_argument("--output-directory", type=Path)
     parser.add_argument("--timeout", type=float, default=90.0)
-    parser.add_argument("--minimum-fps", type=float, help="Require strictly greater accepted presentation FPS; equality fails. Diagnostic runs cannot qualify.")
+    parser.add_argument("--minimum-fps", type=float, help="Require strictly greater accepted presentation FPS; equality fails. Diagnostic runs cannot qualify, and ten or fewer positive intervals are inconclusive.")
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10, help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
     parser.add_argument("--csg-profile", choices=(LIT_NONE, LIT_WAIST_BANDS), default=LIT_NONE, help="Waist bands add two moving box cutters to all twenty mesh children.")
     parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default=LIT_REFERENCE_THREE, help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
@@ -697,8 +703,10 @@ def main(argv=None):
         write_status(f"Stress presentation timing artifacts: {output}")
         result = acquire(args, output)
         write_json(output / "result.json", result)
-        if result[LIT_PERFORMANCE_TARGET][LIT_PASSED] is False:
-            target = result[LIT_PERFORMANCE_TARGET]
+        target = result[LIT_PERFORMANCE_TARGET]
+        if target["inconclusive"]:
+            raise SmokeFailure(f"INCONCLUSIVE: {target['positive_intervals']} positive presentation intervals; more than {MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS} are required for an FPS target")
+        if target[LIT_PASSED] is False:
             raise SmokeFailure(f"accepted presentation FPS {target['observed_fps']:.9g} must exceed {target['minimum_fps']:.9g}")
         write_status(result[LIT_WORKLOAD][LIT_SIGNATURE])
         write_status(f"PASS: {result['measurement']['fps']:.4f} accepted presentations/s over {result['measurement']['seconds']:.6f}s")

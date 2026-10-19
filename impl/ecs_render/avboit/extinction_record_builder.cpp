@@ -106,12 +106,12 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     }
     else if(inputs.csgComputeEmulationPlanCaptured){
         const auto extinctionComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-                m_graph,
-                computeEmulationPayload.csgPlan,
-                scratchArena,
-                Name("render.avboit.extinction.csg_compute_emulation.outputs"),
-                "AVBOIT Extinction CSG Compute Emulation Outputs"
-            );
+            m_graph,
+            computeEmulationPayload.csgPlan,
+            scratchArena,
+            Name("render.avboit.extinction.csg_compute_emulation.outputs"),
+            "AVBOIT Extinction CSG Compute Emulation Outputs"
+        );
         extinctionComputeEmulationOutputStatesGraphOwned = extinctionComputeEmulationOutputSetResult.has_value();
         if(extinctionComputeEmulationOutputSetResult)
             extinctionComputeEmulationOutputSet = *extinctionComputeEmulationOutputSetResult;
@@ -396,17 +396,17 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         for(usize phaseIndex = 0u; phaseIndex < extinctionSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult = addExtinctionSharedComputeEmulationPhase(
-                    extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
-                    extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],
-                    extinctionSharedComputeEmulationDependency,
-                    isRasterPhase ? ExtinctionSharedPhase::Raster : ExtinctionSharedPhase::Generate,
-                    phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
-                    phaseIndex == 0u,
-                    phaseIndex + 1u == extinctionSharedComputeEmulationPhaseCount,
-                    isRasterPhase ? extinctionSharedRasterResourceUses : extinctionSharedGenerateResourceUses,
-                    extinctionMaterialResourceSetUses,
-                    extinctionMaterialResourceSetUseCount
-                );
+                extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
+                extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],
+                extinctionSharedComputeEmulationDependency,
+                isRasterPhase ? ExtinctionSharedPhase::Raster : ExtinctionSharedPhase::Generate,
+                phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
+                phaseIndex == 0u,
+                phaseIndex + 1u == extinctionSharedComputeEmulationPhaseCount,
+                isRasterPhase ? extinctionSharedRasterResourceUses : extinctionSharedGenerateResourceUses,
+                extinctionMaterialResourceSetUses,
+                extinctionMaterialResourceSetUseCount
+            );
             if(!mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult){
                 m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Extinction shared compute-emulation phase"));

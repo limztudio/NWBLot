@@ -268,8 +268,11 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     if(!depthResult)
         return false;
     Core::TextureHandle depth = Move(*depthResult);
-    descriptors[4] = heap.allocate(Core::GpuDescriptorClass::SampledImage2DArray);
-    if(!descriptors[4].valid() || !heap.write(descriptors[4], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
+    const Expected<Core::GpuDescriptorHandle> depthDescriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage2DArray);
+    if(!depthDescriptor)
+        return false;
+    descriptors[4] = *depthDescriptor;
+    if(!heap.write(descriptors[4], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
         return false;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> opaque;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> transparent;

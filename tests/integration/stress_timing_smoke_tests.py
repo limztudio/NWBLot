@@ -815,6 +815,19 @@ class StressPerformanceTargetTests(unittest.TestCase):
         self.assertEqual(result[LIT_PERFORMANCE_TARGET]["observed_fps"], 60)
         self.assertFalse(result[LIT_PASSED])
 
+    def test_ten_positive_intervals_make_a_fast_target_inconclusive(self):
+        rows = iter(smoke.INTERVAL + f"avg={400 if index < 10 else 0} presentations={200 if index < 10 else 0} seconds=0.5 first={80 + 200 * min(index, 10)} last={80 + 200 * min(index + 1, 10)}" for index in range(60))
+        done = smoke.DONE + f"fps={2000 / 30!r} presentations=2000 seconds=30 first=80 last=2080"
+        text = "\n".join(next(rows) if line.startswith(smoke.INTERVAL) else done if line.startswith(smoke.DONE) else line for line in self.rate_log(62).splitlines()) + "\n"
+        self.assertEqual(self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text, use_main=True), 1)
+        output = self.root / LIT_CAPTURE
+        result = json.loads((output / "result.json").read_text())
+        self.assertGreater(result[LIT_PERFORMANCE_TARGET]["observed_fps"], 60)
+        self.assertTrue(result[LIT_PERFORMANCE_TARGET]["inconclusive"])
+        self.assertIsNone(result[LIT_PERFORMANCE_TARGET][LIT_PASSED])
+        self.assertFalse(result[LIT_PASSED])
+        self.assertIn("INCONCLUSIVE: 10 positive", json.loads((output / LIT_FAILURE_JSON).read_text())["error"])
+
     def test_main_retains_fully_validated_result_and_separate_target_failure(self):
         text = self.rate_log(60)
         self.assertEqual(self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text, use_main=True), 1)

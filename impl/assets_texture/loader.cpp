@@ -268,11 +268,12 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
     }
 
     // Resolve descriptor failures before accepting the upload; publish the whole resource before releasing this lease.
-    const Core::GpuDescriptorHandle sampledImageHandle = heap.allocate(descriptorClass);
-    if(!sampledImageHandle.valid()){
+    const Expected<Core::GpuDescriptorHandle> sampledImageHandleResult = heap.allocate(descriptorClass);
+    if(!sampledImageHandleResult){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.resolvedText()));
         return false;
     }
+    const Core::GpuDescriptorHandle sampledImageHandle = *sampledImageHandleResult;
     Core::GpuDescriptorRetirementGuard releaseDescriptor(heap, sampledImageHandle);
 
     if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, textureDimension))){

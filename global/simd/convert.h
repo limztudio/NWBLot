@@ -801,17 +801,10 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ConvertVectorSingleToDouble(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_NEON64)
     return SIMDVectorDoubleDetail::FromPairs(vcvt_f64_f32(vget_low_f32(value)), vcvt_f64_f32(vget_high_f32(value)));
+#elif defined(NWB_HAS_AVX)
+    return BitCast<SIMDVectorDouble>(_mm256_cvtps_pd(value));
 #elif defined(NWB_HAS_SSE2)
-#if defined(NWB_HAS_SCALAR)
-    const __m128 lanes = _mm_loadu_ps(value.f);
-#else
-    const __m128 lanes = value;
-#endif
-#if defined(NWB_HAS_AVX)
-    return BitCast<SIMDVectorDouble>(_mm256_cvtps_pd(lanes));
-#else
-    return SIMDVectorDoubleDetail::FromPairs(_mm_cvtps_pd(lanes), _mm_cvtps_pd(_mm_movehl_ps(lanes, lanes)));
-#endif
+    return SIMDVectorDoubleDetail::FromPairs(_mm_cvtps_pd(value), _mm_cvtps_pd(_mm_movehl_ps(value, value)));
 #elif defined(NWB_HAS_NEON)
     return SIMDConvertDoubleDetail::MakeF64(vgetq_lane_f32(value, 0), vgetq_lane_f32(value, 1), vgetq_lane_f32(value, 2), vgetq_lane_f32(value, 3));
 #else
@@ -822,19 +815,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL ConvertVectorSingleToDouble(SIMDVector
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL ConvertVectorDoubleToSingle(SIMDVectorDouble value)noexcept{
 #if defined(NWB_HAS_NEON64)
     return vcombine_f32(vcvt_f32_f64(SIMDVectorDoubleDetail::GetLow(value)), vcvt_f32_f64(SIMDVectorDoubleDetail::GetHigh(value)));
+#elif defined(NWB_HAS_AVX)
+    return _mm256_cvtpd_ps(BitCast<__m256d>(value));
 #elif defined(NWB_HAS_SSE2)
-#if defined(NWB_HAS_AVX)
-    const __m128 lanes = _mm256_cvtpd_ps(BitCast<__m256d>(value));
-#else
-    const __m128 lanes = _mm_movelh_ps(_mm_cvtpd_ps(SIMDVectorDoubleDetail::GetLow(value)), _mm_cvtpd_ps(SIMDVectorDoubleDetail::GetHigh(value)));
-#endif
-#if defined(NWB_HAS_SCALAR)
-    SIMDVectorSingle result{};
-    _mm_storeu_ps(result.f, lanes);
-    return result;
-#else
-    return lanes;
-#endif
+    return _mm_movelh_ps(_mm_cvtpd_ps(SIMDVectorDoubleDetail::GetLow(value)), _mm_cvtpd_ps(SIMDVectorDoubleDetail::GetHigh(value)));
 #else
     return SIMDConvertDetail::MakeF32(static_cast<f32>(value[0]), static_cast<f32>(value[1]), static_cast<f32>(value[2]), static_cast<f32>(value[3]));
 #endif

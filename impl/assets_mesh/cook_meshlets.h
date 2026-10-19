@@ -281,7 +281,7 @@ public:
     );
     template<typename VertexRefVectorT>
     [[nodiscard]] static Expected<u8> FindMeshletLocalVertex(const VertexRefVectorT& localVertexRefs, const u32 vertexRefIndex)noexcept(
-    noexcept(static_cast<bool>(DeclVal<usize&>() < localVertexRefs.size())) && noexcept(static_cast<bool>(localVertexRefs[DeclVal<usize&>()] != vertexRefIndex))
+        noexcept(static_cast<bool>(DeclVal<usize&>() < localVertexRefs.size())) && noexcept(static_cast<bool>(localVertexRefs[DeclVal<usize&>()] != vertexRefIndex))
     );
     template<typename VertexRefVectorT>
     [[nodiscard]] static MeshletVertexCounts CountMeshletMissingVertices(const VertexRefVectorT& localVertexRefs, const MeshletTriangleData& triangle)noexcept(noexcept(FindMeshletLocalVertex(localVertexRefs, DeclVal<const u32&>())));
@@ -309,69 +309,69 @@ public:
         const u32 triangleIndex,
         const SIMDVectorSingle triangleAreaNormal,
         const TriangleAreaNormalAtT& triangleAreaNormalAt
-    )noexcept(
-        noexcept(ComputeMeshletScoreConeCutoff(triangleIndices, NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal)), triangleIndex, true, triangleAreaNormalAt))
-    );
+    )noexcept(noexcept(ComputeMeshletScoreConeCutoff(triangleIndices, NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal)), triangleIndex, true, triangleAreaNormalAt)));
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
     [[nodiscard]] static SIMDVectorSingle ScoreMeshletCandidate(
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletScoreState& state,
-    const u32 triangleIndex,
-    const MeshletTriangleVectors& triangleVectors,
-    const TriangleAreaNormalAtT& triangleAreaNormalAt,
-    const u32 sharedVertexCount,
-    const u32 missingVertexCount,
-    const bool disconnected
+        const TriangleIndexVectorT& triangleIndices,
+        const MeshletScoreState& state,
+        const u32 triangleIndex,
+        const MeshletTriangleVectors& triangleVectors,
+        const TriangleAreaNormalAtT& triangleAreaNormalAt,
+        const u32 sharedVertexCount,
+        const u32 missingVertexCount,
+        const bool disconnected
     )noexcept(noexcept(PredictMeshletScoreConeWidening(triangleIndices, state, triangleIndex, triangleVectors.areaNormal, triangleAreaNormalAt)));
     [[nodiscard]] static Expected<u32> FindNextUnvisitedMeshletTriangle(const MeshletTrianglePrecompute& trianglePrecompute, const usize searchOffset)noexcept;
     template<typename VertexRefVectorT>
     [[nodiscard]] static Expected<MeshletVertexCounts> MeshletCanFitTriangle(const MeshletDesc& meshlet, const VertexRefVectorT& localVertexRefs, const MeshletTriangleData& triangle)noexcept(
-    noexcept(CountMeshletMissingVertices(localVertexRefs, triangle)) && noexcept(static_cast<bool>(localVertexRefs.size() + DeclVal<const MeshletVertexCounts&>().missing > s_MeshMaxMeshletVertices))
+        noexcept(CountMeshletMissingVertices(localVertexRefs, triangle)) && noexcept(static_cast<bool>(localVertexRefs.size() + DeclVal<const MeshletVertexCounts&>().missing > s_MeshMaxMeshletVertices))
     );
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     static void UpdateBestMeshletCandidateIfBetter(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletScoreState& scoreState,
-    const MeshletDesc& meshlet,
-    const VertexRefVectorT& localVertexRefs,
-    const usize frontierOffset,
-    const u32 triangleIndex,
-    const bool disconnected,
-    bool& found,
-    MeshletFrontierCandidate& outCandidate
-    )noexcept(noexcept(MeshletCanFitTriangle(meshlet, localVertexRefs, DeclVal<const MeshletTriangleData&>()))
-    && noexcept(ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, DeclVal<const MeshletTriangleVectors&>(), DeclVal<SIMDVectorSingle(*)(u32)noexcept>(), DeclVal<const u32&>(), DeclVal<const u32&>(), disconnected)));
+        const MeshletTrianglePrecompute& trianglePrecompute,
+        const TriangleIndexVectorT& triangleIndices,
+        const MeshletScoreState& scoreState,
+        const MeshletDesc& meshlet,
+        const VertexRefVectorT& localVertexRefs,
+        const usize frontierOffset,
+        const u32 triangleIndex,
+        const bool disconnected,
+        bool& found,
+        MeshletFrontierCandidate& outCandidate
+    )noexcept(
+        noexcept(MeshletCanFitTriangle(meshlet, localVertexRefs, DeclVal<const MeshletTriangleData&>()))
+        && noexcept(ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, DeclVal<const MeshletTriangleVectors&>(), DeclVal<SIMDVectorSingle(*)(u32)noexcept>(), DeclVal<const u32&>(), DeclVal<const u32&>(), disconnected))
+    );
     static void UpdateBestMeshletCandidateFromResult(const MeshletCandidateSearchResult& candidate, bool& found, MeshletFrontierCandidate& outCandidate)noexcept;
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     [[nodiscard]] static Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidate(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletScoreState& scoreState,
-    const MeshletDesc& meshlet,
-    const VertexRefVectorT& localVertexRefs
+        const MeshletTrianglePrecompute& trianglePrecompute,
+        const Vector<u32, Core::Alloc::ScratchArena>& frontier,
+        const TriangleIndexVectorT& triangleIndices,
+        const MeshletScoreState& scoreState,
+        const MeshletDesc& meshlet,
+        const VertexRefVectorT& localVertexRefs
     )noexcept(noexcept(UpdateBestMeshletCandidateIfBetter(trianglePrecompute, triangleIndices, scoreState, meshlet, localVertexRefs, 0u, 0u, false, DeclVal<bool&>(), DeclVal<MeshletFrontierCandidate&>())));
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     [[nodiscard]] static Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidateRange(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchBegin,
-    const usize searchEnd,
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletScoreState& scoreState,
-    const MeshletDesc& meshlet,
-    const VertexRefVectorT& localVertexRefs
+        const MeshletTrianglePrecompute& trianglePrecompute,
+        const usize searchBegin,
+        const usize searchEnd,
+        const TriangleIndexVectorT& triangleIndices,
+        const MeshletScoreState& scoreState,
+        const MeshletDesc& meshlet,
+        const VertexRefVectorT& localVertexRefs
     )noexcept(noexcept(UpdateBestMeshletCandidateIfBetter(trianglePrecompute, triangleIndices, scoreState, meshlet, localVertexRefs, 0u, 0u, true, DeclVal<bool&>(), DeclVal<MeshletFrontierCandidate&>())));
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     [[nodiscard]] static Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchOffset,
-    const TriangleIndexVectorT& triangleIndices,
-    const MeshletScoreState& scoreState,
-    const MeshletDesc& meshlet,
-    const VertexRefVectorT& localVertexRefs,
-    Core::CpuTaskScheduler& cpuScheduler,
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates
+        const MeshletTrianglePrecompute& trianglePrecompute,
+        const usize searchOffset,
+        const TriangleIndexVectorT& triangleIndices,
+        const MeshletScoreState& scoreState,
+        const MeshletDesc& meshlet,
+        const VertexRefVectorT& localVertexRefs,
+        Core::CpuTaskScheduler& cpuScheduler,
+        Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates
     );
     template<typename FrontierVectorT>
     static void ClearMeshletFrontier(FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags)noexcept(MeshletCookExceptionDetail::FrontierIndexIterationIsNothrow<FrontierVectorT>() && noexcept(frontier.clear()));
@@ -390,32 +390,32 @@ public:
         noexcept(ComputeMeshletScoreConeCutoff(triangleIndices, state.normalAxis, 0u, false, triangleAreaNormalAt))
     );
     [[nodiscard]] static bool AddVisitedMeshletTriangle(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    MeshletTrianglePrecompute& trianglePrecompute,
-    const u32 triangleIndex,
-    Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
-    Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
-    MeshletDesc& meshlet,
-    Core::Assets::AssetVector<u8>& primitiveIndices,
-    MeshletScoreState& scoreState,
-    Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
+        const Path& nwbFilePath,
+        const TStringView metaKind,
+        MeshletTrianglePrecompute& trianglePrecompute,
+        const u32 triangleIndex,
+        Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
+        Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
+        MeshletDesc& meshlet,
+        Core::Assets::AssetVector<u8>& primitiveIndices,
+        MeshletScoreState& scoreState,
+        Vector<u32, Core::Alloc::ScratchArena>& frontier,
+        Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
     );
     [[nodiscard]] static bool GrowMeshletFromFrontier(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    MeshletTrianglePrecompute& trianglePrecompute,
-    const usize seedSearchOffset,
-    Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
-    Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
-    MeshletDesc& meshlet,
-    Core::Assets::AssetVector<u8>& primitiveIndices,
-    MeshletScoreState& scoreState,
-    Core::CpuTaskScheduler& cpuScheduler,
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
-    Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
+        const Path& nwbFilePath,
+        const TStringView metaKind,
+        MeshletTrianglePrecompute& trianglePrecompute,
+        const usize seedSearchOffset,
+        Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
+        Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
+        MeshletDesc& meshlet,
+        Core::Assets::AssetVector<u8>& primitiveIndices,
+        MeshletScoreState& scoreState,
+        Core::CpuTaskScheduler& cpuScheduler,
+        Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
+        Vector<u32, Core::Alloc::ScratchArena>& frontier,
+        Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
     );
     template<typename PositionRefVectorT>
     [[nodiscard]] static Expected<u16> FindMeshletPositionRef(const PositionRefVectorT& refs, const MeshletPositionStreamRef& ref)noexcept(
@@ -435,22 +435,22 @@ public:
         ))
     );
     template<
-    typename CookEntryT,
-    typename LocalVertexVectorT,
-    typename PositionRefVectorT,
-    typename AttributeRefVectorT,
-    typename AttributeSkinVectorT,
-    typename LocalVertexRefVectorT
+        typename CookEntryT,
+        typename LocalVertexVectorT,
+        typename PositionRefVectorT,
+        typename AttributeRefVectorT,
+        typename AttributeSkinVectorT,
+        typename LocalVertexRefVectorT
     >
     [[nodiscard]] static bool BuildZippedMeshletRefs(
-    const Path& nwbFilePath,
-    const TStringView metaKind,
-    const CookEntryT& entry,
-    const LocalVertexVectorT& sourceVertexRefs,
-    PositionRefVectorT& outPositionRefs,
-    AttributeRefVectorT& outAttributeRefs,
-    AttributeSkinVectorT& outAttributeSkins,
-    LocalVertexRefVectorT& outLocalVertexRefs
+        const Path& nwbFilePath,
+        const TStringView metaKind,
+        const CookEntryT& entry,
+        const LocalVertexVectorT& sourceVertexRefs,
+        PositionRefVectorT& outPositionRefs,
+        AttributeRefVectorT& outAttributeRefs,
+        AttributeSkinVectorT& outAttributeSkins,
+        LocalVertexRefVectorT& outLocalVertexRefs
     );
     template<typename CookEntryT>
     static bool BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, CookEntryT& entry, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
@@ -472,14 +472,14 @@ usize MeshCookMeshlets::MeshletCookVectorBytes(const VectorT& values)noexcept(no
 
 template<typename CookEntryT>
 usize MeshCookMeshlets::EstimateCommonMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry)noexcept(noexcept(
-        MeshletCookVectorBytes(indices)
-        + MeshletCookVectorBytes(entry.positions)
-        + MeshletCookVectorBytes(entry.normals)
-        + MeshletCookVectorBytes(entry.tangents)
-        + MeshletCookVectorBytes(entry.uv0)
-        + MeshletCookVectorBytes(entry.colors)
-        + MeshletCookVectorBytes(entry.vertexRefs)
-    )){
+    MeshletCookVectorBytes(indices)
+    + MeshletCookVectorBytes(entry.positions)
+    + MeshletCookVectorBytes(entry.normals)
+    + MeshletCookVectorBytes(entry.tangents)
+    + MeshletCookVectorBytes(entry.uv0)
+    + MeshletCookVectorBytes(entry.colors)
+    + MeshletCookVectorBytes(entry.vertexRefs)
+)){
     return
         MeshletCookVectorBytes(indices)
         + MeshletCookVectorBytes(entry.positions)
@@ -494,18 +494,18 @@ usize MeshCookMeshlets::EstimateCommonMeshletSourceBytes(const Core::Assets::Ass
 
 template<typename CookEntryT>
 usize MeshCookMeshlets::EstimateCommonMeshletRuntimeBytes(const CookEntryT& entry)noexcept(noexcept(
-        MeshletCookVectorBytes(entry.positions)
-        + MeshletCookVectorBytes(entry.normals)
-        + MeshletCookVectorBytes(entry.tangents)
-        + MeshletCookVectorBytes(entry.uv0)
-        + MeshletCookVectorBytes(entry.colors)
-        + MeshletCookVectorBytes(entry.meshlets)
-        + MeshletCookVectorBytes(entry.meshletBounds)
-        + MeshletCookVectorBytes(entry.meshletPositionStreamRefs)
-        + MeshletCookVectorBytes(entry.meshletAttributeStreamRefs)
-        + MeshletCookVectorBytes(entry.meshletLocalVertexRefs)
-        + MeshletCookVectorBytes(entry.meshletPrimitiveIndices)
-    )){
+    MeshletCookVectorBytes(entry.positions)
+    + MeshletCookVectorBytes(entry.normals)
+    + MeshletCookVectorBytes(entry.tangents)
+    + MeshletCookVectorBytes(entry.uv0)
+    + MeshletCookVectorBytes(entry.colors)
+    + MeshletCookVectorBytes(entry.meshlets)
+    + MeshletCookVectorBytes(entry.meshletBounds)
+    + MeshletCookVectorBytes(entry.meshletPositionStreamRefs)
+    + MeshletCookVectorBytes(entry.meshletAttributeStreamRefs)
+    + MeshletCookVectorBytes(entry.meshletLocalVertexRefs)
+    + MeshletCookVectorBytes(entry.meshletPrimitiveIndices)
+)){
     return
         MeshletCookVectorBytes(entry.positions)
         + MeshletCookVectorBytes(entry.normals)
@@ -836,9 +836,7 @@ SIMDVectorSingle MeshCookMeshlets::PredictMeshletScoreConeWidening(
     const u32 triangleIndex,
     const SIMDVectorSingle triangleAreaNormal,
     const TriangleAreaNormalAtT& triangleAreaNormalAt
-)noexcept(
-    noexcept(ComputeMeshletScoreConeCutoff(triangleIndices, NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal)), triangleIndex, true, triangleAreaNormalAt))
-){
+)noexcept(noexcept(ComputeMeshletScoreConeCutoff(triangleIndices, NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal)), triangleIndex, true, triangleAreaNormalAt))){
     if(!state.coneEnabled)
         return VectorZero();
 
@@ -903,8 +901,10 @@ void MeshCookMeshlets::UpdateBestMeshletCandidateIfBetter(
     const bool disconnected,
     bool& found,
     MeshletFrontierCandidate& outCandidate
-)noexcept(noexcept(MeshletCanFitTriangle(meshlet, localVertexRefs, DeclVal<const MeshletTriangleData&>()))
-    && noexcept(ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, DeclVal<const MeshletTriangleVectors&>(), DeclVal<SIMDVectorSingle(*)(u32)noexcept>(), DeclVal<const u32&>(), DeclVal<const u32&>(), disconnected))){
+)noexcept(
+    noexcept(MeshletCanFitTriangle(meshlet, localVertexRefs, DeclVal<const MeshletTriangleData&>()))
+    && noexcept(ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, DeclVal<const MeshletTriangleVectors&>(), DeclVal<SIMDVectorSingle(*)(u32)noexcept>(), DeclVal<const u32&>(), DeclVal<const u32&>(), disconnected))
+){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
     const auto vertexCounts = MeshletCanFitTriangle(meshlet, localVertexRefs, triangle);
     if(!vertexCounts)

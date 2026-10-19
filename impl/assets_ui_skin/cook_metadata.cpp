@@ -141,8 +141,8 @@ template<usize Count>
     }
 
     if(!Core::Assets::ValidateMetadataAssetFields(path, object, s_DiagnosticPrefix, [hasSlice = region.drawMode == UiSkinDrawMode::NineSlice](const AStringView field)noexcept{
-            return field == s_NameField || field == s_RectField || field == s_DrawModeField || field == s_PaddingField || field == s_MinimumSizeField || (hasSlice && field == s_SliceField);
-        }
+        return field == s_NameField || field == s_RectField || field == s_DrawModeField || field == s_PaddingField || field == s_MinimumSizeField || (hasSlice && field == s_SliceField);
+    }
     ))
         return MakeUnexpected(Failure{});
     auto nameResult = Core::Assets::ReadMetadataNameField(path, object, s_DiagnosticPrefix, s_NameField, true);

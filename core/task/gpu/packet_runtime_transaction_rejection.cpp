@@ -195,31 +195,6 @@ GpuGraphSubmissionTransaction::PayloadLifetimeScope::~PayloadLifetimeScope()noex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuGraphSubmissionTransaction::finishPayloadLifetime(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph){
-    if(!hasUnresolvedSubmissionBinding(compiledGraph))
-        return;
-    if(UncaughtExceptionCount() != 0){
-        UnacceptedPacketsFinalizationScope finalizationScope(*this, graph, compiledGraph);
-        {
-            SubmissionOperation submissionOperation(*this, SubmissionOperationMode::WaitExclusiveBarrier);
-            if(!submissionOperation.valid())
-                TerminateInvariant();
-            finalizationScope.beginClosingWithinSubmissionOperation();
-        }
-        finalizationScope.completeWithoutCallbacks();
-        return;
-    }
-
-    u64 recordingAttemptGeneration = 0u;
-    {
-        NothrowScopedLock lock(m_mutex);
-        recordingAttemptGeneration = m_recordingAttemptGeneration;
-    }
-    if(!discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration))
-        TerminateInvariant();
-}
-
-
 void GpuGraphSubmissionTransaction::rejectTask(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuTaskId task, const u64 recordingAttemptGeneration){
     UnacceptedPacketsFinalizationScope finalizationScope(*this, graph, compiledGraph);
     SubmissionOperation submissionOperation(*this, SubmissionOperationMode::WaitExclusiveBarrier);
@@ -280,6 +255,31 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(GpuTaskGraph& graph, const
             return false;
     }
     return true;
+}
+
+
+void GpuGraphSubmissionTransaction::finishPayloadLifetime(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph){
+    if(!hasUnresolvedSubmissionBinding(compiledGraph))
+        return;
+    if(UncaughtExceptionCount() != 0){
+        UnacceptedPacketsFinalizationScope finalizationScope(*this, graph, compiledGraph);
+        {
+            SubmissionOperation submissionOperation(*this, SubmissionOperationMode::WaitExclusiveBarrier);
+            if(!submissionOperation.valid())
+                TerminateInvariant();
+            finalizationScope.beginClosingWithinSubmissionOperation();
+        }
+        finalizationScope.completeWithoutCallbacks();
+        return;
+    }
+
+    u64 recordingAttemptGeneration = 0u;
+    {
+        NothrowScopedLock lock(m_mutex);
+        recordingAttemptGeneration = m_recordingAttemptGeneration;
+    }
+    if(!discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration))
+        TerminateInvariant();
 }
 
 

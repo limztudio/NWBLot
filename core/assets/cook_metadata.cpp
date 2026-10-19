@@ -208,8 +208,8 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
     }
 
     Sort(files.begin(), files.end(), [](const DiscoveredNwbFile& lhs, const DiscoveredNwbFile& rhs)noexcept{
-            return lhs.normalizedPathText < rhs.normalizedPathText;
-        }
+        return lhs.normalizedPathText < rhs.normalizedPathText;
+    }
     );
 
     return files;

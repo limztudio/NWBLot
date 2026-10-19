@@ -330,8 +330,8 @@ template<typename MetadataValue, typename IsAllowedField>
 template<typename MetadataValue>
 [[nodiscard]] inline bool ValidateMetadataAssetFields(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, const InitializerList<AStringView> allowedFields){
     return ValidateMetadataAssetFields(nwbFilePath, asset, diagnosticPrefix, [allowedFields](const AStringView fieldName)noexcept{
-            return IsListedMetadataAssetField(fieldName, allowedFields);
-        }
+        return IsListedMetadataAssetField(fieldName, allowedFields);
+    }
     );
 }
 

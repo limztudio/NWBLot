@@ -80,9 +80,10 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
         if(!replacementResult)
             return false;
         Core::BufferHandle replacement = Move(*replacementResult);
-        const Core::GpuDescriptorHandle slot = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!slot.valid())
+        const Expected<Core::GpuDescriptorHandle> slotResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!slotResult)
             return false;
+        const Core::GpuDescriptorHandle slot = *slotResult;
         const Core::DescriptorWriteItem write = output ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get()) : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get());
         if(!heap.write(slot, write)){
             heap.free(slot);

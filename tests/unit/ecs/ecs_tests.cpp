@@ -120,8 +120,8 @@ public:
         lastDelta = delta;
 
         world.view<PositionComponent>().each([](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
-                ++position.x;
-            }
+            ++position.x;
+        }
         );
         return {};
     }
@@ -255,20 +255,20 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     usize multiViewCount = 0;
 
     testWorld.world.view<PositionComponent>().each([&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
-            ++singleViewCount;
-        }
+        ++singleViewCount;
+    }
     );
     testWorld.world.view<PositionComponent, VelocityComponent>().each([&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
-            ++multiViewCount;
-        }
+        ++multiViewCount;
+    }
     );
     EXPECT_TRUE((testWorld.world.view<PositionComponent>().parallelEach(testWorld.world.taskScope(), [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
-            ++singleViewCount;
-        }
+        ++singleViewCount;
+    }
     )));
     EXPECT_TRUE((testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(testWorld.world.taskScope(), [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
-            ++multiViewCount;
-        }
+        ++multiViewCount;
+    }
     )));
 
     EXPECT_EQ(singleViewCount, 0u);
@@ -452,8 +452,8 @@ TEST(Ecs, DuplicateComponentAddIsStable){
 
     usize viewCount = 0u;
     testWorld.world.view<PositionComponent>().each([&viewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
-            ++viewCount;
-        }
+        ++viewCount;
+    }
     );
     EXPECT_EQ(viewCount, 1u);
 }
@@ -474,13 +474,13 @@ TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
 
     Atomic<u32> visits{ 0u };
     EXPECT_TRUE((world.taskScope().parallelFor(static_cast<usize>(0), s_OuterCount, [&](usize outerIndex){
-            static_cast<void>(outerIndex);
-            EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
-                    static_cast<void>(position);
-                    visits.fetch_add(1u, MemoryOrder::relaxed);
-                }
-            )));
+        static_cast<void>(outerIndex);
+        EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
+            static_cast<void>(position);
+            visits.fetch_add(1u, MemoryOrder::relaxed);
         }
+        )));
+    }
     )));
 
     EXPECT_EQ(visits.load(MemoryOrder::relaxed), s_EntityCount * static_cast<u32>(s_OuterCount));

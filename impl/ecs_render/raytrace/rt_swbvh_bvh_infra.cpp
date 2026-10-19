@@ -693,10 +693,8 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)"), static_cast<u64>(capacity));
     }
     return
-        ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle) && ensureRayTraceMaterialContextHeapHandle(
-        *m_rayTracingState.m_sceneInstanceBuffer.get(),
-        m_rayTracingState.m_sceneInstanceHeapHandle
-    )
+        ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle)
+        && ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_sceneInstanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle)
     ;
 }
 

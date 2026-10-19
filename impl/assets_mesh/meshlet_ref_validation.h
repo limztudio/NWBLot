@@ -25,38 +25,38 @@ public:
     [[nodiscard]] static bool MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const bool skinRequired)noexcept;
     [[nodiscard]] static bool MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept;
     template<
-    typename MeshletContainer,
-    typename LocalVertexRefContainer,
-    typename AttributeSkinContainer,
-    typename SkinResolver,
-    typename ConflictHandler,
-    typename UnreferencedHandler
+        typename MeshletContainer,
+        typename LocalVertexRefContainer,
+        typename AttributeSkinContainer,
+        typename SkinResolver,
+        typename ConflictHandler,
+        typename UnreferencedHandler
     >
     [[nodiscard]] static bool ResolveMeshletAttributeSkinsFromLocalVertices(
-    const MeshletContainer& meshlets,
-    const LocalVertexRefContainer& localVertexRefs,
-    const usize attributeCount,
-    AttributeSkinContainer& outAttributeSkins,
-    SkinResolver resolveSkin,
-    ConflictHandler onConflict,
-    UnreferencedHandler onUnreferenced
+        const MeshletContainer& meshlets,
+        const LocalVertexRefContainer& localVertexRefs,
+        const usize attributeCount,
+        AttributeSkinContainer& outAttributeSkins,
+        SkinResolver resolveSkin,
+        ConflictHandler onConflict,
+        UnreferencedHandler onUnreferenced
     );
     template<
-    typename MeshletContainer,
-    typename PositionRefContainer,
-    typename LocalVertexRefContainer,
-    typename AttributeSkinContainer,
-    typename ConflictHandler,
-    typename UnreferencedHandler
+        typename MeshletContainer,
+        typename PositionRefContainer,
+        typename LocalVertexRefContainer,
+        typename AttributeSkinContainer,
+        typename ConflictHandler,
+        typename UnreferencedHandler
     >
     [[nodiscard]] static bool ResolveMeshletAttributeSkins(
-    const MeshletContainer& meshlets,
-    const PositionRefContainer& positionRefs,
-    const LocalVertexRefContainer& localVertexRefs,
-    const usize attributeCount,
-    AttributeSkinContainer& outAttributeSkins,
-    ConflictHandler onConflict,
-    UnreferencedHandler onUnreferenced
+        const MeshletContainer& meshlets,
+        const PositionRefContainer& positionRefs,
+        const LocalVertexRefContainer& localVertexRefs,
+        const usize attributeCount,
+        AttributeSkinContainer& outAttributeSkins,
+        ConflictHandler onConflict,
+        UnreferencedHandler onUnreferenced
     );
 
 

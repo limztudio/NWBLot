@@ -100,16 +100,7 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
         char identityText[32u] = {};
         const auto derivedNameAt103Col12 = DeriveName(Name("tests/queue_partial_dag/"), FormatDecimal(taskIndex, identityText));
         ASSERT_TRUE(derivedNameAt103Col12);
-        const auto taskResult = AddTaskWithCommands(
-            graph,
-            *derivedNameAt103Col12,
-            "Partial DAG Task",
-            graphicsTask ? GraphicsCommands() : ComputeCommands(),
-            scheduling,
-            {},
-            dependencies.data(),
-            dependencies.size()
-        );
+        const auto taskResult = AddTaskWithCommands(graph, *derivedNameAt103Col12, "Partial DAG Task", graphicsTask ? GraphicsCommands() : ComputeCommands(), scheduling, {}, dependencies.data(), dependencies.size());
         ASSERT_TRUE(taskResult);
         const Graphics::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
@@ -146,7 +137,7 @@ void CheckIndexedScores(const Shape::Enum shape){
     }
     scoringData.rebuildAssignmentLoads(assignments, topology);
     Vector<GpuTaskQueuePlacementGroup, Graphics::Alloc::ScratchArena> groups(scratch);
-    ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, {}, groups, scratch));
+    ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, groups, scratch));
 
     // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
     Vector<Array<bool, s_TaskCount>, Graphics::Alloc::ScratchArena> reachable(s_TaskCount, scratch);
@@ -383,16 +374,7 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
             scheduling.cost = Graphics::GpuTaskCostHint::Large;
             const auto derivedNameAt386Col16 = DeriveName(Name("tests/queue_no_masks/"), FormatDecimal(index, identityText));
             ASSERT_TRUE(derivedNameAt386Col16);
-            const auto gpuAdmissionAt382 = AddTaskWithCommands(
-                graph,
-                *derivedNameAt386Col16,
-                "Ordered Queue Task",
-                ComputeCommands(),
-                scheduling,
-                {},
-                preceding.valid() ? &preceding : nullptr,
-                preceding.valid() ? 1u : 0u
-            );
+            const auto gpuAdmissionAt382 = AddTaskWithCommands(graph, *derivedNameAt386Col16, "Ordered Queue Task", ComputeCommands(), scheduling, {}, preceding.valid() ? &preceding : nullptr, preceding.valid() ? 1u : 0u);
             ASSERT_TRUE(gpuAdmissionAt382);
             preceding = *gpuAdmissionAt382;
             ASSERT_TRUE(preceding.valid());

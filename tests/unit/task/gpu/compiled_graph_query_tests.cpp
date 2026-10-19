@@ -51,16 +51,7 @@ static void CheckPacketQueries(const usize taskCount){
         char identityText[32u] = {};
         const auto derivedNameAt52Col12 = DeriveName(Name("tests/compiled_query/task/"), FormatDecimal(declarationIndex, identityText));
         ASSERT_TRUE(derivedNameAt52Col12);
-        const auto gpuAdmissionAt50 = AddTaskWithCommands(
-            graph,
-            *derivedNameAt52Col12,
-            "Compiled Query Task",
-            GraphicsCommands(),
-            scheduling,
-            {},
-            orderIndex != 0u ? &dependency : nullptr,
-            orderIndex != 0u ? 1u : 0u
-        );
+        const auto gpuAdmissionAt50 = AddTaskWithCommands(graph, *derivedNameAt52Col12, "Compiled Query Task", GraphicsCommands(), scheduling, {}, orderIndex != 0u ? &dependency : nullptr, orderIndex != 0u ? 1u : 0u);
         ASSERT_TRUE(gpuAdmissionAt50);
         tasks[orderIndex] = *gpuAdmissionAt50;
         ASSERT_TRUE(tasks[orderIndex].valid());

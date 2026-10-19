@@ -104,13 +104,13 @@ bool ShaderTable::setRayGenerationShader(const AStringView exportName){
     BufferHandle& newBuffer = allocation->buffer;
     const u64 newOffset = allocation->offset;
 
-    void* const mapped = m_device.mapBuffer(*newBuffer, CpuAccessMode::Write);
+    const Expected<void*> mapped = m_device.mapBuffer(*newBuffer, CpuAccessMode::Write);
     if(!mapped){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: failed to map new SBT buffer"));
         return false;
     }
 
-    auto* const recordBytes = static_cast<u8*>(mapped) + static_cast<usize>(newOffset);
+    auto* const recordBytes = static_cast<u8*>(*mapped) + static_cast<usize>(newOffset);
     NWB_MEMSET(recordBytes, 0, static_cast<usize>(preflight->recordByteSize));
     const u8* const handle = m_pipeline->m_shaderGroupHandles.data() + preflight->handleOffset;
     NWB_MEMCPY(recordBytes, preflight->handleSizeAligned, handle, preflight->handleSize);
@@ -347,13 +347,13 @@ Expected<u32> ShaderTable::appendShaderRecord(
     BufferHandle& newBuffer = allocation->buffer;
     const u64 newOffset = allocation->offset;
 
-    void* const newMapped = m_device.mapBuffer(*newBuffer, CpuAccessMode::Write);
+    const Expected<void*> newMapped = m_device.mapBuffer(*newBuffer, CpuAccessMode::Write);
     if(!newMapped){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: failed to map new {} SBT buffer"), operationName, recordName);
         return MakeUnexpected(Failure{});
     }
 
-    auto* const newRecordBytes = static_cast<u8*>(newMapped) + static_cast<usize>(newOffset);
+    auto* const newRecordBytes = static_cast<u8*>(*newMapped) + static_cast<usize>(newOffset);
     NWB_MEMSET(newRecordBytes, 0, static_cast<usize>(preflight->recordByteSize));
     usize recordOffset = 0u;
     for(const u32 groupIndex : candidateGroupIndices){

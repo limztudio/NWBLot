@@ -156,7 +156,7 @@ private:
 
 
     public:
-        explicit ListRow(Core::Alloc::GlobalArena& arena)noexcept : text(arena) {}
+        explicit ListRow(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
     };
 
     struct ListFrame{
@@ -179,7 +179,7 @@ private:
 
 
     public:
-        explicit ListFrame(Core::Alloc::GlobalArena& arena)noexcept : rows(arena) {}
+        explicit ListFrame(Core::Alloc::GlobalArena& arena)noexcept : rows(arena){}
     };
 
     struct ComboFrame{

@@ -457,11 +457,9 @@ Expected<MemoryRequirements> Device::getAccelStructMemoryRequirements(RayTracing
     return alignedRequirements;
 }
 
-RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params){
-    RayTracingClusterOperationSizeInfo info{};
-
+Expected<RayTracingClusterOperationSizeInfo> Device::getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params){
     if(!m_context.extensions.nvClusterAccelerationStructure || !m_context.clusterAccelerationStructureFeatureEnabled || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV)
-        return info;
+        return MakeUnexpected(Failure{});
     constexpr u32 s_MaxPositionTruncateBitCount = 32u;
     constexpr u32 s_SupportedOperationFlags =
         static_cast<u32>(RayTracingClusterOperationFlags::FastTrace)
@@ -475,13 +473,13 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
         || ((params.flags & RayTracingClusterOperationFlags::FastTrace) && (params.flags & RayTracingClusterOperationFlags::FastBuild))
         || ((params.flags & RayTracingClusterOperationFlags::NoOverlap) && params.type != RayTracingClusterOperationType::Move)
     )
-        return info;
+        return MakeUnexpected(Failure{});
     if((params.flags & RayTracingClusterOperationFlags::AllowOMM) && (!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled))
-        return info;
+        return MakeUnexpected(Failure{});
 
     auto input = VulkanDetail::BuildClusterOperationInputInfo(params, NWB_TEXT("query cluster operation sizes"));
     if(!input)
-        return info;
+        return MakeUnexpected(Failure{});
     const auto inputInfo = input->nativeInfo();
 
     if(params.type == RayTracingClusterOperationType::ClasBuild || params.type == RayTracingClusterOperationType::ClasBuildTemplates || params.type == RayTracingClusterOperationType::ClasInstantiateTemplates){
@@ -492,21 +490,18 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
             || params.clas.maxGeometryIndex > properties.maxClusterGeometryIndex
             || params.clas.minPositionTruncateBitCount > s_MaxPositionTruncateBitCount
         )
-            return info;
+            return MakeUnexpected(Failure{});
 
         VkFormatProperties formatProperties{};
         m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, input->cluster.vertexFormat, &formatProperties);
         if((formatProperties.bufferFeatures & VK_FORMAT_FEATURE_ACCELERATION_STRUCTURE_VERTEX_BUFFER_BIT_KHR) == 0u)
-            return info;
+            return MakeUnexpected(Failure{});
     }
 
     auto vkSizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
 
-    info.resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize;
-    info.scratchSizeInBytes = vkSizeInfo.buildScratchSize;
-
-    return info;
+    return RayTracingClusterOperationSizeInfo{ .resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize, .scratchSizeInBytes = vkSizeInfo.buildScratchSize, };
 }
 
 bool Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset){

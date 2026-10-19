@@ -48,22 +48,22 @@ template<typename ReceiverT>
 void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum receiverKind, const CsgFrameReceiverLookup& receiverLookup, const CsgFrameBuildDesc& desc, CsgFrameState& inOutState){
     auto receiverView = world.view<ReceiverT>();
     receiverView.each([&](const Core::ECS::EntityID entity, ReceiverT& typedReceiver){
-            const CsgReceiverComponent& receiver = typedReceiver;
-            if(!receiver.enabled)
-                return;
-            if(!ReceiverVisible(world, entity, receiverKind, receiver, desc))
-                return;
+        const CsgReceiverComponent& receiver = typedReceiver;
+        if(!receiver.enabled)
+            return;
+        if(!ReceiverVisible(world, entity, receiverKind, receiver, desc))
+            return;
 
-            const auto opaqueState = desc.includeOpaquePass ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Opaque) : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}));
-            const auto transparentState = desc.includeTransparentPass ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Transparent) : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}));
-            const bool opaqueWork = opaqueState && opaqueState->receiverKind == receiverKind;
-            const bool transparentWork = transparentState && transparentState->receiverKind == receiverKind;
-            if(!opaqueWork && !transparentWork)
-                return;
+        const auto opaqueState = desc.includeOpaquePass ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Opaque) : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}));
+        const auto transparentState = desc.includeTransparentPass ? receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Transparent) : Expected<CsgReceiverDrawState>(MakeUnexpected(Failure{}));
+        const bool opaqueWork = opaqueState && opaqueState->receiverKind == receiverKind;
+        const bool transparentWork = transparentState && transparentState->receiverKind == receiverKind;
+        if(!opaqueWork && !transparentWork)
+            return;
 
-            const CsgReceiverDrawState& receiverState = opaqueWork ? *opaqueState : *transparentState;
-            AddCsgFrameReceiverWork(inOutState, receiverKind, opaqueWork, transparentWork, receiverState.cutterCount);
-        }
+        const CsgReceiverDrawState& receiverState = opaqueWork ? *opaqueState : *transparentState;
+        AddCsgFrameReceiverWork(inOutState, receiverKind, opaqueWork, transparentWork, receiverState.cutterCount);
+    }
     );
 }
 
@@ -86,14 +86,14 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
     m_cutterRanges.reserve(cutterView.candidateCount());
 
     cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
-            static_cast<void>(entity);
-            if(!__hidden_frame_state::ActiveCutter(cutter))
-                return;
+        static_cast<void>(entity);
+        if(!__hidden_frame_state::ActiveCutter(cutter))
+            return;
 
-            auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CutterRangeEntry{});
-            CsgFrameCutterRange& range = result.first.value().range;
-            range.cutterCount = AddSaturating<u32>(range.cutterCount, 1u);
-        }
+        auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CutterRangeEntry{});
+        CsgFrameCutterRange& range = result.first.value().range;
+        range.cutterCount = AddSaturating<u32>(range.cutterCount, 1u);
+    }
     );
 
     u32 firstCutter = 0u;
@@ -109,23 +109,23 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
     m_cutterRefs.resize(static_cast<usize>(firstCutter));
 
     cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
-            if(!__hidden_frame_state::ActiveCutter(cutter))
-                return;
+        if(!__hidden_frame_state::ActiveCutter(cutter))
+            return;
 
-            const auto foundRange = m_cutterRanges.find(cutter.receiverGroup);
-            NWB_ASSERT(foundRange != m_cutterRanges.end());
+        const auto foundRange = m_cutterRanges.find(cutter.receiverGroup);
+        NWB_ASSERT(foundRange != m_cutterRanges.end());
 
-            CutterRangeEntry& entry = foundRange.value();
-            u32& writtenCount = entry.writtenCount;
-            const CsgFrameCutterRange& range = entry.range;
-            if(writtenCount >= range.cutterCount)
-                return;
+        CutterRangeEntry& entry = foundRange.value();
+        u32& writtenCount = entry.writtenCount;
+        const CsgFrameCutterRange& range = entry.range;
+        if(writtenCount >= range.cutterCount)
+            return;
 
-            const usize cutterIndex = static_cast<usize>(range.firstCutter + writtenCount);
-            NWB_ASSERT(cutterIndex < m_cutterRefs.size());
-            m_cutterRefs[cutterIndex] = CsgFrameCutterRef{ entity, &cutter };
-            ++writtenCount;
-        }
+        const usize cutterIndex = static_cast<usize>(range.firstCutter + writtenCount);
+        NWB_ASSERT(cutterIndex < m_cutterRefs.size());
+        m_cutterRefs[cutterIndex] = CsgFrameCutterRef{ entity, &cutter };
+        ++writtenCount;
+    }
     );
 }
 

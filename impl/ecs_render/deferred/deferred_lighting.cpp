@@ -56,8 +56,8 @@ public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
-                return deferredSystem.renderDeferredLighting(taskCommandList, targets, payload.useLaggedLightingHistory);
-            }
+            return deferredSystem.renderDeferredLighting(taskCommandList, targets, payload.useLaggedLightingHistory);
+        }
         );
     }
 };

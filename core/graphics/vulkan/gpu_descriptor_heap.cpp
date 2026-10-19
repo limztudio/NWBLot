@@ -375,7 +375,7 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
     return statistics;
 }
 
-GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum descriptorClass){
+Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum descriptorClass){
     bool hasRetiredSlots = false;
     {
         ScopedLock lock(m_mutex);
@@ -389,26 +389,26 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
 
     if(!m_initialized){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate called before initialize."));
-        return GpuDescriptorHandle::Invalid();
+        return MakeUnexpected(Failure{});
     }
     if(descriptorClass >= GpuDescriptorClass::kCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate called with invalid class {}."), static_cast<u32>(descriptorClass));
-        return GpuDescriptorHandle::Invalid();
+        return MakeUnexpected(Failure{});
     }
     if(descriptorClass == GpuDescriptorClass::AccelStruct && !m_accelStructLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: AccelStruct requires the descriptor-buffer TLAS layout."));
-        return GpuDescriptorHandle::Invalid();
+        return MakeUnexpected(Failure{});
     }
 
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
     if(!manager || manager != &m_device.m_descriptorBufferManager){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate rejected an unavailable manager."));
-        return GpuDescriptorHandle::Invalid();
+        return MakeUnexpected(Failure{});
     }
     ScopedLock lifecycleLock(manager->m_lifecycleMutex);
     if(!manager->m_enabled || manager->m_lifecycleTransitioning || m_descriptorBufferGeneration == 0u || manager->m_bindingGeneration != m_descriptorBufferGeneration){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate rejected a stale descriptor generation."));
-        return GpuDescriptorHandle::Invalid();
+        return MakeUnexpected(Failure{});
     }
 
     SlotAllocator& allocator = allocatorForClass(descriptorClass);
@@ -425,12 +425,12 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
     else{
         const TStringView namespaceName = descriptorClass == GpuDescriptorClass::Sampler ? NWB_TEXT("sampler") : (descriptorClass == GpuDescriptorClass::AccelStruct ? NWB_TEXT("accel-struct") : NWB_TEXT("resource"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: {} namespace exhausted (capacity {})."), namespaceName, allocator.capacity);
-        return GpuDescriptorHandle::Invalid();
+        return MakeUnexpected(Failure{});
     }
 
     if(slot >= allocator.slotStates.size() || slot >= allocator.allocatedClasses.size() || allocator.slotStates[slot] != SlotState::Free || allocator.allocatedClasses[slot] != static_cast<u8>(GpuDescriptorClass::kCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: slot allocator state is invalid for class {} slot {}."), static_cast<u32>(descriptorClass), slot);
-        return GpuDescriptorHandle::Invalid();
+        return MakeUnexpected(Failure{});
     }
     if(recycled)
         --allocator.freeCount;

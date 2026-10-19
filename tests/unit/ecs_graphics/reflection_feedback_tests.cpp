@@ -60,16 +60,18 @@ public:
 
 TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
     const auto partial = ComputeReflectionFeedbackExtent(9u, 17u);
-    ASSERT_TRUE(partial.valid());
-    EXPECT_EQ(partial.tilesX, s_ExpectedDualCount);
-    EXPECT_EQ(partial.tilesY, 3u);
-    EXPECT_EQ(partial.entryCount, 12u);
-    EXPECT_EQ(partial.byteCount, 64u);
-    EXPECT_EQ(ComputeReflectionFeedbackExtent(1u, 1u).byteCount, 24u);
-    EXPECT_FALSE(ComputeReflectionFeedbackExtent(0u, 1u).valid());
-    EXPECT_FALSE(ComputeReflectionFeedbackExtent(1u, 0u).valid());
-    EXPECT_FALSE(ComputeReflectionFeedbackExtent(Limit<u32>::s_Max, 1u).valid());
-    EXPECT_FALSE(ComputeReflectionFeedbackExtent(Limit<u32>::s_Max, Limit<u32>::s_Max).valid());
+    ASSERT_TRUE(partial);
+    EXPECT_EQ(partial->tilesX, s_ExpectedDualCount);
+    EXPECT_EQ(partial->tilesY, 3u);
+    EXPECT_EQ(partial->entryCount, 12u);
+    EXPECT_EQ(partial->byteCount, 64u);
+    const auto single = ComputeReflectionFeedbackExtent(1u, 1u);
+    ASSERT_TRUE(single);
+    EXPECT_EQ(single->byteCount, 24u);
+    EXPECT_FALSE(ComputeReflectionFeedbackExtent(0u, 1u));
+    EXPECT_FALSE(ComputeReflectionFeedbackExtent(1u, 0u));
+    EXPECT_FALSE(ComputeReflectionFeedbackExtent(Limit<u32>::s_Max, 1u));
+    EXPECT_FALSE(ComputeReflectionFeedbackExtent(Limit<u32>::s_Max, Limit<u32>::s_Max));
 }
 
 

@@ -91,9 +91,14 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
             activity.buffers[index] = Move(*buffersResult);
         else
             activity.buffers[index].reset();
-        if(buffersResult)
-            activity.descriptors[index] = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!buffersResult || !activity.descriptors[index].valid() || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))){
+        if(!buffersResult){
+            releaseCausticResolveActivity();
+            return false;
+        }
+        const Expected<Core::GpuDescriptorHandle> descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(descriptor)
+            activity.descriptors[index] = *descriptor;
+        if(!descriptor || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))){
             releaseCausticResolveActivity();
             return false;
         }

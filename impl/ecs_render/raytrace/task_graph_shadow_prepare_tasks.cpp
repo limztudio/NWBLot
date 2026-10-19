@@ -32,14 +32,14 @@ bool ShadowPrepareGraphTask::Record(const Payload& payload, Core::CommandList& c
     if(!payload.targets.bindless.valid())
         return false;
     const auto shadowResourcesPrepared = payload.raytracingSystem.recordPreflightShadowVisibilityResources(
-            commandList,
-            payload.targets,
-            payload.sceneTlasBuildGraphOwned,
-            payload.meshBlasBuildsGraphOwned,
-            payload.meshBlasGeometryBuildInputStatesGraphOwned,
-            payload.meshSwBvhBuildsGraphOwned,
-            payload.preparedMeshSwBvhBuildsRecordedByGraph
-        );
+        commandList,
+        payload.targets,
+        payload.sceneTlasBuildGraphOwned,
+        payload.meshBlasBuildsGraphOwned,
+        payload.meshBlasGeometryBuildInputStatesGraphOwned,
+        payload.meshSwBvhBuildsGraphOwned,
+        payload.preparedMeshSwBvhBuildsRecordedByGraph
+    );
 
     // Selector upload precedes this task; compiler establishes ConstantBuffer state first.
     if(!shadowResourcesPrepared)

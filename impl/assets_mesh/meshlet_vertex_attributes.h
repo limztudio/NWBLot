@@ -62,8 +62,8 @@ template<
     Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndexCount, scratchArena);
 
     if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept(
-            noexcept(DeclVal<Half4U&>() = normalStream[u32{}]) && noexcept(DeclVal<Float2U&>() = uv0Stream[u32{}])
-        ) -> bool {
+        noexcept(DeclVal<Half4U&>() = normalStream[u32{}]) && noexcept(DeclVal<Float2U&>() = uv0Stream[u32{}])
+    ) -> bool {
             const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
             const auto attributeRef = DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex);
             if(!attributeRef)

@@ -9,6 +9,7 @@
 #include <global/diagnostics.h>
 #include <global/limit.h>
 #include <global/not_null.h>
+#include <global/numeric_text.h>
 #include <global/scope_exit.h>
 
 #include <dbghelp.h>
@@ -33,14 +34,6 @@ namespace LoggerCrashSymbolicateDetail{
 using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 inline constexpr u32 s_MaxWindowsStackFrames = 128u;
-inline constexpr char s_HexDigitFirst = '0';
-inline constexpr char s_HexDigitLast = '9';
-inline constexpr char s_HexLowerFirst = 'a';
-inline constexpr char s_HexLowerLast = 'f';
-inline constexpr char s_HexUpperFirst = 'A';
-inline constexpr char s_HexUpperLast = 'F';
-inline constexpr u64 s_HexLetterOffset = 10u;
-inline constexpr u64 s_HexRadixBits = 4u;
 
 struct DumpMemoryRange{
     u64 begin = 0u;
@@ -466,21 +459,12 @@ static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const 
     outReport += "\n";
 }
 
-[[nodiscard]] static u64 ParseHexAddressText(const AStringView hexText)noexcept{
-    u64 value = 0u;
-    for(const char c : hexText){
-        u64 digit;
-        if(c >= s_HexDigitFirst && c <= s_HexDigitLast)
-            digit = static_cast<u64>(c - s_HexDigitFirst);
-        else if(c >= s_HexLowerFirst && c <= s_HexLowerLast)
-            digit = static_cast<u64>(c - s_HexLowerFirst) + s_HexLetterOffset;
-        else if(c >= s_HexUpperFirst && c <= s_HexUpperLast)
-            digit = static_cast<u64>(c - s_HexUpperFirst) + s_HexLetterOffset;
-        else
-            break;
-        value = (value << s_HexRadixBits) | digit;
-    }
-    return value;
+// Frame text may follow the leading hex digits.
+[[nodiscard]] static Expected<u64> ParseHexAddressText(const AStringView hexText)noexcept{
+    usize digitCount = 0u;
+    while(digitCount < hexText.size() && ParseHexDigit(hexText[digitCount]))
+        ++digitCount;
+    return ParseVariableHexU64(AStringView(hexText.data(), digitCount));
 }
 
 // Prefer client-captured frames; fall back to server StackWalk64 when none were shipped.
@@ -507,9 +491,9 @@ static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const 
         const AStringView line = text.substr(lineStart, lineEnd - lineStart);
         const usize hexStart = line.find("0x");
         if(hexStart != AStringView::npos){
-            const u64 address = ParseHexAddressText(line.substr(hexStart + 2u));
-            if(address != 0u){
-                AppendResolvedSymbol(scratchArena, symbolProcess, outReport, frameIndex, static_cast<DWORD64>(address));
+            const Expected<u64> address = ParseHexAddressText(line.substr(hexStart + 2u));
+            if(address && *address != 0u){
+                AppendResolvedSymbol(scratchArena, symbolProcess, outReport, frameIndex, static_cast<DWORD64>(*address));
                 ++frameIndex;
                 decodedAnyFrame = true;
             }

@@ -71,7 +71,10 @@ Expected<bool> Device::pollTimerQuery(TimerQuery& query){
     }
 
     const GpuPhysicalQueueId completionQueue{ .index = completedSubmission.physicalQueueIndex, .deviceGeneration = completedSubmission.deviceGeneration, };
-    if(queueGetCompletedInstance(completionQueue) < completedSubmission.value)
+    const Expected<u64> completedInstance = queueGetCompletedInstance(completionQueue);
+    if(!completedInstance)
+        return MakeUnexpected(Failure{});
+    if(*completedInstance < completedSubmission.value)
         return false;
 
     VkResult res = VK_SUCCESS;
@@ -112,7 +115,8 @@ Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
     }
 
     const GpuPhysicalQueueId completionQueue{ .index = completedSubmission.physicalQueueIndex, .deviceGeneration = completedSubmission.deviceGeneration, };
-    if(queueGetCompletedInstance(completionQueue) < completedSubmission.value)
+    const Expected<u64> completedInstance = queueGetCompletedInstance(completionQueue);
+    if(!completedInstance || *completedInstance < completedSubmission.value)
         return MakeUnexpected(Failure{});
 
     VkResult res = VK_SUCCESS;

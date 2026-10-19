@@ -78,16 +78,7 @@ SubmissionBindingFixture::SubmissionBindingFixture()
         const auto derivedNameAt79Col12 = DeriveName(Name("tests/submission_bindings/task/"), suffix);
         if(!derivedNameAt79Col12)
             return false;
-        const auto taskResult = AddTaskWithCommands(
-            graph,
-            *derivedNameAt79Col12,
-            "Submission Binding",
-            commands,
-            scheduling,
-            {},
-            scheduling.mergeWithPrevious ? &tasks.back() : nullptr,
-            scheduling.mergeWithPrevious ? 1u : 0u
-        );
+        const auto taskResult = AddTaskWithCommands(graph, *derivedNameAt79Col12, "Submission Binding", commands, scheduling, {}, scheduling.mergeWithPrevious ? &tasks.back() : nullptr, scheduling.mergeWithPrevious ? 1u : 0u);
         if(!taskResult)
             return false;
         const Graphics::GpuTaskId task = *taskResult;

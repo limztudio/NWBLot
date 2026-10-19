@@ -8,7 +8,8 @@ diagnostic artifacts, not a pixel-parity gate: the material classes intentionall
 
 The runner collects renderer GPU timestamp envelopes, verifies the arm-specific diagnostic markers,
 captures both native windows, and writes a device-local report. ``--self-test`` exercises parsing
-and report evaluation without a graphics device or visible window.
+and report evaluation without a graphics device or visible window. Timing comparisons need more than ten positive
+intervals per scope; otherwise a functionally clean report is inconclusive.
 
 Both arms use hardware ray traversal, and only the healthy arm includes transparent volume shadows.
 """
@@ -22,7 +23,7 @@ import math
 import sys
 import tempfile
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,7 +36,7 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
-    ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
+    MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
 from name_symbols import debug_name_hash_token  # noqa: E402
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
@@ -57,6 +58,7 @@ LIT_HEALTHY = "healthy"
 LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU = "optional hardware transparent frame budget"
 LIT_PASS = "pass"
 LIT_FAIL = "fail"
+LIT_INCONCLUSIVE = "inconclusive"
 LIT_SCHEMA = "schema"
 LIT_NWB_HARDWARE_SHADOW_BOUNDARY_V1 = "nwb.hardware_shadow_boundary.v1"
 LIT_GENERATED_UTC = "generated_utc"
@@ -296,8 +298,11 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
     healthy_semantics_passed = not healthy.missing_required_log_messages and not healthy.semantic_forbidden_log_messages
     baseline_semantics_passed = (not baseline.missing_required_log_messages and not baseline.semantic_forbidden_log_messages and not baseline_unexpected_transparent_scopes)
     runtime_logs_passed = not healthy.runtime_forbidden_log_messages and not baseline.runtime_forbidden_log_messages
-    gates = [gate("target-scene timestamp telemetry", True, f"positive intervals: frame healthy={healthy_frame.positive_sample_count}, " f"frame baseline={baseline_frame.positive_sample_count}, opaque healthy={healthy_opaque_trace.positive_sample_count}, "
-            f"opaque baseline={baseline_opaque_trace.positive_sample_count}, " f"transparent trace healthy={healthy_transparent_trace.positive_sample_count}, " f"transparent resolve healthy={healthy_transparent_resolve.positive_sample_count}",), gate(
+    timed_scopes = (healthy_frame, baseline_frame, healthy_opaque_trace, baseline_opaque_trace, healthy_transparent_trace, healthy_transparent_resolve)
+    intervals_passed = min(summary.positive_sample_count for summary in timed_scopes) > MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS
+    gates = [gate("target-scene timestamp telemetry", intervals_passed, f"positive intervals: frame healthy={healthy_frame.positive_sample_count}, " f"frame baseline={baseline_frame.positive_sample_count}, opaque healthy={healthy_opaque_trace.positive_sample_count}, "
+            f"opaque baseline={baseline_opaque_trace.positive_sample_count}, " f"transparent trace healthy={healthy_transparent_trace.positive_sample_count}, " f"transparent resolve healthy={healthy_transparent_resolve.positive_sample_count} "
+            f"(more than {MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS} required)",), gate(
             "healthy hardware transparent arm", healthy_semantics_passed, "RayQuery plus accepted opaque and transparent GPU timing scopes were observed" if healthy_semantics_passed
             else f"missing={healthy.missing_required_log_messages}, unexpected={healthy.semantic_forbidden_log_messages}",), gate("natural opaque hardware-shadow baseline", baseline_semantics_passed,
             "opaque trace timing was observed without positive transparent timing or hardware transparent traversal diagnostics" if baseline_semantics_passed
@@ -307,7 +312,11 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
         threshold = args.maximum_transparent_frame_regression_percent
         gates.append(gate(LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU, frame_delta_percent <= threshold, f"healthy {healthy_frame.median_ms:.4f} ms, baseline {baseline_frame.median_ms:.4f} ms, " f"delta {frame_delta_percent:+.3f}% (limit +{threshold:.3f}%)",))
 
-    verdict = LIT_PASS if all(bool(item[LIT_PASSED]) for item in gates) else LIT_FAIL
+    # Too few positive intervals make timing comparisons untrustworthy; functional gate failures still fail.
+    if healthy_semantics_passed and baseline_semantics_passed and runtime_logs_passed and not intervals_passed:
+        verdict = LIT_INCONCLUSIVE
+    else:
+        verdict = LIT_PASS if all(bool(item[LIT_PASSED]) for item in gates) else LIT_FAIL
     healthy_payload = raw_run_payload(healthy)
     healthy_payload.update(frame_median_ms=healthy_frame.median_ms, frame_sample_count=healthy_frame.sample_count,)
     baseline_payload = raw_run_payload(baseline)
@@ -523,16 +532,24 @@ def run_self_test() -> int:
         running_process = SimpleNamespace(poll=lambda: None)
         assert wait_for_log_message(running_process, root, {}, LIT_CAPABILITY_LOG, HEALTHY_REQUIRED_LOGS[0], 0.1, CAPABILITY_SKIP_LOG,) == CAPABILITY_SKIP_LOG
 
-        healthy_scopes = dict(scopes)
-        healthy_scopes[FRAME_SCOPE] = ScopeSummary(2, 2, 4.95, 4.95, 4.9, 5.0)
+        healthy_scopes = {name: replace(summary, sample_count=11, positive_sample_count=11) for name, summary in scopes.items()}
+        healthy_scopes[FRAME_SCOPE] = ScopeSummary(11, 11, 4.95, 4.95, 4.9, 5.0)
         healthy = RunResult(mode=LIT_HEALTHY, executable=LIT_HEALTHY, timing_file=str(timing), log_file=LIT_HEALTHY_LOG, capture_file=LIT_HEALTHY_BMP, scopes=healthy_scopes, missing_required_log_messages=[], runtime_forbidden_log_messages=[],
             semantic_forbidden_log_messages=[],)
-        baseline_scopes = { FRAME_SCOPE: ScopeSummary(2, 2, 4.5, 4.5, 4.4, 4.6), OPAQUE_TRACE_SCOPE: ScopeSummary(2, 2, 0.55, 0.55, 0.5, 0.6), }
+        baseline_scopes = { FRAME_SCOPE: ScopeSummary(11, 11, 4.5, 4.5, 4.4, 4.6), OPAQUE_TRACE_SCOPE: ScopeSummary(11, 11, 0.55, 0.55, 0.5, 0.6), }
         baseline = RunResult(mode=LIT_BASELINE, executable=LIT_BASELINE, timing_file=str(timing), log_file=LIT_BASELINE_LOG, capture_file=LIT_BASELINE_BMP, scopes=baseline_scopes, missing_required_log_messages=[], runtime_forbidden_log_messages=[],
             semantic_forbidden_log_messages=[],)
         args = SimpleNamespace(minimum_samples=2, maximum_transparent_frame_regression_percent=None, frozen_yaw=0.6, warmup_seconds=4.0, measure_seconds=12.0, gpu_validation=False,)
         report = evaluate_runs(args, healthy, baseline)
         assert report[LIT_VERDICT] == LIT_PASS
+
+        # Ten positive baseline intervals cannot qualify timing, but a functional failure still fails.
+        baseline.scopes = {**baseline_scopes, OPAQUE_TRACE_SCOPE: ScopeSummary(12, 10, 0.55, 0.55, 0.0, 0.6)}
+        assert evaluate_runs(args, healthy, baseline)[LIT_VERDICT] == LIT_INCONCLUSIVE
+        baseline.runtime_forbidden_log_messages = ["VUID"]
+        assert evaluate_runs(args, healthy, baseline)[LIT_VERDICT] == LIT_FAIL
+        baseline.scopes = baseline_scopes
+        baseline.runtime_forbidden_log_messages = []
         args.maximum_transparent_frame_regression_percent = 5.0
         threshold_report = evaluate_runs(args, healthy, baseline)
         assert threshold_report[LIT_VERDICT] == LIT_FAIL

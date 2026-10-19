@@ -21,10 +21,10 @@ from types import SimpleNamespace
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
-from gpu_timing_parse import load_name_symbols
+from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, load_name_symbols
 import reflection_benchmark as reflection
 import caustic_timing_qualification as caustic
-from reflection_benchmark import balanced_orders, paired_statistics, parse_intervals, summarize_intervals
+from reflection_benchmark import LIT_POSITIVE_FRAME_REPORTS, balanced_orders, paired_statistics, parse_intervals, positive_frame_reports, summarize_intervals
 from smoke_volume_identity import file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
@@ -494,7 +494,9 @@ def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical
     threshold = max(practical_ms, practical_fraction * means[LIT_BASELINE][FRAME])
     low, high = paired[FRAME][LIT_CI95_MEAN_MS]
     status = "unresolved"
-    if any(metric["material_drift"] for metric in controls.values()):
+    if any(trial[LIT_POSITIVE_FRAME_REPORTS] <= MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS for trial in trials):
+        status = "inconclusive_interval_count"
+    elif any(metric["material_drift"] for metric in controls.values()):
         status = "control_drift"
     elif any(not metric["equivalent_within_tolerance"] for metric in controls.values()):
         status = "control_uncertain"
@@ -558,7 +560,7 @@ def acquire_trial(args, arm, workload, block, position, symbols):
                     problem = "waiting for warm-up/measured reports" if any(FRAME in value for value in intervals) \
                         else "timing reports contain no completed GPU frame samples"
                 retained = intervals[args.warmup_intervals:]
-                if len(retained) >= args.sample_intervals:
+                if positive_frame_reports(retained) >= args.sample_intervals:
                     summaries = summarize_intervals(retained)
                     if workload.validate_log is caustic_log:
                         caustic.validate_warmup(summarize_intervals(intervals[:args.warmup_intervals]))
@@ -584,7 +586,7 @@ def acquire_trial(args, arm, workload, block, position, symbols):
         finalized = parse_intervals(timing_text, symbols, finalized=True)
         validate_inactive_scopes(summarize_intervals(finalized), workload)
         report_range = [args.warmup_intervals, args.warmup_intervals + len(selected)]
-        return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_REPORTS: len(selected), "retained_report_range": report_range, "native_hardware_dispatches_per_range": getattr(args, arm.name + "_hardware_dispatches_per_range")
+        return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_REPORTS: len(selected), LIT_POSITIVE_FRAME_REPORTS: positive_frame_reports(selected), "retained_report_range": report_range, "native_hardware_dispatches_per_range": getattr(args, arm.name + "_hardware_dispatches_per_range")
                 if reflection.HARDWARE in workload.scopes else None, "wall_frame": summarize_wall_frames(text, timing_text, workload, report_range),
             "caustic_warmup_scopes": summarize_intervals(finalized[:args.warmup_intervals]) if workload.validate_log is caustic_log else None, LIT_SCOPES: summarize_intervals(selected), LIT_RUNTIME_SIGNATURE: signature,
             LIT_ARTIFACTS: str(directory), "cache_after": cache_identity(arm.runtime)}
@@ -627,7 +629,7 @@ def parse_args(argv=None):
     parser.add_argument("--workload", choices=tuple(workloads()), default=LIT_TRANSPARENT_MULTI)
     parser.add_argument("--blocks", type=int, default=8)
     parser.add_argument("--warmup-intervals", type=int, default=2)
-    parser.add_argument("--sample-intervals", type=int, default=6)
+    parser.add_argument("--sample-intervals", type=int, default=MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS + 1, help="Positive measured frame reports per trial; performance needs more than ten.")
     parser.add_argument("--minimum-frame-samples", type=int, default=100)
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--order-seed", type=int, default=0)
@@ -664,8 +666,8 @@ def parse_args(argv=None):
         parser.error("caustic qualification applies only to caustic workloads")
     if args.blocks < 8 or args.blocks % 2:
         parser.error("blocks must be even and at least8, retaining complete AB/BA balance")
-    if args.warmup_intervals < 2 or args.sample_intervals < 6 or args.minimum_frame_samples < 100:
-        parser.error("at least2 warm-up reports,6 measured reports and100 completed frames are required")
+    if args.warmup_intervals < 2 or args.sample_intervals <= MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS or args.minimum_frame_samples < 100:
+        parser.error(f"at least 2 warm-up reports, {MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS + 1} positive measured reports and 100 completed frames are required")
     for field in ("timeout", LIT_PRACTICAL_MS, LIT_PRACTICAL_FRACTION, LIT_CONTROL_FLOOR_MS):
         if not math.isfinite(getattr(args, field)) or getattr(args, field) <= 0:
             parser.error(f"{field} must be finite and positive")

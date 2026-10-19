@@ -56,24 +56,34 @@ namespace ProcessExecutionFailure{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// The value is the raw shell status from std::system. A -1 result with errno set means the shell did not run.
 template<typename ArenaT>
-[[nodiscard]] inline int RunSystemCommand(ArenaT& arena, const AStringView command){
+[[nodiscard]] inline Expected<int, ErrorCondition> RunSystemCommand(ArenaT& arena, const AStringView command){
     if(command.find(char{}) != AStringView::npos)
-        return -1;
+        return MakeUnexpected(ErrorCondition::invalid_argument);
     const AString<ArenaT> nativeCommand(command, arena);
-    return std::system(nativeCommand.c_str());
+    errno = 0;
+    const int status = std::system(nativeCommand.c_str());
+    if(status == -1 && errno != 0)
+        return MakeUnexpected(static_cast<ErrorCondition>(errno));
+    return status;
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline int RunSystemCommand(const AString<ArenaT>& command){
+[[nodiscard]] inline Expected<int, ErrorCondition> RunSystemCommand(const AString<ArenaT>& command){
 #if defined(NWB_PLATFORM_WINDOWS)
     AString<ArenaT> systemCommand("\"", command.get_allocator());
     systemCommand += command;
     systemCommand += '"';
-    return std::system(systemCommand.c_str());
+    errno = 0;
+    const int status = std::system(systemCommand.c_str());
 #else
-    return std::system(command.c_str());
+    errno = 0;
+    const int status = std::system(command.c_str());
 #endif
+    if(status == -1 && errno != 0)
+        return MakeUnexpected(static_cast<ErrorCondition>(errno));
+    return status;
 }
 
 
@@ -243,20 +253,23 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline int WaitForProcessExitCode(const pid_t childPid)noexcept{
+// A child killed by a signal reports 128 plus the signal number.
+[[nodiscard]] inline Expected<int, ErrorCondition> WaitForProcessExitCode(const pid_t childPid)noexcept{
     int status = 0;
     pid_t waitedPid = -1;
     do{
         waitedPid = ::waitpid(childPid, &status, 0);
     }while(waitedPid < 0 && errno == EINTR);
 
+    if(waitedPid < 0)
+        return MakeUnexpected(static_cast<ErrorCondition>(errno));
     if(waitedPid != childPid)
-        return -1;
+        return MakeUnexpected(ErrorCondition::no_child_process);
     if(WIFEXITED(status))
         return WEXITSTATUS(status);
     if(WIFSIGNALED(status))
         return s_ProcessSignalExitCodeBase + WTERMSIG(status);
-    return -1;
+    return MakeUnexpected(ErrorCondition::io_error);
 }
 
 
@@ -535,12 +548,12 @@ template<typename ArenaT>
     }
 
     const int closeParentResult = ::close(outputFileDescriptor);
-    const int exitCode = ProcessExecutionDetail::WaitForProcessExitCode(childPid);
+    const Expected<int, ErrorCondition> exitCode = ProcessExecutionDetail::WaitForProcessExitCode(childPid);
     if(closeParentResult != 0)
         return MakeUnexpected(ProcessExecutionFailure::CloseFailed);
-    if(exitCode < 0)
+    if(!exitCode)
         return MakeUnexpected(ProcessExecutionFailure::ExitQueryFailed);
-    return exitCode;
+    return *exitCode;
 #else
     static_cast<void>(arena);
     return MakeUnexpected(ProcessExecutionFailure::Unsupported);

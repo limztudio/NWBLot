@@ -112,10 +112,6 @@ void UiRadioGroupSmokeSource::replace()noexcept{
     m_reversed = false;
 }
 
-void UiRadioGroupSmokeSource::beginFrame()noexcept{
-    m_labelReads = 0u;
-}
-
 u64 UiRadioGroupSmokeSource::rawKey(const u64 index)const noexcept{
     const u64 count = m_removed == 0u ? 5u : 4u;
     if(index >= count)

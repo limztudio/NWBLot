@@ -130,8 +130,8 @@ Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* 
 
 bool RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TStringView message, const u64 frameIndex, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::TextLog, frameIndex, streamId, [type, message](TelemetryArena&, TelemetryBytes& payload){
-            return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, payload);
-        }
+        return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, payload);
+    }
     );
 }
 

@@ -75,18 +75,14 @@ namespace FrameGraphQueueAssignmentModifier{
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
         NonPrimaryRouting = 1u << 2u,
-        DiagnosticTimingQueueOverride = 1u << 3u,
         TimingCalibration = 1u << 4u,
         TimingFeedback = 1u << 5u,
-        DiagnosticQueueOverride = 1u << 6u,
 
         All = DirectDependencyAffinity
             | SameClassLoadBalance
             | NonPrimaryRouting
-            | DiagnosticTimingQueueOverride
             | TimingCalibration
-            | TimingFeedback
-            | DiagnosticQueueOverride,
+            | TimingFeedback,
     };
 };
 

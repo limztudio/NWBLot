@@ -59,10 +59,8 @@ namespace __hidden_task_graph_telemetry{
     constexpr u8 s_KnownModifiers = GpuTaskQueueAssignmentModifier::DirectDependencyAffinity
         | GpuTaskQueueAssignmentModifier::SameClassLoadBalance
         | GpuTaskQueueAssignmentModifier::NonPrimaryRouting
-        | GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride
         | GpuTaskQueueAssignmentModifier::TimingCalibration
         | GpuTaskQueueAssignmentModifier::TimingFeedback
-        | GpuTaskQueueAssignmentModifier::DiagnosticQueueOverride
     ;
     if((static_cast<u8>(modifiers) & static_cast<u8>(~s_KnownModifiers)) != 0u)
         return MakeUnexpected(Failure{});
@@ -74,14 +72,10 @@ namespace __hidden_task_graph_telemetry{
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::SameClassLoadBalance;
     if(modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryRouting;
-    if(modifiers & GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride)
-        translated |= Telemetry::FrameGraphQueueAssignmentModifier::DiagnosticTimingQueueOverride;
     if(modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration)
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::TimingCalibration;
     if(modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback)
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
-    if(modifiers & GpuTaskQueueAssignmentModifier::DiagnosticQueueOverride)
-        translated |= Telemetry::FrameGraphQueueAssignmentModifier::DiagnosticQueueOverride;
     return static_cast<Telemetry::FrameGraphQueueAssignmentModifier::Mask>(translated);
 }
 
@@ -270,7 +264,7 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(Telemetry::Frame
                 || assignment->initialQueue != assignment->queue
             )
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentRerouted;
-            if((assignment->modifiers & GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride) || (assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration) || (assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback))
+            if((assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration) || (assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback))
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting;
         }
         taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, metadata, flags));

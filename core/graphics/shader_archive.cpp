@@ -134,9 +134,9 @@ const Name& ShaderArchive::IndexVirtualPathName()noexcept{
     return s_IndexVirtualPathName;
 }
 
-Name ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringView variantName, const Name& stageName){
+Expected<Name> ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringView variantName, const Name& stageName){
     if(!shaderName || variantName.empty() || !stageName)
-        return s_NameNone;
+        return MakeUnexpected(Failure{});
 
     NameHash derivedHash;
     static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";

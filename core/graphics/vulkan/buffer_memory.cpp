@@ -18,53 +18,53 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAccess){
+Expected<void*> Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAccess){
     if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: invalid CPU access mode"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer belongs to another device"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(!buffer.m_managed){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: native buffer memory is not managed by this device"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(buffer.m_buffer == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: native buffer is null"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     const auto effectiveAccess = VulkanDetail::TryResolveBufferCpuAccess(buffer.m_creationDesc.cpuAccess, buffer.m_creationDesc.isVolatile);
     if(!effectiveAccess || *effectiveAccess == CpuAccessMode::None){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer was created without CPU access"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(requestedAccess != *effectiveAccess){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: requested access does not match the buffer CPU access"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     NothrowScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if(buffer.m_creationDesc.isVirtual){
         if(!buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u || !buffer.m_mappedMemory){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: virtual buffer has no mapped heap binding"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
 
         Heap& heap = *buffer.m_boundHeap.get();
         ScopedLock heapLock(heap.m_bindingMutex);
         if(&heap.m_context != &m_context || &heap.m_allocator != &m_allocator || !heap.m_allocation || !heap.m_mappedMemory || !VulkanDetail::IsBufferHeapTypeCompatible(buffer.m_creationDesc.cpuAccess, buffer.m_creationDesc.isVolatile, heap.m_desc.type)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: virtual buffer heap binding is invalid"));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
 
         if(*effectiveAccess == CpuAccessMode::Read){
             const VkResult res = m_allocator.invalidateHeapMemory(heap, buffer.m_heapBindingRange.localOffset, buffer.m_heapBindingRange.size);
             if(res != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate readback heap mapping: {}"), ResultToString(res));
-                return nullptr;
+                return MakeUnexpected(Failure{});
             }
         }
         return buffer.m_mappedMemory;
@@ -72,7 +72,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
 
     if(buffer.m_allocation == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer has no allocation"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     auto invalidateReadRange = [&]() -> bool{
@@ -89,21 +89,21 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
 
     if(buffer.m_mappedMemory){
         if(!invalidateReadRange())
-            return nullptr;
+            return MakeUnexpected(Failure{});
         return buffer.m_mappedMemory;
     }
 
     const auto data = m_allocator.mapBufferMemory(buffer);
     if(!data){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(data.error()));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     buffer.m_mappedMemory = *data;
     if(!invalidateReadRange()){
         m_allocator.unmapBufferMemory(buffer);
         buffer.m_mappedMemory = nullptr;
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     return *data;
 }

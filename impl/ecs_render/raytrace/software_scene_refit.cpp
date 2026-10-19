@@ -79,9 +79,10 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
         if(!replacementResult)
             return MakeUnexpected(Failure{});
         Core::BufferHandle replacement = Move(*replacementResult);
-        const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!descriptor.valid())
-            return MakeUnexpected(Failure{});
+        const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!descriptorResult)
+            return MakeUnexpected(descriptorResult.error());
+        const Core::GpuDescriptorHandle descriptor = *descriptorResult;
         if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get()))){
             heap.free(descriptor);
             return MakeUnexpected(Failure{});

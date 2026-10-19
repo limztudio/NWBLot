@@ -70,17 +70,17 @@ template<typename Value, typename Bounds, typename Canonicalize, typename Change
 template<typename Canonicalize>
 [[nodiscard]] NumericEditResult RestoreDraft(Canonicalize canonicalize, const bool cancelled)noexcept(
     []()constexpr noexcept{
-    using Returned = decltype(DeclVal<Canonicalize&>()());
-    using Result = Decay_T<Returned>;
-    return
-        noexcept(DeclVal<Canonicalize&>()())
-        && IsNothrowDestructible_V<Canonicalize>
-        && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Result>)
-        && IsNothrowDestructible_V<Result>
-        && noexcept(static_cast<bool>(!DeclVal<const Result&>()))
-        && noexcept(DeclVal<bool&>() = *DeclVal<const Result&>())
-    ;
-}()
+        using Returned = decltype(DeclVal<Canonicalize&>()());
+        using Result = Decay_T<Returned>;
+        return
+            noexcept(DeclVal<Canonicalize&>()())
+            && IsNothrowDestructible_V<Canonicalize>
+            && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Result>)
+            && IsNothrowDestructible_V<Result>
+            && noexcept(static_cast<bool>(!DeclVal<const Result&>()))
+            && noexcept(DeclVal<bool&>() = *DeclVal<const Result&>())
+        ;
+    }()
 ){
     NumericEditResult result;
     const auto restored = canonicalize();

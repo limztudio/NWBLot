@@ -41,16 +41,7 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
         char identityText[32u] = {};
         const auto derivedNameAt42Col12 = DeriveName(Name("tests/queue_scaling/serial/"), FormatDecimal(taskIndex, identityText));
         ASSERT_TRUE(derivedNameAt42Col12);
-        const auto gpuAdmissionAt40 = AddTaskWithCommands(
-            graph,
-            *derivedNameAt42Col12,
-            "Serial Reachability Task",
-            ComputeCommands(),
-            {},
-            {},
-            taskIndex != 0u ? &tasks[taskIndex - 1u] : nullptr,
-            taskIndex != 0u ? 1u : 0u
-        );
+        const auto gpuAdmissionAt40 = AddTaskWithCommands(graph, *derivedNameAt42Col12, "Serial Reachability Task", ComputeCommands(), {}, {}, taskIndex != 0u ? &tasks[taskIndex - 1u] : nullptr, taskIndex != 0u ? 1u : 0u);
         ASSERT_TRUE(gpuAdmissionAt40);
         tasks[taskIndex] = *gpuAdmissionAt40;
         ASSERT_TRUE(tasks[taskIndex].valid());

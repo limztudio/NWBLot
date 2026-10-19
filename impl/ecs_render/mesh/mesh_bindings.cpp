@@ -69,16 +69,18 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation vertex buffer requires the initialized global descriptor heap"));
         return false;
     }
-    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
-    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
-        return false;
+    const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(handle){
+        Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
+        if(heap.write(*handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()))){
+            mesh.emulationVertexHeapHandle = *handle;
+            retireHandle.release();
+            return true;
+        }
     }
-    mesh.emulationVertexHeapHandle = handle;
-    retireHandle.release();
 
-    return true;
+    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
+    return false;
 }
 
 bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers){
@@ -96,17 +98,23 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration requires the initialized global descriptor heap"));
         return false;
     }
-    const Core::GpuDescriptorHandle instanceHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Expected<Core::GpuDescriptorHandle> instanceHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!instanceHandleResult)
+        return false;
+    const Core::GpuDescriptorHandle instanceHandle = *instanceHandleResult;
     Core::GpuDescriptorRetirementGuard retireInstance(heap, instanceHandle);
-    const Core::GpuDescriptorHandle materialTypedHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Expected<Core::GpuDescriptorHandle> materialTypedHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!materialTypedHandleResult)
+        return false;
+    const Core::GpuDescriptorHandle materialTypedHandle = *materialTypedHandleResult;
     Core::GpuDescriptorRetirementGuard retireMaterialTyped(heap, materialTypedHandle);
-    const Core::GpuDescriptorHandle viewHandle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    const Expected<Core::GpuDescriptorHandle> viewHandleResult = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    if(!viewHandleResult)
+        return false;
+    const Core::GpuDescriptorHandle viewHandle = *viewHandleResult;
     Core::GpuDescriptorRetirementGuard retireView(heap, viewHandle);
     const bool registered =
-        instanceHandle.valid()
-        && materialTypedHandle.valid()
-        && viewHandle.valid()
-        && heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
+        heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
         && heap.write(materialTypedHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get()))
         && heap.write(viewHandle, Core::DescriptorWriteItem::ConstantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
     ;
@@ -250,15 +258,21 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime local bounds require a complete raw GPU buffer"));
             return false;
         }
-        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
-        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()))){
+        const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        bool registered = false;
+        if(handle){
+            Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
+            registered = heap.write(*handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()));
+            if(registered){
+                mesh.runtimeLocalBoundsHeapHandle = *handle;
+                retireHandle.release();
+            }
+        }
+        if(!registered){
             releaseMeshGeometryHeapHandles(mesh);
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register runtime local bounds"));
             return false;
         }
-        mesh.runtimeLocalBoundsHeapHandle = handle;
-        retireHandle.release();
     }
 
     if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
@@ -266,11 +280,13 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         const Core::BufferDesc& desc = mesh.runtimeMeshletLocalBoundsBuffer->getCreationDescription();
         const u64 requiredBytes = static_cast<u64>(mesh.meshletCount) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
         if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews){
-            const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-            Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
-            if(handle.valid() && heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get()))){
-                mesh.runtimeMeshletLocalBoundsHeapHandle = handle;
-                retireHandle.release();
+            const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+            if(handle){
+                Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
+                if(heap.write(*handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get()))){
+                    mesh.runtimeMeshletLocalBoundsHeapHandle = *handle;
+                    retireHandle.release();
+                }
             }
         }
         if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
@@ -319,17 +335,17 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
             return;
         }
 
-        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        Core::GpuDescriptorRetirementGuard retireHandle(heap, handle);
-        if(!handle.valid()){
+        const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!handle){
             registered = false;
             return;
         }
-        if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, buffer.get()))){
+        Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
+        if(!heap.write(*handle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, buffer.get()))){
             registered = false;
             return;
         }
-        acquired[bindingSlot] = handle;
+        acquired[bindingSlot] = *handle;
         retireHandle.release();
     }
     );
@@ -372,20 +388,22 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
         return false;
     }
 
-    const Core::GpuDescriptorHandle positionHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    Core::GpuDescriptorRetirementGuard retirePosition(heap, positionHandle);
-    const Core::GpuDescriptorHandle triangleIndexHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    Core::GpuDescriptorRetirementGuard retireTriangleIndex(heap, triangleIndexHandle);
-    const bool registered =
-        positionHandle.valid()
-        && triangleIndexHandle.valid()
-        && heap.write(positionHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.positionBuffer.get()))
-        && heap.write(triangleIndexHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.triangleIndexBuffer.get()))
-    ;
-    if(!registered){
+    const auto registrationFailed = [&mesh](){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-BVH inputs for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
         return false;
-    }
+    };
+    const Expected<Core::GpuDescriptorHandle> positionHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!positionHandleResult)
+        return registrationFailed();
+    const Core::GpuDescriptorHandle positionHandle = *positionHandleResult;
+    Core::GpuDescriptorRetirementGuard retirePosition(heap, positionHandle);
+    const Expected<Core::GpuDescriptorHandle> triangleIndexHandleResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!triangleIndexHandleResult)
+        return registrationFailed();
+    const Core::GpuDescriptorHandle triangleIndexHandle = *triangleIndexHandleResult;
+    Core::GpuDescriptorRetirementGuard retireTriangleIndex(heap, triangleIndexHandle);
+    if(!heap.write(positionHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.positionBuffer.get())) || !heap.write(triangleIndexHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.triangleIndexBuffer.get())))
+        return registrationFailed();
 
     mesh.swBvhPositionHeapHandle = positionHandle;
     mesh.swBvhTriangleIndexHeapHandle = triangleIndexHandle;

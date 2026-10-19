@@ -29,7 +29,7 @@ public:
 
 
 public:
-    void dismiss()noexcept;
+    void dismiss()noexcept{ m_active = false; }
 
 
 private:

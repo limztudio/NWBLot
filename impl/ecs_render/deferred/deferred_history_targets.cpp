@@ -178,8 +178,9 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         return false;
     }
 
-    history.slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(!history.slotsBufferDescriptor.valid() || !heap.write(history.slotsBufferDescriptor, Core::DescriptorWriteItem::ConstantBuffer(0u, history.slotsBuffer.get()))){
+    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    history.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
+    if(!slotsBufferDescriptor || !heap.write(history.slotsBufferDescriptor, Core::DescriptorWriteItem::ConstantBuffer(0u, history.slotsBuffer.get()))){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;

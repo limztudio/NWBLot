@@ -39,7 +39,7 @@ public:
     void reverse()noexcept;
     void remove(u64 key)noexcept;
     void replace()noexcept;
-    void beginFrame()noexcept;
+    void beginFrame()noexcept{ m_labelReads = 0u; }
     [[nodiscard]] bool reversed()const noexcept{ return m_reversed; }
     [[nodiscard]] u64 removedKey()const noexcept{ return m_removed; }
     [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }

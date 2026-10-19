@@ -210,14 +210,11 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     EXPECT_TRUE(foundVersionDependency);
     EXPECT_TRUE(foundPhysicalRaw);
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), };
+    // The graphics queue has no compute support, so the compute consumer must cross queues.
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(0u, TaskGraphTestUtils::QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)), DedicatedComputeQueue(), };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = consumer, .queue = queues[1u].id };
-    Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.diagnosticQueueOverrides = &route;
-    options.diagnosticQueueOverrideCount = 1u;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, options));
+    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
     ASSERT_NE(producerAssignment, nullptr);

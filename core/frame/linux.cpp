@@ -58,18 +58,23 @@ static StringView BackendName(Common::LinuxFrameBackend::Enum backend)noexcept{
 
 inline constexpr usize s_LinuxBackendOrderCapacity = 2u;
 
+struct LinuxBackendOrder final{
+    Common::LinuxFrameBackend::Enum backends[s_LinuxBackendOrderCapacity] = {};
+    usize count = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity], usize& count, const Common::LinuxFrameBackend::Enum backend)noexcept{
-    NWB_ASSERT(count < LengthOf(outOrder));
-    outOrder[count] = backend;
-    ++count;
+static void AppendBackend(LinuxBackendOrder& inOutOrder, const Common::LinuxFrameBackend::Enum backend)noexcept{
+    NWB_ASSERT(inOutOrder.count < LengthOf(inOutOrder.backends));
+    inOutOrder.backends[inOutOrder.count] = backend;
+    ++inOutOrder.count;
 }
 
-static Expected<usize> BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity], Alloc::ScratchArena& scratchArena){
-    usize count = 0;
+static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratchArena){
+    LinuxBackendOrder order;
 
     const auto requestedBackend = ReadEnvironmentVariable(scratchArena, s_LinuxBackendEnvName);
     if(!requestedBackend){
@@ -78,18 +83,18 @@ static Expected<usize> BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOr
     }
     if(*requestedBackend){
         if(**requestedBackend == s_X11BackendRequest){
-            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
+            AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
 #if defined(NWB_WITH_WAYLAND)
-            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
+            AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
 #endif
-            return count;
+            return order;
         }
 
 #if defined(NWB_WITH_WAYLAND)
         if(**requestedBackend == s_WaylandBackendRequest){
-            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
-            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
-            return count;
+            AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
+            AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
+            return order;
         }
 #endif
 
@@ -113,17 +118,17 @@ static Expected<usize> BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOr
         preferWayland = *hasWaylandDisplay;
     }
     if(preferWayland){
-        AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
-        AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
-        return count;
+        AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
+        AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
+        return order;
     }
 #endif
 
-    AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
+    AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
 #if defined(NWB_WITH_WAYLAND)
-    AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
+    AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
 #endif
-    return count;
+    return order;
 }
 
 static bool TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend){
@@ -200,14 +205,13 @@ static void CleanupBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum ba
 bool Frame::init(){
     auto& frameData = data<Common::LinuxFrame>();
 
-    Common::LinuxFrameBackend::Enum backendOrder[FrameDetail::s_LinuxBackendOrderCapacity];
     Alloc::ScratchArena scratchArena(FrameArenaScope::s_LinuxEnvironmentArena);
-    const auto backendCount = FrameDetail::BuildBackendOrder(backendOrder, scratchArena);
-    if(!backendCount)
+    const auto backendOrder = FrameDetail::BuildBackendOrder(scratchArena);
+    if(!backendOrder)
         return false;
 
-    for(usize i = 0u; i < *backendCount; ++i){
-        const Common::LinuxFrameBackend::Enum backend = backendOrder[i];
+    for(usize i = 0u; i < backendOrder->count; ++i){
+        const Common::LinuxFrameBackend::Enum backend = backendOrder->backends[i];
         if(FrameDetail::TryInitBackend(*this, backend)){
             frameData.setBackend(backend);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));

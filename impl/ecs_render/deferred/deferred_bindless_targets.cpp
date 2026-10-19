@@ -693,8 +693,9 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
 
     // The indirection payload is itself heap-addressable.
     // Every consumer receives this one UniformBuffer slot in push constants instead of binding a local selector CBV, keeping the descriptor heap as the only resource binding surface for ordinary renderer passes.
-    bindless.slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(!bindless.slotsBufferDescriptor.valid() || !heap.write(bindless.slotsBufferDescriptor, Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get()))){
+    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    bindless.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
+    if(!slotsBufferDescriptor || !heap.write(bindless.slotsBufferDescriptor, Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get()))){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap"));
         resetDeferredBindlessFrameResources(targets);
         return false;

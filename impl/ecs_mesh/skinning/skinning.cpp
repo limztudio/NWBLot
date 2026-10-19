@@ -28,42 +28,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, Core::Alloc::ScratchArena& scratchArena){
+bool MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
     instance.deformationState.invalidateCurrent();
-    RuntimeSkinPayloadScratch payload{ scratchArena };
-    if(!MeshSkinningPayload::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
-        return false;
-
-    const bool hasActiveSkin = payload.hasActiveSkin();
-    const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
-    const bool meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
-    const auto foundRuntimeResources = m_runtimeResources.find(instance.handle.value);
-    const bool hadSkinningResources = foundRuntimeResources != m_runtimeResources.end() && foundRuntimeResources.value().usesSkinning();
     if(instance.meshlets.empty())
         return true;
-
-    // Pipelines are created during validateResources; the per-frame prepare path only consumes them and fails if setup is missing.
-    if(hasActiveSkin && !skinningPipelineReady())
-        return false;
-    if(!boundsPipelinesReady())
-        return false;
-    // Repack canonical trace attributes when the runtime instance owns the attribute buffer.
-    if(instance.attributeBuffer && !repackPipelineReady())
+    if(!skinningPipelineReady() || !boundsPipelinesReady() || (instance.attributeBuffer && !repackPipelineReady()))
         return false;
 
-    const auto preparedResources = ensureRuntimeResources(instance, payload, scratchArena);
-    if(!preparedResources)
+    const auto resourcesChanged = ensureRuntimeResources(instance, scratchArena);
+    if(!resourcesChanged)
         return false;
-    RuntimeResources* const resources = preparedResources->resources;
-    const bool resourcesRebuilt = preparedResources->rebuilt;
-
-    // Releasing a pose rebuilds descriptors; force one rest->skinned copy.
-    if(!hasActiveSkin && hadSkinningResources && resourcesRebuilt){
-        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty);
-    }
-    const MeshSkinningDeformationInputs inputs{ .resourceSlotsBuffer = resources->bindlessResourceSlotsBuffer, .editRevision = instance.editRevision, .skinningMode = payload.resolvedSkinningMode, };
-    // Changed inputs stay revision zero until the graph accepts their complete output.
-    instance.deformationState.refreshCurrent(inputs, payload.jointMatrices.data(), payload.jointMatrices.size(), skinnedMeshInputDirty || meshletBoundsDirty || resourcesRebuilt);
+    if(*resourcesChanged)
+        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty);
     return true;
 }
 

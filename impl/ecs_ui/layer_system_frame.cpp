@@ -26,17 +26,6 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
     static_cast<void>(world);
     m_frameDelta.add(delta);
     synchronizeInput();
-    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin");
-            const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
-            if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
-                return false;
-            m_skinAsset = Move(*candidateAsset);
-            return true;
-        }
-    );
-    if(skinChange == UiSkinChangeResult::Failed)
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: UI skin request failed; retaining the selected skin"));
     if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
         return {};
     if(m_frameGeneration == Limit<u64>::s_Max)

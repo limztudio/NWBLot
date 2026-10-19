@@ -268,6 +268,33 @@ MeshSkinningSystem::~MeshSkinningSystem()noexcept{
     m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(*this);
 }
 
+void MeshSkinningSystem::prepare(Core::ECS::World& world){
+    static_cast<void>(world);
+    m_runtimeSetupReady = false;
+    if(!m_skinningComputePipeline || !m_boundsComputePipeline || !m_localBoundsComputePipeline || !m_repackComputePipeline)
+        return;
+    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
+    m_runtimeMeshCache.prepareResources(m_world, scratchArena);
+    pruneRuntimeResources();
+    bool ready = true;
+    m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, SkinnedMeshBindingComponent& binding){
+            if(!ready)
+                return;
+            if(!binding.runtimeMesh.valid())
+                return;
+
+            MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+            if(!instance)
+                return;
+            NWB_ASSERT(instance->valid());
+
+            ready = prepareRuntimeMeshResources(*instance, scratchArena);
+        }
+    );
+
+    m_runtimeSetupReady = ready;
+}
+
 Expected<void, Core::CpuTaskAdmissionError::Enum> MeshSkinningSystem::update(Core::ECS::World& world, const f32 delta)noexcept{
     static_cast<void>(world);
     static_cast<void>(delta);
@@ -301,36 +328,14 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
 
 bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
-
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
-    m_runtimeMeshCache.prepareResources(m_world, scratchArena);
-    pruneRuntimeResources();
-    bool ready = true;
-    m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
-            if(!ready)
-                return;
-            if(!binding.runtimeMesh.valid())
-                return;
-
-            MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
-            if(!instance)
-                return;
-            NWB_ASSERT(instance->valid());
-
-            const SkeletonJointPaletteComponent* jointPalette = nullptr;
-            const SkeletonPoseComponent* skeletonPose = nullptr;
-            __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
-            ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose, scratchArena);
-        }
-    );
-
     // Frames may lack native submissions; filter retired buffers so handles pin nothing.
     if(m_acceptedSkinningState.valid() && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source(), scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
         return false;
     }
 
-    return ready;
+    return m_runtimeSetupReady;
 }
 
 void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
@@ -341,7 +346,9 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
 }
 
 void MeshSkinningSystem::invalidateResources(){
+    m_runtimeSetupReady = false;
     resetFrameTaskGraph();
+    NWB_FATAL_ASSERT_MSG(m_frameRecordedGraph.releaseCommandListCache(), "skinning invalidation requires joined graph recording before device-bound cache release");
     m_acceptedSkinningState.reset();
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
         releaseRuntimeResourceBindlessHeapHandles(it.value());
@@ -426,6 +433,16 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             }
 
             const bool hasActiveSkin = payload.hasActiveSkin();
+            Span<const SkeletonJointMatrix> jointPaletteUpload;
+            if(hasActiveSkin){
+                const auto upload = MeshSkinningPayload::ResolveGpuJointPalette(*instance, payload);
+                if(!upload){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: current joint palette does not match Skin upload bounds for runtime mesh '{}'"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+                jointPaletteUpload = *upload;
+            }
             const bool skinningInputDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
             const bool meshletBoundsDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
             if(instance->meshlets.empty())
@@ -472,7 +489,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             plan.repacksNormals = (hasActiveSkin || copiesRestStreams) && instance->attributeBuffer != nullptr;
             plan.meshletCount = static_cast<u32>(instance->meshlets.size());
             plan.skinCount = static_cast<u32>(payload.skinInfluenceCount);
-            plan.jointCount = static_cast<u32>(payload.jointMatrices.size());
+            plan.jointCount = static_cast<u32>(jointPaletteUpload.size());
             plan.skinningMode = payload.resolvedSkinningMode;
             plan.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
             plan.bindlessResourceSlotsBuffer = resources.bindlessResourceSlotsBuffer;
@@ -729,12 +746,12 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
 
             if(hasActiveSkin){
                 usize jointPaletteBytes = 0u;
-                if(payload.jointMatrices.size() > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || (jointPaletteBytes = payload.jointMatrices.size() * sizeof(SkeletonJointMatrix)) == 0u){
+                if(jointPaletteUpload.size() > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || (jointPaletteBytes = jointPaletteUpload.size() * sizeof(SkeletonJointMatrix)) == 0u){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
                     declarationFailed = true;
                     return;
                 }
-                const auto jointPaletteSourceResult = graph.copyUploadData(payload.jointMatrices.data(), jointPaletteBytes, alignof(SkeletonJointMatrix));
+                const auto jointPaletteSourceResult = graph.copyUploadData(jointPaletteUpload.data(), jointPaletteBytes, alignof(SkeletonJointMatrix));
                 if(!jointPaletteSourceResult){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned joint palette data for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;

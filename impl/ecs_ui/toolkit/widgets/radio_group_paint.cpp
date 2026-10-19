@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     if(item.radioGroup >= m_scope->m_radioGroups.size())
         return false;
-    RadioGroupFrame& frame = *m_scope->m_radioGroups[item.radioGroup];
+    RadioGroupFrame& frame = m_scope->m_radioGroups[item.radioGroup];
     if(!radioGroupMatches(frame) || frame.m_labels.size() != frame.m_choices.count)
         return false;
     const auto placement = RadioGroupLayout::Place(box.rectangle, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), frame.m_choices, frame.m_metrics);

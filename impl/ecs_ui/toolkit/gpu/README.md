@@ -4,8 +4,10 @@
 `RGBA16_FLOAT` texture. It borrows `GraphicsRuntime`, `AssetManager`, a shader path
 resolver, and the caller's `GlobalArena`; it has no ECS or ImGui dependency.
 
-Call `validateResources(width, height)`, then `setSkin(identity, loadedSkin,
-skinGeneration)`. `setSkin` can also rebind a later skin generation without a GPU
+Call `validateResources(width, height)` after the graphics swap-chain framebuffers
+exist, then `setSkin(identity, loadedSkin, skinGeneration)`. Resource validation
+creates the presentation pipeline from that framebuffer compatibility and retains
+four CPU frame owners for the three GPU slots plus a pending generation. `setSkin` can also rebind a later skin generation without a GPU
 idle wait. It loads and validates the referenced texture,
 creates its concrete GPU image and descriptor, and saves the loader's authoritative
 static-upload completion token. Skin identities and generation must match the
@@ -21,7 +23,9 @@ partial setup failures retain native image references through accepted GPU work.
 
 Only one CPU generation can be pending. `submit` rejects a second pending frame
 without moving its snapshot; `hasPendingFrame()` lets the caller retain that
-existing generation for retry. The renderer has three target/buffer slots.
+existing generation for retry. Submission reuses a retained frame owner only after
+all accepted work completes and graph payloads release their CPU ownership. The
+renderer has three target/buffer slots.
 Preparation allocates or grows geometry buffers before recording and admits a
 frame only when a slot is free. If all slots remain in flight, preparation succeeds
 with no declared layer and keeps the pending snapshot. No frame waits for GPU idle.

@@ -62,7 +62,7 @@ struct GpuRecordedPacket{
     static constexpr usize s_MaxCommandLists = 12u;
 
     GpuSubmissionPacketId packet;
-    // Native recording owns its newly-created lists through submission.
+    // Native recording retains its acquired lists through submission.
     CommandListHandle ownedCommandLists[s_MaxCommandLists] = {};
     CommandList* commandLists[s_MaxCommandLists] = {};
     // Exact graph-publication identities let reset/destruction revoke an unsubmitted list without touching a later recording that happens to reuse the same retained CommandList object.
@@ -211,12 +211,18 @@ private:
     // Every ready-frontier worker receives isolated state-handoff scratch.
     // This is separate from the per-packet final-state slots, are written only by the packet's own recording worker and read by later frontiers.
     struct PacketRecordingScratch final : NoCopy{
+        struct CachedCommandList{
+            CommandListParameters parameters;
+            CommandListHandle commandList;
+        };
+
         GlobalUniquePtr<Alloc::ScratchArena> stateFanInScratchArena;
         CommandListResourceStateHandoff initialStateSeed;
         CommandListResourceStateHandoff stateSubsetScratch;
         CommandListResourceStateHandoff stateMergeScratch;
         CommandListResourceStateHandoff externalBaseStateSeed;
         CommandListResourceStateHandoff externalMergedStateSeed;
+        GraphicsVector<CachedCommandList> commandLists;
 
 
     public:
@@ -226,11 +232,13 @@ private:
             , stateMergeScratch(arena)
             , externalBaseStateSeed(arena)
             , externalMergedStateSeed(arena)
+            , commandLists(arena)
         {}
 
 
     public:
         [[nodiscard]] bool ensureValid(GraphicsArena& arena);
+        [[nodiscard]] Expected<CommandListHandle> acquireCommandList(Device& device, const CommandListParameters& parameters);
         void reset()noexcept;
         [[nodiscard]] bool valid()const noexcept{ return stateFanInScratchArena != nullptr; }
     };
@@ -255,6 +263,8 @@ public:
     // Failed reset leaves all storage and exact publication identities unchanged so the operation can finish or unwind safely
     [[nodiscard]] bool tryReset(const GpuCompiledGraph& compiledGraph);
     void reset(const GpuCompiledGraph& compiledGraph);
+    // Join graph/native work before releasing device-bound cached recording objects.
+    [[nodiscard]] bool releaseCommandListCache()noexcept;
 
 
 private:

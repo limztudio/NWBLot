@@ -22,22 +22,22 @@ void Builder::publishSliderResults(const bool valid)noexcept{
     const InputRouter& input = m_context.input();
     for(const auto& frame : m_scope->m_sliders){
         SliderResult result;
-        if(valid && frame->m_result.valid && sliderMatches(*frame)){
-            result = frame->m_result;
-            result.focused = frame->m_interactive && input.focus() == frame->m_widget.id;
+        if(valid && frame.m_result.valid && sliderMatches(frame)){
+            result = frame.m_result;
+            result.focused = frame.m_interactive && input.focus() == frame.m_widget.id;
             result.dragging = false;
-            if(frame->m_interactive && input.primaryDown()){
-                const auto track = MakeWidgetId(frame->m_widget.id, "track");
-                const auto thumb = MakeWidgetId(frame->m_widget.id, "thumb");
+            if(frame.m_interactive && input.primaryDown()){
+                const auto track = MakeWidgetId(frame.m_widget.id, "track");
+                const auto thumb = MakeWidgetId(frame.m_widget.id, "thumb");
                 if(!track || !thumb){
                     m_context.fail();
-                    frame->m_state.m_result = {};
+                    frame.m_state.m_result = {};
                     continue;
                 }
                 result.dragging = input.capture() == *track || input.capture() == *thumb;
             }
         }
-        frame->m_state.m_result = result;
+        frame.m_state.m_result = result;
     }
 }
 

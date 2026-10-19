@@ -206,9 +206,10 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
         return;
     }
 
-    auto& runtime = m_world.entity(entity).addComponent<ModelRuntimeComponent>();
-    if(runtime.model == component.model.name())
+    ModelRuntimeComponent* const existing = m_world.tryGetComponent<ModelRuntimeComponent>(entity);
+    if(existing && existing->model == component.model.name())
         return;
+    auto& runtime = existing ? *existing : m_world.entity(entity).addComponent<ModelRuntimeComponent>();
 
     clearModelRuntime(entity, scratchArena);
 

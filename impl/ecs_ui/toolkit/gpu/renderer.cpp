@@ -91,21 +91,42 @@ GpuSharedResources::~GpuSharedResources()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept
+GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena)noexcept
     : m_arena(arena)
-    , m_snapshot(Move(snapshot))
-    , m_skin(Move(skin))
+    , m_snapshot(arena)
     , m_glyphPages(arena)
     , m_sdfPages(arena)
     , m_textureImages(arena)
 {}
 
+void GpuFrameData::reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept{
+    m_snapshot = Move(snapshot);
+    m_skin = Move(skin);
+    m_glyphPages.clear();
+    m_sdfPages.clear();
+    m_textureImages.clear();
+    m_target.reset();
+    m_resources.reset();
+    m_vertices.reset();
+    m_indices.reset();
+    m_outputPipeline.reset();
+    m_acquired = {};
+    m_vertexUpload = {};
+    m_indexUpload = {};
+    m_clear = {};
+    m_raster = {};
+    m_finalConsumer = {};
+    m_recordingMode = GpuCommandRecordingMode::Direct;
+    m_presentationMode = NWB_UI_PRESENTATION_SDR;
+    m_prepared = false;
+}
+
 bool GpuFrameData::prefixComplete(Core::Device& device)const{
     return __hidden_ui_gpu::TokenComplete(device, m_vertexUpload) && __hidden_ui_gpu::TokenComplete(device, m_indexUpload) && __hidden_ui_gpu::TokenComplete(device, m_clear) && __hidden_ui_gpu::TokenComplete(device, m_raster);
 }
 
-bool GpuFrameData::complete(Core::Device& device)const{
-    if(!m_finalConsumer.valid() || !__hidden_ui_gpu::TokenComplete(device, m_finalConsumer) || !prefixComplete(device))
+bool GpuFrameData::recyclable(Core::Device& device)const{
+    if(!__hidden_ui_gpu::TokenComplete(device, m_finalConsumer) || !prefixComplete(device))
         return false;
     for(const auto& page : m_glyphPages){
         if(!__hidden_ui_gpu::TokenComplete(device, page->m_readinessToken))
@@ -120,6 +141,10 @@ bool GpuFrameData::complete(Core::Device& device)const{
             return false;
     }
     return true;
+}
+
+bool GpuFrameData::complete(Core::Device& device)const{
+    return m_finalConsumer.valid() && recyclable(device);
 }
 
 
@@ -164,6 +189,16 @@ bool GpuRenderer::validateResources(const u32 width, const u32 height){
         return false;
     if(!m_state->createResources())
         return false;
+    Core::Framebuffer* const framebuffer = m_state->m_graphics.getFramebuffer(0u);
+    if(!framebuffer || !m_state->prepareOutputPipeline(framebuffer->getFramebufferInfo()))
+        return false;
+    Array<GpuFrame, 4u> frames;
+    for(auto& frame : frames){
+        auto created = MakeGpuVersion<GpuFrameData>(m_state->m_arena, m_state->m_arena);
+        if(!created)
+            return false;
+        frame = Move(*created);
+    }
     Array<GpuVersion<GpuTargetVersion>, 3u> targets;
     for(auto& target : targets){
         auto created = m_state->createTarget(width, height);
@@ -175,6 +210,7 @@ bool GpuRenderer::validateResources(const u32 width, const u32 height){
         m_state->m_slots[i] = {};
         m_state->m_slots[i].target = Move(targets[i]);
     }
+    m_state->m_frames = Move(frames);
     m_state->m_width = width;
     m_state->m_height = height;
     return true;
@@ -184,6 +220,8 @@ void GpuRenderer::invalidateResources()noexcept{
     m_state->m_pending.reset();
     for(auto& slot : m_state->m_slots)
         slot = {};
+    for(auto& frame : m_state->m_frames)
+        frame.reset();
     m_state->m_skin.reset();
     m_state->m_glyphCache.clear();
     m_state->m_sdfCache.clear();
@@ -244,12 +282,30 @@ bool GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
         return false;
     if(!GpuRendererState::ValidateGlyphPages(snapshot) || !GpuRendererState::ValidateSdfPages(snapshot) || !GpuRendererState::ValidateTextureImages(snapshot))
         return false;
-    auto pending = MakeGpuVersion<GpuFrameData>(m_state->m_arena, m_state->m_arena, Move(snapshot), m_state->m_skin);
-    if(!pending){
+    Core::Device& device = m_state->m_graphics.getDevice();
+    for(auto& slot : m_state->m_slots){
+        if(slot.inFlight && slot.inFlight->complete(device))
+            slot.inFlight.reset();
+    }
+    for(auto& frame : m_state->m_frames){
+        // Completed GPU work can still have graph payload owners; mutate only an exclusively retained frame.
+        if(!frame || frame->getReferenceCount() != 1u)
+            continue;
+        AtomicThreadFence(MemoryOrder::acquire);
+        if(!frame->recyclable(device))
+            continue;
+        if(m_state->m_pending){
+            if(frame->m_snapshot.generation() != 0u)
+                frame->reset(DrawSnapshot(m_state->m_arena), {});
+            continue;
+        }
+        frame->reset(Move(snapshot), m_state->m_skin);
+        m_state->m_pending = frame;
+    }
+    if(!m_state->m_pending){
         m_state->m_claimed = false;
         return false;
     }
-    m_state->m_pending = Move(*pending);
     m_state->m_pending->m_recordingMode = m_state->m_recordingMode;
     m_state->m_claimed = false;
     return true;

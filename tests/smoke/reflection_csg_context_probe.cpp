@@ -136,7 +136,7 @@ ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& cont
     , m_world(world)
     , m_renderer(renderer)
     , m_rayCapacity(rayCapacity)
-    , m_output(context.objectArena)
+    , m_capturePaths(context.objectArena)
 {}
 
 bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
@@ -148,7 +148,15 @@ bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
     const auto scene = CreateReflectionCsgContextScene(m_context, m_world);
     if(!scene)
         return false;
-    m_output.assign(output->data(), output->size());
+    m_capturePaths.reserve(5u);
+    for(u32 phase = 0u; phase < 5u; ++phase){
+        const auto path = phase == 4u ? SmokeEnvironmentString(*output, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", *output, phase);
+        m_capturePaths.emplace_back(m_context.objectArena, AStringView(path));
+    }
+    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
+    m_capture = MakeUnique<FramebufferCapture>(m_context, Move(m_capturePaths.front()), 1u, options);
+    if(!m_capture || !m_capture->start())
+        return false;
     m_entities = *scene;
     return beginPhase();
 }
@@ -192,9 +200,9 @@ bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionSt
             m_capture->finish();
             return true;
         }
-        m_capture->stop();
-        m_capture.reset();
         ++m_phase;
+        if(!m_capture->rearm(Move(m_capturePaths[m_phase])))
+            return false;
         return beginPhase();
     }
     if(m_targetSource == Limit<u64>::s_Max && m_completed >= 16u)
@@ -214,14 +222,7 @@ bool ReflectionCsgContextProbe::beginPhase(){
     m_completed = 0u;
     m_targetSource = Limit<u64>::s_Max;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"), m_phase, m_phaseSource, small ? 12u : csg ? 108u : 0u, csg ? 1u : 0u);
-    return startCapture();
-}
-
-bool ReflectionCsgContextProbe::startCapture(){
-    const auto path = m_phase == 4u ? SmokeEnvironmentString(m_output, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", m_output, m_phase);
-    const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
-    m_capture = MakeUnique<FramebufferCapture>(m_context, AStringView(path), 1u, options);
-    return m_capture && m_capture->start();
+    return true;
 }
 
 

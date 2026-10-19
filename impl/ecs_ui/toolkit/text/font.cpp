@@ -43,47 +43,6 @@ namespace __hidden_ui_text_font{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ScaledFont final : NoCopy{
-public:
-    ScaledFont(hb_face_t& face, f32 size)noexcept
-        : m_font(hb_font_create(&face))
-    {
-        hb_ot_font_set_funcs(m_font);
-        const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(size), VectorReplicate(64.0f), VectorReplicate(0.5f))));
-        hb_font_set_scale(m_font, scale, scale);
-    }
-    ~ScaledFont()noexcept{ hb_font_destroy(m_font); }
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{ return m_font != hb_font_get_empty(); }
-    [[nodiscard]] hb_font_t& get()const noexcept{ return *m_font; }
-
-
-private:
-    hb_font_t* m_font;
-};
-
-class ShapeBuffer final : NoCopy{
-public:
-    ShapeBuffer()noexcept
-        : m_buffer(hb_buffer_create())
-    {}
-    ~ShapeBuffer()noexcept{ hb_buffer_destroy(m_buffer); }
-
-
-public:
-    [[nodiscard]] hb_buffer_t& get()const noexcept{ return *m_buffer; }
-
-
-private:
-    hb_buffer_t* m_buffer;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -157,11 +116,14 @@ private:
         m_blob = hb_blob_create(reinterpret_cast<const char*>(m_bytes.data()), static_cast<u32>(m_bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
         m_hbFace = hb_face_create(m_blob, source.font.faceIndex());
         m_unitsPerEm = hb_face_get_upem(m_hbFace);
-        m_ready = hb_face_get_glyph_count(m_hbFace) != 0u && m_unitsPerEm != 0u;
+        m_scaledFont = hb_font_create(m_hbFace);
+        m_shapeBuffer = hb_buffer_create();
+        m_ready = hb_face_get_glyph_count(m_hbFace) != 0u && m_unitsPerEm != 0u && m_scaledFont != hb_font_get_empty() && hb_buffer_allocation_successful(m_shapeBuffer);
         if(!m_ready){
             NWB_LOGGER_ERROR(NWB_TEXT("UI HarfBuzz font face initialization failed"));
             return;
         }
+        hb_ot_font_set_funcs(m_scaledFont);
         m_allowOutlineBounds = !FT_IS_TRICKY(m_face);
         m_coverageInkReliable =
             m_allowOutlineBounds && __hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('g', 'l', 'y', 'f'))
@@ -189,6 +151,14 @@ private:
     }
 
     void releaseNative()noexcept{
+        if(m_shapeBuffer){
+            hb_buffer_destroy(m_shapeBuffer);
+            m_shapeBuffer = nullptr;
+        }
+        if(m_scaledFont){
+            hb_font_destroy(m_scaledFont);
+            m_scaledFont = nullptr;
+        }
         if(m_hbFace){
             hb_face_destroy(m_hbFace);
             m_hbFace = nullptr;
@@ -268,6 +238,8 @@ private:
     FT_Face m_face = nullptr;
     hb_blob_t* m_blob = nullptr;
     hb_face_t* m_hbFace = nullptr;
+    hb_font_t* m_scaledFont = nullptr;
+    hb_buffer_t* m_shapeBuffer = nullptr;
     bool m_ready = false;
     bool m_allowOutlineBounds = false;
     bool m_coverageInkReliable = false;
@@ -299,9 +271,10 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     FontMetrics metrics{};
     if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / 64.0f || fontSize > 2048.0f)
         return MakeUnexpected(Failure{});
-    __hidden_ui_text_font::ScaledFont scaled(*m_state->m_hbFace, fontSize);
+    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(fontSize), VectorReplicate(64.0f), VectorReplicate(0.5f))));
+    hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     hb_font_extents_t extents{};
-    if(!scaled.valid() || !hb_font_get_h_extents(&scaled.get(), &extents))
+    if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents))
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle scaledExtents = VectorScale(VectorXorInt(VectorSet(static_cast<f32>(extents.ascender), static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), s_SIMDFlipY), 1.0f / 64.0f);
     const SIMDVectorSingle positiveExtents = VectorSelect(scaledExtents, VectorZero(), VectorGreater(VectorZero(), scaledExtents));
@@ -316,22 +289,23 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
 bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
     if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / 64.0f || request.fontSize > 2048.0f)
         return false;
-    __hidden_ui_text_font::ScaledFont scaled(*m_state->m_hbFace, request.fontSize);
+    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(request.fontSize), VectorReplicate(64.0f), VectorReplicate(0.5f))));
+    hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     const hb_script_t script = hb_script_from_iso15924_tag(request.scriptTag);
-    if(!scaled.valid() || script == HB_SCRIPT_INVALID)
+    if(script == HB_SCRIPT_INVALID)
         return false;
     if(byteBegin == byteEnd){
         output.clear();
         return true;
     }
-    __hidden_ui_text_font::ShapeBuffer buffer;
-    hb_buffer_t& nativeBuffer = buffer.get();
+    hb_buffer_t& nativeBuffer = *m_state->m_shapeBuffer;
+    hb_buffer_clear_contents(&nativeBuffer);
     hb_buffer_set_direction(&nativeBuffer, request.direction == TextDirection::LeftToRight ? HB_DIRECTION_LTR : HB_DIRECTION_RTL);
     hb_buffer_set_script(&nativeBuffer, script);
     hb_buffer_set_language(&nativeBuffer, hb_language_from_string(request.language.data(), static_cast<i32>(request.language.size())));
     hb_buffer_set_cluster_level(&nativeBuffer, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES);
     hb_buffer_add_utf8(&nativeBuffer, request.text.data(), static_cast<i32>(request.text.size()), byteBegin, static_cast<i32>(byteEnd - byteBegin));
-    hb_shape(&scaled.get(), &nativeBuffer, nullptr, 0u);
+    hb_shape(m_state->m_scaledFont, &nativeBuffer, nullptr, 0u);
     if(!hb_buffer_allocation_successful(&nativeBuffer)){
         NWB_LOGGER_ERROR(NWB_TEXT("UI HarfBuzz run allocation failed"));
         return false;
@@ -362,7 +336,7 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
         for(u32 index = first; index < end; ++index){
             hb_glyph_extents_t extents{};
             Rect ink;
-            if(hb_font_get_glyph_extents(&scaled.get(), infos[index].codepoint, &extents)){
+            if(hb_font_get_glyph_extents(m_state->m_scaledFont, infos[index].codepoint, &extents)){
                 const SIMDVectorSingle bearing = VectorSet(static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing), static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing));
                 const SIMDVectorSingle origin = VectorScale(VectorXorInt(bearing, s_SIMDFlipYW), 1.0f / 64.0f);
                 const SIMDVectorSingle width = VectorReplicate(static_cast<f32>(extents.width));

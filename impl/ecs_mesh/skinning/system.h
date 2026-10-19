@@ -70,7 +70,6 @@ NWB_IMPL_BEGIN
 
 
 struct MeshSkinningRuntimeInstance;
-struct RuntimeSkinPayloadScratch;
 
 static_assert(SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION, "Skeleton skinning mode values must match the shader ABI");
 
@@ -157,7 +156,6 @@ private:
 
 
     public:
-        [[nodiscard]] bool usesSkinning()const noexcept{ return skinCount != 0u && jointCount != 0u; }
         [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const noexcept{
             const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
@@ -188,11 +186,6 @@ private:
         }
     };
 
-    struct RuntimeResourcePreparation{
-        RuntimeResources* resources;
-        bool rebuilt;
-    };
-
     struct RestToSkinnedCopyByteCounts{
         usize positionBytes;
         usize normalBytes;
@@ -218,6 +211,7 @@ public:
 
 
 public:
+    virtual void prepare(Core::ECS::World& world)override;
     [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
@@ -240,13 +234,13 @@ private:
     [[nodiscard]] bool repackPipelineReady()const noexcept;
     // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     [[nodiscard]] bool submitFrameSkinningGraph();
-    [[nodiscard]] bool prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     [[nodiscard]] bool recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     void confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept;
     void collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] bool replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<RuntimeResourcePreparation> ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<bool> ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
@@ -263,6 +257,7 @@ private:
     IRuntimeMeshRegistry& m_runtimeMeshRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;
     MeshSkinningRuntimeCache m_runtimeMeshCache;
+    bool m_runtimeSetupReady = false;
 
     HashMap<u64, RuntimeResources, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_runtimeResources;
     // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.

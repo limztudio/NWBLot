@@ -69,7 +69,7 @@ class NumericEditRun:
                 continue
             if snapshot["logical_extent"][0] < 640.0 or snapshot["logical_extent"][1] < 400.0:
                 raise SmokeSkip("the numeric editor fixture needs a logical client of at least 640x400")
-            if not self.native.windows and report is not None and report["model_matches"] and report["geometry_matches"] and report["extra_matches"]:
+            if report is not None and report["model_matches"] and report["geometry_matches"] and report["extra_matches"]:
                 if (extent is None or tuple(report["extent"]) == extent) and all(probe["passed"] or probe["name"].endswith("_caret") for probe in report["probes"]):
                     # Synchronize a caret-only retry; an already visible initial capture needs no extra blink cycle.
                     sample = self._caret_probe_sample(snapshot)

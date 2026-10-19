@@ -130,14 +130,13 @@ public:
 
 struct ReflectionCsgDispatchState{
     ReflectionFrameSnapshot resources;
-    Core::GpuTimingFrameTransaction timing;
+    Optional<Core::GpuTimingFrameTransaction> timing;
 
 
 public:
     ReflectionCsgDispatchState(const ReflectionFrameSnapshot& frame, Core::GpuTimingRecorder& recorder)noexcept
         : resources(frame)
-        , timing(recorder)
-    {}
+    { timing.emplace(recorder); }
 };
 using ReflectionCsgDispatchControl = RefCounter<ReflectionCsgDispatchState>;
 using ReflectionCsgDispatchHandle = RefCountPtr< ReflectionCsgDispatchControl, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena> >;
@@ -155,7 +154,7 @@ public:
     // Caller joins submitted work and discards snapshots before teardown.
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, bool prepareCsgHardware, const ReflectionSettings& settings);
-    [[nodiscard]] Expected<ReflectionCsgDispatchHandle> createCsgDispatchState(const ReflectionFrameSnapshot& resources)const noexcept;
+    [[nodiscard]] Expected<ReflectionCsgDispatchHandle> acquireCsgDispatchState(const ReflectionFrameSnapshot& resources)noexcept;
     void pollStatistics();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
@@ -170,6 +169,7 @@ public:
 
 private:
     void releaseTargets();
+    [[nodiscard]] bool prepareCsgDispatchResources();
     [[nodiscard]] bool prepareQueue(u32 capacity);
     [[nodiscard]] bool prepareArguments(u32 capacity, bool sliced);
     [[nodiscard]] bool preparePipelines(bool prepareHardware, bool prepareCsgHardware);
@@ -183,6 +183,8 @@ private:
     RendererReflectionPostprocess m_postprocess;
     RendererReflectionFeedback m_feedback;
     ReflectionFrameSnapshot m_resources;
+    Vector<ReflectionCsgDispatchHandle, Core::Alloc::GlobalArena> m_csgDispatchStates;
+    ReflectionCsgDispatchControl* m_preparedCsgDispatch = nullptr;
     Core::BindingLayoutHandle m_bindingLayout;
     Core::BindingLayoutHandle m_depthBindingLayout;
     Core::BindingLayoutHandle m_csgBindingLayout;

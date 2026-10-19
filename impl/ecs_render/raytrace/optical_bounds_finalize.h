@@ -94,6 +94,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
+    Vector<RayTracingOpticalBoundsFinalizeHandle, Core::Alloc::GlobalArena> m_snapshots;
     Core::BufferHandle m_inputBuffer;
     Core::BufferHandle m_outputBuffer;
     Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();

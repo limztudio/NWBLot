@@ -33,7 +33,7 @@ static_assert(alignof(MeshSkinningInfluenceGpu) == NWB_SKINNED_MESH_SKIN_INFLUEN
 static_assert(offsetof(MeshSkinningInfluenceGpu, packedJoint) == 0u, "MeshSkinning packed joints must lead each GPU record");
 static_assert(offsetof(MeshSkinningInfluenceGpu, weight) == NWB_SKINNED_MESH_SKIN_WEIGHT_BYTE_OFFSET, "MeshSkinning FP32 weights must follow the packed joints");
 
-// Preparation and graph declaration resolve the pose independently; graph copies joints only.
+// Keep the full current pose for validation and deformation history; the graph owns its upload copy.
 struct RuntimeSkinPayloadScratch final{
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints;
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
@@ -92,6 +92,14 @@ namespace MeshSkinningPayload{
         influences.push_back(gpuSkin);
     }
     return influences;
+}
+
+// Source validation and deformation snapshots keep every row; GPU reads only joints referenced by this Skin.
+[[nodiscard]] inline Expected<Span<const SkeletonJointMatrix>> ResolveGpuJointPalette(const MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload)noexcept{
+    const usize jointCount = instance.skeletonJointCount;
+    if(!payload.hasActiveSkin() || payload.skinInfluenceCount != instance.skin.size() || jointCount == 0u || jointCount > static_cast<usize>(Limit<u16>::s_Max) + 1u || payload.jointMatrices.size() < jointCount)
+        return MakeUnexpected(Failure{});
+    return Span<const SkeletonJointMatrix>(payload.jointMatrices.data(), jointCount);
 }
 
 template<typename SourceJointVector, typename JointPaletteVector>

@@ -37,9 +37,11 @@ RayTracingOpticalBoundsFinalizeSnapshot::RayTracingOpticalBoundsFinalizeSnapshot
 RayTracingOpticalBoundsFinalizeResources::RayTracingOpticalBoundsFinalizeResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
     : m_arena(arena)
     , m_graphics(graphics)
+    , m_snapshots(arena)
 {}
 
 void RayTracingOpticalBoundsFinalizeResources::invalidate(){
+    m_snapshots.clear();
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const auto retire = [&](const Core::BufferHandle& buffer, const Core::GpuDescriptorHandle descriptor){
@@ -98,9 +100,22 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize buffers"));
         return MakeUnexpected(Failure{});
     }
-    RayTracingOpticalBoundsFinalizeHandle snapshot(NewArenaObject<RayTracingOpticalBoundsFinalizeControl>(m_arena, m_arena, m_graphics), ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
-    if(!snapshot)
-        return MakeUnexpected(Failure{});
+    RayTracingOpticalBoundsFinalizeHandle snapshot;
+    for(const RayTracingOpticalBoundsFinalizeHandle& cached : m_snapshots){
+        if(cached->getReferenceCount() == 1u){
+            AtomicThreadFence(MemoryOrder::acquire);
+            snapshot = cached;
+            break;
+        }
+    }
+    if(!snapshot){
+        snapshot = RayTracingOpticalBoundsFinalizeHandle(NewArenaObject<RayTracingOpticalBoundsFinalizeControl>(m_arena, m_arena, m_graphics), ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
+        if(!snapshot)
+            return MakeUnexpected(Failure{});
+        m_snapshots.push_back(snapshot);
+    }
+    snapshot->inputs.clear();
+    snapshot->boundsBuffers.clear();
     snapshot->inputBuffer = m_inputBuffer;
     snapshot->outputBuffer = m_outputBuffer;
     snapshot->pipeline = m_pipeline;

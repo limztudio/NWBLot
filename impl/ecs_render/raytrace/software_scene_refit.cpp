@@ -37,9 +37,11 @@ SoftwareSceneRefitSnapshot::SoftwareSceneRefitSnapshot(Core::Alloc::GlobalArena&
 SoftwareSceneRefitResources::SoftwareSceneRefitResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
     : m_arena(arena)
     , m_graphics(graphics)
+    , m_snapshots(arena)
 {}
 
 void SoftwareSceneRefitResources::invalidate(){
+    m_snapshots.clear();
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     if(heap.isInitialized() && m_inputBuffer && m_inputDescriptor.valid() && m_inputBuffer->getDeviceGeneration() == device.getDeviceGeneration())
@@ -89,9 +91,22 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
         m_inputBuffer = Move(replacement);
         m_inputDescriptor = descriptor;
     }
-    SoftwareSceneRefitHandle snapshot(NewArenaObject<SoftwareSceneRefitControl>(m_arena, m_arena, m_graphics), ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
-    if(!snapshot)
-        return MakeUnexpected(Failure{});
+    SoftwareSceneRefitHandle snapshot;
+    for(const SoftwareSceneRefitHandle& cached : m_snapshots){
+        if(cached->getReferenceCount() == 1u){
+            AtomicThreadFence(MemoryOrder::acquire);
+            snapshot = cached;
+            break;
+        }
+    }
+    if(!snapshot){
+        snapshot = SoftwareSceneRefitHandle(NewArenaObject<SoftwareSceneRefitControl>(m_arena, m_arena, m_graphics), ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
+        if(!snapshot)
+            return MakeUnexpected(Failure{});
+        m_snapshots.push_back(snapshot);
+    }
+    snapshot->inputs.clear();
+    snapshot->meshNodes.clear();
     snapshot->inputBuffer = m_inputBuffer;
     snapshot->sceneNodes = sceneNodes;
     snapshot->pipeline = m_pipeline;

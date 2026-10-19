@@ -280,10 +280,14 @@ private:
         DestroySmokeRenderWorld(m_context, m_world);
     }
 
-    [[nodiscard]] bool startTemporalCapture(){
-        const auto path = m_temporalSample + 1u == s_TemporalSampleCount ? NWB::Tests::Smoke::SmokeEnvironmentString(m_temporalOutput, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", m_temporalOutput, m_temporalSample);
+    [[nodiscard]] bool prepareTemporalCapture(const AStringView outputPath){
+        m_capturePaths.reserve(s_TemporalSampleCount);
+        for(u32 sample = 0u; sample < s_TemporalSampleCount; ++sample){
+            const auto path = sample + 1u == s_TemporalSampleCount ? NWB::Tests::Smoke::SmokeEnvironmentString(outputPath, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", outputPath, sample);
+            m_capturePaths.emplace_back(m_context.objectArena, AStringView(path));
+        }
         const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-        m_capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(m_context, AStringView(path), 1u, options);
+        m_capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(m_context, Move(m_capturePaths.front()), 1u, options);
         return m_capture && m_capture->start();
     }
 
@@ -299,14 +303,13 @@ private:
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal warmup started graphics frame {}"), frame);
             return;
         }
-        if(!m_capture){
+        if(!m_temporalCaptureStarted){
             const f64 elapsed = DurationInSeconds<f64>(TimerNow(), m_temporalWarmupStart);
             if(elapsed < s_TemporalWarmupSeconds)
                 return;
             m_nextCaptureFrame = m_context.graphics.getFrameIndex();
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds={:.6f} first_frame={}"), elapsed, m_nextCaptureFrame);
-            if(!startTemporalCapture())
-                m_context.requestQuit();
+            m_temporalCaptureStarted = true;
             return;
         }
         // Consecutive captures complete the previous readback before reusing the single observer.
@@ -333,10 +336,8 @@ private:
             m_capture->finish();
             return;
         }
-        m_capture->stop();
-        m_capture.reset();
         m_nextCaptureFrame += m_temporalFrameInterval;
-        if(!startTemporalCapture())
+        if(!m_capture->rearm(Move(m_capturePaths[m_temporalSample])))
             m_context.requestQuit();
     }
 
@@ -345,7 +346,7 @@ public:
     explicit CsgVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
-        , m_temporalOutput(context.objectArena)
+        , m_capturePaths(context.objectArena)
     {}
     virtual ~CsgVisibleSmokeProject()noexcept override{
         destroyWorld();
@@ -392,7 +393,8 @@ public:
             }
             else if(*view != "full")
                 return false;
-            m_temporalOutput.assign(output->data(), output->size());
+            if(!prepareTemporalCapture(AStringView(*output)))
+                return false;
             m_temporalAnimated = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
             if(overlapping && m_temporalAnimated){
                 NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));
@@ -502,15 +504,16 @@ private:
     Float4 m_receiverCenters[s_CsgVisibleShapeCount] = {};
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgVisibleFpsLabel() };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ CsgVisibleFpsLabel() };
-    NWB::Tests::Smoke::SmokeEnvironmentString m_temporalOutput;
+    Vector<::Path<NWB::Core::Alloc::GlobalArena>, NWB::Core::Alloc::GlobalArena> m_capturePaths;
     UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_capture;
     Timer m_temporalWarmupStart;
-    u64 m_nextCaptureFrame = 0u;
+    u64 m_nextCaptureFrame = Limit<u64>::s_Max;
     u64 m_temporalFrameInterval = s_TemporalFrameInterval;
     u32 m_temporalSample = 0u;
     bool m_temporalEnabled = false;
     bool m_temporalAnimated = false;
     bool m_temporalWarmupStarted = false;
+    bool m_temporalCaptureStarted = false;
 };
 
 

@@ -95,6 +95,7 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
+    Vector<SoftwareSceneRefitHandle, Core::Alloc::GlobalArena> m_snapshots;
     Core::BufferHandle m_inputBuffer;
     Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::BindingLayoutHandle m_bindingLayout;

@@ -56,7 +56,6 @@ public:
 
 private:
     [[nodiscard]] bool beginPhase();
-    [[nodiscard]] bool startCapture();
 
 
 private:
@@ -65,7 +64,7 @@ private:
     Impl::RendererSystem& m_renderer;
     const u32 m_rayCapacity;
     ReflectionCsgContextEntities m_entities;
-    SmokeEnvironmentString m_output;
+    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> m_capturePaths;
     UniquePtr<FramebufferCapture> m_capture;
     u64 m_phaseSource = 0u;
     u64 m_targetSource = Limit<u64>::s_Max;

@@ -135,7 +135,8 @@ private:
     }
 
     [[nodiscard]] static bool ShouldCapture(void* const context, const u64 frame)noexcept{
-        return frame >= static_cast<SkinnedCausticSmokeProject*>(context)->m_nextCaptureFrame;
+        const auto& project = *static_cast<SkinnedCausticSmokeProject*>(context);
+        return project.m_transitionStarted && frame >= project.m_nextCaptureFrame;
     }
 
 
@@ -165,10 +166,14 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool startTransitionCapture(){
-        const auto path = m_transitionSample + 1u == s_TransitionSampleCount ? NWB::Tests::Smoke::SmokeEnvironmentString(m_transitionOutput, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", m_transitionOutput, m_transitionSample);
+    [[nodiscard]] bool prepareTransitionCapture(const AStringView outputPath){
+        m_capturePaths.reserve(s_TransitionSampleCount);
+        for(u32 sample = 0u; sample < s_TransitionSampleCount; ++sample){
+            const auto path = sample + 1u == s_TransitionSampleCount ? NWB::Tests::Smoke::SmokeEnvironmentString(outputPath, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", outputPath, sample);
+            m_capturePaths.emplace_back(m_context.objectArena, AStringView(path));
+        }
         const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-        m_capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(m_context, AStringView(path), 1u, options);
+        m_capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(m_context, Move(m_capturePaths.front()), 1u, options);
         return m_capture && m_capture->start();
     }
 
@@ -256,11 +261,6 @@ private:
             m_nextCaptureFrame = frame + s_TransitionCaptureInterval - 1u;
             m_transitionStarted = true;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: warmup complete elapsed_seconds={:.6f} first_frame={}"), elapsed, frame);
-            if(!startTransitionCapture()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: failed to start framebuffer capture"));
-                m_context.requestQuit();
-                return;
-            }
         }
         const u64 relativeFrame = frame - m_transitionFirstFrame;
         const u32 phase = static_cast<u32>(Min(relativeFrame / s_TransitionPhaseFrames, static_cast<u64>(s_TransitionPhaseCount - 1u)));
@@ -279,7 +279,7 @@ private:
     }
 
     void updateTransitionCapture(){
-        if(!m_capture || m_transitionSample == s_TransitionSampleCount)
+        if(!m_capture || !m_transitionStarted || m_transitionSample == s_TransitionSampleCount)
             return;
         // Poll accepted readbacks without a device join, preserving overlap with next-frame pose writes.
         m_capture->update();
@@ -301,10 +301,8 @@ private:
             m_capture->finish();
             return;
         }
-        m_capture->stop();
-        m_capture.reset();
         m_nextCaptureFrame += s_TransitionCaptureInterval;
-        if(!startTransitionCapture()){
+        if(!m_capture->rearm(Move(m_capturePaths[m_transitionSample]))){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: failed to advance framebuffer capture"));
             m_context.requestQuit();
         }
@@ -387,7 +385,7 @@ public:
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
         , m_bindJoints(context.objectArena)
-        , m_transitionOutput(context.objectArena)
+        , m_capturePaths(context.objectArena)
     {}
     virtual ~SkinnedCausticSmokeProject()noexcept override{
         destroyWorld();
@@ -407,7 +405,8 @@ public:
             const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
             if(!output)
                 return false;
-            m_transitionOutput.assign(output->data(), output->size());
+            if(!prepareTransitionCapture(AStringView(*output)))
+                return false;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED") ? 1u : 0u
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
@@ -488,7 +487,7 @@ private:
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
     f64 m_animationTime = 0.0;
-    NWB::Tests::Smoke::SmokeEnvironmentString m_transitionOutput;
+    Vector<::Path<NWB::Core::Alloc::GlobalArena>, NWB::Core::Alloc::GlobalArena> m_capturePaths;
     UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_capture;
     NWB::Core::ECS::EntityID m_cutterEntity = NWB::Core::ECS::s_InvalidEntityId;
     Timer m_transitionWarmupStart;

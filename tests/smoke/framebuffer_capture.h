@@ -52,6 +52,7 @@ private:
     struct CompletionStateData{
         Core::QueueSubmissionToken acceptedToken;
         u64 graphicsFrameIndex = Limit<u64>::s_Max;
+        u64 generation = 1u;
     };
 
 
@@ -65,6 +66,7 @@ private:
 
 public:
     FramebufferCapture(ProjectRuntimeContext& context, AStringView outputPath, u32 captureFrameCount, FramebufferCaptureOptions options = {});
+    FramebufferCapture(ProjectRuntimeContext& context, ::Path<Core::Alloc::GlobalArena>&& outputPath, u32 captureFrameCount, FramebufferCaptureOptions options = {});
     virtual ~FramebufferCapture()noexcept override;
 
 
@@ -72,6 +74,7 @@ public:
     [[nodiscard]] bool start();
     void stop();
     void update();
+    [[nodiscard]] bool rearm(::Path<Core::Alloc::GlobalArena>&& outputPath)noexcept;
     [[nodiscard]] bool captureReady()const noexcept{ return m_captureReady; }
     [[nodiscard]] u64 capturedGraphicsFrameIndex()const noexcept{ return m_completionState->graphicsFrameIndex; }
     void finish();
@@ -79,6 +82,7 @@ public:
 
 public:
     virtual bool shouldRenderUnfocused()noexcept override;
+    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
     virtual void backBufferResizing()override;
 

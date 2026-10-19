@@ -139,6 +139,27 @@ bool RendererCsgSystem::createCsgClipResources(){
         }
     }
 
+    if(!createCsgIntervalSampleStateBuffer())
+        return false;
+    if(!m_csgState.m_clipContextSlotsBuffer){
+        Core::BufferDesc bufferDesc;
+        bufferDesc.setByteSize(sizeof(CsgClipContextSlots)).setIsConstantBuffer(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName("engine/csg/clip_context_slots").enableAutomaticStateTracking(Core::ResourceStates::Common);
+        auto clipContextSlotsBufferResult = m_graphics.createBuffer(bufferDesc);
+        if(clipContextSlotsBufferResult)
+            m_csgState.m_clipContextSlotsBuffer = Move(*clipContextSlotsBufferResult);
+        else
+            m_csgState.m_clipContextSlotsBuffer.reset();
+        if(!clipContextSlotsBufferResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
+            return false;
+        }
+    }
+    if(
+        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, *m_csgState.m_clipContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_clipContextSlotsHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, *m_csgState.m_intervalSampleStateBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_intervalSampleStateHeapHandle)
+    )
+        return false;
+
     return true;
 }
 
@@ -177,31 +198,16 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     NWB_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(!reserveCsgReceiverRangeBufferCapacity(receiverRangeCount) || !reserveCsgCutterBufferCapacity(cutterCount))
         return false;
-    if(!createCsgIntervalSampleStateBuffer())
-        return false;
-    if(!m_csgState.m_clipContextSlotsBuffer){
-        Core::BufferDesc bufferDesc;
-        bufferDesc.setByteSize(sizeof(CsgClipContextSlots)).setIsConstantBuffer(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName("engine/csg/clip_context_slots").enableAutomaticStateTracking(Core::ResourceStates::Common);
-        auto clipContextSlotsBufferResult = m_graphics.createBuffer(bufferDesc);
-        if(clipContextSlotsBufferResult)
-            m_csgState.m_clipContextSlotsBuffer = Move(*clipContextSlotsBufferResult);
-        else
-            m_csgState.m_clipContextSlotsBuffer.reset();
-        if(!clipContextSlotsBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
-            return false;
-        }
-    }
     if(
         !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_receiverRangeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, m_csgState.m_receiverRangeBufferHeapHandle)
         || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_cutterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, m_csgState.m_cutterBufferHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_clipContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_clipContextSlotsHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_intervalSampleStateBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_intervalSampleStateHeapHandle)
+        || !m_csgState.m_clipContextSlotsBuffer || !m_csgState.m_clipContextSlotsHeapHandle.valid()
+        || !m_csgState.m_intervalSampleStateBuffer || !m_csgState.m_intervalSampleStateHeapHandle.valid()
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG clip context heap registration is incomplete"));
         return false;
     }
-    if(!createCsgClipResources())
+    if(!m_csgState.m_clipBindingLayout)
         return false;
 
     // Draw paths consume these handles only via a graph snapshot.

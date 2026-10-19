@@ -33,6 +33,8 @@ BuilderScopeFrame::BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
     , m_window(arena)
 {
     m_items.reserve(s_LayoutMaxNodes);
+    m_radioGroups.reserve(16u);
+    m_sliders.reserve(16u);
     m_stack.reserve(64u);
 }
 

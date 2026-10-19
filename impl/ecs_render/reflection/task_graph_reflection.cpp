@@ -292,12 +292,12 @@ public:
         parameters.frameParametersSlot = resources.frameParametersSlot;
         parameters.rayOffset = payload.slice * NWB_REFLECTION_TRACE_SLICE_RAYS;
         commandList.setPushConstants(&parameters, sizeof(parameters));
-        if(payload.slice == 0u && !payload.dispatch->timing.begin(ReflectionGpuTimingScope::s_Hardware, payload.graphics.getDevice(), commandList))
+        if(payload.slice == 0u && !payload.dispatch->timing->begin(ReflectionGpuTimingScope::s_Hardware, payload.graphics.getDevice(), commandList))
             return false;
 
         commandList.dispatchIndirect(payload.slice * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES);
         if(payload.slice + 1u == payload.sliceCount)
-            return payload.dispatch->timing.recordEnd(commandList);
+            return payload.dispatch->timing->recordEnd(commandList);
         return true;
     }
 
@@ -306,13 +306,13 @@ public:
             return;
         // An accepted prefix already reads the frozen context even when a later packet fails.
         payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
-        if(payload.slice == 0u && !payload.dispatch->timing.confirmBeginSubmission(token)){
+        if(payload.slice == 0u && !payload.dispatch->timing->confirmBeginSubmission(token)){
             NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing begin"));
-            payload.dispatch->timing.discard();
+            payload.dispatch->timing->discard();
         }
-        if(payload.slice + 1u == payload.sliceCount && !payload.dispatch->timing.confirmEndSubmission(token, true)){
+        if(payload.slice + 1u == payload.sliceCount && !payload.dispatch->timing->confirmEndSubmission(token, true)){
             NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing end"));
-            payload.dispatch->timing.discard();
+            payload.dispatch->timing->discard();
         }
         if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: hardware"));
@@ -322,7 +322,7 @@ public:
 
     static void Discarded(Payload& payload){
         if(payload.dispatch)
-            payload.dispatch->timing.discard();
+            payload.dispatch->timing->discard();
     }
 };
 
@@ -596,7 +596,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
         uses.push_back(ReadWriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess));
         uses.push_back(ReadWriteUse(result.glassRadiance, Core::ResourceStates::UnorderedAccess));
         if(resources.scene.csgTraceContextBuffer){
-            const auto dispatchResult = reflectionSystem.createCsgDispatchState(resources);
+            const auto dispatchResult = reflectionSystem.acquireCsgDispatchState(resources);
             if(!dispatchResult)
                 return MakeUnexpected(dispatchResult.error());
             const ReflectionCsgDispatchHandle& dispatch = *dispatchResult;

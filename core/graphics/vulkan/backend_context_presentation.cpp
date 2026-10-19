@@ -264,9 +264,8 @@ Expected<bool, PresentationFailure> BackendContext::present(){
             return MakeUnexpected(PresentationFailure{ presentationAccepted });
         }
 
-        // Swap-chain-lifetime list created with swap-chain resources; reopen it here instead of creating per frame.
-        if(!ensureDirectPresentCommandList(primaryGraphicsQueue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire the direct presentation command list."));
+        if(!m_directPresentCommandList || m_directPresentQueue != primaryGraphicsQueue){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Direct presentation command list was not prepared for the current Graphics queue."));
             return MakeUnexpected(PresentationFailure{ presentationAccepted });
         }
         if(!recordDirectPresentTransition(transitionPolicy, swapChainImage.rhiHandle.get()))

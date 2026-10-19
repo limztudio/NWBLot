@@ -245,10 +245,10 @@ bool GpuNativePacketRecorder::recordPacket(
     }
 
     CommandListParameters parameters;
-    parameters.setPhysicalQueue(packet.queue);
+    parameters.setQueueType(queue->queueClass).setPhysicalQueue(packet.queue);
     parameters.setRecordingWorker(recordingWorkerDomain, recordingWorkerIndex);
     const Timer commandListAcquisitionBegin = TimerNow();
-    auto commandListResult = m_device.createCommandList(parameters);
+    auto commandListResult = scratch.acquireCommandList(m_device, parameters);
     if(!commandListResult){
         packetStateSeed->reset();
         abortPacketRecording();

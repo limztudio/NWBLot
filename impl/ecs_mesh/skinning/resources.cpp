@@ -68,13 +68,12 @@ static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(Core::GpuDescri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload, Core::Alloc::ScratchArena& scratchArena){
-    NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
-
-    const bool hasActiveSkin = payload.hasActiveSkin();
-    NWB_ASSERT(!hasActiveSkin || payload.skinInfluenceCount == instance.skin.size());
-    NWB_ASSERT(payload.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(payload.jointMatrices.size() <= static_cast<usize>(Limit<u32>::s_Max));
+Expected<bool> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
+    const bool hasSkinPayload = !instance.skin.empty();
+    if(instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max) || (hasSkinPayload && (instance.skeletonJointCount == 0u || instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u))){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has invalid skin resource counts"), instance.handle.value);
+        return MakeUnexpected(Failure{});
+    }
 
     MeshSkinningResourceBuffers buffers = CaptureMeshSkinningResourceBuffers(instance);
     auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
@@ -82,8 +81,8 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
     const u32 positionCount = instance.meshletPositionRefCount;
     const u32 attributeCount = instance.meshletAttributeRefCount;
     const u32 meshletCount = static_cast<u32>(instance.meshlets.size());
-    const u32 skinCount = static_cast<u32>(payload.skinInfluenceCount);
-    const u32 jointCount = static_cast<u32>(payload.jointMatrices.size());
+    const u32 skinCount = static_cast<u32>(instance.skin.size());
+    const u32 jointCount = hasSkinPayload ? instance.skeletonJointCount : 0u;
     const bool rebuild =
         inserted
         || resources.buffers != buffers
@@ -93,12 +92,11 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
         || resources.meshletCount != meshletCount
         || resources.skinCount != skinCount
         || resources.jointCount != jointCount
-        || !resources.hasPersistentHeapDescriptors(hasActiveSkin, instance.attributeBuffer != nullptr)
-        || (hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer))
-        || (!hasActiveSkin && resources.usesSkinning())
+        || !resources.hasPersistentHeapDescriptors(hasSkinPayload, instance.attributeBuffer != nullptr)
+        || (hasSkinPayload && (!resources.skinBuffer || !resources.jointPaletteBuffer))
     ;
     if(!rebuild)
-        return RuntimeResourcePreparation{ &resources, false };
+        return false;
 
     class UnpublishedRuntimeDescriptors final : NoCopy{
     public:
@@ -133,7 +131,7 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
     rebuilt.skinCount = skinCount;
     rebuilt.jointCount = jointCount;
 
-    if(hasActiveSkin){
+    if(hasSkinPayload){
         const auto skinInfluences = MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
         if(!skinInfluences)
             return MakeUnexpected(Failure{});
@@ -152,7 +150,16 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
         }
         rebuilt.skinBuffer = Move(*skinBufferResult);
 
-        auto jointPaletteBufferResult = __hidden_resources::SetupStructuredBuffer(m_graphics, *jointPaletteBufferName, payload.jointMatrices.data(), payload.jointMatrices.size(), NWB_TEXT("joint palette"));
+        // Live pose data arrives from the graph after ECS updates; setup owns only the Skin-sized storage.
+        Core::BufferDesc jointPaletteBufferDesc;
+        jointPaletteBufferDesc
+            .setByteSize(static_cast<u64>(jointCount) * sizeof(SkeletonJointMatrix))
+            .setStructStride(sizeof(SkeletonJointMatrix))
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .setDebugName(*jointPaletteBufferName)
+            .setInitialState(Core::ResourceStates::Common)
+        ;
+        auto jointPaletteBufferResult = m_graphics.createBuffer(jointPaletteBufferDesc);
         if(!jointPaletteBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
@@ -190,7 +197,7 @@ Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ens
     releaseRuntimeResourceBindlessHeapHandles(resources);
     resources = Move(rebuilt);
     retireRebuilt.release();
-    return RuntimeResourcePreparation{ &resources, true };
+    return true;
 }
 
 bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources){

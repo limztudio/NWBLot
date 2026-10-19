@@ -280,8 +280,7 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
     return true;
 }
 
-bool GpuRendererState::prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired){
-    const Core::FramebufferInfo& info = acquired.framebuffer->getFramebufferInfo();
+bool GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){
     if(m_resources->m_outputPipeline && m_resources->m_outputPipeline->getFramebufferInfo() == info)
         return true;
     Core::Device& device = m_graphics.getDevice();
@@ -320,6 +319,8 @@ bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
         || backBuffer.width != m_width || backBuffer.height != m_height || backBuffer.sampleCount != 1u
     )
         return false;
+    if(!m_resources->m_outputPipeline || m_resources->m_outputPipeline->getFramebufferInfo() != acquired.framebuffer->getFramebufferInfo())
+        return false;
     if(m_pending->m_prepared && MatchesAcquired(m_pending->m_acquired, acquired)){
         m_readyToDeclare = true;
         return true;
@@ -344,7 +345,7 @@ bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
     for(auto& slot : m_slots){
         if(slot.inFlight)
             continue;
-        if(!prepareGlyphPages(*m_pending) || !prepareSdfPages(*m_pending) || !prepareTextureImages(*m_pending) || !prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired))
+        if(!prepareGlyphPages(*m_pending) || !prepareSdfPages(*m_pending) || !prepareTextureImages(*m_pending) || !prepareBuffers(slot, m_pending->m_snapshot))
             return false;
         m_pending->m_target = slot.target;
         m_pending->m_resources = m_resources;

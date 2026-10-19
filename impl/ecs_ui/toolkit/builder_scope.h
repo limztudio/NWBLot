@@ -293,8 +293,8 @@ private:
     PaintVector<IntegerEditFrame> m_integerEdits;
     PaintVector<FloatEditFrame> m_floatEdits;
     PaintVector<ListFrame> m_lists;
-    PaintVector<Core::GlobalUniquePtr<RadioGroupFrame>> m_radioGroups;
-    PaintVector<Core::GlobalUniquePtr<SliderFrame>> m_sliders;
+    PaintVector<RadioGroupFrame> m_radioGroups;
+    PaintVector<SliderFrame> m_sliders;
     PaintVector<ProgressFrame> m_progress;
     PaintVector<ImageFrame> m_images;
     PaintVector<ComboFrame> m_combos;

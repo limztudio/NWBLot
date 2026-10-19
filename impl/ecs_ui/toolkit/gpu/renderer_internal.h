@@ -179,11 +179,16 @@ struct GpuFrameData : NoCopy{
 
 
 public:
-    GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept;
+    explicit GpuFrameData(Core::Alloc::GlobalArena& arena)noexcept;
+
+
+public:
+    void reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept;
 
 
 public:
     [[nodiscard]] bool prefixComplete(Core::Device& device)const;
+    [[nodiscard]] bool recyclable(Core::Device& device)const;
     [[nodiscard]] bool complete(Core::Device& device)const;
 };
 
@@ -334,6 +339,7 @@ struct GpuRendererState final : NoCopy{
     Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
     Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureCache;
     Array<GpuFrameSlot, 3u> m_slots;
+    Array<GpuFrame, 4u> m_frames;
     GpuFrame m_pending;
     Core::AcquiredPresentationFrame m_lastAcceptedAcquired;
     Core::IGpuTaskGraphPresentationContributor* m_presentationContributor = nullptr;
@@ -375,7 +381,7 @@ public:
     void trimImageCache(const DrawSnapshot& snapshot);
     void evictImageCacheEntry()noexcept;
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
-    [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
+    [[nodiscard]] bool prepareOutputPipeline(const Core::FramebufferInfo& info);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer);
     [[nodiscard]] Expected<Core::GpuTaskId> declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);

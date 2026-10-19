@@ -67,7 +67,7 @@ class EditRun:
             wanted = primary
             if allowed_primary is not None and snapshot["primary"] in allowed_primary:
                 wanted = snapshot["primary"]
-            if (not self.native.windows and snapshot["primary"] == wanted and snapshot["secondary"] == secondary and snapshot["readonly"] == readonly and snapshot["visible"] == visible):
+            if (snapshot["primary"] == wanted and snapshot["secondary"] == secondary and snapshot["readonly"] == readonly and snapshot["visible"] == visible):
                 fields = [field for field, state in (("primary", wanted), ("secondary", secondary)) if caret_required(field, state, readonly, visible, selection)]
                 if fields:
                     # Observe off-to-on before the capture's 0.2s settle; full-frame processing can alias the 1s blink cycle.

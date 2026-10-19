@@ -78,6 +78,7 @@ private:
     Core::GraphicsRuntime& m_graphics;
     Name m_identity;
     RayTracingOpticalSceneSnapshot m_resources;
+    Vector<RayTracingOpticalSceneUploadHandle, Core::Alloc::GlobalArena> m_uploads;
     RayTracingOpticalBoundsFinalizeResources m_runtimeBounds;
     RayTracingOpticalBoundsFinalizeHandle m_runtimeBoundsSnapshot;
     usize m_capacity = 0u;

@@ -21,6 +21,7 @@ RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(Core::Alloc::Gl
     : m_arena(arena)
     , m_graphics(graphics)
     , m_identity(identity)
+    , m_uploads(arena)
     , m_runtimeBounds(arena, graphics)
 {}
 
@@ -34,6 +35,7 @@ void RayTracingOpticalSceneResources::invalidate(){
     if(heap.isInitialized() && m_resources.descriptor.valid() && m_resources.buffer && m_resources.buffer->getDeviceGeneration() == device.getDeviceGeneration())
         heap.free(m_resources.descriptor);
     m_resources = {};
+    m_uploads.clear();
     m_capacity = 0u;
     m_prepared = false;
     m_runtimeBoundsRequired = false;
@@ -97,7 +99,28 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         && (instanceBytes == 0u || NWB_MEMCMP(m_resources.upload->bytes.data() + sizeof(gather.header), gather.instances.data(), instanceBytes) == 0)
     ;
     if(!samePayload){
-        m_resources.upload = RayTracingOpticalSceneUploadHandle(NewArenaObject<RayTracingOpticalSceneUploadControl>(m_arena, m_arena, gather), ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
+        RayTracingOpticalSceneUploadHandle upload;
+        for(const RayTracingOpticalSceneUploadHandle& cached : m_uploads){
+            if(cached->getReferenceCount() == 1u){
+                AtomicThreadFence(MemoryOrder::acquire);
+                upload = cached;
+                break;
+            }
+        }
+        if(!upload){
+            upload = RayTracingOpticalSceneUploadHandle(NewArenaObject<RayTracingOpticalSceneUploadControl>(m_arena, m_arena, gather), ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
+            if(!upload)
+                return false;
+            m_uploads.push_back(upload);
+        }
+        else{
+            upload->bytes.resize(byteCount);
+            NWB_MEMCPY(upload->bytes.data(), upload->bytes.size(), &gather.header, sizeof(gather.header));
+            if(instanceBytes != 0u)
+                NWB_MEMCPY(upload->bytes.data() + sizeof(gather.header), instanceBytes, gather.instances.data(), instanceBytes);
+            upload->instanceCount = static_cast<u32>(gather.instances.size());
+        }
+        m_resources.upload = Move(upload);
     }
     m_resources.transparentCount = gather.header.transparentCount;
     m_resources.unspecifiedBoundariesOnly = gather.unspecifiedBoundariesOnly;

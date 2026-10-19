@@ -115,6 +115,40 @@ TEST(SkinningPayload, RuntimePayloadClearsWhenSkinOrPoseIsRemoved){
     EXPECT_TRUE(payload.jointMatrices.empty());
 }
 
+TEST(SkinningPayload, GpuJointUploadBoundsFollowSkinWhileSourceTailStillValidates){
+    NWB::Tests::CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistration(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    auto& arena = NWB::Tests::TestDetail::Arena();
+    NWB::Impl::MeshSkinningRuntimeInstance instance(arena);
+    instance.skeletonJointCount = s_ExpectedDualCount;
+    instance.skin.assign(3u, MakeSkinInfluence(1u));
+    NWB::Impl::SkeletonJointPaletteComponent palette(arena);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Impl::RuntimeSkinPayloadScratch payload(scratchArena);
+    ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::ResolveGpuJointPalette(instance, payload));
+
+    palette.joints.assign(3u, MakeTranslationJoint(7.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
+    const auto upload = NWB::Impl::MeshSkinningPayload::ResolveGpuJointPalette(instance, payload);
+    ASSERT_TRUE(upload);
+    EXPECT_EQ(upload->size(), s_ExpectedDualCount);
+    EXPECT_EQ(upload->data(), payload.jointMatrices.data());
+    EXPECT_EQ(payload.jointMatrices.size(), 3u);
+    EXPECT_FLOAT_EQ((*upload)[1u].rows[0].w, 7.0f);
+
+    ++payload.skinInfluenceCount;
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::ResolveGpuJointPalette(instance, payload));
+    --payload.skinInfluenceCount;
+    payload.jointMatrices.erase(payload.jointMatrices.begin() + 1, payload.jointMatrices.end());
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::ResolveGpuJointPalette(instance, payload));
+
+    palette.joints[2u].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::ResolveGpuJointPalette(instance, payload));
+    EXPECT_EQ(logger.errorCount(), 1u);
+}
+
 TEST(SkinningPayload, RuntimePayloadFollowsReplacementMeshAndJointCounts){
     auto& arena = NWB::Tests::TestDetail::Arena();
     NWB::Impl::MeshSkinningRuntimeInstance instance(arena);

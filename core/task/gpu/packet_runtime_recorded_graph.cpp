@@ -159,6 +159,32 @@ bool GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena)
 }
 
 
+Expected<CommandListHandle> GpuRecordedGraph::PacketRecordingScratch::acquireCommandList(Device& device, const CommandListParameters& parameters){
+    for(usize index = 0u; index < commandLists.size();){
+        CachedCommandList& cached = commandLists[index];
+        if(cached.parameters.physicalQueue.deviceGeneration != device.getDeviceGeneration()){
+            commandLists.erase(commandLists.begin() + static_cast<isize>(index));
+            continue;
+        }
+        if(
+            cached.parameters.physicalQueue == parameters.physicalQueue
+            && cached.parameters.queueType == parameters.queueType
+            && cached.parameters.recordingWorkerDomain == parameters.recordingWorkerDomain
+            && cached.parameters.recordingWorkerIndex == parameters.recordingWorkerIndex
+            && cached.commandList->getReferenceCount() == 1u
+        ){
+            AtomicThreadFence(MemoryOrder::acquire);
+            return cached.commandList;
+        }
+        ++index;
+    }
+    auto created = device.createCommandList(parameters);
+    if(!created)
+        return MakeUnexpected(created.error());
+    commandLists.push_back({ parameters, *created });
+    return Move(*created);
+}
+
 void GpuRecordedGraph::PacketRecordingScratch::reset()noexcept{
     initialStateSeed.reset();
     stateSubsetScratch.reset();
@@ -288,6 +314,22 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
         return;
 
     NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt");
+}
+
+bool GpuRecordedGraph::releaseCommandListCache()noexcept{
+    if(ArtifactOperation::ActiveFor(*this))
+        return false;
+    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
+    if(!artifactOperation.valid())
+        return false;
+    for(ArtifactStorage* const storage : { m_activeStorage.get(), m_candidateStorage.get() }){
+        if(!storage)
+            continue;
+        storage->serialRecordingScratch.commandLists.clear();
+        for(PacketRecordingScratch& scratch : storage->packetRecordingScratch)
+            scratch.commandLists.clear();
+    }
+    return true;
 }
 
 void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactStorage& storage)noexcept{

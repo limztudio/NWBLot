@@ -39,7 +39,7 @@ bool Builder::paintDeferredContents(){
 bool Builder::validateDeferredSources()const{
     // Every loan remains live through all later source callbacks, including those in an ended child scope.
     for(const auto& frame : m_scope->m_radioGroups){
-        if(!radioGroupMatches(*frame))
+        if(!radioGroupMatches(frame))
             return false;
     }
     for(const auto& frame : m_scope->m_lists){
@@ -60,7 +60,7 @@ bool Builder::validateDeferredSources()const{
 bool Builder::validateDeferredStates()const noexcept{
     // No source callbacks run after these model checks until every scope's loans have been released.
     for(const auto& frame : m_scope->m_sliders){
-        if(!sliderMatches(*frame))
+        if(!sliderMatches(frame))
             return false;
     }
     for(const auto& frame : m_scope->m_textAreas){
@@ -76,7 +76,7 @@ bool Builder::validateDeferredStates()const noexcept{
             return false;
     }
     for(const auto& frame : m_scope->m_radioGroups){
-        if(!radioGroupStateMatches(*frame))
+        if(!radioGroupStateMatches(frame))
             return false;
     }
     for(const auto& frame : m_scope->m_lists){

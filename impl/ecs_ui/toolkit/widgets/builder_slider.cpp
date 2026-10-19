@@ -67,22 +67,22 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
         return false;
     // Attempt diagnostics retire immediately; invalid policy leaves semantic state and accepted geometry untouched.
     state.m_result = {};
-    auto frame = Core::MakeGlobalUnique<SliderFrame>(m_arena, state);
-    frame->m_options = options;
-    frame->m_style = m_sliderStyle;
-    frame->m_snapshot = state.snapshot();
-    frame->m_widget = **widget;
+    SliderFrame frame(state);
+    frame.m_options = options;
+    frame.m_style = m_sliderStyle;
+    frame.m_snapshot = state.snapshot();
+    frame.m_widget = **widget;
     if(!SliderBehavior::Validate(options)){
         m_context.fail();
         return false;
     }
-    const auto metrics = SliderLayout::Measure(options, frame->m_style);
+    const auto metrics = SliderLayout::Measure(options, frame.m_style);
     if(!metrics){
         m_context.fail();
         return false;
     }
-    frame->m_metrics = *metrics;
-    if(!prepareSlider(*frame)){
+    frame.m_metrics = *metrics;
+    if(!prepareSlider(frame)){
         m_context.fail();
         return false;
     }
@@ -92,7 +92,7 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
     item.slider = static_cast<u32>(m_scope->m_sliders.size());
     LayoutNodeDesc description;
     description.width = options.width;
-    description.intrinsicSize = frame->m_metrics.contentSize;
+    description.intrinsicSize = frame.m_metrics.contentSize;
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();

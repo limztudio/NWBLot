@@ -49,9 +49,12 @@ RendererReflectionSystem::RendererReflectionSystem(Core::Alloc::GlobalArena& are
     , m_statistics(arena, graphics)
     , m_postprocess(arena, graphics, shaders)
     , m_feedback(arena, graphics)
+    , m_csgDispatchStates(arena)
 {}
 
 void RendererReflectionSystem::invalidateResources(){
+    m_preparedCsgDispatch = nullptr;
+    m_csgDispatchStates.clear();
     m_statistics.invalidateResources();
     releaseTargets();
     m_resources.classifyPipeline = nullptr;
@@ -90,6 +93,8 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         return false;
     const u32 capacity = static_cast<u32>(boundedCapacity);
     const bool csgHardwareWork = prepareCsgHardware && settings.maxHardwareRaysPerFrame > 0u && (settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid);
+    if(csgHardwareWork && !prepareCsgDispatchResources())
+        return false;
     if(
         m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height
         && (!prepareHardware || (m_resources.hardwarePipeline && m_plainHardwarePipeline && m_unspecifiedHardwarePipeline))
@@ -270,13 +275,15 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings) && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled);
 }
 
-Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::createCsgDispatchState(const ReflectionFrameSnapshot& resources)const noexcept{
+Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::acquireCsgDispatchState(const ReflectionFrameSnapshot& resources)noexcept{
     if(!resources.hasHardwareWork() || !resources.scene.csgTraceContextBuffer)
         return ReflectionCsgDispatchHandle{};
-    auto* const control = NewArenaObject<ReflectionCsgDispatchControl>(m_arena, resources, m_graphics.gpuTiming());
-    if(!control)
+    ReflectionCsgDispatchControl* const control = Exchange(m_preparedCsgDispatch, nullptr);
+    if(!control || control->getReferenceCount() != 1u)
         return MakeUnexpected(Failure{});
-    return ReflectionCsgDispatchHandle(control, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
+    AtomicThreadFence(MemoryOrder::acquire);
+    control->resources = resources;
+    return ReflectionCsgDispatchHandle(control, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena));
 }
 
 void RendererReflectionSystem::pollStatistics(){
@@ -430,9 +437,31 @@ void RendererReflectionSystem::releaseTargets(){
         mip = {};
 }
 
+bool RendererReflectionSystem::prepareCsgDispatchResources(){
+    m_preparedCsgDispatch = nullptr;
+    for(const ReflectionCsgDispatchHandle& control : m_csgDispatchStates){
+        if(control->getReferenceCount() != 1u)
+            continue;
+        AtomicThreadFence(MemoryOrder::acquire);
+        control->timing->discard();
+        control->timing.emplace(m_graphics.gpuTiming());
+        control->resources = {};
+        m_preparedCsgDispatch = control.get();
+        return true;
+    }
+    // Retained graph callbacks keep their owner immutable until they release it.
+    auto* const control = NewArenaObject<ReflectionCsgDispatchControl>(m_arena, ReflectionFrameSnapshot{}, m_graphics.gpuTiming());
+    if(!control)
+        return false;
+    ReflectionCsgDispatchHandle owner(control, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
+    m_csgDispatchStates.push_back(Move(owner));
+    m_preparedCsgDispatch = control;
+    return true;
+}
+
 bool RendererReflectionSystem::prepareQueue(const u32 capacity){
     using namespace __hidden_reflection_resources;
-    if(m_resources.queue && m_resources.parameters.queueCapacity == capacity)
+    if(m_resources.queue && m_resources.parameters.queueCapacity >= capacity)
         return true;
     Core::BufferDesc desc;
     desc
@@ -469,7 +498,7 @@ bool RendererReflectionSystem::prepareArguments(const u32 capacity, const bool s
     using namespace __hidden_reflection_resources;
     const u32 argumentCount = sliced ? (capacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
     const u64 byteSize = static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES;
-    if(m_resources.indirectArgs && m_resources.indirectArgs->getCreationDescription().byteSize == byteSize)
+    if(m_resources.indirectArgs && m_resources.indirectArgs->getCreationDescription().byteSize >= byteSize)
         return true;
     Core::BufferDesc desc;
     desc

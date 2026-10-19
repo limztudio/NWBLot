@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     if(item.slider >= m_scope->m_sliders.size())
         return false;
-    SliderFrame& frame = *m_scope->m_sliders[item.slider];
+    SliderFrame& frame = m_scope->m_sliders[item.slider];
     if(!sliderMatches(frame))
         return false;
     auto normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());

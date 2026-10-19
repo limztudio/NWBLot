@@ -326,7 +326,7 @@ void PrintCounts(const StringView category, const Counts& counts){
 }
 #endif
 
-[[nodiscard]] i32 VerifyTraps(const Evaluate evaluate){
+[[nodiscard]] i32 VerifyTraps([[maybe_unused]] const Evaluate evaluate){
 #if defined(NWB_PLATFORM_WINDOWS)
     const SIMDVectorSingle x[]{ VectorSet(-1.0f, 1.0f, 1.0f, 1.0f), VectorSet(0x1.fffffep127f, 1.0f, 1.0f, 1.0f), VectorSet(0.0f, 1.0f, 1.0f, 1.0f), VectorSet(0x1.fffffep127f, -1.0f, 1.0f, 1.0f), VectorSet(-1.0f, 0x1.fffffep127f, 1.0f, 1.0f) };
     const SIMDVectorSingle y[]{ VectorSet(0.5f, 1.0f, 1.0f, 1.0f), VectorSet(2.0f, 1.0f, 1.0f, 1.0f), VectorSet(-1.0f, 1.0f, 1.0f, 1.0f), VectorSet(2.0f, 0.5f, 1.0f, 1.0f), VectorSet(0.5f, 2.0f, 1.0f, 1.0f) };

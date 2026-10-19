@@ -52,7 +52,6 @@ target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector3.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector4.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector_arithmetic.h"
-    "${CMAKE_CURRENT_LIST_DIR}/simd/vector_multiply_subtract.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector_compare.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector_construct.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector_exp_log.h"

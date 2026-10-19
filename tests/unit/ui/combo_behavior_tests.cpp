@@ -489,9 +489,7 @@ TEST(UiComboBehaviorTests, RowCountChangingWithoutRevisionDuringReconcileFailsWi
 }
 
 TEST(UiComboBehaviorTests, SourceChangesDuringCommitLeaveThePopupAndCommittedKeyUnchanged){
-    for(const CallbackMutation::Enum mutation : {
-        CallbackMutation::Revision, CallbackMutation::Generation, CallbackMutation::Count
-    }){
+    for(const CallbackMutation::Enum mutation : { CallbackMutation::Revision, CallbackMutation::Generation, CallbackMutation::Count }){
         ComboSource source;
         ComboState state;
         state.select(4u);
@@ -506,10 +504,7 @@ TEST(UiComboBehaviorTests, SourceChangesDuringCommitLeaveThePopupAndCommittedKey
 }
 
 TEST(UiComboBehaviorTests, ReconcileCannotOverwriteAnExplicitSelectionFromAnySourceLoan){
-    for(const CallbackStage::Enum stage : {
-        CallbackStage::Generation, CallbackStage::Revision, CallbackStage::Count,
-        CallbackStage::Lookup, CallbackStage::Key, CallbackStage::Enabled
-    }){
+    for(const CallbackStage::Enum stage : { CallbackStage::Generation, CallbackStage::Revision, CallbackStage::Count, CallbackStage::Lookup, CallbackStage::Key, CallbackStage::Enabled }){
         ComboState state;
         ComboSource source(&state);
         state.select(4u);
@@ -524,10 +519,7 @@ TEST(UiComboBehaviorTests, ReconcileCannotOverwriteAnExplicitSelectionFromAnySou
 }
 
 TEST(UiComboBehaviorTests, CommitCannotOverwriteAnExplicitSelectionFromAnySourceLoan){
-    for(const CallbackStage::Enum stage : {
-        CallbackStage::Generation, CallbackStage::Revision, CallbackStage::Count,
-        CallbackStage::Lookup, CallbackStage::Key, CallbackStage::Enabled
-    }){
+    for(const CallbackStage::Enum stage : { CallbackStage::Generation, CallbackStage::Revision, CallbackStage::Count, CallbackStage::Lookup, CallbackStage::Key, CallbackStage::Enabled }){
         ComboState state;
         ComboSource source(&state);
         state.select(4u);

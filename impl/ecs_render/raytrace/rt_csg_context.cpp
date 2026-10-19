@@ -55,7 +55,12 @@ bool RendererRayTracingSystem::ensureCsgTraceContextResources(){
         if(!token.valid())
             continue;
         const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
-        if(!device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || device.queueGetCompletedInstance(queue) >= token.value)
+        if(!device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)){
+            token = {};
+            continue;
+        }
+        const Expected<u64> completedValue = device.queueGetCompletedInstance(queue);
+        if(completedValue && *completedValue >= token.value)
             token = {};
         else
             readersPending = true;

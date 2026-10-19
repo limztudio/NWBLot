@@ -34,9 +34,9 @@ namespace CrashNames = NWB::Core::Crash::PackageNames;
 inline constexpr Name s_FixtureArena("tests/integration/crash/archive_upload");
 inline constexpr Name s_OperationScratch("tests/integration/crash/archive_upload_scratch");
 
-static u32 g_UploadDiagnostics = 0u;
-static char g_LastUploadOperation[64u] = {};
-static char g_LastUploadDiagnostic[192u] = {};
+static u32 s_UploadDiagnostics = 0u;
+static char s_LastUploadOperation[64u] = {};
+static char s_LastUploadDiagnostic[192u] = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,9 +78,9 @@ private:
 static void ObserveUploadDiagnostic(const DiagnosticEventRecord& record)noexcept{
     if(record.category != AStringView("crash_package_upload"))
         return;
-    ++g_UploadDiagnostics;
-    CopyFixedBuffer(g_LastUploadOperation, record.expression);
-    CopyFixedBuffer(g_LastUploadDiagnostic, record.message);
+    ++s_UploadDiagnostics;
+    CopyFixedBuffer(s_LastUploadOperation, record.expression);
+    CopyFixedBuffer(s_LastUploadDiagnostic, record.message);
 }
 
 
@@ -127,11 +127,11 @@ TEST_F(CrashArchiveUpload, UnsupportedProtocolPreservesFailureAndPendingRetry){
     NWB::Core::Crash::UninstallCrashHandler();
     const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveUploadDiagnostic, MemoryOrder::acq_rel);
     ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
-    g_UploadDiagnostics = 0u;
+    s_UploadDiagnostics = 0u;
     EXPECT_FALSE(NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(m_arena, snapshot));
-    EXPECT_EQ(g_UploadDiagnostics, 1u);
-    EXPECT_EQ(AStringView(g_LastUploadOperation), AStringView("perform_upload"));
-    EXPECT_NE(AStringView(g_LastUploadDiagnostic).find("curl code="), AStringView::npos);
+    EXPECT_EQ(s_UploadDiagnostics, 1u);
+    EXPECT_EQ(AStringView(s_LastUploadOperation), AStringView("perform_upload"));
+    EXPECT_NE(AStringView(s_LastUploadDiagnostic).find("curl code="), AStringView::npos);
     const auto retained = IsDirectory(pending);
     ASSERT_TRUE(retained);
     EXPECT_TRUE(*retained);

@@ -219,7 +219,7 @@ u32 DescriptorBufferManager::getMaxTexelBufferElements()const noexcept{
     return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
 }
 
-DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
+Expected<DescriptorBufferSegment> DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
     return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
 }
 
@@ -271,23 +271,23 @@ bool DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u
     return true;
 }
 
-DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes, const u64 requiredGeneration){
+Expected<DescriptorBufferSegment> DescriptorBufferManager::allocateForBindingGeneration(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes, const u64 requiredGeneration){
     DescriptorBufferSegment result{};
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
     if(requiredGeneration != 0u && requiredGeneration != m_bindingGeneration)
-        return result;
+        return MakeUnexpected(Failure{});
     if(!m_enabled || sizeBytes == 0)
-        return result;
+        return MakeUnexpected(Failure{});
     if(kind != DescriptorBufferSegmentKind::Resource && kind != DescriptorBufferSegmentKind::Sampler){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: invalid segment kind {}."), static_cast<u32>(kind));
-        return result;
+        return MakeUnexpected(Failure{});
     }
 
     const u32 requiredAlignmentBytes = getOffsetAlignmentBytes();
     if(alignmentBytes == 0u || (alignmentBytes % requiredAlignmentBytes) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: alignment {} is not a non-zero multiple of required alignment {}."), alignmentBytes, requiredAlignmentBytes);
-        return result;
+        return MakeUnexpected(Failure{});
     }
 
     SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
@@ -312,7 +312,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
 
     if(segment.nextAllocationSerial == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: allocation serial space is exhausted."));
-        return result;
+        return MakeUnexpected(Failure{});
     }
 
     for(usize i = 0u; i < segment.freeRanges.size(); ++i){
@@ -351,11 +351,11 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(co
     const auto alignedOffset = AlignUpU32Checked(segment.writableOffsetBytes, alignmentBytes);
     if(!alignedOffset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer alignment overflows 32-bit offsets."));
-        return result;
+        return MakeUnexpected(Failure{});
     }
     if(*alignedOffset > segment.capacityBytes || sizeBytes > segment.capacityBytes - *alignedOffset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer is out of space (kind={}, requested={} bytes)."), kind == DescriptorBufferSegmentKind::Sampler ? NWB_TEXT("sampler") : NWB_TEXT("resource"), sizeBytes);
-        return result;
+        return MakeUnexpected(Failure{});
     }
 
     segment.writableOffsetBytes = *alignedOffset + sizeBytes;

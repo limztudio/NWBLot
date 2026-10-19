@@ -200,11 +200,12 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
     if(!__hidden_shape_registry::ValidShapeTypeDesc(desc))
         return MakeUnexpected(Failure{});
 
-    const CsgShapeTypeId canonicalId = CsgShapeTypeIdFromName(desc.name);
-    if(!__hidden_shape_registry::ValidShapeTypeId(canonicalId)){
+    const Expected<CsgShapeTypeId> canonicalIdResult = CsgShapeTypeIdFromName(desc.name);
+    if(!canonicalIdResult){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id"), StringConvert(desc.name.resolvedText()));
         return MakeUnexpected(Failure{});
     }
+    const CsgShapeTypeId canonicalId = *canonicalIdResult;
 
     ScopedLock lock(m_mutex);
 

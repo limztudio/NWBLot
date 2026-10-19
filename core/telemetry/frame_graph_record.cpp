@@ -21,8 +21,8 @@ NWB_TELEMETRY_BEGIN
 
 bool RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, const u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::FrameGraphFrame, frameIndex, streamId, [frameIndex, &scratchArena, &nodes, &edges](TelemetryArena&, TelemetryBytes& payload){
-            return BuildFrameGraphPayload(scratchArena, frameIndex, nodes, edges, payload);
-        }
+        return BuildFrameGraphPayload(scratchArena, frameIndex, nodes, edges, payload);
+    }
     );
 }
 
@@ -36,8 +36,8 @@ bool RecordFrameGraph(
     const u32 streamId
 ){
     return recorder.recordBuiltPayload(EventKind::FrameGraphFrame, frameIndex, streamId, [frameIndex, &scratchArena, &nodes, &edges, &physicalQueueRuntimeStatistics](TelemetryArena&, TelemetryBytes& payload){
-            return BuildFrameGraphPayload(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, payload);
-        }
+        return BuildFrameGraphPayload(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, payload);
+    }
     );
 }
 
@@ -52,8 +52,8 @@ bool RecordFrameGraph(
     const u32 streamId
 ){
     return recorder.recordBuiltPayload(EventKind::FrameGraphFrame, frameIndex, streamId, [frameIndex, &scratchArena, &nodes, &edges, &physicalQueueRuntimeStatistics, &packetSubmissionStatistics](TelemetryArena&, TelemetryBytes& payload){
-            return BuildFrameGraphPayload(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload);
-        }
+        return BuildFrameGraphPayload(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload);
+    }
     );
 }
 

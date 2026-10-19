@@ -28,7 +28,7 @@ NWB::Core::Assets::AssetBytes AssetsGraphicsFixture::MakeAssetBytes(AssetsGraphi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AssetsGraphicsFixture::AppendTestMeta(AssetsGraphicsFixture::AString& inOutMeta, const AStringView text) {
+void AssetsGraphicsFixture::AppendTestMeta(AssetsGraphicsFixture::AString& inOutMeta, const AStringView text){
     inOutMeta.append(text.data(), text.size());
 }
 
@@ -65,7 +65,7 @@ AssetsGraphicsFixture::AString AssetsGraphicsFixture::BuildMeshTriangleMeta(cons
 
 
 #endif
-bool AssetsGraphicsFixture::PrepareCleanDirectory(const AssetsGraphicsFixture::Path& directory) {
+bool AssetsGraphicsFixture::PrepareCleanDirectory(const AssetsGraphicsFixture::Path& directory){
     if(!RemoveAllIfExists(directory))
         return false;
     return EnsureDirectories(directory).has_value();
@@ -75,7 +75,7 @@ bool AssetsGraphicsFixture::PrepareCleanDirectory(const AssetsGraphicsFixture::P
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& filePath, const AStringView text) {
+bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& filePath, const AStringView text){
     if(!EnsureDirectories(filePath.parentPath()))
         return false;
 
@@ -86,7 +86,7 @@ bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& fil
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()noexcept {
+AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()noexcept{
 #if defined(NWB_DEBUG)
     return "dbg";
 #elif defined(NWB_FINAL)
@@ -100,7 +100,7 @@ AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(AssetsGraphicsFixture::TestArena& testArena) {
+AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(AssetsGraphicsFixture::TestArena& testArena){
     return Path(testArena.arena, __FILE__).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
 }
 
@@ -108,7 +108,7 @@ AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(As
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(AssetsGraphicsFixture::TestArena& testArena, const AStringView caseName) {
+AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(AssetsGraphicsFixture::TestArena& testArena, const AStringView caseName){
     // Object-cache paths append a wide asset-type hash and cache key.
     // This target is RUN_SERIAL and each cook fixture clears its root, so retain fixture isolation through a compact config-plus-case key that keeps every generated Windows path below MAX_PATH.
     AString caseKey;

@@ -400,13 +400,13 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.materialGeometryStatesGraphOwned = false;
     if(gbufferUsesMaterialGeometry){
         const auto gbufferMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
-                m_deferredLightingTaskGraph,
-                gbufferMaterialGeometryDrawSets,
-                LengthOf(gbufferMaterialGeometryDrawSets),
-                scratchArena,
-                Name("render.graphics_prefix.gbuffer.material_geometry"),
-                "Opaque Material Geometry"
-            );
+            m_deferredLightingTaskGraph,
+            gbufferMaterialGeometryDrawSets,
+            LengthOf(gbufferMaterialGeometryDrawSets),
+            scratchArena,
+            Name("render.graphics_prefix.gbuffer.material_geometry"),
+            "Opaque Material Geometry"
+        );
         gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialGeometrySetResult.has_value();
         if(gbufferMaterialGeometrySetResult)
             gbufferMaterialGeometrySet = *gbufferMaterialGeometrySetResult;
@@ -419,14 +419,14 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     bool gbufferMaterialSampledTexturesCollected = false;
     if(gbufferUsesMaterialGeometry){
         const auto gbufferMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
-                m_materialSystem,
-                m_deferredLightingTaskGraph,
-                gbufferMaterialGeometryDrawSets,
-                LengthOf(gbufferMaterialGeometryDrawSets),
-                scratchArena,
-                Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
-                "Opaque Material Sampled Textures"
-            );
+            m_materialSystem,
+            m_deferredLightingTaskGraph,
+            gbufferMaterialGeometryDrawSets,
+            LengthOf(gbufferMaterialGeometryDrawSets),
+            scratchArena,
+            Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
+            "Opaque Material Sampled Textures"
+        );
         gbufferMaterialSampledTexturesCollected = gbufferMaterialSampledTextureSetResult.has_value();
         if(gbufferMaterialSampledTextureSetResult)
             gbufferMaterialSampledTextureSet = *gbufferMaterialSampledTextureSetResult;
@@ -456,12 +456,12 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     bool opaqueComputeEmulationOutputStatesGraphOwned = false;
     if(opaqueComputeEmulationPlanCaptured){
         const auto opaqueComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-                m_deferredLightingTaskGraph,
-                opaqueComputeEmulationPayload.plan,
-                scratchArena,
-                Name("render.graphics_prefix.opaque_compute_emulation.outputs"),
-                "Opaque Compute Emulation Outputs"
-            );
+            m_deferredLightingTaskGraph,
+            opaqueComputeEmulationPayload.plan,
+            scratchArena,
+            Name("render.graphics_prefix.opaque_compute_emulation.outputs"),
+            "Opaque Compute Emulation Outputs"
+        );
         opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputSetResult.has_value();
         if(opaqueComputeEmulationOutputSetResult)
             opaqueComputeEmulationOutputSet = *opaqueComputeEmulationOutputSetResult;
@@ -515,12 +515,12 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     bool opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = false;
     if(opaqueCsgReceiverComputeEmulationPlanCaptured){
         const auto opaqueCsgReceiverComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-                m_deferredLightingTaskGraph,
-                opaqueCsgReceiverComputeEmulationPayload.plan,
-                scratchArena,
-                Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation.outputs"),
-                "Opaque CSG Receiver Compute Emulation Outputs"
-            );
+            m_deferredLightingTaskGraph,
+            opaqueCsgReceiverComputeEmulationPayload.plan,
+            scratchArena,
+            Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation.outputs"),
+            "Opaque CSG Receiver Compute Emulation Outputs"
+        );
         opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = opaqueCsgReceiverComputeEmulationOutputSetResult.has_value();
         if(opaqueCsgReceiverComputeEmulationOutputSetResult)
             opaqueCsgReceiverComputeEmulationOutputSet = *opaqueCsgReceiverComputeEmulationOutputSetResult;
@@ -886,16 +886,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         for(usize phaseIndex = 0u; phaseIndex < opaqueSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto mGraphicsPrefixOpaqueSharedComputeEmulationTasksPhaseIndexResult = addOpaqueSharedComputeEmulationPhase(
-                    opaqueSharedComputeEmulationPhaseIdentities[phaseIndex],
-                    opaqueSharedComputeEmulationPhaseMarkers[phaseIndex],
-                    opaqueSharedComputeEmulationDependency,
-                    isRasterPhase ? OpaqueSharedPhase::Raster : OpaqueSharedPhase::Generate,
-                    phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
-                    phaseIndex + 1u == opaqueSharedComputeEmulationPhaseCount,
-                    isRasterPhase ? opaqueSharedComputeEmulationRasterResourceUses : opaqueSharedComputeEmulationGenerateResourceUses,
-                    opaqueSharedComputeEmulationResourceSetUses,
-                    opaqueSharedComputeEmulationResourceSetUseCount
-                );
+                opaqueSharedComputeEmulationPhaseIdentities[phaseIndex],
+                opaqueSharedComputeEmulationPhaseMarkers[phaseIndex],
+                opaqueSharedComputeEmulationDependency,
+                isRasterPhase ? OpaqueSharedPhase::Raster : OpaqueSharedPhase::Generate,
+                phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
+                phaseIndex + 1u == opaqueSharedComputeEmulationPhaseCount,
+                isRasterPhase ? opaqueSharedComputeEmulationRasterResourceUses : opaqueSharedComputeEmulationGenerateResourceUses,
+                opaqueSharedComputeEmulationResourceSetUses,
+                opaqueSharedComputeEmulationResourceSetUseCount
+            );
             if(!mGraphicsPrefixOpaqueSharedComputeEmulationTasksPhaseIndexResult){
                 m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
@@ -959,13 +959,13 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalSamplePayload.materialGeometryStatesGraphOwned = false;
         if(csgIntervalSampleUsesMaterialGeometry){
             const auto csgIntervalSampleMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
-                    m_deferredLightingTaskGraph,
-                    csgIntervalSampleMaterialGeometryDrawSets,
-                    LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
-                    scratchArena,
-                    Name("render.graphics_prefix.csg_interval_sample.material_geometry"),
-                    "Opaque CSG Material Geometry"
-                );
+                m_deferredLightingTaskGraph,
+                csgIntervalSampleMaterialGeometryDrawSets,
+                LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
+                scratchArena,
+                Name("render.graphics_prefix.csg_interval_sample.material_geometry"),
+                "Opaque CSG Material Geometry"
+            );
             csgIntervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleMaterialGeometrySetResult.has_value();
             if(csgIntervalSampleMaterialGeometrySetResult)
                 csgIntervalSampleMaterialGeometrySet = *csgIntervalSampleMaterialGeometrySetResult;
@@ -977,14 +977,14 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         bool csgIntervalSampleMaterialSampledTexturesCollected = false;
         if(csgIntervalSampleUsesMaterialGeometry){
             const auto csgIntervalSampleMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
-                    m_materialSystem,
-                    m_deferredLightingTaskGraph,
-                    csgIntervalSampleMaterialGeometryDrawSets,
-                    LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
-                    scratchArena,
-                    Name("render.graphics_prefix.csg_interval_sample.material_sampled_textures"),
-                    "Opaque CSG Material Sampled Textures"
-                );
+                m_materialSystem,
+                m_deferredLightingTaskGraph,
+                csgIntervalSampleMaterialGeometryDrawSets,
+                LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
+                scratchArena,
+                Name("render.graphics_prefix.csg_interval_sample.material_sampled_textures"),
+                "Opaque CSG Material Sampled Textures"
+            );
             csgIntervalSampleMaterialSampledTexturesCollected = csgIntervalSampleMaterialSampledTextureSetResult.has_value();
             if(csgIntervalSampleMaterialSampledTextureSetResult)
                 csgIntervalSampleMaterialSampledTextureSet = *csgIntervalSampleMaterialSampledTextureSetResult;
@@ -1005,12 +1005,12 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         bool opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned = false;
         if(opaqueCsgIntervalSampleComputeEmulationPlanCaptured){
             const auto opaqueCsgIntervalSampleComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-                    m_deferredLightingTaskGraph,
-                    opaqueCsgIntervalSampleComputeEmulationPayload.plan,
-                    scratchArena,
-                    Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation.outputs"),
-                    "Opaque CSG Interval-Sample Compute Emulation Outputs"
-                );
+                m_deferredLightingTaskGraph,
+                opaqueCsgIntervalSampleComputeEmulationPayload.plan,
+                scratchArena,
+                Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation.outputs"),
+                "Opaque CSG Interval-Sample Compute Emulation Outputs"
+            );
             opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned = opaqueCsgIntervalSampleComputeEmulationOutputSetResult.has_value();
             if(opaqueCsgIntervalSampleComputeEmulationOutputSetResult)
                 opaqueCsgIntervalSampleComputeEmulationOutputSet = *opaqueCsgIntervalSampleComputeEmulationOutputSetResult;

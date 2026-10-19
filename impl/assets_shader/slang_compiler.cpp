@@ -346,8 +346,14 @@ static bool WriteBomStrippedCompilerInput(ScratchString& source, const Path& sou
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<ScratchPath> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, ScratchVector<ScratchPath>& outIncludeDirectories, Alloc::ScratchArena& scratchArena){
-    outIncludeDirectories.clear();
+// The common path allocates the source path last, so it is declared last to be released first from scratch.
+struct CompilerInputs final{
+    ScratchVector<ScratchPath> includeDirectories;
+    ScratchPath sourcePath;
+};
+
+static Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Alloc::ScratchArena& scratchArena){
+    ScratchVector<ScratchPath> includeDirectories(scratchArena);
 
     if(request.dependencies.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has no resolved source dependencies"), StringConvert(request.shaderName));
@@ -355,10 +361,10 @@ static Expected<ScratchPath> PrepareBomStrippedCompilerInputs(const ShaderCook::
     }
 
     if(!request.compilerInputsHaveBom){
-        outIncludeDirectories.reserve(request.includeDirectories.size());
+        includeDirectories.reserve(request.includeDirectories.size());
         for(const Path& includeDirectory : request.includeDirectories)
-            outIncludeDirectories.emplace_back(scratchArena, includeDirectory);
-        return ScratchPath(scratchArena, request.sourcePath);
+            includeDirectories.emplace_back(scratchArena, includeDirectory);
+        return CompilerInputs{ .includeDirectories = Move(includeDirectories), .sourcePath = ScratchPath(scratchArena, request.sourcePath) };
     }
 
     auto ensureDirectoriesResult2 = EnsureDirectories(overlayRoot);
@@ -409,7 +415,7 @@ static Expected<ScratchPath> PrepareBomStrippedCompilerInputs(const ShaderCook::
         return MakeUnexpected(Failure{});
     }
 
-    outIncludeDirectories.reserve(request.includeDirectories.size() * 2u);
+    includeDirectories.reserve(request.includeDirectories.size() * 2u);
     for(const Path& includeDirectory : request.includeDirectories){
         const auto absoluteIncludeDirectory = AbsolutePath(ScratchPath(scratchArena, includeDirectory));
         if(!absoluteIncludeDirectory){
@@ -422,12 +428,12 @@ static Expected<ScratchPath> PrepareBomStrippedCompilerInputs(const ShaderCook::
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to map include directory '{}' into the temporary compiler source directory"), PathToString<tchar>(includeDirectory));
             return MakeUnexpected(Failure{});
         }
-        outIncludeDirectories.push_back(Move(*overlayIncludeDirectory));
+        includeDirectories.push_back(Move(*overlayIncludeDirectory));
     }
     for(const Path& includeDirectory : request.includeDirectories)
-        outIncludeDirectories.emplace_back(scratchArena, includeDirectory);
+        includeDirectories.emplace_back(scratchArena, includeDirectory);
 
-    return Move(*sourcePathResult);
+    return CompilerInputs{ .includeDirectories = Move(includeDirectories), .sourcePath = Move(*sourcePathResult) };
 }
 
 
@@ -616,10 +622,10 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     const __hidden_slang_compiler::ScratchPath diagnosticsPath = compilerWorkDirectory / "compiler.diag";
     const __hidden_slang_compiler::ScratchPath compilerOutputPath = compilerWorkDirectory / "module.spv";
     const __hidden_slang_compiler::ScratchPath compilerOverlayRoot = compilerWorkDirectory / "sources";
-    __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchPath> compilerIncludeDirectories(scratchArena);
-    const auto compilerSourcePath = __hidden_slang_compiler::PrepareBomStrippedCompilerInputs(request, compilerOverlayRoot, compilerIncludeDirectories, scratchArena);
-    if(!compilerSourcePath)
+    const auto compilerInputs = __hidden_slang_compiler::PrepareBomStrippedCompilerInputs(request, compilerOverlayRoot, scratchArena);
+    if(!compilerInputs)
         return false;
+    const __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchPath>& compilerIncludeDirectories = compilerInputs->includeDirectories;
 
     const usize includeDirectoryCount = compilerIncludeDirectories.size();
     const usize defineCount = static_cast<usize>(request.defineCount);
@@ -643,7 +649,7 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     ownedArguments.reserve(ownedArgumentCount);
     arguments.push_back(AStringView(NWB_SLANGC_EXECUTABLE));
 
-    auto sourcePathText = __hidden_slang_compiler::BuildCompilerPathText(*compilerSourcePath, scratchArena);
+    auto sourcePathText = __hidden_slang_compiler::BuildCompilerPathText(compilerInputs->sourcePath, scratchArena);
     if(!sourcePathText)
         return false;
     ownedArguments.push_back(Move(*sourcePathText));

@@ -57,7 +57,7 @@ TEST(UiSkinSelectionTests, FailedDefaultLeavesSelectionUncommittedForRetry){
     EXPECT_EQ(selection.ensure(reject), UiSkinSelectionResult::Failed);
     EXPECT_FALSE(selection.selected().valid());
     EXPECT_EQ(calls, 2u);
-    const auto acceptCustom = [&](const Core::Assets::AssetRef<UiSkin>& ref){ return ref == custom; };
+    const auto acceptCustom = [&](const Core::Assets::AssetRef<UiSkin>& ref)noexcept{ return ref == custom; };
     EXPECT_EQ(selection.ensure(acceptCustom), UiSkinSelectionResult::Selected);
     EXPECT_EQ(selection.selected(), custom);
 }
@@ -65,7 +65,7 @@ TEST(UiSkinSelectionTests, FailedDefaultLeavesSelectionUncommittedForRetry){
 TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
     const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/custom/atlas" };
     UiSkinSelection selection(custom);
-    const auto acceptCustom = [&](const Core::Assets::AssetRef<UiSkin>& ref){ return ref == custom; };
+    const auto acceptCustom = [&](const Core::Assets::AssetRef<UiSkin>& ref)noexcept{ return ref == custom; };
     EXPECT_EQ(selection.ensure(acceptCustom), UiSkinSelectionResult::Selected);
     u32 calls = 0u;
     EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>& ref){
@@ -87,7 +87,7 @@ TEST(UiSkinSelectionTests, ChangeWaitsForResourcesGpuFrameAndAcceptedLayout){
     const auto bind = [&](const Core::Assets::AssetRef<UiSkin>&, const u64){ ++binds; return true; };
     EXPECT_EQ(selection.applyChangeIfReady(false, false, false, bind), UiSkinChangeResult::Deferred);
     EXPECT_TRUE(selection.changePending());
-    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&){ return true; }), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     EXPECT_EQ(selection.applyChangeIfReady(true, true, false, bind), UiSkinChangeResult::Deferred);
     EXPECT_EQ(selection.applyChangeIfReady(true, false, true, bind), UiSkinChangeResult::Deferred);
     EXPECT_EQ(binds, 0u);
@@ -110,14 +110,14 @@ TEST(UiSkinSelectionTests, ChangeWaitsForResourcesGpuFrameAndAcceptedLayout){
 TEST(UiSkinSelectionTests, SameReferenceReloadAdvancesGenerationAndLatestRequestWins){
     UiSkinSelection selection(s_DefaultUiSkinRef);
     const Core::Assets::AssetRef<UiSkin> obsolete{ "project/ui/skins/obsolete/atlas" };
-    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&){ return true; }), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange(obsolete);
     selection.requestChange(s_DefaultUiSkinRef);
     EXPECT_EQ(selection.applyChangeIfReady(true, false, false, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            EXPECT_EQ(ref, s_DefaultUiSkinRef);
-            EXPECT_EQ(generation, 2u);
-            return true;
-        }
+        EXPECT_EQ(ref, s_DefaultUiSkinRef);
+        EXPECT_EQ(generation, 2u);
+        return true;
+    }
     ), UiSkinChangeResult::Applied
     );
     EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
@@ -128,7 +128,7 @@ TEST(UiSkinSelectionTests, SameReferenceReloadAdvancesGenerationAndLatestRequest
 TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetry){
     UiSkinSelection selection(s_DefaultUiSkinRef);
     const Core::Assets::AssetRef<UiSkin> alternate{ "project/ui/skins/alternate/atlas" };
-    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&){ return true; }), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange(alternate);
     u32 binds = 0u;
     const auto reject = [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
@@ -148,10 +148,10 @@ TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetr
     selection.resourcesValidated();
     EXPECT_TRUE(selection.changePending());
     EXPECT_EQ(selection.applyChangeIfReady(true, false, false, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            EXPECT_EQ(ref, alternate);
-            EXPECT_EQ(generation, 2u);
-            return true;
-        }
+        EXPECT_EQ(ref, alternate);
+        EXPECT_EQ(generation, 2u);
+        return true;
+    }
     ), UiSkinChangeResult::Applied
     );
     EXPECT_EQ(selection.selected(), alternate);
@@ -162,13 +162,13 @@ TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetr
 TEST(UiSkinSelectionTests, EmptyLiveRequestSelectsAndRebindsEngineDefault){
     const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/custom/atlas" };
     UiSkinSelection selection(custom);
-    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&){ return true; }), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange({});
     EXPECT_EQ(selection.applyChangeIfReady(true, false, false, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            EXPECT_EQ(ref, s_DefaultUiSkinRef);
-            EXPECT_EQ(generation, 2u);
-            return true;
-        }
+        EXPECT_EQ(ref, s_DefaultUiSkinRef);
+        EXPECT_EQ(generation, 2u);
+        return true;
+    }
     ), UiSkinChangeResult::Applied
     );
     EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);

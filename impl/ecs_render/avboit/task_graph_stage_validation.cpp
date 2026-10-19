@@ -151,10 +151,9 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             return false;
         const Core::GpuTaskId producerRasterSequence[] = { taskGraphStage.m_occupancyComputeEmulationTask, taskGraphStage.m_occupancyTask, };
         return
-            compiledGraph.tasksFormContiguousPacketSequence(producerRasterSequence, LengthOf(producerRasterSequence)) && optionalTaskPrecedesInSharedPacket(
-            taskGraphStage.m_occupancyStreamTask,
-            taskGraphStage.m_occupancyComputeEmulationTask
-        ) && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_clearTask, taskGraphStage.m_occupancyComputeEmulationTask)
+            compiledGraph.tasksFormContiguousPacketSequence(producerRasterSequence, LengthOf(producerRasterSequence))
+            && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_occupancyStreamTask, taskGraphStage.m_occupancyComputeEmulationTask)
+            && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_clearTask, taskGraphStage.m_occupancyComputeEmulationTask)
         ;
     }();
     // Shared outputs need contiguous D/R callbacks in Pre's packet.
@@ -201,10 +200,10 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
                 return false;
         }
         return
-            compiledGraph.tasksFormContiguousPacketSequence(taskGraphStage.m_occupancySharedComputeEmulationTasks, phaseCount) && compiledGraph.taskPrecedesInSamePacket(
-            taskGraphStage.m_preTask,
-            taskGraphStage.m_occupancyStreamTask
-        ) && compiledGraph.taskPrecedesInSamePacket(taskGraphStage.m_occupancyStreamTask, taskGraphStage.m_clearTask) && compiledGraph.taskPrecedesInSamePacket(taskGraphStage.m_clearTask, taskGraphStage.m_occupancySharedComputeEmulationTasks[0u])
+            compiledGraph.tasksFormContiguousPacketSequence(taskGraphStage.m_occupancySharedComputeEmulationTasks, phaseCount)
+            && compiledGraph.taskPrecedesInSamePacket(taskGraphStage.m_preTask, taskGraphStage.m_occupancyStreamTask)
+            && compiledGraph.taskPrecedesInSamePacket(taskGraphStage.m_occupancyStreamTask, taskGraphStage.m_clearTask)
+            && compiledGraph.taskPrecedesInSamePacket(taskGraphStage.m_clearTask, taskGraphStage.m_occupancySharedComputeEmulationTasks[0u])
         ;
     }();
     const bool avboitOccupancyAllComputeEmulationMerged = avboitOccupancyComputeEmulationMerged && avboitOccupancySharedComputeEmulationMerged;
@@ -262,10 +261,8 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
                 return false;
         }
         return
-            compiledGraph.tasksFormContiguousPacketSequence(taskGraphStage.m_extinctionSharedComputeEmulationTasks, phaseCount) && optionalTaskPrecedesInSharedPacket(
-            taskGraphStage.m_extinctionStreamTask,
-            taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u]
-        )
+            compiledGraph.tasksFormContiguousPacketSequence(taskGraphStage.m_extinctionSharedComputeEmulationTasks, phaseCount)
+            && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_extinctionStreamTask, taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u])
         ;
     }();
     const bool avboitExtinctionAllComputeEmulationMerged = avboitExtinctionComputeEmulationMerged && avboitExtinctionSharedComputeEmulationMerged;
@@ -325,10 +322,9 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
         }
         const Core::GpuTaskId finalizerBoundary[] = { taskGraphStage.m_accumulationSharedComputeEmulationTasks[phaseCount - 1u], taskGraphStage.m_accumulationFinalizeTask, };
         return
-            compiledGraph.tasksFormContiguousPacketSequence(taskGraphStage.m_accumulationSharedComputeEmulationTasks, phaseCount) && compiledGraph.tasksFormContiguousPacketSequence(
-            finalizerBoundary,
-            LengthOf(finalizerBoundary)
-        ) && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_accumulationStreamTask, taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u])
+            compiledGraph.tasksFormContiguousPacketSequence(taskGraphStage.m_accumulationSharedComputeEmulationTasks, phaseCount)
+            && compiledGraph.tasksFormContiguousPacketSequence(finalizerBoundary, LengthOf(finalizerBoundary))
+            && optionalTaskPrecedesInSharedPacket(taskGraphStage.m_accumulationStreamTask, taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u])
         ;
     }();
     const bool avboitAccumulationAllComputeEmulationMerged = avboitAccumulationComputeEmulationMerged && avboitAccumulationSharedComputeEmulationMerged;

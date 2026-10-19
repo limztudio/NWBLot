@@ -114,7 +114,7 @@ struct GpuCompiledTask{
     GpuPhysicalQueueId queue;
     GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
     GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
-    // Calibration and debug-override observations contribute route duration history without becoming the committed timing-feedback incumbent.
+    // Calibration observations contribute route duration history without becoming the committed timing-feedback incumbent.
     // Retain that decision so late query collection preserves policy dwell.
     bool recordsNonCommittingTimingSample = false;
 };

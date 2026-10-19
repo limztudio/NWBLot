@@ -61,25 +61,26 @@ static void CollectMaterialMeshShaderKeys(const ShaderCook::CookVector<MaterialC
     }
 }
 
-void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
-    outShaderKeys.clear();
-    outShaderKeys.reserve(materialEntries.size());
+ShaderStageKeySet CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+    ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
+    shaderKeys.reserve(materialEntries.size());
 
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
     for(const MaterialCookEntry& materialEntry : materialEntries){
         const auto foundShader = materialEntry.stageShaders.find(Core::ShaderType::PixelStage);
         if(foundShader != materialEntry.stageShaders.end())
-            InsertShaderKey(outShaderKeys, foundShader.value().name(), pixelStageName);
+            InsertShaderKey(shaderKeys, foundShader.value().name(), pixelStageName);
     }
 
-    CollectMaterialMeshShaderKeys(materialEntries, outShaderKeys);
+    CollectMaterialMeshShaderKeys(materialEntries, shaderKeys);
+    return shaderKeys;
 }
 
-Expected<void, NameTextError::Enum> CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
-    outShaderKeys.clear();
-    outShaderKeys.reserve(materialEntries.size());
+Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+    ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
+    shaderKeys.reserve(materialEntries.size());
 
-    CollectMaterialMeshShaderKeys(materialEntries, outShaderKeys);
+    CollectMaterialMeshShaderKeys(materialEntries, shaderKeys);
 
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
     // Every transparent material owns cook-generated AVBOIT accumulate/occupancy/extinction pixel shaders, and each needs the matching CSG clip variant for its typed material binding and project surface/BXDF contract.
@@ -88,22 +89,22 @@ Expected<void, NameTextError::Enum> CollectAvboitClipShaderKeys(const ShaderCook
             const auto shaderName = Name::FromText(AStringView(materialEntry.avboitAccumulatePixelShaderName));
             if(!shaderName)
                 return MakeUnexpected(shaderName.error());
-            InsertShaderKey(outShaderKeys, *shaderName, pixelStageName);
+            InsertShaderKey(shaderKeys, *shaderName, pixelStageName);
         }
         if(!materialEntry.avboitOccupancyPixelShaderName.empty()){
             const auto shaderName = Name::FromText(AStringView(materialEntry.avboitOccupancyPixelShaderName));
             if(!shaderName)
                 return MakeUnexpected(shaderName.error());
-            InsertShaderKey(outShaderKeys, *shaderName, pixelStageName);
+            InsertShaderKey(shaderKeys, *shaderName, pixelStageName);
         }
         if(!materialEntry.avboitExtinctionPixelShaderName.empty()){
             const auto shaderName = Name::FromText(AStringView(materialEntry.avboitExtinctionPixelShaderName));
             if(!shaderName)
                 return MakeUnexpected(shaderName.error());
-            InsertShaderKey(outShaderKeys, *shaderName, pixelStageName);
+            InsertShaderKey(shaderKeys, *shaderName, pixelStageName);
         }
     }
-    return {};
+    return shaderKeys;
 }
 
 Expected<bool, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){

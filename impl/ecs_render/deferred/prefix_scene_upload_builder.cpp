@@ -102,14 +102,14 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
             return MakeUnexpected(meshViewBlobResult.error());
         const Core::GpuUploadBlobId meshViewBlob = *meshViewBlobResult;
         const auto meshViewUploadTaskResult = m_graph.addUploadBufferTask(
-                meshViewUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = meshViewBlob,
-                    .destination = inputs.meshView,
-                    // The backing buffer deliberately restores Common when a native packet closes.
-                    // Declare that exact graph-visible boundary here; the G-buffer consumer below owns the Common -> ConstantBuffer transition.
-                    .finalState = Core::ResourceStates::Common, }
-            );
+            meshViewUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = meshViewBlob,
+                .destination = inputs.meshView,
+                // The backing buffer deliberately restores Common when a native packet closes.
+                // Declare that exact graph-visible boundary here; the G-buffer consumer below owns the Common -> ConstantBuffer transition.
+                .finalState = Core::ResourceStates::Common, }
+        );
         if(!meshViewUploadTaskResult){
             meshViewUploadTask = {};
             return MakeUnexpected(Failure{});
@@ -138,14 +138,14 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
             return MakeUnexpected(sceneLightBlobResult.error());
         const Core::GpuUploadBlobId sceneLightBlob = *sceneLightBlobResult;
         const auto sceneUploadTaskResult = m_graph.addUploadBufferTask(
-                sceneLightUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = sceneLightBlob,
-                    .destination = inputs.lights,
-                    // These shared frame buffers retain Common between native packets.
-                    // The first declared reader owns the transition to ShaderResource.
-                    .finalState = Core::ResourceStates::Common, }
-            );
+            sceneLightUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = sceneLightBlob,
+                .destination = inputs.lights,
+                // These shared frame buffers retain Common between native packets.
+                // The first declared reader owns the transition to ShaderResource.
+                .finalState = Core::ResourceStates::Common, }
+        );
         if(!sceneUploadTaskResult){
             sceneUploadTask = {};
             return MakeUnexpected(Failure{});
@@ -161,13 +161,13 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
             return MakeUnexpected(sceneShadingBlobResult.error());
         const Core::GpuUploadBlobId sceneShadingBlob = *sceneShadingBlobResult;
         const auto sceneUploadTaskResult2 = m_graph.addUploadBufferTask(
-                sceneShadingUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = sceneShadingBlob,
-                    .destination = inputs.sceneShading,
-                    // See the light upload above: preserve the resource's automatic Common boundary and let the first declared reader lower its ConstantBuffer transition.
-                    .finalState = Core::ResourceStates::Common, }
-            );
+            sceneShadingUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = sceneShadingBlob,
+                .destination = inputs.sceneShading,
+                // See the light upload above: preserve the resource's automatic Common boundary and let the first declared reader lower its ConstantBuffer transition.
+                .finalState = Core::ResourceStates::Common, }
+        );
         if(!sceneUploadTaskResult2){
             sceneUploadTask = {};
             return MakeUnexpected(Failure{});

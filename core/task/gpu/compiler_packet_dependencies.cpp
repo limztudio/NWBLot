@@ -62,10 +62,10 @@ namespace GpuTaskGraphCompilerDetail{
 
     if(plansResourceStateDependencies){
         Sort(resourceStateDependencies.begin(), resourceStateDependencies.end(), [](const GpuPacketDependency& lhs, const GpuPacketDependency& rhs)noexcept{
-                if(lhs.consumer.index != rhs.consumer.index)
-                    return lhs.consumer.index < rhs.consumer.index;
-                return lhs.producer.index > rhs.producer.index;
-            }
+            if(lhs.consumer.index != rhs.consumer.index)
+                return lhs.consumer.index < rhs.consumer.index;
+            return lhs.producer.index > rhs.producer.index;
+        }
         );
     }
 

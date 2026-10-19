@@ -891,19 +891,19 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 .setResourceUses(transparentTemporalMergeResourceUses.data(), transparentTemporalMergeResourceUses.size())
             ;
             const auto mDeferredShadowVisibilityTransparentTemporalMergeTaskResult = m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
-                    m_deferredLightingTaskGraph,
-                    transparentTemporalMergeDesc,
-                    deferredTargets,
-                    deferredLightingResources,
-                    timingTicket,
-                    transparentResolveTiming,
-                    opaqueProduced,
-                    transparentTraceProduced,
-                    opaqueFrameIndex,
-                    true,
-                    combinedSoftTemporal,
-                    hardwareShadowSupported
-                );
+                m_deferredLightingTaskGraph,
+                transparentTemporalMergeDesc,
+                deferredTargets,
+                deferredLightingResources,
+                timingTicket,
+                transparentResolveTiming,
+                opaqueProduced,
+                transparentTraceProduced,
+                opaqueFrameIndex,
+                true,
+                combinedSoftTemporal,
+                hardwareShadowSupported
+            );
             if(!mDeferredShadowVisibilityTransparentTemporalMergeTaskResult){
                 m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));

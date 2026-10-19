@@ -111,10 +111,11 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
         if(submission.valid() && submission.hasPhysicalQueueIdentity()){
             auto& device = m_graphics.getDevice();
             const Core::GpuPhysicalQueueId queue{ submission.physicalQueueIndex, submission.deviceGeneration };
-            if(device.queueGetCompletedInstance(queue) >= submission.value){
-                const u32* failures = static_cast<const u32*>(device.mapBuffer(*diagnostics.readback, Core::CpuAccessMode::Read));
-                if(failures){
-                    const u32 failureFlags = *failures;
+            const Expected<u64> completedValue = device.queueGetCompletedInstance(queue);
+            if(completedValue && *completedValue >= submission.value){
+                const Expected<void*> mappedFailures = device.mapBuffer(*diagnostics.readback, Core::CpuAccessMode::Read);
+                if(mappedFailures){
+                    const u32 failureFlags = *static_cast<const u32*>(*mappedFailures);
                     device.unmapBuffer(*diagnostics.readback);
                     const u32 newFailures = failureFlags & ~diagnostics.reportedFailures;
                     diagnostics.reportedFailures |= failureFlags;

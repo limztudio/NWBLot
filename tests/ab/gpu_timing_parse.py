@@ -16,6 +16,8 @@ from window_capture_smoke import SmokeFailure
 LIT_UTF_8 = "utf-8"
 LIT_REPLACE = "replace"
 NAME_SYMBOLS_HEADER = "nwb_namesym_v1"
+# Unattended windows can stall into zero intervals; this many positive intervals or fewer cannot qualify performance.
+MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS = 10
 
 
 NUMBER = r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"

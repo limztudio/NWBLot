@@ -51,7 +51,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return byteCount != 0u; }
 };
 
-[[nodiscard]] ReflectionFeedbackExtent ComputeReflectionFeedbackExtent(u32 width, u32 height)noexcept;
+[[nodiscard]] Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(u32 width, u32 height)noexcept;
 
 struct ReflectionFeedbackBinding{
     Core::BufferHandle buffer;

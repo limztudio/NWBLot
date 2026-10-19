@@ -108,12 +108,12 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     }
     else if(inputs.csgComputeEmulationPlanCaptured){
         const auto accumulationComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
-                m_graph,
-                computeEmulationPayload.csgPlan,
-                scratchArena,
-                Name("render.avboit.accumulation.csg_compute_emulation.outputs"),
-                "AVBOIT Accumulation CSG Compute Emulation Outputs"
-            );
+            m_graph,
+            computeEmulationPayload.csgPlan,
+            scratchArena,
+            Name("render.avboit.accumulation.csg_compute_emulation.outputs"),
+            "AVBOIT Accumulation CSG Compute Emulation Outputs"
+        );
         accumulationComputeEmulationOutputStatesGraphOwned = accumulationComputeEmulationOutputSetResult.has_value();
         if(accumulationComputeEmulationOutputSetResult)
             accumulationComputeEmulationOutputSet = *accumulationComputeEmulationOutputSetResult;
@@ -390,17 +390,17 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         for(usize phaseIndex = 0u; phaseIndex < accumulationSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto mAvboitSystemTaskGraphStageMAccumulationSharedComputeEmulationTasksPhaseIndexResult = addAccumulationSharedComputeEmulationPhase(
-                    accumulationSharedComputeEmulationPhaseIdentities[phaseIndex],
-                    accumulationSharedComputeEmulationPhaseMarkers[phaseIndex],
-                    accumulationSharedComputeEmulationDependency,
-                    isRasterPhase ? AccumulationSharedPhase::Raster : AccumulationSharedPhase::Generate,
-                    phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
-                    phaseIndex == 0u,
-                    phaseIndex + 1u == accumulationSharedComputeEmulationPhaseCount,
-                    isRasterPhase ? accumulationSharedRasterResourceUses : accumulationSharedGenerateResourceUses,
-                    accumulationMaterialResourceSetUses,
-                    accumulationMaterialResourceSetUseCount
-                );
+                accumulationSharedComputeEmulationPhaseIdentities[phaseIndex],
+                accumulationSharedComputeEmulationPhaseMarkers[phaseIndex],
+                accumulationSharedComputeEmulationDependency,
+                isRasterPhase ? AccumulationSharedPhase::Raster : AccumulationSharedPhase::Generate,
+                phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
+                phaseIndex == 0u,
+                phaseIndex + 1u == accumulationSharedComputeEmulationPhaseCount,
+                isRasterPhase ? accumulationSharedRasterResourceUses : accumulationSharedGenerateResourceUses,
+                accumulationMaterialResourceSetUses,
+                accumulationMaterialResourceSetUseCount
+            );
             if(!mAvboitSystemTaskGraphStageMAccumulationSharedComputeEmulationTasksPhaseIndexResult){
                 m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Accumulation shared compute-emulation phase"));

@@ -296,8 +296,8 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 
 [[nodiscard]] static bool SendAllSocketNoSigpipe(const int descriptor, const void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(static_cast<const u8*>(data), byteCount, [descriptor](const u8* const cursor, const usize remaining)noexcept{
-            return send(descriptor, cursor, remaining, MSG_NOSIGNAL);
-        }
+        return send(descriptor, cursor, remaining, MSG_NOSIGNAL);
+    }
     );
 }
 

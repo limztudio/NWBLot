@@ -50,8 +50,7 @@ TEST_F(UiEditCommandTests, ShortcutTranslationPreservesWordSelectionAndLeavesAlt
     EXPECT_EQ(m_model.selectedText(), "two");
     const u64 revision = m_model.revision();
     const u64 selection = m_model.selectionGeneration();
-    for(const EditCommandRequest& rejected : {
-        translate(Core::Key::V), translate(Core::Key::V, true, false, true), translate(Core::Key::Left, true, true, true), translate(static_cast<i32>(Core::Key::Menu) + 1) }){
+    for(const EditCommandRequest& rejected : { translate(Core::Key::V), translate(Core::Key::V, true, false, true), translate(Core::Key::Left, true, true, true), translate(static_cast<i32>(Core::Key::Menu) + 1) }){
         EXPECT_FALSE(ApplyEditCommand(m_model, rejected).handled);
         EXPECT_EQ(m_model.text(), "one two");
         EXPECT_EQ(m_model.selectedText(), "two");

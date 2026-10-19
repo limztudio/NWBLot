@@ -46,7 +46,7 @@ TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContex
             EXPECT_TRUE(reportingContextAlive);
             ++handled;
             return error.result;
-        }, [](){ return -1; }
+        }, []()noexcept{ return -1; }
         );
         EXPECT_TRUE(reportingContextAlive);
     }

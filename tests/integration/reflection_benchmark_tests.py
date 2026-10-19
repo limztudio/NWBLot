@@ -126,7 +126,7 @@ def matched_trials(frame_delta=-.5, control_delta=0.0):
             delta = frame_delta if variant.name == LIT_HYBRID else 0.0
             controls = .5 + (control_delta if variant.name == LIT_HYBRID else 0.0)
             scopes = synthetic_scopes(variant, 5.0 + block * .03 + delta, controls)
-            trials.append({LIT_BLOCK: block, LIT_VARIANT: benchmark.asdict(variant), LIT_SCOPES: scopes, LIT_KERNEL_WORK_MS: benchmark.kernel_work_ms(scopes, variant, 10)})
+            trials.append({LIT_BLOCK: block, LIT_VARIANT: benchmark.asdict(variant), benchmark.LIT_POSITIVE_FRAME_REPORTS: 16, LIT_SCOPES: scopes, LIT_KERNEL_WORK_MS: benchmark.kernel_work_ms(scopes, variant, 10)})
     return variants, trials
 
 
@@ -235,6 +235,17 @@ class PairedInferenceTests(unittest.TestCase):
             results = benchmark.compare_trials(trials, variants)
             pair = next(item for item in results if item[LIT_BASELINE] == LIT_HARDWARE and item[LIT_CANDIDATE] == LIT_HYBRID)
             self.assertEqual(pair[LIT_STATUS], status)
+
+    def test_ten_positive_frame_reports_in_one_trial_cannot_resolve_its_pairs(self):
+        variants, trials = matched_trials()
+        next(trial for trial in trials if trial[LIT_VARIANT][LIT_NAME] == LIT_HYBRID)[benchmark.LIT_POSITIVE_FRAME_REPORTS] = 10
+        statuses = {(item[LIT_BASELINE], item[LIT_CANDIDATE]): item[LIT_STATUS] for item in benchmark.compare_trials(trials, variants)}
+        self.assertEqual(statuses[(LIT_HARDWARE, LIT_HYBRID)], "inconclusive_interval_count")
+        self.assertEqual(statuses[("disabled", LIT_HARDWARE)], "unresolved")
+
+    def test_positive_frame_reports_ignore_missing_and_zero_frame_rows(self):
+        text = report([(benchmark.FRAME, 1, 2)]) + report([(benchmark.CLASSIFY, 1, 2)]) + report([(benchmark.FRAME, 0, 2)]) + report([])
+        self.assertEqual(benchmark.positive_frame_reports(benchmark.parse_intervals(text, finalized=True)), 1)
 
     def test_noisy_controls_require_equivalence_before_a_speedup_claim(self):
         variants, trials = matched_trials()

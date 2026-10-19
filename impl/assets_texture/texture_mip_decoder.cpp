@@ -339,7 +339,7 @@ static void StoreHdrAlpha(u8* const outRgba16FloatBytes, const usize texelIndex,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextureMipDecoder::TextureMipDecoder()noexcept {}
+TextureMipDecoder::TextureMipDecoder()noexcept{}
 
 
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const Core::Format::Enum format, Core::Alloc::ScratchArena& arena){

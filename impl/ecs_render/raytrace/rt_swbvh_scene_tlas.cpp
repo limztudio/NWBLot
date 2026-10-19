@@ -332,14 +332,20 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             heap.free(m_rayTracingState.m_tlasHeapHandle);
             m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
-        const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
-        Core::GpuDescriptorRetirementGuard retireUnpublished(heap, tlasHeapHandle);
-        if(!tlasHeapHandle.valid() || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))){
+        const Expected<Core::GpuDescriptorHandle> tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
+        bool registered = false;
+        if(tlasHeapHandle){
+            Core::GpuDescriptorRetirementGuard retireUnpublished(heap, *tlasHeapHandle);
+            registered = heap.write(*tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()));
+            if(registered){
+                m_rayTracingState.m_tlasHeapHandle = *tlasHeapHandle;
+                retireUnpublished.release();
+            }
+        }
+        if(!registered){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             return false;
         }
-        m_rayTracingState.m_tlasHeapHandle = tlasHeapHandle;
-        retireUnpublished.release();
     }
 
     // Preserve a valid typed buffer and hash the descriptor-slot representation.

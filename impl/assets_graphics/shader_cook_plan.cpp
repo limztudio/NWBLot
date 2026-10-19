@@ -301,12 +301,10 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     plan.preparedEntries.reserve(inOutShaderEntries.size() * 3u);
     plan.plannedFileCount = 1; // shader archive index
 
-    AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys{ 0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena };
-    AssetsGraphicsCsgShaderVariants::ShaderStageKeySet avboitClipShaderKeys{ 0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena };
-    AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, materialClipShaderKeys);
-    const auto avboitKeys = AssetsGraphicsCsgShaderVariants::CollectAvboitClipShaderKeys(materialEntries, avboitClipShaderKeys);
-    if(!avboitKeys){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid generated AVBOIT shader identity (failure {})"), static_cast<u32>(avboitKeys.error()));
+    const AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys = AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, scratchArena);
+    const auto avboitClipShaderKeys = AssetsGraphicsCsgShaderVariants::CollectAvboitClipShaderKeys(materialEntries, scratchArena);
+    if(!avboitClipShaderKeys){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid generated AVBOIT shader identity (failure {})"), static_cast<u32>(avboitClipShaderKeys.error()));
         return MakeUnexpected(Failure{});
     }
 
@@ -427,7 +425,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         preparedEntry.dependencyChecksum = dependency->checksum;
         preparedEntry.compilerInputsHaveBom = dependency->compilerInputsHaveBom;
         const auto supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialClipShaderKeys, preparedEntry.entry);
-        const auto supportsAvboitCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(avboitClipShaderKeys, preparedEntry.entry);
+        const auto supportsAvboitCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(*avboitClipShaderKeys, preparedEntry.entry);
         if(!supportsCsgClipVariant){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid CSG clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsCsgClipVariant.error()));
             return MakeUnexpected(Failure{});

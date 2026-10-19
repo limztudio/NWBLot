@@ -91,16 +91,7 @@ bool CallbackGraph::prepare(const usize taskCount){
         const auto derivedNameAt92Col12 = DeriveName(Name("tests/callback_bindings/task/"), FormatDecimal(index, suffix));
         if(!derivedNameAt92Col12)
             return false;
-        const auto taskResult = AddTaskWithCommands(
-            m_graph,
-            *derivedNameAt92Col12,
-            "Callback Binding Task",
-            GraphicsCommands(),
-            scheduling,
-            {},
-            scheduling.mergeWithPrevious ? &m_tasks.back() : nullptr,
-            scheduling.mergeWithPrevious ? 1u : 0u
-        );
+        const auto taskResult = AddTaskWithCommands(m_graph, *derivedNameAt92Col12, "Callback Binding Task", GraphicsCommands(), scheduling, {}, scheduling.mergeWithPrevious ? &m_tasks.back() : nullptr, scheduling.mergeWithPrevious ? 1u : 0u);
         if(!taskResult)
             return false;
         const Graphics::GpuTaskId task = *taskResult;

@@ -259,9 +259,9 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
             ASSERT_TRUE(resolvedDrawStateResult1);
             const auto& resolvedDrawState = *resolvedDrawStateResult1;
             receiverLookup.forEachReceiverCutter(resolvedDrawState, [&](const NWB::Core::ECS::EntityID, const NWB::Impl::CsgCutterComponent& resolvedCutter){
-                    EXPECT_EQ(resolvedCutter.receiverGroup, receiver.receiverGroup);
-                    ++resolvedCutterCount;
-                }
+                EXPECT_EQ(resolvedCutter.receiverGroup, receiver.receiverGroup);
+                ++resolvedCutterCount;
+            }
             );
         }
         EXPECT_EQ(resolvedCutterCount, s_ExpectedDualCount);

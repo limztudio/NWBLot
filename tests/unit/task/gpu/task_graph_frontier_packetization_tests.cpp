@@ -360,7 +360,6 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     const Name consumerIdentity("tests/task_graph/frontier_scored_tail_frontier_consumer");
     Graphics::GpuTaskSchedulingHint consumerScheduling;
     consumerScheduling.allowSameClassQueueRouting = true;
-    consumerScheduling.allowTimingFeedbackRouting = true;
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc.setIdentity(consumerIdentity).setMarkerLabel("Frontier Scored Tail Frontier Consumer").setScheduling(consumerScheduling).setDependencies(&merged, 1u);
     const auto consumerResult = graph.addTask(consumerDesc, graphicsCommands);
@@ -372,11 +371,8 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     auxiliaryGraphicsQueue.queueIndex = 1u;
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), auxiliaryGraphicsQueue, };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
-    const Graphics::GpuTaskDiagnosticTimingQueueOverride queueOverride{ .key = Graphics::GpuTaskTimingKey{ .task = consumerIdentity, .queue = Graphics::CommandQueue::Graphics, }, .queue = auxiliaryGraphicsQueue.id, };
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    options.queueAssignmentOptions.diagnosticTimingQueueOverrides = &queueOverride;
-    options.queueAssignmentOptions.diagnosticTimingQueueOverrideCount = 1u;
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -396,7 +392,9 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     EXPECT_EQ(firstAssignment->queue, queues[0u].id);
     EXPECT_EQ(mergedAssignment->queue, queues[0u].id);
     EXPECT_EQ(blockedAssignment->queue, queues[0u].id);
+    // Same-class balancing moves the consumer to the idle graphics queue in the same family.
     EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
+    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
     const Graphics::GpuSubmissionPacketId mergedPacket = compiledPlan.packetForTask(merged);

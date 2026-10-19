@@ -11,6 +11,8 @@ timestamp envelopes, and makes the M4 rollout gate explicit:
 * render.frame (the Graphics critical path) must not regress beyond the configured tolerance; and
 * the fixed-scene output and validation log must remain clean.
 
+Timing gates need more than ten positive intervals per compared scope; otherwise a functionally clean run is inconclusive.
+
 The actual benchmark needs a target GPU with a dedicated compute-only queue and a visible native
 window. `--self-test` checks capture failures, cleanup ordering, and incomplete telemetry without either requirement.
 """
@@ -39,7 +41,7 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
-    INTERVAL_RE, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
+    INTERVAL_RE, MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
@@ -67,6 +69,7 @@ LIT_TIMING_FILE = "timing_file"
 LIT_LOG_FILE = "log_file"
 LIT_PASS = "pass"
 LIT_FAIL = "fail"
+LIT_INCONCLUSIVE = "inconclusive"
 LIT_SCHEMA = "schema"
 LIT_NWB_ASYNC_SHADOW_M4_V3 = "nwb.async_shadow_m4.v3"
 LIT_VERDICT = "verdict"
@@ -565,12 +568,19 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
         pixel_detail = (f"max abs {pixel_diff.max_abs}/{args.maximum_pixel_max_abs}, mean abs " f"{pixel_diff.mean_abs:.6f}/{args.maximum_pixel_mean_abs:.6f}, changed " f"{pixel_diff.changed_fraction * 100.0:.4f}%")
 
     logs_passed = not sync.forbidden_log_messages and not async_run.forbidden_log_messages
-    gates = [gate("dedicated async lane", async_run.lane.requested and async_run.lane.effective and async_run.lane.dedicated_compute, f"requested={async_run.lane.requested}, effective={async_run.lane.effective}, "
+    lane_passed = async_run.lane.requested and async_run.lane.effective and async_run.lane.dedicated_compute
+    intervals_passed = min(sync_frame.positive_sample_count, async_frame.positive_sample_count, shadow.positive_sample_count) > MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS
+    gates = [gate("dedicated async lane", lane_passed, f"requested={async_run.lane.requested}, effective={async_run.lane.effective}, "
             f"queues={async_run.lane.graphics_queue}/{async_run.lane.compute_queue}, " f"dedicated={async_run.lane.compute_dedicated}, compute={async_run.lane.compute_supported}, " f"graphics={async_run.lane.compute_graphics}",), gate(
-            "graph-owned shadow timing", shadow_scope_passed, f"median {format_ms(shadow.median_ms)} (min {args.minimum_shadow_ms:.4f} ms), " f"positive {shadow.positive_sample_count}/{shadow.sample_count}",), gate("critical path", timing_passed,
+            "positive timing intervals", intervals_passed, f"sync frame {sync_frame.positive_sample_count}, async frame {async_frame.positive_sample_count}, async shadow {shadow.positive_sample_count} "
+            f"(more than {MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS} required)",), gate("graph-owned shadow timing", shadow_scope_passed, f"median {format_ms(shadow.median_ms)} (min {args.minimum_shadow_ms:.4f} ms), " f"positive {shadow.positive_sample_count}/{shadow.sample_count}",), gate("critical path", timing_passed,
             f"sync {format_ms(sync_frame.median_ms)}, async {format_ms(async_frame.median_ms)}, " f"delta {regression_percent:+.3f}% (limit +{args.maximum_frame_regression_percent:.3f}%)",), gate("pixel parity", pixel_passed, pixel_detail), gate(
             "runtime and validation logs", logs_passed, "no forbidden log messages" if logs_passed else f"sync={sync.forbidden_log_messages}, async={async_run.forbidden_log_messages}",),]
-    verdict = LIT_PASS if all(bool(item[LIT_PASSED]) for item in gates) else LIT_FAIL
+    # Too few positive intervals make timing gates untrustworthy; functional gate failures still fail.
+    if lane_passed and pixel_passed and logs_passed and not intervals_passed:
+        verdict = LIT_INCONCLUSIVE
+    else:
+        verdict = LIT_PASS if all(bool(item[LIT_PASSED]) for item in gates) else LIT_FAIL
 
     def compact_run(run: RunResult, frame: ScopeSummary, shadow_scope: Optional[ScopeSummary] = None) -> Dict[str, object]:
         result = raw_run_payload(run)
@@ -943,7 +953,7 @@ def run_self_test() -> int:
 
         # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate submissions.
         # The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
-        stable_scope = ScopeSummary(6, 6, 1.0, 1.0, 1.0, 1.0)
+        stable_scope = ScopeSummary(11, 11, 1.0, 1.0, 1.0, 1.0)
         async_run = RunResult(mode=LIT_ASYNC, executable="async.exe", timing_file="async.timing.txt", log_file=LIT_ASYNC_LOG, capture_file=None, lane=LaneStatus(True, True, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False), scopes={
                 LIT_RENDER_FRAME: stable_scope, LIT_RENDER_ASYNC_SHADOW: stable_scope, LIT_RENDER_ASYNC_FINAL: stable_scope, }, forbidden_log_messages=[],)
         sync_run = RunResult(mode=LIT_SYNC, executable="sync.exe", timing_file="sync.timing.txt", log_file=LIT_SYNC_LOG, capture_file=None, lane=LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False),
@@ -951,8 +961,15 @@ def run_self_test() -> int:
         capture_args.skip_pixel_parity = True
         assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_PASS
 
+        # Ten positive shadow intervals cannot qualify timing, but a functional failure still fails.
+        async_run.scopes = {**async_run.scopes, LIT_RENDER_ASYNC_SHADOW: ScopeSummary(12, 10, 1.0, 1.0, 0.0, 1.0)}
+        assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_INCONCLUSIVE
+        async_run.forbidden_log_messages = [LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO]
+        assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_FAIL
+        async_run.forbidden_log_messages = []
+
         # Warmup can falsely fail an accepted measurement or mask a real regression; neither prefix may reach the gate.
-        sync_run.scopes = {LIT_RENDER_FRAME: ScopeSummary(6, 6, 10.0, 10.0, 10.0, 10.0)}
+        sync_run.scopes = {LIT_RENDER_FRAME: ScopeSummary(11, 11, 10.0, 10.0, 10.0, 10.0)}
         timing_path = root / "measurement-boundary.timing.txt"
         timing_symbols = load_name_symbols(None)
         for newline in ("\n", "\r\n"):
@@ -967,7 +984,7 @@ def run_self_test() -> int:
                 measured_interval = timing_interval(measured_ms)
                 header = measured_interval.splitlines(keepends=True)[0]
                 for cutoff_kind in ("completed_report", "partial_header", "partial_scope", "missing_file"):
-                    full_prefix = warmup_interval * 8
+                    full_prefix = warmup_interval * 16
                     if cutoff_kind == "partial_header":
                         initial_prefix = full_prefix + warmup_interval[:9]
                         remainder = warmup_interval[9:]
@@ -988,7 +1005,7 @@ def run_self_test() -> int:
                         timing_path.unlink()
                     if cutoff_kind != "missing_file":
                         timing_path.write_bytes(initial_prefix)
-                    chunks = [remainder, warmup_interval, header.rstrip(b"\r\n"), newline.encode(LIT_UTF_8) + measured_interval[len(header):] + measured_interval * 5]
+                    chunks = [remainder, warmup_interval, header.rstrip(b"\r\n"), newline.encode(LIT_UTF_8) + measured_interval[len(header):] + measured_interval * 10]
                     clock = [0.0]
                     writes = []
 
@@ -1005,7 +1022,7 @@ def run_self_test() -> int:
                     assert len(writes) == 4, "an incomplete or first post-warmup header was admitted"
                     assert offset == len(full_prefix) + len(warmup_interval)
                     measured = summarize_scopes(parse_timing_file(timing_path, timing_symbols, offset))
-                    assert measured[LIT_RENDER_FRAME].sample_count == 6
+                    assert measured[LIT_RENDER_FRAME].sample_count == 11
                     assert measured[LIT_RENDER_FRAME].median_ms == measured_ms
                     async_run.scopes = measured
                     assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == expected_verdict

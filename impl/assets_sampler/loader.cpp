@@ -42,11 +42,12 @@ bool SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& 
     }
     Core::SamplerHandle sampler = Move(*samplerResult);
 
-    const Core::GpuDescriptorHandle samplerHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
-    if(!samplerHandle.valid()){
+    const Expected<Core::GpuDescriptorHandle> samplerHandleResult = heap.allocate(Core::GpuDescriptorClass::Sampler);
+    if(!samplerHandleResult){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampler slot for '{}'"), owner, StringConvert(samplerName.resolvedText()));
         return false;
     }
+    const Core::GpuDescriptorHandle samplerHandle = *samplerHandleResult;
     if(!heap.write(samplerHandle, Core::DescriptorWriteItem::Sampler(0u, sampler.get()))){
         heap.free(samplerHandle);
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), owner, StringConvert(samplerName.resolvedText()));

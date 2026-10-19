@@ -208,12 +208,12 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
         sortedJointIndices.push_back(jointIndex);
     Sort(sortedJointIndices.begin(), sortedJointIndices.end(), [&parentDepths, &sortNames](const usize lhs, const usize rhs)noexcept{
-            if(parentDepths[lhs] != parentDepths[rhs])
-                return parentDepths[lhs] < parentDepths[rhs];
-            if(sortNames[lhs] != sortNames[rhs])
-                return sortNames[lhs] < sortNames[rhs];
-            return lhs < rhs;
-        }
+        if(parentDepths[lhs] != parentDepths[rhs])
+            return parentDepths[lhs] < parentDepths[rhs];
+        if(sortNames[lhs] != sortNames[rhs])
+            return sortNames[lhs] < sortNames[rhs];
+        return lhs < rhs;
+    }
     );
 
     outData.oldToNewJointIndices.resize(joints.size(), 0u);

@@ -287,11 +287,12 @@ bool AppendPreparedShadersToManifest(
             ))
                 return false;
 
-            const Name virtualPath = Core::ShaderArchive::BuildVirtualPathName(shaderName, generatedVariantName, stageName);
-            if(!virtualPath){
+            const Expected<Name> virtualPathResult = Core::ShaderArchive::BuildVirtualPathName(shaderName, generatedVariantName, stageName);
+            if(!virtualPathResult){
                 NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage.view()), StringConvert(generatedVariantName));
                 return false;
             }
+            const Name& virtualPath = *virtualPathResult;
 
             const NameHash virtualPathHash = virtualPath.hash();
             if(!inOutSeenVirtualPathHashes.insert(virtualPathHash).second){

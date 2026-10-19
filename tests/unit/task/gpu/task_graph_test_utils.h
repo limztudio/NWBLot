@@ -134,7 +134,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuTaskGraphCompileOptions& options = {}
 );
 
-// Synthetic ownership and packet fixtures require distinct transports independent of automatic placement scores.
+// Compiles on a topology copy where Compute and Transfer capabilities stay only on their own queue class when that class exists.
+// Single-capability Graphics, Compute, and Transfer work then gets one legal queue class from its command requirements alone.
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
     Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,

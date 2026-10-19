@@ -213,11 +213,12 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
 
     MeshSkinningRuntimeInstance instance(m_arena);
     instance.entity = entity;
-    instance.handle = allocateHandle();
-    if(!instance.handle.valid()){
+    const Expected<RuntimeMeshHandle> handleResult = allocateHandle();
+    if(!handleResult){
         eraseUnusedSource(sourceName);
         return false;
     }
+    instance.handle = *handleResult;
     instance.sourceName = sourceName;
     instance.meshClass = Core::Mesh::MeshClass::Skinned;
     instance.uv0 = mesh->uv0Stream();

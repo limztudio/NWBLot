@@ -97,7 +97,7 @@ concept DeviceApi = requires(
     device.unmapStagingTexture(stagingTexture);
 
     { device.createBuffer(bufferDesc) }->SameAs<Expected<BufferHandle>>;
-    { device.mapBuffer(buffer, CpuAccessMode::Write) }->SameAs<void*>;
+    { device.mapBuffer(buffer, CpuAccessMode::Write) }->SameAs<Expected<void*>>;
     device.unmapBuffer(buffer);
     { device.getBufferMemoryRequirements(buffer) }->SameAs<Expected<MemoryRequirements>>;
     { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<bool>;
@@ -131,7 +131,7 @@ concept DeviceApi = requires(
     { device.createOpacityMicromap(opacityMicromapDesc) }->SameAs<Expected<RayTracingOpacityMicromapHandle>>;
     { device.createAccelStruct(accelStructDesc) }->SameAs<Expected<RayTracingAccelStructHandle>>;
     { device.getAccelStructMemoryRequirements(*accelStruct) }->SameAs<Expected<MemoryRequirements>>;
-    { device.getClusterOperationSizeInfo(clusterOperationParams) }->SameAs<RayTracingClusterOperationSizeInfo>;
+    { device.getClusterOperationSizeInfo(clusterOperationParams) }->SameAs<Expected<RayTracingClusterOperationSizeInfo>>;
     { device.bindAccelStructMemory(*accelStruct, heap, u64{}) }->SameAs<bool>;
 
     { device.createCommandList(commandListParams) }->SameAs<Expected<CommandListHandle>>;

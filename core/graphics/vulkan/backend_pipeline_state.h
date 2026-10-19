@@ -193,13 +193,13 @@ public:
     [[nodiscard]] u32 getMaxTexelBufferElements()const noexcept;
 
     // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
-    [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
+    [[nodiscard]] Expected<DescriptorBufferSegment> allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
 
 
 private:
     // Driver layout sizes may exceed the working-size defaults; addresses become immutable after the first allocation in a generation.
     [[nodiscard]] bool reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
-    [[nodiscard]] DescriptorBufferSegment allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
+    [[nodiscard]] Expected<DescriptorBufferSegment> allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
 
 
 public:
@@ -375,8 +375,8 @@ public:
     // Coherent aggregate lifecycle counters; intentionally does not identify individual physical queues.
     [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const noexcept;
 
-    // Returns invalid (logged) when the class namespace is exhausted.
-    [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);
+    // Fails (logged) when the heap is not ready or the class namespace is exhausted.
+    [[nodiscard]] Expected<GpuDescriptorHandle> allocate(GpuDescriptorClass::Enum descriptorClass);
 
     // Defers reuse across pending CPU recording and until every protected heap binding completes or is abandoned.
     void free(GpuDescriptorHandle handle);

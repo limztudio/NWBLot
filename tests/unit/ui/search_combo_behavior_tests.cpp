@@ -466,9 +466,7 @@ TEST_F(UiSearchComboBehaviorTests, SameQueryCallbackAssignmentStillInvalidatesTh
 }
 
 TEST_F(UiSearchComboBehaviorTests, CompositionCallbacksInvalidateTheLoanWithoutChangingCommittedQuery){
-    for(const Mutation::Enum mutation : {
-        Mutation::CompositionBegin, Mutation::CompositionUpdate, Mutation::CompositionCancel
-    }){
+    for(const Mutation::Enum mutation : { Mutation::CompositionBegin, Mutation::CompositionUpdate, Mutation::CompositionCancel }){
         SearchComboState state(m_arena);
         SearchSource source(m_arena, state);
         ASSERT_TRUE(state.query().setText("tail"));

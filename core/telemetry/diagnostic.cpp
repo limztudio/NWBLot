@@ -177,8 +177,8 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const 
 
 bool RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, const u64 frameIndex, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::Diagnostic, frameIndex, streamId, [&record](TelemetryArena& arena, TelemetryBytes& payload){
-            return BuildDiagnosticPayload(arena, record, payload);
-        }
+        return BuildDiagnosticPayload(arena, record, payload);
+    }
     );
 }
 

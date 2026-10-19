@@ -124,13 +124,13 @@ TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLat
 
 TEST(GpuTaskTimingHistory, PreservesOrderedAverageAndExtremaAcrossRollingWindows){
     GraphicsArena arena(Name("tests/timing_history/ordered_reduction"));
-    constexpr u32 capacity = 4u;
-    GpuTaskTimingHistoryStore store(arena, capacity);
+    constexpr u32 s_Capacity = 4u;
+    GpuTaskTimingHistoryStore store(arena, s_Capacity);
     const TimingInput input = Input(0u);
     const f64 samples[] = { 1.0e100, 1.0, 3.0e99, 2.0, 5.0e99, 3.0, 7.0e99, 7.0e99, 4.0 };
     for(usize index = 0u; index < LengthOf(samples); ++index){
         ASSERT_TRUE(store.recordNonCommittingSample(input.key, input.queue, samples[index]));
-        const usize begin = index >= capacity ? index + 1u - capacity : 0u;
+        const usize begin = index >= s_Capacity ? index + 1u - s_Capacity : 0u;
         f64 expectedAverage = 0.0;
         f64 expectedMinimum = samples[begin];
         f64 expectedMaximum = samples[begin];

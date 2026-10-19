@@ -400,12 +400,12 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             }
             m_classBufferOffset[static_cast<u32>(cls)] = it->second;
         }
-        const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocateForBindingGeneration(bindingLayout->getDescriptorBufferSegmentKind(), setSizeBytes, offsetAlignmentBytes, m_descriptorBufferGeneration);
-        if(!block.valid()){
+        const Expected<DescriptorBufferSegment> block = m_context.descriptorBufferManager->allocateForBindingGeneration(bindingLayout->getDescriptorBufferSegmentKind(), setSizeBytes, offsetAlignmentBytes, m_descriptorBufferGeneration);
+        if(!block){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(block.error());
         }
-        return block;
+        return *block;
     };
 
     static constexpr GpuDescriptorClass::Enum s_ResourceClasses[] = {
@@ -460,11 +460,12 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
         const bool allocateBlock = !retainedBlock.valid();
         DescriptorBufferSegment* block = &retainedBlock;
         if(allocateBlock){
-            candidateBlock = m_context.descriptorBufferManager->allocateForBindingGeneration(m_accelStructLayout->getDescriptorBufferSegmentKind(), setSizeBytes, m_context.descriptorBufferManager->getOffsetAlignmentBytes(), m_descriptorBufferGeneration);
-            if(!candidateBlock.valid()){
+            const Expected<DescriptorBufferSegment> allocatedBlock = m_context.descriptorBufferManager->allocateForBindingGeneration(m_accelStructLayout->getDescriptorBufferSegmentKind(), setSizeBytes, m_context.descriptorBufferManager->getOffsetAlignmentBytes(), m_descriptorBufferGeneration);
+            if(!allocatedBlock){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: failed to carve {}-byte TLAS block."), setSizeBytes);
                 return false;
             }
+            candidateBlock = *allocatedBlock;
             block = &candidateBlock;
         }
 

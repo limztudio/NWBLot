@@ -42,17 +42,17 @@ template<
     Vector<u32, Core::Alloc::ScratchArena> outIndices(primitiveIndexCount, scratchArena);
 
     if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> bool {
-            const bool skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
-            const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
-            const auto positionRef = DecodeMeshletPositionRef(deltaBytes, deltaByteCount, meshlet, localPositionIndex, skinRequired);
-            if(!positionRef)
-                return false;
-            if(static_cast<usize>(positionRef->position) >= positionCount)
-                return false;
+        const bool skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
+        const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
+        const auto positionRef = DecodeMeshletPositionRef(deltaBytes, deltaByteCount, meshlet, localPositionIndex, skinRequired);
+        if(!positionRef)
+            return false;
+        if(static_cast<usize>(positionRef->position) >= positionCount)
+            return false;
 
-            outIndices[primitiveByte] = positionRef->position;
-            return true;
-        }
+        outIndices[primitiveByte] = positionRef->position;
+        return true;
+    }
     ))
         return MakeUnexpected(Failure{});
     return outIndices;

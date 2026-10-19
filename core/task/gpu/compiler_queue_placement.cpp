@@ -170,7 +170,6 @@ namespace GpuTaskGraphCompilerDetail{
         if(
             (requiredClass != CommandQueue::kCount && candidate.queueClass != requiredClass)
             || (group.initialOwnershipQueue.valid() && candidate.id != group.initialOwnershipQueue)
-            || (group.diagnosticOverrideQueue.valid() && candidate.id != group.diagnosticOverrideQueue)
             || !HasCapabilities(candidate.capabilities, group.requiredCapabilities)
             || !IsBetterQueue(candidate, result)
         )
@@ -191,7 +190,6 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
-    const GpuTaskGraphQueueAssignmentOptions& options,
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
     Alloc::ScratchArena& scratchArena
 ){
@@ -205,32 +203,9 @@ namespace GpuTaskGraphCompilerDetail{
         return MakeUnexpected(diagnostic);
     };
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> initialOwnershipQueues(graph.taskCount(), scratchArena);
-    Vector<GpuPhysicalQueueId, Alloc::ScratchArena> diagnosticOverrideQueues(graph.taskCount(), scratchArena);
     const auto ownershipConstraints = BuildInitialOwnershipQueueConstraints(graph, analysis, initialOwnershipQueues, scratchArena);
     if(!ownershipConstraints)
         return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, ownershipConstraints.error());
-
-    if(options.diagnosticQueueOverrideCount != 0u && !options.diagnosticQueueOverrides){
-        diagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
-        return MakeUnexpected(diagnostic);
-    }
-    for(usize overrideIndex = 0u; overrideIndex < options.diagnosticQueueOverrideCount; ++overrideIndex){
-        const GpuTaskDiagnosticQueueOverride& override = options.diagnosticQueueOverrides[overrideIndex];
-        if(!graph.validTask(override.task)){
-            diagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
-            diagnostic.task = override.task;
-            return MakeUnexpected(diagnostic);
-        }
-        const GpuPhysicalQueueInfo* const candidate = FindPhysicalQueueInfo(topology, override.queue);
-        if(
-            diagnosticOverrideQueues[override.task.index].valid()
-            || !candidate
-            || !IsLegalQueueAssignmentCandidate(graph, topology, graph.taskAt(override.task.index), *candidate)
-            || (initialOwnershipQueues[override.task.index].valid() && initialOwnershipQueues[override.task.index] != override.queue)
-        )
-            return fail(GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride, override.task);
-        diagnosticOverrideQueues[override.task.index] = override.queue;
-    }
 
     outGroups.clear();
     outGroups.reserve(graph.taskCount());
@@ -243,7 +218,6 @@ namespace GpuTaskGraphCompilerDetail{
             .assignmentCount = 1u,
             .requiredCapabilities = task.commands.requiredCapabilities,
             .initialOwnershipQueue = initialOwnershipQueues[taskID.index],
-            .diagnosticOverrideQueue = diagnosticOverrideQueues[taskID.index],
         };
         const GpuPhysicalQueueInfo* const singletonQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, singleton);
         if(!singletonQueue)
@@ -253,7 +227,6 @@ namespace GpuTaskGraphCompilerDetail{
             GpuTaskQueuePlacementGroup combined = outGroups.back();
             ++combined.assignmentCount;
             combined.requiredCapabilities |= singleton.requiredCapabilities;
-            combined.diagnosticOverrideQueue = {};
             const GpuPhysicalQueueInfo* combinedWitness = nullptr;
             if(AccumulateExactQueueConstraint(singleton.initialOwnershipQueue, combined.initialOwnershipQueue)){
                 NWB_ASSERT(legalityWitness);
@@ -264,9 +237,6 @@ namespace GpuTaskGraphCompilerDetail{
                     combinedWitness = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined);
             }
             if(combinedWitness){
-                combined.diagnosticOverrideQueue = outGroups.back().diagnosticOverrideQueue;
-                if(!AccumulateExactQueueConstraint(singleton.diagnosticOverrideQueue, combined.diagnosticOverrideQueue) || (combined.diagnosticOverrideQueue.valid() && !FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined)))
-                    return fail(GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride, taskID);
                 outGroups.back() = combined;
                 legalityWitness = combinedWitness;
                 continue;

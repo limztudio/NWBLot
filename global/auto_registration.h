@@ -91,30 +91,30 @@ template<typename QueueT, typename ContextT, typename FunctionVectorT, typename 
     && noexcept(logNull())
     && noexcept(logFailure())
     && []()constexpr noexcept{
-    using Range = FunctionVectorT;
-    if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-        using Returned = decltype(*DeclVal<Iterator&>());
-        using Value = Decay_T<Returned>;
-        using Item = const Value&;
-        return
-            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-            && IsNothrowDestructible_V<Iterator>
-            && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-            && noexcept(++DeclVal<Iterator&>())
-            && noexcept(*DeclVal<Iterator&>())
-            && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
-            && IsNothrowDestructible_V<Value>
-            && noexcept(static_cast<bool>(!DeclVal<Item>()))
-            && noexcept(static_cast<bool>(DeclVal<Item>()(DeclVal<ContextT&>())))
-        ;
-    }
-    else
-        return false;
-}()
+        using Range = FunctionVectorT;
+        if constexpr(requires(Range& values){ values.begin(); values.end(); }){
+            using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
+            using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
+            using Returned = decltype(*DeclVal<Iterator&>());
+            using Value = Decay_T<Returned>;
+            using Item = const Value&;
+            return
+                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
+                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
+                && IsNothrowDestructible_V<Iterator>
+                && IsNothrowDestructible_V<Sentinel>
+                && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+                && noexcept(++DeclVal<Iterator&>())
+                && noexcept(*DeclVal<Iterator&>())
+                && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
+                && IsNothrowDestructible_V<Value>
+                && noexcept(static_cast<bool>(!DeclVal<Item>()))
+                && noexcept(static_cast<bool>(DeclVal<Item>()(DeclVal<ContextT&>())))
+            ;
+        }
+        else
+            return false;
+    }()
 ){
     queue.copyTo(scratchFunctions);
 
@@ -139,40 +139,40 @@ inline void RegisterAutoFactoryProducts(const FactoryVectorT& factories, CreateP
     noexcept(logNullProduct())
     && noexcept(logRegisterFailure())
     && []()constexpr noexcept{
-    using Range = const FactoryVectorT;
-    if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-        using Returned = decltype(*DeclVal<Iterator&>());
-        using Value = Decay_T<Returned>;
-        using Item = const Value&;
-        return
-            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-            && IsNothrowDestructible_V<Iterator>
-            && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-            && noexcept(++DeclVal<Iterator&>())
-            && noexcept(*DeclVal<Iterator&>())
-            && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
-            && IsNothrowDestructible_V<Value>
-            && noexcept(static_cast<bool>(DeclVal<Item>() == nullptr))
-            && []()constexpr noexcept{
-                using ReturnedProduct = decltype(DeclVal<CreateProductT&>()(DeclVal<Item>()));
-                using Product = Decay_T<ReturnedProduct>;
-                return
-                    noexcept(DeclVal<CreateProductT&>()(DeclVal<Item>()))
-                    && (!IsReference_V<ReturnedProduct> || IsNothrowConvertible_V<ReturnedProduct, Product>)
-                    && IsNothrowDestructible_V<Product>
-                    && noexcept(static_cast<bool>(!DeclVal<Product&>()))
-                    && noexcept(static_cast<bool>(!DeclVal<RegisterProductT&>()(DeclVal<Product&&>())))
-                ;
-            }()
-        ;
-    }
-    else
-        return false;
-}()
+        using Range = const FactoryVectorT;
+        if constexpr(requires(Range& values){ values.begin(); values.end(); }){
+            using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
+            using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
+            using Returned = decltype(*DeclVal<Iterator&>());
+            using Value = Decay_T<Returned>;
+            using Item = const Value&;
+            return
+                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
+                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
+                && IsNothrowDestructible_V<Iterator>
+                && IsNothrowDestructible_V<Sentinel>
+                && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+                && noexcept(++DeclVal<Iterator&>())
+                && noexcept(*DeclVal<Iterator&>())
+                && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
+                && IsNothrowDestructible_V<Value>
+                && noexcept(static_cast<bool>(DeclVal<Item>() == nullptr))
+                && []()constexpr noexcept{
+                    using ReturnedProduct = decltype(DeclVal<CreateProductT&>()(DeclVal<Item>()));
+                    using Product = Decay_T<ReturnedProduct>;
+                    return
+                        noexcept(DeclVal<CreateProductT&>()(DeclVal<Item>()))
+                        && (!IsReference_V<ReturnedProduct> || IsNothrowConvertible_V<ReturnedProduct, Product>)
+                        && IsNothrowDestructible_V<Product>
+                        && noexcept(static_cast<bool>(!DeclVal<Product&>()))
+                        && noexcept(static_cast<bool>(!DeclVal<RegisterProductT&>()(DeclVal<Product&&>())))
+                    ;
+                }()
+            ;
+        }
+        else
+            return false;
+    }()
 ){
     for(const auto factory : factories){
         if(factory == nullptr)

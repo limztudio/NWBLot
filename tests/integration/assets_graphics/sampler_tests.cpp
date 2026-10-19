@@ -71,9 +71,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryPayload::HeaderBinary));
     const NWB::Core::Assets::AssetBytes validBinary(binary);
 
-    for(const NWB::Core::SamplerReductionType::Enum reduction : {
-        NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum
-    }){
+    for(const NWB::Core::SamplerReductionType::Enum reduction : { NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum }){
         binary = validBinary;
         const u32 reductionValue = static_cast<u32>(reduction);
         NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));

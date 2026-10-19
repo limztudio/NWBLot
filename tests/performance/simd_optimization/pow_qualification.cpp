@@ -41,15 +41,16 @@ inline constexpr f32 s_EncodeExponent = 1.0f / 2.4f;
 inline constexpr f32 s_DecodeScale = 1.0f / 1.055f;
 
 struct FlagsSnapshot{
-    i32 standard;
-    u32 mapped;
-    u64 native;
     friend bool operator==(const FlagsSnapshot&, const FlagsSnapshot&)noexcept = default;
-
     template<typename Stream>
     friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value){
         return stream << value.standard << '/' << value.mapped << '/' << value.native;
     }
+
+
+    i32 standard;
+    u32 mapped;
+    u64 native;
 };
 
 struct alignas(SIMDVectorSingle) Observation{
@@ -352,10 +353,12 @@ void PrintCounts(const StringView category, const Counts& counts){
 
 #if defined(NWB_PLATFORM_WINDOWS)
 struct TrapEdgeObservation{
+    friend bool operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
+
+
     u32 code{}, flags{}, control{};
     i32 error{};
     u64 nativeStatus{}, nativeControl{};
-    friend bool operator==(const TrapEdgeObservation&, const TrapEdgeObservation&) = default;
 };
 
 [[nodiscard]] Expected<TrapEdgeObservation> ObserveTrapEdge(const Evaluate evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled){
@@ -420,21 +423,21 @@ struct TrapEdgeObservation{
 #endif
         errno = savedError;
     });
-    constexpr i32 modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    constexpr i32 s_Modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
 #if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    constexpr u32 denormalModes[]{ _DN_SAVE, _DN_FLUSH };
+    constexpr u32 s_DenormalModes[]{ _DN_SAVE, _DN_FLUSH };
 #else
-    constexpr u32 denormalModes[]{ _DN_SAVE };
+    constexpr u32 s_DenormalModes[]{ _DN_SAVE };
 #endif
     const SIMDVectorSingle x[]{ VectorSet(0.5f, 1.0f, 1.0f, 1.0f), VectorSet(0.5f, 1.0f, 1.0f, 1.0f), VectorSetInt(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u) };
     const SIMDVectorSingle y[]{ VectorSet(149.0f, 1.0f, 1.0f, 1.0f), VectorSet(127.0f, 1.0f, 1.0f, 1.0f), VectorSet(0.0f, 1.0f, 1.0f, 1.0f) };
     u32 differences = 0u, cases = 0u;
     bool delivered = true;
-    for(const u32 denormalMode : denormalModes){
+    for(const u32 denormalMode : s_DenormalModes){
         u32 control{};
         if(_controlfp_s(&control, denormalMode, _MCW_DN) != 0 || (control & _MCW_DN) != denormalMode)
             return 2;
-        for(const i32 mode : modes){
+        for(const i32 mode : s_Modes){
             if(!SetFloatingPointRoundingMode(mode))
                 return 2;
             for(const u32 enabled : { _EM_UNDERFLOW, _EM_UNDERFLOW | _EM_INEXACT }){

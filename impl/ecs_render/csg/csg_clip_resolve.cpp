@@ -216,17 +216,17 @@ template<typename CutterTransformLoader, typename CutterHandler>
 ){
     bool resolved = true;
     receiverLookup.forEachReceiverCutter(receiverDrawState, [&](const Core::ECS::EntityID, const CsgCutterComponent& cutter){
-            if(!resolved)
-                return;
+        if(!resolved)
+            return;
 
-            const CsgCutterTransforms cutterTransforms = loadCutterTransforms(cutter);
-            const auto resolvedCutter = ResolveReceiverClipCutter(shapeRegistry, cutter, cutterTransforms.shapeToWorld, cutterTransforms.worldToShape, receiverLocalMinBounds, receiverLocalMaxBounds, receiverBoundsCanCull, receiverLocalToWorld);
-            if(!resolvedCutter)
-                return;
+        const CsgCutterTransforms cutterTransforms = loadCutterTransforms(cutter);
+        const auto resolvedCutter = ResolveReceiverClipCutter(shapeRegistry, cutter, cutterTransforms.shapeToWorld, cutterTransforms.worldToShape, receiverLocalMinBounds, receiverLocalMaxBounds, receiverBoundsCanCull, receiverLocalToWorld);
+        if(!resolvedCutter)
+            return;
 
-            if(!handler(*resolvedCutter))
-                resolved = false;
-        }
+        if(!handler(*resolvedCutter))
+            resolved = false;
+    }
     );
     return resolved;
 }

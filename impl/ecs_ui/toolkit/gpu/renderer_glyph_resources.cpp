@@ -52,9 +52,10 @@ namespace __hidden_ui_gpu_glyphs{
     if(version.m_sampledImage.valid())
         return true;
     Core::GpuDescriptorHeap& heap = version.m_graphics.getDevice().getDescriptorHeap();
-    const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(!descriptor.valid())
+    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    if(!descriptorResult)
         return false;
+    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
     Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
     if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, version.m_texture.get(), Core::Format::R8_UNORM, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
         return false;

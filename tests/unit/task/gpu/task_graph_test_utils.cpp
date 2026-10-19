@@ -150,35 +150,26 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options
 ){
-    Vector<Graphics::GpuTaskDiagnosticQueueOverride, Core::Alloc::ScratchArena> overrides{ scratchArena };
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        overrides.reserve(declarations.taskCount());
-        for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
-            const Graphics::GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
-            const Graphics::GpuQueueCapability::Mask capabilities = task.commands.requiredCapabilities;
-            if(capabilities == Graphics::GpuQueueCapability::None || task.commands.requiresPrimaryGraphicsQueue || task.commands.externalQueue.valid())
-                continue;
-            const Graphics::CommandQueue::Enum queueClass = (capabilities & Graphics::GpuQueueCapability::Graphics)
-                ? Graphics::CommandQueue::Graphics
-                : ((capabilities & Graphics::GpuQueueCapability::Compute) ? Graphics::CommandQueue::Compute : Graphics::CommandQueue::Transfer)
-            ;
-            const Graphics::GpuPhysicalQueueInfo* selectedQueue = nullptr;
-            for(usize queueIndex = 0u; topology.queues && queueIndex < topology.queueCount; ++queueIndex){
-                const Graphics::GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
-                if(queue.queueClass != queueClass || (queue.capabilities & capabilities) != capabilities)
-                    continue;
-                if(!selectedQueue || queue.id.index < selectedQueue->id.index)
-                    selectedQueue = &queue;
-            }
-            if(selectedQueue)
-                overrides.push_back({ .task = task.id, .queue = selectedQueue->id });
-        }
+    if(!topology.queues)
+        return Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
+
+    bool hasComputeQueue = false;
+    bool hasTransferQueue = false;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        hasComputeQueue = hasComputeQueue || topology.queues[queueIndex].queueClass == Graphics::CommandQueue::Compute;
+        hasTransferQueue = hasTransferQueue || topology.queues[queueIndex].queueClass == Graphics::CommandQueue::Transfer;
     }
-    Graphics::GpuTaskGraphCompileOptions routedOptions = options;
-    routedOptions.queueAssignmentOptions.diagnosticQueueOverrides = overrides.data();
-    routedOptions.queueAssignmentOptions.diagnosticQueueOverrideCount = overrides.size();
-    return Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph, routedOptions);
+    Vector<Graphics::GpuPhysicalQueueInfo, Core::Alloc::ScratchArena> queues(topology.queues, topology.queues + topology.queueCount, scratchArena);
+    for(Graphics::GpuPhysicalQueueInfo& queue : queues){
+        u8 capabilities = static_cast<u8>(queue.capabilities);
+        if(hasComputeQueue && queue.queueClass == Graphics::CommandQueue::Graphics)
+            capabilities &= static_cast<u8>(~static_cast<u8>(Graphics::GpuQueueCapability::Compute));
+        if(hasTransferQueue && queue.queueClass != Graphics::CommandQueue::Transfer)
+            capabilities &= static_cast<u8>(~static_cast<u8>(Graphics::GpuQueueCapability::Transfer));
+        queue.capabilities = static_cast<Graphics::GpuQueueCapability::Mask>(capabilities);
+    }
+    const Graphics::GpuPhysicalQueueTopology separatedTopology{ .queues = queues.data(), .queueCount = queues.size(), };
+    return Compile(scratchArena, graph, analysis, separatedTopology, assignments, compiledGraph, options);
 }
 
 

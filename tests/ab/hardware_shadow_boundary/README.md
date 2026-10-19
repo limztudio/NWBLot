@@ -39,10 +39,11 @@ python -m launcher hardware-shadow-boundary -- --measure-seconds 30 --minimum-sa
 ```
 
 After the requested warmup, the runner waits for the next complete timing-file flush and excludes every byte through
-that boundary from the measured sample set. The default success condition then requires six positive `render.frame`
-and `render.shadow_opaque_trace` intervals from
-each arm, plus six positive `render.shadow_transparent_trace` and `render.shadow_transparent_resolve` intervals from
-the healthy arm. The opaque baseline must publish no positive transparent timing. Expected arm markers, clean
+that boundary from the measured sample set. Collection then requires at least `--minimum-samples` (default six) positive
+`render.frame` and `render.shadow_opaque_trace` intervals from each arm, plus the same count of positive
+`render.shadow_transparent_trace` and `render.shadow_transparent_resolve` intervals from the healthy arm. Timing
+comparisons need more than ten positive intervals in each of those scopes; with fewer, a report whose functional gates
+pass is `inconclusive`. The opaque baseline must publish no positive transparent timing. Expected arm markers, clean
 runtime/validation logs, and nonblank native-window captures remain mandatory. A machine without RayQuery-capable
 hardware returns the standard skip code `77`; a missing route marker or runtime error is still a failure.
 

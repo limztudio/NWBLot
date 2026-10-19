@@ -53,8 +53,8 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
         return MakeUnexpected(Failure{});
     const bool hasBitmap = map.findField("width") != nullptr;
     if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, [hasBitmap](const AStringView field)noexcept{
-            return field == "advance_units" || (hasBitmap && (field == "group" || field == "channel" || field == "x" || field == "y" || field == "width" || field == "height" || field == "plane_left" || field == "plane_top"));
-        }
+        return field == "advance_units" || (hasBitmap && (field == "group" || field == "channel" || field == "x" || field == "y" || field == "width" || field == "height" || field == "plane_left" || field == "plane_top"));
+    }
     ))
         return MakeUnexpected(Failure{});
     auto advanceUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "advance_units", true);

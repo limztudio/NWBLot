@@ -97,7 +97,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(_M_HYBRID_X86_ARM64) && !defined(_M_ARM64EC) && (!_MANAGED) && (!_M_CEE) && (!defined(_M_IX86_FP) || (_M_IX86_FP > 1)) && !defined(NWB_NO_INTRINSICS) && !defined(NWB_NO_VECTORCALL)
+#if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(_M_ARM64EC) && (!defined(_M_IX86_FP) || (_M_IX86_FP > 1))
 #define NWB_SIMD_CALL __vectorcall
 #elif defined(__GNUC__)
 #define NWB_SIMD_CALL

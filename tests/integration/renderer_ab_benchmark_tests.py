@@ -193,7 +193,7 @@ def trial_matrix(frame_delta=-.5):
     for block, row in enumerate(orders):
         for position, arm in enumerate(row):
             current = scopes(workload, frame_ms=5 + block * .01 + (frame_delta if arm == LIT_CANDIDATE else 0))
-            trials.append({LIT_ARM: arm, LIT_BLOCK: block, LIT_POSITION: position, LIT_SCOPES: current})
+            trials.append({LIT_ARM: arm, LIT_BLOCK: block, LIT_POSITION: position, benchmark.LIT_POSITIVE_FRAME_REPORTS: 11, LIT_SCOPES: current})
     return workload, orders, trials
 
 
@@ -317,6 +317,12 @@ class WallFrameEvidenceTests(unittest.TestCase):
             trial["wall_frame"] = {"eligible": True, "mean_frame_ms": 1, "mean_fps": 1000}
         self.assertFalse(benchmark.compare_trials(trials, orders, workload)["wall_frame"]["eligible"])
 
+    def test_ten_positive_frame_reports_in_one_trial_cannot_resolve_a_change(self):
+        workload, orders, trials = trial_matrix()
+        self.assertEqual(benchmark.compare_trials(trials, orders, workload)[LIT_STATUS], LIT_RESOLVED_GPU_TIME_REDUCTION)
+        trials[-1][benchmark.LIT_POSITIVE_FRAME_REPORTS] = 10
+        self.assertEqual(benchmark.compare_trials(trials, orders, workload)[LIT_STATUS], "inconclusive_interval_count")
+
     def test_wall_frame_comparison_uses_complete_paired_blocks_and_correct_units(self):
         workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
         _, orders, trials = trial_matrix()
@@ -400,7 +406,7 @@ class WorkloadPolicyTests(unittest.TestCase):
     def test_cli_rejects_lower_coverage_and_unbalanced_plans(self):
         common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        for extra in ((LIT_BLOCKS, "7"), (LIT_BLOCKS, "6"), ("--warmup-intervals", "1"), ("--sample-intervals", "5"), ("--minimum-frame-samples", "99"), ("--timeout", LIT_NAN), ("--application-arg=--gpudbg",)):
+        for extra in ((LIT_BLOCKS, "7"), (LIT_BLOCKS, "6"), ("--warmup-intervals", "1"), ("--sample-intervals", "10"), ("--minimum-frame-samples", "99"), ("--timeout", LIT_NAN), ("--application-arg=--gpudbg",)):
             with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(common + list(extra))
 

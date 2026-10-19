@@ -47,7 +47,8 @@ inline Expected<Array<u64, s_TimerQueryTimestampCount>, VkResult> GetTimerQueryR
     if(!token.hasPhysicalQueueIdentity())
         return false;
 
-    return device.queueGetCompletedInstance(GpuPhysicalQueueId{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration, }) >= token.value;
+    const Expected<u64> completedInstance = device.queueGetCompletedInstance(GpuPhysicalQueueId{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration, });
+    return completedInstance && *completedInstance >= token.value;
 }
 
 

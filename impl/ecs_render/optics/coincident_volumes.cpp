@@ -92,11 +92,13 @@ public:
             return false;
         // Shared groups assert preserved boundaries; otherwise all material bytes must agree.
         return
-            lhs->group != s_NameNone || (
-            lhs->boundaryMode == rhs->boundaryMode && lhs->mediumPriority == rhs->mediumPriority
-            && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
-            && (lhs->mutableTypedByteCount == 0u || NWB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
-        )
+            lhs->group != s_NameNone
+            || (
+                lhs->boundaryMode == rhs->boundaryMode
+                && lhs->mediumPriority == rhs->mediumPriority
+                && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
+                && (lhs->mutableTypedByteCount == 0u || NWB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
+            )
         ;
     }
 

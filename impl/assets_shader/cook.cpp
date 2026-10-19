@@ -239,8 +239,8 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
         for(const CookString& defineValue : defineValues){
             const AStringView valueView(defineValue);
             if(valueView.empty() || TrimView(valueView) != valueView || FindIf(valueView.begin(), valueView.end(), [](const char ch)noexcept{
-                    return ch == ';' || ch == '\0' || ch == '\r' || ch == '\n';
-                }
+                return ch == ';' || ch == '\0' || ch == '\r' || ch == '\n';
+            }
             ) != valueView.end()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
                 return MakeUnexpected(Failure{});
@@ -292,8 +292,8 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
     }
     entry.archiveStage = entry.stage;
     if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Shader meta", [isMesh = shaderType == Core::ShaderType::MeshStage](const AStringView field)noexcept{
-            return field == "ray_query" || field == "optimization_level" || field == "entry_point" || field == "include_roots" || field == "defines" || (isMesh && field == "emit_mesh_compute_shadow");
-        }
+        return field == "ray_query" || field == "optimization_level" || field == "entry_point" || field == "include_roots" || field == "defines" || (isMesh && field == "emit_mesh_compute_shadow");
+    }
     ))
         return MakeUnexpected(Failure{});
     const auto rayQuery = __hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "ray_query", entry.rayQuery);

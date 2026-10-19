@@ -58,25 +58,25 @@ Expected<MeshSkinningSystem::RestToSkinnedCopyByteCounts> MeshSkinningSystem::Re
 void MeshSkinningSystem::collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const{
     MeshSkinningStateBufferCollector collector(scratchArena, outBuffers);
     m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
-            if(!binding.runtimeMesh.valid())
-                return;
+        if(!binding.runtimeMesh.valid())
+            return;
 
-            const MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
-            if(!instance)
-                return;
+        const MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+        if(!instance)
+            return;
 
-            MeshSkinningStateBufferResources resources;
-            const auto foundResources = m_runtimeResources.find(instance->handle.value);
-            if(foundResources != m_runtimeResources.end()){
-                resources = {
-                    .editRevision = foundResources.value().editRevision,
-                    .skinBuffer = &foundResources.value().skinBuffer,
-                    .jointPaletteBuffer = &foundResources.value().jointPaletteBuffer,
-                    .bindlessResourceSlotsBuffer = &foundResources.value().bindlessResourceSlotsBuffer,
-                };
-            }
-            collector.collect(instance, resources);
+        MeshSkinningStateBufferResources resources;
+        const auto foundResources = m_runtimeResources.find(instance->handle.value);
+        if(foundResources != m_runtimeResources.end()){
+            resources = {
+                .editRevision = foundResources.value().editRevision,
+                .skinBuffer = &foundResources.value().skinBuffer,
+                .jointPaletteBuffer = &foundResources.value().jointPaletteBuffer,
+                .bindlessResourceSlotsBuffer = &foundResources.value().bindlessResourceSlotsBuffer,
+            };
         }
+        collector.collect(instance, resources);
+    }
     );
 }
 

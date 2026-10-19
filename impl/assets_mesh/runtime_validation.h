@@ -32,57 +32,57 @@ public:
     [[nodiscard]] static bool ValidDirectionVector(const SIMDVectorSingle direction)noexcept;
     [[nodiscard]] static bool ValidTangentVector(const SIMDVectorSingle tangent)noexcept;
     [[nodiscard]] static bool ValidateMeshStreams(
-    const Core::Assets::AssetVector<Float3U>& positions,
-    const Core::Assets::AssetVector<Half4U>& normals,
-    const Core::Assets::AssetVector<Half4U>& tangents,
-    const Core::Assets::AssetVector<Float2U>& uv0,
-    const Core::Assets::AssetVector<Half4U>& colors,
-    const TStringView contextText,
-    const TStringView meshPathText
+        const Core::Assets::AssetVector<Float3U>& positions,
+        const Core::Assets::AssetVector<Half4U>& normals,
+        const Core::Assets::AssetVector<Half4U>& tangents,
+        const Core::Assets::AssetVector<Float2U>& uv0,
+        const Core::Assets::AssetVector<Half4U>& colors,
+        const TStringView contextText,
+        const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateMeshletAttributeSkinSharing(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::Assets::AssetVector<u8>& positionRefDeltas,
-    const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
-    const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const TStringView contextText,
-    const TStringView meshPathText
+        Core::Alloc::ScratchArena& scratchArena,
+        const Core::Assets::AssetVector<u8>& positionRefDeltas,
+        const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
+        const Core::Assets::AssetVector<MeshletDesc>& meshlets,
+        const TStringView contextText,
+        const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateMeshletPayload(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::Assets::AssetVector<u8>& positionRefDeltas,
-    const Core::Assets::AssetVector<u8>& attributeRefDeltas,
-    const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
-    const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
-    const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
-    const usize positionCount,
-    const usize skinCount,
-    const usize normalCount,
-    const usize tangentCount,
-    const usize uv0Count,
-    const usize colorCount,
-    const bool skinRequired,
-    const TStringView contextText,
-    const TStringView meshPathText
+        Core::Alloc::ScratchArena& scratchArena,
+        const Core::Assets::AssetVector<u8>& positionRefDeltas,
+        const Core::Assets::AssetVector<u8>& attributeRefDeltas,
+        const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
+        const Core::Assets::AssetVector<MeshletDesc>& meshlets,
+        const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
+        const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
+        const usize positionCount,
+        const usize skinCount,
+        const usize normalCount,
+        const usize tangentCount,
+        const usize uv0Count,
+        const usize colorCount,
+        const bool skinRequired,
+        const TStringView contextText,
+        const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateSharedMeshPayload(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::Assets::AssetVector<Float3U>& positions,
-    const Core::Assets::AssetVector<Half4U>& normals,
-    const Core::Assets::AssetVector<Half4U>& tangents,
-    const Core::Assets::AssetVector<Float2U>& uv0,
-    const Core::Assets::AssetVector<Half4U>& colors,
-    const Core::Assets::AssetVector<u8>& positionRefDeltas,
-    const Core::Assets::AssetVector<u8>& attributeRefDeltas,
-    const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
-    const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
-    const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
-    const usize skinCount,
-    const bool skinRequired,
-    const TStringView contextText,
-    const TStringView meshPathText
+        Core::Alloc::ScratchArena& scratchArena,
+        const Core::Assets::AssetVector<Float3U>& positions,
+        const Core::Assets::AssetVector<Half4U>& normals,
+        const Core::Assets::AssetVector<Half4U>& tangents,
+        const Core::Assets::AssetVector<Float2U>& uv0,
+        const Core::Assets::AssetVector<Half4U>& colors,
+        const Core::Assets::AssetVector<u8>& positionRefDeltas,
+        const Core::Assets::AssetVector<u8>& attributeRefDeltas,
+        const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
+        const Core::Assets::AssetVector<MeshletDesc>& meshlets,
+        const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
+        const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
+        const usize skinCount,
+        const bool skinRequired,
+        const TStringView contextText,
+        const TStringView meshPathText
     );
     template<typename MeshGeometryPayloadT>
     [[nodiscard]] static bool ValidateSharedMeshPayload(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText);

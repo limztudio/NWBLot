@@ -65,18 +65,11 @@ Expected<EditBoxPlacement> EditBoxView::arrange(const Rect& bounds, const Insets
 }
 
 Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, const Point previousScroll, const f32 caretWidth, const bool revealCaret)const noexcept{
-    if(
-        !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(viewport)
-        || !__hidden_ui_edit_box_layout::ValidRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y
-    )
+    if(!m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(viewport) || !__hidden_ui_edit_box_layout::ValidRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y)
         return MakeUnexpected(Failure{});
     // Lanes are viewport right, viewport bottom, bounds right, bounds bottom. ValidRect already proved these sums finite.
     const SIMDVectorSingle end = VectorAdd(VectorSet(viewport.x, viewport.y, bounds.x, bounds.y), VectorSet(viewport.width, viewport.height, bounds.width, bounds.height));
-    if(
-        VectorGetX(end) > VectorGetZ(end) || VectorGetY(end) > VectorGetW(end)
-        || !IsFinite(previousScroll.x) || previousScroll.x < 0.0f || !IsFinite(previousScroll.y) || previousScroll.y < 0.0f
-        || !IsFinite(caretWidth) || caretWidth <= 0.0f
-    )
+    if(VectorGetX(end) > VectorGetZ(end) || VectorGetY(end) > VectorGetW(end) || !IsFinite(previousScroll.x) || previousScroll.x < 0.0f || !IsFinite(previousScroll.y) || previousScroll.y < 0.0f || !IsFinite(caretWidth) || caretWidth <= 0.0f)
         return MakeUnexpected(Failure{});
     EditBoxPlacement placement;
     placement.bounds = bounds;

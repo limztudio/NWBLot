@@ -133,21 +133,21 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_TRUE(completion.valid());
     Graphics::GpuTaskDesc firstDesc;
     firstDesc.setIdentity(Name("tests/task_graph/packet_first")).setMarkerLabel("Packet First");
-    const auto firstResult = graph.addTask<PacketLifecycleTask>(firstDesc, PacketLifecycleTask::Payload{});
+    const auto firstResult = graph.addTask<PacketLifecycleTask>(firstDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Graphics::GpuQueueCapability::Compute });
     ASSERT_TRUE(firstResult);
     const Graphics::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
 
     Graphics::GpuTaskDesc secondDesc;
     secondDesc.setIdentity(Name("tests/task_graph/packet_second")).setMarkerLabel("Packet Second").setDependencies(&first, 1u).setExternalDependencies(&completion, 1u);
-    const auto secondResult = graph.addTask<PacketLifecycleTask>(secondDesc, PacketLifecycleTask::Payload{});
+    const auto secondResult = graph.addTask<PacketLifecycleTask>(secondDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Graphics::GpuQueueCapability::Graphics });
     ASSERT_TRUE(secondResult);
     const Graphics::GpuTaskId second = *secondResult;
     ASSERT_TRUE(second.valid());
 
     Graphics::GpuTaskDesc transferDesc;
     transferDesc.setIdentity(Name("tests/task_graph/packet_transfer")).setMarkerLabel("Packet Transfer");
-    const auto transferResult = graph.addTask<PacketLifecycleTask>(transferDesc, PacketLifecycleTask::Payload{});
+    const auto transferResult = graph.addTask<PacketLifecycleTask>(transferDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Graphics::GpuQueueCapability::Transfer });
     ASSERT_TRUE(transferResult);
     const Graphics::GpuTaskId transfer = *transferResult;
     ASSERT_TRUE(transfer.valid());
@@ -164,7 +164,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     recoveryScheduling.isRecoverySubmission = true;
     Graphics::GpuTaskDesc recoveryDesc;
     recoveryDesc.setIdentity(Name("tests/task_graph/packet_recovery")).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryUses, LengthOf(recoveryUses));
-    const auto recoveryResult = graph.addTask<PacketLifecycleTask>(recoveryDesc, PacketLifecycleTask::Payload{});
+    const auto recoveryResult = graph.addTask<PacketLifecycleTask>(recoveryDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Graphics::GpuQueueCapability::Graphics });
     ASSERT_TRUE(recoveryResult);
     const Graphics::GpuTaskId recovery = *recoveryResult;
     ASSERT_TRUE(recovery.valid());
@@ -174,16 +174,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    const Graphics::GpuTaskDiagnosticQueueOverride routes[] = {
-        { .task = first, .queue = queues[1u].id },
-        { .task = second, .queue = queues[0u].id },
-        { .task = transfer, .queue = queues[s_ThirdElementIndex].id },
-        { .task = recovery, .queue = queues[0u].id },
-    };
-    Graphics::GpuTaskGraphCompileOptions options;
-    options.queueAssignmentOptions.diagnosticQueueOverrides = routes;
-    options.queueAssignmentOptions.diagnosticQueueOverrideCount = LengthOf(routes);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
         const Graphics::GpuCompiledGraph::ReadView& compiledPlan = reads.compiled;
@@ -287,8 +278,7 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     ASSERT_EQ(compiledPlan.packet(fourthPacket).plan->dependencyCount, s_ExpectedDualCount);
     bool hasSecondProducer = false;
     bool hasThirdProducer = false;
-    for(const Graphics::GpuPacketDependency& dependency : {
-        compiledPlan.packet(fourthPacket).dependencies[0u], compiledPlan.packet(fourthPacket).dependencies[1u], }){
+    for(const Graphics::GpuPacketDependency& dependency : { compiledPlan.packet(fourthPacket).dependencies[0u], compiledPlan.packet(fourthPacket).dependencies[1u] }){
         hasSecondProducer = hasSecondProducer || dependency.producer == secondPacket;
         hasThirdProducer = hasThirdProducer || dependency.producer == thirdPacket;
     }

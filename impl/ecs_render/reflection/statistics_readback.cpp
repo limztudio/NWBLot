@@ -275,16 +275,17 @@ void ReflectionStatisticsReadback::pollCompleted(){
         const auto& key = pending->key;
         const auto& token = pending->token;
         const Core::GpuPhysicalQueueId physicalQueue{.index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration};
-        if(device.queueGetCompletedInstance(physicalQueue) < token.value)
+        const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
+        if(!completedValue || *completedValue < token.value)
             continue;
-        const auto* const counters = static_cast<const u32*>(device.mapBuffer(*m_buffers[index], Core::CpuAccessMode::Read));
+        const Expected<void*> counters = device.mapBuffer(*m_buffers[index], Core::CpuAccessMode::Read);
         if(!counters){
             NWB_LOGGER_ERROR(NWB_TEXT("Reflection statistics: failed to map a completed readback"));
             m_control->complete(key, token, nullptr);
             continue;
         }
         u32 completedCounters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)];
-        NWB_MEMCPY(completedCounters, sizeof(completedCounters), counters, sizeof(completedCounters));
+        NWB_MEMCPY(completedCounters, sizeof(completedCounters), *counters, sizeof(completedCounters));
         device.unmapBuffer(*m_buffers[index]);
         m_control->complete(key, token, completedCounters);
     }

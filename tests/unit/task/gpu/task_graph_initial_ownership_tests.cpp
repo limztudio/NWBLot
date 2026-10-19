@@ -95,12 +95,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = addBuffer(
-            graph,
-            Name("tests/task_graph/initial_owner_stale"),
-            "Initial Owner Stale",
-            Graphics::GpuPhysicalQueueId{ .index = queues[0u].id.index, .deviceGeneration = static_cast<u16>(queues[0u].id.deviceGeneration + 1u) }
-        );
+        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_stale"), "Initial Owner Stale", Graphics::GpuPhysicalQueueId{ .index = queues[0u].id.index, .deviceGeneration = static_cast<u16>(queues[0u].id.deviceGeneration + 1u) });
         ASSERT_TRUE(resourceResult);
         const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());

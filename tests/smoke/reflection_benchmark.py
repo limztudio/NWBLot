@@ -20,7 +20,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
-from gpu_timing_parse import SCOPE_RE, load_name_symbols
+from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, SCOPE_RE, load_name_symbols
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
@@ -36,6 +36,7 @@ LIT_SCREEN = "screen"
 LIT_TOTAL_MS = "total_ms"
 LIT_GPU_SAMPLES = "gpu_samples"
 LIT_REPORTS = "reports"
+LIT_POSITIVE_FRAME_REPORTS = "positive_frame_reports"
 LIT_MEAN_MS = "mean_ms"
 LIT_BLOCKS = "blocks"
 LIT_CI95_MEAN_MS = "ci95_mean_ms"
@@ -193,6 +194,10 @@ def summarize_intervals(intervals):
     return totals
 
 
+def positive_frame_reports(reports):
+    return sum(FRAME in report and report[FRAME].total_ms > 0.0 for report in reports)
+
+
 def retain_after_warmup(reports, warmup_intervals, minimum_warmup_frames=0):
     """Feedback warms up by completed GPU observations, not a presumed wall-clock frame rate."""
     start = min(warmup_intervals, len(reports))
@@ -309,7 +314,9 @@ def compare_trials(trials, variants, practical_ms=.02, practical_fraction=.03, c
         threshold = max(practical_ms, practical_fraction * base)
         low, high = frame[LIT_CI95_MEAN_MS]
         status = "unresolved"
-        if unstable:
+        if any(min(b[baseline][LIT_POSITIVE_FRAME_REPORTS], b[candidate][LIT_POSITIVE_FRAME_REPORTS]) <= MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS for b in blocks):
+            status = "inconclusive_interval_count"
+        elif unstable:
             status = "control_drift"
         elif uncertain_controls:
             status = "control_uncertain"
@@ -441,7 +448,7 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         if file_identity(args.executable) != executable_identity:
             raise SmokeFailure("executable changed during benchmark")
         scopes = summarize_intervals(selected)
-        result = {LIT_BLOCK: block, LIT_POSITION: position, LIT_VARIANT: asdict(variant), LIT_REPORTS: len(selected), "retained_report_range": [retained_start, retained_start + len(selected)],
+        result = {LIT_BLOCK: block, LIT_POSITION: position, LIT_VARIANT: asdict(variant), LIT_REPORTS: len(selected), LIT_POSITIVE_FRAME_REPORTS: positive_frame_reports(selected), "retained_report_range": [retained_start, retained_start + len(selected)],
             LIT_SCOPES: scopes, LIT_KERNEL_WORK_MS: kernel_work_ms(scopes, variant, args.mip_count, args.history_samples), LIT_MIP_COUNT: args.mip_count, LIT_RUNTIME_ASSET_IDENTITY: runtime_identity, "artifacts": str(directory)}
         result["runtime_pipeline_cache_after"] = runtime_pipeline_cache_identity(args.working_directory)
         write_json(directory / "summary.json", result)

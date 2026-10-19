@@ -20,15 +20,15 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackExtent ComputeReflectionFeedbackExtent(const u32 width, const u32 height)noexcept{
+Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(const u32 width, const u32 height)noexcept{
     if(width == 0u || height == 0u)
-        return {};
+        return MakeUnexpected(Failure{});
     const u32 tilesX = (width - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE + 1u;
     const u32 tilesY = (height - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE + 1u;
     const u64 entryCount = static_cast<u64>(tilesX) * tilesY * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT;
     const u64 byteCount = NWB_REFLECTION_FEEDBACK_HEADER_BYTES + entryCount * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES;
     if(entryCount > Limit<u32>::s_Max || byteCount > Limit<u32>::s_Max)
-        return {};
+        return MakeUnexpected(Failure{});
     return ReflectionFeedbackExtent{width, height, tilesX, tilesY, static_cast<u32>(entryCount), static_cast<u32>(byteCount)};
 }
 
@@ -50,11 +50,12 @@ void RendererReflectionFeedback::invalidateResources(){
 }
 
 bool RendererReflectionFeedback::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings, const bool enabled){
-    const ReflectionFeedbackExtent extent = ComputeReflectionFeedbackExtent(width, height);
-    if(!extent.valid()){
+    const Expected<ReflectionFeedbackExtent> extentResult = ComputeReflectionFeedbackExtent(width, height);
+    if(!extentResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
         return false;
     }
+    const ReflectionFeedbackExtent& extent = *extentResult;
     auto& device = m_graphics.getDevice();
     const u16 deviceGeneration = device.getDeviceGeneration();
     if(!m_control)
@@ -124,14 +125,14 @@ bool RendererReflectionFeedback::prepareBank(ReflectionFeedbackBinding& bank, co
         return false;
     }
     Core::BufferHandle buffer = Move(*bufferResult);
-    const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
-        if(descriptor.valid())
-            heap.free(descriptor);
+    const Expected<Core::GpuDescriptorHandle> descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!descriptor || !heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
+        if(descriptor)
+            heap.free(*descriptor);
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to register storage buffer"));
         return false;
     }
-    bank = ReflectionFeedbackBinding{Move(buffer), descriptor};
+    bank = ReflectionFeedbackBinding{Move(buffer), *descriptor};
     return true;
 }
 

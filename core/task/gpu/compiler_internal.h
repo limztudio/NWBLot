@@ -233,14 +233,12 @@ struct GpuTaskQueuePlacementGroup{
     usize assignmentCount = 0u;
     GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
     GpuPhysicalQueueId initialOwnershipQueue;
-    GpuPhysicalQueueId diagnosticOverrideQueue;
 };
 
 [[nodiscard]] Expected<void, GpuTaskQueueAssignmentDiagnostic> BuildQueuePlacementGroups(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
-    const GpuTaskGraphQueueAssignmentOptions& options,
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
     Alloc::ScratchArena& scratchArena
 );

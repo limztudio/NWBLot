@@ -125,8 +125,8 @@ template<typename SourceArenaT, typename DependencyVectorT>
                 const auto includeKind = include->kind;
                 if(includeKind == ShaderSourceDependencies::IncludeKind::Macro || includeKind == ShaderSourceDependencies::IncludeKind::Unsupported){
                     const bool plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
-                            return name == includeName;
-                        }
+                        return name == includeName;
+                    }
                     ) != externallyPlannedMacroIncludes.end();
                     if(plannedMacro){
                         lineBegin = lineEnd + 1u;

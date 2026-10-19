@@ -91,12 +91,12 @@ public:
     static void LogMetadataFiniteF32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataF32ValueFailure::Enum failure);
     template<usize ComponentCount>
     static Expected<Array<f32, ComponentCount>> ParseMetadataF32TupleListElement(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const TStringView metaKind,
-    const AStringView fieldName,
-    const usize elementIndex,
-    Core::Alloc::ScratchArena& scratchArena
+        const Path& nwbFilePath,
+        const Core::Metascript::Value& value,
+        const TStringView metaKind,
+        const AStringView fieldName,
+        const usize elementIndex,
+        Core::Alloc::ScratchArena& scratchArena
     );
     template<typename ElementT, usize ComponentCount>
     static Expected<ScratchVector<ElementT>> ParseMetadataFloatListField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const AStringView fieldName, Core::Alloc::ScratchArena& scratchArena);

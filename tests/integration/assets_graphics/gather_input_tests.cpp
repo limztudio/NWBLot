@@ -117,9 +117,9 @@ TEST(AssetsGraphics, DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwr
     record.shaderName = Name("project/shaders/borrowed_index");
     record.variantName = "BORROWED_VARIANT=nontrivial_owned_text";
     record.stage = Name("ps");
-    const Name virtualPath = ShaderArchive::BuildVirtualPathName(record.shaderName, AStringView(record.variantName), record.stage);
+    const Expected<Name> virtualPath = ShaderArchive::BuildVirtualPathName(record.shaderName, AStringView(record.variantName), record.stage);
     ASSERT_TRUE(virtualPath);
-    record.virtualPathHash = virtualPath.hash();
+    record.virtualPathHash = virtualPath->hash();
 
     auto encoded = ShaderArchive::SerializeIndex(testArena.arena, records, scratchArena);
     ASSERT_TRUE(encoded);

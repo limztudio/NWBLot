@@ -24,9 +24,10 @@ static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(Core::GpuDescripto
     if(!buffer)
         return MakeUnexpected(Failure{});
 
-    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!handle.valid())
-        return MakeUnexpected(Failure{});
+    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!allocated)
+        return MakeUnexpected(allocated.error());
+    const Core::GpuDescriptorHandle handle = *allocated;
     Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, buffer))){
@@ -41,9 +42,10 @@ static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(C
     if(!texture)
         return MakeUnexpected(Failure{});
 
-    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
-    if(!handle.valid())
-        return MakeUnexpected(Failure{});
+    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(Core::GpuDescriptorClass::StorageImage);
+    if(!allocated)
+        return MakeUnexpected(allocated.error());
+    const Core::GpuDescriptorHandle handle = *allocated;
     Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
 
     if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(0u, texture, format, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D))){

@@ -98,10 +98,8 @@ void OpaqueEmulationMergeValidator::validate(
                 return false;
         }
         return
-            compiledPlan.tasksFormContiguousPacketSequence(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks, phaseCount) && compiledPlan.taskPrecedesInSamePacket(
-            pipeline.m_graphicsPrefixGbufferTask,
-            pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
-        )
+            compiledPlan.tasksFormContiguousPacketSequence(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks, phaseCount)
+            && compiledPlan.taskPrecedesInSamePacket(pipeline.m_graphicsPrefixGbufferTask, pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u])
         ;
     }();
     // Declared producers must share G-buffer's packet for the same handoff.

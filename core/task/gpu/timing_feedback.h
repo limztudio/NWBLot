@@ -225,33 +225,6 @@ public:
     [[nodiscard]] bool valid()const noexcept;
 };
 
-struct GpuTaskDiagnosticTimingQueueOverride{
-    GpuTaskTimingKey key;
-    GpuPhysicalQueueId queue;
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{ return key.valid() && queue.valid(); }
-};
-
-namespace GpuTaskDiagnosticTimingQueueOverrideStatus{
-    enum Enum : u8{
-        Success,
-        MissingOverrides,
-        InvalidKey,
-        InvalidQueue,
-        MismatchedDeviceGeneration,
-        DuplicateTaskKey,
-
-        kCount,
-    };
-};
-
-// Validates only identity and device-generation safety.
-// The compiler remains responsible for capability, queue class, resource-ownership, and task-level eligibility checks before honoring a debug force override.
-[[nodiscard]] GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(const GpuTaskDiagnosticTimingQueueOverride* overrides, usize overrideCount, u16 deviceGeneration)noexcept;
-[[nodiscard]] const GpuTaskDiagnosticTimingQueueOverride* FindGpuTaskDiagnosticTimingQueueOverride(const GpuTaskDiagnosticTimingQueueOverride* overrides, usize overrideCount, const GpuTaskTimingKey& key)noexcept;
-
 [[nodiscard]] bool GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
 [[nodiscard]] bool GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
 [[nodiscard]] bool GpuTaskTimingSwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept;

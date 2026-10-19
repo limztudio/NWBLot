@@ -198,7 +198,13 @@ void FramebufferCapture::update(){
         return;
     }
     const Core::GpuPhysicalQueueId physicalQueue{ .index = acceptedToken.physicalQueueIndex, .deviceGeneration = acceptedToken.deviceGeneration, };
-    if(device.queueGetCompletedInstance(physicalQueue) < acceptedToken.value)
+    const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
+    if(!completedValue){
+        markFailed(NWB_TEXT("failed to query readback submission completion"));
+        requestTerminalQuit();
+        return;
+    }
+    if(*completedValue < acceptedToken.value)
         return;
     if(!m_readback){
         markFailed(NWB_TEXT("accepted readback submission lost its staging texture"));
@@ -237,10 +243,6 @@ void FramebufferCapture::finish(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool FramebufferCapture::shouldRenderUnfocused()noexcept{
-    return true;
-}
 
 void FramebufferCapture::invalidateResources(){
     if(!m_registered)

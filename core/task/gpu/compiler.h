@@ -68,10 +68,8 @@ namespace GpuTaskQueueAssignmentModifier{
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
         NonPrimaryRouting = 1u << 2u,
-        DiagnosticTimingQueueOverride = 1u << 3u,
         TimingCalibration = 1u << 4u,
         TimingFeedback = 1u << 5u,
-        DiagnosticQueueOverride = 1u << 6u,
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
@@ -85,7 +83,6 @@ namespace GpuTaskGraphQueueAssignmentStatus{
         InvalidQueueTopology,
         InvalidQueueLoad,
         InvalidTimingFeedback,
-        InvalidDiagnosticQueueOverride,
         NoCompatibleQueue,
     };
 };
@@ -128,12 +125,6 @@ struct GpuTaskQueueLoad{
     u64 estimatedCost = 0u;
 };
 
-// Scheduler diagnostics may force a legal placement without adding queue choices to task declarations.
-struct GpuTaskDiagnosticQueueOverride{
-    GpuTaskId task;
-    GpuPhysicalQueueId queue;
-};
-
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
     // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes
@@ -142,11 +133,7 @@ struct GpuTaskGraphQueueAssignmentOptions{
     // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment.
     // The history remains an explicitly immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
-    const GpuTaskDiagnosticTimingQueueOverride* diagnosticTimingQueueOverrides = nullptr;
-    usize diagnosticTimingQueueOverrideCount = 0u;
     u64 timingFrameIndex = 0u;
-    const GpuTaskDiagnosticQueueOverride* diagnosticQueueOverrides = nullptr;
-    usize diagnosticQueueOverrideCount = 0u;
 };
 
 // Optional timing-envelope anchors for one normal-execution packet (both omitted = off; partial = invalid).

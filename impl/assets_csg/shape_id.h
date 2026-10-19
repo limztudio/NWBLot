@@ -35,9 +35,9 @@ inline constexpr Name s_CsgCapsuleShapeName("engine/csg/capsule");
 
 
 // Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
-[[nodiscard]] inline CsgShapeTypeId CsgShapeTypeIdFromName(const Name& shapeName){
+[[nodiscard]] inline Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName){
     if(!shapeName)
-        return s_InvalidCsgShapeTypeId;
+        return MakeUnexpected(Failure{});
 
     // HashValue returns usize and would make the cooked ID host-dependent.
     const NameHash& shapeHash = shapeName.hash();

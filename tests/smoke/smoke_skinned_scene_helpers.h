@@ -110,11 +110,11 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
 [[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(Core::ECS::World& world, const Core::ECS::EntityID owner, const Name objectName, const u32 objectKind)noexcept{
     Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
     world.view<Impl::ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, Impl::ModelObjectComponent& object)noexcept{
-            if(result.valid())
-                return;
-            if(object.owner == owner && object.object == objectName && object.kind == objectKind)
-                result = entity;
-        }
+        if(result.valid())
+            return;
+        if(object.owner == owner && object.object == objectName && object.kind == objectKind)
+            result = entity;
+    }
     );
     return result;
 }

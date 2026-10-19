@@ -137,12 +137,12 @@ bool GpuInitialStateHandoffValidation::validate(){
         if(!m_textureIndex)
             m_textureIndex.emplace(m_scratchArena);
         BuildRecordIndex(m_states.m_textureStates, *m_textureIndex, textureResource, [](const auto& lhs, const auto& rhs)noexcept{
-                if(lhs.texture != rhs.texture)
-                    return LessThan<Texture*>{}(lhs.texture, rhs.texture);
-                if(lhs.mipLevel != rhs.mipLevel)
-                    return lhs.mipLevel < rhs.mipLevel;
-                return lhs.arraySlice < rhs.arraySlice;
-            }
+            if(lhs.texture != rhs.texture)
+                return LessThan<Texture*>{}(lhs.texture, rhs.texture);
+            if(lhs.mipLevel != rhs.mipLevel)
+                return lhs.mipLevel < rhs.mipLevel;
+            return lhs.arraySlice < rhs.arraySlice;
+        }
         );
         for(usize index = 1u; index < m_textureIndex->size(); ++index){
             const auto& previous = m_states.m_textureStates[(*m_textureIndex)[index - 1u]];
@@ -176,10 +176,10 @@ bool GpuInitialStateHandoffValidation::validate(){
         if(!m_bufferIndex)
             m_bufferIndex.emplace(m_scratchArena);
         BuildRecordIndex(m_states.m_bufferStates, *m_bufferIndex, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{
-                if(lhs.buffer != rhs.buffer)
-                    return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer);
-                return lhs.range.byteOffset < rhs.range.byteOffset;
-            }
+            if(lhs.buffer != rhs.buffer)
+                return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer);
+            return lhs.range.byteOffset < rhs.range.byteOffset;
+        }
         );
         for(usize index = 1u; index < m_bufferIndex->size(); ++index){
             const auto& previous = m_states.m_bufferStates[(*m_bufferIndex)[index - 1u]];

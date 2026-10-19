@@ -36,7 +36,7 @@ Framework contracts for presentation, existing external submission timelines, an
 
 Submission retains the complete dependency token array for validation and lifecycle ordering. A prior accepted native wait whose scope covers all commands on the exact consuming physical queue may cover a later wait on the same current-device producer timeline at no greater value. Rejected submissions publish no inherited coverage; binary and external synchronization remains explicit. Submission statistics keep emitted native `timelineWaitCount`, same-queue elisions, duplicate merges, and `inheritedTimelineWaitElisionCount` separate, with exact planned-token accounting.
 
-Compiler `diagnosticQueueOverrides` provide exact physical assignments for diagnostics and synthetic fixtures. They are validated against the same command, resource, and external timeline constraints. Normal task construction does not use them. Optional same-class and timing-history routing continue to require their existing explicit scheduling opt-ins.
+Compile options carry no per-task queue choice. Placement follows only declared commands, resource ownership and sharing, scheduling hints, scheduler queue loads, and timing history. Optional same-class and timing-history routing require their explicit scheduling opt-ins.
 
 # Shared read state sources
 

@@ -167,18 +167,18 @@ bool RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& imag
         return false;
     Core::TextureHandle texture = Move(*textureResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    Core::GpuDescriptorHandle sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    Core::GpuDescriptorHandle storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);
-    if(!sampled.valid() || !storage.valid() || !heap.write(sampled, Core::DescriptorWriteItem::TextureSrv(0u, texture.get())) || !heap.write(storage, Core::DescriptorWriteItem::TextureUav(0u, texture.get()))){
-        if(sampled.valid())
-            heap.free(sampled);
-        if(storage.valid())
-            heap.free(storage);
+    const Expected<Core::GpuDescriptorHandle> sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    const Expected<Core::GpuDescriptorHandle> storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);
+    if(!sampled || !storage || !heap.write(*sampled, Core::DescriptorWriteItem::TextureSrv(0u, texture.get())) || !heap.write(*storage, Core::DescriptorWriteItem::TextureUav(0u, texture.get()))){
+        if(sampled)
+            heap.free(*sampled);
+        if(storage)
+            heap.free(*storage);
         return false;
     }
-    m_descriptors[descriptorIndex] = sampled;
-    m_descriptors[descriptorIndex + 1u] = storage;
-    image = ReflectionRadianceBinding{Move(texture), sampled.slot(), storage.slot()};
+    m_descriptors[descriptorIndex] = *sampled;
+    m_descriptors[descriptorIndex + 1u] = *storage;
+    image = ReflectionRadianceBinding{Move(texture), sampled->slot(), storage->slot()};
     return true;
 }
 

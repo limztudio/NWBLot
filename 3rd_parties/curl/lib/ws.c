@@ -468,10 +468,9 @@ static CURLcode ws_dec_read_head(struct ws_decoder *dec,
         dec->head[9];
       break;
     default:
-      /* this should never happen */
+      /* this should never happen, head_total is only 2, 4 or 10 here */
       DEBUGASSERT(0);
-      failf(data, "[WS] unexpected frame header length");
-      return CURLE_RECV_ERROR;
+      break;
     }
 
     dec->frame_age = 0;

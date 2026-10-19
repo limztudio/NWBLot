@@ -121,14 +121,6 @@ hb_buf_blob_from (hb_blob_t **recycled_blob,
       return nullptr;
   }
 
-  if (unlikely (blob == hb_blob_get_empty ()))
-  {
-    if (new_meta)
-      hb_free (meta);
-    hb_free (data);
-    return nullptr;
-  }
-
   if (new_meta &&
       !hb_blob_set_user_data (blob,
                               &hb_vector_blob_meta_user_data_key,

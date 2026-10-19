@@ -245,22 +245,15 @@ bool ExecMarkerTreeSerializer::UpdateNestedCmdBufferMarkerNodes(uint64_t        
     {
         MarkerNode* parent_cmd_buffer_node = iter->second;
         assert(parent_cmd_buffer_node != nullptr);
-        if (parent_cmd_buffer_node != nullptr)
-        {
-            // Move the root marker node from nested command buffer to the relevant marker node of the parent command buffer.
-            for (std::shared_ptr<MarkerNode>& node_ptr : nested_cmd_buffer_tree.marker_nodes_)
-            {
-                parent_cmd_buffer_node->child_markers.push_back(node_ptr);
-            }
 
-            parent_cmd_buffer_node->nested_cmd_buffer_queue_type = nested_command_buffer_queue_type;
-            ret                                                  = true;
-        }
-        else
+        // Move the root marker node from nested command buffer to the relevant marker node of the parent command buffer.
+        for (std::shared_ptr<MarkerNode>& node_ptr : nested_cmd_buffer_tree.marker_nodes_)
         {
-            // Should not reach here.
-            assert(false);
+            parent_cmd_buffer_node->child_markers.push_back(node_ptr);
         }
+
+        parent_cmd_buffer_node->nested_cmd_buffer_queue_type = nested_command_buffer_queue_type;
+        ret                                                  = true;
     }
 
     return ret;
@@ -311,41 +304,38 @@ void ExecMarkerTreeSerializer::GenerateSummaryJson(std::vector<const MarkerNode*
 {
     const MarkerNode* node = marker_stack.back();
     assert(node != nullptr);
-    if (node != nullptr)
+    if (GetMarkerNodeStatus(*node) == MarkerExecutionStatus::kInProgress)
     {
-        if (GetMarkerNodeStatus(*node) == MarkerExecutionStatus::kInProgress)
+        is_atleast_one_child_in_progress = true;
+        bool is_atleast_one_child_of_current_in_progress = false;
+
+        for (const std::shared_ptr<MarkerNode>& child_marker : node->child_markers)
         {
-            is_atleast_one_child_in_progress = true;
-            bool is_atleast_one_child_of_current_in_progress = false;
+            marker_stack.push_back(child_marker.get());
+            GenerateSummaryJson(marker_stack, marker_summary_json, is_atleast_one_child_of_current_in_progress);
+            marker_stack.pop_back();
+        }
 
-            for (const std::shared_ptr<MarkerNode>& child_marker : node->child_markers)
+        if (!is_atleast_one_child_of_current_in_progress)
+        {
+            // When none of the child nodes are "in progress" or there are no child marker nodes, current node is the last "in progress" node in the tree path.
+            // Print the path from root until the current node.
+            std::stringstream txt;
+
+            for (size_t i = 0, count = marker_stack.size(); i + 1 < count; ++i)
             {
-                marker_stack.push_back(child_marker.get());
-                GenerateSummaryJson(marker_stack, marker_summary_json, is_atleast_one_child_of_current_in_progress);
-                marker_stack.pop_back();
+                txt << marker_stack[i]->marker_str << '/';
             }
-
-            if (!is_atleast_one_child_of_current_in_progress)
+            if (kBarrierMarkerStrings.find(marker_stack.back()->marker_str) != kBarrierMarkerStrings.end())
             {
-                // When none of the child nodes are "in progress" or there are no child marker nodes, current node is the last "in progress" node in the tree path.
-                // Print the path from root until the current node.
-                std::stringstream txt;
-
-                for (size_t i = 0, count = marker_stack.size(); i + 1 < count; ++i)
-                {
-                    txt << marker_stack[i]->marker_str << '/';
-                }
-                if (kBarrierMarkerStrings.find(marker_stack.back()->marker_str) != kBarrierMarkerStrings.end())
-                {
-                    // Replace barrier marker strings with standard string for the barrier marker.
-                    txt << kBarrierStandard;
-                }
-                else
-                {
-                    txt << marker_stack.back()->marker_str;
-                }
-                marker_summary_json[kJsonElemMarkers].push_back(txt.str());
+                // Replace barrier marker strings with standard string for the barrier marker.
+                txt << kBarrierStandard;
             }
+            else
+            {
+                txt << marker_stack.back()->marker_str;
+            }
+            marker_summary_json[kJsonElemMarkers].push_back(txt.str());
         }
     }
 }
@@ -582,48 +572,45 @@ std::string ExecMarkerTreeSerializer::GenerateSummaryString(std::vector<const Ma
     std::stringstream txt;
     const MarkerNode* const node = marker_stack.back();
     assert(node != nullptr);
-    if (node != nullptr)
+    if (GetMarkerNodeStatus(*node) == MarkerExecutionStatus::kInProgress)
     {
-        if (GetMarkerNodeStatus(*node) == MarkerExecutionStatus::kInProgress)
+        is_atleast_one_child_in_progress = true;
+        bool is_atleast_one_child_of_current_in_progress = false;
+
+        for (const std::shared_ptr<MarkerNode>& child_marker : node->child_markers)
         {
-            is_atleast_one_child_in_progress = true;
-            bool is_atleast_one_child_of_current_in_progress = false;
+            marker_stack.push_back(child_marker.get());
+            txt << GenerateSummaryString(marker_stack, is_atleast_one_child_of_current_in_progress);
+            marker_stack.pop_back();
+        }
 
-            for (const std::shared_ptr<MarkerNode>& child_marker : node->child_markers)
+        if (!is_atleast_one_child_of_current_in_progress)
+        {
+            // When none of the child nodes are "in progress" or there are no child marker nodes, current node is the last "in progress" node in the tree path.
+            // Print the path from root until the current node.
+
+            // Do not include the consecutive repeating occurrences of identical nodes in text summary list.
+            if (node->is_include_node_in_text_summary_list)
             {
-                marker_stack.push_back(child_marker.get());
-                txt << GenerateSummaryString(marker_stack, is_atleast_one_child_of_current_in_progress);
-                marker_stack.pop_back();
-            }
-
-            if (!is_atleast_one_child_of_current_in_progress)
-            {
-                // When none of the child nodes are "in progress" or there are no child marker nodes, current node is the last "in progress" node in the tree path.
-                // Print the path from root until the current node.
-
-                // Do not include the consecutive repeating occurrences of identical nodes in text summary list.
-                if (node->is_include_node_in_text_summary_list)
+                for (size_t i = 0, count = marker_stack.size(); i + 1 < count; ++i)
                 {
-                    for (size_t i = 0, count = marker_stack.size(); i + 1 < count; ++i)
-                    {
-                        txt << marker_stack[i]->marker_str << '/';
-                    }
-                    if (kBarrierMarkerStrings.find(marker_stack.back()->marker_str) != kBarrierMarkerStrings.end())
-                    {
-                        // Replace barrier marker strings with standard string for the barrier marker.
-                        txt << kBarrierStandard;
-                    }
-                    else
-                    {
-                        txt << marker_stack.back()->marker_str;
-                    }
-
-                    if (node->consecutive_identical_nodes_count > 0)
-                    {
-                        txt << " [" << node->consecutive_identical_nodes_count + 1 << " repeating occurrences]";
-                    }
-                    txt << std::endl;
+                    txt << marker_stack[i]->marker_str << '/';
                 }
+                if (kBarrierMarkerStrings.find(marker_stack.back()->marker_str) != kBarrierMarkerStrings.end())
+                {
+                    // Replace barrier marker strings with standard string for the barrier marker.
+                    txt << kBarrierStandard;
+                }
+                else
+                {
+                    txt << marker_stack.back()->marker_str;
+                }
+
+                if (node->consecutive_identical_nodes_count > 0)
+                {
+                    txt << " [" << node->consecutive_identical_nodes_count + 1 << " repeating occurrences]";
+                }
+                txt << std::endl;
             }
         }
     }

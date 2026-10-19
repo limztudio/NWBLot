@@ -1921,10 +1921,6 @@ CURLcode Curl_add_timecondition(struct Curl_easy *data,
   tm = &keeptime;
 
   switch(data->set.timecondition) {
-  default:
-    DEBUGF(infof(data, "invalid time condition"));
-    return CURLE_BAD_FUNCTION_ARGUMENT;
-
   case CURL_TIMECOND_IFMODSINCE:
     condp = "If-Modified-Since";
     len = 17;
@@ -1934,6 +1930,9 @@ CURLcode Curl_add_timecondition(struct Curl_easy *data,
     len = 19;
     break;
   case CURL_TIMECOND_LASTMOD:
+  default:
+    /* setopt only admits NONE..LASTMOD and NONE returned above */
+    DEBUGASSERT(data->set.timecondition == CURL_TIMECOND_LASTMOD);
     condp = "Last-Modified";
     len = 13;
     break;

@@ -2,4 +2,4 @@ package: ufbx
 version: 0.23.1 (tag v0.23.1, commit 26a482ae66871d7de36eb722aa060bce95bce274)
 updated_utc: 2026-09-29T17:35:31Z
 source: https://github.com/ufbx/ufbx/releases/tag/v0.23.1
-notes: Single-file FBX loader. Refreshed ufbx.c/h to upstream v0.23.1 (stream stop-error/EOF-slack correctness fixes past v0.23.0). The NWB static target is runtime-matched through the top-level CMake policy.
+notes: Single-file FBX loader. Refreshed ufbx.c/h to upstream v0.23.1 (stream stop-error/EOF-slack correctness fixes past v0.23.0). The NWB static target is runtime-matched through the top-level CMake policy. NWB-local patch (validation cleanup 2026-10-19): removed 8 redundant checks proven unreachable in ufbx.c (including the dead zero-element fallback and its now-unused ufbxi_zero_element buffer in ufbxi_read_vertex_element; see .git/validation-audit-20261019 register); re-apply or drop on re-vendor.

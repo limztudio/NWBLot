@@ -491,11 +491,7 @@
     SDF_Edge*  ptr   = NULL;
 
 
-    if ( !memory || !edge )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( memory && edge );
 
     if ( !FT_QNEW( ptr ) )
     {
@@ -503,7 +499,6 @@
       *edge = ptr;
     }
 
-  Exit:
     return error;
   }
 
@@ -513,8 +508,7 @@
   sdf_edge_done( FT_Memory   memory,
                  SDF_Edge**  edge )
   {
-    if ( !memory || !edge || !*edge )
-      return;
+    FT_ASSERT( memory && edge && *edge );
 
     FT_FREE( *edge );
   }
@@ -530,11 +524,7 @@
     SDF_Contour*  ptr   = NULL;
 
 
-    if ( !memory || !contour )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( memory && contour );
 
     if ( !FT_QNEW( ptr ) )
     {
@@ -542,7 +532,6 @@
       *contour = ptr;
     }
 
-  Exit:
     return error;
   }
 
@@ -557,8 +546,7 @@
     SDF_Edge*  temp;
 
 
-    if ( !memory || !contour || !*contour )
-      return;
+    FT_ASSERT( memory && contour && *contour );
 
     edges = (*contour)->edges;
 
@@ -585,11 +573,7 @@
     SDF_Shape*  ptr   = NULL;
 
 
-    if ( !memory || !shape )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( memory && shape );
 
     if ( !FT_QNEW( ptr ) )
     {
@@ -598,7 +582,6 @@
       *shape      = ptr;
     }
 
-  Exit:
     return error;
   }
 
@@ -613,14 +596,12 @@
     SDF_Contour*  temp;
 
 
-    if ( !shape || !*shape )
-      return;
+    FT_ASSERT( shape && *shape );
 
     memory   = (*shape)->memory;
     contours = (*shape)->contours;
 
-    if ( !memory )
-      return;
+    FT_ASSERT( memory );
 
     /* release all contours */
     while ( contours )
@@ -655,11 +636,7 @@
     FT_Memory  memory = shape->memory;
 
 
-    if ( !to || !user )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( to && user );
 
     FT_CALL( sdf_contour_new( memory, &contour ) );
 
@@ -687,11 +664,7 @@
     FT_Memory     memory   = shape->memory;
 
 
-    if ( !to || !user )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( to && user );
 
     contour = shape->contours;
 
@@ -730,11 +703,7 @@
     FT_Memory  memory = shape->memory;
 
 
-    if ( !control_1 || !to || !user )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( control_1 && to && user );
 
     contour = shape->contours;
 
@@ -784,11 +753,7 @@
     FT_Memory  memory = shape->memory;
 
 
-    if ( !control_2 || !control_1 || !to || !user )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( control_2 && control_1 && to && user );
 
     contour = shape->contours;
 
@@ -832,17 +797,12 @@
     FT_Error  error = FT_Err_Ok;
 
 
-    if ( !outline || !shape )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( outline && shape );
 
     error = FT_Outline_Decompose( outline,
                                   &sdf_decompose_funcs,
                                   (void*)shape );
 
-  Exit:
     return error;
   }
 
@@ -1085,11 +1045,7 @@
     SDF_Edge*    left,*  right;
 
 
-    if ( !memory || !out  )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( memory && out );
 
     /* split conic outline */
     cpos[0] = control_points[0];
@@ -1155,11 +1111,7 @@
     const FT_26D6  threshold = ONE_PIXEL / 4;
 
 
-    if ( !memory || !out )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( memory && out );
 
     /* split the cubic */
     cpos[0] = control_points[0];
@@ -1236,11 +1188,7 @@
     SDF_Contour*  new_contours = NULL;
 
 
-    if ( !shape || !shape->memory )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( shape && shape->memory );
 
     contours = shape->contours;
     memory   = shape->memory;
@@ -1907,17 +1855,8 @@
     FT_16D16_Vec  nearest_vector;   /* `p` - `nearest_point` */
 
 
-    if ( !line || !out )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
-
-    if ( line->edge_type != SDF_EDGE_LINE )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( line && out );
+    FT_ASSERT( line->edge_type == SDF_EDGE_LINE );
 
     a = line->start_pos;
     b = line->end_pos;
@@ -1980,7 +1919,6 @@
                    FT_MulFix( line_segment.y, nearest_vector.x );
     }
 
-  Exit:
     return error;
   }
 
@@ -2127,17 +2065,8 @@
     FT_UShort  i;
 
 
-    if ( !conic || !out )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
-
-    if ( conic->edge_type != SDF_EDGE_CONIC )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( conic && out );
+    FT_ASSERT( conic->edge_type == SDF_EDGE_CONIC );
 
     p0 = conic->start_pos;
     p1 = conic->control_a;
@@ -2276,7 +2205,6 @@
                    FT_MulFix( direction.y, nearest_point.x );
     }
 
-  Exit:
     return error;
   }
 
@@ -2421,17 +2349,8 @@
     FT_UShort  steps;
 
 
-    if ( !conic || !out )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
-
-    if ( conic->edge_type != SDF_EDGE_CONIC )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( conic && out );
+    FT_ASSERT( conic->edge_type == SDF_EDGE_CONIC );
 
     p0 = conic->start_pos;
     p1 = conic->control_a;
@@ -2552,7 +2471,6 @@
                    FT_MulFix( direction.y, nearest_point.x );
     }
 
-  Exit:
     return error;
   }
 
@@ -2735,17 +2653,8 @@
     FT_UShort  steps;
 
 
-    if ( !cubic || !out )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
-
-    if ( cubic->edge_type != SDF_EDGE_CUBIC )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( cubic && out );
+    FT_ASSERT( cubic->edge_type == SDF_EDGE_CUBIC );
 
     p0 = cubic->start_pos;
     p1 = cubic->control_a;
@@ -2879,7 +2788,6 @@
                    FT_MulFix( direction.y, nearest_point.x );
     }
 
-  Exit:
     return error;
   }
 
@@ -2917,11 +2825,7 @@
     FT_Error  error = FT_Err_Ok;
 
 
-    if ( !edge || !out )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( edge && out );
 
     /* edge-specific distance calculation */
     switch ( edge->edge_type )
@@ -2942,7 +2846,6 @@
       error = FT_THROW( Invalid_Argument );
     }
 
-  Exit:
     return error;
   }
 
@@ -3262,24 +3165,16 @@
     const FT_16D16  fixed_spread = (FT_16D16)FT_INT_16D16( spread );
 
 
-    if ( !shape || !bitmap )
+    if ( !bitmap )
     {
       error = FT_THROW( Invalid_Argument );
       goto Exit;
     }
 
-    if ( spread < MIN_SPREAD || spread > MAX_SPREAD )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( MIN_SPREAD <= spread && spread <= MAX_SPREAD );
 
     memory = shape->memory;
-    if ( !memory )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( memory );
 
     if ( bitmap->rows > FT_INT_MAX / bitmap->width )
     {
@@ -3578,7 +3473,9 @@
     orientations = NULL;
     head         = NULL;
 
-    if ( !shape || !bitmap || !shape->memory )
+    FT_ASSERT( shape && shape->memory );
+
+    if ( !bitmap )
       return FT_THROW( Invalid_Argument );
 
     /* Disable `flip_sign` to avoid extra complication */

@@ -1045,7 +1045,7 @@ namespace basisu
 		if ((num_comps < 1) || (num_comps > cMaxComps))
 			return false;
 				
-		if ((minimum(dst_w, dst_h) < 1) || (maximum(dst_w, dst_h) > BASISU_RESAMPLER_MAX_DIMENSION))
+		if (maximum(dst_w, dst_h) > BASISU_RESAMPLER_MAX_DIMENSION)
 		{
 			printf("Image is too large!\n");
 			return false;
@@ -1196,7 +1196,7 @@ namespace basisu
 		if ((num_comps < 1) || (num_comps > cMaxComps))
 			return false;
 
-		if ((minimum(dst_w, dst_h) < 1) || (maximum(dst_w, dst_h) > BASISU_RESAMPLER_MAX_DIMENSION))
+		if (maximum(dst_w, dst_h) > BASISU_RESAMPLER_MAX_DIMENSION)
 		{
 			printf("Image is too large!\n");
 			return false;
@@ -5327,7 +5327,7 @@ namespace basisu
 
 	void directional_gaussian_blur(const image& src_img, image& dst_img, float angle_deg, float sigma_par, float sigma_perp)
 	{
-		assert((sigma_par > 0.0f) && (sigma_par > 0.0f));
+		assert(sigma_par > 0.0f);
 
 		dst_img.match_dimensions(src_img);
 

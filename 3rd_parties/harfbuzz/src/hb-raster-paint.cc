@@ -1007,7 +1007,7 @@ hb_raster_paint_image (hb_paint_funcs_t *pfuncs HB_UNUSED,
     unsigned data_len;
     const uint8_t *data = (const uint8_t *) hb_blob_get_data (blob, &data_len);
     size_t pixel_count = (size_t) src_width * (size_t) src_height;
-    if (src_width && pixel_count / src_width != src_height)
+    if (pixel_count / src_width != src_height)
       return false;
     if (pixel_count > (size_t) -1 / 4u)
       return false;
@@ -2419,11 +2419,7 @@ hb_raster_paint_set_custom_palette_color (hb_raster_paint_t *paint,
 					  hb_color_t         color)
 {
   if (unlikely (!paint->custom_palette))
-  {
     paint->custom_palette = hb_map_create ();
-    if (unlikely (!paint->custom_palette))
-      return false;
-  }
   hb_map_set (paint->custom_palette, color_index, color);
   return hb_map_allocation_successful (paint->custom_palette);
 }

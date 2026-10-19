@@ -367,9 +367,7 @@ RmtErrorCode RmtStreamMergerAdvance(RmtStreamMerger* token_heap, bool local_heap
     }
 
     // grab the next token from the heap.
-    RmtErrorCode error_code = Poll(token_heap, out_token);
-    RMT_ASSERT(error_code == kRmtOk);
-    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
+    Poll(token_heap, out_token);
 
     // rebase against the minimum timestamp seen on all heaps.
     out_token->common.timestamp -= token_heap->minimum_start_timestamp;
@@ -446,7 +444,7 @@ RmtErrorCode RmtStreamMergerAdvance(RmtStreamMerger* token_heap, bool local_heap
     // heap for consideration.
     RmtToken* next_token_from_stream = &token_heap->buffer[out_token->common.stream_index];
     *next_token_from_stream          = {};
-    error_code                       = RmtParserAdvance(&token_heap->parsers[out_token->common.stream_index], next_token_from_stream, NULL);
+    RmtErrorCode error_code          = RmtParserAdvance(&token_heap->parsers[out_token->common.stream_index], next_token_from_stream, NULL);
 
     if (error_code == kRmtErrorInvalidSize)
     {

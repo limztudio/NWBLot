@@ -8488,10 +8488,8 @@ scan_number_done:
                 std::array<char, 9> cs{{}};
                 const auto cs_size = (std::snprintf)(cs.data(), cs.size(), "<U+%.4X>", static_cast<unsigned char>(c)); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
                 JSON_ASSERT(cs_size == 8);
-                if (JSON_HEDLEY_LIKELY(cs_size == 8))
-                {
-                    result.append(cs.data(), static_cast<std::string::size_type>(cs_size));
-                }
+                static_cast<void>(cs_size);
+                result.append(cs.data(), 8);
             }
             else
             {
@@ -9769,8 +9767,6 @@ struct is_sax_static_asserts
                   "Missing/invalid function: bool null()");
     static_assert(is_detected_exact<bool, boolean_function_t, SAX>::value,
                   "Missing/invalid function: bool boolean(bool)");
-    static_assert(is_detected_exact<bool, boolean_function_t, SAX>::value,
-                  "Missing/invalid function: bool boolean(bool)");
     static_assert(
         is_detected_exact<bool, number_integer_function_t, SAX,
         number_integer_t>::value,
@@ -10119,7 +10115,8 @@ class binary_reader
                 std::array<char, 3> cr{{}};
                 const auto cr_size = (std::snprintf)(cr.data(), cr.size(), "%.2hhX", static_cast<unsigned char>(element_type)); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
                 JSON_ASSERT(cr_size == 2);
-                const std::string cr_str{cr.data(), cr_size == 2 ? static_cast<std::string::size_type>(cr_size) : std::string::size_type(0)};
+                static_cast<void>(cr_size);
+                const std::string cr_str{cr.data(), std::string::size_type(2)};
                 return sax->parse_error(element_type_parse_position, cr_str,
                                         parse_error::create(114, element_type_parse_position, concat("Unsupported BSON record type 0x", cr_str), nullptr));
             }
@@ -12741,7 +12738,8 @@ class binary_reader
         std::array<char, 3> cr{{}};
         const auto cr_size = (std::snprintf)(cr.data(), cr.size(), "%.2hhX", static_cast<unsigned char>(current)); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
         JSON_ASSERT(cr_size == 2);
-        return std::string{cr.data(), cr_size == 2 ? static_cast<std::string::size_type>(cr_size) : std::string::size_type(0)};
+        static_cast<void>(cr_size);
+        return std::string{cr.data(), std::string::size_type(2)};
     }
 
     /*!
@@ -13624,8 +13622,7 @@ class iter_impl // NOLINT(cppcoreguidelines-special-member-functions,hicpp-speci
     static_assert(is_basic_json<typename std::remove_const<BasicJsonType>::type>::value,
                   "iter_impl only accepts (const) basic_json");
     // superficial check for the LegacyBidirectionalIterator named requirement
-    static_assert(std::is_base_of<std::bidirectional_iterator_tag, std::bidirectional_iterator_tag>::value
-                  &&  std::is_base_of<std::bidirectional_iterator_tag, typename std::iterator_traits<typename array_t::iterator>::iterator_category>::value,
+    static_assert(std::is_base_of<std::bidirectional_iterator_tag, typename std::iterator_traits<typename array_t::iterator>::iterator_category>::value,
                   "basic_json iterator assumes array and object type iterators satisfy the LegacyBidirectionalIterator named requirement.");
 
   public:
@@ -19196,7 +19193,8 @@ class serializer
                                     const auto escaped_bytes = (std::snprintf)(string_buffer.data() + bytes, 7, "\\u%04x",
                                                                                static_cast<std::uint16_t>(codepoint));
                                     JSON_ASSERT(escaped_bytes == 6);
-                                    bytes += escaped_bytes == 6 ? static_cast<std::size_t>(escaped_bytes) : 0u;
+                                    static_cast<void>(escaped_bytes);
+                                    bytes += 6;
                                 }
                                 else
                                 {
@@ -19205,7 +19203,8 @@ class serializer
                                                                                static_cast<std::uint16_t>(0xD7C0u + (codepoint >> 10u)),
                                                                                static_cast<std::uint16_t>(0xDC00u + (codepoint & 0x3FFu)));
                                     JSON_ASSERT(escaped_bytes == 12);
-                                    bytes += escaped_bytes == 12 ? static_cast<std::size_t>(escaped_bytes) : 0u;
+                                    static_cast<void>(escaped_bytes);
+                                    bytes += 12;
                                 }
                             }
                             else

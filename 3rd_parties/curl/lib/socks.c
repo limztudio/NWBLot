@@ -1190,8 +1190,7 @@ static CURLcode socks_proxy_cf_connect(struct Curl_cfilter *cf,
 
   default:
     DEBUGASSERT(0); /* should not come here, checked it at creation time */
-    result = CURLE_COULDNT_CONNECT;
-    goto out;
+    break;
   }
 
   if(pxresult) {

@@ -5007,7 +5007,6 @@ namespace basisu
 				case basist::basis_tex_format::cASTC_LDR_12x12: fmt = basist::KTX2_FORMAT_ASTC_12x12_UNORM_BLOCK; break;
 				default:
 					assert(0);
-					return false;
 				}
 				assert(fmt);
 
@@ -5045,7 +5044,6 @@ namespace basisu
 			default:
 				assert(0);
 				//fmt_debug_printf("HERE 3\n");
-				return false;
 			}
 		}
 

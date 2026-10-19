@@ -2813,7 +2813,7 @@ namespace basisu
 		uint_vec m_hist, m_total_count_to_picked, m_entries_picked, m_entries_to_do, m_remap_table;
 
 		inline uint32_t get_hist(int i, int j, int n) const { return (i > j) ? m_hist[j * n + i] : m_hist[i * n + j]; }
-		inline void inc_hist(int i, int j, int n) { if ((i != j) && (i < j) && (i != -1) && (j != -1)) { assert(((uint32_t)i < (uint32_t)n) && ((uint32_t)j < (uint32_t)n)); m_hist[i * n + j]++; } }
+		inline void inc_hist(int i, int j, int n) { if ((i < j) && (i != -1) && (j != -1)) { assert(((uint32_t)i < (uint32_t)n) && ((uint32_t)j < (uint32_t)n)); m_hist[i * n + j]++; } }
 
 		void prepare_hist(uint32_t num_syms, uint32_t num_indices, const uint32_t *pIndices);
 		void find_initial(uint32_t num_syms);

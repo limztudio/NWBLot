@@ -229,9 +229,7 @@ namespace basist
 		const uint32_t DDSCAPS2_VOLUME = 0x200000;
 
 		// DX10 D3D10_RESOURCE_DIMENSION
-		const uint32_t DDS_DIMENSION_TEXTURE1D = 2;
 		const uint32_t DDS_DIMENSION_TEXTURE2D = 3;
-		const uint32_t DDS_DIMENSION_TEXTURE3D = 4;
 		// DX10 miscFlag
 		const uint32_t DDS_RESOURCE_MISC_TEXTURECUBE = 0x4;
 
@@ -602,10 +600,6 @@ namespace basist
 			const uint32_t array_size = rd_u32(dx10 + 12);
 			data_start += DDS_DX10_HEADER_SIZE;
 
-			if (resource_dim == DDS_DIMENSION_TEXTURE1D)
-				return false;
-			if (resource_dim == DDS_DIMENSION_TEXTURE3D)
-				return false;
 			if (resource_dim != DDS_DIMENSION_TEXTURE2D)
 				return false;
 

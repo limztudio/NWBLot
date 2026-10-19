@@ -540,7 +540,6 @@ void RgdVaInfo::SortResourceTimeline()
     // Update the timeline indices for each resource as sorting of RgdResourceTimeline may cause index change of an event.
     for (size_t index = 0; index < rgd_resource_timeline_.size(); index++)
     {
-        assert(&rgd_resource_timeline_[index] != nullptr);
         const RgdResourceTimeline& timeline_event = rgd_resource_timeline_[index];
         assert(resource_map_[timeline_event.identifier] != nullptr);
         RgdResource& current_rgd_resource = *resource_map_[timeline_event.identifier];
@@ -905,14 +904,10 @@ bool RgdResourceInfoSerializer::Impl::BuildResourceMapFromEvent(const RmtGpuAddr
 
                     // Heap resource type may have multiple bind events.
                     // Keep track of the virtual address, parent allocation base address and size associated with each bind event.
-                    assert(&va_info.rgd_resource_timeline_.back() != nullptr);
-                    if (&va_info.rgd_resource_timeline_.back() != nullptr)
-                    {
-                        va_info.rgd_resource_timeline_.back().bound_virtual_address = event_info->virtual_address;
-                        va_info.rgd_resource_timeline_.back().bound_base_address = event_info->resource_bound_allocation;
-                        va_info.rgd_resource_timeline_.back().bound_size_in_bytes = event_info->size_in_bytes;
-                        memcpy(va_info.rgd_resource_timeline_.back().heap_preferences, event_info->heap_preferences, sizeof(va_info.rgd_resource_timeline_.back().heap_preferences));
-                    }
+                    va_info.rgd_resource_timeline_.back().bound_virtual_address = event_info->virtual_address;
+                    va_info.rgd_resource_timeline_.back().bound_base_address = event_info->resource_bound_allocation;
+                    va_info.rgd_resource_timeline_.back().bound_size_in_bytes = event_info->size_in_bytes;
+                    memcpy(va_info.rgd_resource_timeline_.back().heap_preferences, event_info->heap_preferences, sizeof(va_info.rgd_resource_timeline_.back().heap_preferences));
 
                     rgd_resource.timeline_indices.push_back(va_info.rgd_resource_timeline_.size() - 1);
                 }
@@ -1069,12 +1064,8 @@ bool RgdResourceInfoSerializer::Impl::BuildResourceMapFromEvent(const RmtGpuAddr
                             va_info.rgd_resource_timeline_.emplace_back(RgdResourceEventType::kMakeResident,
                                 current_resource_id,
                                 event_timestamp);
-                            assert(&va_info.rgd_resource_timeline_.back() != nullptr);
-                            if (&va_info.rgd_resource_timeline_.back() != nullptr)
-                            {
-                                // Keep track of made resident virtual address.
-                                va_info.rgd_resource_timeline_.back().bound_virtual_address = event_info->virtual_address;
-                            }
+                            // Keep track of made resident virtual address.
+                            va_info.rgd_resource_timeline_.back().bound_virtual_address = event_info->virtual_address;
                             current_rgd_resource.timeline_indices.push_back(va_info.rgd_resource_timeline_.size() - 1);
                         }
                     }
@@ -1153,7 +1144,6 @@ uint64_t RgdResourceInfoSerializer::Impl::GetResourceCreateTime(const RgdVaInfo&
     {
         const size_t resource_timeline_idx = rgd_resource.timeline_indices[i];
         assert(resource_timeline_idx < va_info.rgd_resource_timeline_.size());
-        assert(&va_info.rgd_resource_timeline_[resource_timeline_idx] != nullptr);
         const RgdResourceTimeline& resource_timeline_event = va_info.rgd_resource_timeline_[resource_timeline_idx];
 
         if (resource_timeline_event.event_type == RgdResourceEventType::kCreate)
@@ -1232,7 +1222,6 @@ void RgdResourceInfoSerializer::Impl::ResourceHistoryToString(const Config&  use
             {
                 const size_t resource_timeline_idx = current_resource.timeline_indices[index];
                 assert(resource_timeline_idx < va_info.rgd_resource_timeline_.size());
-                assert(&va_info.rgd_resource_timeline_[resource_timeline_idx] != nullptr);
                 const RgdResourceTimeline& resource_timeline_event = va_info.rgd_resource_timeline_[resource_timeline_idx];
 
                 if (resource_timeline_event.event_type == RgdResourceEventType::kBind)
@@ -1356,7 +1345,6 @@ void RgdResourceInfoSerializer::Impl::ResourceHistoryToString(const Config&  use
             {
                 const size_t current_idx = current_resource.timeline_indices[m];
                 const size_t previous_idx = current_resource.timeline_indices[m - 1];
-                assert(&va_info.rgd_resource_timeline_[current_idx] != nullptr && &va_info.rgd_resource_timeline_[previous_idx] != nullptr);
                 const RgdResourceTimeline& current_event = va_info.rgd_resource_timeline_[current_idx];
                 const RgdResourceTimeline& previous_event = va_info.rgd_resource_timeline_[previous_idx];
                 if (is_repeated_events == false
@@ -1383,7 +1371,6 @@ void RgdResourceInfoSerializer::Impl::ResourceHistoryToString(const Config&  use
             {
                 const size_t resource_timeline_idx = current_resource.timeline_indices[index];
                 assert(resource_timeline_idx < va_info.rgd_resource_timeline_.size());
-                assert(&va_info.rgd_resource_timeline_[resource_timeline_idx] != nullptr);
                 const RgdResourceTimeline& resource_timeline_event = va_info.rgd_resource_timeline_[resource_timeline_idx];
 
                 if (index == 0 || look_ahead_counter[index - 1] == 0 || same_events_count == 0)
@@ -1503,7 +1490,6 @@ bool RgdResourceInfoSerializer::Impl::ResourceHistoryToJson(const Config&   user
                         {
                             const size_t resource_timeline_idx = rgd_resource.timeline_indices[index];
                             assert(resource_timeline_idx < va_info.rgd_resource_timeline_.size());
-                            assert(&va_info.rgd_resource_timeline_[resource_timeline_idx] != nullptr);
                             const RgdResourceTimeline& resource_timeline_event = va_info.rgd_resource_timeline_[resource_timeline_idx];
 
                             if (resource_timeline_event.event_type == RgdResourceEventType::kBind)
@@ -1527,8 +1513,7 @@ bool RgdResourceInfoSerializer::Impl::ResourceHistoryToJson(const Config&   user
 
                         for (size_t resource_timeline_idx : rgd_resource.timeline_indices)
                         {
-                            assert(&va_info.rgd_resource_timeline_[resource_timeline_idx] != nullptr);
-                            if (resource_timeline_idx < va_info.rgd_resource_timeline_.size() && &va_info.rgd_resource_timeline_[resource_timeline_idx] != nullptr)
+                            if (resource_timeline_idx < va_info.rgd_resource_timeline_.size())
                             {
                                 const RgdResourceTimeline& resource_timeline_event = va_info.rgd_resource_timeline_[resource_timeline_idx];
 
@@ -1720,7 +1705,6 @@ void RgdResourceInfoSerializer::Impl::GenerateResourceTimeline(const Config&  us
         {
             const size_t current_idx = m;
             const size_t previous_idx = m - 1;
-            assert(&va_info.rgd_resource_timeline_[current_idx] != nullptr && &va_info.rgd_resource_timeline_[previous_idx] != nullptr);
             const RgdResourceTimeline& current_event = va_info.rgd_resource_timeline_[current_idx];
             const RgdResourceTimeline& previous_event = va_info.rgd_resource_timeline_[previous_idx];
             if (is_repeated_events == false

@@ -576,7 +576,9 @@
     ED*       ed;
 
 
-    if ( !worker || !worker->distance_map )
+    FT_ASSERT( worker );
+
+    if ( !worker->distance_map )
     {
       error = FT_THROW( Invalid_Argument );
       goto Exit;
@@ -652,12 +654,7 @@
     ED*       t;
 
 
-    /* again check the parameters (probably unnecessary) */
-    if ( !source || !worker )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( source && worker );
 
     /* Because of the way we convert a bitmap to SDF, */
     /* i.e., aligning the source to the center of the */
@@ -1060,11 +1057,7 @@
     FT_Error  error = FT_Err_Ok;
 
 
-    if ( !worker || !worker->distance_map )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( worker && worker->distance_map );
 
     /* first scan of the image */
     first_pass( worker );
@@ -1072,7 +1065,6 @@
     /* second scan of the image */
     second_pass( worker );
 
-  Exit:
     return error;
   }
 
@@ -1112,22 +1104,13 @@
     FT_16D16       sp_sq, spread;
 
 
-    if ( !worker || !target )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( worker && target );
 
     w        = (int)target->width;
     r        = (int)target->rows;
     t_buffer = (FT_SDFFormat*)target->buffer;
 
-    if ( w != worker->width ||
-         r != worker->rows  )
-    {
-      error = FT_THROW( Invalid_Argument );
-      goto Exit;
-    }
+    FT_ASSERT( w == worker->width && r == worker->rows );
 
     spread = (FT_16D16)FT_INT_16D16( worker->params.spread );
 
@@ -1173,7 +1156,6 @@
       }
     }
 
-  Exit:
     return error;
   }
 

@@ -220,11 +220,7 @@ mz_ulong mz_crc32(mz_ulong crc, const mz_uint8 *ptr, size_t buf_len)
 
         pStream->state = (struct mz_internal_state *)pComp;
 
-        if (tdefl_init(pComp, NULL, NULL, comp_flags) != TDEFL_STATUS_OKAY)
-        {
-            mz_deflateEnd(pStream);
-            return MZ_PARAM_ERROR;
-        }
+        tdefl_init(pComp, NULL, NULL, comp_flags);
 
         return MZ_OK;
     }

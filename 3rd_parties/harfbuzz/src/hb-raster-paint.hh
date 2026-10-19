@@ -80,7 +80,7 @@ struct hb_raster_clip_t
 	      (int) y >= rect_y0 && (int) y < rect_y1) ? 255 : 0;
     if (x >= width || y >= height) return 0;
     if (stride < width) return 0;
-    if (height && stride > (size_t) -1 / height) return 0;
+    if (stride > (size_t) -1 / height) return 0;
     size_t idx = (size_t) y * stride + x;
     if (!alpha.arrayZ || idx >= alpha.length) return 0;
     return alpha[idx];

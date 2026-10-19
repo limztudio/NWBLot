@@ -133,13 +133,9 @@ static RmtVirtualAllocationInterval* InsertNode(RmtVirtualAllocationList*     vi
     {
         node->left = InsertNode(virtual_allocation_list, node->left, gpu_address, size_in_pages, allocation);
     }
-    else if (gpu_address >= node->base_address)
-    {
-        node->right = InsertNode(virtual_allocation_list, node->right, gpu_address, size_in_pages, allocation);
-    }
     else
     {
-        RMT_ASSERT_FAIL("RmtVirtualAllocationInterval InsertNode failed");
+        node->right = InsertNode(virtual_allocation_list, node->right, gpu_address, size_in_pages, allocation);
     }
 
     return node;

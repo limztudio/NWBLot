@@ -955,10 +955,7 @@ namespace
             if (id_to_encodings.find(masked_machine_code) != id_to_encodings.end())
             {
                 encoding = id_to_encodings.at(masked_machine_code);
-                if (encoding == nullptr)
-                {
-                    break;
-                }
+                assert(encoding);
                 if (encoding->name == single_encoding.name)
                 {
                     is_encoding_found = true;
@@ -979,10 +976,7 @@ namespace
                     if (id_to_encodings.find(masked_machine_code_opy) != id_to_encodings.end())
                     {
                         std::shared_ptr<Encoding> encoding_new = id_to_encodings.at(masked_machine_code_opy);
-                        if (encoding_new == nullptr)
-                        {
-                            break;
-                        }
+                        assert(encoding_new);
                         if (encoding->bit_count < encoding_new->bit_count)
                         {
                             encoding = encoding_new;
@@ -1259,7 +1253,6 @@ namespace
         }
         else if (is_vopdy)
         {
-            assert(!is_vopdx);
             const auto& opy_iter = GetFieldIterator(encoding.microcode_format, "OPY");
             assert(opy_iter != encoding.microcode_format.bit_map.end());
             opcode_mask = GetFieldMask(*opy_iter);
@@ -1621,7 +1614,7 @@ namespace v1_1_1
                         }
                         else if (is_y_layout)
                         {
-                            assert(is_opy_found && !is_x_layout);
+                            assert(is_opy_found);
                             if (!AmdIsaUtility::GetRange(*opy_iter, range, 0))
                             {
                                 is_isa_spec_parsed = false;
@@ -2160,10 +2153,6 @@ namespace v1_1_1
                                     amdisa::AmdIsaUtility::BitMapToString(encoding_ptr->microcode_format, working_dwords, instruction_info.encoding_layout);
 
                                     // Find the instruction.
-                                    bool is_instruction_retrieval_successful =
-                                        instruction_ptrs.instruction_encoding_ptr != nullptr && instruction_ptrs.instruction_ptr != nullptr;
-
-                                    if (is_instruction_retrieval_successful)
                                     {
                                         // Dereference pointers for local use.
                                         const InstructionEncoding& inst_enc = *(instruction_ptrs.instruction_encoding_ptr);
@@ -2447,22 +2436,6 @@ namespace v1_1_1
                                                 }
                                             }
                                         }
-                                    }
-                                    else
-                                    {
-                                        is_decode_failed = true;
-                                        std::stringstream err_stream;
-                                        err_stream << kStringErrorInstructionNotFoundInSpec;
-                                        if (instruction_ptrs.instruction_encoding_ptr == nullptr)
-                                        {
-                                            err_stream << " " << kStringErrorEncodingNotFound;
-                                        }
-                                        err_stream << kStringErrorEncodingNotFound;
-                                        for (const auto& kDword : working_dwords)
-                                        {
-                                            err_stream << std::hex << "0x" << kDword << " ";
-                                        }
-                                        err_message = err_stream.str();
                                     }
 
                                     // Apply modifiers on the assembly operands.

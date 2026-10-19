@@ -748,9 +748,6 @@ namespace jpgd {
 
 			num_left -= i;
 
-			if ((index & 0x10) > 0x10)
-				stop_decoding(JPGD_BAD_DHT_INDEX);
-
 			index = (index & 0x0F) + ((index & 0x10) >> 4) * (JPGD_MAX_HUFF_TABLES >> 1);
 
 			if (index >= JPGD_MAX_HUFF_TABLES)

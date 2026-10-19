@@ -1064,11 +1064,11 @@ size_t Curl_ftp_parselist(char *buffer, size_t size, size_t nmemb,
       result = parse_unix(data, parser, infop, c);
       break;
     case OS_TYPE_WIN_NT:
+    default:
+      /* os_type is set to UNIX or WIN_NT before this loop */
+      DEBUGASSERT(parser->os_type == OS_TYPE_WIN_NT);
       result = parse_winnt(data, parser, infop, c);
       break;
-    default:
-      retsize = bufflen + 1;
-      goto fail;
     }
     if(result) {
       parser->error = result;

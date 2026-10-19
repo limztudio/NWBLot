@@ -332,7 +332,7 @@ const EventHistoryImpl* EventHistoryImpl::FromHandle(const RmtMemoryEventHistory
 bool EventHistoryImpl::CheckEventIndex(RmtMemoryEventHistoryEventIndex index) const
 {
     bool result = false;
-    if ((index != kRmtMemoryEventHistoryInvalidEventIndex) && (index < event_list_.size()))
+    if (index < event_list_.size())
     {
         result = true;
     }

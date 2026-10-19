@@ -519,7 +519,7 @@ static CURLcode httpsig_sign_base(struct Curl_easy *data,
     break;
   }
 
-  if(result && result == CURLE_NOT_BUILT_IN) {
+  if(result == CURLE_NOT_BUILT_IN) {
     failf(data, "httpsig: algorithm '%s' not supported by TLS backend",
           alg_to_str(alg));
   }

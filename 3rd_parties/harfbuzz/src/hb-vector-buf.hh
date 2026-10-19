@@ -86,9 +86,8 @@ struct hb_vector_buf_t : hb_vector_t<char>
     if (unlikely (would_overflow (l)))
       return false;
     unsigned old_len = length;
-    unsigned new_len;
-    if (unlikely (hb_unsigned_add_overflows (old_len, l, &new_len) ||
-		  !resize_dirty ((int) new_len)))
+    unsigned new_len = old_len + l;
+    if (unlikely (!resize_dirty ((int) new_len)))
       return false;
     hb_memcpy (arrayZ + old_len, s, l);
     return true;
@@ -131,7 +130,7 @@ struct hb_vector_buf_t : hb_vector_t<char>
     if (fabsf (v) < rounded_zero_threshold)
       v = 0.f;
 
-    if (!(v == v) || !std::isfinite (v))
+    if (!std::isfinite (v))
     {
       append_c ('0');
       return;
@@ -245,11 +244,11 @@ struct hb_vector_buf_t : hb_vector_t<char>
     unsigned ngroups = len / 3 + (len % 3 != 0);
     unsigned out_len;
     unsigned old_len = length;
-    unsigned new_len;
     if (unlikely (hb_unsigned_mul_overflows (ngroups, 4, &out_len) ||
-		  would_overflow (out_len) ||
-		  hb_unsigned_add_overflows (old_len, out_len, &new_len) ||
-		  !resize_dirty ((int) new_len)))
+		  would_overflow (out_len)))
+      return false;
+    unsigned new_len = old_len + out_len;
+    if (unlikely (!resize_dirty ((int) new_len)))
       return false;
 
     char *dst = arrayZ + old_len;

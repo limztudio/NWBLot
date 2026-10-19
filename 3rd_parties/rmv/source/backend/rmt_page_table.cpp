@@ -32,12 +32,6 @@ static void DecomposeAddress(RmtGpuAddress virtual_address,
     const int32_t  level2_radix        = (virtual_page_offset >> 8) & 0xff;
     const int32_t  level3_radix        = (virtual_page_offset >> 0) & 0xff;
 
-    // check the radix never goes out of range, this will stomp memory.
-    RMT_ASSERT(level0_radix < RMT_PAGE_DIRECTORY_LEVEL_0_SIZE);
-    RMT_ASSERT(level1_radix < RMT_PAGE_DIRECTORY_LEVEL_1_SIZE);
-    RMT_ASSERT(level2_radix < RMT_PAGE_DIRECTORY_LEVEL_2_SIZE);
-    RMT_ASSERT(level3_radix < RMT_PAGE_DIRECTORY_LEVEL_3_SIZE);
-
     *out_level0_radix = level0_radix;
     *out_level1_radix = level1_radix;
     *out_level2_radix = level2_radix;
@@ -208,13 +202,10 @@ RmtErrorCode RmtPageTableInitialize(RmtPageTable* page_table, const RmtSegmentIn
     RmtErrorCode error_code = kRmtOk;
     error_code = RmtPoolInitialize(&page_table->level1_allocator, page_table->level1_nodes, sizeof(page_table->level1_nodes), sizeof(RmtPageDirectoryLevel1));
     RMT_ASSERT(error_code == kRmtOk);
-    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
     error_code = RmtPoolInitialize(&page_table->level2_allocator, page_table->level2_nodes, sizeof(page_table->level2_nodes), sizeof(RmtPageDirectoryLevel2));
     RMT_ASSERT(error_code == kRmtOk);
-    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
     error_code = RmtPoolInitialize(&page_table->level3_allocator, page_table->level3_nodes, sizeof(page_table->level3_nodes), sizeof(RmtPageDirectoryLevel3));
     RMT_ASSERT(error_code == kRmtOk);
-    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
 
     // clear per-heap byte tracking.
     for (int32_t current_heap_index = 0; current_heap_index < kRmtHeapTypeCount; ++current_heap_index)

@@ -616,11 +616,9 @@ CURLcode Curl_pollset_change(struct Curl_easy *data,
       ps->count = new_count;
     }
     DEBUGASSERT(i < ps->count);
-    if(i < ps->count) {
-      ps->sockets[i] = sock;
-      ps->actions[i] = (unsigned char)add_flags;
-      ps->n = i + 1;
-    }
+    ps->sockets[i] = sock;
+    ps->actions[i] = (unsigned char)add_flags;
+    ps->n = i + 1;
   }
   return CURLE_OK;
 }

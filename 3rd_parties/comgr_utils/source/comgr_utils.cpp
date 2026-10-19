@@ -295,18 +295,15 @@ namespace amdt
     /// @return AMD COMGR status.
     static amd_comgr_status_t CountFuncSymbolCallback(amd_comgr_symbol_t symbol, void* user_data)
     {
-        amd_comgr_status_t status = AMD_COMGR_STATUS_ERROR;
-        if (user_data != nullptr)
-        {
-            CodeObjSymbolIterState* state  = static_cast<CodeObjSymbolIterState*>(user_data);
-            void*                   buffer = state->scratch_buffer;
-            status                         = ComgrEntryPoints::Instance()->amd_comgr_symbol_get_info_fn(symbol, AMD_COMGR_SYMBOL_INFO_TYPE, buffer);
+        assert(user_data);
+        CodeObjSymbolIterState* state  = static_cast<CodeObjSymbolIterState*>(user_data);
+        void*                   buffer = state->scratch_buffer;
+        amd_comgr_status_t      status = ComgrEntryPoints::Instance()->amd_comgr_symbol_get_info_fn(symbol, AMD_COMGR_SYMBOL_INFO_TYPE, buffer);
 
-            if (*((amd_comgr_symbol_type_t*)buffer) == AMD_COMGR_SYMBOL_TYPE_FUNC)
-            {
-                // if its a function print some more info
-                state->symbol_count += 1;
-            }
+        if (*((amd_comgr_symbol_type_t*)buffer) == AMD_COMGR_SYMBOL_TYPE_FUNC)
+        {
+            // if its a function print some more info
+            state->symbol_count += 1;
         }
 
         return status;
@@ -322,11 +319,8 @@ namespace amdt
     {
         amd_comgr_status_t status = AMD_COMGR_STATUS_ERROR;
 
+        assert(user_data);
         CodeObjSymbolIterState* state = static_cast<CodeObjSymbolIterState*>(user_data);
-        if (state == nullptr)
-        {
-            return status;
-        }
 
         // Abbreviated name to use in this function.
         void*  buffer      = state->scratch_buffer;
@@ -3203,14 +3197,11 @@ namespace amdt
     {
         amd_comgr_metadata_node_t child = {0};
 
-        if (IsValid())
+        if (GetKind() == Kind::kNodeKindList)
         {
-            if (GetKind() == Kind::kNodeKindList)
-            {
-                Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
-                amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_index_list_metadata_fn(handle_, idx, &child);
-                CheckStatus(current_code_object_, status, child);
-            }
+            Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
+            amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_index_list_metadata_fn(handle_, idx, &child);
+            CheckStatus(current_code_object_, status, child);
         }
 
         return MDNode(child, current_code_object_);
@@ -3220,14 +3211,11 @@ namespace amdt
     {
         amd_comgr_metadata_node_t child = {0};
 
-        if (IsValid())
+        if (GetKind() == Kind::kNodeKindList)
         {
-            if (GetKind() == Kind::kNodeKindList)
-            {
-                Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
-                amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_index_list_metadata_fn(handle_, idx, &child);
-                CheckStatus(current_code_object_, status, child);
-            }
+            Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
+            amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_index_list_metadata_fn(handle_, idx, &child);
+            CheckStatus(current_code_object_, status, child);
         }
 
         return MDNode(child, current_code_object_);
@@ -3237,14 +3225,11 @@ namespace amdt
     {
         amd_comgr_metadata_node_t child = {0};
 
-        if (IsValid())
+        if (GetKind() == Kind::kNodeKindMap)
         {
-            if (GetKind() == Kind::kNodeKindMap)
-            {
-                Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
-                amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_metadata_lookup_fn(handle_, key.c_str(), &child);
-                CheckStatus(current_code_object_, status, child);
-            }
+            Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
+            amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_metadata_lookup_fn(handle_, key.c_str(), &child);
+            CheckStatus(current_code_object_, status, child);
         }
 
         return MDNode(child, current_code_object_);
@@ -3254,14 +3239,11 @@ namespace amdt
     {
         amd_comgr_metadata_node_t child = {0};
 
-        if (IsValid())
+        if (GetKind() == Kind::kNodeKindMap)
         {
-            if (GetKind() == Kind::kNodeKindMap)
-            {
-                Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
-                amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_metadata_lookup_fn(handle_, key, &child);
-                CheckStatus(current_code_object_, status, child);
-            }
+            Check(ComgrEntryPoints::Instance()->EntryPointsValid(), child);
+            amd_comgr_status_t status = ComgrEntryPoints::Instance()->amd_comgr_metadata_lookup_fn(handle_, key, &child);
+            CheckStatus(current_code_object_, status, child);
         }
 
         return MDNode(child, current_code_object_);
@@ -3269,8 +3251,6 @@ namespace amdt
 
     bool MDNode::Find(const std::string& key) const
     {
-        CheckValid(false);
-
         if (GetKind() == Kind::kNodeKindMap)
         {
             Check(ComgrEntryPoints::Instance()->EntryPointsValid(), false);
@@ -3371,8 +3351,6 @@ namespace amdt
     template <>
     std::string MDNode::value<std::string>() const
     {
-        CheckValid("");
-
         if (GetKind() == Kind::kNodeKindString)
         {
             Check(ComgrEntryPoints::Instance()->EntryPointsValid(), "");
@@ -3428,8 +3406,6 @@ namespace amdt
     template <>
     uint32_t MDNode::value<uint32_t>() const
     {
-        CheckValid(0);
-
         if (GetKind() == Kind::kNodeKindString)
         {
             Check(ComgrEntryPoints::Instance()->EntryPointsValid(), 0);
@@ -3464,8 +3440,6 @@ namespace amdt
     template <>
     uint64_t MDNode::value<uint64_t>() const
     {
-        CheckValid(0);
-
         if (GetKind() == Kind::kNodeKindString)
         {
             Check(ComgrEntryPoints::Instance()->EntryPointsValid(), 0);

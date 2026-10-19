@@ -550,7 +550,6 @@ struct hb_vector_t
     /* Reallocate */
 
     bool overflows =
-      (int) in_error () ||
       (new_allocated < size) ||
       hb_unsigned_mul_overflows (new_allocated, sizeof (Type));
 

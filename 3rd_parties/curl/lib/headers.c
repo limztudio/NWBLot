@@ -121,10 +121,8 @@ CURLHcode curl_easy_header(CURL *curl,
           break;
         }
       }
-      if(!e) { /* this should not happen */
-        hresult = CURLHE_MISSING;
-        goto out;
-      }
+      /* the first round counted this occurrence */
+      DEBUGASSERT(e);
     }
     /* this is the name we want */
     copy_header_external(hs, nameindex, amount, e_pick,

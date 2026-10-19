@@ -629,7 +629,7 @@ hb_raster_image_t::deserialize_from_png (hb_blob_t *blob)
   }
 
   size_t rgba_size = (size_t) rowbytes * (size_t) h;
-  if ((h && rgba_size / (size_t) h != (size_t) rowbytes) ||
+  if (rgba_size / (size_t) h != (size_t) rowbytes ||
       rgba_size > HB_RASTER_MAX_BUFFER_SIZE)
   {
     png_destroy_read_struct (&png, &info, nullptr);
@@ -646,7 +646,7 @@ hb_raster_image_t::deserialize_from_png (hb_blob_t *blob)
   }
 
   size_t rows_size = (size_t) h * sizeof (png_bytep);
-  if (h && rows_size / (size_t) h != sizeof (png_bytep))
+  if (rows_size / (size_t) h != sizeof (png_bytep))
   {
     png_destroy_read_struct (&png, &info, nullptr);
     hb_raster_png_read_blob_fini (reader);
@@ -748,7 +748,7 @@ hb_raster_image_t::serialize_to_png_or_fail () const
 
   size_t rowbytes = (size_t) extents.width * 4u;
   size_t rgba_size = rowbytes * (size_t) extents.height;
-  if (extents.height && rgba_size / (size_t) extents.height != rowbytes)
+  if (rgba_size / (size_t) extents.height != rowbytes)
   {
     png_destroy_write_struct (&png, &info);
     hb_raster_png_write_blob_fini (writer);
@@ -764,7 +764,7 @@ hb_raster_image_t::serialize_to_png_or_fail () const
   }
 
   size_t rows_size = (size_t) extents.height * sizeof (png_bytep);
-  if (extents.height && rows_size / (size_t) extents.height != sizeof (png_bytep))
+  if (rows_size / (size_t) extents.height != sizeof (png_bytep))
   {
     png_destroy_write_struct (&png, &info);
     hb_raster_png_write_blob_fini (writer);

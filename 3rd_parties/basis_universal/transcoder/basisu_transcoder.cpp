@@ -12503,29 +12503,9 @@ namespace basist
 
 			} // j
 
-			// can't ever fire
-			if ((!key_size) || (key_size > 0xFF))
-			{
-				assert(0);
-				return false;
-			}
-
-			// can't ever fire
-			if (val_size > UINT32_MAX)
-			{
-				assert(0);
-				return false;
-			}
-
 			if ((remaining_bytes < (key_size + val_size)))
 			{
 				BASISU_DEVEL_ERROR("basisu_transcoder::get_key_values: KV section corrupted (4)\n");
-				return false;
-			}
-
-			if (((size_t)key_size) != key_size)
-			{
-				BASISU_DEVEL_ERROR("basisu_transcoder::get_key_values: key size too large)\n");
 				return false;
 			}
 
@@ -12552,11 +12532,7 @@ namespace basist
 
 			if (val_size)
 			{
-				if (remaining_bytes < val_size)
-				{
-					BASISU_DEVEL_ERROR("basisu_transcoder::get_key_values: KV section corrupted (5)\n");
-					return false;
-				}
+				assert(remaining_bytes >= val_size);
 
 				if (((size_t)(val_size + 1)) != (val_size + 1))
 				{

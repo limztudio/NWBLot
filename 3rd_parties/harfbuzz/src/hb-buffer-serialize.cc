@@ -785,11 +785,7 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
   buffer->assert_glyphs ();
 
   if (unlikely (hb_object_is_immutable (buffer)))
-  {
-    if (end_ptr)
-      *end_ptr = buf;
     return false;
-  }
 
   if (buf_len == -1)
     buf_len = strlen (buf);
@@ -856,11 +852,7 @@ hb_buffer_deserialize_unicode (hb_buffer_t *buffer,
   buffer->assert_unicode ();
 
   if (unlikely (hb_object_is_immutable (buffer)))
-  {
-    if (end_ptr)
-      *end_ptr = buf;
     return false;
-  }
 
   if (buf_len == -1)
     buf_len = strlen (buf);

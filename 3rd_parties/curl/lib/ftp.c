@@ -3152,13 +3152,12 @@ static CURLcode ftp_wait_resp(struct Curl_easy *data,
       ftpc->count1 = 0;
       break;
     case CURLFTPAUTH_TLS:
+    default:
+      /* setopt only admits DEFAULT, SSL and TLS */
+      DEBUGASSERT((long)data->set.ftpsslauth == CURLFTPAUTH_TLS);
       ftpc->count2 = -1; /* subtract one to get next */
       ftpc->count1 = 1;
       break;
-    default:
-      failf(data, "unsupported parameter to CURLOPT_FTPSSLAUTH: %d",
-            (int)data->set.ftpsslauth);
-      return CURLE_UNKNOWN_OPTION; /* we do not know what to do */
     }
     result = Curl_pp_sendf(data, &ftpc->pp, "AUTH %s", ftpauth[ftpc->count1]);
     if(!result)

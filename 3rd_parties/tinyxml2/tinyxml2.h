@@ -266,7 +266,6 @@ public:
     }
 
     size_t Size() const {
-        TIXMLASSERT( _size >= 0 );
         return _size;
     }
 
@@ -277,7 +276,6 @@ public:
 
 	void SwapRemove(size_t i) {
 		TIXMLASSERT(i < _size);
-		TIXMLASSERT(_size > 0);
 		_mem[i] = _mem[_size - 1];
 		--_size;
 	}

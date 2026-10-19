@@ -967,11 +967,7 @@ init_config_builder_ech(struct Curl_easy *data,
   if(data->set.tls_ech && CURL_EASY_STR(data, STRING_ECH_CONFIG)) {
     const char *b64 = CURL_EASY_STR(data, STRING_ECH_CONFIG);
     size_t decode_result;
-    if(!b64) {
-      infof(data, "rustls: ECHConfig from command line empty");
-      result = CURLE_SSL_CONNECT_ERROR;
-      goto cleanup;
-    }
+    DEBUGASSERT(b64); /* checked by the enclosing if */
     /* rustls-ffi expects the raw TLS encoded ECHConfigList bytes */
     decode_result = curlx_base64_decode(b64, &ech_config, &ech_config_len);
     if(decode_result || !ech_config) {

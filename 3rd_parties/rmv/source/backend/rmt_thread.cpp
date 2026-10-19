@@ -37,7 +37,6 @@ typedef struct RmtThreadInternal
 RmtErrorCode RmtThreadCreate(RmtThread* thread, RmtThreadFunc thread_func, void* input_data)
 {
     RMT_ASSERT_MESSAGE(thread, "Parameter thread is NULL.");
-    RMT_ASSERT_MESSAGE(thread, "Parameter threadFunc is NULL.");
     RMT_RETURN_ON_ERROR(thread, kRmtErrorInvalidPointer);
     RMT_RETURN_ON_ERROR(thread_func, kRmtErrorInvalidPointer);
 

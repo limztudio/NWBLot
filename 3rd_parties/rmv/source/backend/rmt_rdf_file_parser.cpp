@@ -106,8 +106,8 @@ static RmtErrorCode LoadSnapshotChunks(rdfChunkFile* chunk_file, RmtDataSet* dat
 // Load the Driver Overrides chunk.
 static RmtErrorCode LoadDriverOverridesChunk(rdfChunkFile* chunk_file, RmtDataSet* data_set)
 {
-    RMT_RETURN_ON_ERROR(chunk_file != nullptr, kRmtErrorInvalidPointer);
-    RMT_RETURN_ON_ERROR(data_set != nullptr, kRmtErrorInvalidPointer);
+    RMT_ASSERT(chunk_file != nullptr);
+    RMT_ASSERT(data_set != nullptr);
     RmtErrorCode result = kRmtErrorMalformedData;
 
     // Attempt to load Driver Overrides chunk.
@@ -123,8 +123,8 @@ static RmtErrorCode LoadDriverOverridesChunk(rdfChunkFile* chunk_file, RmtDataSe
 // Load the GPU Memory Segment chunk.
 static RmtErrorCode LoadSegmentChunk(rdfChunkFile* chunk_file, RmtDataSet* data_set)
 {
-    RMT_RETURN_ON_ERROR(chunk_file != nullptr, kRmtErrorInvalidPointer);
-    RMT_RETURN_ON_ERROR(data_set != nullptr, kRmtErrorInvalidPointer);
+    RMT_ASSERT(chunk_file != nullptr);
+    RMT_ASSERT(data_set != nullptr);
 
     RmtErrorCode result                = kRmtErrorMalformedData;
     int          rdf_result            = kRmtRdfResultFailure;
@@ -195,7 +195,7 @@ RmtErrorCode RmtRdfFileParserDestroyAllDataStreams()
 // Callback function to fill a buffer with the next chunk from a data stream.
 static RmtErrorCode RdfDataStreamGetNextChunk(const RmtParser* rmt_parser, const size_t start_offset, void** out_rmt_buffer, size_t* out_rmt_buffer_size)
 {
-    RMT_RETURN_ON_ERROR(rmt_parser != nullptr, kRmtErrorInvalidPointer);
+    RMT_ASSERT(rmt_parser != nullptr);
     RmtRdfDataStream* data_stream = GetRdfDataStreamFromParser(rmt_parser);
     RMT_RETURN_ON_ERROR(data_stream != nullptr, kRmtErrorInvalidPointer);
 
@@ -227,7 +227,7 @@ static RmtErrorCode RdfDataStreamGetNextChunk(const RmtParser* rmt_parser, const
 // Callback function to reset the RDF data stream to the first chunk in the queue.
 static RmtErrorCode RdfDataStreamReset(const RmtParser* rmt_parser)
 {
-    RMT_RETURN_ON_ERROR(rmt_parser, kRmtErrorInvalidPointer);
+    RMT_ASSERT(rmt_parser);
 
     RmtRdfDataStream* data_stream = GetRdfDataStreamFromParser(rmt_parser);
     RMT_RETURN_ON_ERROR(data_stream != nullptr, kRmtErrorInvalidPointer);
@@ -239,9 +239,9 @@ static RmtErrorCode RdfDataStreamReset(const RmtParser* rmt_parser)
 // Group chunks by stream index and add them to the stream's chunk queue.
 static RmtErrorCode QueueDataStreamChunks(rdfChunkFile* chunk_file, RmtDataSet* data_set, const char* path)
 {
-    RMT_RETURN_ON_ERROR(chunk_file, kRmtErrorInvalidPointer);
-    RMT_RETURN_ON_ERROR(data_set, kRmtErrorInvalidPointer);
-    RMT_RETURN_ON_ERROR(path, kRmtErrorInvalidPointer);
+    RMT_ASSERT(chunk_file);
+    RMT_ASSERT(data_set);
+    RMT_ASSERT(path);
 
     RmtErrorCode result     = kRmtErrorMalformedData;
     const auto   identifier = RmtRdfDataStream::ChunkIdentifier();
@@ -373,8 +373,8 @@ static RmtErrorCode QueueDataStreamChunks(rdfChunkFile* chunk_file, RmtDataSet* 
 
 static RmtErrorCode LoadSystemInfoChunk(rdfChunkFile* chunk_file, RmtDataSet* data_set)
 {
-    RMT_RETURN_ON_ERROR(chunk_file, kRmtErrorInvalidPointer);
-    RMT_RETURN_ON_ERROR(data_set, kRmtErrorInvalidPointer);
+    RMT_ASSERT(chunk_file);
+    RMT_ASSERT(data_set);
 
     RmtErrorCode                  result      = kRmtEof;
     system_info_utils::SystemInfo system_info = {};

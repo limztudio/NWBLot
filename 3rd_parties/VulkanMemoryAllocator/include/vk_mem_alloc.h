@@ -13403,12 +13403,6 @@ VmaAllocator_T::VmaAllocator_T(const VmaAllocatorCreateInfo* pCreateInfo) :
         VMA_ASSERT(0 && "VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT is set but required extension is not available in your Vulkan header or its support in VMA has been disabled by a preprocessor macro.");
     }
 #endif
-#if !(VMA_KHR_MAINTENANCE5)
-    if(m_UseKhrMaintenance5)
-    {
-        VMA_ASSERT(0 && "VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT is set but required extension is not available in your Vulkan header or its support in VMA has been disabled by a preprocessor macro.");
-    }
-#endif
 
 #if !(VMA_EXTERNAL_MEMORY_WIN32)
     if(m_UseKhrExternalMemoryWin32)

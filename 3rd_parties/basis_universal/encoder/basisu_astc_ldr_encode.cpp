@@ -5951,11 +5951,7 @@ public:
 		}
 
 		size_t idx = pTemps - m_pool.begin();
-		if (idx >= m_pool.size())
-		{
-			assert(0);
-			return false;
-		}
+		assert(idx < m_pool.size());
 
 		m_pool[idx].m_used_flag = false;
 

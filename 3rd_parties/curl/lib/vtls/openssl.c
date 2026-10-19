@@ -3498,10 +3498,7 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
     size_t ech_config_len = 0;
     CURLcode result;
 
-    if(!b64) {
-      infof(data, "ECH: ECHConfig from command line empty");
-      return CURLE_SSL_CONNECT_ERROR;
-    }
+    DEBUGASSERT(b64); /* checked by the enclosing if */
     ech_config_len = 2 * strlen(b64);
     result = curlx_base64_decode(b64, &ech_config, &ech_config_len);
     if(result || !ech_config) {
@@ -3521,10 +3518,7 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
 #else
     const char *ech_config = CURL_EASY_STR(data, STRING_ECH_CONFIG);
     size_t ech_config_len = 0;
-    if(!ech_config) {
-      infof(data, "ECH: ECHConfig from command line empty");
-      return CURLE_SSL_CONNECT_ERROR;
-    }
+    DEBUGASSERT(ech_config); /* checked by the enclosing if */
     ech_config_len = strlen(ech_config);
     if(SSL_set1_ech_config_list(octx->ssl,
                                 (const uint8_t *)ech_config,

@@ -2180,12 +2180,6 @@ namespace basisu
 				return false;
 			}
 
-			if ((size_t)ofs != ofs)
-			{
-				assert(0);
-				return false;
-			}
-
 			return try_insert((size_t)ofs, &obj, 1);
 		}
 

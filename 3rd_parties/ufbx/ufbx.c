@@ -3781,7 +3781,6 @@ ufbxi_noinline ufbxi_nodiscard static bool ufbxi_grow_array_size(ufbxi_allocator
 	if (n <= *p_cap) return true;
 	void *ptr = *(void**)p_ptr;
 	size_t old_n = *p_cap;
-	if (old_n >= n) return true;
 	size_t new_n = ufbxi_max_sz(old_n * 2, n);
 	void *new_ptr = ufbxi_realloc_size(ator, size, ptr, old_n, new_n);
 	if (!new_ptr) return false;
@@ -4055,7 +4054,7 @@ static ufbxi_noinline void *ufbxi_push_size(ufbxi_buf *b, size_t size, size_t n)
 		// If we overflow the current block we don't need to care as the block
 		// boundaries are not contiguous.
 		pos = ufbxi_align_to_mask(b->pos, 0xf);
-		if (total < SIZE_MAX - 16 && total + 16 <= b->size - pos) {
+		if (total + 16 <= b->size - pos) {
 			ufbxi_buf_chunk *chunk = b->chunks[0];
 			ufbxi_buf_padding *padding = (ufbxi_buf_padding*)(chunk->data + pos);
 			padding->original_pos = b->pos;
@@ -6131,10 +6130,8 @@ ufbxi_nodiscard ufbxi_noinline static ufbxi_task *ufbxi_thread_pool_create_task(
 {
 	uint32_t index = pool->start_index;
 	if (index - pool->wait_index >= pool->num_tasks) {
-		if (index - pool->wait_index >= pool->num_tasks) {
-			// No space left
-			return NULL;
-		}
+		// No space left
+		return NULL;
 	} else if (index == INT32_MAX) {
 		// TODO: Expand to 64 bits if possible?
 		return NULL;
@@ -12653,8 +12650,6 @@ typedef struct {
 	uint32_t index;
 } ufbxi_tangent_layer;
 
-static ufbx_real ufbxi_zero_element[8] = { 0 };
-
 // Sentinel pointers used for zero/sequential index buffers
 static const uint32_t ufbxi_sentinel_index_zero[1] = { 100000000 };
 static const uint32_t ufbxi_sentinel_index_consecutive[1] = { 123456789 };
@@ -12757,7 +12752,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_vertex_element(ufbxi_contex
 		return 1;
 	}
 
-	ufbxi_check(num_elems > 0 && num_elems < INT32_MAX);
+	ufbxi_check(num_elems < INT32_MAX);
 
 	attrib->exists = true;
 	attrib->indices.count = mesh->num_indices;
@@ -12765,16 +12760,10 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_vertex_element(ufbxi_contex
 	const char *mapping = "";
 	ufbxi_ignore(ufbxi_find_val1(node, ufbxi_MappingInformationType, "C", (char**)&mapping));
 
-	attrib->values.count = num_elems ? num_elems : 1;
+	attrib->values.count = num_elems;
 
-	// Data array is always used as-is, if empty set the data to a global
-	// zero buffer so invalid zero index can point to some valid data.
-	// The zero data is offset by 4 elements to accommodate for invalid index (-1)
-	if (num_elems > 0) {
-		*p_dst_data = (ufbx_real*)data->data;
-	} else {
-		*p_dst_data = ufbxi_zero_element + 4;
-	}
+	// Data array is always used as-is.
+	*p_dst_data = (ufbx_real*)data->data;
 
 	// HACK: Some old exporters seem to use ByPolygon to mean ByPolygonVertex,
 	// it should be quite safe to remap this
@@ -20720,7 +20709,7 @@ ufbxi_noinline static void ufbxi_propagate_main_textures(ufbx_scene *scene)
 		ufbx_shader_texture *shader = texture->shader;
 		if (!shader || !shader->main_texture || shader->main_texture_output_index != 0) continue;
 		ufbx_texture *main_tex = shader->main_texture;
-		if (main_tex && main_tex->shader && main_tex->shader->main_texture) {
+		if (main_tex->shader && main_tex->shader->main_texture) {
 			// Should have been propagated to `texture`
 			shader->main_texture = NULL;
 		}
@@ -31938,7 +31927,7 @@ ufbx_abi ufbxi_noinline ufbx_matrix ufbx_catch_get_skin_vertex_matrix(ufbx_panic
 	ufbx_assert(skin);
 	if (ufbxi_panicf(panic, vertex < skin->vertices.count, "vertex (%zu) out of bounds (%zu)", vertex, skin->vertices.count)) return ufbx_identity_matrix;
 
-	if (!skin || vertex >= skin->vertices.count) return ufbx_identity_matrix;
+	if (!skin) return ufbx_identity_matrix;
 	ufbx_skin_vertex skin_vertex = skin->vertices.data[vertex];
 
 	ufbx_matrix mat = { 0.0f };

@@ -172,8 +172,6 @@ CURLcode Curl_capsule_encap_udp_datagram(struct bufq *q,
 
   hdr_len = capsule_encap_udp_hdr(hdr, sizeof(hdr), blen);
   DEBUGASSERT(hdr_len);
-  if(!hdr_len)
-    return CURLE_FAILED_INIT;
 
   result = Curl_bufq_write(q, hdr, hdr_len, &nwritten);
   if(!result && (nwritten != hdr_len))

@@ -408,7 +408,7 @@ static int cb_h3_proxy_recv_header(nghttp3_conn *conn, int64_t stream_id,
   if(!stream || (stream->id != stream_id)) {
     CURL_TRC_CF(data, cf, "[%" PRId64 "] recv_header: stream lookup "
                 "failed for data=%p mid=%u",
-                stream_id, (void *)data, data ? data->mid : 0);
+                stream_id, (void *)data, data->mid);
     return 0;
   }
 
@@ -467,7 +467,7 @@ static int cb_h3_proxy_end_headers(nghttp3_conn *conn, int64_t stream_id,
   if(!stream || (stream->id != stream_id)) {
     CURL_TRC_CF(data, cf, "[%" PRId64 "] end_headers: stream lookup "
                 "failed for data=%p mid=%u",
-                stream_id, (void *)data, data ? data->mid : 0);
+                stream_id, (void *)data, data->mid);
     return 0;
   }
 

@@ -1392,8 +1392,8 @@ static MZ_FORCEINLINE void tdefl_find_match(tdefl_compressor *d, mz_uint lookahe
         pComp = (tdefl_compressor *)MZ_MALLOC(sizeof(tdefl_compressor));
         if (!pComp)
             return MZ_FALSE;
-        succeeded = (tdefl_init(pComp, pPut_buf_func, pPut_buf_user, flags) == TDEFL_STATUS_OKAY);
-        succeeded = succeeded && (tdefl_compress_buffer(pComp, pBuf, buf_len, TDEFL_FINISH) == TDEFL_STATUS_DONE);
+        tdefl_init(pComp, pPut_buf_func, pPut_buf_user, flags);
+        succeeded = (tdefl_compress_buffer(pComp, pBuf, buf_len, TDEFL_FINISH) == TDEFL_STATUS_DONE);
         MZ_FREE(pComp);
         return succeeded;
     }

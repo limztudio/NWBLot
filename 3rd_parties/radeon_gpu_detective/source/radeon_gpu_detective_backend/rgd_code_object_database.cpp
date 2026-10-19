@@ -28,13 +28,9 @@ static const char* kStrExtractedDebugInfoForInFlightShader    = "extracted debug
 static bool RgdCodeObjDbInitializeComgrHandles(RgdCodeObjectDatabase* code_object_db)
 {
     assert(code_object_db != nullptr);
+    assert(!code_object_db->entries_.empty());
 
     bool ret = true;
-    if (code_object_db == nullptr || code_object_db->entries_.size() == 0)
-    {
-        ret = false;
-    }
-
     for (RgdCodeObjectEntry& entry : code_object_db->entries_)
     {
         const char* code_object_payload = (const char*)entry.code_object_payload_.data();
@@ -270,102 +266,99 @@ static uint64_t RgdGetSymbolSizeFromSymbolName(const std::string symbol_name, Rg
 static void RgdCodeObjDbInitCodeObjEntry(RgdCodeObjectEntry* entry, ecitrace::GpuSeries gpu_series)
 {
     assert(entry != nullptr);
-    if (entry != nullptr)
+    if (RgdCodeObjDbCreateIsaContextAmdGpuDis(entry, gpu_series))
     {
-        if (RgdCodeObjDbCreateIsaContextAmdGpuDis(entry, gpu_series))
-        {
-            AmdGpuDisStatus status = AMD_GPU_DIS_STATUS_FAILED;
+        AmdGpuDisStatus status = AMD_GPU_DIS_STATUS_FAILED;
 
-            // Get the full AMDGPU disassembly for the code object entry.
-            size_t disassembly_string_size = 0;
-            status = rgd_disassembler_api_table.AmdGpuDisGetDisassemblyStringSize(entry->amd_gpu_dis_context_, &disassembly_string_size);
+        // Get the full AMDGPU disassembly for the code object entry.
+        size_t disassembly_string_size = 0;
+        status = rgd_disassembler_api_table.AmdGpuDisGetDisassemblyStringSize(entry->amd_gpu_dis_context_, &disassembly_string_size);
+        if (status == AMD_GPU_DIS_STATUS_SUCCESS)
+        {
+            std::vector<char> disassembly_string(disassembly_string_size);
+            status = rgd_disassembler_api_table.AmdGpuDisGetDisassemblyString(entry->amd_gpu_dis_context_, disassembly_string.data());
             if (status == AMD_GPU_DIS_STATUS_SUCCESS)
             {
-                std::vector<char> disassembly_string(disassembly_string_size);
-                status = rgd_disassembler_api_table.AmdGpuDisGetDisassemblyString(entry->amd_gpu_dis_context_, disassembly_string.data());
-                if (status == AMD_GPU_DIS_STATUS_SUCCESS)
-                {
-                    entry->disassembly_ = std::string(disassembly_string.data());
-                }
-                else
-                {
-                    entry->disassembly_ = kStrNotAvailable;
-                }
-            }
-
-            const amdt::PalPipelineData* pipeline_data = &(entry->pipeline_data_);
-
-            assert(pipeline_data->num_pipelines != 0);
-            assert(pipeline_data->pipelines != nullptr);
-
-            if (pipeline_data->pipelines != nullptr && pipeline_data->num_pipelines != 0)
-            {
-                // For each shader in the pipeline metadata, build the shader info.
-                for (size_t j = 0; j < pipeline_data->pipelines[0].num_shaders; ++j)
-                {
-                    amdt::HwStageType stage = GetHwStageForShader(pipeline_data->pipelines[0].shader_list[j].hardware_mapping_bit_field);
-                    RgdShaderInfo     shader_info;
-                    assert(entry->hw_stage_to_shader_info_map_.find(stage) == entry->hw_stage_to_shader_info_map_.end());
-                    shader_info.api_shader_hash_lo             = pipeline_data->pipelines[0].shader_list[j].api_shader_hash_lo;
-                    shader_info.api_shader_hash_hi             = pipeline_data->pipelines[0].shader_list[j].api_shader_hash_hi;
-                    shader_info.api_stage                      = GetShaderTypeString(pipeline_data->pipelines[0].shader_list[j].shader_type);
-                    shader_info.hw_stage                       = GetHwStageString(stage);
-                    entry->hw_stage_to_shader_info_map_[stage] = shader_info;
-                }
-
-                // For each stage in the pipeline metadata, update the respective shader info.
-                for (size_t j = 0; j < pipeline_data->pipelines[0].num_stages; ++j)
-                {
-                    amdt::HwStageType stage = pipeline_data->pipelines[0].stage_list[j].stage_type;
-
-                    assert(entry->hw_stage_to_shader_info_map_.find(stage) != entry->hw_stage_to_shader_info_map_.end());
-                    if (entry->hw_stage_to_shader_info_map_.find(stage) != entry->hw_stage_to_shader_info_map_.end())
-                    {
-                        RgdShaderInfo& shader_info          = entry->hw_stage_to_shader_info_map_[stage];
-                        assert(pipeline_data->pipelines[0].stage_list[j].entry_point_symbol_name != nullptr);
-                        if (pipeline_data->pipelines[0].stage_list[j].entry_point_symbol_name != nullptr)
-                        {
-                            shader_info.entry_point_symbol_name = pipeline_data->pipelines[0].stage_list[j].entry_point_symbol_name;
-                        }
-                        else
-                        {
-                            shader_info.entry_point_symbol_name = "";
-                            RgdUtils::PrintMessage("failed to find entry point symbol name for the hardware stage.", RgdMessageType::kError, true);
-                        }
-                        shader_info.symbol_size             = RgdGetSymbolSizeFromSymbolName(shader_info.entry_point_symbol_name, entry);
-
-                        // Build the instructions vector for the shader.
-                        assert(shader_info.symbol_size != 0);
-                        assert(!entry->disassembly_.empty());
-                        BuildInstructionsVectorForShader(
-                            entry->disassembly_, shader_info.entry_point_symbol_name, shader_info.symbol_size, shader_info.instructions);
-
-                        // Make a copy of instructions for json output.
-                        shader_info.instructions_json_output = shader_info.instructions;
-
-                        // Check if this shader is the crashing shader.
-                        assert(shader_info.instructions.size() != 0);
-                        if (shader_info.instructions.size() != 0)
-                        {
-                            // Update the crashing shader flag and assign the seq number/id to the crashing shader.
-                            if (IsInFlightShader(entry->pc_offset_to_hung_wave_count_map_, shader_info))
-                            {
-                                shader_info.is_in_flight_shader = true;
-                                shader_info.crashing_shader_id  = ++crashing_shader_count;
-                                shader_info.str_shader_info_id  = RgdUtils::GetAlphaNumericId(kStrPrefixShaderInfoId, shader_info.crashing_shader_id);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        RgdUtils::PrintMessage("failed to find shader info for the hardware stage.", RgdMessageType::kError, true);
-                    }
-                }
+                entry->disassembly_ = std::string(disassembly_string.data());
             }
             else
             {
-                RgdUtils::PrintMessage("failed to find pipeline data for the code object.", RgdMessageType::kError, true);
+                entry->disassembly_ = kStrNotAvailable;
             }
+        }
+
+        const amdt::PalPipelineData* pipeline_data = &(entry->pipeline_data_);
+
+        assert(pipeline_data->num_pipelines != 0);
+        assert(pipeline_data->pipelines != nullptr);
+
+        if (pipeline_data->pipelines != nullptr && pipeline_data->num_pipelines != 0)
+        {
+            // For each shader in the pipeline metadata, build the shader info.
+            for (size_t j = 0; j < pipeline_data->pipelines[0].num_shaders; ++j)
+            {
+                amdt::HwStageType stage = GetHwStageForShader(pipeline_data->pipelines[0].shader_list[j].hardware_mapping_bit_field);
+                RgdShaderInfo     shader_info;
+                assert(entry->hw_stage_to_shader_info_map_.find(stage) == entry->hw_stage_to_shader_info_map_.end());
+                shader_info.api_shader_hash_lo             = pipeline_data->pipelines[0].shader_list[j].api_shader_hash_lo;
+                shader_info.api_shader_hash_hi             = pipeline_data->pipelines[0].shader_list[j].api_shader_hash_hi;
+                shader_info.api_stage                      = GetShaderTypeString(pipeline_data->pipelines[0].shader_list[j].shader_type);
+                shader_info.hw_stage                       = GetHwStageString(stage);
+                entry->hw_stage_to_shader_info_map_[stage] = shader_info;
+            }
+
+            // For each stage in the pipeline metadata, update the respective shader info.
+            for (size_t j = 0; j < pipeline_data->pipelines[0].num_stages; ++j)
+            {
+                amdt::HwStageType stage = pipeline_data->pipelines[0].stage_list[j].stage_type;
+
+                assert(entry->hw_stage_to_shader_info_map_.find(stage) != entry->hw_stage_to_shader_info_map_.end());
+                if (entry->hw_stage_to_shader_info_map_.find(stage) != entry->hw_stage_to_shader_info_map_.end())
+                {
+                    RgdShaderInfo& shader_info          = entry->hw_stage_to_shader_info_map_[stage];
+                    assert(pipeline_data->pipelines[0].stage_list[j].entry_point_symbol_name != nullptr);
+                    if (pipeline_data->pipelines[0].stage_list[j].entry_point_symbol_name != nullptr)
+                    {
+                        shader_info.entry_point_symbol_name = pipeline_data->pipelines[0].stage_list[j].entry_point_symbol_name;
+                    }
+                    else
+                    {
+                        shader_info.entry_point_symbol_name = "";
+                        RgdUtils::PrintMessage("failed to find entry point symbol name for the hardware stage.", RgdMessageType::kError, true);
+                    }
+                    shader_info.symbol_size             = RgdGetSymbolSizeFromSymbolName(shader_info.entry_point_symbol_name, entry);
+
+                    // Build the instructions vector for the shader.
+                    assert(shader_info.symbol_size != 0);
+                    assert(!entry->disassembly_.empty());
+                    BuildInstructionsVectorForShader(
+                        entry->disassembly_, shader_info.entry_point_symbol_name, shader_info.symbol_size, shader_info.instructions);
+
+                    // Make a copy of instructions for json output.
+                    shader_info.instructions_json_output = shader_info.instructions;
+
+                    // Check if this shader is the crashing shader.
+                    assert(shader_info.instructions.size() != 0);
+                    if (shader_info.instructions.size() != 0)
+                    {
+                        // Update the crashing shader flag and assign the seq number/id to the crashing shader.
+                        if (IsInFlightShader(entry->pc_offset_to_hung_wave_count_map_, shader_info))
+                        {
+                            shader_info.is_in_flight_shader = true;
+                            shader_info.crashing_shader_id  = ++crashing_shader_count;
+                            shader_info.str_shader_info_id  = RgdUtils::GetAlphaNumericId(kStrPrefixShaderInfoId, shader_info.crashing_shader_id);
+                        }
+                    }
+                }
+                else
+                {
+                    RgdUtils::PrintMessage("failed to find shader info for the hardware stage.", RgdMessageType::kError, true);
+                }
+            }
+        }
+        else
+        {
+            RgdUtils::PrintMessage("failed to find pipeline data for the code object.", RgdMessageType::kError, true);
         }
     }
 }

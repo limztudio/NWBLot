@@ -194,8 +194,7 @@ struct hb_subset_plan_t
       hb_lock_t lock (plan->accelerator ? &plan->accelerator->sanitized_table_cache_lock : nullptr);
 
       auto *cache = plan->accelerator ? &plan->accelerator->sanitized_table_cache : &plan->sanitized_table_cache;
-      if (cache
-	  && !cache->in_error ()
+      if (!cache->in_error ()
 	  && cache->has (+T::tableTag)) {
 	return hb_blob_reference (cache->get (+T::tableTag).get ());
       }
@@ -203,8 +202,7 @@ struct hb_subset_plan_t
       hb::unique_ptr<hb_blob_t> table_blob {hb_sanitize_context_t ().reference_table<T> (plan->source)};
       hb_blob_t* ret = hb_blob_reference (table_blob.get ());
 
-      if (likely (cache))
-	cache->set (+T::tableTag, std::move (table_blob));
+      cache->set (+T::tableTag, std::move (table_blob));
 
       return ret;
     }

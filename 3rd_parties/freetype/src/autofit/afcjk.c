@@ -144,9 +144,6 @@
       if ( !glyph_index )
         goto Exit;
 
-      if ( !glyph_index )
-        goto Exit;
-
       FT_TRACE5(( "standard character: U+%04lX (glyph index %lu)\n",
                   ch, glyph_index ));
 

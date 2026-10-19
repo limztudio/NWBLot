@@ -98,10 +98,7 @@ errno_t strcpy_s(char* destination, size_t size, const char* source)
 
     if (result == 0)
     {
-        if (strncpy(destination, source, size) == nullptr)
-        {
-            result = ERANGE;
-        }
+        strncpy(destination, source, size);
     }
 
     assert(result == 0);
@@ -143,10 +140,7 @@ errno_t strcat_s(char* destination, size_t size, const char* source)
 
     if (result == 0)
     {
-        if (strncat(destination, source, size) == nullptr)
-        {
-            result = ERANGE;
-        }
+        strncat(destination, source, size);
     }
 
     assert(result == 0);

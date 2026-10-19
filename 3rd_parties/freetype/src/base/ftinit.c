@@ -142,7 +142,7 @@
       }
       module_name[i] = '\0';
 
-      if ( !*p || *p != ':' || p == q )
+      if ( *p != ':' || p == q )
         break;
 
       /* read property name, followed by `=' */
@@ -155,7 +155,7 @@
       }
       property_name[i] = '\0';
 
-      if ( !*p || *p != '=' || p == q )
+      if ( *p != '=' || p == q )
         break;
 
       /* read property value, followed by whitespace (if any) */

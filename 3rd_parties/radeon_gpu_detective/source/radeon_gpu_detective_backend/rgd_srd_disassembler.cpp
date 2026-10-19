@@ -61,7 +61,7 @@ uint32_t ShaderResourceDescriptor::ExtractBitsFull(uint32_t start_bit, uint32_t 
     }
 
     // Check if dword_index is within bounds and all inputs are valid.
-    if (last_dword < data_.size() && n_bits <= 32 )
+    if (n_bits <= 32)
     {
         start_bit = start_bit % 32;
         last_bit   = last_bit % 32;
@@ -86,10 +86,7 @@ uint32_t ShaderResourceDescriptor::ExtractBitsFull(uint32_t start_bit, uint32_t 
     }
     else
     {
-        if (last_dword >= data_.size() * 32 || n_bits > 32)
-        {
-            RgdUtils::PrintMessage("SRD ExtractBits: invalid bit index range", RgdMessageType::kError, true);
-        }
+        RgdUtils::PrintMessage("SRD ExtractBits: invalid bit index range", RgdMessageType::kError, true);
     }
 
     return result;

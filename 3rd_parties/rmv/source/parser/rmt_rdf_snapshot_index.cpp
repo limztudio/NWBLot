@@ -39,8 +39,6 @@ RmtErrorCode RmtRdfSnapshotIndex::LoadLastChunk(rdfChunkFile* chunk_file)
 {
     RMT_RETURN_ON_ERROR(chunk_file != nullptr, kRmtErrorInvalidPointer);
 
-    RMT_ASSERT(chunk_file != nullptr);
-
     RmtErrorCode result                = kRmtErrorMalformedData;
     const auto   identifier            = RmtRdfSnapshotIndex::ChunkIdentifier();
     int          contains_chunk_result = 0;

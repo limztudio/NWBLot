@@ -23,11 +23,6 @@ static uint32_t RMT_THREAD_FUNC JobSystemThreadFunc(void* input_data)
     // read the thread input structure
     RmtJobQueueWorkerThreadInput* thread_input = (RmtJobQueueWorkerThreadInput*)input_data;
 
-    if (thread_input == NULL)
-    {
-        return 0;
-    }
-
     // run until the thread terminate signal is set
     while (true)
     {

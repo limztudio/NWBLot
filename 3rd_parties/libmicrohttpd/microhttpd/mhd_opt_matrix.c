@@ -150,7 +150,7 @@ mhd_opt_matrix_lookup (const char *name_or_idx)
     unsigned long v;
 
     v = strtoul (name_or_idx, &end, 10);
-    if ((NULL != end) && (0 == *end) && (NUM_PROFILES > v))
+    if ((0 == *end) && (NUM_PROFILES > v))
       return opt_profiles + v;
   }
   return NULL;
@@ -274,7 +274,7 @@ mhd_opt_matrix_from_env (void)
       unsigned long v;
 
       v = strtoul (mem_env, &end, 10);
-      if ((NULL == end) || (0 != *end))
+      if (0 != *end)
         env_error (MHD_OPT_MATRIX_MEM_ENV, mem_env);
       env_profile.mem_limit = (size_t) v;
     }
@@ -285,7 +285,7 @@ mhd_opt_matrix_from_env (void)
     long v;
 
     v = strtol (discp_env, &end, 10);
-    if ((NULL == end) || (0 != *end) || (-3 > v) || (3 < v))
+    if ((0 != *end) || (-3 > v) || (3 < v))
       env_error (MHD_OPT_MATRIX_DISCP_ENV, discp_env);
     env_profile.discipline_lvl = (int) v;
     env_profile.use_legacy_strict = 0;
@@ -296,7 +296,7 @@ mhd_opt_matrix_from_env (void)
     long v;
 
     v = strtol (strict_env, &end, 10);
-    if ((NULL == end) || (0 != *end))
+    if (0 != *end)
       env_error (MHD_OPT_MATRIX_STRICT_ENV, strict_env);
     env_profile.discipline_lvl = (int) v;
     env_profile.use_legacy_strict = ! 0;

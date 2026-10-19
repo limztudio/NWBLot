@@ -540,8 +540,7 @@
   static FT_Bool
   tt_check_trickyness( FT_Face  face )
   {
-    if ( !face )
-      return FALSE;
+    FT_ASSERT( face );
 
     /* For first, check the face name for quick check. */
     if ( face->family_name                               &&

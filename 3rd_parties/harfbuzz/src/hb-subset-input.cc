@@ -748,7 +748,6 @@ static void
 _format_number_set (const hb_set_t *set, hb_vector_t<char> &out, unsigned base = 10)
 {
   assert (base == 10 || base == 16);
-  if (unlikely (base != 10 && base != 16)) return;
 
   hb_codepoint_t first = HB_SET_VALUE_INVALID, last = HB_SET_VALUE_INVALID;
   bool first_range = true;

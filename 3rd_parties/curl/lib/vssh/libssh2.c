@@ -513,11 +513,8 @@ static CURLcode ssh_check_fingerprint(struct Curl_easy *data,
       return CURLE_PEER_FAILED_VERIFICATION;
     }
 
-    if(!fingerprint_b64) {
-      failf(data, "SHA256 fingerprint could not be encoded");
-      myssh_to(data, sshc, SSH_SESSION_FREE);
-      return CURLE_PEER_FAILED_VERIFICATION;
-    }
+    /* a successful encode of 32 bytes always gives a buffer */
+    DEBUGASSERT(fingerprint_b64);
 
     infof(data, "SSH: SHA256 fingerprint '%s'", fingerprint_b64);
 
@@ -671,7 +668,7 @@ static CURLcode ssh_force_knownhost_key_type(struct Curl_easy *data,
             }
             p = kh_name_end + 2; /* start of port number */
             if(!curlx_str_number(&p, &port, 0xffff) &&
-               (kh_name_end && (port == conn->origin->port))) {
+               (port == conn->origin->port)) {
               kh_name_size = strlen(store->name) - 1 - strlen(kh_name_end);
               if(!strncmp(store->name + 1, conn->origin->hostname,
                           kh_name_size)) {

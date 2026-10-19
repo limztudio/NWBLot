@@ -265,8 +265,6 @@ static bool DeleteTemporaryFile(const char* file_path)
 RmtSnapshotWriter* SnapshotWriterFromHandle(RmtSnapshotWriterHandle handle)
 {
     RmtSnapshotWriter* snapshot_writer = reinterpret_cast<RmtSnapshotWriter*>(handle);
-
-    RMT_ASSERT((handle == nullptr) || ((handle != nullptr) && (snapshot_writer != nullptr)));
     return snapshot_writer;
 }
 
@@ -464,10 +462,6 @@ static RmtErrorCode ParseChunks(RmtDataSet* data_set)
     RmtErrorCode  error_code = RmtFileParserCreateFromHandle(&rmt_file_parser, (FILE*)data_set->file_handle);
     RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
 
-    // Check if file is supported.
-    error_code = RmtFileParserIsFileSupported(&rmt_file_parser.header);
-    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
-
     // Store the time the trace was taken.
     struct tm      create_time;
     RmtFileHeader* header = &rmt_file_parser.header;
@@ -488,10 +482,6 @@ static RmtErrorCode ParseChunks(RmtDataSet* data_set)
     {
         // Ensure that the chunk is valid to read.
         RMT_ASSERT(current_file_chunk);
-        if (current_file_chunk == nullptr)
-        {
-            break;
-        }
 
         if ((size_t)rmt_file_parser.next_chunk_offset > data_set->file_size_in_bytes)
         {

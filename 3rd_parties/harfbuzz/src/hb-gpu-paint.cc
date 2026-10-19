@@ -748,7 +748,7 @@ hb_gpu_paint_emit_linear (hb_gpu_paint_t  *c,
   hb_blob_t *grad_blob = hb_blob_create ((const char *) grad_data.arrayZ,
 					 grad_bytes, HB_MEMORY_MODE_DUPLICATE,
 					 nullptr, nullptr);
-  if (unlikely (!grad_blob || !c->sub_blobs.push_or_fail (grad_blob)))
+  if (unlikely (!c->sub_blobs.push_or_fail (grad_blob)))
   {
     hb_blob_destroy (grad_blob);
     c->unsupported = true;
@@ -836,7 +836,7 @@ hb_gpu_paint_emit_radial (hb_gpu_paint_t  *c,
   hb_blob_t *grad_blob = hb_blob_create ((const char *) grad_data.arrayZ,
 					 grad_bytes, HB_MEMORY_MODE_DUPLICATE,
 					 nullptr, nullptr);
-  if (unlikely (!grad_blob || !c->sub_blobs.push_or_fail (grad_blob)))
+  if (unlikely (!c->sub_blobs.push_or_fail (grad_blob)))
   {
     hb_blob_destroy (grad_blob);
     c->unsupported = true;
@@ -972,7 +972,7 @@ hb_gpu_paint_emit_sweep (hb_gpu_paint_t  *c,
   hb_blob_t *grad_blob = hb_blob_create ((const char *) grad_data.arrayZ,
 					 grad_bytes, HB_MEMORY_MODE_DUPLICATE,
 					 nullptr, nullptr);
-  if (unlikely (!grad_blob || !c->sub_blobs.push_or_fail (grad_blob)))
+  if (unlikely (!c->sub_blobs.push_or_fail (grad_blob)))
   {
     hb_blob_destroy (grad_blob);
     c->unsupported = true;
@@ -1279,11 +1279,7 @@ hb_gpu_paint_set_custom_palette_color (hb_gpu_paint_t *paint,
 				       hb_color_t      color)
 {
   if (unlikely (!paint->custom_palette))
-  {
     paint->custom_palette = hb_map_create ();
-    if (unlikely (!paint->custom_palette))
-      return false;
-  }
   hb_map_set (paint->custom_palette, color_index, color);
   return hb_map_allocation_successful (paint->custom_palette);
 }

@@ -105,7 +105,7 @@ CLI11_INLINE std::string &remove_outer(std::string &str, char key) {
 
 CLI11_INLINE std::string fix_newlines(const std::string &leader, std::string input) {
     std::string::size_type n = 0;
-    while(n != std::string::npos && n < input.size()) {
+    while(n < input.size()) {
         n = input.find_first_of("\r\n", n);
         if(n != std::string::npos) {
             input.insert(n + 1, leader);

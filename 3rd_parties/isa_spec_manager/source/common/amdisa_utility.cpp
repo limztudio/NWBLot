@@ -21,7 +21,7 @@ namespace amdisa
     bool AmdIsaUtility::GetRange(const Field& field, Range& range, uint32_t range_order)
     {
         bool is_range_retrieved = false;
-        if (!field.ranges.empty() && range_order < field.ranges.size())
+        if (range_order < field.ranges.size())
         {
             range              = field.ranges[range_order];
             is_range_retrieved = true;

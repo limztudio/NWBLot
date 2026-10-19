@@ -559,8 +559,7 @@ static RmtErrorCode DestroyResource(RmtResourceList* resource_list, RmtResource*
     // get a pointer to the last resource, if its the one we're trying to delete then adjust the count.
     RmtResource* tail_resource = &resource_list->resources[resource_list->resource_count - 1];
 
-    const RmtErrorCode error_code = RemoveResourceFromTree(resource_list, hashed_identifier);
-    RMT_ASSERT(error_code == kRmtOk);
+    RemoveResourceFromTree(resource_list, hashed_identifier);
 
     // copy the tail into the target.
     if (tail_resource != resource)
@@ -910,13 +909,8 @@ RmtErrorCode RmtResourceListAddResourceDestroy(RmtResourceList* resource_list, c
     }
 
     // call destroy on it.
-    const RmtErrorCode error_code = DestroyResource(resource_list, resource);
-    if (error_code == kRmtOk)
-    {
-        resource->destroy_time = resource_destroy->common.timestamp;
-    }
-
-    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
+    DestroyResource(resource_list, resource);
+    resource->destroy_time = resource_destroy->common.timestamp;
 
     return kRmtOk;
 }

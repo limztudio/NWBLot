@@ -977,7 +977,6 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
             return MZ_FALSE;
         }
 
-        if (pZip->m_pState)
         {
             mz_zip_internal_state *pState = pZip->m_pState;
             pZip->m_pState = NULL;
@@ -3138,7 +3137,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         return (mz_uint32)(pDst - pBuf);
     }
 
-    static mz_bool mz_zip_writer_create_local_dir_header(mz_zip_archive *pZip, mz_uint8 *pDst, mz_uint16 filename_size, mz_uint16 extra_size, mz_uint64 uncomp_size, mz_uint64 comp_size, mz_uint32 uncomp_crc32, mz_uint16 method, mz_uint16 bit_flags, mz_uint16 dos_time, mz_uint16 dos_date)
+    static void mz_zip_writer_create_local_dir_header(mz_zip_archive *pZip, mz_uint8 *pDst, mz_uint16 filename_size, mz_uint16 extra_size, mz_uint64 uncomp_size, mz_uint64 comp_size, mz_uint32 uncomp_crc32, mz_uint16 method, mz_uint16 bit_flags, mz_uint16 dos_time, mz_uint16 dos_date)
     {
         (void)pZip;
         memset(pDst, 0, MZ_ZIP_LOCAL_DIR_HEADER_SIZE);
@@ -3153,14 +3152,13 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         MZ_WRITE_LE32(pDst + MZ_ZIP_LDH_DECOMPRESSED_SIZE_OFS, MZ_MIN(uncomp_size, MZ_UINT32_MAX));
         MZ_WRITE_LE16(pDst + MZ_ZIP_LDH_FILENAME_LEN_OFS, filename_size);
         MZ_WRITE_LE16(pDst + MZ_ZIP_LDH_EXTRA_LEN_OFS, extra_size);
-        return MZ_TRUE;
     }
 
-    static mz_bool mz_zip_writer_create_central_dir_header(mz_zip_archive *pZip, mz_uint8 *pDst,
-                                                           mz_uint16 filename_size, mz_uint16 extra_size, mz_uint16 comment_size,
-                                                           mz_uint64 uncomp_size, mz_uint64 comp_size, mz_uint32 uncomp_crc32,
-                                                           mz_uint16 method, mz_uint16 bit_flags, mz_uint16 dos_time, mz_uint16 dos_date,
-                                                           mz_uint64 local_header_ofs, mz_uint32 ext_attributes)
+    static void mz_zip_writer_create_central_dir_header(mz_zip_archive *pZip, mz_uint8 *pDst,
+                                                        mz_uint16 filename_size, mz_uint16 extra_size, mz_uint16 comment_size,
+                                                        mz_uint64 uncomp_size, mz_uint64 comp_size, mz_uint32 uncomp_crc32,
+                                                        mz_uint16 method, mz_uint16 bit_flags, mz_uint16 dos_time, mz_uint16 dos_date,
+                                                        mz_uint64 local_header_ofs, mz_uint32 ext_attributes)
     {
         (void)pZip;
         memset(pDst, 0, MZ_ZIP_CENTRAL_DIR_HEADER_SIZE);
@@ -3178,7 +3176,6 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         MZ_WRITE_LE16(pDst + MZ_ZIP_CDH_COMMENT_LEN_OFS, comment_size);
         MZ_WRITE_LE32(pDst + MZ_ZIP_CDH_EXTERNAL_ATTR_OFS, ext_attributes);
         MZ_WRITE_LE32(pDst + MZ_ZIP_CDH_LOCAL_HEADER_OFS, MZ_MIN(local_header_ofs, MZ_UINT32_MAX));
-        return MZ_TRUE;
     }
 
     static mz_bool mz_zip_writer_add_to_central_dir(mz_zip_archive *pZip, const char *pFilename, mz_uint16 filename_size,
@@ -3203,8 +3200,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         if (((mz_uint64)pState->m_central_dir.m_size + MZ_ZIP_CENTRAL_DIR_HEADER_SIZE + filename_size + extra_size + user_extra_data_len + comment_size) >= MZ_UINT32_MAX)
             return mz_zip_set_error(pZip, MZ_ZIP_UNSUPPORTED_CDIR_SIZE);
 
-        if (!mz_zip_writer_create_central_dir_header(pZip, central_dir_header, filename_size, (mz_uint16)(extra_size + user_extra_data_len), comment_size, uncomp_size, comp_size, uncomp_crc32, method, bit_flags, dos_time, dos_date, local_header_ofs, ext_attributes))
-            return mz_zip_set_error(pZip, MZ_ZIP_INTERNAL_ERROR);
+        mz_zip_writer_create_central_dir_header(pZip, central_dir_header, filename_size, (mz_uint16)(extra_size + user_extra_data_len), comment_size, uncomp_size, comp_size, uncomp_crc32, method, bit_flags, dos_time, dos_date, local_header_ofs, ext_attributes);
 
         if ((!mz_zip_array_push_back(pZip, &pState->m_central_dir, central_dir_header, MZ_ZIP_CENTRAL_DIR_HEADER_SIZE)) ||
             (!mz_zip_array_push_back(pZip, &pState->m_central_dir, pFilename, filename_size)) ||
@@ -3418,8 +3414,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
                                                                    (uncomp_size >= MZ_UINT32_MAX) ? &comp_size : NULL, (local_dir_header_ofs >= MZ_UINT32_MAX) ? &local_dir_header_ofs : NULL);
             }
 
-            if (!mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)(extra_size + user_extra_data_len), 0, 0, 0, method, bit_flags, dos_time, dos_date))
-                return mz_zip_set_error(pZip, MZ_ZIP_INTERNAL_ERROR);
+            mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)(extra_size + user_extra_data_len), 0, 0, 0, method, bit_flags, dos_time, dos_date);
 
             if (pZip->m_pWrite(pZip->m_pIO_opaque, local_dir_header_ofs, local_dir_header, sizeof(local_dir_header)) != sizeof(local_dir_header))
                 return mz_zip_set_error(pZip, MZ_ZIP_FILE_WRITE_FAILED);
@@ -3445,8 +3440,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         {
             if ((comp_size > MZ_UINT32_MAX) || (cur_archive_file_ofs > MZ_UINT32_MAX))
                 return mz_zip_set_error(pZip, MZ_ZIP_ARCHIVE_TOO_LARGE);
-            if (!mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)user_extra_data_len, 0, 0, 0, method, bit_flags, dos_time, dos_date))
-                return mz_zip_set_error(pZip, MZ_ZIP_INTERNAL_ERROR);
+            mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)user_extra_data_len, 0, 0, 0, method, bit_flags, dos_time, dos_date);
 
             if (pZip->m_pWrite(pZip->m_pIO_opaque, local_dir_header_ofs, local_dir_header, sizeof(local_dir_header)) != sizeof(local_dir_header))
                 return mz_zip_set_error(pZip, MZ_ZIP_FILE_WRITE_FAILED);
@@ -3488,8 +3482,8 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
             state.m_cur_archive_file_ofs = cur_archive_file_ofs;
             state.m_comp_size = 0;
 
-            if ((tdefl_init(pComp, mz_zip_writer_add_put_buf_callback, &state, tdefl_create_comp_flags_from_zip_params(level, -15, MZ_DEFAULT_STRATEGY)) != TDEFL_STATUS_OKAY) ||
-                (tdefl_compress_buffer(pComp, pBuf, buf_size, TDEFL_FINISH) != TDEFL_STATUS_DONE))
+            tdefl_init(pComp, mz_zip_writer_add_put_buf_callback, &state, tdefl_create_comp_flags_from_zip_params(level, -15, MZ_DEFAULT_STRATEGY));
+            if (tdefl_compress_buffer(pComp, pBuf, buf_size, TDEFL_FINISH) != TDEFL_STATUS_DONE)
             {
                 pZip->m_pFree(pZip->m_pAlloc_opaque, pComp);
                 return mz_zip_set_error(pZip, MZ_ZIP_COMPRESSION_FAILED);
@@ -3673,8 +3667,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
                                                                        (local_dir_header_ofs >= MZ_UINT32_MAX) ? &local_dir_header_ofs : NULL);
             }
 
-            if (!mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)(extra_size + user_extra_data_len), 0, 0, 0, method, gen_flags, dos_time, dos_date))
-                return mz_zip_set_error(pZip, MZ_ZIP_INTERNAL_ERROR);
+            mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)(extra_size + user_extra_data_len), 0, 0, 0, method, gen_flags, dos_time, dos_date);
 
             if (pZip->m_pWrite(pZip->m_pIO_opaque, cur_archive_file_ofs, local_dir_header, sizeof(local_dir_header)) != sizeof(local_dir_header))
                 return mz_zip_set_error(pZip, MZ_ZIP_FILE_WRITE_FAILED);
@@ -3697,8 +3690,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         {
             if ((comp_size > MZ_UINT32_MAX) || (cur_archive_file_ofs > MZ_UINT32_MAX))
                 return mz_zip_set_error(pZip, MZ_ZIP_ARCHIVE_TOO_LARGE);
-            if (!mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)user_extra_data_len, 0, 0, 0, method, gen_flags, dos_time, dos_date))
-                return mz_zip_set_error(pZip, MZ_ZIP_INTERNAL_ERROR);
+            mz_zip_writer_create_local_dir_header(pZip, local_dir_header, (mz_uint16)archive_name_size, (mz_uint16)user_extra_data_len, 0, 0, 0, method, gen_flags, dos_time, dos_date);
 
             if (pZip->m_pWrite(pZip->m_pIO_opaque, cur_archive_file_ofs, local_dir_header, sizeof(local_dir_header)) != sizeof(local_dir_header))
                 return mz_zip_set_error(pZip, MZ_ZIP_FILE_WRITE_FAILED);
@@ -3769,12 +3761,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
                 state.m_cur_archive_file_ofs = cur_archive_file_ofs;
                 state.m_comp_size = 0;
 
-                if (tdefl_init(pComp, mz_zip_writer_add_put_buf_callback, &state, tdefl_create_comp_flags_from_zip_params(level, -15, MZ_DEFAULT_STRATEGY)) != TDEFL_STATUS_OKAY)
-                {
-                    pZip->m_pFree(pZip->m_pAlloc_opaque, pComp);
-                    pZip->m_pFree(pZip->m_pAlloc_opaque, pRead_buf);
-                    return mz_zip_set_error(pZip, MZ_ZIP_INTERNAL_ERROR);
-                }
+                tdefl_init(pComp, mz_zip_writer_add_put_buf_callback, &state, tdefl_create_comp_flags_from_zip_params(level, -15, MZ_DEFAULT_STRATEGY));
 
                 for (;;)
                 {
@@ -3862,12 +3849,11 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
                                                                    (max_size >= MZ_UINT32_MAX) ? &comp_size : NULL, (local_dir_header_ofs >= MZ_UINT32_MAX) ? &local_dir_header_ofs : NULL);
             }
 
-            if (!mz_zip_writer_create_local_dir_header(pZip, local_dir_header,
-                                                       (mz_uint16)archive_name_size, (mz_uint16)(extra_size + user_extra_data_len),
-                                                       (max_size >= MZ_UINT32_MAX) ? MZ_UINT32_MAX : uncomp_size,
-                                                       (max_size >= MZ_UINT32_MAX) ? MZ_UINT32_MAX : comp_size,
-                                                       uncomp_crc32, method, gen_flags, dos_time, dos_date))
-                return mz_zip_set_error(pZip, MZ_ZIP_INTERNAL_ERROR);
+            mz_zip_writer_create_local_dir_header(pZip, local_dir_header,
+                                                  (mz_uint16)archive_name_size, (mz_uint16)(extra_size + user_extra_data_len),
+                                                  (max_size >= MZ_UINT32_MAX) ? MZ_UINT32_MAX : uncomp_size,
+                                                  (max_size >= MZ_UINT32_MAX) ? MZ_UINT32_MAX : comp_size,
+                                                  uncomp_crc32, method, gen_flags, dos_time, dos_date);
 
             cur_archive_header_file_ofs = local_dir_header_ofs;
 

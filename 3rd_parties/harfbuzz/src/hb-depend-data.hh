@@ -321,8 +321,6 @@ struct hb_depend_data_builder_t
     {
       set_index = data.sets.length;
       hb_set_t *new_set = hb_set_create ();
-      if (unlikely (!new_set))
-	return fail_invalid ();
       new_set->set (set);
       if (unlikely (new_set->in_error ()))
       {

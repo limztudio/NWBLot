@@ -47,27 +47,6 @@ typedef struct HistogramJobInput
     int64_t                   bucket_count;            // the number of buckets in the histogram.
 } HistogramJobInput;
 
-// check the input parameters are good.
-static bool ValidateInputParameters(HistogramJobInput* input_parameters)
-{
-    if (input_parameters == NULL)
-    {
-        return false;
-    }
-
-    if (input_parameters->timeline == NULL)
-    {
-        return false;
-    }
-
-    if (input_parameters->out_timeline_histogram == NULL)
-    {
-        return false;
-    }
-
-    return true;
-}
-
 // Job function to create histogram data for a single bucket from RMT mip-mapped data series in timeline.
 static void CreateHistogramJob(int32_t thread_id, int32_t index, void* input)
 {
@@ -75,12 +54,7 @@ static void CreateHistogramJob(int32_t thread_id, int32_t index, void* input)
 
     // Get hold of the job input and validate it.
     HistogramJobInput* input_parameters = (HistogramJobInput*)input;
-    const bool         is_input_valid   = ValidateInputParameters(input_parameters);
-    RMT_ASSERT(is_input_valid == true);
-    if (!is_input_valid)
-    {
-        return;
-    }
+    RMT_ASSERT(input_parameters && input_parameters->timeline && input_parameters->out_timeline_histogram);
 
     const uint64_t start_timestamp = input_parameters->start_timestamp + (input_parameters->bucket_width_in_cycles * index);
     const uint64_t end_timestamp   = start_timestamp + input_parameters->bucket_width_in_cycles;

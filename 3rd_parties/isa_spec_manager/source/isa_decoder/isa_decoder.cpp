@@ -47,8 +47,6 @@ namespace amdisa
     static const char* kStringErrorMissingTargetResolutionInfo = "Error: Branch target resolution information missing";
     static const char* kStringErrorIsaDecoderNotFound          = "Error: Invalid IsaDecoder provided to decode the instructions";
     static const char* kStringNa                               = "N/A";
-    static const char* kStringErrorApiImplAllocationFailed     = "Error: API Implementation object allocation failed";
-    static const char* kStringErrorManagerImplAllocationFailed = "Error: Manager Implementation object allocation failed";
     static const char* kStringErrorEmptyRangesInField          = "Error: Range is empty for the field: ";
     static const char* kStringErrorEncodingIdentifiersNotFound = "Error: Could not find the encoding identifier for the instruction.";
     static const char* kStringErrorMoreThanOneEncodings        = "Error: Encoding has more than a single match. This should imply decoding errors.";
@@ -954,10 +952,7 @@ namespace amdisa
             if (id_to_encodings.find(masked_machine_code) != id_to_encodings.end())
             {
                 encoding = id_to_encodings.at(masked_machine_code);
-                if (encoding == nullptr)
-                {
-                    break;
-                }
+                assert(encoding);
                 if (encoding->name == single_encoding.name)
                 {
                     is_encoding_found = true;
@@ -978,10 +973,7 @@ namespace amdisa
                     if (id_to_encodings.find(masked_machine_code_opy) != id_to_encodings.end())
                     {
                         std::shared_ptr<Encoding> encoding_new = id_to_encodings.at(masked_machine_code_opy);
-                        if (encoding_new == nullptr)
-                        {
-                            break;
-                        }
+                        assert(encoding_new);
                         if (encoding->bit_count < encoding_new->bit_count)
                         {
                             encoding = encoding_new;
@@ -1258,7 +1250,6 @@ namespace amdisa
         }
         else if (is_vopdy)
         {
-            assert(!is_vopdx);
             const auto& opy_iter = GetFieldIterator(encoding.microcode_format, "OPY");
             assert(opy_iter != encoding.microcode_format.bit_map.end());
             opcode_mask = GetFieldMask(*opy_iter);
@@ -1530,11 +1521,8 @@ namespace amdisa
 
     static IIsaDecoderStrategy* CreateLegacyIsaDecoderForSchema(const std::string& schema_version, std::vector<std::string>& log)
     {
-        if (schema_version < kDefaultXmlSchemaVersion)
-        {
-            return v1_1_1::CreateIsaDecoder(log);
-        }
-        return nullptr;
+        assert(schema_version < kDefaultXmlSchemaVersion);
+        return v1_1_1::CreateIsaDecoder(log);
     }
 
     // Default strategy for v1.2.0+ XML schemas.
@@ -1792,7 +1780,7 @@ namespace amdisa
                         }
                         else if (is_y_layout)
                         {
-                            assert(is_opy_found && !is_x_layout);
+                            assert(is_opy_found);
                             if (!AmdIsaUtility::GetRange(*opy_iter, range, 0))
                             {
                                 is_isa_spec_parsed = false;
@@ -2062,12 +2050,7 @@ namespace amdisa
             pStrategy_ = new IsaDecoderDefaultStrategy(log_);
         }
 
-        if (pStrategy_ == nullptr)
-        {
-            err_message = kStringErrorApiImplAllocationFailed;
-            return false;
-        }
-
+        assert(pStrategy_);
         return pStrategy_->InitializeFromSpec(std::move(spec), err_message);
     }
 
@@ -2295,10 +2278,6 @@ namespace amdisa
                                     amdisa::AmdIsaUtility::BitMapToString(encoding_ptr->microcode_format, working_dwords, instruction_info.encoding_layout);
 
                                     // Find the instruction.
-                                    bool is_instruction_retrieval_successful =
-                                        instruction_ptrs.instruction_encoding_ptr != nullptr && instruction_ptrs.instruction_ptr != nullptr;
-
-                                    if (is_instruction_retrieval_successful)
                                     {
                                         // Dereference pointers for local use.
                                         const InstructionEncoding& inst_enc = *(instruction_ptrs.instruction_encoding_ptr);
@@ -2607,22 +2586,6 @@ namespace amdisa
                                             }
                                         }
                                     }
-                                    else
-                                    {
-                                        is_decode_failed = true;
-                                        std::stringstream err_stream;
-                                        err_stream << kStringErrorInstructionNotFoundInSpec;
-                                        if (instruction_ptrs.instruction_encoding_ptr == nullptr)
-                                        {
-                                            err_stream << " " << kStringErrorEncodingNotFound;
-                                        }
-                                        err_stream << kStringErrorEncodingNotFound;
-                                        for (const auto& kDword : working_dwords)
-                                        {
-                                            err_stream << std::hex << "0x" << kDword << " ";
-                                        }
-                                        err_message = err_stream.str();
-                                    }
 
                                     // Apply modifiers on the assembly operands.
                                     uint32_t neg_modifier_value = 0;
@@ -2929,11 +2892,7 @@ namespace amdisa
             manager_impl_ = new DecodeManagerImpl();
         }
 
-        if (manager_impl_ == nullptr)
-        {
-            should_abort = true;
-            err_message  = kStringErrorManagerImplAllocationFailed;
-        }
+        assert(manager_impl_);
 
         // Initialize IsaDecoder for each XML spec paths provided.
         for (auto path_iter = input_spec_file_paths.begin(); !should_abort && path_iter != input_spec_file_paths.end(); path_iter++)

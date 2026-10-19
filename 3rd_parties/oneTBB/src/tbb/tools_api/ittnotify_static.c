@@ -990,9 +990,9 @@ static void ITTAPI ITT_VERSIONIZE(ITT_JOIN(_N_(bind_context_metadata_to_counter)
             type = metadata[item].type;
             for (h_tail = NULL, h = _N_(_ittapi_global).counter_metadata_list; h != NULL; h_tail = h, h = h->next)
             {
-                if (h->counter != NULL && h->counter == counter && h->type == type) break;
+                if (h->counter == counter && h->type == type) break;
             }
-            if (h == NULL && counter != NULL && type != __itt_context_unknown)
+            if (h == NULL && type != __itt_context_unknown)
             {
                 if (type == __itt_context_nameA || type == __itt_context_deviceA || type == __itt_context_unitsA || type == __itt_context_pci_addrA)
                 {

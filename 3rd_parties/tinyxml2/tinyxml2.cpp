@@ -497,9 +497,6 @@ const char* XMLUtil::GetCharacterRef(const char* p, char* value, int* length)
             // Decimal.
             q = p + 2;
         }
-        if (!(*q)) {
-            return 0;
-        }
 
         q = strchr(q, SEMICOLON);
         if (!q) {
@@ -545,11 +542,6 @@ const char* XMLUtil::GetCharacterRef(const char* p, char* value, int* length)
         }
         // convert the UCS to UTF-8
         ConvertUTF32ToUTF8(ucs, value, length);
-		if (length == 0) {
-            // If length is 0, there was an error. (Security? Bad input?)
-            // Fail safely.
-			return 0;
-		}
         return p + delta + 1;
     }
     return p + 1;
@@ -1130,7 +1122,6 @@ char* XMLNode::ParseDeep( char* p, StrPair* parentEndTag, int* curLineNumPtr )
             if (ToDocument()) {
                 if (FirstChild()) {
                     wellLocated =
-                        FirstChild() &&
                         FirstChild()->ToDeclaration() &&
                         LastChild() &&
                         LastChild()->ToDeclaration();

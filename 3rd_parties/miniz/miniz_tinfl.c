@@ -533,7 +533,7 @@ extern "C"
                     }
 
                     dist_from_out_buf_start = pOut_buf_cur - pOut_buf_start;
-                    if ((dist == 0 || dist > dist_from_out_buf_start || dist_from_out_buf_start == 0) && (decomp_flags & TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF))
+                    if ((dist == 0 || dist > dist_from_out_buf_start) && (decomp_flags & TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF))
                     {
                         TINFL_CR_RETURN_FOREVER(37, TINFL_STATUS_FAILED);
                     }

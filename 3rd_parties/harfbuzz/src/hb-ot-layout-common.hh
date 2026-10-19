@@ -4721,11 +4721,9 @@ struct ConditionSet
   void keep_with_variations (hb_collect_feature_substitutes_with_var_context_t *c) const
   {
     hb_map_t *condition_map = hb_map_create ();
-    if (unlikely (!condition_map)) return;
     hb::shared_ptr<hb_map_t> p {condition_map};
 
     hb_set_t *cond_set = hb_set_create ();
-    if (unlikely (!cond_set)) return;
     hb::shared_ptr<hb_set_t> s {cond_set};
 
     c->apply = true;

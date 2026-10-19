@@ -90,7 +90,7 @@ curl_thread_t Curl_thread_create(
 
   if(t)
     ac = curlx_malloc(sizeof(struct Curl_actual_call));
-  if(!(ac && t))
+  if(!ac)
     goto err;
 
   ac->func = func;

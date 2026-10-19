@@ -1627,15 +1627,15 @@ static bool IsArch4Encoding31Condition3(uint64_t dword) {
 }
 
 static bool IsArch4Encoding32Condition19(uint64_t dword) {
-    return (((((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) != 254)) && (((dword & 0xff)) != 255)) && (((dword >> 8) & 0xff) != 255);
+    return ((((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) != 254)) && (((dword >> 8) & 0xff) != 255);
 }
 
 static bool IsArch4Encoding32Condition20(uint64_t dword) {
-    return (((((dword & 0xff)) != 254) && (((dword >> 8) & 0xff) == 254)) && (((dword & 0xff)) != 255)) && (((dword >> 8) & 0xff) != 255);
+    return ((((dword & 0xff)) != 254) && (((dword >> 8) & 0xff) == 254)) && (((dword & 0xff)) != 255);
 }
 
 static bool IsArch4Encoding32Condition21(uint64_t dword) {
-    return (((((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) == 254)) && (((dword & 0xff)) != 255)) && (((dword >> 8) & 0xff) != 255);
+    return (((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) == 254);
 }
 
 static bool IsArch4Encoding33Condition1(uint64_t dword) {
@@ -1651,15 +1651,15 @@ static bool IsArch4Encoding33Condition3(uint64_t dword) {
 }
 
 static bool IsArch4Encoding34Condition19(uint64_t dword) {
-    return (((((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) != 254)) && (((dword & 0xff)) != 255)) && (((dword >> 8) & 0xff) != 255);
+    return ((((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) != 254)) && (((dword >> 8) & 0xff) != 255);
 }
 
 static bool IsArch4Encoding34Condition20(uint64_t dword) {
-    return (((((dword & 0xff)) != 254) && (((dword >> 8) & 0xff) == 254)) && (((dword & 0xff)) != 255)) && (((dword >> 8) & 0xff) != 255);
+    return ((((dword & 0xff)) != 254) && (((dword >> 8) & 0xff) == 254)) && (((dword & 0xff)) != 255);
 }
 
 static bool IsArch4Encoding34Condition21(uint64_t dword) {
-    return (((((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) == 254)) && (((dword & 0xff)) != 255)) && (((dword >> 8) & 0xff) != 255);
+    return (((dword & 0xff)) == 254) && (((dword >> 8) & 0xff) == 254);
 }
 
 static bool IsArch4Encoding36Condition5(uint64_t dword) {

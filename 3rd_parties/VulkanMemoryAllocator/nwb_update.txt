@@ -2,4 +2,4 @@ package: VulkanMemoryAllocator
 version: 3.4.0
 updated_utc: 2026-10-13
 source: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/releases/tag/v3.4.0
-notes: Header-only Vulkan allocator (vk_mem_alloc.h). NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::vma_headers as the alias for nwb_vma_headers with SYSTEM INTERFACE includes from include/.
+notes: Header-only Vulkan allocator (vk_mem_alloc.h). NWB CMake wrapper now shares the parent nwb_declare_vendor_headers helper, declaring nwb::vma_headers as the alias for nwb_vma_headers with SYSTEM INTERFACE includes from include/. NWB-local patch (validation cleanup 2026-10-19): removed 1 duplicate check in include/vk_mem_alloc.h (repeated VMA_KHR_MAINTENANCE5 VMA_ASSERT block in VmaAllocator_T constructor; see .git/validation-audit-20261019 register); re-apply or drop on re-vendor.

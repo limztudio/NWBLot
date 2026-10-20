@@ -11,6 +11,8 @@ import smoke_cpu_gpu_timing as diagnostic
 import stress_timing_smoke as smoke
 from window_capture_smoke import SmokeFailure
 
+LIT_STRESS = "stress"
+
 LIT_WINDOW_80_560_100_580_30 = "window 80 560 100 580 30"
 LIT_SCOPE_1_0_RENDERER_FRAME = "scope 1 0 1 renderer.frame"
 LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009 = "sample 1 0 1 580 560 579 570 572 3 0.009 0.003 0.003 0.003"
@@ -132,15 +134,15 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
     def test_explicit_request_and_matching_application_markers_required(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / LIT_CPU_GPU_TIMING_TXT
-            self.assertFalse(diagnostic.verify_capture("", path, MEASUREMENT, False, "stress")[LIT_REQUESTED])
+            self.assertFalse(diagnostic.verify_capture("", path, MEASUREMENT, False, LIT_STRESS)[LIT_REQUESTED])
             with self.assertRaises(SmokeFailure):
-                diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True, "stress")
+                diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True, LIT_STRESS)
             path.write_text(publication_text(), encoding=LIT_UTF_8)
-            result = diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True, "stress")
+            result = diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True, LIT_STRESS)
             self.assertTrue(result[LIT_REQUESTED])
             for log, requested in (("", True), (complete_log(13), True), (complete_log(), False), (complete_log() + diagnostic.ENABLED, True)):
                 with self.subTest(log=log, requested=requested), self.assertRaises(SmokeFailure):
-                    diagnostic.verify_capture(log, path, MEASUREMENT, requested, "stress")
+                    diagnostic.verify_capture(log, path, MEASUREMENT, requested, LIT_STRESS)
 
     def test_stale_sample_generation_and_zero_scope_generation_fail(self):
         for candidate in (publication_text().replace("sample 1 0 1 ", "sample 1 0 2 "), publication_text().replace("scope 1 0 1 ", "scope 1 0 0 ")):
@@ -153,7 +155,7 @@ class SmokeCpuGpuTimingTests(unittest.TestCase):
             path.write_text(publication_text(), encoding=LIT_UTF_8)
             for log in (complete_log().replace("owner=stress", "owner=reflection"), complete_log().replace("owner=stress ", ""), complete_log() + diagnostic.COMPLETE.rstrip()):
                 with self.subTest(log=log), self.assertRaises(SmokeFailure):
-                    diagnostic.verify_capture(log, path, MEASUREMENT, True, "stress")
+                    diagnostic.verify_capture(log, path, MEASUREMENT, True, LIT_STRESS)
 
     def test_inherited_environment_cannot_inject_capture(self):
         with TemporaryDirectory() as directory:

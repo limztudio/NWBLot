@@ -17,6 +17,14 @@
 #define NWB_RAY_TRIANGLE_DETERMINANT_EPSILON 1e-12
 #define NWB_FRAME_FALLBACK_AXIS_Z_MAX 0.999
 #define NWB_TANGENT_HANDEDNESS_EPSILON 0.000001
+#define NWB_TWO_PI 6.283185307179586
+#define NWB_FLOAT_EPSILON 1.1920928955078125e-7
+#define NWB_FLOAT_MIN_NORMAL 1.1754943508222875e-38
+#define NWB_FLOAT_MAX_BITS 0x7f7fffffu
+#define NWB_FLOAT_QUIET_NAN_BITS 0x7fc00000u
+#define NWB_FLOAT_MAGNITUDE_BITS_MASK 0x7fffffffu
+#define NWB_HALF_BITS_MASK 0xffffu
+#define NWB_HALF_BIT_COUNT 16u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,11 +39,11 @@ float nwbLuminance(const float3 color){
 }
 
 uint nwbPackHalf2x16(float2 value){
-    return (f32tof16(value.x) & 0xffffu) | ((f32tof16(value.y) & 0xffffu) << 16u);
+    return (f32tof16(value.x) & NWB_HALF_BITS_MASK) | ((f32tof16(value.y) & NWB_HALF_BITS_MASK) << NWB_HALF_BIT_COUNT);
 }
 
 float2 nwbUnpackHalf2x16(uint value){
-    return float2(f16tof32(value & 0xffffu), f16tof32((value >> 16u) & 0xffffu));
+    return float2(f16tof32(value & NWB_HALF_BITS_MASK), f16tof32((value >> NWB_HALF_BIT_COUNT) & NWB_HALF_BITS_MASK));
 }
 
 bool nwbFiniteFloat(const float value){

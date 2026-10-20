@@ -15,6 +15,18 @@ from types import SimpleNamespace
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, WinRect, collect_log_delta, ensure_process_running, launch_logserver, read_bmp_24_rows, request_windows_graceful_exit, require_normal_process_exit,
     snapshot_log_files, terminate_process, validate_expected_log_text, wait_for_log_message, write_status,)
 
+LIT_LOGSERVER = "logserver"
+LIT_SINGLE_CORE_CPU_FRACTION = "single_core_cpu_fraction"
+LIT_MESSAGES = "messages"
+LIT_EXPECTED_ROWS = "expected_rows"
+LIT_STARTUP_RECEIVED = "startup_received"
+LIT_CLEAN_WM_CLOSE_EXIT = "clean_wm_close_exit"
+LIT_LOGGER_BMP = "logger.bmp"
+LIT_CPU = "cpu"
+LIT_SCREENSHOT = "screenshot"
+LIT_RESIZE = "resize"
+LIT_UTF_8 = "utf-8"
+
 SETTLE_SECONDS = 1.0
 SAMPLE_SECONDS = 3.0
 MAX_CPU_FRACTION = 0.15
@@ -84,14 +96,14 @@ def sample_idle_cpu(process, backend, handle):
         foreground_checks = 0
         while time.monotonic() < deadline:
             time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
-            ensure_process_running(process, "during idle CPU sample", "logserver")
+            ensure_process_running(process, "during idle CPU sample", LIT_LOGSERVER)
             require_active_window(backend.user32, handle)
             foreground_checks += 1
         kernel_end, user_end = read_times()
         wall_seconds = time.perf_counter() - wall_start
         kernel_seconds = (kernel_end - kernel_start) * FILETIME_SECONDS
         user_seconds = (user_end - user_start) * FILETIME_SECONDS
-        return { "wall_seconds": wall_seconds, "kernel_cpu_seconds": kernel_seconds, "user_cpu_seconds": user_seconds, "single_core_cpu_fraction": (kernel_seconds + user_seconds) / wall_seconds, "foreground_active_checks": foreground_checks, }
+        return { "wall_seconds": wall_seconds, "kernel_cpu_seconds": kernel_seconds, "user_cpu_seconds": user_seconds, LIT_SINGLE_CORE_CPU_FRACTION: (kernel_seconds + user_seconds) / wall_seconds, "foreground_active_checks": foreground_checks, }
     finally:
         if not kernel32.CloseHandle(process_handle):
             raise SmokeFailure(f"CloseHandle failed: {ctypes.get_last_error()}")
@@ -113,7 +125,7 @@ def query_log_list(backend, handle, message, index=0, address=0):
 def wait_for_visible_log_rows(process, backend, handle, minimum_rows, timeout_seconds=10.0):
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        ensure_process_running(process, "while waiting for its HTTP log row", "logserver")
+        ensure_process_running(process, "while waiting for its HTTP log row", LIT_LOGSERVER)
         if query_log_list(backend, handle, LB_GETCOUNT) >= minimum_rows:
             return
         time.sleep(0.05)
@@ -156,7 +168,7 @@ def exercise_resize_message_publication(process, backend, handle, port, director
         for index in range(32):
             if time.monotonic() >= deadline:
                 raise SmokeFailure("logger resize completion exceeded its deadline")
-            ensure_process_running(process, "during resize/message publication", "logserver")
+            ensure_process_running(process, "during resize/message publication", LIT_LOGSERVER)
             backend.resize_client(handle, 920 + (index & 1) * 40, 600)
             result = ctypes.c_size_t()
             if not backend.user32.SendMessageTimeoutW(handle, WM_EXITSIZEMOVE, 0, 0, SMTO_ABORTIFHUNG, 1000, ctypes.byref(result)):
@@ -175,7 +187,7 @@ def exercise_resize_message_publication(process, backend, handle, port, director
     for message in messages:
         if text.count(message) != 1:
             raise SmokeFailure(f"resize HTTP message does not occur exactly once in the log: {message}")
-    return {"messages": messages, "responses": responses, "resize_completions": completions, "rows_before": before_rows, "expected_rows": expected_rows, "actual_rows": actual_rows}
+    return {LIT_MESSAGES: messages, "responses": responses, "resize_completions": completions, "rows_before": before_rows, LIT_EXPECTED_ROWS: expected_rows, "actual_rows": actual_rows}
 
 
 def capture_visible_messages(backend, handle, output, minimum_rows=1):
@@ -217,14 +229,14 @@ def main(argv):
     args.working_directory = args.working_directory.resolve()
     args.output_directory = args.output_directory.resolve()
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    evidence = {"scenario": "active_logger_busy_spin", "executable": str(args.executable), "settle_seconds": SETTLE_SECONDS, "sample_seconds": SAMPLE_SECONDS, "max_cpu_fraction": args.max_cpu_fraction, "startup_received": False,
-                "clean_wm_close_exit": False, "screenshot_path": str(args.output_directory / "logger.bmp")}
+    evidence = {"scenario": "active_logger_busy_spin", "executable": str(args.executable), "settle_seconds": SETTLE_SECONDS, "sample_seconds": SAMPLE_SECONDS, "max_cpu_fraction": args.max_cpu_fraction, LIT_STARTUP_RECEIVED: False,
+                LIT_CLEAN_WM_CLOSE_EXIT: False, "screenshot_path": str(args.output_directory / LIT_LOGGER_BMP)}
     failures = []
     skip_reason = None
     required_messages = []
     process = backend = handle = None
     directory = baseline = pattern = None
-    screenshot = args.output_directory / "logger.bmp"
+    screenshot = args.output_directory / LIT_LOGGER_BMP
     wake_screenshot = args.output_directory / "logger_after_idle.bmp"
     try:
         backend = WindowsCapture()
@@ -239,7 +251,7 @@ def main(argv):
         startup = f"Log server: listening on port {port}"
         required_messages.append(startup)
         wait_for_log_message(directory, baseline, pattern, startup, 10.0)
-        evidence.update({"startup_received": True, "startup_message": startup})
+        evidence.update({LIT_STARTUP_RECEIVED: True, "startup_message": startup})
         backend.prepare_window(handle)
         require_active_window(backend.user32, handle)
         initial_rows = query_log_list(backend, handle, LB_GETCOUNT)
@@ -250,8 +262,8 @@ def main(argv):
         wait_for_log_message(directory, message_baseline, pattern, message, 10.0)
         wait_for_visible_log_rows(process, backend, handle, initial_rows + 1)
         time.sleep(SETTLE_SECONDS)
-        evidence["cpu"] = sample_idle_cpu(process, backend, handle)
-        evidence["screenshot"] = capture_visible_messages(backend, handle, screenshot, initial_rows + 1)
+        evidence[LIT_CPU] = sample_idle_cpu(process, backend, handle)
+        evidence[LIT_SCREENSHOT] = capture_visible_messages(backend, handle, screenshot, initial_rows + 1)
 
         rows_before_wakeup = query_log_list(backend, handle, LB_GETCOUNT)
         wake_message = f"LoggerBusySpin: fresh HTTP message after idle sample (pid={process.pid})"
@@ -264,34 +276,34 @@ def main(argv):
         evidence["post_idle_wakeup_seconds"] = time.monotonic() - wake_started
         evidence["post_idle_wakeup_received"] = True
         evidence["screenshot_after_idle"] = capture_visible_messages(backend, handle, wake_screenshot, rows_before_wakeup + 1,)
-        if evidence["cpu"]["single_core_cpu_fraction"] >= args.max_cpu_fraction:
-            raise SmokeFailure(f"active idle logger consumed {evidence['cpu']['single_core_cpu_fraction']:.3f} of one CPU core; " f"required < {args.max_cpu_fraction:.3f}")
-        evidence["resize"] = exercise_resize_message_publication(process, backend, handle, port, directory, pattern)
-        required_messages.extend(evidence["resize"]["messages"])
-        evidence["screenshot_after_resize"] = capture_visible_messages(backend, handle, args.output_directory / "logger_after_resize.bmp", evidence["resize"]["expected_rows"])
+        if evidence[LIT_CPU][LIT_SINGLE_CORE_CPU_FRACTION] >= args.max_cpu_fraction:
+            raise SmokeFailure(f"active idle logger consumed {evidence[LIT_CPU][LIT_SINGLE_CORE_CPU_FRACTION]:.3f} of one CPU core; " f"required < {args.max_cpu_fraction:.3f}")
+        evidence[LIT_RESIZE] = exercise_resize_message_publication(process, backend, handle, port, directory, pattern)
+        required_messages.extend(evidence[LIT_RESIZE][LIT_MESSAGES])
+        evidence["screenshot_after_resize"] = capture_visible_messages(backend, handle, args.output_directory / "logger_after_resize.bmp", evidence[LIT_RESIZE][LIT_EXPECTED_ROWS])
     except SmokeSkip as error:
         skip_reason = str(error)
     except Exception as error:
         failures.append(str(error))
     finally:
         if process is not None:
-            if handle and "screenshot" not in evidence and process.poll() is None:
+            if handle and LIT_SCREENSHOT not in evidence and process.poll() is None:
                 try:
-                    evidence["screenshot"] = capture_visible_messages(backend, handle, screenshot)
+                    evidence[LIT_SCREENSHOT] = capture_visible_messages(backend, handle, screenshot)
                 except Exception as error:
                     failures.append(f"capture: {error}")
             try:
-                ensure_process_running(process, "before WM_CLOSE", "logserver")
+                ensure_process_running(process, "before WM_CLOSE", LIT_LOGSERVER)
                 if not request_windows_graceful_exit(process.pid):
                     raise SmokeFailure("no logger window accepted WM_CLOSE")
                 exit_code = process.wait(timeout=10.0)
-                require_normal_process_exit(exit_code, "", "logserver")
-                evidence["clean_wm_close_exit"] = True
+                require_normal_process_exit(exit_code, "", LIT_LOGSERVER)
+                evidence[LIT_CLEAN_WM_CLOSE_EXIT] = True
             except Exception as error:
                 failures.append(f"WM_CLOSE: {error}")
             finally:
                 try:
-                    exit_code, tail = terminate_process(process, "logserver")
+                    exit_code, tail = terminate_process(process, LIT_LOGSERVER)
                     evidence.update({"exit_code": exit_code, "process_output_tail": tail})
                     if tail:
                         validate_expected_log_text(tail, (), LOG_FAILURE_MESSAGES)
@@ -301,7 +313,7 @@ def main(argv):
         if directory:
             try:
                 log_text = collect_log_delta(directory, baseline, pattern)
-                (args.output_directory / "logger.log").write_text(log_text, encoding="utf-8")
+                (args.output_directory / "logger.log").write_text(log_text, encoding=LIT_UTF_8)
                 validate_expected_log_text(log_text, required_messages, LOG_FAILURE_MESSAGES)
                 evidence["log_diagnostics_checked"] = True
             except Exception as error:
@@ -309,7 +321,7 @@ def main(argv):
         if backend:
             backend.close()
         evidence.update({"passed": not failures and skip_reason is None, "skipped": skip_reason is not None, "skip_reason": skip_reason, "failures": failures})
-        (args.output_directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+        (args.output_directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding=LIT_UTF_8)
 
     for failure in failures:
         write_status(f"FAIL: {failure}")
@@ -318,7 +330,7 @@ def main(argv):
     if skip_reason is not None:
         write_status(f"SKIP: {skip_reason}")
         return SKIP_EXIT_CODE
-    write_status(f"PASS: active logger idle CPU fraction {evidence['cpu']['single_core_cpu_fraction']:.3f}; clean WM_CLOSE exit")
+    write_status(f"PASS: active logger idle CPU fraction {evidence[LIT_CPU][LIT_SINGLE_CORE_CPU_FRACTION]:.3f}; clean WM_CLOSE exit")
     return 0
 
 

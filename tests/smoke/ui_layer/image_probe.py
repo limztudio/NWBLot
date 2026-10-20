@@ -8,6 +8,28 @@ from window_capture_smoke import SmokeFailure
 from probe_common import center, snapshot_from_patterns
 from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile
 
+LIT_VALUES = "values"
+LIT_SEQUENCE = "sequence"
+LIT_RECTANGLES = "rectangles"
+LIT_PHASE = "phase"
+LIT_EXPECTED = "expected"
+LIT_PASSED = "passed"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_NATURAL_SPRITE = "natural_sprite"
+LIT_NATURAL_SLICE = "natural_slice"
+LIT_FIXED_SPRITE = "fixed_sprite"
+LIT_FIXED_SLICE = "fixed_slice"
+LIT_STRETCH = "stretch"
+LIT_TINTED = "tinted"
+LIT_TRANSPARENT = "transparent"
+LIT_FROZEN = "frozen"
+LIT_EXTERNAL = "external"
+LIT_EXTERNAL_CLIP = "external_clip"
+LIT_DOT = "dot"
+LIT_SLICE = "slice"
+LIT_PARENT = "parent"
+LIT_CHILD = "child"
+
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiImageSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -26,7 +48,7 @@ def snapshot_from_logs(text):
     snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="image")
     if snapshot is None:
         return None
-    values, sequence, rectangles = snapshot["values"], snapshot["sequence"], snapshot["rectangles"]
+    values, sequence, rectangles = snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE], snapshot[LIT_RECTANGLES]
     if any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
         raise SmokeFailure("image fixture reported invalid display or placement extents")
     if any(value > 0xFFFFFF for value in (*values, sequence)):
@@ -36,9 +58,9 @@ def snapshot_from_logs(text):
 
 def observe_image(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
-    scale, rectangles = snapshot["scale"], snapshot["rectangles"]
+    scale, rectangles = snapshot["scale"], snapshot[LIT_RECTANGLES]
     probes = []
-    geometry_matches = snapshot["phase"] in (0, 1) and snapshot["image_targets"] == 0
+    geometry_matches = snapshot[LIT_PHASE] in (0, 1) and snapshot["image_targets"] == 0
 
     def pixel(point):
         return round(point[0] * scale[0]), round(point[1] * scale[1])
@@ -53,20 +75,20 @@ def observe_image(frame, snapshot, expected, *, extent=None, skin="default", ext
             raise SmokeFailure(f"image probe '{name}' falls outside {width}x{height}: ({x},{y})")
         observed = rows[y][x]
         error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": list(position), "expected": list(color), "observed": list(observed), "error": error, "passed": error <= tolerance})
+        probes.append({"name": name, "position": list(position), LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
 
-    for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
+    for index, value in enumerate((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE])):
         for part in range(2):
             marker = index * 2 + part
-            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot["logical_extent"][1] - 14.0)), encoded_marker(value >> (12 * part)), 5)
+            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0)), encoded_marker(value >> (12 * part)), 5)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
-    logical_width = snapshot["logical_extent"][0]
+    logical_width = snapshot[LIT_LOGICAL_EXTENT][0]
     main_width = max(300.0, logical_width * 0.5 - 40.0)
     right = 24.0 + main_width + 32.0
     other_width = max(220.0, logical_width - right - 24.0)
-    declarations = { "before": (32.0, 56.0, main_width - 16.0, 28.0), "after": (32.0, 372.0, main_width - 16.0, 28.0), "natural_sprite": (32.0, 92.0, 24.0, 24.0), "natural_slice": (32.0, 124.0, 24.0, 24.0), "fixed_sprite": (32.0, 156.0, 96.0, 40.0),
-        "fixed_slice": (32.0, 204.0, 96.0, 40.0), "stretch": (32.0, 252.0, main_width - 16.0, 32.0), "tinted": (32.0, 292.0, 96.0, 40.0), "transparent": (32.0, 340.0, 96.0, 24.0), "frozen": (right + 8.0, 56.0, 96.0, 40.0),
-        "external": (right + 8.0, 184.0, other_width - 16.0, 40.0), "external_clip": (right + 8.0, 184.0, (other_width - 16.0) * 0.5, 40.0), }
+    declarations = { "before": (32.0, 56.0, main_width - 16.0, 28.0), "after": (32.0, 372.0, main_width - 16.0, 28.0), LIT_NATURAL_SPRITE: (32.0, 92.0, 24.0, 24.0), LIT_NATURAL_SLICE: (32.0, 124.0, 24.0, 24.0), LIT_FIXED_SPRITE: (32.0, 156.0, 96.0, 40.0),
+        LIT_FIXED_SLICE: (32.0, 204.0, 96.0, 40.0), LIT_STRETCH: (32.0, 252.0, main_width - 16.0, 32.0), LIT_TINTED: (32.0, 292.0, 96.0, 40.0), LIT_TRANSPARENT: (32.0, 340.0, 96.0, 24.0), LIT_FROZEN: (right + 8.0, 56.0, 96.0, 40.0),
+        LIT_EXTERNAL: (right + 8.0, 184.0, other_width - 16.0, 40.0), LIT_EXTERNAL_CLIP: (right + 8.0, 184.0, (other_width - 16.0) * 0.5, 40.0), }
     geometry_matches = geometry_matches and all(all(abs(actual - wanted) <= 0.025 for actual, wanted in zip(rectangles[name], declaration)) for name, declaration in declarations.items())
 
     def image(name, kind, tint, backdrop, constraint=None, obscured=None):
@@ -74,13 +96,13 @@ def observe_image(frame, snapshot, expected, *, extent=None, skin="default", ext
         bounds = rectangles[name]
         bx, by, bw, bh = bounds
         geometry_matches = geometry_matches and bw > 0.0 and bh > 0.0 and bx >= 0.0 and by >= 0.0 \
-            and bx + bw <= snapshot["logical_extent"][0] + 0.025 and by + bh <= snapshot["logical_extent"][1] + 0.025
+            and bx + bw <= snapshot[LIT_LOGICAL_EXTENT][0] + 0.025 and by + bh <= snapshot[LIT_LOGICAL_EXTENT][1] + 0.025
 
         def color_at(position):
             if constraint is not None and not inside(constraint, position):
                 return SENTINEL
-            if kind == "dot":
-                source, alpha = sampled_tile("dot", bounds, position, scale, MARK, MARK)
+            if kind == LIT_DOT:
+                source, alpha = sampled_tile(LIT_DOT, bounds, position, scale, MARK, MARK)
             else:
                 source, alpha = sampled_region(bounds, position, scale, *FILL)
             return compose(source, alpha, tint, backdrop)
@@ -91,7 +113,7 @@ def observe_image(frame, snapshot, expected, *, extent=None, skin="default", ext
                 record(f"{name}_{label}", position, color_at(position))
 
         sample("middle", center(bounds))
-        if kind == "dot":
+        if kind == LIT_DOT:
             sample("off_center_dot", (bx + bw * 0.60, by + bh * 0.35))
             sample("transparent_corner", (bx + bw * 0.05, by + bh * 0.05))
         else:
@@ -108,21 +130,21 @@ def observe_image(frame, snapshot, expected, *, extent=None, skin="default", ext
                 if inside(bounds, position):
                     record(f"{name}_outside_clip_{side}", position, SENTINEL)
 
-    for name, kind in (("natural_sprite", "dot"), ("natural_slice", "slice"), ("fixed_sprite", "dot"), ("fixed_slice", "slice"), ("stretch", "slice")):
+    for name, kind in ((LIT_NATURAL_SPRITE, LIT_DOT), (LIT_NATURAL_SLICE, LIT_SLICE), (LIT_FIXED_SPRITE, LIT_DOT), (LIT_FIXED_SLICE, LIT_SLICE), (LIT_STRETCH, LIT_SLICE)):
         image(name, kind, WHITE, panel)
-    image("tinted", "dot", (0.4, 0.7, 0.9, 0.5), panel)
-    image("transparent", "dot", (1.0, 1.0, 1.0, 0.0), panel)
-    phase = snapshot["phase"]
-    image("frozen", "slice" if phase == 0 else "dot", WHITE if phase == 0 else (0.5, 0.75, 1.0, 0.5), panel)
-    image("external", "slice", WHITE, panel, constraint=rectangles["external_clip"])
-    natural = rectangles["natural_sprite"]
+    image(LIT_TINTED, LIT_DOT, (0.4, 0.7, 0.9, 0.5), panel)
+    image(LIT_TRANSPARENT, LIT_DOT, (1.0, 1.0, 1.0, 0.0), panel)
+    phase = snapshot[LIT_PHASE]
+    image(LIT_FROZEN, LIT_SLICE if phase == 0 else LIT_DOT, WHITE if phase == 0 else (0.5, 0.75, 1.0, 0.5), panel)
+    image(LIT_EXTERNAL, LIT_SLICE, WHITE, panel, constraint=rectangles[LIT_EXTERNAL_CLIP])
+    natural = rectangles[LIT_NATURAL_SPRITE]
     record("replacement_panel_gutter", pixel((natural[0] + natural[2] + 8.0, natural[1] + natural[3] / 2.0)), panel)
-    for opened, name, kind, tint in (("parent", "parent_image", "slice", WHITE), ("child", "child_image", "dot", (0.5, 1.0, 0.5, 0.75))):
+    for opened, name, kind, tint in ((LIT_PARENT, "parent_image", LIT_SLICE, WHITE), (LIT_CHILD, "child_image", LIT_DOT, (0.5, 1.0, 0.5, 0.75))):
         if snapshot[opened]:
             popup = rectangles[opened]
-            declaration = popup[0] + 8.0, popup[1] + (44.0 if opened == "parent" else 8.0), popup[2] - 16.0, 40.0
+            declaration = popup[0] + 8.0, popup[1] + (44.0 if opened == LIT_PARENT else 8.0), popup[2] - 16.0, 40.0
             geometry_matches = geometry_matches and all(abs(actual - wanted) <= 0.025 for actual, wanted in zip(rectangles[name], declaration))
-            obscured = rectangles["child"] if opened == "parent" and snapshot["child"] else None
+            obscured = rectangles[LIT_CHILD] if opened == LIT_PARENT and snapshot[LIT_CHILD] else None
             image(name, kind, tint, (26, 34, 45), obscured=obscured)
         else:
             geometry_matches = geometry_matches and rectangles[name][2:] == (0.0, 0.0) \
@@ -130,5 +152,5 @@ def observe_image(frame, snapshot, expected, *, extent=None, skin="default", ext
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
     model_matches = model_matches and snapshot["declared_region"] == (1 if phase == 0 else 2) \
         and snapshot["post_declaration_region"] == (2 if phase == 0 else 1)
-    return { "extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes, "geometry_matches": geometry_matches, "passed": model_matches and geometry_matches
-            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot)) and all(probe["passed"] for probe in probes), }
+    return { "extent": [width, height], "snapshot": snapshot, LIT_EXPECTED: dict(expected), "probes": probes, "geometry_matches": geometry_matches, LIT_PASSED: model_matches and geometry_matches
+            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot)) and all(probe[LIT_PASSED] for probe in probes), }

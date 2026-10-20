@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+LIT_TRANSPARENTMULTISMOKEPROJECT_RENDERER = "TransparentMultiSmokeProject: renderer baseline capture ready after"
+LIT_NWB_GI_TEST_SMOKE = "nwb_gi_test_smoke"
+LIT_NWB_GI_TEST = "NWB GI Test"
+
 LIT_TESTING = "Testing"
 LIT_SMOKE_RUNTIME = "smoke_runtime"
 LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE = "NWB_TRANSPARENT_MULTI_SPIN_ANGLE"
@@ -32,18 +36,18 @@ class BaselineProfile:
 PROFILES: Mapping[str, BaselineProfile] = { "opaque-texture": BaselineProfile(target="nwb_texture_smoke", runtime_directory=Path(LIT_TESTING) / "texture_smoke_runtime", window_title="NWB Texture Smoke", settle_seconds=4.0, frozen_environment={},
         description="Opaque textured material and bindless sampled-image baseline.",), "transparent-avboit": BaselineProfile(target="nwb_transparent_multi_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SMOKE_RUNTIME,
         window_title="NWB Transparent Multi Smoke", settle_seconds=0.75, frozen_environment={LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: LIT_N_0_6}, description="Prepared transparent AVBOIT baseline with immutable material streams.", capture_freeze_frame=96,
-        capture_ready_log="TransparentMultiSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), "static-csg": BaselineProfile(target="nwb_csg_visible_smoke", runtime_directory=Path(LIT_TESTING) / "csg_visible_smoke_runtime",
+        capture_ready_log=LIT_TRANSPARENTMULTISMOKEPROJECT_RENDERER, fixed_delta_seconds=1.0 / 60.0,), "static-csg": BaselineProfile(target="nwb_csg_visible_smoke", runtime_directory=Path(LIT_TESTING) / "csg_visible_smoke_runtime",
         window_title="NWB CSG Visible Smoke", settle_seconds=4.0, frozen_environment={}, description="Static opaque CSG interval-production baseline.",), "skinned-csg": BaselineProfile(target="nwb_csg_skinned_visible_smoke",
         runtime_directory=Path(LIT_TESTING) / "csg_skinned_visible_smoke_runtime", window_title="NWB Skinned CSG Smoke", settle_seconds=0.75, frozen_environment={}, description="Runtime-skinning and CSG interval-production baseline.", capture_freeze_frame=96,
         capture_ready_log="CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), "soft-shadows": BaselineProfile(target="nwb_soft_shadow_test_smoke",
         runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title="NWB Soft Shadow Test", settle_seconds=0.75, frozen_environment={"NWB_SOFT_SHADOW_TEST_SPIN_ANGLE": LIT_N_0_6},
         description="Hardware soft-shadow production-path baseline.", capture_freeze_frame=360, capture_ready_log="SoftShadowTestSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), "caustics": BaselineProfile(
         target="nwb_caustic_sphere_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SMOKE_RUNTIME, window_title="NWB Caustic Sphere Smoke", settle_seconds=0.75, frozen_environment={LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: LIT_N_0_6},
-        description="Caustic accumulation baseline after the temporal warm-up.", capture_freeze_frame=360, capture_ready_log="TransparentMultiSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), "surfel-gi": BaselineProfile(
-        target="nwb_gi_test_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title="NWB GI Test", settle_seconds=0.75,
+        description="Caustic accumulation baseline after the temporal warm-up.", capture_freeze_frame=360, capture_ready_log=LIT_TRANSPARENTMULTISMOKEPROJECT_RENDERER, fixed_delta_seconds=1.0 / 60.0,), "surfel-gi": BaselineProfile(
+        target=LIT_NWB_GI_TEST_SMOKE, runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title=LIT_NWB_GI_TEST, settle_seconds=0.75,
         # current-renderer-v1 pins the original open-box scene; the complex scene has its own profile.
         frozen_environment={}, description="Surfel-GI trace and resolve baseline.", capture_freeze_frame=360, capture_ready_log="GiTestSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), "surfel-gi-complex": BaselineProfile(
-        target="nwb_gi_test_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title="NWB GI Test", settle_seconds=0.0, frozen_environment={ "NWB_GI_SMOKE_COMPLEX_SCENE": "1", "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "30",
+        target=LIT_NWB_GI_TEST_SMOKE, runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title=LIT_NWB_GI_TEST, settle_seconds=0.0, frozen_environment={ "NWB_GI_SMOKE_COMPLEX_SCENE": "1", "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "30",
         }, description="Closed, 20-body skylight scene for surfel-GI A/B readbacks after post-presentation warmup.", capture_freeze_frame=360,
         capture_ready_log="GiTestSmokeProject: complex GI capture source_frame=", fixed_delta_seconds=1.0 / 60.0, formal_corpus=False,),
     "stress": BaselineProfile(target="nwb_stress_test_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title="NWB Stress Test Smoke", settle_seconds=0.75, frozen_environment={"NWB_STRESS_TEST_SPIN_ANGLE": LIT_N_0_6},

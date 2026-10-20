@@ -13,6 +13,13 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke
 
+LIT_ALL_REJECTED = "all_rejected"
+LIT_QUERY_BUDGET_UNITS_PER_HARDWARE_RAY = "query_budget_units_per_hardware_ray"
+LIT_MALFORMED = "malformed"
+LIT_RESULT_JSON = "result.json"
+LIT_OBSERVED_FPS = "observed_fps"
+LIT_ERROR = "error"
+
 LIT_QUARTER = "quarter"
 LIT_REFERENCE_THREE = "reference_three"
 LIT_AUTOMATIC = "automatic"
@@ -440,7 +447,7 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
         text = reflection_log(reflection_record(sequence=3, frame=11, graphics_frame=14), reflection_record(sequence=7, frame=15, graphics_frame=18))
         result = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)
         optical = result[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_STATUS], "all_rejected")
+        self.assertEqual(optical[LIT_STATUS], LIT_ALL_REJECTED)
         self.assertEqual(optical[LIT_SAMPLE_COUNT], 2)
         self.assertEqual(optical[LIT_SUMS]["hardware_rays"], 20)
         self.assertEqual(optical[LIT_SUMS]["unsupported_paths"], 20)
@@ -468,9 +475,9 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
     def test_budget_reservation_cannot_be_reported_as_a_physical_query(self):
         text = reflection_log(reflection_record(query_budget_units=10, physical_queries=0))
         optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_STATUS], "all_rejected")
-        self.assertEqual(optical["query_budget_units_per_hardware_ray"], 1.)
-        self.assertEqual(optical["physical_queries_per_hardware_ray"], 0.)
+        self.assertEqual(optical[LIT_STATUS], LIT_ALL_REJECTED)
+        self.assertEqual(optical[LIT_QUERY_BUDGET_UNITS_PER_HARDWARE_RAY], 1.)
+        self.assertEqual(optical[LIT_QUERIES_PER_HARDWARE_RAY], 0.)
 
     def test_zero_ray_samples_do_not_produce_false_support_or_zero_ratios(self):
         text = reflection_log(reflection_record(hardware_ready=0, transport_enabled=0, candidates=0, hardware_rays=0, unsupported_paths=0))
@@ -557,10 +564,10 @@ class StressReflectionQualityTests(unittest.TestCase):
         fields = current.split()
         for field in smoke.REFLECTION_SCREEN_FIELDS:
             missing = " ".join(value for value in fields if not value.startswith(field + "="))
-            with self.subTest(field=field), self.assertRaisesRegex(smoke.SmokeFailure, "malformed"):
+            with self.subTest(field=field), self.assertRaisesRegex(smoke.SmokeFailure, LIT_MALFORMED):
                 smoke.parse_runtime_log(reflection_log(missing), 0, reflection_diagnostics=True)
         without_screen = " ".join(value for value in fields if not any(value.startswith(field + "=") for field in smoke.REFLECTION_SCREEN_FIELDS))
-        with self.assertRaisesRegex(smoke.SmokeFailure, "malformed"):
+        with self.assertRaisesRegex(smoke.SmokeFailure, LIT_MALFORMED):
             smoke.parse_runtime_log(reflection_log(without_screen), 0, reflection_diagnostics=True)
         optical = smoke.parse_runtime_log(reflection_log(current), 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
         self.assertEqual(optical[LIT_SCREEN][LIT_SAMPLE_COUNT], 1)
@@ -782,10 +789,10 @@ class StressPerformanceTargetTests(unittest.TestCase):
         text = shadow_record() + "\n" + reflection_log(row)
         self.assertEqual(self.acquire_or_main([LIT_REFLECTION_DIAGNOSTICS], text, use_main=True), 0)
         output = self.root / LIT_CAPTURE
-        result = json.loads((output / "result.json").read_text(encoding=LIT_UTF_8))
+        result = json.loads((output / LIT_RESULT_JSON).read_text(encoding=LIT_UTF_8))
         self.assertTrue(result[LIT_CAPTURE_VALIDATED])
-        self.assertEqual(result[LIT_OPTICAL_REFLECTION]["query_budget_units_per_hardware_ray"], 2.)
-        self.assertEqual(result[LIT_OPTICAL_REFLECTION]["physical_queries_per_hardware_ray"], 1.)
+        self.assertEqual(result[LIT_OPTICAL_REFLECTION][LIT_QUERY_BUDGET_UNITS_PER_HARDWARE_RAY], 2.)
+        self.assertEqual(result[LIT_OPTICAL_REFLECTION][LIT_QUERIES_PER_HARDWARE_RAY], 1.)
         self.assertFalse((output / LIT_FAILURE_JSON).exists())
 
     def test_positive_finite_threshold_extremes_are_accepted(self):
@@ -812,7 +819,7 @@ class StressPerformanceTargetTests(unittest.TestCase):
         text = self.rate_log(60).replace("complete fps=60 ", "complete fps=60.00000003 ")
         result = self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text)
         self.assertGreater(result[LIT_MEASUREMENT][LIT_FPS], 60)
-        self.assertEqual(result[LIT_PERFORMANCE_TARGET]["observed_fps"], 60)
+        self.assertEqual(result[LIT_PERFORMANCE_TARGET][LIT_OBSERVED_FPS], 60)
         self.assertFalse(result[LIT_PASSED])
 
     def test_ten_positive_intervals_make_a_fast_target_inconclusive(self):
@@ -821,23 +828,23 @@ class StressPerformanceTargetTests(unittest.TestCase):
         text = "\n".join(next(rows) if line.startswith(smoke.INTERVAL) else done if line.startswith(smoke.DONE) else line for line in self.rate_log(62).splitlines()) + "\n"
         self.assertEqual(self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text, use_main=True), 1)
         output = self.root / LIT_CAPTURE
-        result = json.loads((output / "result.json").read_text())
-        self.assertGreater(result[LIT_PERFORMANCE_TARGET]["observed_fps"], 60)
+        result = json.loads((output / LIT_RESULT_JSON).read_text())
+        self.assertGreater(result[LIT_PERFORMANCE_TARGET][LIT_OBSERVED_FPS], 60)
         self.assertTrue(result[LIT_PERFORMANCE_TARGET]["inconclusive"])
         self.assertIsNone(result[LIT_PERFORMANCE_TARGET][LIT_PASSED])
         self.assertFalse(result[LIT_PASSED])
-        self.assertIn("INCONCLUSIVE: 10 positive", json.loads((output / LIT_FAILURE_JSON).read_text())["error"])
+        self.assertIn("INCONCLUSIVE: 10 positive", json.loads((output / LIT_FAILURE_JSON).read_text())[LIT_ERROR])
 
     def test_main_retains_fully_validated_result_and_separate_target_failure(self):
         text = self.rate_log(60)
         self.assertEqual(self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text, use_main=True), 1)
         output = self.root / LIT_CAPTURE
-        result = json.loads((output / "result.json").read_text())
+        result = json.loads((output / LIT_RESULT_JSON).read_text())
         failure = json.loads((output / LIT_FAILURE_JSON).read_text())
         self.assertTrue(result[LIT_CAPTURE_VALIDATED])
         self.assertFalse(result[LIT_PASSED])
         self.assertFalse(result[LIT_PERFORMANCE_TARGET][LIT_PASSED])
-        self.assertIn("must exceed 60", failure["error"])
+        self.assertIn("must exceed 60", failure[LIT_ERROR])
         self.assertEqual((output / LIT_RUNTIME_LOG).read_text(), text)
         self.assertEqual((output / LIT_PROCESS_TAIL_TXT).read_text(), LIT_PROCESS_PRESERVED)
         self.assertEqual(result[LIT_IDENTITY_BEFORE], {LIT_VERIFIED: True})

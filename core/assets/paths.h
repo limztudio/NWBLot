@@ -62,13 +62,15 @@ struct RelativeAssetPathLayout{
 template<typename PathArenaT>
 [[nodiscard]] inline RelativeAssetPathLayout<PathArenaT> MeasureRelativeAssetPathText(const ::Path<PathArenaT>& relativePath){
     using NativeStringView = typename ::Path<PathArenaT>::native_string_view;
+    constexpr NativeStringView s_PathSeparatorChars{ NWB_TEXT("/\\") };
+
     RelativeAssetPathLayout<PathArenaT> layout{ relativePath.end() };
     ConvertedPathByteCounter counter;
     for(auto componentIt = relativePath.begin(); componentIt != relativePath.end(); ++componentIt){
         const auto component = componentIt.nativeComponent();
         if(component.empty() || GlobalFilesystemPathDetail::IsDot(component))
             continue;
-        if(GlobalFilesystemPathDetail::IsDotDot(component) || component.find_first_of(NativeStringView{ NWB_TEXT("/\\"), 2u }) != NativeStringView::npos){
+        if(GlobalFilesystemPathDetail::IsDotDot(component) || component.find_first_of(s_PathSeparatorChars) != NativeStringView::npos){
             layout.acceptedEnd = componentIt;
             layout.byteCount = counter.byteCount;
             return layout;

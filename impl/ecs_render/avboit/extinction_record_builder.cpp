@@ -36,6 +36,8 @@ static constexpr usize s_CsgIntervalUseCount = 4u;
 static constexpr usize s_EmulationBaseCount = 4u;
 static constexpr usize s_EmulationPlanUseCount = 8u;
 static constexpr usize s_SharedGenerateUseCount = 5u;
+static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
+static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,7 +191,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[3u] = {};
+    Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[__hidden_avboit_extinction_record::s_MaterialResourceSetUseCapacity] = {};
     usize extinctionMaterialResourceSetUseCount = 0u;
     if(extinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
         extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
@@ -258,7 +260,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
                 inputs.csgRemovedIntervalCountSubresources
             );
         }
-        Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[3u] = {};
+        Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[__hidden_avboit_extinction_record::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize extinctionComputeEmulationResourceSetUseCount = 0u;
         extinctionComputeEmulationResourceSetUses[extinctionComputeEmulationResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
         if(inputs.materialSampledTextureSet.valid()){
@@ -421,7 +423,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     }
     else{
         const Core::GpuTaskId rasterDependencies[] = { extinctionDependency, inputs.reusedGeometryProducer };
-        const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != extinctionDependency ? 2u : 1u;
+        const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != extinctionDependency ? LengthOf(rasterDependencies) : 1u;
         Core::GpuTaskDesc extinctionDesc;
         extinctionDesc
             .setIdentity(Name("render.avboit.extinction"))

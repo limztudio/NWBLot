@@ -254,6 +254,35 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         resourceUses.push_back(ReadWriteUse(resource, state));
         return true;
     };
+    // Graph identities and labels shared by the monolithic declaration and the prepared split re-imports.
+    constexpr AStringView s_ShadowSoftHalfAName = "render.shadow_visibility.soft_half_a";
+    constexpr AStringView s_ShadowSoftHalfALabel = "Shadow Soft Half A";
+    constexpr AStringView s_ShadowSoftHalfBName = "render.shadow_visibility.soft_half_b";
+    constexpr AStringView s_ShadowSoftHalfBLabel = "Shadow Soft Half B";
+    constexpr AStringView s_ShadowSoftGeometryName = "render.shadow_visibility.soft_geometry";
+    constexpr AStringView s_ShadowSoftGeometryLabel = "Shadow Soft Geometry";
+    constexpr AStringView s_ShadowSoftGeometryPreviousName = "render.shadow_visibility.soft_geometry_previous";
+    constexpr AStringView s_ShadowSoftGeometryPreviousLabel = "Previous Shadow Soft Geometry";
+    constexpr AStringView s_ShadowHistoryAName = "render.shadow_visibility.history_a";
+    constexpr AStringView s_ShadowHistoryALabel = "Shadow History A";
+    constexpr AStringView s_ShadowHistoryBName = "render.shadow_visibility.history_b";
+    constexpr AStringView s_ShadowHistoryBLabel = "Shadow History B";
+    constexpr AStringView s_ShadowMomentsAName = "render.shadow_visibility.moments_a";
+    constexpr AStringView s_ShadowMomentsALabel = "Shadow Moments A";
+    constexpr AStringView s_ShadowMomentsBName = "render.shadow_visibility.moments_b";
+    constexpr AStringView s_ShadowMomentsBLabel = "Shadow Moments B";
+    constexpr AStringView s_TransparentSoftHalfName = "render.shadow_visibility.transparent_soft_half";
+    constexpr AStringView s_TransparentSoftHalfLabel = "Transparent Shadow Soft Half";
+    constexpr AStringView s_TransparentHistoryAName = "render.shadow_visibility.transparent_history_a";
+    constexpr AStringView s_TransparentHistoryALabel = "Transparent Shadow History A";
+    constexpr AStringView s_TransparentHistoryBName = "render.shadow_visibility.transparent_history_b";
+    constexpr AStringView s_TransparentHistoryBLabel = "Transparent Shadow History B";
+    constexpr AStringView s_TransparentMomentsAName = "render.shadow_visibility.transparent_moments_a";
+    constexpr AStringView s_TransparentMomentsALabel = "Transparent Shadow Moments A";
+    constexpr AStringView s_TransparentMomentsBName = "render.shadow_visibility.transparent_moments_b";
+    constexpr AStringView s_TransparentMomentsBLabel = "Transparent Shadow Moments B";
+    constexpr AStringView s_ShadowEdgeCounterName = "render.shadow_visibility.edge_counter";
+    constexpr AStringView s_ShadowEdgeCounterLabel = "Shadow Edge Counter";
     bool optionalResourcesImported =
         (
             // The retained monolith selects its adaptive fallback only after runtime slot checks. Declare coarse as an output across that whole adaptive route, while prepared split callbacks omit it completely.
@@ -262,19 +291,19 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         )
         // The retained callback first overwrites these scratch targets, then resolves them locally within the same command list.
         // Its graph entry must therefore preserve Unknown -> UAV first writes rather than fabricate a ReadWrite native source for a fresh target generation.
-        && appendOptionalWriteTexture(deferredTargets.shadowSoftHalfA, Name("render.shadow_visibility.soft_half_a"), "Shadow Soft Half A")
-        && appendOptionalWriteTexture(deferredTargets.shadowSoftHalfB, Name("render.shadow_visibility.soft_half_b"), "Shadow Soft Half B")
-        && appendOptionalWriteTexture(deferredTargets.shadowSoftGeometry, Name("render.shadow_visibility.soft_geometry"), "Shadow Soft Geometry")
-        && appendOptionalOpaqueTemporalStaticReadTexture(deferredTargets.shadowSoftGeometryPrev, Name("render.shadow_visibility.soft_geometry_previous"), "Previous Shadow Soft Geometry")
-        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowHistA, Name("render.shadow_visibility.history_a"), "Shadow History A", opaqueHistoryFrontIsA)
-        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowHistB, Name("render.shadow_visibility.history_b"), "Shadow History B", !opaqueHistoryFrontIsA)
-        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowMomentsA, Name("render.shadow_visibility.moments_a"), "Shadow Moments A", opaqueHistoryFrontIsA)
-        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowMomentsB, Name("render.shadow_visibility.moments_b"), "Shadow Moments B", !opaqueHistoryFrontIsA)
-        && appendOptionalWriteTexture(deferredTargets.transparentSoftHalf, Name("render.shadow_visibility.transparent_soft_half"), "Transparent Shadow Soft Half")
-        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentHistA, Name("render.shadow_visibility.transparent_history_a"), "Transparent Shadow History A", opaqueHistoryFrontIsA)
-        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentHistB, Name("render.shadow_visibility.transparent_history_b"), "Transparent Shadow History B", !opaqueHistoryFrontIsA)
-        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentMomentsA, Name("render.shadow_visibility.transparent_moments_a"), "Transparent Shadow Moments A", opaqueHistoryFrontIsA)
-        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentMomentsB, Name("render.shadow_visibility.transparent_moments_b"), "Transparent Shadow Moments B", !opaqueHistoryFrontIsA)
+        && appendOptionalWriteTexture(deferredTargets.shadowSoftHalfA, Name(s_ShadowSoftHalfAName), s_ShadowSoftHalfALabel)
+        && appendOptionalWriteTexture(deferredTargets.shadowSoftHalfB, Name(s_ShadowSoftHalfBName), s_ShadowSoftHalfBLabel)
+        && appendOptionalWriteTexture(deferredTargets.shadowSoftGeometry, Name(s_ShadowSoftGeometryName), s_ShadowSoftGeometryLabel)
+        && appendOptionalOpaqueTemporalStaticReadTexture(deferredTargets.shadowSoftGeometryPrev, Name(s_ShadowSoftGeometryPreviousName), s_ShadowSoftGeometryPreviousLabel)
+        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowHistA, Name(s_ShadowHistoryAName), s_ShadowHistoryALabel, opaqueHistoryFrontIsA)
+        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowHistB, Name(s_ShadowHistoryBName), s_ShadowHistoryBLabel, !opaqueHistoryFrontIsA)
+        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowMomentsA, Name(s_ShadowMomentsAName), s_ShadowMomentsALabel, opaqueHistoryFrontIsA)
+        && appendOptionalOpaqueTemporalHistoryTexture(deferredTargets.shadowMomentsB, Name(s_ShadowMomentsBName), s_ShadowMomentsBLabel, !opaqueHistoryFrontIsA)
+        && appendOptionalWriteTexture(deferredTargets.transparentSoftHalf, Name(s_TransparentSoftHalfName), s_TransparentSoftHalfLabel)
+        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentHistA, Name(s_TransparentHistoryAName), s_TransparentHistoryALabel, opaqueHistoryFrontIsA)
+        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentHistB, Name(s_TransparentHistoryBName), s_TransparentHistoryBLabel, !opaqueHistoryFrontIsA)
+        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentMomentsA, Name(s_TransparentMomentsAName), s_TransparentMomentsALabel, opaqueHistoryFrontIsA)
+        && appendOptionalTransparentTemporalHistoryTexture(deferredTargets.transparentMomentsB, Name(s_TransparentMomentsBName), s_TransparentMomentsBLabel, !opaqueHistoryFrontIsA)
         && (hardwareTransparentTrace || RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
             rayTracingResources,
             importBuffer,
@@ -282,7 +311,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 resourceUses.push_back(ReadUse(resource, state));
             }
         ))
-        && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowEdgeCounterBuffer, Name("render.shadow_visibility.edge_counter"), "Shadow Edge Counter", Core::ResourceStates::UnorderedAccess)
+        && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowEdgeCounterBuffer, Name(s_ShadowEdgeCounterName), s_ShadowEdgeCounterLabel, Core::ResourceStates::UnorderedAccess)
         && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowEdgeListBuffer, Name("render.shadow_visibility.edge_list"), "Shadow Edge List", Core::ResourceStates::UnorderedAccess)
         && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowIndirectArgsBuffer, Name("render.shadow_visibility.indirect_args"), "Shadow Indirect Arguments", Core::ResourceStates::UnorderedAccess)
     ;
@@ -327,7 +356,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     }
     Core::GpuGraphResourceId adaptiveEdgeCounter;
     if(graphOwnedAdaptivePlan.compact){
-        const auto adaptiveEdgeCounterResult = importBuffer(rayTracingShadowResources.swShadowEdgeCounterBuffer, Name("render.shadow_visibility.edge_counter"), "Shadow Edge Counter");
+        const auto adaptiveEdgeCounterResult = importBuffer(rayTracingShadowResources.swShadowEdgeCounterBuffer, Name(s_ShadowEdgeCounterName), s_ShadowEdgeCounterLabel);
         if(!adaptiveEdgeCounterResult){
             adaptiveEdgeCounter = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
@@ -364,22 +393,22 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueResourceUses{ scratchArena };
     bool graphOwnsTransparentTemporalMergeEntryStates = false;
     if(splitSoftTransparentFold){
-        const auto shadowSoftHalfAResult = importTexture(deferredTargets.shadowSoftHalfA, Name("render.shadow_visibility.soft_half_a"), "Shadow Soft Half A");
-        const auto shadowSoftHalfBResult = importTexture(deferredTargets.shadowSoftHalfB, Name("render.shadow_visibility.soft_half_b"), "Shadow Soft Half B");
-        const auto shadowSoftGeometryResult = importTexture(deferredTargets.shadowSoftGeometry, Name("render.shadow_visibility.soft_geometry"), "Shadow Soft Geometry");
-        const auto shadowSoftGeometryPreviousResult = importTexture(deferredTargets.shadowSoftGeometryPrev, Name("render.shadow_visibility.soft_geometry_previous"), "Previous Shadow Soft Geometry");
-        const auto opaqueHistoryAResult = importTexture(deferredTargets.shadowHistA, Name("render.shadow_visibility.history_a"), "Shadow History A");
-        const auto opaqueHistoryBResult = importTexture(deferredTargets.shadowHistB, Name("render.shadow_visibility.history_b"), "Shadow History B");
-        const auto opaqueMomentsAResult = importTexture(deferredTargets.shadowMomentsA, Name("render.shadow_visibility.moments_a"), "Shadow Moments A");
-        const auto opaqueMomentsBResult = importTexture(deferredTargets.shadowMomentsB, Name("render.shadow_visibility.moments_b"), "Shadow Moments B");
-        const auto transparentSoftHalfResult = importTexture(deferredTargets.transparentSoftHalf, Name("render.shadow_visibility.transparent_soft_half"), "Transparent Shadow Soft Half");
-        const auto transparentHistoryAResult = importTexture(deferredTargets.transparentHistA, Name("render.shadow_visibility.transparent_history_a"), "Transparent Shadow History A");
-        const auto transparentHistoryBResult = importTexture(deferredTargets.transparentHistB, Name("render.shadow_visibility.transparent_history_b"), "Transparent Shadow History B");
-        const auto transparentMomentsAResult = importTexture(deferredTargets.transparentMomentsA, Name("render.shadow_visibility.transparent_moments_a"), "Transparent Shadow Moments A");
-        const auto transparentMomentsBResult = importTexture(deferredTargets.transparentMomentsB, Name("render.shadow_visibility.transparent_moments_b"), "Transparent Shadow Moments B");
+        const auto shadowSoftHalfAResult = importTexture(deferredTargets.shadowSoftHalfA, Name(s_ShadowSoftHalfAName), s_ShadowSoftHalfALabel);
+        const auto shadowSoftHalfBResult = importTexture(deferredTargets.shadowSoftHalfB, Name(s_ShadowSoftHalfBName), s_ShadowSoftHalfBLabel);
+        const auto shadowSoftGeometryResult = importTexture(deferredTargets.shadowSoftGeometry, Name(s_ShadowSoftGeometryName), s_ShadowSoftGeometryLabel);
+        const auto shadowSoftGeometryPreviousResult = importTexture(deferredTargets.shadowSoftGeometryPrev, Name(s_ShadowSoftGeometryPreviousName), s_ShadowSoftGeometryPreviousLabel);
+        const auto opaqueHistoryAResult = importTexture(deferredTargets.shadowHistA, Name(s_ShadowHistoryAName), s_ShadowHistoryALabel);
+        const auto opaqueHistoryBResult = importTexture(deferredTargets.shadowHistB, Name(s_ShadowHistoryBName), s_ShadowHistoryBLabel);
+        const auto opaqueMomentsAResult = importTexture(deferredTargets.shadowMomentsA, Name(s_ShadowMomentsAName), s_ShadowMomentsALabel);
+        const auto opaqueMomentsBResult = importTexture(deferredTargets.shadowMomentsB, Name(s_ShadowMomentsBName), s_ShadowMomentsBLabel);
+        const auto transparentSoftHalfResult = importTexture(deferredTargets.transparentSoftHalf, Name(s_TransparentSoftHalfName), s_TransparentSoftHalfLabel);
+        const auto transparentHistoryAResult = importTexture(deferredTargets.transparentHistA, Name(s_TransparentHistoryAName), s_TransparentHistoryALabel);
+        const auto transparentHistoryBResult = importTexture(deferredTargets.transparentHistB, Name(s_TransparentHistoryBName), s_TransparentHistoryBLabel);
+        const auto transparentMomentsAResult = importTexture(deferredTargets.transparentMomentsA, Name(s_TransparentMomentsAName), s_TransparentMomentsALabel);
+        const auto transparentMomentsBResult = importTexture(deferredTargets.transparentMomentsB, Name(s_TransparentMomentsBName), s_TransparentMomentsBLabel);
         Expected<Optional<Core::GpuGraphResourceId>> sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{};
         if(!(hardwareTransparentTrace)){
-            const auto importedResource = importBuffer(rayTracingResources.sceneBvhNodeBuffer, Name("render.shadow_visibility.scene_bvh_nodes"), "Scene BVH Nodes");
+            const auto importedResource = importBuffer(rayTracingResources.sceneBvhNodeBuffer, Name(RendererFramePipelineDetail::s_SceneBvhNodesName), RendererFramePipelineDetail::s_SceneBvhNodesLabel);
             if(!importedResource)
                 sceneBvhNodesResult = MakeUnexpected(importedResource.error());
             else
@@ -387,7 +416,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         }
         Expected<Optional<Core::GpuGraphResourceId>> sceneInstancesResult = Optional<Core::GpuGraphResourceId>{};
         if(!(hardwareTransparentTrace)){
-            const auto importedResource = importBuffer(rayTracingResources.sceneInstanceBuffer, Name("render.shadow_visibility.scene_instances"), "Scene Instances");
+            const auto importedResource = importBuffer(rayTracingResources.sceneInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneInstancesName), RendererFramePipelineDetail::s_SceneInstancesLabel);
             if(!importedResource)
                 sceneInstancesResult = MakeUnexpected(importedResource.error());
             else

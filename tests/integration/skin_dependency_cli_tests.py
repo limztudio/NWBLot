@@ -9,6 +9,21 @@ import struct
 import sys
 import types
 
+LIT_IMPL = "impl"
+LIT_ASSETS = "assets"
+LIT_UI = "ui"
+LIT_TEXTURE_NWB = "texture.nwb"
+LIT_TEXTURE_TEX = "texture.tex"
+LIT_ASSETS_LIST = "assets.list"
+LIT_C = "c"
+LIT_TESTS = "tests"
+LIT_PROJECT = "project"
+LIT_ATLAS_NWB = "atlas.nwb"
+LIT_LINEAR = "linear"
+LIT_PROJECT_ASSETS_UI_UI_ATLAS_NWB = "project/assets/ui/../ui/atlas.nwb"
+LIT_PROJECT_ASSETS_UI_UI = "project/assets/ui/../ui"
+LIT_ORDER = "order"
+
 
 UTF_8 = "utf-8"
 INCLUDE_SKIN_DEPENDENCIES = "--include-skin-dependencies"
@@ -48,11 +63,11 @@ def _write_skin(path: pathlib.Path, texture: str, extent: tuple[int, int] = ATLA
 
 
 def _copy_texture(repo: pathlib.Path, path: pathlib.Path) -> pathlib.Path:
-    shipped = repo / "impl" / "assets" / "ui" / "skins" / "default"
+    shipped = repo / LIT_IMPL / LIT_ASSETS / LIT_UI / "skins" / "default"
     path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(shipped / "texture.nwb", path)
-    sidecar = path.parent / "texture.tex"
-    shutil.copyfile(shipped / "texture.tex", sidecar)
+    shutil.copyfile(shipped / LIT_TEXTURE_NWB, path)
+    sidecar = path.parent / LIT_TEXTURE_TEX
+    shutil.copyfile(shipped / LIT_TEXTURE_TEX, sidecar)
     return sidecar
 
 
@@ -76,7 +91,7 @@ def _expect_manifest(manifest: pathlib.Path, inputs: list[str], appended: list[p
 
 
 def _read_current_artifacts(directory: pathlib.Path, helpers: types.ModuleType) -> dict[bytes, bytes]:
-    manifest = directory / "assets.list"
+    manifest = directory / LIT_ASSETS_LIST
     names = manifest.read_text(encoding=UTF_8).splitlines()
     if not names or any(not name for name in names):
         raise AssertionError("builder published an empty current artifact list")
@@ -159,10 +174,10 @@ def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
 def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pathlib.Path, roots: list[pathlib.Path], manifest: pathlib.Path, sidecar: pathlib.Path, invalid_skin: pathlib.Path, helpers: types.ModuleType,) -> None:
     artifacts = fixture / "built"
     packed = fixture / "volume"
-    build_command = [str(args.asset_builder), REPO_ROOT, str(fixture), INPUT_LIST, str(manifest), OUTPUT_DIRECTORY, str(artifacts), CACHE_DIRECTORY, str(root / "c"), CONFIGURATION, "tests",]
+    build_command = [str(args.asset_builder), REPO_ROOT, str(fixture), INPUT_LIST, str(manifest), OUTPUT_DIRECTORY, str(artifacts), CACHE_DIRECTORY, str(root / LIT_C), CONFIGURATION, LIT_TESTS,]
     for asset_root in roots:
         build_command.extend([ASSET_ROOT, str(asset_root)])
-    gather_command = [str(args.asset_gatherer), INPUT_LIST, str(artifacts / "assets.list"), OUTPUT_DIRECTORY, str(packed), CONFIGURATION, "tests",]
+    gather_command = [str(args.asset_gatherer), INPUT_LIST, str(artifacts / LIT_ASSETS_LIST), OUTPUT_DIRECTORY, str(packed), CONFIGURATION, LIT_TESTS,]
     helpers.run_command(build_command, fixture)
     original = _read_current_artifacts(artifacts, helpers)
     skin_identity, texture_identity = _package_identities(original)
@@ -200,8 +215,8 @@ def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pa
     if helpers.read_volume(packed) != refreshed:
         raise AssertionError("texture sidecar change was not reflected in the republished volume")
 
-    launcher_command = [sys.executable, str(args.pipeline_launcher), "--skip-build", INCLUDE_SKIN_DEPENDENCIES, REPO_ROOT, str(args.repo_root), INPUT, str(fixture / "project" / "assets" / "ui" / "atlas.nwb"), OUTPUT_DIRECTORY, str(packed),
-        CACHE_DIRECTORY, str(root / "c"), CONFIGURATION, "tests", "--dependency-computer", str(args.dependency_computer), "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),]
+    launcher_command = [sys.executable, str(args.pipeline_launcher), "--skip-build", INCLUDE_SKIN_DEPENDENCIES, REPO_ROOT, str(args.repo_root), INPUT, str(fixture / LIT_PROJECT / LIT_ASSETS / LIT_UI / LIT_ATLAS_NWB), OUTPUT_DIRECTORY, str(packed),
+        CACHE_DIRECTORY, str(root / LIT_C), CONFIGURATION, LIT_TESTS, "--dependency-computer", str(args.dependency_computer), "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),]
     for asset_root in roots:
         launcher_command.extend([ASSET_ROOT, str(asset_root)])
     helpers.run_command(launcher_command, fixture)
@@ -215,22 +230,22 @@ def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pa
 
 def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, helpers: types.ModuleType) -> None:
     fixture = root / "s"
-    project_root = fixture / "project" / "assets"
-    engine_root = fixture / "impl" / "assets"
+    project_root = fixture / LIT_PROJECT / LIT_ASSETS
+    engine_root = fixture / LIT_IMPL / LIT_ASSETS
     roots = [project_root, engine_root]
-    skin = project_root / "ui" / "atlas.nwb"
-    shared_skin = project_root / "ui" / "shared.nwb"
-    texture = engine_root / "ui" / "texture.nwb"
+    skin = project_root / LIT_UI / LIT_ATLAS_NWB
+    shared_skin = project_root / LIT_UI / "shared.nwb"
+    texture = engine_root / LIT_UI / LIT_TEXTURE_NWB
     unrelated = project_root / "samplers" / "unrelated.nwb"
     manifest = fixture / "dependencies.txt"
     sidecar = _copy_texture(args.repo_root, texture)
     _write_skin(skin, TEXTURE_IDENTITY)
     _write_skin(shared_skin, TEXTURE_IDENTITY)
-    helpers.write_sampler(unrelated, "linear")
+    helpers.write_sampler(unrelated, LIT_LINEAR)
     _write_metadata(project_root / "unrelated_bad.nwb", "unrelated malformed metadata {{{\n")
     _write_metadata(project_root / "shaders" / "unrelated_bad.bind", "unrelated malformed bind metadata {{{\n")
 
-    original = ["project/assets/ui/../ui/atlas.nwb", str(skin), "project/assets/ui/../ui/atlas.nwb"]
+    original = [LIT_PROJECT_ASSETS_UI_UI_ATLAS_NWB, str(skin), LIT_PROJECT_ASSETS_UI_UI_ATLAS_NWB]
     helpers.run_command(_dependency_command(args, fixture, roots, original, manifest, enabled=False), fixture)
     _expect_manifest(manifest, original, [])
     helpers.run_command(_dependency_command(args, fixture, roots, original, manifest), fixture)
@@ -238,39 +253,39 @@ def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, help
     good_manifest = manifest.read_bytes()
 
     cases = (([str(skin), str(shared_skin), str(skin)], roots, [texture]), ([str(skin), "impl/assets/ui/../ui/texture.nwb", str(skin)], roots, []), ([str(unrelated), str(unrelated)], roots, []),
-        ([str(skin)], [project_root, engine_root, engine_root, engine_root / "ui"], [texture]), (["project/assets/ui/../ui"], roots, [texture]), (["project/assets/ui/../ui", "impl/assets/ui"], roots, []),)
+        ([str(skin)], [project_root, engine_root, engine_root, engine_root / LIT_UI], [texture]), ([LIT_PROJECT_ASSETS_UI_UI], roots, [texture]), ([LIT_PROJECT_ASSETS_UI_UI, "impl/assets/ui"], roots, []),)
     scratch_manifest = fixture / "case.txt"
     for inputs, asset_roots, appended in cases:
         helpers.run_command(_dependency_command(args, fixture, asset_roots, inputs, scratch_manifest), fixture)
         _expect_manifest(scratch_manifest, inputs, appended)
 
-    ordered_a = project_root / "order" / "a.nwb"
-    ordered_b = project_root / "order" / "b.nwb"
-    texture_a = project_root / "textures" / "a" / "texture.nwb"
-    texture_b = engine_root / "order" / "b" / "texture.nwb"
+    ordered_a = project_root / LIT_ORDER / "a.nwb"
+    ordered_b = project_root / LIT_ORDER / "b.nwb"
+    texture_a = project_root / "textures" / "a" / LIT_TEXTURE_NWB
+    texture_b = engine_root / LIT_ORDER / "b" / LIT_TEXTURE_NWB
     _copy_texture(args.repo_root, texture_a)
     _copy_texture(args.repo_root, texture_b)
     _write_skin(ordered_a, "project/textures/a/texture")
     _write_skin(ordered_b, "engine/order/b/texture")
-    sampler_root = fixture / "typed" / "impl" / "assets"
-    helpers.write_sampler(sampler_root / "ui" / "texture.nwb", "linear")
-    ordered_cases = (([str(ordered_b), str(ordered_a), str(ordered_b)], roots, [texture_b, texture_a]), ([str(project_root / "order")], roots, [texture_a, texture_b]), ([str(skin)], [project_root, sampler_root, engine_root], [texture]),)
+    sampler_root = fixture / "typed" / LIT_IMPL / LIT_ASSETS
+    helpers.write_sampler(sampler_root / LIT_UI / LIT_TEXTURE_NWB, LIT_LINEAR)
+    ordered_cases = (([str(ordered_b), str(ordered_a), str(ordered_b)], roots, [texture_b, texture_a]), ([str(project_root / LIT_ORDER)], roots, [texture_a, texture_b]), ([str(skin)], [project_root, sampler_root, engine_root], [texture]),)
     for inputs, asset_roots, appended in ordered_cases:
         helpers.run_command(_dependency_command(args, fixture, asset_roots, inputs, scratch_manifest), fixture)
         _expect_manifest(scratch_manifest, inputs, appended)
 
-    missing_skin = project_root / "missing" / "atlas.nwb"
+    missing_skin = project_root / "missing" / LIT_ATLAS_NWB
     _write_skin(missing_skin, "engine/ui/missing")
-    wrong_skin = project_root / "wrong" / "atlas.nwb"
+    wrong_skin = project_root / "wrong" / LIT_ATLAS_NWB
     _write_skin(wrong_skin, "engine/ui/wrong")
-    helpers.write_sampler(engine_root / "ui" / "wrong.nwb", "linear")
-    invalid_skin = project_root / "invalid" / "atlas.nwb"
+    helpers.write_sampler(engine_root / LIT_UI / "wrong.nwb", LIT_LINEAR)
+    invalid_skin = project_root / "invalid" / LIT_ATLAS_NWB
     _write_skin(invalid_skin, TEXTURE_IDENTITY, (16, 16))
-    multiple_skin = project_root / "multiple" / "atlas.nwb"
+    multiple_skin = project_root / "multiple" / LIT_ATLAS_NWB
     _write_skin(multiple_skin, TEXTURE_IDENTITY)
     _write_metadata(multiple_skin, multiple_skin.read_text(encoding=UTF_8) + "sampler extra;\n")
-    duplicate_root = fixture / "other" / "impl" / "assets"
-    _copy_texture(args.repo_root, duplicate_root / "ui" / "texture.nwb")
+    duplicate_root = fixture / "other" / LIT_IMPL / LIT_ASSETS
+    _copy_texture(args.repo_root, duplicate_root / LIT_UI / LIT_TEXTURE_NWB)
     failures = (([str(missing_skin)], roots), ([str(wrong_skin)], roots), ([str(skin)], [*roots, duplicate_root]), ([str(invalid_skin)], roots), ([str(multiple_skin)], roots),)
     for inputs, asset_roots in failures:
         helpers.run_command(_dependency_command(args, fixture, asset_roots, inputs, manifest), fixture, failure=True,)

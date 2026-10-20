@@ -22,10 +22,10 @@ Expected<VolumeBuildInfo> BuildVolume(const Path& outputDirectory, const VolumeB
     VolumeBuildInfo buildInfo;
 
     const StagedDirectoryPaths stagedVolumePaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, config.volumeName.view(), scratchArena);
-    if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "stage directory"))
+    if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_StageDirectoryLabel))
         return MakeUnexpected(Failure{});
     StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix);
-    if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "backup directory"))
+    if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_BackupDirectoryLabel))
         return MakeUnexpected(Failure{});
 
     Alloc::GlobalArena arena(FilesystemArenaScope::s_BuildVolumeArena);

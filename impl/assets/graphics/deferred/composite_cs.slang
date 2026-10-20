@@ -5,6 +5,7 @@
 #include "binding_slots.h"
 #include "bindless_resources.slangi"
 #include "../avboit/constants.h"
+#include "../reflection/frame_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,6 +32,14 @@ struct NwbDeferredCompositePushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const half3 NWB_DEFERRED_REFLECTION_DEBUG_HARDWARE_COLOR = half3(0.15h, 0.3h, 1.0h);
+static const half3 NWB_DEFERRED_REFLECTION_DEBUG_SCREEN_COLOR = half3(0.15h, 1.0h, 0.2h);
+static const half3 NWB_DEFERRED_REFLECTION_DEBUG_FALLBACK_COLOR = half3(1.0h, 0.25h, 0.1h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Composite stays in linear RGBA16F on Compute. The following Graphics present pass alone handles the swapchain framebuffer/sRGB boundary, so this dispatch never requires storage-capable surface images.
 [numthreads(NWB_DEFERRED_COMPOSITE_GROUP_SIZE, NWB_DEFERRED_COMPOSITE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
@@ -44,8 +53,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader stays free of implicit derivatives and therefore needs no compute-derivative Vulkan extension or feature.
     const int3 texel = int3(pixel, 0);
-    const half4 opaqueReflection = g_NwbDeferredCompositePushConstants.opaqueReflectionSlot != 0xffffffffu ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h);
-    const half4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != 0xffffffffu ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);
+    const half4 opaqueReflection = g_NwbDeferredCompositePushConstants.opaqueReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h);
+    const half4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT ?half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);
     const half3 opaqueColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.x).Load(texel).rgb) + opaqueReflection.rgb;
     half reflectionSource = opaqueReflection.a;
     const half4 transparentColorAccum = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.y).Load(texel));
@@ -63,11 +72,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
     if(glassReflection.a > half(0.0h))
         reflectionSource = glassReflection.a;
-    if(g_NwbDeferredCompositePushConstants.reflectionDebugView == 1u){
-        compositeColor = reflectionSource >= half(3.0h) ? half3(0.15h, 0.3h, 1.0h) : reflectionSource >= half(2.0h) ? half3(0.15h, 1.0h, 0.2h) : reflectionSource > half(0.0h) ? half3(1.0h, 0.25h, 0.1h) : half3(0.0h);
+    if(g_NwbDeferredCompositePushConstants.reflectionDebugView == NWB_REFLECTION_DEBUG_VIEW_TRACE_SOURCE){
+        compositeColor = reflectionSource >= half(NWB_REFLECTION_SOURCE_HARDWARE) ? NWB_DEFERRED_REFLECTION_DEBUG_HARDWARE_COLOR : reflectionSource >= half(NWB_REFLECTION_SOURCE_SCREEN) ? NWB_DEFERRED_REFLECTION_DEBUG_SCREEN_COLOR : reflectionSource > half(0.0h) ? NWB_DEFERRED_REFLECTION_DEBUG_FALLBACK_COLOR : half3(0.0h);
     }
-    else if(g_NwbDeferredCompositePushConstants.reflectionDebugView == 2u)
-        compositeColor = half3(reflectionSource >= half(3.0h) ? half(1.0h) : saturate((reflectionSource - half(2.0h)) * half(2.0h)));
+    else if(g_NwbDeferredCompositePushConstants.reflectionDebugView == NWB_REFLECTION_DEBUG_VIEW_CONFIDENCE)
+        compositeColor = half3(reflectionSource >= half(NWB_REFLECTION_SOURCE_HARDWARE) ? half(1.0h) : saturate((reflectionSource - half(NWB_REFLECTION_SOURCE_SCREEN)) * half(NWB_REFLECTION_SOURCE_CONFIDENCE_DECODE_SCALE)));
     g_NwbDeferredCompositeOutput[pixel] = float4(float3(compositeColor), 1.0);
 }
 

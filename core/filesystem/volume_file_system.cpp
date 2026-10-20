@@ -495,10 +495,10 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     }
 
     const StagedDirectoryPaths stagedPaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(m_mountDirectory, m_volumeName.view(), scratchArena);
-    if(!EnsureEmptyStagedDirectory(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "stage directory"))
+    if(!EnsureEmptyStagedDirectory(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_StageDirectoryLabel))
         return false;
     StagedDirectoryCleanupGuard stageCleanup(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix);
-    if(!RemoveStagedDirectoryIfPresent(stagedPaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "backup directory"))
+    if(!RemoveStagedDirectoryIfPresent(stagedPaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_BackupDirectoryLabel))
         return false;
     Vector<u8, Core::Alloc::ScratchArena> copyBuffer(static_cast<usize>(copyChunkBytes), 0u, scratchArena);
     usize stagedSegmentCount = 0u;

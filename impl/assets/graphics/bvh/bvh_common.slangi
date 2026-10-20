@@ -46,6 +46,26 @@ struct NwbBvhBuildPushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const uint NWB_BVH_KEY_BIT_COUNT = 32u;
+static const uint NWB_BVH_KEY_HIGHEST_BIT = 31u;
+
+// Karras Morton expansion: each multiply copies the bits up by the shift, and the mask keeps one copy.
+static const uint NWB_BVH_MORTON_EXPAND_MULTIPLY_16 = 0x00010001u;
+static const uint NWB_BVH_MORTON_EXPAND_MASK_16 = 0xFF0000FFu;
+static const uint NWB_BVH_MORTON_EXPAND_MULTIPLY_8 = 0x00000101u;
+static const uint NWB_BVH_MORTON_EXPAND_MASK_8 = 0x0F00F00Fu;
+static const uint NWB_BVH_MORTON_EXPAND_MULTIPLY_4 = 0x00000011u;
+static const uint NWB_BVH_MORTON_EXPAND_MASK_4 = 0xC30C30C3u;
+static const uint NWB_BVH_MORTON_EXPAND_MULTIPLY_2 = 0x00000005u;
+static const uint NWB_BVH_MORTON_EXPAND_MASK_2 = 0x49249249u;
+
+static const float NWB_BVH_MORTON_AXIS_CELL_COUNT = 1024.0;
+static const float NWB_BVH_MORTON_AXIS_CELL_MAX = 1023.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool nwbBvhNodeIsLeaf(const NwbBvhNode node){
     return (node.leftChild & NWB_BVH_LEAF_FLAG) != 0u;
 }
@@ -66,22 +86,22 @@ bool nwbBvhNodeContainsTransparentOccluder(const NwbBvhNode node){
 // Count leading zero bits (0..32); firstbithigh returns -1 for zero, which this maps to 32.
 uint nwbBvhClz(const uint value){
     if(value == 0u)
-        return 32u;
-    return 31u - (uint)firstbithigh(value);
+        return NWB_BVH_KEY_BIT_COUNT;
+    return NWB_BVH_KEY_HIGHEST_BIT - (uint)firstbithigh(value);
 }
 
 // Spread the low 10 bits of value so they occupy every third bit (Karras Morton expansion).
 uint nwbBvhExpandBits10(uint value){
-    value = (value * 0x00010001u) & 0xFF0000FFu;
-    value = (value * 0x00000101u) & 0x0F00F00Fu;
-    value = (value * 0x00000011u) & 0xC30C30C3u;
-    value = (value * 0x00000005u) & 0x49249249u;
+    value = (value * NWB_BVH_MORTON_EXPAND_MULTIPLY_16) & NWB_BVH_MORTON_EXPAND_MASK_16;
+    value = (value * NWB_BVH_MORTON_EXPAND_MULTIPLY_8) & NWB_BVH_MORTON_EXPAND_MASK_8;
+    value = (value * NWB_BVH_MORTON_EXPAND_MULTIPLY_4) & NWB_BVH_MORTON_EXPAND_MASK_4;
+    value = (value * NWB_BVH_MORTON_EXPAND_MULTIPLY_2) & NWB_BVH_MORTON_EXPAND_MASK_2;
     return value;
 }
 
 // 30-bit Morton code (10 bits/axis) of a point already normalized into [0, 1]^3.
 uint nwbBvhMorton3D(const float3 normalizedPosition){
-    const float3 scaled = clamp(normalizedPosition * 1024.0, 0.0, 1023.0);
+    const float3 scaled = clamp(normalizedPosition * NWB_BVH_MORTON_AXIS_CELL_COUNT, 0.0, NWB_BVH_MORTON_AXIS_CELL_MAX);
     const uint x = nwbBvhExpandBits10((uint)scaled.x);
     const uint y = nwbBvhExpandBits10((uint)scaled.y);
     const uint z = nwbBvhExpandBits10((uint)scaled.z);

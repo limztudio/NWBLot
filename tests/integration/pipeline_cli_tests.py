@@ -12,6 +12,8 @@ from unittest import mock
 
 from skin_dependency_cli_tests import run_skin_dependency_tests
 
+LIT_C = "c"
+
 LIT_DEPENDENCY_COMPUTER = "--dependency-computer"
 LIT_ASSET_BUILDER = "--asset-builder"
 LIT_ASSET_GATHERER = "--asset-gatherer"
@@ -123,7 +125,7 @@ def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_r
         raise AssertionError("could not load the pipeline launcher for discovery failure regression")
     pipeline_launcher = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(pipeline_launcher)
-    options = pipeline_launcher.parse_arguments([LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(asset_root), LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / "c"), LIT_CONFIGURATION, LIT_TESTS,
+    options = pipeline_launcher.parse_arguments([LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(asset_root), LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / LIT_C), LIT_CONFIGURATION, LIT_TESTS,
         LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),])
     previous_volume = read_volume(output)
     with pipeline_launcher.os.scandir(asset_root) as entries:
@@ -160,7 +162,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if manifest.read_text(encoding=LIT_UTF_8).splitlines() != input_values:
         raise AssertionError("dependency computation must preserve every input, its order, and duplicate values")
 
-    build_options = [LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(first_root), str(second_root), LIT_CACHE_DIRECTORY, str(root / "c"), LIT_CONFIGURATION, LIT_TESTS,]
+    build_options = [LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(first_root), str(second_root), LIT_CACHE_DIRECTORY, str(root / LIT_C), LIT_CONFIGURATION, LIT_TESTS,]
     failure_output = run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), LIT_OUTPUT_DIRECTORY, str(root / "unsupported"), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL], root, failure=True,)
     expected_message = f"unsupported --asset-type '{ASSET_TYPE_SENTINEL}'. Available types:"
     if expected_message not in failure_output or "[ERROR]:" not in failure_output:
@@ -276,7 +278,7 @@ def main() -> int:
             setattr(args, name, path)
         args.repo_root = args.repo_root.resolve()
         # The object-cache directory includes a 128-character type hash; keep Windows paths below MAX_PATH.
-        temporary_parent = args.repo_root / "__build_obj" / "c"
+        temporary_parent = args.repo_root / "__build_obj" / LIT_C
         temporary_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="p", dir=temporary_parent) as temporary_directory:
             run_pipeline_tests(args, pathlib.Path(temporary_directory))

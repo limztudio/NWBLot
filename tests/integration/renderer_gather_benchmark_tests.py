@@ -14,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_gather_benchmark as bench
 from generate_gather_benchmark_assets import main as generate_assets
 
+LIT_IMPL_ECS_RENDER_RENDER = "impl/ecs_render/render"
+
 LIT_PRESENT = "present"
 LIT_HISTORICAL_ARENA_PEAK = "historical_arena_peak"
 LIT_ALLOCATIONS = "allocations"
@@ -172,7 +174,7 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
 
     def test_unavailable_optional_arena_is_null_not_zero_savings(self):
         values = rows(mode=LIT_MEMORY)
-        optional = "impl/ecs_render/render"
+        optional = LIT_IMPL_ECS_RENDER_RENDER
         for row in values:
             if LIT_ARENAS in row:
                 row[LIT_ARENAS][optional][LIT_PRESENT] = False
@@ -183,7 +185,7 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
 
     def test_memory_acquisition_accepts_current_caller_owners_without_retired_helper_arenas(self):
         values = rows(mode=LIT_MEMORY)
-        current_owners = ("impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph")
+        current_owners = ("impl/ecs_render/prepare", LIT_IMPL_ECS_RENDER_RENDER, "impl/ecs_render/task_graph")
         for row in values:
             if LIT_ARENAS in row:
                 row[LIT_ARENAS] = {owner: row[LIT_ARENAS][owner] for owner in current_owners}

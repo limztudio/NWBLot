@@ -168,10 +168,10 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& aren
         return MakeUnexpected(Failure{});
 
     const StagedVolumePaths stagedVolumePaths = BuildStagedVolumePaths(resolvedPaths.outputDirectory, volumeConfig->volumeName, configurationSafeName, scratchArena);
-    if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, s_AssetGathererLogPrefix, "stage directory"))
+    if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, s_AssetGathererLogPrefix, Core::Filesystem::s_StageDirectoryLabel))
         return MakeUnexpected(Failure{});
     Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, s_AssetGathererLogPrefix);
-    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, s_AssetGathererLogPrefix, "backup directory"))
+    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, s_AssetGathererLogPrefix, Core::Filesystem::s_BackupDirectoryLabel))
         return MakeUnexpected(Failure{});
 
     u64 stagedFileCount = 0;

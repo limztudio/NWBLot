@@ -36,9 +36,9 @@ inline constexpr u32 s_ExpectedDualCount = 2u;
 TEST(AllocatorUsageBoundaries, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
     constexpr Name s_Owner("tests/allocation_owners/odd_reallocation");
     GlobalArena arena(s_Owner);
-    auto* pointer = static_cast<u8*>(arena.allocate(1u, 13u));
+    auto* pointer = static_cast<u8*>(arena.allocate(1u, s_OddBytes));
     ASSERT_NE(pointer, nullptr);
-    for(usize index = 0u; index < 13u; ++index)
+    for(usize index = 0u; index < s_OddBytes; ++index)
         pointer[index] = static_cast<u8>(index + 1u);
     EXPECT_EQ(arena.memoryStats().usedBytes, CoreMsize(pointer));
     EXPECT_EQ(arena.memoryStats().reservedBytes, CoreMsize(pointer));
@@ -46,7 +46,7 @@ TEST(AllocatorUsageBoundaries, GlobalArenaChargesUsableBytesAcrossOddSizeRealloc
     auto* replacement = static_cast<u8*>(arena.reallocate(pointer, 1u, 21u));
     ASSERT_NE(replacement, nullptr);
     pointer = replacement;
-    for(usize index = 0u; index < 13u; ++index)
+    for(usize index = 0u; index < s_OddBytes; ++index)
         EXPECT_EQ(pointer[index], static_cast<u8>(index + 1u));
     EXPECT_EQ(arena.memoryStats().usedBytes, CoreMsize(pointer));
     EXPECT_EQ(OwnerStats(s_Owner).usedBytes, CoreMsize(pointer));

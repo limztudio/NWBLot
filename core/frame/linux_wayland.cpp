@@ -68,6 +68,10 @@ static constexpr u32 s_WaylandSeatBindVersion = 5u;
 static constexpr u32 s_WaylandWmBaseBindVersion = 1u;
 static constexpr u32 s_WaylandPointerFrameSeatVersion = 5u;
 static constexpr u32 s_InitialConfigureRoundtripLimit = 2u;
+static constexpr u32 s_WaylandSeatReleaseVersion = 5u;
+static constexpr TStringView s_PosixNativeDomain = NWB_TEXT("POSIX");
+static constexpr StringView s_WarningEventName = "warning";
+static constexpr StringView s_KeymapLifecycleCategory = "frame_keymap_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -458,7 +462,7 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
     context.frame.input().pointerLeave();
     DestroyKeyboard(context);
     DestroyPointer(context);
-    if(context.seatVersion >= 5u)
+    if(context.seatVersion >= s_WaylandSeatReleaseVersion)
         wl_seat_release(context.seat);
     else
         wl_seat_destroy(context.seat);
@@ -670,11 +674,11 @@ static void ReleaseKeymapResources(const i32 fd, void* const map, const u32 size
     const i32 closeError = closeFailed ? errno : 0;
     if(unmapFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame Wayland keymap unmap failed; native_domain=POSIX native_code={}", unmapError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "frame_keymap_lifecycle", .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_KeymapLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
     if(closeFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame Wayland keymap descriptor release failed; native_domain=POSIX native_code={}", closeError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "frame_keymap_lifecycle", .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_KeymapLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
 }
 
@@ -943,17 +947,17 @@ struct WaylandEventFailure{
 
 [[nodiscard]] static Expected<void, WaylandEventFailure> PumpEvents(WaylandContext& context, const i32 timeoutMs){
     if(wl_display_dispatch_pending(context.display) == -1)
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
 
     while(wl_display_prepare_read(context.display) != 0){
         if(wl_display_dispatch_pending(context.display) == -1)
-            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending during prepare_read"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
+            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending during prepare_read"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
     }
 
     const auto flushed = FlushDisplay(*context.display);
     if(!flushed){
         wl_display_cancel_read(context.display);
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("display flush"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = flushed.error(), });
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("display flush"), .nativeDomain = s_PosixNativeDomain, .nativeCode = flushed.error(), });
     }
 
     pollfd fd;
@@ -966,7 +970,7 @@ struct WaylandEventFailure{
         wl_display_cancel_read(context.display);
         if(nativeError == EINTR)
             return {};
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("poll"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = nativeError, });
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("poll"), .nativeDomain = s_PosixNativeDomain, .nativeCode = nativeError, });
     }
 
     if(pollResult == 0){
@@ -981,13 +985,13 @@ struct WaylandEventFailure{
 
     if((fd.revents & POLLIN) != 0){
         if(wl_display_read_events(context.display) == -1)
-            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("read events"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
+            return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("read events"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
     }
     else
         wl_display_cancel_read(context.display);
 
     if(wl_display_dispatch_pending(context.display) == -1)
-        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending after poll"), .nativeDomain = NWB_TEXT("POSIX"), .nativeCode = errno, });
+        return MakeUnexpected(WaylandEventFailure{ .operation = NWB_TEXT("dispatch pending after poll"), .nativeDomain = s_PosixNativeDomain, .nativeCode = errno, });
     return {};
 }
 

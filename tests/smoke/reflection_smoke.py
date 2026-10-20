@@ -15,6 +15,8 @@ import sys
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_LOG_2 = "log"
+
 LIT_OFFSCREEN = "offscreen"
 LIT_MOVED = "moved"
 LIT_OPAQUE_GLASS = "opaque_glass"
@@ -469,7 +471,7 @@ def capture(args, case, mode, budget=DEFAULT_RAY_BUDGET):
 def write_report(args, captures, metrics=None, statistics=None):
     metadata = {"frames": args.frames, "frame_source": "actual application framebuffer readback", "size": [960, 720], "hardware_required": args.require_hardware, "application_args": args.application_arg,
         "settings": {"environment_top": [0, 0, 0], "environment_bottom": [0, 0, 0], "max_hardware_rays_per_frame": 1382400, "roughness": 0, "glass_ior": 3.8}, "suite": args.suite, LIT_CAPTURES: [{LIT_CASE: case, LIT_MODE: mode, LIT_HARDWARE_BUDGET: budget,
-            LIT_FILE: capture_stem(case, mode, budget) + LIT_BMP, "log": capture_stem(case, mode, budget) + LIT_LOG} for case, mode, budget in captures], "statistics": statistics,
+            LIT_FILE: capture_stem(case, mode, budget) + LIT_BMP, LIT_LOG_2: capture_stem(case, mode, budget) + LIT_LOG} for case, mode, budget in captures], "statistics": statistics,
         "metrics": metrics, LIT_LIMITATIONS: "Smooth single-bounce reflection with on-screen and offscreen geometric marker checks. Wall-mirror screen hits approach marker backs and have provisional confidence; the floor case approaches their fronts. Completed per-frame counters separately check floor hybrid ray reduction and bounded budgets; they do not establish GPU speed. Hardware secondary-hit lighting is approximate; roughness reconstruction and temporal history are not validated here."}
     (args.output_directory / "reflection_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
     cards = []
@@ -478,7 +480,7 @@ def write_report(args, captures, metrics=None, statistics=None):
         png = png_rgb_bytes(read_bmp_24_rows(bmp))
         bmp.with_suffix(".png").write_bytes(png)
         label = html.escape(item[LIT_CASE] + " / " + item[LIT_MODE] + " / budget " + str(item[LIT_HARDWARE_BUDGET]))
-        cards.append(f'<article><h2>{label}</h2><a href="{html.escape(item[LIT_FILE])}">Raw BMP</a>' f' / <a href="{html.escape(item["log"])}">Completed-frame log</a>'
+        cards.append(f'<article><h2>{label}</h2><a href="{html.escape(item[LIT_FILE])}">Raw BMP</a>' f' / <a href="{html.escape(item[LIT_LOG_2])}">Completed-frame log</a>'
             f'<img alt="Actual {label} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
     document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection smoke captures</title>'
     document += '<style>body{background:#141922;color:#e7edf5;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{display:block;width:100%;margin-top:12px}a{color:#88c9ff}pre{white-space:pre-wrap}h2{font-size:19px}</style>'

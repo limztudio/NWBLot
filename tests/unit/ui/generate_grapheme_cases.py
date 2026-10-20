@@ -5,17 +5,19 @@ import json
 from pathlib import Path
 from urllib.request import urlopen
 
+LIT_UTF_8 = "utf-8"
+
 HERE = Path(__file__).resolve().parent
 SEP = "/" * 128
 
 
 def write_cpp(path, text):
-    path.write_bytes(text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8"))
+    path.write_bytes(text.replace("\r\n", "\n").replace("\n", "\r\n").encode(LIT_UTF_8))
 
 
 def generate_cases(data):
     cases = []
-    for line in data.decode("utf-8").splitlines():
+    for line in data.decode(LIT_UTF_8).splitlines():
         tokens = line.split("#", 1)[0].split()
         if not tokens:
             continue
@@ -24,7 +26,7 @@ def generate_cases(data):
             if token == "\u00F7":
                 boundaries.append(len(text))
             elif token != "\u00D7":
-                text.extend(chr(int(token, 16)).encode("utf-8"))
+                text.extend(chr(int(token, 16)).encode(LIT_UTF_8))
         encoded = "".join(f"\\x{value:02X}" for value in text)
         positions = ",".join(str(value) for value in boundaries)
         cases.append(f'    {{ "{encoded}", "{positions}", {len(text)}u }},')
@@ -38,7 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, help="Use a cached conformance.txt file.")
     arguments = parser.parse_args()
-    manifest = json.loads((HERE / "unicode_sources.json").read_text(encoding="utf-8"))
+    manifest = json.loads((HERE / "unicode_sources.json").read_text(encoding=LIT_UTF_8))
     source = manifest["conformance"]
     payload = (arguments.source_dir / "conformance.txt").read_bytes() if arguments.source_dir else urlopen(source["url"]).read()
     if hashlib.sha256(payload).hexdigest() != source["sha256"]:

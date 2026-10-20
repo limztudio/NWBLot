@@ -21,6 +21,9 @@ NWB_CRASH_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr StringView s_SignalReasonKind = "signal";
+inline constexpr StringView s_WindowsExceptionReasonKind = "windows_exception";
+
 [[nodiscard]] inline StringView PosixSignalName(const u64 signalNumber)noexcept{
 #if defined(SIGILL)
     if(signalNumber == static_cast<u64>(SIGILL))
@@ -46,7 +49,7 @@ NWB_CRASH_BEGIN
     if(signalNumber == static_cast<u64>(SIGSEGV))
         return "SIGSEGV";
 #endif
-    return "signal";
+    return s_SignalReasonKind;
 }
 
 inline constexpr u32 s_WindowsExceptionBreakpointCode = 0x80000003u;
@@ -99,7 +102,7 @@ inline constexpr u32 s_WindowsExceptionStackOverflowCode = 0xC00000FDu;
     case s_WindowsExceptionStackOverflowCode:
         return "stack_overflow";
     default:
-        return "windows_exception";
+        return s_WindowsExceptionReasonKind;
     }
 }
 

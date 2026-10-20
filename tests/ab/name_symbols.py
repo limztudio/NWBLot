@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Dict, Iterable
 
+LIT_A = "A"
+
 LIT_UTF_8 = "utf-8"
 
 
@@ -19,8 +21,8 @@ def debug_name_hash_token(text: str) -> str:
     """Match global/name.h's canonical eight-lane FNV-1a debug token."""
     lanes = list(NAME_HASH_LANE_SEEDS)
     for byte in text.encode(LIT_UTF_8):
-        if ord("A") <= byte <= ord("Z"):
-            byte += ord("a") - ord("A")
+        if ord(LIT_A) <= byte <= ord("Z"):
+            byte += ord("a") - ord(LIT_A)
         elif byte == ord("\\"):
             byte = ord("/")
         for index, lane in enumerate(lanes):

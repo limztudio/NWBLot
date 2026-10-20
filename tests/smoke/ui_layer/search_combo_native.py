@@ -4,6 +4,7 @@ from __future__ import annotations
 import time
 
 from combo_native import ComboNativeInput
+from edit_native import TEXT_SETTLE_SECONDS
 from window_capture_smoke import SmokeFailure
 
 
@@ -19,7 +20,7 @@ class SearchComboNativeInput(ComboNativeInput):
             self.key(name, True)
             self.key(name, False)
         if settle:
-            time.sleep(0.15)
+            time.sleep(TEXT_SETTLE_SECONDS)
 
     def replace_query(self, value):
         self.tap("a", control=True)

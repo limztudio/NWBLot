@@ -34,6 +34,24 @@ inline constexpr AStringView s_SceneShadowMaterialTypedLabel = "Shadow Typed Mat
 inline constexpr AStringView s_SceneShadowInstancesLabel = "Shadow Instances";
 inline constexpr AStringView s_SceneTlasResourceName = "render.deferred_effects.tlas";
 inline constexpr AStringView s_SceneTlasResourceLabel = "Scene TLAS";
+inline constexpr AStringView s_SceneBvhNodesName = "render.shadow_visibility.scene_bvh_nodes";
+inline constexpr AStringView s_SceneBvhNodesLabel = "Scene BVH Nodes";
+inline constexpr AStringView s_SceneInstancesName = "render.shadow_visibility.scene_instances";
+inline constexpr AStringView s_SceneInstancesLabel = "Scene Instances";
+inline constexpr AStringView s_SceneGeometryDomainLabel = "Scene Acceleration and Geometry";
+inline constexpr AStringView s_MeshViewName = "render.deferred.mesh_view";
+inline constexpr AStringView s_MeshViewLabel = "Mesh View";
+inline constexpr AStringView s_CausticAccumulatorLabel = "Caustic Accumulator";
+inline constexpr AStringView s_CausticHistoryLabel = "Caustic History";
+inline constexpr AStringView s_CausticResolveHalfLabel = "Caustic Resolve Half";
+inline constexpr AStringView s_CausticResolveGeometryLabel = "Caustic Resolve Geometry";
+inline constexpr AStringView s_HardwareCausticEmissionTargetsName = "render.hardware_caustics.emission_targets";
+inline constexpr AStringView s_SoftwareCausticEmissionTargetsName = "render.software_caustics.emission_targets";
+inline constexpr AStringView s_CausticEmissionTargetsLabel = "Caustic Emission Targets";
+inline constexpr AStringView s_SurfelConstantsName = "render.surfel_gi.constants";
+inline constexpr AStringView s_SurfelConstantsLabel = "Surfel Constants";
+inline constexpr AStringView s_SurfelCounterName = "render.surfel_gi.counter";
+inline constexpr AStringView s_SurfelCounterLabel = "Surfel Counter";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,9 +68,9 @@ template<typename ImportBufferFn, typename AppendBufferFn>
         rayTracingResources.shadowMaterialTypedBuffer,
         rayTracingResources.shadowInstanceBuffer,
     };
-    const Name sceneShadowIdentities[] = { Name("render.shadow_visibility.scene_bvh_nodes"), Name("render.shadow_visibility.scene_instances"), Name(s_SceneShadowInstanceMaterialName), Name(s_SceneShadowMaterialTypedName), Name(s_SceneShadowInstancesName), };
-    const AStringView sceneShadowLabels[] = { "Scene BVH Nodes", "Scene Instances", s_SceneShadowInstanceMaterialLabel, s_SceneShadowMaterialTypedLabel, s_SceneShadowInstancesLabel, };
-    for(usize bufferIndex = 0u; bufferIndex < 5u; ++bufferIndex){
+    const Name sceneShadowIdentities[] = { Name(s_SceneBvhNodesName), Name(s_SceneInstancesName), Name(s_SceneShadowInstanceMaterialName), Name(s_SceneShadowMaterialTypedName), Name(s_SceneShadowInstancesName), };
+    const AStringView sceneShadowLabels[] = { s_SceneBvhNodesLabel, s_SceneInstancesLabel, s_SceneShadowInstanceMaterialLabel, s_SceneShadowMaterialTypedLabel, s_SceneShadowInstancesLabel, };
+    for(usize bufferIndex = 0u; bufferIndex < LengthOf(sceneShadowBuffers); ++bufferIndex){
         const Core::BufferHandle& buffer = sceneShadowBuffers[bufferIndex];
         if(!buffer)
             continue;
@@ -66,7 +84,10 @@ template<typename ImportBufferFn, typename AppendBufferFn>
 }
 
 struct TraceResourceSetUses{
-    Core::GpuTaskResourceSetUse uses[2u] = {};
+    // Trace geometry set and trace material sampled-texture set.
+    static constexpr usize s_UseCapacity = 2u;
+
+    Core::GpuTaskResourceSetUse uses[s_UseCapacity] = {};
     usize useCount = 0u;
 };
 

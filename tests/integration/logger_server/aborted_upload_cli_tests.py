@@ -16,11 +16,20 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "smoke"))
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, collect_log_delta, ensure_process_running, launch_logserver, require_normal_process_exit, terminate_process, validate_expected_log_text)
 
+LIT_LOGSERVER = "logserver"
+LIT_DISCONNECT_RETIRED = "disconnect_retired"
+LIT_SHUTDOWN_RETIRED = "shutdown_retired"
+LIT_RESPONSE_RECOVERED = "response_recovered"
+LIT_CONCURRENT_UPLOADS_INDEPENDENT = "concurrent_uploads_independent"
+LIT_LD_LIBRARY_PATH = "LD_LIBRARY_PATH"
+LIT_SECOND_LOGSERVER = "second logserver"
+LIT_UTF_8 = "utf-8"
+
 
 def wait_for_condition(process, condition, timeout, description):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        ensure_process_running(process, description, "logserver")
+        ensure_process_running(process, description, LIT_LOGSERVER)
         value = condition()
         if value:
             return value
@@ -43,13 +52,13 @@ def start_partial_upload(port, process, inbox, timeout, marker):
 
 def run(executable, output, timeout):
     output.mkdir(parents=True, exist_ok=True)
-    evidence = {"disconnect_retired": False, "shutdown_retired": False, "response_recovered": False, "concurrent_uploads_independent": False}
+    evidence = {LIT_DISCONNECT_RETIRED: False, LIT_SHUTDOWN_RETIRED: False, LIT_RESPONSE_RECOVERED: False, LIT_CONCURRENT_UPLOADS_INDEPENDENT: False}
     with tempfile.TemporaryDirectory(prefix="aborted_upload_", dir=output) as temporary:
         runtime = Path(temporary)
         staged = runtime / executable.name
         shutil.copy2(executable, staged)
         environment = os.environ.copy()
-        environment["LD_LIBRARY_PATH"] = str(executable.parent) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
+        environment[LIT_LD_LIBRARY_PATH] = str(executable.parent) + os.pathsep + environment.get(LIT_LD_LIBRARY_PATH, "")
         options = SimpleNamespace(no_logserver=False, logserver_executable=str(staged), log_port=None, working_directory=runtime, timeout=timeout)
         process = second_process = None
         upload = open_upload = None
@@ -67,10 +76,10 @@ def run(executable, output, timeout):
             upload.close()
             upload = None
             wait_for_condition(process, lambda: not first_path.exists(), timeout, "waiting for disconnected upload retirement")
-            evidence["disconnect_retired"] = True
+            evidence[LIT_DISCONNECT_RETIRED] = True
             if not second_path.is_file() or not second_path.read_bytes().startswith(second_marker):
                 raise SmokeFailure("disconnecting one logger removed or altered the other logger's upload")
-            evidence["concurrent_uploads_independent"] = True
+            evidence[LIT_CONCURRENT_UPLOADS_INDEPENDENT] = True
             health = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
             try:
                 health.request("POST", "/namesym", body=b"")
@@ -78,19 +87,19 @@ def run(executable, output, timeout):
                 body = response.read()
                 if response.status != 404 or body:
                     raise SmokeFailure(f"logger failed to recover after disconnect: {response.status}, {body!r}")
-                evidence["response_recovered"] = True
+                evidence[LIT_RESPONSE_RECOVERED] = True
             finally:
                 health.close()
             exit_code, tail = terminate_process(process, "logserver after disconnected upload")
             process = None
-            require_normal_process_exit(exit_code, tail, "logserver")
+            require_normal_process_exit(exit_code, tail, LIT_LOGSERVER)
             validate_expected_log_text(tail, (), STRICT_LOG_FAILURE_MESSAGES)
             exit_code, tail = terminate_process(second_process, "logserver with incomplete upload")
             second_process = None
-            require_normal_process_exit(exit_code, tail, "second logserver")
+            require_normal_process_exit(exit_code, tail, LIT_SECOND_LOGSERVER)
             if second_path.exists() or list(inbox.iterdir()):
                 raise SmokeFailure("daemon shutdown retained an incomplete crash upload")
-            evidence["shutdown_retired"] = True
+            evidence[LIT_SHUTDOWN_RETIRED] = True
             validate_expected_log_text(tail, (), STRICT_LOG_FAILURE_MESSAGES)
         finally:
             if upload is not None:
@@ -99,15 +108,15 @@ def run(executable, output, timeout):
                 open_upload.close()
             if process is not None:
                 exit_code, tail = terminate_process(process, "logserver upload cleanup")
-                require_normal_process_exit(exit_code, tail, "logserver")
+                require_normal_process_exit(exit_code, tail, LIT_LOGSERVER)
             if second_process is not None:
                 exit_code, tail = terminate_process(second_process, "second logserver upload cleanup")
-                require_normal_process_exit(exit_code, tail, "second logserver")
+                require_normal_process_exit(exit_code, tail, LIT_SECOND_LOGSERVER)
             if directory is not None:
                 logs = collect_log_delta(directory, baseline, pattern)
-                (output / "logger.log").write_text(logs, encoding="utf-8")
+                (output / "logger.log").write_text(logs, encoding=LIT_UTF_8)
                 validate_expected_log_text(logs, (), STRICT_LOG_FAILURE_MESSAGES)
-    (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding=LIT_UTF_8)
     print("PASS: concurrent crash uploads remained independent and retired on disconnect and daemon shutdown")
 
 

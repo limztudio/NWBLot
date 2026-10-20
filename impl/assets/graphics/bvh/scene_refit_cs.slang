@@ -5,6 +5,7 @@
 #include "scene_refit_constants.h"
 #include "bvh_heap_resources.slangi"
 #include "bindless_heap_bvh.slangi"
+#include "../common/math.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +23,12 @@ struct NwbSceneBvhRefitPushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const float NWB_SCENE_BVH_REFIT_ROUNDOFF_EPSILON_SCALE = 16.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The interval encloses the affine transform, including FP32 product, sum and subnormal rounding.
 bool nwbSceneRefitAxis(const float4 row, const float3 localMin, const float3 localMax, out float minimum, out float maximum){
     const float3 first = row.xyz * localMin;
@@ -31,8 +38,8 @@ bool nwbSceneRefitAxis(const float4 row, const float3 localMin, const float3 loc
     const float3 terms = max(abs(first), abs(second));
     const float magnitude = abs(row.w) + terms.x + terms.y + terms.z + 1.0;
     // A subnormal local endpoint may flush before multiplication by a large affine scale.
-    const float3 inputFlush = abs(row.xyz) * 1.1754943508222875e-38;
-    const float relativeError = 16.0 * 1.1920928955078125e-7;
+    const float3 inputFlush = abs(row.xyz) * NWB_FLOAT_MIN_NORMAL;
+    const float relativeError = NWB_SCENE_BVH_REFIT_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON;
     const float flushError = (inputFlush.x + inputFlush.y + inputFlush.z) * (1.0 + relativeError);
     const float margin = magnitude * relativeError + flushError;
     minimum = ((row.w + low.x) + low.y) + low.z - margin;
@@ -47,7 +54,7 @@ void main(const uint3 threadId : SV_GroupThreadID){
     if(nodeCount == 0u)
         return;
     const uint sceneSlot = g_NwbSceneBvhRefitPush.sceneNodeSlot;
-    const float finiteMax = asfloat(0x7f7fffffu);
+    const float finiteMax = asfloat(NWB_FLOAT_MAX_BITS);
     for(uint index = threadId.x; index < nodeCount; index += NWB_SCENE_BVH_REFIT_GROUP_SIZE){
         NwbBvhNode node = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index];
         if(!nwbBvhNodeIsLeaf(node))
@@ -64,7 +71,7 @@ void main(const uint3 threadId : SV_GroupThreadID){
             float3 upper;
             bool valid = all(isfinite(root.aabbMin)) && all(isfinite(root.aabbMax)) && all(root.aabbMin <= root.aabbMax);
             for(uint axis = 0u; axis < 3u; ++axis){
-                const float4 row = asfloat(inputs.Load4(offset + axis * 16u));
+                const float4 row = asfloat(inputs.Load4(offset + axis * NWB_SCENE_BVH_REFIT_ROW_BYTES));
                 valid = nwbSceneRefitAxis(row, root.aabbMin, root.aabbMax, lower[axis], upper[axis]) && valid;
             }
             if(valid){

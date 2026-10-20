@@ -40,6 +40,7 @@ constexpr SmokeMeshRef s_Sphere{"project/meshes/caustic_sphere"};
 constexpr SmokeMeshRef s_Torus{"project/meshes/refraction_torus"};
 constexpr SmokeMeshRef s_Shells{"project/meshes/refraction_two_shells"};
 constexpr SmokeMeshRef s_Prism{"project/meshes/refraction_prism"};
+constexpr SmokeMeshRef s_Cube{"project/meshes/cube_hard_edges"};
 constexpr SmokeMaterialRef s_Glass{"project/smoke/refraction/materials/gallery_glass"};
 constexpr SmokeMaterialRef s_OpticalVolume{"project/smoke/reflection/materials/optical_volume"};
 constexpr SmokeMaterialRef s_Preview{"project/smoke/refraction/materials/gallery_preview"};
@@ -52,6 +53,52 @@ constexpr f32 s_GalleryCameraDistance = 6.f;
 constexpr f32 s_IdentityForeignFront = -0.0005f;
 // The near plane lies strictly between the foreign entry and the primary z=0 entry; ray queries still start at the camera.
 constexpr f32 s_IdentityNearPlane = s_GalleryCameraDistance - 0.00025f;
+// Camera, objects and backdrop share this height.
+constexpr f32 s_GalleryCenterHeight = 1.4f;
+constexpr f32 s_SlabFaceScale = 2.6f;
+constexpr f32 s_PreviewAlpha = 0.48f;
+constexpr f32 s_OpticalIor = 1.5f;
+// The slab tint and its unit transmission use the same color.
+constexpr Float4 s_OpticalTransmission(0.45f, 0.8f, 0.95f, 0.f);
+constexpr f32 s_TintedCoverage = 0.3f;
+constexpr f32 s_DuplicateSphereRadius = 1.1f;
+constexpr i32 s_WinningOpticalPriority = 10;
+constexpr f32 s_BackdropDepth = 4.5f;
+constexpr f32 s_BackdropHalfHeight = 5.0f;
+constexpr f32 s_DepthMarkerAlpha = 0.70f;
+
+constexpr AStringView s_CaseCsgReference = "csg_reference";
+constexpr AStringView s_CaseCsgCap = "csg_cap";
+constexpr AStringView s_CaseCsgMiddle = "csg_middle";
+constexpr AStringView s_CaseCsgUncut = "csg_uncut";
+constexpr AStringView s_CaseIdentityReference = "identity_reference";
+constexpr AStringView s_CaseIdentitySameIor = "identity_same_ior";
+constexpr AStringView s_CaseIdentityDifferentIor = "identity_different_ior";
+constexpr AStringView s_CaseCrossingOverflow = "crossing_overflow";
+constexpr AStringView s_CaseNearAirOrdinary = "near_air_ordinary";
+constexpr AStringView s_CaseNearAirCsg = "near_air_csg";
+constexpr AStringView s_CaseSingle = "single";
+constexpr AStringView s_CaseSeparate = "separate";
+constexpr AStringView s_CaseStacked = "stacked";
+constexpr AStringView s_CaseIntersecting = "intersecting";
+constexpr AStringView s_CaseNested = "nested";
+constexpr AStringView s_CaseDuplicateSingleCool = "duplicate_single_cool";
+constexpr AStringView s_CaseDuplicateSingleWarm = "duplicate_single_warm";
+constexpr AStringView s_CaseDuplicateSingleCoolTinted = "duplicate_single_cool_tinted";
+constexpr AStringView s_CaseDuplicateSingleWarmTinted = "duplicate_single_warm_tinted";
+constexpr AStringView s_CaseCoincident = "coincident";
+constexpr AStringView s_CaseCoincidentTinted = "coincident_tinted";
+constexpr AStringView s_CaseCoincidentReversed = "coincident_reversed";
+constexpr AStringView s_CaseCoincidentTintedReversed = "coincident_tinted_reversed";
+constexpr AStringView s_CaseCoincidentPrioritySwap = "coincident_priority_swap";
+constexpr AStringView s_CaseCoincidentTintedPrioritySwap = "coincident_tinted_priority_swap";
+constexpr AStringView s_CaseCoincidentIdentical = "coincident_identical";
+constexpr AStringView s_CaseCoincidentTintedIdentical = "coincident_tinted_identical";
+constexpr AStringView s_CaseNearCoincident = "near_coincident";
+constexpr AStringView s_CaseCoincidentPreserved = "coincident_preserved";
+constexpr AStringView s_CaseTorus = "torus";
+constexpr AStringView s_CaseSameMesh = "same_mesh";
+constexpr AStringView s_CasePrism = "prism";
 
 
 class GalleryBuilder final{
@@ -77,8 +124,8 @@ public:
         const i32 opticalPriority = 0,
         const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent
     ){
-        const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, 0.48f) : Float4(0.90f, 0.98f, 1.0f, coverage);
-        const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, 0.48f) : Float4(1.0f, 0.94f, 0.88f, coverage);
+        const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, s_PreviewAlpha) : Float4(0.90f, 0.98f, 1.0f, coverage);
+        const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, s_PreviewAlpha) : Float4(1.0f, 0.94f, 0.88f, coverage);
         const Float4 tint = second ? secondTint : firstTint;
         const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale);
 
@@ -103,7 +150,7 @@ public:
         const i32 opticalPriority = 0,
         const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent
     ){
-        object(s_Sphere, Float4(x, 1.4f, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage, 0.0f, 0.0f, 0.0f, opticalGroup, opticalPriority, opticalCoincidence);
+        object(s_Sphere, Float4(x, s_GalleryCenterHeight, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage, 0.0f, 0.0f, 0.0f, opticalGroup, opticalPriority, opticalCoincidence);
     }
 
     Expected<void> opticalParameters(const Core::ECS::EntityID entity, const f32 ior, const Float4& transmission){
@@ -119,16 +166,16 @@ public:
     }
 
     Expected<Core::ECS::EntityID> csgSlab(const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const NameText<char> surfaceInterface){
-        const bool reference = caseName == "csg_reference";
-        const bool middle = caseName == "csg_middle";
+        const bool reference = caseName == s_CaseCsgReference;
+        const bool middle = caseName == s_CaseCsgMiddle;
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
+            m_world, m_context.objectArena, s_Cube,
             m_preview ? s_Preview : material, m_preview ? NameText<char>{s_Interface} : surfaceInterface, tint,
-            Float4(0.f, 1.4f, reference || middle ? 0.5f : 0.f, 0.f), Float4(2.6f, 2.6f, reference ? 1.f : (middle ? 3.f : 2.f), 0.f)
+            Float4(0.f, s_GalleryCenterHeight, reference || middle ? 0.5f : 0.f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, reference ? 1.f : (middle ? 3.f : 2.f), 0.f)
         );
         if(!entity.valid())
             return MakeUnexpected(Failure{});
-        if(caseName != "csg_cap" && !middle)
+        if(caseName != s_CaseCsgCap && !middle)
             return entity;
         const Name group("smoke/refraction/csg_optics");
         AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
@@ -139,7 +186,7 @@ public:
                 return MakeUnexpected(Failure{});
             auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
             cutter.receiverGroup = group;
-            cutter.shapeType = Name("engine/csg/plane");
+            cutter.shapeType = Impl::s_CsgPlaneShapeName;
             Impl::CsgPlaneShapeParameters parameters;
             parameters.normalDistance = index == 0u ? Float4(0.f, 0.f, 1.f, 0.f) : Float4(0.f, 0.f, -1.f, 1.f);
             AssignCsgCutterParameters(cutter, parameters);
@@ -149,19 +196,19 @@ public:
     }
 
     bool identitySlab(const AStringView caseName){
-        if(caseName != "identity_reference"){
+        if(caseName != s_CaseIdentityReference){
             // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
             constexpr f32 s_ForeignExit = 0.25f;
             const auto foreign = CreateTintedStaticMeshEntity(
-                m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
+                m_world, m_context.objectArena, s_Cube,
                 m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
-                Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f),
-                Float4(0.f, 1.4f, (s_ForeignExit + s_IdentityForeignFront) * 0.5f, 0.f),
-                Float4(2.6f, 2.6f, s_ForeignExit - s_IdentityForeignFront, 0.f)
+                Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
+                Float4(0.f, s_GalleryCenterHeight, (s_ForeignExit + s_IdentityForeignFront) * 0.5f, 0.f),
+                Float4(s_SlabFaceScale, s_SlabFaceScale, s_ForeignExit - s_IdentityForeignFront, 0.f)
             );
             if(!foreign.valid())
                 return false;
-            if(!opticalParameters(foreign, caseName == "identity_different_ior" ? 3.8f : 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)))
+            if(!opticalParameters(foreign, caseName == s_CaseIdentityDifferentIor ? 3.8f : s_OpticalIor, s_OpticalTransmission))
                 return false;
         }
         // Reusing an actual ECS slot exercises generation bits beyond float32's exact integer range.
@@ -171,10 +218,10 @@ public:
                 return false;
             m_world.destroyEntity(recycled.id());
         }
-        const auto primary = csgSlab("csg_reference", Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f), s_OpticalVolume, s_OpticalInterface);
+        const auto primary = csgSlab(s_CaseCsgReference, Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f), s_OpticalVolume, s_OpticalInterface);
         if(!primary || primary->id <= (1u << 24u))
             return false;
-        if(!opticalParameters(*primary, 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)))
+        if(!opticalParameters(*primary, s_OpticalIor, s_OpticalTransmission))
             return false;
         const Name group("smoke/refraction/identity");
         if(!farPlaneReceiver(*primary, group))
@@ -190,7 +237,7 @@ public:
             return false;
         auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
         cutter.receiverGroup = group;
-        cutter.shapeType = Name("engine/csg/plane");
+        cutter.shapeType = Impl::s_CsgPlaneShapeName;
         Impl::CsgPlaneShapeParameters parameters;
         parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
         AssignCsgCutterParameters(cutter, parameters);
@@ -201,8 +248,8 @@ public:
     bool crossingOverflow(){
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, m_context.objectArena, SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
-            m_preview ? s_Preview : s_Glass, s_Interface, Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f),
-            Float4(0.f, 1.4f, 0.f, 0.f), Float4(0.1f, 0.1f, 1.f, 0.f)
+            m_preview ? s_Preview : s_Glass, s_Interface, Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
+            Float4(0.f, s_GalleryCenterHeight, 0.f, 0.f), Float4(0.1f, 0.1f, 1.f, 0.f)
         );
         if(!entity.valid())
             return false;
@@ -214,10 +261,10 @@ public:
 
     bool nearAirSlab(const bool csg){
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
+            m_world, m_context.objectArena, s_Cube,
             m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
-            Float4(1.f, 1.f, 1.f, m_preview ? 0.48f : 0.f),
-            Float4(0.f, 1.4f, 1.25f, 0.f), Float4(2.6f, 2.6f, 3.f, 0.f)
+            Float4(1.f, 1.f, 1.f, m_preview ? s_PreviewAlpha : 0.f),
+            Float4(0.f, s_GalleryCenterHeight, 1.25f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, 3.f, 0.f)
         );
         if(!entity.valid())
             return false;
@@ -242,18 +289,18 @@ public:
     void backdrop(){
         if(m_preview){
             // Translucent, nonrefractive geometry preview makes nested/overlapping surfaces visible.
-            panel(s_Opaque, Float4(0.075f, 0.085f, 0.11f, 1.0f), 0.0f, 1.4f, 4.5f, 6.0f, 5.0f);
+            panel(s_Opaque, Float4(0.075f, 0.085f, 0.11f, 1.0f), 0.0f, s_GalleryCenterHeight, s_BackdropDepth, 6.0f, s_BackdropHalfHeight);
             return;
         }
         for(u32 stripe = 0u; stripe < 36u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.9f : 0.045f;
-            panel(s_Opaque, Float4(value, value, value, 1.0f), VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(stripe)), VectorReplicate(0.3f), VectorReplicate(-5.25f))), 1.4f, 4.5f, 0.15f, 5.0f);
+            panel(s_Opaque, Float4(value, value, value, 1.0f), VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(stripe)), VectorReplicate(0.3f), VectorReplicate(-5.25f))), s_GalleryCenterHeight, s_BackdropDepth, 0.15f, s_BackdropHalfHeight);
         }
         // A second direction and colored depth markers make ray displacement legible.
         for(u32 row = 0u; row < 9u; ++row)
             panel(s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f), 0.0f, VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(row)), VectorReplicate(0.7f), VectorReplicate(-1.4f))), 4.48f, 5.4f, 0.015f);
-        panel(s_Transparent, Float4(0.04f, 0.27f, 1.0f, 0.70f), 0.0f, 1.93f, 3.0f, 3.1f, 0.10f);
-        panel(s_Transparent, Float4(1.0f, 0.035f, 0.025f, 0.70f), 0.0f, 1.05f, -2.5f, 1.55f, 0.04f);
+        panel(s_Transparent, Float4(0.04f, 0.27f, 1.0f, s_DepthMarkerAlpha), 0.0f, 1.93f, 3.0f, 3.1f, 0.10f);
+        panel(s_Transparent, Float4(1.0f, 0.035f, 0.025f, s_DepthMarkerAlpha), 0.0f, 1.05f, -2.5f, 1.55f, 0.04f);
     }
 
 

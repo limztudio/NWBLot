@@ -108,7 +108,7 @@ static void ResetKeyStates()noexcept{
 }
 
 static void SynchronizeKeyStates(const Common::LinuxFrame& frameData){
-    char keymap[s_KeyStateCount / 8u];
+    char keymap[s_KeyStateCount / s_BitsPerByte];
     if(XQueryKeymap(GetX11Display(frameData), keymap) == 0){
         ResetKeyStates();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 physical key-state query failed"));
@@ -116,7 +116,7 @@ static void SynchronizeKeyStates(const Common::LinuxFrame& frameData){
     }
     // Keys held while focus returns must remain repeats until their physical release.
     for(usize keycode = 0u; keycode < s_KeyStateCount; ++keycode)
-        s_KeyStates[keycode] = (static_cast<u8>(keymap[keycode / 8u]) & (1u << (keycode % 8u))) != 0u;
+        s_KeyStates[keycode] = (static_cast<u8>(keymap[keycode / s_BitsPerByte]) & (1u << (keycode % s_BitsPerByte))) != 0u;
 }
 
 static i32 TranslateModifiers(u32 state)noexcept{

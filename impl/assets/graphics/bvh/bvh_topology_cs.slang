@@ -23,7 +23,7 @@ int nwbBvhDelta(const int lhs, const int rhs, const uint primitiveCount){
     const uint keyRhs = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.keysHeapSlot][rhs];
     if(keyLhs != keyRhs)
         return (int)nwbBvhClz(keyLhs ^ keyRhs);
-    return 32 + (int)nwbBvhClz((uint)lhs ^ (uint)rhs);
+    return (int)NWB_BVH_KEY_BIT_COUNT + (int)nwbBvhClz((uint)lhs ^ (uint)rhs);
 }
 
 // Karras split: the last key index of the left child's range within [first, last].

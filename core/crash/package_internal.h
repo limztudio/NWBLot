@@ -23,6 +23,8 @@ namespace Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr StringView s_PackageErrorCategory = "crash_package_error";
+
 struct CrashUploadSnapshot{
     CrashSpoolRetentionConfig spoolRetention;
     char spoolDirectory[s_MaxPathText] = {};

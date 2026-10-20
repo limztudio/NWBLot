@@ -16,6 +16,35 @@ import tempfile
 
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text)
 
+LIT_LAGGED = "lagged"
+LIT_NO_PHOTONS = "no_photons"
+LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN = "SkinnedCausticSmokeProject: shutdown"
+LIT_VARIANT = "variant"
+LIT_RECEIVER = "receiver"
+LIT_MEAN_ABSOLUTE_CHANNEL_ERROR = "mean_absolute_channel_error"
+LIT_P95_CHANNEL_ERROR = "p95_channel_error"
+LIT_LARGE_ERROR_FRACTION = "large_error_fraction"
+LIT_CHANGED_PIXELS = "changed_pixels"
+LIT_CURRENT_VS_LAGGED = "current_vs_lagged"
+LIT_REPEATED_STATES = "repeated_states"
+LIT_CSG_SIGNAL = "csg_signal"
+LIT_MOTION_SIGNAL = "motion_signal"
+LIT_PHOTON_SIGNAL = "photon_signal"
+LIT_SAMPLE = "sample"
+LIT_REGION = "region"
+LIT_CURRENT = "current"
+LIT_GROUND = "ground"
+LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
+LIT_EXECUTABLE = "--executable"
+LIT_WORKING_DIRECTORY = "--working-directory"
+LIT_TIMEOUT = "--timeout"
+LIT_RUNTIME_LOG = "runtime.log"
+LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
+LIT_SKIP_LOG_MESSAGE = "--skip-log-message"
+LIT_NO_GPU_VALIDATION = "--no-gpu-validation"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_UTF_8 = "utf-8"
+
 
 SAMPLE_COUNT = 8
 PHASE_FRAMES = 64
@@ -32,8 +61,8 @@ def sample_path(directory, sample):
 
 
 def validate_series_log(log, variant):
-    lagged, photons = variant == "lagged", variant != "no_photons"
-    validate_expected_log_text(log, ("SkinnedCausticTransition: complete samples=8", "SkinnedCausticSmokeProject: shutdown"), STRICT_LOG_FAILURE_MESSAGES)
+    lagged, photons = variant == LIT_LAGGED, variant != LIT_NO_PHOTONS
+    validate_expected_log_text(log, ("SkinnedCausticTransition: complete samples=8", LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN), STRICT_LOG_FAILURE_MESSAGES)
     setup = re.findall(r"SkinnedCausticTransition: setup lagged=([01]) caustics=([01]) minimum_frame=(\d+) warmup_seconds=(\d+) phase_frames=(\d+) samples=(\d+) model=(\w+)", log)
     if setup != [(str(int(lagged)), str(int(photons)), "360", "30", "64", "8", "closed_prism")]:
         raise SmokeFailure("transition setup does not match the requested public controls")
@@ -77,7 +106,7 @@ def validate_series_log(log, variant):
         validate_expected_log_text(log, ("RendererSystem: frame-lagged async lighting bootstrap accepted", "RendererSystem: frame-lagged async lighting active history accepted"), ())
         if "RendererSystem: frame-lagged async lighting Graphics queue route accepted" in log:
             raise SmokeFailure("Graphics fallback cannot qualify the dedicated Compute reader lifetime")
-    return {"variant": variant, "first_frame": first, "warmup_elapsed_seconds": elapsed, "source_frames": [sample[1] for sample in samples], "gpu_phases": gpu, "accepted_photon_routes": routes}
+    return {LIT_VARIANT: variant, "first_frame": first, "warmup_elapsed_seconds": elapsed, "source_frames": [sample[1] for sample in samples], "gpu_phases": gpu, "accepted_photon_routes": routes}
 
 
 def frame_regions(frame):
@@ -91,7 +120,7 @@ def frame_regions(frame):
             for x in range(left, right, 2):
                 values.extend(rows[y][x])
         regions[name] = values
-    if max(regions["receiver"]) - min(regions["receiver"]) < 12:
+    if max(regions[LIT_RECEIVER]) - min(regions[LIT_RECEIVER]) < 12:
         raise SmokeFailure("transition receiver capture is blank or has no visible geometry contrast")
     return regions
 
@@ -102,20 +131,20 @@ def difference(first, second):
     errors = [abs(left - right) for left, right in zip(first, second)]
     ordered = sorted(errors)
     changed = sum(max(errors[index:index + 3]) > SIGNAL_LIMITS["channel_threshold"] for index in range(0, len(errors), 3))
-    return {"mean_absolute_channel_error": statistics.mean(errors), "p95_channel_error": ordered[round((len(ordered) - 1) * .95)], "large_error_fraction": sum(error > MATCH_LIMITS["large_error_channel_threshold"] for error in errors) / len(errors),
-        "changed_pixels": changed, "pixels": len(errors) // 3}
+    return {LIT_MEAN_ABSOLUTE_CHANNEL_ERROR: statistics.mean(errors), LIT_P95_CHANNEL_ERROR: ordered[round((len(ordered) - 1) * .95)], LIT_LARGE_ERROR_FRACTION: sum(error > MATCH_LIMITS["large_error_channel_threshold"] for error in errors) / len(errors),
+        LIT_CHANGED_PIXELS: changed, "pixels": len(errors) // 3}
 
 
 def require_match(first, second, label):
     measured = difference(first, second)
-    if any(measured[key] > MATCH_LIMITS[key] for key in ("mean_absolute_channel_error", "p95_channel_error", "large_error_fraction")):
+    if any(measured[key] > MATCH_LIMITS[key] for key in (LIT_MEAN_ABSOLUTE_CHANNEL_ERROR, LIT_P95_CHANNEL_ERROR, LIT_LARGE_ERROR_FRACTION)):
         raise SmokeFailure(f"{label} has stale or unstable posed geometry/light: {measured}")
     return measured
 
 
 def require_signal(first, second, minimum_pixels, label, minimum_mean=0):
     measured = difference(first, second)
-    if measured["changed_pixels"] < minimum_pixels or measured["mean_absolute_channel_error"] < minimum_mean:
+    if measured[LIT_CHANGED_PIXELS] < minimum_pixels or measured[LIT_MEAN_ABSOLUTE_CHANNEL_ERROR] < minimum_mean:
         raise SmokeFailure(f"{label} has no qualifying visible signal: {measured}")
     return measured
 
@@ -123,22 +152,22 @@ def require_signal(first, second, minimum_pixels, label, minimum_mean=0):
 def compare_series(series):
     if set(series) != set(VARIANTS) or any(len(samples) != SAMPLE_COUNT for samples in series.values()):
         raise SmokeFailure("transition comparison requires all three complete eight-frame series")
-    comparisons = {"current_vs_lagged": [], "repeated_states": [], "csg_signal": [], "motion_signal": [], "photon_signal": []}
+    comparisons = {LIT_CURRENT_VS_LAGGED: [], LIT_REPEATED_STATES: [], LIT_CSG_SIGNAL: [], LIT_MOTION_SIGNAL: [], LIT_PHOTON_SIGNAL: []}
     for sample in range(SAMPLE_COUNT):
         for region in REGIONS:
-            comparisons["current_vs_lagged"].append({"sample": sample, "region": region, **require_match(series["current"][sample][region], series["lagged"][sample][region], f"current/lagged sample {sample} {region}")})
+            comparisons[LIT_CURRENT_VS_LAGGED].append({LIT_SAMPLE: sample, LIT_REGION: region, **require_match(series[LIT_CURRENT][sample][region], series[LIT_LAGGED][sample][region], f"current/lagged sample {sample} {region}")})
         # Only ground pixels qualify photon contribution; body transmission or CSG silhouettes cannot satisfy it.
         if sample < 2:
-            comparisons["photon_signal"].append({"sample": sample, **require_signal(series["current"][sample]["ground"], series["no_photons"][sample]["ground"], SIGNAL_LIMITS["photon_changed_pixels"], "hardware photons on ordinary ground",
+            comparisons[LIT_PHOTON_SIGNAL].append({LIT_SAMPLE: sample, **require_signal(series[LIT_CURRENT][sample][LIT_GROUND], series[LIT_NO_PHOTONS][sample][LIT_GROUND], SIGNAL_LIMITS["photon_changed_pixels"], "hardware photons on ordinary ground",
                     SIGNAL_LIMITS["photon_mean_channel_error"])})
-    for variant in ("current", "lagged"):
+    for variant in (LIT_CURRENT, LIT_LAGGED):
         for sample in range(4):
             for region in REGIONS:
-                comparisons["repeated_states"].append({"variant": variant, "sample": sample, "region": region, **require_match(series[variant][sample][region], series[variant][sample + 4][region], f"{variant} repeated ordinary/CSG pose {sample} {region}")})
+                comparisons[LIT_REPEATED_STATES].append({LIT_VARIANT: variant, LIT_SAMPLE: sample, LIT_REGION: region, **require_match(series[variant][sample][region], series[variant][sample + 4][region], f"{variant} repeated ordinary/CSG pose {sample} {region}")})
         for sample in range(2):
-            comparisons["csg_signal"].append({"variant": variant, "sample": sample, **require_signal(series[variant][sample]["receiver"], series[variant][sample + 2]["receiver"],
+            comparisons[LIT_CSG_SIGNAL].append({LIT_VARIANT: variant, LIT_SAMPLE: sample, **require_signal(series[variant][sample][LIT_RECEIVER], series[variant][sample + 2][LIT_RECEIVER],
                     SIGNAL_LIMITS["csg_changed_pixels"], "active cutter on the live skinned receiver")})
-        comparisons["motion_signal"].append({"variant": variant, **require_signal(series[variant][0]["receiver"], series[variant][1]["receiver"], SIGNAL_LIMITS["motion_changed_pixels"], "live joint pose motion")})
+        comparisons[LIT_MOTION_SIGNAL].append({LIT_VARIANT: variant, **require_signal(series[variant][0][LIT_RECEIVER], series[variant][1][LIT_RECEIVER], SIGNAL_LIMITS["motion_changed_pixels"], "live joint pose motion")})
     return comparisons
 
 
@@ -151,18 +180,18 @@ def capture(args, variant):
     for key in tuple(environment):
         if key.startswith(("NWB_SKINNED_CAUSTIC_CSG_", "NWB_RENDERER_BASELINE_", "NWB_GI_SMOKE_", "NWB_CAUSTIC_SMOKE_")):
             environment.pop(key)
-    environment.pop("NWB_GPU_TIMING_FILE", None)
-    environment.update({"NWB_SKINNED_CAUSTIC_CSG_TRANSITION": "1", "NWB_SKINNED_CAUSTIC_CSG_LAGGED": str(int(variant == "lagged")), "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS": str(int(variant == "no_photons")),
-        "NWB_GPU_TIMING_FILE": str((directory / "gpu_timing.txt").resolve()), "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "128"})
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(sample_path(directory, SAMPLE_COUNT - 1)), "--application-capture", "--application-capture-frame-count", "1", "--timeout", str(args.timeout),
-        "--log-output", str(directory / "runtime.log"), "--expect-log-message", "SkinnedCausticTransition: complete samples=8", "--expect-log-message", "SkinnedCausticSmokeProject: shutdown",
-        "--skip-log-message", "natural software-only shadow route selected because RayQuery-capable hardware is unavailable", "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
-    if variant == "lagged":
-        command += ["--skip-log-message", "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue",
-            "--skip-log-message", "SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable"]
+    environment.pop(LIT_NWB_GPU_TIMING_FILE, None)
+    environment.update({"NWB_SKINNED_CAUSTIC_CSG_TRANSITION": "1", "NWB_SKINNED_CAUSTIC_CSG_LAGGED": str(int(variant == LIT_LAGGED)), "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS": str(int(variant == LIT_NO_PHOTONS)),
+        LIT_NWB_GPU_TIMING_FILE: str((directory / "gpu_timing.txt").resolve()), "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "128"})
+    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
+        "--output", str(sample_path(directory, SAMPLE_COUNT - 1)), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout),
+        "--log-output", str(directory / LIT_RUNTIME_LOG), LIT_EXPECT_LOG_MESSAGE, "SkinnedCausticTransition: complete samples=8", LIT_EXPECT_LOG_MESSAGE, LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN,
+        LIT_SKIP_LOG_MESSAGE, "natural software-only shadow route selected because RayQuery-capable hardware is unavailable", "--gpu-validation" if args.gpu_validation else LIT_NO_GPU_VALIDATION]
+    if variant == LIT_LAGGED:
+        command += [LIT_SKIP_LOG_MESSAGE, "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue",
+            LIT_SKIP_LOG_MESSAGE, "SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable"]
     if args.logserver_executable:
-        command += ["--logserver-executable", str(args.logserver_executable)]
+        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:
         command.append("--no-logserver")
     print(f"Capturing skinned ordinary/CSG transitions: {variant}", flush=True)
@@ -176,7 +205,7 @@ def analyze(directory):
     series, runs = {}, []
     for variant in VARIANTS:
         root = directory / variant
-        runs.append(validate_series_log((root / "runtime.log").read_text(encoding="utf-8"), variant))
+        runs.append(validate_series_log((root / LIT_RUNTIME_LOG).read_text(encoding=LIT_UTF_8), variant))
         series[variant] = []
         files = []
         for sample in range(SAMPLE_COUNT):
@@ -194,15 +223,15 @@ def analyze(directory):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executable", type=Path)
-    parser.add_argument("--working-directory", type=Path)
-    parser.add_argument("--logserver-executable", type=Path)
+    parser.add_argument(LIT_EXECUTABLE, type=Path)
+    parser.add_argument(LIT_WORKING_DIRECTORY, type=Path)
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
     output = parser.add_mutually_exclusive_group(required=True)
     output.add_argument("--output-directory", type=Path, help="Use the exact evidence directory with the existing freshness checks.")
     output.add_argument("--output-root", type=Path, help="Preserve prior evidence and create a unique child directory for this run.")
-    parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument(LIT_TIMEOUT, type=float, default=180)
     parser.add_argument("--analysis-only", action="store_true")
-    parser.add_argument("--no-gpu-validation", dest="gpu_validation", action="store_false", default=True)
+    parser.add_argument(LIT_NO_GPU_VALIDATION, dest="gpu_validation", action="store_false", default=True)
     args = parser.parse_args(argv)
     if args.analysis_only and args.output_root is not None:
         parser.error("--analysis-only requires --output-directory with existing captured evidence")
@@ -222,7 +251,7 @@ def main(argv=None):
                 if capture(args, variant) == SKIP_EXIT_CODE:
                     return SKIP_EXIT_CODE
         result = analyze(args.output_directory)
-        (args.output_directory / "manifest.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        (args.output_directory / "manifest.json").write_text(json.dumps(result, indent=2) + "\n", encoding=LIT_UTF_8)
         print(json.dumps({"variants": VARIANTS, "samples_per_variant": SAMPLE_COUNT, "status": "passed"}))
         return 0
     except (SmokeFailure, OSError, ValueError, subprocess.SubprocessError) as error:

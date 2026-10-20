@@ -29,6 +29,27 @@ from smoke_volume_identity import file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
+LIT_REFLECTION_OPTICAL_INSIDE = "reflection-optical-inside"
+LIT_AVBOIT_REFRACTION_ACCUMULATION = "avboit-refraction-accumulation"
+LIT_SHA256 = "sha256"
+LIT_SOURCE = "source"
+LIT_ELIGIBLE = "eligible"
+LIT_REASON = "reason"
+LIT_FPS = "fps"
+LIT_AVERAGE = "average"
+LIT_MINIMUM = "minimum"
+LIT_MAXIMUM = "maximum"
+LIT_SECONDS = "seconds"
+LIT_FRAMES = "frames"
+LIT_POLICY = "policy"
+LIT_RETAINED_REPORT_RANGE = "retained_report_range"
+LIT_MEAN_FRAME_MS = "mean_frame_ms"
+LIT_MEAN_FPS = "mean_fps"
+LIT_WALL_FRAME = "wall_frame"
+LIT_COMPARISON = "comparison"
+LIT_NATIVE_HARDWARE_DISPATCHES_PER_RANGE = "native_hardware_dispatches_per_range"
+LIT_REPORT_JSON = "report.json"
+
 LIT_RENDER_OPAQUE_REGULAR = "render.opaque_regular"
 LIT_RENDER_SHADOW_VISIBILITY = "render.shadow_visibility"
 LIT_RENDER_DEFERRED_LIGHTING = "render.deferred_lighting"
@@ -295,12 +316,12 @@ def workloads():
     definitions = (("reflection-rough-spatial", LIT_ROUGH, LIT_HARDWARE, .4, False, True, reflection.SPATIAL), ("reflection-mirror-spatial", LIT_ROUGH, LIT_HARDWARE, 0.0, False, True, reflection.SPATIAL),
         ("reflection-rough-filtered", LIT_ROUGH, LIT_HARDWARE, .4, True, True, reflection.SPATIAL), ("reflection-screen-depth", "floor", "screen", 0.0, False, False, reflection.DEPTH),
         ("reflection-optical-clear", "optical_clear", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE), ("reflection-optical-csg-cap", "optical_csg_cap", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
-        ("reflection-optical-inside", LIT_OPTICAL_INSIDE, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),)
+        (LIT_REFLECTION_OPTICAL_INSIDE, LIT_OPTICAL_INSIDE, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),)
     for definition in definitions:
         workload = reflection_workload(*definition)
         result[workload.name] = workload
-    refraction_accumulation = result["reflection-optical-inside"]
-    result["avboit-refraction-accumulation"] = replace(refraction_accumulation, name="avboit-refraction-accumulation", scope_multipliers=refraction_accumulation.scope_multipliers + tuple((scope, 1) for scope in AVBOIT),
+    refraction_accumulation = result[LIT_REFLECTION_OPTICAL_INSIDE]
+    result[LIT_AVBOIT_REFRACTION_ACCUMULATION] = replace(refraction_accumulation, name=LIT_AVBOIT_REFRACTION_ACCUMULATION, scope_multipliers=refraction_accumulation.scope_multipliers + tuple((scope, 1) for scope in AVBOIT),
         secondary_scope="render.avboit_accumulate")
     caustic_scopes = (FRAME, *CONTROLS, *OBSERVATIONS, *AVBOIT, caustic.PHOTONS, caustic.RESOLVE)
     for preset in caustic.PRESETS:
@@ -371,7 +392,7 @@ def source_identity(manifest_path):
         if not isinstance(relative, str) or not isinstance(expected, str) or not SHA256.fullmatch(expected):
             raise SmokeFailure("source manifest contains an invalid path or SHA256")
         path = (manifest_path.parent / relative).resolve()
-        if not path.is_file() or file_identity(path)["sha256"] != expected:
+        if not path.is_file() or file_identity(path)[LIT_SHA256] != expected:
             raise SmokeFailure(f"source bytes differ from the manifest: {relative}")
         actual[str(path)] = expected
     return {"manifest": str(manifest_path), "identity": file_identity(manifest_path), LIT_REVISION: document[LIT_REVISION], LIT_FILES: actual}
@@ -383,7 +404,7 @@ def runtime_identity(runtime):
         raise SmokeFailure(f"runtime lacks a packed res directory: {runtime}")
     mutable = set(runtime_pipeline_cache_paths(runtime))
     files = {path.relative_to(runtime).as_posix(): file_identity(path) for path in sorted(resources.rglob("*")) if path.is_file() and path not in mutable}
-    volumes = {relative: identity["sha256"] for relative, identity in files.items() if Path(relative).match("*.vol")}
+    volumes = {relative: identity[LIT_SHA256] for relative, identity in files.items() if Path(relative).match("*.vol")}
     if not files or not volumes:
         raise SmokeFailure("runtime contains no authored packed volume")
     return {LIT_FILES: files, "authored_volume_hashes": volumes}
@@ -400,7 +421,7 @@ def binary_identity(executable):
 
 
 def freeze_arm(arm):
-    return {LIT_EXECUTABLE: str(arm.executable), LIT_RUNTIME: str(arm.runtime), "binaries": binary_identity(arm.executable), "resources": runtime_identity(arm.runtime), "source": source_identity(arm.source_manifest)}
+    return {LIT_EXECUTABLE: str(arm.executable), LIT_RUNTIME: str(arm.runtime), "binaries": binary_identity(arm.executable), "resources": runtime_identity(arm.runtime), LIT_SOURCE: source_identity(arm.source_manifest)}
 
 
 def verify_frozen(arms, identities, shared):
@@ -435,7 +456,7 @@ def write_json(path, value):
 
 def summarize_wall_frames(text, timing_text, workload, report_range):
     if workload.reflection_policy is None:
-        return {"eligible": False, "reason": SYNTHETIC_FRAME_REASON}
+        return {LIT_ELIGIBLE: False, LIT_REASON: SYNTHETIC_FRAME_REASON}
     start, stop = report_range
     if start < 0 or stop <= start:
         raise SmokeFailure("invalid retained wall-frame report range")
@@ -446,28 +467,28 @@ def summarize_wall_frames(text, timing_text, workload, report_range):
         match = FPS_REPORT.fullmatch(line)
         if match is None:
             raise SmokeFailure("malformed reflection FPS report")
-        values = {field: float(match[field]) for field in ("fps", "average", "minimum", "maximum", "seconds")}
-        frames = int(match["frames"])
+        values = {field: float(match[field]) for field in (LIT_FPS, LIT_AVERAGE, LIT_MINIMUM, LIT_MAXIMUM, LIT_SECONDS)}
+        frames = int(match[LIT_FRAMES])
         if frames <= 0 or any(not math.isfinite(value) or value <= 0 for value in values.values()):
             raise SmokeFailure("invalid reflection FPS report")
-        average = values["seconds"] * 1000 / frames
-        if not (values["minimum"] <= values["average"] <= values["maximum"]) \
-            or not math.isclose(values["average"], average, rel_tol=1e-5, abs_tol=1e-6) \
-            or not math.isclose(values["fps"], frames / values["seconds"], rel_tol=1e-5, abs_tol=1e-6):
+        average = values[LIT_SECONDS] * 1000 / frames
+        if not (values[LIT_MINIMUM] <= values[LIT_AVERAGE] <= values[LIT_MAXIMUM]) \
+            or not math.isclose(values[LIT_AVERAGE], average, rel_tol=1e-5, abs_tol=1e-6) \
+            or not math.isclose(values[LIT_FPS], frames / values[LIT_SECONDS], rel_tol=1e-5, abs_tol=1e-6):
             raise SmokeFailure("inconsistent reflection FPS report")
-        reports.append({**values, "frames": frames})
+        reports.append({**values, LIT_FRAMES: frames})
     headers = list(reflection.HEADER.finditer(timing_text.replace("\r\n", "\n")))
     if stop > len(reports) or stop > len(headers):
         raise SmokeFailure("retained GPU intervals lack matching reflection FPS reports")
     selected = reports[start:stop]
     for report, header in zip(selected, headers[start:stop]):
-        if report["frames"] != int(header[1]) \
-            or not math.isclose(report["seconds"], float(header[2]), rel_tol=0, abs_tol=.000051):
+        if report[LIT_FRAMES] != int(header[1]) \
+            or not math.isclose(report[LIT_SECONDS], float(header[2]), rel_tol=0, abs_tol=.000051):
             raise SmokeFailure("reflection FPS and GPU report windows do not match")
-    frames = sum(report["frames"] for report in selected)
-    seconds = sum(report["seconds"] for report in selected)
-    return {"eligible": True, "source": "ReflectionSmokeProject FpsProbe callback delta", "policy": WALL_FRAME_POLICY, "retained_report_range": [start, stop], "reports": len(selected), "frames": frames, "seconds": seconds,
-        "mean_frame_ms": seconds * 1000 / frames, "mean_fps": frames / seconds, "min_frame_ms": min(report["minimum"] for report in selected), "max_frame_ms": max(report["maximum"] for report in selected)}
+    frames = sum(report[LIT_FRAMES] for report in selected)
+    seconds = sum(report[LIT_SECONDS] for report in selected)
+    return {LIT_ELIGIBLE: True, LIT_SOURCE: "ReflectionSmokeProject FpsProbe callback delta", LIT_POLICY: WALL_FRAME_POLICY, LIT_RETAINED_REPORT_RANGE: [start, stop], LIT_REPORTS: len(selected), LIT_FRAMES: frames, LIT_SECONDS: seconds,
+        LIT_MEAN_FRAME_MS: seconds * 1000 / frames, LIT_MEAN_FPS: frames / seconds, "min_frame_ms": min(report[LIT_MINIMUM] for report in selected), "max_frame_ms": max(report[LIT_MAXIMUM] for report in selected)}
 
 
 def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical_fraction=.03, control_floor_ms=.015):
@@ -507,19 +528,19 @@ def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical
     secondary_frame_means = {arm: statistics.fmean(block[arm][LIT_SCOPES][workload.secondary_scope][LIT_TOTAL_MS] / block[arm][LIT_SCOPES][FRAME][LIT_GPU_SAMPLES] for block in blocks.values()) for arm in (LIT_BASELINE, LIT_CANDIDATE)}
     secondary_frame_delta = paired_statistics([block[LIT_CANDIDATE][LIT_SCOPES][workload.secondary_scope][LIT_TOTAL_MS] / block[LIT_CANDIDATE][LIT_SCOPES][FRAME][LIT_GPU_SAMPLES]
         - block[LIT_BASELINE][LIT_SCOPES][workload.secondary_scope][LIT_TOTAL_MS] / block[LIT_BASELINE][LIT_SCOPES][FRAME][LIT_GPU_SAMPLES] for block in blocks.values()], seed)
-    wall_frame = {"eligible": False, "reason": SYNTHETIC_FRAME_REASON}
+    wall_frame = {LIT_ELIGIBLE: False, LIT_REASON: SYNTHETIC_FRAME_REASON}
     if workload.reflection_policy is not None:
-        if any(not trial.get("wall_frame", {}).get("eligible") for trial in trials):
+        if any(not trial.get(LIT_WALL_FRAME, {}).get(LIT_ELIGIBLE) for trial in trials):
             raise SmokeFailure("wall-frame inference requires every planned trial to have qualified reports")
         for trial in trials:
-            if any(not math.isfinite(trial["wall_frame"][field]) or trial["wall_frame"][field] <= 0 for field in ("mean_frame_ms", "mean_fps")):
+            if any(not math.isfinite(trial[LIT_WALL_FRAME][field]) or trial[LIT_WALL_FRAME][field] <= 0 for field in (LIT_MEAN_FRAME_MS, LIT_MEAN_FPS)):
                 raise SmokeFailure("invalid trial wall-frame metrics")
-        wall_frame = {"eligible": True, "policy": WALL_FRAME_POLICY, "means": {arm: {"frame_ms": statistics.fmean(block[arm]["wall_frame"]["mean_frame_ms"] for block in blocks.values()), "fps": statistics.fmean(block[arm]["wall_frame"]["mean_fps"]
-                for block in blocks.values())} for arm in (LIT_BASELINE, LIT_CANDIDATE)}, "frame_ms_delta": paired_statistics([block[LIT_CANDIDATE]["wall_frame"]["mean_frame_ms"]
-                - block[LIT_BASELINE]["wall_frame"]["mean_frame_ms"] for block in blocks.values()], seed), "fps_delta": {key.replace("_ms", "_fps"): value for key, value in paired_statistics([
-                block[LIT_CANDIDATE]["wall_frame"]["mean_fps"] - block[LIT_BASELINE]["wall_frame"]["mean_fps"] for block in blocks.values()], seed).items()},
-            "comparison": "candidate minus baseline; equal-weight independent blocks with paired bootstrap 95% intervals"}
-    return {"status": status, "practical_threshold_ms": threshold, LIT_MEANS_MS: means, "wall_frame": wall_frame, "frame": paired[FRAME], LIT_SECONDARY_SCOPE: workload.secondary_scope,
+        wall_frame = {LIT_ELIGIBLE: True, LIT_POLICY: WALL_FRAME_POLICY, "means": {arm: {"frame_ms": statistics.fmean(block[arm][LIT_WALL_FRAME][LIT_MEAN_FRAME_MS] for block in blocks.values()), LIT_FPS: statistics.fmean(block[arm][LIT_WALL_FRAME][LIT_MEAN_FPS]
+                for block in blocks.values())} for arm in (LIT_BASELINE, LIT_CANDIDATE)}, "frame_ms_delta": paired_statistics([block[LIT_CANDIDATE][LIT_WALL_FRAME][LIT_MEAN_FRAME_MS]
+                - block[LIT_BASELINE][LIT_WALL_FRAME][LIT_MEAN_FRAME_MS] for block in blocks.values()], seed), "fps_delta": {key.replace("_ms", "_fps"): value for key, value in paired_statistics([
+                block[LIT_CANDIDATE][LIT_WALL_FRAME][LIT_MEAN_FPS] - block[LIT_BASELINE][LIT_WALL_FRAME][LIT_MEAN_FPS] for block in blocks.values()], seed).items()},
+            LIT_COMPARISON: "candidate minus baseline; equal-weight independent blocks with paired bootstrap 95% intervals"}
+    return {"status": status, "practical_threshold_ms": threshold, LIT_MEANS_MS: means, LIT_WALL_FRAME: wall_frame, "frame": paired[FRAME], LIT_SECONDARY_SCOPE: workload.secondary_scope,
         "secondary": paired[workload.secondary_scope], LIT_CONTROLS: controls, "scope_deltas": paired, "secondary_scope_units": "milliseconds per completed mip-reduction range" if workload.secondary_scope == reflection.DEPTH
             else "milliseconds per completed scope range; a range may contain multiple native dispatches", "secondary_per_frame_work": {LIT_MEANS_MS: secondary_frame_means, "delta": secondary_frame_delta,
             LIT_UNITS: "sum of measured secondary-scope milliseconds per completed GPU frame; not a frame-time attribution"}, LIT_COMPLETED_TRIALS: len(trials), "completed_blocks": len(blocks),
@@ -586,8 +607,8 @@ def acquire_trial(args, arm, workload, block, position, symbols):
         finalized = parse_intervals(timing_text, symbols, finalized=True)
         validate_inactive_scopes(summarize_intervals(finalized), workload)
         report_range = [args.warmup_intervals, args.warmup_intervals + len(selected)]
-        return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_REPORTS: len(selected), LIT_POSITIVE_FRAME_REPORTS: positive_frame_reports(selected), "retained_report_range": report_range, "native_hardware_dispatches_per_range": getattr(args, arm.name + "_hardware_dispatches_per_range")
-                if reflection.HARDWARE in workload.scopes else None, "wall_frame": summarize_wall_frames(text, timing_text, workload, report_range),
+        return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_REPORTS: len(selected), LIT_POSITIVE_FRAME_REPORTS: positive_frame_reports(selected), LIT_RETAINED_REPORT_RANGE: report_range, LIT_NATIVE_HARDWARE_DISPATCHES_PER_RANGE: getattr(args, arm.name + "_hardware_dispatches_per_range")
+                if reflection.HARDWARE in workload.scopes else None, LIT_WALL_FRAME: summarize_wall_frames(text, timing_text, workload, report_range),
             "caustic_warmup_scopes": summarize_intervals(finalized[:args.warmup_intervals]) if workload.validate_log is caustic_log else None, LIT_SCOPES: summarize_intervals(selected), LIT_RUNTIME_SIGNATURE: signature,
             LIT_ARTIFACTS: str(directory), "cache_after": cache_identity(arm.runtime)}
     finally:
@@ -713,7 +734,7 @@ def run(args):
         "settings": dict(workload.environment_overrides), "diagnostics": False, LIT_CAPTURE: False, "warmup_intervals": args.warmup_intervals, "sample_intervals": args.sample_intervals,
         "minimum_frame_samples": args.minimum_frame_samples, "timeout_seconds": args.timeout, LIT_TIMING_IN_FLIGHT_RANGES: 32, "scope_multipliers": dict(workload.scope_multipliers), "inactive_scopes": list(workload.inactive_scopes),
         "wall_frame_policy": WALL_FRAME_POLICY if workload.reflection_policy is not None else SYNTHETIC_FRAME_REASON, LIT_REFLECTION_POLICY: asdict(workload.reflection_policy) if workload.reflection_policy is not None else None,
-        "caustic_qualification": qualification, "native_hardware_dispatches_per_range": { LIT_BASELINE: args.baseline_hardware_dispatches_per_range, LIT_CANDIDATE: args.candidate_hardware_dispatches_per_range,
+        "caustic_qualification": qualification, LIT_NATIVE_HARDWARE_DISPATCHES_PER_RANGE: { LIT_BASELINE: args.baseline_hardware_dispatches_per_range, LIT_CANDIDATE: args.candidate_hardware_dispatches_per_range,
         } if reflection.HARDWARE in workload.scopes else None,
         "hardware_range_policy": "one completed range per frame containing every submitted native call; sliced optical work may include zero-work indirect records beyond the admitted queue; declared submitted counts require separate build qualification and never divide measured time",
         "depth_range_policy": "native mip count ranges per frame; per-range means describe one mip, with total measured mip work per frame reported separately",
@@ -744,8 +765,8 @@ def run(args):
                 trials.append(trial)
                 write_json(args.output_directory / "trials.json", trials)
         comparison = compare_trials(trials, orders, workload, args.analysis_seed, args.practical_ms, args.practical_fraction, args.control_floor_ms)
-        write_json(args.output_directory / "report.json", {"plan": plan, "trials": trials, "comparison": comparison})
-        write_status(f"Renderer A/B complete: {args.output_directory / 'report.json'}")
+        write_json(args.output_directory / LIT_REPORT_JSON, {"plan": plan, "trials": trials, LIT_COMPARISON: comparison})
+        write_status(f"Renderer A/B complete: {args.output_directory / LIT_REPORT_JSON}")
         return 0
     except Exception as error:
         write_json(args.output_directory / "failure.json", {"error": str(error), LIT_COMPLETED_TRIALS: len(trials)})

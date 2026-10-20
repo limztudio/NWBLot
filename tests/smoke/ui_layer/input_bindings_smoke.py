@@ -12,6 +12,14 @@ from edit_smoke import EditRun, run
 from interaction_smoke import parse_args
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip
 
+LIT_W = "w"
+LIT_X = "x"
+LIT_END = "End"
+LIT_Q = "q"
+LIT_R = "r"
+LIT_T = "t"
+LIT_A = "a"
+
 
 class InputBindingsRun(EditRun):
     def __init__(self, *args, **kwargs):
@@ -44,11 +52,11 @@ class InputBindingsRun(EditRun):
 
     def queued_text_keys(self):
         if not self.native.windows:
-            self.physical_text_key("w", "w", settle=False)
-            self.physical_text_key("x", "x")
+            self.physical_text_key(LIT_W, LIT_W, settle=False)
+            self.physical_text_key(LIT_X, LIT_X)
             return
         user32 = self.backend.user32
-        keys = [(KEYS[name], 1 | (int(user32.MapVirtualKeyW(KEYS[name], 0)) << 16), character) for name, character in (("w", "w"), ("x", "x"))]
+        keys = [(KEYS[name], 1 | (int(user32.MapVirtualKeyW(KEYS[name], 0)) << 16), character) for name, character in ((LIT_W, LIT_W), (LIT_X, LIT_X))]
         for virtual_key, flags, _ in keys:
             user32.SendMessageW(self.handle, 0x0100, virtual_key, flags)
         for virtual_key, flags, _ in keys:
@@ -62,16 +70,16 @@ class InputBindingsRun(EditRun):
         primary, secondary = "Hello 한글", "Target"
         self.checkpoint("initial", model(primary), model(secondary))
         self.focus("primary")
-        self.native.tap("End")
+        self.native.tap(LIT_END)
         self.checkpoint("primary_focus", model(primary, focused=True), model(secondary))
-        self.physical_text_key("q", "q")
+        self.physical_text_key(LIT_Q, LIT_Q)
         self.checkpoint("custom_Activate_suppresses_its_printable_key", model(primary, focused=True), model(secondary))
         if self.native.windows:
-            self.physical_text_key("w", "w", repeat=True)
+            self.physical_text_key(LIT_W, LIT_W, repeat=True)
             self.checkpoint("orphan_bound_W_repeat_cannot_navigate_or_insert", model(primary, focused=True), model(secondary))
-        self.physical_text_key("w", "w")
+        self.physical_text_key(LIT_W, LIT_W)
         self.checkpoint("printable_W_moves_without_inserting", model(primary, 9, 9, True), model(secondary))
-        self.physical_text_key("x", "x")
+        self.physical_text_key(LIT_X, LIT_X)
         primary = "Hello 한x글"
         self.checkpoint("unbound_X_still_inserts", model(primary, 10, 10, True), model(secondary))
         self.physical_text_key("space", " ")
@@ -79,18 +87,18 @@ class InputBindingsRun(EditRun):
         self.checkpoint("default_Space_remains_editor_text", model(primary, 11, 11, True), model(secondary))
         self.native.tap("Tab")
         self.checkpoint("disabled_default_Tab_keeps_focus", model(primary, 11, 11, True), model(secondary))
-        self.physical_text_key("r", "r")
+        self.physical_text_key(LIT_R, LIT_R)
         self.checkpoint("printable_R_changes_focus_without_inserting", model(primary, 11, 11), model(secondary, focused=True))
-        self.physical_text_key("t", "t")
+        self.physical_text_key(LIT_T, LIT_T)
         self.checkpoint("printable_T_returns_focus_without_inserting", model(primary, 11, 11, True), model(secondary))
-        self.native.tap("End")
+        self.native.tap(LIT_END)
         self.queued_text_keys()
         primary = "Hello 한x x글"
         self.checkpoint("queued_scan_codes_keep_bound_and_unbound_text_separate", model(primary, 12, 12, True), model(secondary))
-        self.native.tap("a", control=True)
+        self.native.tap(LIT_A, control=True)
         self.native.tap("c", control=True)
-        self.physical_text_key("r", "r")
-        self.native.tap("a", control=True)
+        self.physical_text_key(LIT_R, LIT_R)
+        self.native.tap(LIT_A, control=True)
         self.native.tap("v", control=True)
         self.checkpoint("configured_navigation_preserves_OS_clipboard", model(primary, 0, 15), model(primary, focused=True))
 

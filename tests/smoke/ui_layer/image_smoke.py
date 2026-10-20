@@ -12,6 +12,12 @@ from image_probe import observe_image, snapshot_from_logs
 from window_capture_smoke import run_smoke_main
 from passive_run import PassiveImageRun, run_passive_image
 
+LIT_TAB = "Tab"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_RECTANGLES = "rectangles"
+LIT_STRETCH = "stretch"
+LIT_ESCAPE = "Escape"
+
 
 class ImageRun(PassiveImageRun):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
@@ -31,7 +37,7 @@ class ImageRun(PassiveImageRun):
         self.checkpoint("initial_natural_fixed_stretch_tint_transparency_and_clip")
         self.click("before")
         self.checkpoint("before_button_activates_and_takes_focus", before_clicks=1, focus_code=1)
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
         self.checkpoint("tab_skips_all_passive_images", focus_code=2)
         self.click("natural_sprite")
         for key in ("Right", "Home", "Return"):
@@ -39,20 +45,20 @@ class ImageRun(PassiveImageRun):
         self.checkpoint("passive_image_pointer_and_keyboard_leave_values_unchanged", focus_code=0)
         self.native.tap("F4")
         self.checkpoint("declaration_retains_region_options_and_tint", phase=1, declared_region=2, post_declaration_region=1)
-        old_extent = self.snapshot["logical_extent"]
-        old_width = self.snapshot["rectangles"]["stretch"][2]
+        old_extent = self.snapshot[LIT_LOGICAL_EXTENT]
+        old_width = self.snapshot[LIT_RECTANGLES][LIT_STRETCH][2]
         target_extent = round(old_extent[0]) + 96, round(old_extent[1]) + 64
         physical_extent = self.point(*target_extent)
         self.backend.resize_client(self.handle, *physical_extent)
-        self.checkpoint("resize_recomputes_stretch_and_preserves_retained_images", extent=physical_extent, extra=lambda snapshot: snapshot["rectangles"]["stretch"][2] != old_width and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0
-                and abs(snapshot["logical_extent"][1] - target_extent[1]) < 1.0)
+        self.checkpoint("resize_recomputes_stretch_and_preserves_retained_images", extent=physical_extent, extra=lambda snapshot: snapshot[LIT_RECTANGLES][LIT_STRETCH][2] != old_width and abs(snapshot[LIT_LOGICAL_EXTENT][0] - target_extent[0]) < 1.0
+                and abs(snapshot[LIT_LOGICAL_EXTENT][1] - target_extent[1]) < 1.0)
         self.native.tap("F5")
         self.checkpoint("both_popups_publish_images_before_child_input", parent=1, child=1, popup_count=2, focus_code=4)
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
         self.checkpoint("child_tab_stays_on_its_only_button", focus_code=4)
-        self.native.tap("Escape")
+        self.native.tap(LIT_ESCAPE)
         self.checkpoint("escape_child_retires_its_image_and_restores_parent", parent=1, child=0, popup_count=1, focus_code=3)
-        self.native.tap("Escape")
+        self.native.tap(LIT_ESCAPE)
         self.checkpoint("escape_parent_retires_its_image_and_restores_root", parent=0, child=0, popup_count=0, focus_code=0)
 
 

@@ -14,6 +14,9 @@ import zlib
 
 from window_capture_smoke import (SKIP_EXIT_CODE, SmokeFailure, analyze_rgb_rows, read_bmp_24_rows,)
 
+LIT_GALLERY_HTML = "gallery.html"
+LIT_IMAGE_COUNT = "image_count"
+
 LIT_SINGLE = "single"
 LIT_GEOMETRY = "geometry"
 LIT_AUTOMATIC = "automatic"
@@ -255,7 +258,7 @@ def write_gallery(output_directory, manifest):
             capture_item["image"] = "data:image/png;base64," + base64.b64encode(content).decode("ascii")
     data = json.dumps(embedded, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     prefix, suffix = HTML.split("__CAPTURE_DATA__")
-    with (output_directory / "gallery.html").open("w", encoding=LIT_UTF_8, newline="\n") as output:
+    with (output_directory / LIT_GALLERY_HTML).open("w", encoding=LIT_UTF_8, newline="\n") as output:
         output.write(prefix)
         output.write(data)
         output.write(suffix)
@@ -287,7 +290,7 @@ def main(argv):
     if args.require_hardware:
         labels[LIT_AUTOMATIC] = "Hardware RT (per-pixel fallback allowed)"
     manifest = { "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "frames": args.frames, "hardware_required": args.require_hardware, "application_args": list(args.application_arg),
-        LIT_VARIANTS: list(args.variants), "variant_labels": labels, LIT_LIMITS: COMMON_LIMIT, "image_count": len(args.cases) * len(args.variants), LIT_CASES: [],
+        LIT_VARIANTS: list(args.variants), "variant_labels": labels, LIT_LIMITS: COMMON_LIMIT, LIT_IMAGE_COUNT: len(args.cases) * len(args.variants), LIT_CASES: [],
         "validation": "Strict runtime logs, successful route dispatch, normal shutdown, nontrivial frames, and visible changes when a disabled baseline is present.", }
     try:
         for case_id in args.cases:
@@ -313,7 +316,7 @@ def main(argv):
             manifest[LIT_CASES].append(entry)
             del frames
         write_gallery(args.output_directory, manifest)
-        print(f"PASS: {manifest['image_count']} actual captures; offline gallery: {args.output_directory / 'gallery.html'}", flush=True)
+        print(f"PASS: {manifest[LIT_IMAGE_COUNT]} actual captures; offline gallery: {args.output_directory / LIT_GALLERY_HTML}", flush=True)
         return 0
     except (OSError, SmokeFailure, subprocess.TimeoutExpired) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)

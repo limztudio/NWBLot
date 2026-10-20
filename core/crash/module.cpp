@@ -26,6 +26,7 @@ namespace __hidden_crash_module{
 
 
 inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = 5u;
+inline constexpr usize s_LifecycleFailureTextCapacity = 192u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -201,7 +202,7 @@ NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& rec
 Detail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept{
     if(m_failureCount == 0u)
         return;
-    char text[192u] = {};
+    char text[__hidden_crash_module::s_LifecycleFailureTextCapacity] = {};
     CopyFixedBuffer(text, "Native crash lifecycle failure: domain=");
     AppendUnsignedToFixedBuffer(text, static_cast<u64>(m_first.domain));
     AppendFixedBuffer(text, ", operation=");
@@ -221,7 +222,7 @@ Detail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept{
         AppendUnsignedToFixedBuffer(text, m_first.code);
     AppendFixedBuffer(text, ", total failures=");
     AppendUnsignedToFixedBuffer(text, m_failureCount);
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_native_lifecycle", .expression = __hidden_crash_module::PlatformOperationText(m_first.operation), .message = AStringView(text), .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = Detail::s_WarningEventName, .category = "crash_native_lifecycle", .expression = __hidden_crash_module::PlatformOperationText(m_first.operation), .message = AStringView(text), .file = __FILE__, .line = __LINE__, });
 }
 
 void Detail::PlatformCleanupObservations::record(const PlatformFailure& failure)noexcept{

@@ -12,6 +12,17 @@ import tempfile
 from pathlib import Path
 from typing import Sequence
 
+LIT_UTF_8 = "utf-8"
+LIT_DBG = "dbg"
+LIT_OPT = "opt"
+LIT_FIN = "fin"
+LIT_O = "-o"
+LIT_LLVM_LIBRARY = "--llvm-library"
+LIT_LLVM_VERSION = "--llvm-version"
+LIT_ASCII = "ascii"
+LIT_UTF_16_LE = "utf-16-le"
+LIT_RUNTIME_OBJECT = "--runtime-object"
+
 
 NARROW_LITERAL = "NWB_LITERAL_ESCAPED_VIEW_ACROSS_TRANSLATION_UNITS_20261005"
 UTF16_LITERAL = "NWB_LITERAL_UTF16_EMBEDDED\0\u00e9\U0001f642"
@@ -29,7 +40,7 @@ def unit_hash(values: Sequence[int]) -> int:
 
 def source_file(path: Path, body: str) -> None:
     text = "// limztudio@gmail.com\n" + SEPARATOR + "\n\n\n" + body.strip() + "\n\n\n" + SEPARATOR + "\n\n"
-    path.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+    path.write_bytes(text.replace("\n", "\r\n").encode(LIT_UTF_8))
 
 
 def run(command: Sequence[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -50,15 +61,15 @@ class LiteralQualification:
         self.windows = os.name == "nt"
         self.clang_cl = Path(options.compiler).stem.lower().endswith("clang-cl")
         self.target_flags = ["--target=" + options.target] if options.target else []
-        self.optimization = {"dbg": "-O0", "opt": "-O2", "fin": "-O3"}[options.configuration]
-        self.library = "msvcrtd" if options.configuration == "dbg" else "msvcrt"
+        self.optimization = {LIT_DBG: "-O0", LIT_OPT: "-O2", LIT_FIN: "-O3"}[options.configuration]
+        self.library = "msvcrtd" if options.configuration == LIT_DBG else "msvcrt"
 
     def compiler_command(self, source: Path, output: Path, is_c: bool = False) -> list[str]:
         compiler = self.options.c_compiler if is_c else self.options.compiler
-        defines = [{"dbg": "NWB_DEBUG", "opt": "NWB_OPTIMIZE", "fin": "NWB_FINAL"}[self.options.configuration]]
-        defines.append("_DEBUG" if self.options.configuration == "dbg" else "NDEBUG")
+        defines = [{LIT_DBG: "NWB_DEBUG", LIT_OPT: "NWB_OPTIMIZE", LIT_FIN: "NWB_FINAL"}[self.options.configuration]]
+        defines.append("_DEBUG" if self.options.configuration == LIT_DBG else "NDEBUG")
         if self.clang_cl:
-            arguments = [*self.target_flags, "/clang:" + self.optimization, "/MDd" if self.options.configuration == "dbg" else "/MD"]
+            arguments = [*self.target_flags, "/clang:" + self.optimization, "/MDd" if self.options.configuration == LIT_DBG else "/MD"]
             arguments.extend("/D" + define for define in defines)
             arguments.extend(["/I" + str(self.options.source_dir), "/TC" if is_c else "/std:c++latest", "/c", str(source), "/Fo" + str(output)])
         else:
@@ -66,12 +77,12 @@ class LiteralQualification:
             arguments.extend("-D" + define for define in defines)
             if self.windows:
                 arguments.extend(["-D_DLL", "-D_MT", "-Xclang", "--dependent-lib=" + self.library])
-            arguments.extend(["-I", str(self.options.source_dir), "-c", str(source), "-o", str(output)])
-        return [sys.executable, str(self.compiler_wrapper), "--llvm-library", str(self.options.llvm_library), "--llvm-version", self.options.llvm_version, "--", str(compiler), *arguments]
+            arguments.extend(["-I", str(self.options.source_dir), "-c", str(source), LIT_O, str(output)])
+        return [sys.executable, str(self.compiler_wrapper), LIT_LLVM_LIBRARY, str(self.options.llvm_library), LIT_LLVM_VERSION, self.options.llvm_version, "--", str(compiler), *arguments]
 
     def decoded_startup_and_escaped_lifetime(self) -> dict:
-        narrow_hash = unit_hash(NARROW_LITERAL.encode("ascii"))
-        utf16_bytes = UTF16_LITERAL.encode("utf-16-le")
+        narrow_hash = unit_hash(NARROW_LITERAL.encode(LIT_ASCII))
+        utf16_bytes = UTF16_LITERAL.encode(LIT_UTF_16_LE)
         utf16_units = [int.from_bytes(utf16_bytes[index:index + 2], "little") for index in range(0, len(utf16_bytes), 2)]
         utf32_units = [ord(value) for value in UTF32_LITERAL]
         common = '''#include <global/type.h>
@@ -183,17 +194,17 @@ char* MutableB(){{ return g_MutableB; }}
             require_success(run(self.compiler_command(source, output, is_c), self.directory), f"Compile {source.name}")
         executable = self.directory / ("lifetime.exe" if self.windows else "lifetime")
         if self.clang_cl:
-            link_arguments = [*self.target_flags, "/MDd" if self.options.configuration == "dbg" else "/MD", *map(str, objects), str(self.options.runtime_object), "/Fe" + str(executable)]
+            link_arguments = [*self.target_flags, "/MDd" if self.options.configuration == LIT_DBG else "/MD", *map(str, objects), str(self.options.runtime_object), "/Fe" + str(executable)]
         else:
-            link_arguments = [*self.target_flags, *map(str, objects), str(self.options.runtime_object), "-o", str(executable)]
+            link_arguments = [*self.target_flags, *map(str, objects), str(self.options.runtime_object), LIT_O, str(executable)]
             if self.windows:
                 link_arguments.extend(["-Wl,/nodefaultlib:libcmt", "-Wl,/defaultlib:" + self.library])
         # The runtime is deliberately last: Mach-O needs the wrapper to place its constructor first.
-        link_command = [sys.executable, str(self.linker_wrapper), "--runtime-object", str(self.options.runtime_object), "--", str(self.options.compiler), *link_arguments]
+        link_command = [sys.executable, str(self.linker_wrapper), LIT_RUNTIME_OBJECT, str(self.options.runtime_object), "--", str(self.options.compiler), *link_arguments]
         require_success(run(link_command, self.directory), "Link startup fixture")
         image = executable.read_bytes()
-        forbidden = [NARROW_LITERAL.encode("ascii")]
-        forbidden.extend(UTF16_LITERAL.encode(encoding) for encoding in ("utf-16-le", "utf-16-be"))
+        forbidden = [NARROW_LITERAL.encode(LIT_ASCII)]
+        forbidden.extend(UTF16_LITERAL.encode(encoding) for encoding in (LIT_UTF_16_LE, "utf-16-be"))
         forbidden.extend(UTF32_LITERAL.encode(encoding) for encoding in ("utf-32-le", "utf-32-be"))
         if any(marker in image for marker in forbidden):
             raise RuntimeError("An eligible fixture literal remains plaintext in the linked image")
@@ -209,12 +220,12 @@ char* MutableB(){{ return g_MutableB; }}
         base = self.compiler_command(valid, output)
         first_response = self.directory / "first.rsp"
         second_response = self.directory / "second.rsp"
-        first_response.write_text('"@' + second_response.as_posix() + '"\n', encoding="utf-8")
-        second_response.write_text('"@' + first_response.as_posix() + '"\n', encoding="utf-8")
+        first_response.write_text('"@' + second_response.as_posix() + '"\n', encoding=LIT_UTF_8)
+        second_response.write_text('"@' + first_response.as_posix() + '"\n', encoding=LIT_UTF_8)
         separator = base.index("--")
         recursive = [*base[:separator + 2], "@" + str(first_response)]
         mismatch = base.copy()
-        mismatch[mismatch.index("--llvm-version") + 1] = "0.0.0"
+        mismatch[mismatch.index(LIT_LLVM_VERSION) + 1] = "0.0.0"
         unsupported_lto = [*base, "/clang:-flto" if self.clang_cl else "-flto"]
         multiple_sources = [*base, str(invalid)]
         cases = (("frontend", self.compiler_command(invalid, output), "error:"), ("llvm_version", mismatch, "differs from compiler"), ("recursive_response", recursive, "Recursive response file"),
@@ -236,10 +247,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", required=True, type=Path)
     parser.add_argument("--c-compiler", required=True, type=Path)
-    parser.add_argument("--runtime-object", required=True, type=Path)
-    parser.add_argument("--llvm-library", required=True, type=Path)
-    parser.add_argument("--llvm-version", required=True)
-    parser.add_argument("--configuration", required=True, choices=("dbg", "opt", "fin"))
+    parser.add_argument(LIT_RUNTIME_OBJECT, required=True, type=Path)
+    parser.add_argument(LIT_LLVM_LIBRARY, required=True, type=Path)
+    parser.add_argument(LIT_LLVM_VERSION, required=True)
+    parser.add_argument("--configuration", required=True, choices=(LIT_DBG, LIT_OPT, LIT_FIN))
     parser.add_argument("--source-dir", required=True, type=Path)
     parser.add_argument("--target", default="")
     options = parser.parse_args(argv)

@@ -7,11 +7,14 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import window_capture_smoke  # noqa: E402
 
+LIT_RESIZE_BEFORE_CAPTURE = "--resize-before-capture"
+LIT_UI_RESIZE_FIXTURE = "UI resize fixture"
+
 
 def _resize_request(argv):
-    if "--resize-before-capture" not in argv:
+    if LIT_RESIZE_BEFORE_CAPTURE not in argv:
         return None, argv
-    index = argv.index("--resize-before-capture")
+    index = argv.index(LIT_RESIZE_BEFORE_CAPTURE)
     if index + 2 >= len(argv):
         raise window_capture_smoke.SmokeFailure("--resize-before-capture requires WIDTH HEIGHT")
     try:
@@ -44,9 +47,9 @@ def _capture_after_resize(args, target):
             raise smoke.SmokeFailure(f"window already has target client extent {target}")
         backend.resize_client(handle, *target)
         smoke.wait_for_application_capture_exit(application, args.output, args.timeout)
-        exit_code, tail = smoke.terminate_process(application, "UI resize fixture", handle)
+        exit_code, tail = smoke.terminate_process(application, LIT_UI_RESIZE_FIXTURE, handle)
         application = None
-        smoke.require_normal_process_exit(exit_code, tail, "UI resize fixture")
+        smoke.require_normal_process_exit(exit_code, tail, LIT_UI_RESIZE_FIXTURE)
         log_text = smoke.shutdown_logserver_and_collect(logserver, log_directory, baseline, pattern)
         logserver = None
         if args.log_output:
@@ -73,7 +76,7 @@ def _capture_after_resize(args, target):
         return 1
     finally:
         if application is not None:
-            smoke.terminate_process(application, "UI resize fixture", handle)
+            smoke.terminate_process(application, LIT_UI_RESIZE_FIXTURE, handle)
         if logserver is not None:
             smoke.terminate_process(logserver, "UI resize logserver")
         if backend is not None:

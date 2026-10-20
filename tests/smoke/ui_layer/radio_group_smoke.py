@@ -15,6 +15,30 @@ from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, S
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
+LIT_MAIN_SELECTED = "main_selected"
+LIT_MAIN_CURSOR = "main_cursor"
+LIT_PARENT = "parent"
+LIT_POPUP_CURSOR = "popup_cursor"
+LIT_LABEL_READS = "label_reads"
+LIT_CHOICE_COUNT = "choice_count"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_PASSED = "passed"
+LIT_STAGE = "stage"
+LIT_CAPTURE = "capture"
+LIT_NATIVE_WINDOW = "native_window"
+LIT_UTF_8 = "utf-8"
+LIT_TAB = "Tab"
+LIT_RIGHT = "Right"
+LIT_DOWN = "Down"
+LIT_UP = "Up"
+LIT_RETURN = "Return"
+LIT_ROW20 = "row20"
+LIT_ROW40 = "row40"
+LIT_TOGGLE_ENABLED = "toggle_enabled"
+LIT_ROW50 = "row50"
+LIT_OPEN = "open"
+LIT_UI_RADIO_FIXTURE = "UI radio fixture"
+
 
 class RadioGroupRun:
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
@@ -30,8 +54,8 @@ class RadioGroupRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = { "main_selected": 10, "main_cursor": 10, "focus_code": 0, "changes": 0, "activations": 0, "before_clicks": 0, "after_clicks": 0, "enabled": 1, "source_revision": 1, "source_generation": 1701,
-            "reversed": 0, "removed": 0, "parent": 0, "popup_selected": 10, "popup_cursor": 10, "popup_changes": 0, "popup_activations": 0, "popup_count": 0, "focus_scope": 0, "label_reads": 10, "disabled_selected": 30, "choice_count": 5, }
+        self.expected = { LIT_MAIN_SELECTED: 10, LIT_MAIN_CURSOR: 10, "focus_code": 0, "changes": 0, "activations": 0, "before_clicks": 0, "after_clicks": 0, "enabled": 1, "source_revision": 1, "source_generation": 1701,
+            "reversed": 0, "removed": 0, LIT_PARENT: 0, "popup_selected": 10, LIT_POPUP_CURSOR: 10, "popup_changes": 0, "popup_activations": 0, "popup_count": 0, "focus_scope": 0, LIT_LABEL_READS: 10, "disabled_selected": 30, LIT_CHOICE_COUNT: 5, }
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -53,13 +77,13 @@ class RadioGroupRun:
         return {name: self.expected[name] + delta for name, delta in counts.items()}
 
     def navigate(self, key, selected, name):
-        changed = int(self.expected["main_selected"] != selected)
+        changed = int(self.expected[LIT_MAIN_SELECTED] != selected)
         self.native.tap(key)
         self.checkpoint(name, main_selected=selected, main_cursor=selected, focus_code=2, **self.increments(changes=changed))
 
     def checkpoint(self, name, *, extent=None, extra=None, neutral=True, pressed=None, **changes):
         self.expected.update(changes)
-        self.expected["label_reads"] = self.expected["choice_count"] * (2 + self.expected["parent"])
+        self.expected[LIT_LABEL_READS] = self.expected[LIT_CHOICE_COUNT] * (2 + self.expected[LIT_PARENT])
         if neutral:
             self.native.pointer(4, 4)
         self.native.maintain_pointer()
@@ -74,110 +98,110 @@ class RadioGroupRun:
             if snapshot is None:
                 time.sleep(0.1)
                 continue
-            if snapshot["logical_extent"][0] < 700.0 or snapshot["logical_extent"][1] < 400.0:
+            if snapshot[LIT_LOGICAL_EXTENT][0] < 700.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
                 raise SmokeSkip("the radio fixture needs a logical client of at least 700x400")
             if self.native.windows:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
             report = observe_radio_group(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, pressed=pressed)
-            if report["passed"]:
+            if report[LIT_PASSED]:
                 self.snapshot = snapshot
-                report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
+                report.update({LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window()})
                 self.stages.append(report)
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
+        self.failure_report = {LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"radio displayed-state gate '{name}' failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 physical cursor positioning with posted pointer/key messages"
+        report = { LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 physical cursor positioning with posted pointer/key messages"
                 if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus", "runtime_limit": "No native Wayland, physical pointer-grab, or live IME qualification.", }
-        (self.args.output_directory / "radio_group.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (self.args.output_directory / "radio_group.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
 
     def execute(self):
         self.checkpoint("initial_checked_disabled_and_atlas_state")
         self.click("before")
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
         self.checkpoint("tab_enters_one_radio_host", before_clicks=1, focus_code=2)
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
         self.checkpoint("next_tab_skips_owned_choices", focus_code=3)
-        self.native.tap("Tab", shift=True)
-        self.navigate("Right", 20, "shift_tab_and_right_select_second")
-        self.navigate("Down", 40, "down_skips_disabled_choice")
+        self.native.tap(LIT_TAB, shift=True)
+        self.navigate(LIT_RIGHT, 20, "shift_tab_and_right_select_second")
+        self.navigate(LIT_DOWN, 40, "down_skips_disabled_choice")
         self.navigate("Left", 20, "left_selects_previous_enabled_choice")
-        self.navigate("Up", 10, "up_selects_first_choice")
-        self.navigate("Up", 50, "up_wraps_to_last_enabled_choice")
-        self.navigate("Right", 10, "right_wraps_to_first_enabled_choice")
+        self.navigate(LIT_UP, 10, "up_selects_first_choice")
+        self.navigate(LIT_UP, 50, "up_wraps_to_last_enabled_choice")
+        self.navigate(LIT_RIGHT, 10, "right_wraps_to_first_enabled_choice")
         self.navigate("End", 50, "end_selects_last_enabled_choice")
         self.navigate("Home", 10, "home_selects_first_enabled_choice")
-        self.native.tap("Return", repeat_count=3)
+        self.native.tap(LIT_RETURN, repeat_count=3)
         self.checkpoint("held_enter_activates_once_without_selection_change", **self.increments(activations=1))
         self.native.tap("space", repeat_count=3)
         self.checkpoint("held_space_activates_once_without_selection_change", **self.increments(activations=1))
         self.click("row30")
-        self.native.drag(self.rectangle_point("row20"), self.point(4, 4))
+        self.native.drag(self.rectangle_point(LIT_ROW20), self.point(4, 4))
         self.checkpoint("disabled_choice_and_drag_out_cannot_activate", focus_code=2)
-        pressed = self.rectangle_point("row40")
+        pressed = self.rectangle_point(LIT_ROW40)
         self.native.button(True, *pressed)
         self.checkpoint("pointer_press_keeps_selection_until_release", neutral=False, pressed=("", 40))
         self.native.button(False, *pressed)
         self.checkpoint("pointer_release_selects_and_activates_once", main_selected=40, main_cursor=40, **self.increments(changes=1, activations=1))
         self.native.command("select_disabled")
         self.checkpoint("external_disabled_selection_keeps_check_and_repairs_cursor", main_selected=30, main_cursor=40)
-        self.native.command("toggle_enabled")
-        self.native.tap("Return")
-        self.click("row50")
+        self.native.command(LIT_TOGGLE_ENABLED)
+        self.native.tap(LIT_RETURN)
+        self.click(LIT_ROW50)
         self.checkpoint("disabled_group_blocks_keyboard_and_pointer", enabled=0, focus_code=0)
-        self.native.command("toggle_enabled")
-        self.click("row20")
+        self.native.command(LIT_TOGGLE_ENABLED)
+        self.click(LIT_ROW20)
         self.checkpoint("fresh_pointer_sequence_after_enable", enabled=1, focus_code=2, main_selected=20, main_cursor=20, **self.increments(changes=1, activations=1))
-        old_row = self.rectangle_point("row40")
+        old_row = self.rectangle_point(LIT_ROW40)
         self.native.button(True, *old_row)
         self.native.command("reverse")
         self.native.button(False, *old_row)
         self.checkpoint("source_reorder_preserves_key_and_retires_old_release", reversed=1, source_revision=2)
         self.native.command("remove_selected")
         self.checkpoint("removal_clears_selection_and_repairs_cursor", removed=20, source_revision=3, main_selected=0, main_cursor=50, choice_count=4, **self.increments(changes=1))
-        self.click("row50")
+        self.click(LIT_ROW50)
         self.checkpoint("fresh_keyed_release_after_removal", main_selected=50, main_cursor=50, **self.increments(changes=1, activations=1))
-        self.native.key("Return", True)
-        self.checkpoint("radio_submit_press_waits_for_release", pressed=("", self.expected["main_cursor"]))
+        self.native.key(LIT_RETURN, True)
+        self.checkpoint("radio_submit_press_waits_for_release", pressed=("", self.expected[LIT_MAIN_CURSOR]))
         self.native.command("replace_source")
-        self.native.key("Return", True, repeat=True)
-        self.native.key("Return", False)
+        self.native.key(LIT_RETURN, True, repeat=True)
+        self.native.key(LIT_RETURN, False)
         self.checkpoint("replacement_resets_selection_and_retires_held_submit", source_generation=1702, source_revision=4, reversed=0, removed=0, choice_count=5, main_selected=0, main_cursor=10, disabled_selected=0, **self.increments(changes=1))
         physical_extent = self.point(840, 640)
         self.backend.resize_client(self.handle, *physical_extent)
         self.native.pointer(4, 4)
         time.sleep(0.3)
-        self.click("row40")
-        self.checkpoint("resized_display_accepts_fresh_owned_release", extent=physical_extent, extra=lambda snapshot: abs(snapshot["logical_extent"][0] - 840.0) < 1.0 and abs(snapshot["logical_extent"][1] - 640.0) < 1.0,
+        self.click(LIT_ROW40)
+        self.checkpoint("resized_display_accepts_fresh_owned_release", extent=physical_extent, extra=lambda snapshot: abs(snapshot[LIT_LOGICAL_EXTENT][0] - 840.0) < 1.0 and abs(snapshot[LIT_LOGICAL_EXTENT][1] - 640.0) < 1.0,
             main_selected=40, main_cursor=40, **self.increments(changes=1, activations=1))
-        self.click("open")
+        self.click(LIT_OPEN)
         self.checkpoint("parent_popup_focuses_its_single_radio_host", parent=1, popup_count=1, focus_code=5, focus_scope=1)
-        self.native.tap("Down")
-        self.native.tap("Return", repeat_count=3)
+        self.native.tap(LIT_DOWN)
+        self.native.tap(LIT_RETURN, repeat_count=3)
         self.checkpoint("popup_navigation_selects_and_held_enter_activates_once", popup_selected=20, popup_cursor=20, popup_changes=1, popup_activations=1)
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
         self.checkpoint("popup_next_tab_skips_all_owned_choices", focus_code=6)
-        self.native.tap("Tab", shift=True)
+        self.native.tap(LIT_TAB, shift=True)
         old_popup_row = self.rectangle_point("popup_row40")
         self.native.button(True, *old_popup_row)
         self.native.command("close_parent")
         self.native.button(False, *old_popup_row)
         self.checkpoint("ancestor_close_retires_popup_capture_before_release", parent=0, popup_count=0, focus_code=4, focus_scope=0)
-        self.click("open")
+        self.click(LIT_OPEN)
         self.checkpoint("reopened_popup_publishes_focus_before_held_submit", parent=1, popup_count=1, focus_code=5, focus_scope=1)
-        self.native.key("Return", True)
-        self.checkpoint("popup_radio_submit_press_waits_for_release", pressed=("popup_", self.expected["popup_cursor"]))
+        self.native.key(LIT_RETURN, True)
+        self.checkpoint("popup_radio_submit_press_waits_for_release", pressed=("popup_", self.expected[LIT_POPUP_CURSOR]))
         self.native.focus_loss_and_gain()
-        self.native.key("Return", True, repeat=True)
-        self.native.key("Return", False)
+        self.native.key(LIT_RETURN, True, repeat=True)
+        self.native.key(LIT_RETURN, False)
         self.checkpoint("native_focus_loss_closes_reopened_popup_and_retires_key", parent=0, popup_count=0, focus_code=0, focus_scope=0)
-        self.click("open")
+        self.click(LIT_OPEN)
         self.checkpoint("reopened_popup_publishes_geometry_before_fresh_release", parent=1, popup_count=1, focus_code=5, focus_scope=1)
         self.click("popup_row50")
         self.checkpoint("fresh_popup_release_after_focus_loss", parent=1, popup_count=1, focus_code=5, focus_scope=1, popup_selected=50, popup_cursor=50, popup_changes=2, popup_activations=2)
@@ -211,15 +235,15 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, "UI radio fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI radio fixture")
+                exit_code, tail = terminate_process(application, LIT_UI_RADIO_FIXTURE, handle)
+                require_normal_process_exit(exit_code, tail, LIT_UI_RADIO_FIXTURE)
         finally:
             try:
                 text = ""
                 if log_directory is not None:
                     text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
                     logserver = None
-                    (args.output_directory / "radio_group.log").write_text(text, encoding="utf-8")
+                    (args.output_directory / "radio_group.log").write_text(text, encoding=LIT_UTF_8)
             finally:
                 try:
                     if logserver is not None:

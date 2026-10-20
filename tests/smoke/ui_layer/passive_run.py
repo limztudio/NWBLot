@@ -10,9 +10,15 @@ from fixture_launch import admit_fixture_processes, prepare_fixture_launch
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 
+LIT_IMAGE = "image"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_STAGE = "stage"
+LIT_CAPTURE = "capture"
+LIT_NATIVE_WINDOW = "native_window"
+
 
 class PassiveImageRun:
-    def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern, *, minimum_height, snapshot_reader, observer, center, fixture_label="image"):
+    def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern, *, minimum_height, snapshot_reader, observer, center, fixture_label=LIT_IMAGE):
         self.args, self.backend, self.handle, self.process = args, backend, handle, process
         self.log_directory, self.log_baseline, self.log_pattern = log_directory, log_baseline, log_pattern
         self.native = GuardedNativeInput(backend, handle)
@@ -54,7 +60,7 @@ class PassiveImageRun:
             if snapshot is None:
                 time.sleep(0.1)
                 continue
-            if snapshot["logical_extent"][0] < 740.0 or snapshot["logical_extent"][1] < self.minimum_height:
+            if snapshot[LIT_LOGICAL_EXTENT][0] < 740.0 or snapshot[LIT_LOGICAL_EXTENT][1] < self.minimum_height:
                 raise SmokeSkip(f"the {self.fixture_label} fixture needs a logical client of at least 740x{self.minimum_height:g}")
             if self.native.windows:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
@@ -63,17 +69,17 @@ class PassiveImageRun:
             report = self.observer(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot
-                report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
+                report.update({LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window()})
                 self.stages.append(report)
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "native_window": self.native.observe_window(), "observation": report}
+        self.failure_report = {LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"{self.fixture_label} displayed-state gate '{name}' failed: {self.failure_report}")
 
 
-def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, label, fixture_label="image"):
+def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, label, fixture_label=LIT_IMAGE):
     launch = prepare_fixture_launch(args, fixture, build_launch_environment=build_launch_environment, build_fixture_environment=build_fixture_environment, create_capture_backend=create_capture_backend)
     driver = None
     try:

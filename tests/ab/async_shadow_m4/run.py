@@ -47,6 +47,27 @@ from window_capture_smoke import (  # noqa: E402
     run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_capture_result,)
 
+LIT_B_BM = b"BM"
+LIT_NAME = 'name'
+LIT_DETAIL = 'detail'
+LIT_FRAME_MEDIAN_MS = 'frame_median_ms'
+LIT_FRAME_REGRESSION_PERCENT = 'frame_regression_percent'
+LIT_CHANGED_FRACTION = 'changed_fraction'
+LIT_CAPTURE_FILE = 'capture_file'
+LIT_SYNC_EXECUTABLE = "--sync-executable"
+LIT_ASYNC_EXECUTABLE = "--async-executable"
+LIT_RUNTIME_DIR = "--runtime-dir"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE = "--frozen-yaw must be a finite float32 decimal"
+LIT_NON_FINITE_BENCHMARK_OPTION = "non-finite benchmark option"
+LIT_SCREEN_CLIENT = "screen-client"
+LIT_CURSOR = "cursor"
+LIT_PARTIAL_HEADER = "partial_header"
+LIT_PARTIAL_SCOPE = "partial_scope"
+LIT_MISSING_FILE = "missing_file"
+LIT_MONOTONIC = "monotonic"
+LIT_SLEEP = "sleep"
+
 LIT_RENDER_FRAME = "render.frame"
 LIT_RENDER_ASYNC_SHADOW = "render.async_shadow"
 LIT_RENDER_ASYNC_FINAL = "render.async_final"
@@ -245,7 +266,7 @@ def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
 def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
     """Read the 24-bit BMPs written by the shared native-window capture helper."""
     data = path.read_bytes()
-    if len(data) < 54 or data[:2] != b"BM":
+    if len(data) < 54 or data[:2] != LIT_B_BM:
         raise SmokeFailure(f"capture is not a BMP: {path}")
 
     pixel_offset = struct.unpack_from(LIT_I, data, 10)[0]
@@ -319,8 +340,8 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
         async_run = report[LIT_ASYNC]
         assert isinstance(sync, Mapping)
         assert isinstance(async_run, Mapping)
-        lines = (LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT, "", "Verdict: **FAIL**", "", "## Incomplete telemetry", "", str(report[LIT_COLLECTION_ERROR]), "", LIT_ARTIFACTS, "", f"- Sync timing: `{sync['timing_file']}`",
-            f"- Async timing: `{async_run['timing_file']}`", f"- Sync log: `{sync['log_file']}`", f"- Async log: `{async_run['log_file']}`",)
+        lines = (LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT, "", "Verdict: **FAIL**", "", "## Incomplete telemetry", "", str(report[LIT_COLLECTION_ERROR]), "", LIT_ARTIFACTS, "", f"- Sync timing: `{sync[LIT_TIMING_FILE]}`",
+            f"- Async timing: `{async_run[LIT_TIMING_FILE]}`", f"- Sync log: `{sync[LIT_LOG_FILE]}`", f"- Async log: `{async_run[LIT_LOG_FILE]}`",)
         path.write_text("\n".join(lines) + "\n", encoding=LIT_UTF_8)
         return
 
@@ -331,20 +352,20 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
     gates = report[LIT_GATES]
     assert isinstance(gates, Sequence)
 
-    lines = [LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT, "", f"Verdict: **{report['verdict'].upper()}**", "", "| Gate | Result | Detail |", "| --- | --- | --- |",]
+    lines = [LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT, "", f"Verdict: **{report[LIT_VERDICT].upper()}**", "", "| Gate | Result | Detail |", "| --- | --- | --- |",]
     for gate in gates:
         assert isinstance(gate, Mapping)
         result = "PASS" if gate[LIT_PASSED] else "FAIL"
-        lines.append(f"| {gate['name']} | {result} | {gate['detail']} |")
+        lines.append(f"| {gate[LIT_NAME]} | {result} | {gate[LIT_DETAIL]} |")
 
-    lines.extend(("", "## Critical path", "", f"- Synchronous `render.frame`: {sync['frame_median_ms']:.4f} ms", f"- Async `render.frame`: {async_run['frame_median_ms']:.4f} ms", f"- Delta: {report['frame_regression_percent']:+.3f}%",
+    lines.extend(("", "## Critical path", "", f"- Synchronous `render.frame`: {sync[LIT_FRAME_MEDIAN_MS]:.4f} ms", f"- Async `render.frame`: {async_run[LIT_FRAME_MEDIAN_MS]:.4f} ms", f"- Delta: {report[LIT_FRAME_REGRESSION_PERCENT]:+.3f}%",
         f"- Async graph-owned shadow median: {async_run['shadow_median_ms']:.4f} ms", f"- Async graph-owned shadow positive samples: {async_run['shadow_positive_sample_count']}/{async_run['shadow_sample_count']}", "", LIT_ARTIFACTS, "",
-        f"- Sync timing: `{sync['timing_file']}`", f"- Async timing: `{async_run['timing_file']}`", f"- Sync log: `{sync['log_file']}`", f"- Async log: `{async_run['log_file']}`",))
+        f"- Sync timing: `{sync[LIT_TIMING_FILE]}`", f"- Async timing: `{async_run[LIT_TIMING_FILE]}`", f"- Sync log: `{sync[LIT_LOG_FILE]}`", f"- Async log: `{async_run[LIT_LOG_FILE]}`",))
     if report.get(LIT_PIXEL_DIFF):
         pixel_diff = report[LIT_PIXEL_DIFF]
         assert isinstance(pixel_diff, Mapping)
-        lines.extend((f"- Pixel comparison: max abs {pixel_diff['max_abs']}, mean abs {pixel_diff['mean_abs']:.6f}, " f"changed {pixel_diff['changed_fraction'] * 100.0:.4f}%", f"- Sync capture: `{sync['capture_file']}`",
-            f"- Async capture: `{async_run['capture_file']}`",))
+        lines.extend((f"- Pixel comparison: max abs {pixel_diff['max_abs']}, mean abs {pixel_diff['mean_abs']:.6f}, " f"changed {pixel_diff[LIT_CHANGED_FRACTION] * 100.0:.4f}%", f"- Sync capture: `{sync[LIT_CAPTURE_FILE]}`",
+            f"- Async capture: `{async_run[LIT_CAPTURE_FILE]}`",))
 
     path.write_text("\n".join(lines) + "\n", encoding=LIT_UTF_8)
 
@@ -533,17 +554,17 @@ def run_single_mode(args: argparse.Namespace, mode: str, executable: Path, symbo
 
 
 def gate(name: str, passed: bool, detail: str) -> Dict[str, object]:
-    return {"name": name, LIT_PASSED: passed, "detail": detail}
+    return {LIT_NAME: name, LIT_PASSED: passed, LIT_DETAIL: detail}
 
 
 def raw_run_payload(run: RunResult) -> Dict[str, object]:
-    return { "executable": run.executable, LIT_TIMING_FILE: run.timing_file, LIT_LOG_FILE: run.log_file, "capture_file": run.capture_file, "measurement_start_byte_offset": run.measurement_start_byte_offset, "lane": asdict(run.lane),
+    return { "executable": run.executable, LIT_TIMING_FILE: run.timing_file, LIT_LOG_FILE: run.log_file, LIT_CAPTURE_FILE: run.capture_file, "measurement_start_byte_offset": run.measurement_start_byte_offset, "lane": asdict(run.lane),
         "forbidden_log_messages": run.forbidden_log_messages, "scopes": {name: asdict(summary) for name, summary in run.scopes.items()}, }
 
 
 def raw_pixel_diff_payload(pixel_diff: PixelDiff) -> Dict[str, object]:
     payload = asdict(pixel_diff)
-    payload["changed_fraction"] = pixel_diff.changed_fraction
+    payload[LIT_CHANGED_FRACTION] = pixel_diff.changed_fraction
     return payload
 
 
@@ -584,12 +605,12 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
 
     def compact_run(run: RunResult, frame: ScopeSummary, shadow_scope: Optional[ScopeSummary] = None) -> Dict[str, object]:
         result = raw_run_payload(run)
-        result.update({ "frame_median_ms": frame.median_ms, "frame_sample_count": frame.sample_count, })
+        result.update({ LIT_FRAME_MEDIAN_MS: frame.median_ms, "frame_sample_count": frame.sample_count, })
         if shadow_scope:
             result.update(shadow_median_ms=shadow_scope.median_ms, shadow_sample_count=shadow_scope.sample_count, shadow_positive_sample_count=shadow_scope.positive_sample_count,)
         return result
 
-    return { LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3, LIT_VERDICT: verdict, LIT_GATES: gates, "frame_regression_percent": regression_percent, LIT_SYNC: compact_run(sync, sync_frame), LIT_ASYNC: compact_run(async_run, async_frame, shadow),
+    return { LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3, LIT_VERDICT: verdict, LIT_GATES: gates, LIT_FRAME_REGRESSION_PERCENT: regression_percent, LIT_SYNC: compact_run(sync, sync_frame), LIT_ASYNC: compact_run(async_run, async_frame, shadow),
         LIT_PIXEL_DIFF: raw_pixel_diff_payload(pixel_diff) if pixel_diff else None, }
 
 
@@ -606,10 +627,10 @@ def require_non_negative(parser: argparse.ArgumentParser, option: str, value: fl
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser/verdict checks without launching the selected backend.")
-    parser.add_argument("--sync-executable", type=Path, help="Path to nwb_async_shadow_m4_sync_benchmark.")
-    parser.add_argument("--async-executable", type=Path, help="Path to nwb_async_shadow_m4_async_benchmark.")
-    parser.add_argument("--runtime-dir", type=Path, help="Cooked smoke runtime root used as both process working directory.")
-    parser.add_argument("--output-dir", type=Path, help="Directory for timing files, logs, captures, and reports.")
+    parser.add_argument(LIT_SYNC_EXECUTABLE, type=Path, help="Path to nwb_async_shadow_m4_sync_benchmark.")
+    parser.add_argument(LIT_ASYNC_EXECUTABLE, type=Path, help="Path to nwb_async_shadow_m4_async_benchmark.")
+    parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Cooked smoke runtime root used as both process working directory.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for timing files, logs, captures, and reports.")
     parser.add_argument("--logserver-executable", help="Optional path to nwb_logserver/logserver.")
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Use standalone loader logs rather than a logserver.")
     parser.add_argument("--sync-namesym", type=Path, help="Optional name-symbol sidecar for an opt/fin sync binary.")
@@ -643,15 +664,15 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     # The native environment reader uses full-consumption std::from_chars<f32>.
     yaw_token = re.fullmatch(r"-?([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", args.frozen_yaw)
     if yaw_token is None:
-        parser.error("--frozen-yaw must be a finite float32 decimal")
+        parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
     if any(digit not in "0." for digit in yaw_token[1]):
         try:
             frozen_yaw = Decimal(args.frozen_yaw).copy_abs()
         except InvalidOperation:
-            parser.error("--frozen-yaw must be a finite float32 decimal")
+            parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
         # Nonzero values rounding to zero or infinity are native range errors.
         if not Decimal.from_float(2.0 ** -150) < frozen_yaw < Decimal(2 ** 128 - 2 ** 103):
-            parser.error("--frozen-yaw must be a finite float32 decimal")
+            parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
     require_non_negative(parser, LIT_WARMUP_SECONDS, args.warmup_seconds)
     require_positive(parser, LIT_MEASURE_SECONDS, args.measure_seconds)
     require_positive(parser, LIT_STARTUP_TIMEOUT, args.startup_timeout)
@@ -685,16 +706,16 @@ def run_self_test() -> int:
     for validator in (require_positive, require_non_negative):
         for value in (math.nan, math.inf, -math.inf):
             numeric_parser.error.reset_mock()
-            numeric_parser.error.side_effect = ValueError("non-finite benchmark option")
+            numeric_parser.error.side_effect = ValueError(LIT_NON_FINITE_BENCHMARK_OPTION)
             try:
                 validator(numeric_parser, LIT_STARTUP_TIMEOUT, value)
             except ValueError as error:
-                assert str(error) == "non-finite benchmark option"
+                assert str(error) == LIT_NON_FINITE_BENCHMARK_OPTION
             else:
                 raise AssertionError("a non-finite benchmark deadline or tolerance was accepted")
             numeric_parser.error.assert_called_once()
 
-    yaw_arguments = ["--sync-executable", "sync", "--async-executable", "async", "--runtime-dir", "runtime", "--output-dir", "output"]
+    yaw_arguments = [LIT_SYNC_EXECUTABLE, LIT_SYNC, LIT_ASYNC_EXECUTABLE, LIT_ASYNC, LIT_RUNTIME_DIR, "runtime", LIT_OUTPUT_DIR, "output"]
     for value in (
         "nan", "inf", "-inf", "not-a-number", "1e100", "1e300", "-1e100", "1_0", "+0.6", " 0.6", "0.6 ", "3.4028236e38", "1e-46", "1e-999",
         "340282356779733661637539395458142568448",
@@ -798,10 +819,10 @@ def run_self_test() -> int:
     cursor_capture = object.__new__(WindowsCapture)
     cursor_events = []
     cursor_capture.prepare_raw_client_window = mock.Mock(side_effect=lambda hwnd: cursor_events.append((LIT_PREPARE, hwnd)))
-    cursor_capture._client_rect = mock.Mock(side_effect=lambda hwnd: cursor_events.append(("screen-client", hwnd)) or WindowsCapture.RECT(-1281, 73, -1, 974))
-    cursor_capture.user32 = SimpleNamespace(SetCursorPos=mock.Mock(side_effect=lambda x, y: cursor_events.append(("cursor", x, y)) or 1))
+    cursor_capture._client_rect = mock.Mock(side_effect=lambda hwnd: cursor_events.append((LIT_SCREEN_CLIENT, hwnd)) or WindowsCapture.RECT(-1281, 73, -1, 974))
+    cursor_capture.user32 = SimpleNamespace(SetCursorPos=mock.Mock(side_effect=lambda x, y: cursor_events.append((LIT_CURSOR, x, y)) or 1))
     prepare_m4_client_area(cursor_capture, 17)
-    assert cursor_events == [(LIT_PREPARE, 17), ("screen-client", 17), ("cursor", -641, 523)]
+    assert cursor_events == [(LIT_PREPARE, 17), (LIT_SCREEN_CLIENT, 17), (LIT_CURSOR, -641, 523)]
 
     for client_rect in (None, WindowsCapture.RECT(104, 73, 104, 973), WindowsCapture.RECT(104, 73, 103, 973),
                         WindowsCapture.RECT(104, 73, 1384, 73), WindowsCapture.RECT(104, 73, 1384, 72)):
@@ -885,7 +906,7 @@ def run_self_test() -> int:
         for dib_size in (40, 56):
             pixel_offset = 14 + dib_size
             bmp = bytearray(pixel_offset + 4)
-            bmp[:2] = b"BM"
+            bmp[:2] = LIT_B_BM
             struct.pack_into("<I", bmp, 10, pixel_offset)
             struct.pack_into("<IiiHHI", bmp, 14, dib_size, 1, 1, 1, 24, 0)
             bmp[pixel_offset:] = bytes((3, 2, 1, 0))
@@ -983,18 +1004,18 @@ def run_self_test() -> int:
                 warmup_interval = timing_interval(warmup_ms)
                 measured_interval = timing_interval(measured_ms)
                 header = measured_interval.splitlines(keepends=True)[0]
-                for cutoff_kind in ("completed_report", "partial_header", "partial_scope", "missing_file"):
+                for cutoff_kind in ("completed_report", LIT_PARTIAL_HEADER, LIT_PARTIAL_SCOPE, LIT_MISSING_FILE):
                     full_prefix = warmup_interval * 16
-                    if cutoff_kind == "partial_header":
+                    if cutoff_kind == LIT_PARTIAL_HEADER:
                         initial_prefix = full_prefix + warmup_interval[:9]
                         remainder = warmup_interval[9:]
                         full_prefix += warmup_interval
-                    elif cutoff_kind == "partial_scope":
+                    elif cutoff_kind == LIT_PARTIAL_SCOPE:
                         cut = warmup_interval.index(b"window_avg_ms=") + 6
                         initial_prefix = full_prefix + warmup_interval[:cut]
                         remainder = warmup_interval[cut:]
                         full_prefix += warmup_interval
-                    elif cutoff_kind == "missing_file":
+                    elif cutoff_kind == LIT_MISSING_FILE:
                         full_prefix = b""
                         initial_prefix = b""
                         remainder = b""
@@ -1003,7 +1024,7 @@ def run_self_test() -> int:
                         remainder = b""
                     if timing_path.exists():
                         timing_path.unlink()
-                    if cutoff_kind != "missing_file":
+                    if cutoff_kind != LIT_MISSING_FILE:
                         timing_path.write_bytes(initial_prefix)
                     chunks = [remainder, warmup_interval, header.rstrip(b"\r\n"), newline.encode(LIT_UTF_8) + measured_interval[len(header):] + measured_interval * 10]
                     clock = [0.0]
@@ -1016,8 +1037,8 @@ def run_self_test() -> int:
                             timing_file.write(chunk)
                         writes.append(chunk)
 
-                    with mock.patch.object(module.time, "monotonic", side_effect=lambda: clock[0]), \
-                         mock.patch.object(module.time, "sleep", side_effect=append_chunk):
+                    with mock.patch.object(module.time, LIT_MONOTONIC, side_effect=lambda: clock[0]), \
+                         mock.patch.object(module.time, LIT_SLEEP, side_effect=append_chunk):
                         offset = wait_for_measurement_timing_boundary(app, timing_path, 1.0)
                     assert len(writes) == 4, "an incomplete or first post-warmup header was admitted"
                     assert offset == len(full_prefix) + len(warmup_interval)
@@ -1026,22 +1047,22 @@ def run_self_test() -> int:
                     assert measured[LIT_RENDER_FRAME].median_ms == measured_ms
                     async_run.scopes = measured
                     assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == expected_verdict
-                    if cutoff_kind != "missing_file":
+                    if cutoff_kind != LIT_MISSING_FILE:
                         async_run.scopes = summarize_scopes(parse_timing_file(timing_path, timing_symbols))
                         assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] != expected_verdict
 
         # Missing publications and truncation fail admission instead of falling back to warmup or partial rows.
         timing_path.write_bytes(b"warmup prefix")
         clock = [0.0]
-        with mock.patch.object(module.time, "monotonic", side_effect=lambda: clock[0]), \
-             mock.patch.object(module.time, "sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)):
+        with mock.patch.object(module.time, LIT_MONOTONIC, side_effect=lambda: clock[0]), \
+             mock.patch.object(module.time, LIT_SLEEP, side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)):
             try:
                 wait_for_measurement_timing_boundary(app, timing_path, 0.1)
             except SmokeFailure as error:
                 assert "did not publish" in str(error)
             else:
                 raise AssertionError("missing post-warmup boundaries admitted the prefix")
-        with mock.patch.object(module.time, "sleep", side_effect=lambda seconds: timing_path.write_bytes(b"")):
+        with mock.patch.object(module.time, LIT_SLEEP, side_effect=lambda seconds: timing_path.write_bytes(b"")):
             try:
                 wait_for_measurement_timing_boundary(app, timing_path, 1.0)
             except SmokeFailure as error:

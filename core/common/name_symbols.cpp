@@ -43,6 +43,7 @@ inline constexpr char s_NamesymRecordSeparator = '\t';
 inline constexpr char s_NamesymRecordTerminator = '\n';
 inline constexpr AStringView s_NamesymProducerSuffix = "\tproducer=runtime\n";
 inline constexpr AStringView s_NamesymRuntimeSource = "\truntime\t";
+inline constexpr usize s_NamesymEscapedCharBytes = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +149,7 @@ public:
             requiredSize = AddSize(requiredSize, ::NameDetail::s_DebugHashTextLength);
             requiredSize = AddSize(requiredSize, s_NamesymRuntimeSource.size());
             for(const char ch : *record.text){
-                const usize encodedSize = ch == '\\' || ch == '\n' || ch == '\r' || ch == '\t' ? 2u : 1u;
+                const usize encodedSize = ch == '\\' || ch == '\n' || ch == '\r' || ch == '\t' ? s_NamesymEscapedCharBytes : 1u;
                 requiredSize = AddSize(requiredSize, encodedSize);
             }
             requiredSize = AddSize(requiredSize, 1u);

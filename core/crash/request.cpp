@@ -3,6 +3,7 @@
 
 
 #include "internal.h"
+#include "reason_names.h"
 
 #include <global/diagnostics.h>
 #include <global/thread.h>
@@ -57,9 +58,9 @@ StringView PlatformKindName(const u32 platform)noexcept{
 StringView ReasonKindName(const u32 reasonKind)noexcept{
     switch(reasonKind){
     case CrashReasonKind::WindowsException:
-        return "windows_exception";
+        return s_WindowsExceptionReasonKind;
     case CrashReasonKind::PosixSignal:
-        return "signal";
+        return s_SignalReasonKind;
     case CrashReasonKind::Terminate:
         return "terminate";
     case CrashReasonKind::ManualDump:

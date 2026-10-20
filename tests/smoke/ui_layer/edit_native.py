@@ -9,8 +9,17 @@ import ctypes
 import time
 from contextlib import contextmanager
 
-from interaction_smoke import NativeInput, WinInput, WinKeyboardInput
+from interaction_smoke import INPUT_SETTLE_SECONDS, KEY_REPEAT_INTERVAL_SECONDS, PRESS_HOLD_SECONDS, NativeInput, WinInput, WinKeyboardInput
 from window_capture_smoke import LinuxXEvent, SmokeFailure, SmokeSkip, WinPoint
+
+LIT_AGGREGATE_KEY_MESSAGES_ARE_WIN32_ONLY = "aggregate key messages are Win32-only"
+LIT_UTF_16_LE = "utf-16-le"
+LIT_LITTLE = "little"
+LIT_TAB = "Tab"
+
+# Let posted text commit and real pointer tracking settle before the next step.
+TEXT_SETTLE_SECONDS = 0.15
+POINTER_SETTLE_SECONDS = 0.15
 
 KEYS = { "Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B, "BackSpace": 0x08, "Insert": 0x2D, "Delete": 0x2E, "Left": 0x25, "Right": 0x27, "Home": 0x24, "End": 0x23, "F5": 0x74, "F6": 0x75, "F7": 0x76,
     **{letter: ord(letter.upper()) for letter in "abcdefghijklmnopqrstuvwxyz"}, }
@@ -38,7 +47,7 @@ class EditNativeInput(NativeInput):
             raise SmokeFailure("SetCursorPos failed before native double-click")
         try:
             # TrackMouseEvent observes the real pointer even when button messages are posted.
-            time.sleep(0.15)
+            time.sleep(POINTER_SETTLE_SECONDS)
             yield
         finally:
             if not user32.SetCursorPos(original.x, original.y):
@@ -61,7 +70,7 @@ class EditNativeInput(NativeInput):
             self._post(0x0100 if down else 0x0101, KEYS[name], flags)
             return
         if count != 1:
-            raise SmokeFailure("aggregate key messages are Win32-only")
+            raise SmokeFailure(LIT_AGGREGATE_KEY_MESSAGES_ARE_WIN32_ONLY)
         keysym = self.backend.x11.XStringToKeysym(name.encode("ascii"))
         keycode = self.backend.x11.XKeysymToKeycode(self.backend.display, keysym)
         if not keycode:
@@ -80,7 +89,7 @@ class EditNativeInput(NativeInput):
         modifiers = []
         if self.windows and (shift or control):
             self.backend.focus_window(self.handle)
-            time.sleep(0.1)
+            time.sleep(INPUT_SETTLE_SECONDS)
             if self.backend.user32.GetForegroundWindow() != self.handle:
                 raise SmokeSkip("the edit fixture cannot take foreground focus for native modifier chords")
             try:
@@ -88,7 +97,7 @@ class EditNativeInput(NativeInput):
                     if enabled:
                         self._modifier(key, True)
                         modifiers.append(key)
-                time.sleep(0.08)
+                time.sleep(PRESS_HOLD_SECONDS)
             except BaseException:
                 for key in reversed(modifiers):
                     self._modifier(key, False)
@@ -96,36 +105,36 @@ class EditNativeInput(NativeInput):
         try:
             self.key(name, True, shift=shift, control=control)
             for _ in range(repeat_count):
-                time.sleep(0.04)
+                time.sleep(KEY_REPEAT_INTERVAL_SECONDS)
                 self.key(name, True, repeat=True, shift=shift, control=control)
-            time.sleep(0.08)
+            time.sleep(PRESS_HOLD_SECONDS)
             self.key(name, False, shift=shift, control=control)
         finally:
             for key in reversed(modifiers):
                 self._modifier(key, False)
-        time.sleep(0.1)
+        time.sleep(INPUT_SETTLE_SECONDS)
 
     def aggregate_tap(self, name, count, *, repeat=False):
         if not self.windows:
-            raise SmokeFailure("aggregate key messages are Win32-only")
+            raise SmokeFailure(LIT_AGGREGATE_KEY_MESSAGES_ARE_WIN32_ONLY)
         self.key(name, True, repeat=repeat, count=count)
-        time.sleep(0.08)
+        time.sleep(PRESS_HOLD_SECONDS)
         self.key(name, False)
-        time.sleep(0.1)
+        time.sleep(INPUT_SETTLE_SECONDS)
 
     def aggregate_text(self, character, count):
         if not self.windows or len(character) != 1 or not 1 <= count <= 0xFFFF:
             raise SmokeFailure("aggregate text needs one Unicode scalar and a Win32 repeat count")
-        encoded = character.encode("utf-16-le")
+        encoded = character.encode(LIT_UTF_16_LE)
         for offset in range(0, len(encoded), 2):
-            self._post(0x0102, int.from_bytes(encoded[offset:offset + 2], "little"), count)
-        time.sleep(0.15)
+            self._post(0x0102, int.from_bytes(encoded[offset:offset + 2], LIT_LITTLE), count)
+        time.sleep(TEXT_SETTLE_SECONDS)
 
     def text(self, value, *, settle=True):
         if self.windows:
-            encoded = value.encode("utf-16-le")
+            encoded = value.encode(LIT_UTF_16_LE)
             for offset in range(0, len(encoded), 2):
-                self._post(0x0102, int.from_bytes(encoded[offset:offset + 2], "little"), 1)
+                self._post(0x0102, int.from_bytes(encoded[offset:offset + 2], LIT_LITTLE), 1)
         else:
             for character in value:
                 name = "space" if character == " " else character.lower()
@@ -134,10 +143,10 @@ class EditNativeInput(NativeInput):
                 self.key(name, True, shift=character.isupper())
                 self.key(name, False, shift=character.isupper())
         if settle:
-            time.sleep(0.15)
+            time.sleep(TEXT_SETTLE_SECONDS)
 
     def text_then_tab(self, value):
         self.text(value, settle=False)
-        self.key("Tab", True)
-        self.key("Tab", False)
+        self.key(LIT_TAB, True)
+        self.key(LIT_TAB, False)
 

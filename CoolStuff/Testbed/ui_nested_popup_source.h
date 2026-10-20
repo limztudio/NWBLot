@@ -18,17 +18,20 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiNestedPopupSource final : public UiFilteredListSource<UiNestedPopupSource, 5u, 3u>{
-    friend class UiImmutableListSource<UiNestedPopupSource, 5u, 3u, NWB::Impl::Ui::ISearchableListDataSource>;
-    friend class UiFilteredListSource<UiNestedPopupSource, 5u, 3u>;
+inline constexpr usize s_NestedPopupLabelCount = 5u;
+inline constexpr u64 s_NestedPopupDisabledKey = 3u;
+
+class UiNestedPopupSource final : public UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>{
+    friend class UiImmutableListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey, NWB::Impl::Ui::ISearchableListDataSource>;
+    friend class UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>;
 
 
 private:
-    static constexpr Array<StringView, 5u> s_Labels{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Echo" };
+    static constexpr Array<StringView, s_NestedPopupLabelCount> s_Labels{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Echo" };
 
 
 public:
-    using UiFilteredListSource<UiNestedPopupSource, 5u, 3u>::UiFilteredListSource;
+    using UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>::UiFilteredListSource;
 
 
 public:

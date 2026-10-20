@@ -14,6 +14,23 @@ from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, S
 from smoke_arguments import parse_ui_smoke_args
 from fixture_environment import build_fixture_environment
 
+LIT_SCALE = "scale"
+LIT_RECTANGLES = "rectangles"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_PASSED = "passed"
+LIT_CAPTURE_CHANGE_CANCEL = "capture_change_cancel"
+LIT_CAPTURE_CHANGE_RECOVERY = "capture_change_recovery"
+LIT_POINTER_LEAVE_DRAG = "pointer_leave_drag"
+LIT_UTF_8 = "utf-8"
+LIT_MINIMUM = "minimum"
+LIT_BUTTON = "button"
+LIT_RESIZE = "resize"
+LIT_COLLAPSE = "collapse"
+LIT_LOCK = "lock"
+LIT_LOCKED = "locked"
+LIT_INCREASE = "increase"
+LIT_UI_WINDOW_FIXTURE = "UI window fixture"
+
 
 def parse_args(argv):
     return parse_ui_smoke_args(argv, description=__doc__, include_skin=True)
@@ -37,14 +54,14 @@ class WindowRun:
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
 
     def point(self, x, y):
-        scale_x, scale_y = self.snapshot["scale"]
+        scale_x, scale_y = self.snapshot[LIT_SCALE]
         return round(x * scale_x), round(y * scale_y)
 
     def click(self, rectangle):
-        self.native.click(*self.point(*center(self.snapshot["rectangles"][rectangle])))
+        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][rectangle])))
 
     def title_point(self):
-        x, y, width, height = self.snapshot["rectangles"]["title"]
+        x, y, width, height = self.snapshot[LIT_RECTANGLES]["title"]
         return x + width * 0.6, y + height / 2.0
 
     def quick_drag(self, origin, dx, dy, *, leave=False):
@@ -56,7 +73,7 @@ class WindowRun:
         self.native.pointer(*finish)
         self.native.button(False, *finish)
         # No sleep separates this complete native event batch. Release must retain the accumulated gesture.
-        scale_x, scale_y = self.snapshot["scale"]
+        scale_x, scale_y = self.snapshot[LIT_SCALE]
         return (finish[0] - start[0]) / scale_x, (finish[1] - start[1]) / scale_y
 
     def checkpoint(self, name, bounds, count, collapsed=False, locked=False, *, extent=None):
@@ -70,11 +87,11 @@ class WindowRun:
             if snapshot is None:
                 time.sleep(0.1)
                 continue
-            if snapshot["logical_extent"][0] < 430.0 or snapshot["logical_extent"][1] < 270.0:
+            if snapshot[LIT_LOGICAL_EXTENT][0] < 430.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 270.0:
                 raise SmokeSkip("the window fixture needs a logical client of at least 430x270 for separate model markers")
             self.backend.capture_client_window(self.handle, path)
             report = observe_window(read_bmp_24_rows(path), snapshot, bounds, count, collapsed, locked, extent=extent, skin=self.args.skin)
-            if report["passed"]:
+            if report[LIT_PASSED]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path)})
                 self.stages.append(report)
@@ -84,47 +101,47 @@ class WindowRun:
         raise SmokeFailure(f"window displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted button/motion/leave/capture-change/activation messages"
+        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted button/motion/leave/capture-change/activation messages"
                 if self.native.windows else "X11 XSendEvent and XSetInputFocus", "runtime_limit": "No physical pointer grab or native Wayland input qualification",
-            "omitted_platform_stages": [] if self.native.windows else ["capture_change_cancel", "capture_change_recovery", "pointer_leave_drag"]}
-        (self.args.output_directory / "window.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            "omitted_platform_stages": [] if self.native.windows else [LIT_CAPTURE_CHANGE_CANCEL, LIT_CAPTURE_CHANGE_RECOVERY, LIT_POINTER_LEAVE_DRAG]}
+        (self.args.output_directory / "window.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
 
     def execute(self):
         bounds = (40.0, 40.0, 300.0, 180.0)
         self.checkpoint("initial", bounds, 0)
-        if tuple(self.snapshot["minimum"]) != (180.0, 110.0):
-            raise SmokeFailure(f"window fixture minimum differs from declared 180x110: {self.snapshot['minimum']}")
-        self.click("button")
+        if tuple(self.snapshot[LIT_MINIMUM]) != (180.0, 110.0):
+            raise SmokeFailure(f"window fixture minimum differs from declared 180x110: {self.snapshot[LIT_MINIMUM]}")
+        self.click(LIT_BUTTON)
         self.checkpoint("first_button", bounds, 1)
         dx, dy = self.quick_drag(self.title_point(), 30.0, 10.0)
         bounds = (bounds[0] + dx, bounds[1] + dy, bounds[2], bounds[3])
         self.checkpoint("complete_title_drag", bounds, 1)
-        dx, dy = self.quick_drag(center(self.snapshot["rectangles"]["resize"]), 40.0, 10.0)
+        dx, dy = self.quick_drag(center(self.snapshot[LIT_RECTANGLES][LIT_RESIZE]), 40.0, 10.0)
         bounds = (bounds[0], bounds[1], bounds[2] + dx, bounds[3] + dy)
         self.checkpoint("complete_corner_resize", bounds, 1)
-        self.quick_drag(center(self.snapshot["rectangles"]["resize"]), -240.0, -180.0)
+        self.quick_drag(center(self.snapshot[LIT_RECTANGLES][LIT_RESIZE]), -240.0, -180.0)
         bounds = (bounds[0], bounds[1], 180.0, 110.0)
         self.checkpoint("minimum_resize", bounds, 1)
-        self.click("collapse")
+        self.click(LIT_COLLAPSE)
         self.checkpoint("collapsed", bounds, 1, collapsed=True)
-        self.click("button")
+        self.click(LIT_BUTTON)
         self.checkpoint("collapsed_body_inactive", bounds, 1, collapsed=True)
-        self.click("collapse")
+        self.click(LIT_COLLAPSE)
         self.checkpoint("expanded", bounds, 1)
-        self.click("lock")
-        self.checkpoint("locked", bounds, 1, locked=True)
+        self.click(LIT_LOCK)
+        self.checkpoint(LIT_LOCKED, bounds, 1, locked=True)
         self.quick_drag(self.title_point(), 24.0, 12.0)
         self.checkpoint("locked_move_barrier", bounds, 1, locked=True)
-        self.quick_drag(center(self.snapshot["rectangles"]["resize"]), 60.0, 40.0)
+        self.quick_drag(center(self.snapshot[LIT_RECTANGLES][LIT_RESIZE]), 60.0, 40.0)
         self.checkpoint("locked_resize_barrier", bounds, 1, locked=True)
-        self.click("lock")
+        self.click(LIT_LOCK)
         self.checkpoint("unlocked", bounds, 1)
         origin = self.title_point()
         self.native.button(True, *self.point(*origin))
         self.native.focus_loss_and_gain()
         self.native.button(False, *self.point(origin[0] + 25.0, origin[1] + 10.0))
         self.checkpoint("focus_loss_cancels_drag", bounds, 1)
-        self.click("button")
+        self.click(LIT_BUTTON)
         self.checkpoint("focus_loss_recovery_click", bounds, 2)
         count = 2
         if self.native.windows:
@@ -132,28 +149,28 @@ class WindowRun:
             self.native.button(True, *self.point(*origin))
             self.native._post(0x0215)  # WM_CAPTURECHANGED through the native loss callback.
             self.native.button(False, *self.point(origin[0] + 25.0, origin[1] + 10.0))
-            self.checkpoint("capture_change_cancel", bounds, count)
-            self.click("button")
+            self.checkpoint(LIT_CAPTURE_CHANGE_CANCEL, bounds, count)
+            self.click(LIT_BUTTON)
             count += 1
-            self.checkpoint("capture_change_recovery", bounds, count)
+            self.checkpoint(LIT_CAPTURE_CHANGE_RECOVERY, bounds, count)
             dx, dy = self.quick_drag(self.title_point(), 18.0, 8.0, leave=True)
             bounds = (bounds[0] + dx, bounds[1] + dy, bounds[2], bounds[3])
-            self.checkpoint("pointer_leave_drag", bounds, count)
+            self.checkpoint(LIT_POINTER_LEAVE_DRAG, bounds, count)
         self.backend.resize_client(self.handle, 800, 600)
         self.checkpoint("client_resized", bounds, count, extent=(800, 600))
         dx, dy = self.quick_drag(self.title_point(), 24.0, 16.0)
         bounds = (bounds[0] + dx, bounds[1] + dy, bounds[2], bounds[3])
         self.checkpoint("resized_first_drag", bounds, count, extent=(800, 600))
-        self.click("button")
+        self.click(LIT_BUTTON)
         self.checkpoint("resized_button", bounds, count + 1, extent=(800, 600))
 
 
 def expected_actions(windows):
-    actions = [("increase", 1, 0, 1), ("locked", 1, 1, 2), ("locked", 1, 0, 3), ("increase", 2, 0, 4)]
+    actions = [(LIT_INCREASE, 1, 0, 1), (LIT_LOCKED, 1, 1, 2), (LIT_LOCKED, 1, 0, 3), (LIT_INCREASE, 2, 0, 4)]
     if windows:
-        actions += [("increase", 3, 0, 5), ("increase", 4, 0, 6)]
+        actions += [(LIT_INCREASE, 3, 0, 5), (LIT_INCREASE, 4, 0, 6)]
     else:
-        actions += [("increase", 3, 0, 5)]
+        actions += [(LIT_INCREASE, 3, 0, 5)]
     return actions
 
 
@@ -180,15 +197,15 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, "UI window fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI window fixture")
+                exit_code, tail = terminate_process(application, LIT_UI_WINDOW_FIXTURE, handle)
+                require_normal_process_exit(exit_code, tail, LIT_UI_WINDOW_FIXTURE)
         finally:
             try:
                 text = ""
                 if log_directory is not None:
                     text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
                     logserver = None
-                    (args.output_directory / "window.log").write_text(text, encoding="utf-8")
+                    (args.output_directory / "window.log").write_text(text, encoding=LIT_UTF_8)
             finally:
                 if logserver is not None:
                     terminate_process(logserver, "UI window logserver")

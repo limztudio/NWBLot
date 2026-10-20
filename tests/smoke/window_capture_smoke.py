@@ -14,6 +14,16 @@ import sys
 import tempfile
 import time
 
+LIT_GPUDBG = "--gpudbg"
+LIT_B_BM = b"BM"
+LIT_FRONT = "front"
+LIT_SIDE = "side"
+LIT_LITTLE = "little"
+LIT_BIG = "big"
+LIT_X = "x"
+LIT_Y = "y"
+LIT_RESIZE_SETTLE_SECONDS = "--resize-settle-seconds"
+
 LIT_N_127_0_0_1 = "127.0.0.1"
 LIT_RB = "rb"
 LIT_UTF_8 = "utf-8"
@@ -87,8 +97,8 @@ class SmokeFailure(Exception):
 
 def run_smoke_main(argv, parse_args, run, *, default_timeout=None, self_test=None, output_stream=None, failure_types=(SmokeFailure, OSError, ValueError, TimeoutError)):
     """Apply common smoke CLI timeout and exit-status handling."""
-    if default_timeout is not None and not any(argument == "--timeout" or argument.startswith("--timeout=") for argument in argv):
-        argv = [*argv, "--timeout", str(default_timeout)]
+    if default_timeout is not None and not any(argument == LIT_TIMEOUT or argument.startswith("--timeout=") for argument in argv):
+        argv = [*argv, LIT_TIMEOUT, str(default_timeout)]
     args = parse_args(argv)
     if self_test is not None and args.self_test:
         return self_test()
@@ -392,7 +402,7 @@ def terminate_process(process, name, window_handle=None):
 
 def finish_logserver_cleanup(logserver, output, errors, primary_failure, terminate, write_report):
     try:
-        terminate(logserver, "logserver")
+        terminate(logserver, LIT_LOGSERVER)
     except Exception as error:
         errors.append(f"logger cleanup: {error}")
     if errors:
@@ -454,7 +464,7 @@ def resolve_lavapipe_icd():
 
 
 def make_runtime_launch_args(args: argparse.Namespace) -> SimpleNamespace:
-    return SimpleNamespace(no_logserver=args.no_logserver, logserver_executable=args.logserver_executable, log_port=0, working_directory=args.runtime_dir, timeout=args.startup_timeout, application_arg=["--gpudbg"] if args.gpu_validation else [],
+    return SimpleNamespace(no_logserver=args.no_logserver, logserver_executable=args.logserver_executable, log_port=0, working_directory=args.runtime_dir, timeout=args.startup_timeout, application_arg=[LIT_GPUDBG] if args.gpu_validation else [],
         software_vulkan=LIT_OFF,)
 
 
@@ -530,7 +540,7 @@ def write_bmp_24(path, width, height, rows_rgb):
     padding = b"\0" * (row_stride - width * 3)
 
     with path.open("wb") as out:
-        out.write(struct.pack(LIT_N_2SIHHI, b"BM", file_size, 0, 0, 14 + 40))
+        out.write(struct.pack(LIT_N_2SIHHI, LIT_B_BM, file_size, 0, 0, 14 + 40))
         out.write(struct.pack("<IIIHHIIIIII", 40, width, height, 1, 24, 0, image_size, 0, 0, 0, 0))
         for row in reversed(rows_rgb):
             encoded = bytearray()
@@ -568,7 +578,7 @@ def read_bmp_24_rows(path):
         raise SmokeFailure(f"application capture BMP '{path}' is shorter than the required headers")
 
     signature, declared_file_size, _, _, pixel_offset = struct.unpack_from(LIT_N_2SIHHI, data, 0)
-    if signature != b"BM":
+    if signature != LIT_B_BM:
         raise SmokeFailure(f"application capture BMP '{path}' has an invalid signature")
     if declared_file_size != len(data):
         raise SmokeFailure(f"application capture BMP '{path}' declares {declared_file_size} bytes but contains {len(data)}")
@@ -612,7 +622,7 @@ def validate_surfel_coverage_probe(path):
     width, height, rows = read_bmp_24_rows(path)
     # The cube is fixed in the 1280x900 smoke camera.
     # Fractional ROIs tolerate framebuffer scaling and avoid silhouette pixels, where normal/depth filtering should deliberately reduce coverage.
-    regions = { "front": (0.80, 0.42, 0.92, 0.55), "side": (0.735, 0.42, 0.770, 0.55), }
+    regions = { LIT_FRONT: (0.80, 0.42, 0.92, 0.55), LIT_SIDE: (0.735, 0.42, 0.770, 0.55), }
     observed = {}
     for face, (left, top, right, bottom) in regions.items():
         x0, x1 = int(left * width), int(right * width)
@@ -623,19 +633,19 @@ def validate_surfel_coverage_probe(path):
             for red, green, blue in row[x0:x1]:
                 if red + green < 100:
                     continue
-                if face == "front" and blue > 40:
+                if face == LIT_FRONT and blue > 40:
                     continue
-                if face == "side" and (blue < 140 or blue < max(red, green) * 0.65):
+                if face == LIT_SIDE and (blue < 140 or blue < max(red, green) * 0.65):
                     continue
                 pixels += 1
                 if red > green + 20:
                     covered += 1
         observed[face] = (covered, pixels)
 
-    minimum = {"front": 1000, "side": 300}
+    minimum = {LIT_FRONT: 1000, LIT_SIDE: 300}
     for face, (covered, pixels) in observed.items():
         if pixels < minimum[face] or covered < pixels * 0.80:
-            raise SmokeFailure("surfel coverage probe did not cover the perpendicular faces " f"(front={observed['front'][0]}/{observed['front'][1]}, " f"side={observed['side'][0]}/{observed['side'][1]})")
+            raise SmokeFailure("surfel coverage probe did not cover the perpendicular faces " f"(front={observed[LIT_FRONT][0]}/{observed[LIT_FRONT][1]}, " f"side={observed[LIT_SIDE][0]}/{observed[LIT_SIDE][1]})")
     return observed
 
 
@@ -820,8 +830,8 @@ def ximage_rgb_rows(image, byte_order):
 
     # Common RGB888 masks map directly to byte channels; keep scaled-mask conversion for other XImage layouts.
     if (image.bits_per_pixel in (24, 32) and (image.red_mask, image.green_mask, image.blue_mask) == (0xFF0000, 0xFF00, 0xFF)
-            and byte_order in ("little", "big") and image.width >= 0 and image.bytes_per_line >= image.width * bytes_per_pixel):
-        red, green, blue = (2, 1, 0) if byte_order == "little" else (bytes_per_pixel - 3, bytes_per_pixel - 2, bytes_per_pixel - 1)
+            and byte_order in (LIT_LITTLE, LIT_BIG) and image.width >= 0 and image.bytes_per_line >= image.width * bytes_per_pixel):
+        red, green, blue = (2, 1, 0) if byte_order == LIT_LITTLE else (bytes_per_pixel - 3, bytes_per_pixel - 2, bytes_per_pixel - 1)
         for y in range(image.height):
             row_base = y * image.bytes_per_line
             row_end = row_base + image.width * bytes_per_pixel
@@ -860,7 +870,7 @@ def bgra_rgb_rows(buffer, width, height):
 
 
 class LinuxXWindowAttributes(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_int), ("y", ctypes.c_int), (LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("border_width", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("visual", ctypes.c_void_p), (LIT_ROOT, ctypes.c_ulong), ("class", ctypes.c_int),
+    _fields_ = [(LIT_X, ctypes.c_int), (LIT_Y, ctypes.c_int), (LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("border_width", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("visual", ctypes.c_void_p), (LIT_ROOT, ctypes.c_ulong), ("class", ctypes.c_int),
         ("bit_gravity", ctypes.c_int), ("win_gravity", ctypes.c_int), ("backing_store", ctypes.c_int), ("backing_planes", ctypes.c_ulong), ("backing_pixel", ctypes.c_ulong), ("save_under", ctypes.c_int), ("colormap", ctypes.c_ulong),
         ("map_installed", ctypes.c_int), ("map_state", ctypes.c_int), ("all_event_masks", ctypes.c_long), ("your_event_mask", ctypes.c_long), ("do_not_propagate_mask", ctypes.c_long), ("override_redirect", ctypes.c_int), ("screen", ctypes.c_void_p),]
 
@@ -879,7 +889,7 @@ LinuxXImage._fields_ = [(LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), (
 
 
 LINUX_X_INPUT_EVENT_PREFIX = [(LIT_TYPE, ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int), ("display", ctypes.c_void_p), ("window", ctypes.c_ulong), (LIT_ROOT, ctypes.c_ulong), ("subwindow", ctypes.c_ulong), ("time", ctypes.c_ulong),
-    ("x", ctypes.c_int), ("y", ctypes.c_int), ("x_root", ctypes.c_int), ("y_root", ctypes.c_int), ("state", ctypes.c_uint),]
+    (LIT_X, ctypes.c_int), (LIT_Y, ctypes.c_int), ("x_root", ctypes.c_int), ("y_root", ctypes.c_int), ("state", ctypes.c_uint),]
 
 
 class LinuxXKeyEvent(ctypes.Structure):
@@ -1213,7 +1223,7 @@ class LinuxX11Capture:
         try:
             if image.contents.bits_per_pixel not in (16, 24, 32) or not image.contents.data:
                 raise SmokeFailure("X11 pixel sample has unsupported or missing image data")
-            byte_order = "little" if image.contents.byte_order == self.LSB_FIRST else "big"
+            byte_order = LIT_LITTLE if image.contents.byte_order == self.LSB_FIRST else LIT_BIG
             return ximage_rgb_rows(image.contents, byte_order)
         finally:
             self.x11.XDestroyImage(image)
@@ -1257,7 +1267,7 @@ class LinuxX11Capture:
         if not image.data:
             raise SmokeFailure(f"XImage for drawable 0x{output_handle:x} has no pixel data")
 
-        byte_order = "little" if image.byte_order == self.LSB_FIRST else "big"
+        byte_order = LIT_LITTLE if image.byte_order == self.LSB_FIRST else LIT_BIG
         rows = ximage_rgb_rows(image, byte_order)
         return write_capture_rows(output_handle, image.width, image.height, rows, output_path)
 
@@ -1267,7 +1277,7 @@ class WinRect(ctypes.Structure):
 
 
 class WinPoint(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long),]
+    _fields_ = [(LIT_X, ctypes.c_long), (LIT_Y, ctypes.c_long),]
 
 
 class WinBitmapInfoHeader(ctypes.Structure):
@@ -2010,7 +2020,7 @@ def parse_args(argv):
     parser.add_argument(LIT_TIMEOUT, type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument(LIT_SETTLE_SECONDS, type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"), help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
-    parser.add_argument("--resize-settle-seconds", type=float, help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
+    parser.add_argument(LIT_RESIZE_SETTLE_SECONDS, type=float, help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
     parser.add_argument(LIT_RENDER_READY_TIMEOUT, type=float, default=RENDER_READY_TIMEOUT_SECONDS, help="Seconds to wait for a blank visible window to publish its first rendered frame.",)
     parser.add_argument("--application-capture", action=LIT_STORE_TRUE, help="Use the application's framebuffer readback instead of desktop window capture.",)
     parser.add_argument(LIT_APPLICATION_CAPTURE_FRAME_COUNT, type=int, default=360, help="Positive rendered frame count at which application capture is requested. Defaults to 360.",)
@@ -2045,7 +2055,7 @@ def parse_args(argv):
         parser.error("--log-output requires --application-capture")
     if args.window_handle is None and not args.executable:
         parser.error("--executable is required unless --window-handle is provided")
-    for name, value in ((LIT_TIMEOUT, args.timeout), (LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout), (LIT_SETTLE_SECONDS, args.settle_seconds), ("--resize-settle-seconds", args.resize_settle_seconds)):
+    for name, value in ((LIT_TIMEOUT, args.timeout), (LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout), (LIT_SETTLE_SECONDS, args.settle_seconds), (LIT_RESIZE_SETTLE_SECONDS, args.resize_settle_seconds)):
         if value is not None and not math.isfinite(value):
             parser.error(f"{name} must be finite")
     require_positive_arg(parser, LIT_TIMEOUT, args.timeout)
@@ -2070,7 +2080,7 @@ def parse_args(argv):
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()
     if args.gpu_validation:
-        args.application_arg = ["--gpudbg", *args.application_arg]
+        args.application_arg = [LIT_GPUDBG, *args.application_arg]
     return args
 
 
@@ -2102,7 +2112,7 @@ def main(argv):
             status = (f"{status}; sampled texture hues " f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}; " f"receiver red GI={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}")
         if args.expect_surfel_coverage_probe:
             probe = validate_surfel_coverage_probe(args.output)
-            status = (f"{status}; surfel coverage probe " f"front={probe['front'][0]}/{probe['front'][1]}, " f"side={probe['side'][0]}/{probe['side'][1]}")
+            status = (f"{status}; surfel coverage probe " f"front={probe[LIT_FRONT][0]}/{probe[LIT_FRONT][1]}, " f"side={probe[LIT_SIDE][0]}/{probe[LIT_SIDE][1]}")
         write_status(status)
         return 0
     except SmokeSkip as exc:

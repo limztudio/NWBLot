@@ -13,6 +13,19 @@ from uuid import uuid4
 
 from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsDesktopUnavailable, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
 
+LIT_LOADER_PROJECT_STARTUP_COMPLETE = "Loader: project startup complete"
+LIT_PASSED_CASES = "passed_cases"
+LIT_UTF_8 = "utf-8"
+LIT_EXECUTABLE = "executable"
+LIT_WORKING_DIRECTORY = "working_directory"
+LIT_LOGSERVER_EXECUTABLE = "logserver_executable"
+LIT_AVBOIT_DEPTH_WARP_PROBE = "AVBOIT depth-warp probe"
+LIT_PROCESS_TAIL_TXT = "process_tail.txt"
+LIT_RUNTIME_LOG = "runtime.log"
+LIT_RESULT_JSON = "result.json"
+LIT_SCHEMA = "schema"
+LIT_PASSED = "passed"
+
 
 EXPECTED_COUNTS = (1050, 2550, 512, 4112)
 MANIFEST = re.compile(r"AvboitDepthWarpProbe: manifest boundary=(\d+) exhaustive=(\d+) randomized=(\d+) total=(\d+) seed=0x6b47c2d1")
@@ -21,7 +34,7 @@ SHUTDOWN = "AvboitDepthWarpProbe: shutdown completed=1"
 
 
 def validate_runtime_log(text):
-    validate_expected_log_text(text, ("Loader: GPU debug validation enabled", "GraphicsRuntime: created device '", "Loader: project startup complete",
+    validate_expected_log_text(text, ("Loader: GPU debug validation enabled", "GraphicsRuntime: created device '", LIT_LOADER_PROJECT_STARTUP_COMPLETE,
             SHUTDOWN,), STRICT_LOG_FAILURE_MESSAGES,)
     manifests = list(MANIFEST.finditer(text))
     completions = list(COMPLETION.finditer(text))
@@ -31,21 +44,21 @@ def validate_runtime_log(text):
         raise SmokeFailure("depth-warp probe requires exactly one complete 4112-case success record")
     if text.count(SHUTDOWN) != 1:
         raise SmokeFailure("depth-warp probe requires exactly one successful shutdown record")
-    startup = text.index("Loader: project startup complete")
+    startup = text.index(LIT_LOADER_PROJECT_STARTUP_COMPLETE)
     shutdown = text.index(SHUTDOWN)
     if not manifests[0].start() < startup < completions[0].start() < shutdown:
         raise SmokeFailure("depth-warp probe manifest, startup, completion and shutdown order is invalid")
-    return { "boundary_cases": EXPECTED_COUNTS[0], "exhaustive_cases": EXPECTED_COUNTS[1], "randomized_cases": EXPECTED_COUNTS[2], "passed_cases": EXPECTED_COUNTS[3], "gpu_validation_enabled": True, "full_output_and_sentinel_validation": True, }
+    return { "boundary_cases": EXPECTED_COUNTS[0], "exhaustive_cases": EXPECTED_COUNTS[1], "randomized_cases": EXPECTED_COUNTS[2], LIT_PASSED_CASES: EXPECTED_COUNTS[3], "gpu_validation_enabled": True, "full_output_and_sentinel_validation": True, }
 
 
 def write_json(path, value):
-    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding=LIT_UTF_8)
 
 
 def acquire(args, output):
     launch = SimpleNamespace(executable=args.executable, working_directory=args.working_directory, logserver_executable=args.logserver_executable, no_logserver=False, log_port=0, timeout=args.timeout, application_arg=["--gpudbg"], software_vulkan="off",)
     environment = build_launch_environment(launch)
-    write_json(output / "launch.json", { "executable": str(args.executable), "working_directory": str(args.working_directory), "logserver_executable": str(args.logserver_executable), "application_args": launch.application_arg, "timeout_seconds": args.timeout,
+    write_json(output / "launch.json", { LIT_EXECUTABLE: str(args.executable), LIT_WORKING_DIRECTORY: str(args.working_directory), LIT_LOGSERVER_EXECUTABLE: str(args.logserver_executable), "application_args": launch.application_arg, "timeout_seconds": args.timeout,
     })
     process = logserver = log_directory = None
     baseline, pattern = {}, ""
@@ -59,14 +72,14 @@ def acquire(args, output):
             process.wait(timeout=args.timeout)
         except subprocess.TimeoutExpired as error:
             raise SmokeFailure("depth-warp probe did not self-exit before timeout") from error
-        code, tail = terminate_process(process, "AVBOIT depth-warp probe")
+        code, tail = terminate_process(process, LIT_AVBOIT_DEPTH_WARP_PROBE)
         process = None
-        (output / "process_tail.txt").write_text(tail, encoding="utf-8")
-        require_normal_process_exit(code, tail, "AVBOIT depth-warp probe")
+        (output / LIT_PROCESS_TAIL_TXT).write_text(tail, encoding=LIT_UTF_8)
+        require_normal_process_exit(code, tail, LIT_AVBOIT_DEPTH_WARP_PROBE)
         text = shutdown_logserver_and_collect(logserver, log_directory, baseline, pattern)
         logserver = None
         collected = True
-        (output / "runtime.log").write_text(text, encoding="utf-8")
+        (output / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
         result = validate_runtime_log(text)
         result.update(schema=1, passed=True, exit_code=code)
         return result
@@ -75,14 +88,14 @@ def acquire(args, output):
         errors = []
         if process is not None:
             try:
-                _, tail = terminate_process(process, "AVBOIT depth-warp probe")
-                (output / "process_tail.txt").write_text(tail, encoding="utf-8")
+                _, tail = terminate_process(process, LIT_AVBOIT_DEPTH_WARP_PROBE)
+                (output / LIT_PROCESS_TAIL_TXT).write_text(tail, encoding=LIT_UTF_8)
             except Exception as error:
                 errors.append(f"probe cleanup: {error}")
         if not collected and log_directory is not None:
             try:
                 text = shutdown_logserver_and_collect(logserver, log_directory, baseline, pattern)
-                (output / "runtime.log").write_text(text, encoding="utf-8")
+                (output / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
                 logserver = None
             except Exception as error:
                 errors.append(f"failure log collection: {error}")
@@ -97,9 +110,9 @@ def parse_args(argv=None):
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=120.0)
     args = parser.parse_args(argv)
-    for field in ("executable", "working_directory", "logserver_executable", "output_directory"):
+    for field in (LIT_EXECUTABLE, LIT_WORKING_DIRECTORY, LIT_LOGSERVER_EXECUTABLE, "output_directory"):
         setattr(args, field, getattr(args, field).resolve())
-    for field in ("executable", "logserver_executable"):
+    for field in (LIT_EXECUTABLE, LIT_LOGSERVER_EXECUTABLE):
         if not getattr(args, field).is_file():
             parser.error(f"{field.replace('_', '-')} must name an existing file")
     if not args.working_directory.is_dir() or not (args.working_directory / "res").is_dir():
@@ -118,16 +131,16 @@ def main(argv=None):
     try:
         result = acquire(args, output)
     except WindowsDesktopUnavailable as error:
-        write_json(output / "result.json", {"schema": 1, "passed": False, "skipped": True, "skip_reason": str(error)})
+        write_json(output / LIT_RESULT_JSON, {LIT_SCHEMA: 1, LIT_PASSED: False, "skipped": True, "skip_reason": str(error)})
         print(f"SKIP: {error}", file=sys.stderr, flush=True)
         return SKIP_EXIT_CODE
     except (SmokeFailure, SmokeSkip, OSError) as error:
         # Missing validation/device support still fails this native qualification.
-        write_json(output / "result.json", {"schema": 1, "passed": False, "error": str(error)})
+        write_json(output / LIT_RESULT_JSON, {LIT_SCHEMA: 1, LIT_PASSED: False, "error": str(error)})
         print(f"FAIL: {error}", file=sys.stderr, flush=True)
         return 1
-    write_json(output / "result.json", result)
-    print(f"PASS: all {result['passed_cases']} native depth-warp cases matched", flush=True)
+    write_json(output / LIT_RESULT_JSON, result)
+    print(f"PASS: all {result[LIT_PASSED_CASES]} native depth-warp cases matched", flush=True)
     return 0
 
 

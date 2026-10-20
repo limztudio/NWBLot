@@ -16,6 +16,48 @@ from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, S
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
+LIT_SCROLL = "scroll"
+LIT_ENABLED = "enabled"
+LIT_READONLY = "readonly"
+LIT_PREFERRED_VALID = "preferred_valid"
+LIT_PREFERRED_BITS = "preferred_bits"
+LIT_SUBMITS = "submits"
+LIT_CANCELS = "cancels"
+LIT_OUTSIDE = "outside"
+LIT_CLIPBOARD_SEEDS = "clipboard_seeds"
+LIT_RECTANGLES = "rectangles"
+LIT_CARET = "caret"
+LIT_CONTENT = "content"
+LIT_SEQUENCE = "sequence"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_PASSED = "passed"
+LIT_EXTENT = "extent"
+LIT_EXPECTED = "expected"
+LIT_STAGE = "stage"
+LIT_CAPTURE = "capture"
+LIT_NATIVE_WINDOW = "native_window"
+LIT_OS_CLIPBOARD = "os_clipboard"
+LIT_UTF_8 = "utf-8"
+LIT_X = "x"
+LIT_Y = "y"
+LIT_TRACK = "_track"
+LIT_THUMB = "_thumb"
+LIT_LINE_HEIGHT = "line_height"
+LIT_MAXIMUM = "maximum"
+LIT_LEFT = "Left"
+LIT_RIGHT = "Right"
+LIT_DOWN = "Down"
+LIT_UP = "Up"
+LIT_C = "c"
+LIT_Z = "z"
+LIT_A = "a"
+LIT_V = "v"
+LIT_RETURN = "Return"
+LIT_BLURS = "blurs"
+LIT_RESET = "reset"
+LIT_HOME = "Home"
+LIT_UI_TEXTAREA_FIXTURE = "UI TextArea fixture"
+
 
 INITIAL = "abcdef\nx\nabcdef\n한국어"
 LONG_LINE = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"
@@ -24,7 +66,7 @@ MODEL_EPOCHS = ("model_revision", "external_revision", "selection_generation")
 
 
 def scroll_matches(state, expected):
-    return all(abs(actual - wanted) <= 0.05 for actual, wanted in zip(state["scroll"], expected))
+    return all(abs(actual - wanted) <= 0.05 for actual, wanted in zip(state[LIT_SCROLL], expected))
 
 
 class TextAreaRun:
@@ -36,23 +78,23 @@ class TextAreaRun:
         self.snapshot, self.failure_report = None, None
         self.stages = []
         self.caret_phase_waits = 0
-        self.expected = {**document_fields(INITIAL, 5, 5), "focus": 0, "enabled": 1, "readonly": 0, "compact": 0, "long_document": 0, "preferred_valid": 0, "preferred_bits": 0, "submits": 0,
-            "cancels": 0, "outside": 0, "clipboard_seeds": 0, "clipboard_pending": 0, "coherent": 1}
+        self.expected = {**document_fields(INITIAL, 5, 5), "focus": 0, LIT_ENABLED: 1, LIT_READONLY: 0, "compact": 0, "long_document": 0, LIT_PREFERRED_VALID: 0, LIT_PREFERRED_BITS: 0, LIT_SUBMITS: 0,
+            LIT_CANCELS: 0, LIT_OUTSIDE: 0, LIT_CLIPBOARD_SEEDS: 0, "clipboard_pending": 0, "coherent": 1}
 
     def point(self, x, y):
         sx, sy = self.snapshot["scale"]
         return round(x * sx), round(y * sy)
 
     def controller(self, name):
-        self.native.click(*self.point(*center(self.snapshot["rectangles"][name])))
+        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def focus(self, stage):
-        x, y, width, height = self.snapshot["rectangles"]["caret"]
-        cx, cy, cw, ch = self.snapshot["rectangles"]["content"]
+        x, y, width, height = self.snapshot[LIT_RECTANGLES][LIT_CARET]
+        cx, cy, cw, ch = self.snapshot[LIT_RECTANGLES][LIT_CONTENT]
         target = (min(max(x + width * 0.5, cx + 1.0), cx + cw - 1.0), min(max(y + height * 0.5, cy + 1.0), cy + ch - 1.0))
         self.native.focus_click(*self.point(*target), deadline=self.deadline)
         self.native.pointer(*self.point(28.0, 394.0))
-        self.checkpoint(stage, focus=1, anchor=self.snapshot["caret"], preferred_valid=0, preferred_bits=0)
+        self.checkpoint(stage, focus=1, anchor=self.snapshot[LIT_CARET], preferred_valid=0, preferred_bits=0)
 
     def checkpoint(self, name, *, text=None, anchor=None, caret=None, extent=None, extra=None, minimum_selection_lines=0, settle=0.25, allow_offscreen_caret=False, wait_for_settle=False, **changes):
         if text is not None:
@@ -63,15 +105,15 @@ class TextAreaRun:
             if anchor is not None:
                 self.expected["anchor"] = anchor
             if caret is not None:
-                self.expected["caret"] = caret
-        if changes.get("preferred_valid") == 1 and not self.expected.get("preferred_valid"):
-            self.expected.pop("preferred_bits", None)
+                self.expected[LIT_CARET] = caret
+        if changes.get(LIT_PREFERRED_VALID) == 1 and not self.expected.get(LIT_PREFERRED_VALID):
+            self.expected.pop(LIT_PREFERRED_BITS, None)
         self.expected.update(changes)
         time.sleep(settle)
         path = self.args.output_directory / f"{len(self.stages):02}_{name}.bmp"
         stage_deadline = min(self.deadline, time.monotonic() + 10.0)
         report = None
-        entry_sequence = self.snapshot["sequence"] if self.snapshot is not None else -1
+        entry_sequence = self.snapshot[LIT_SEQUENCE] if self.snapshot is not None else -1
         settled = not wait_for_settle
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during TextArea capture")
@@ -81,10 +123,10 @@ class TextAreaRun:
             if snapshot is None:
                 time.sleep(0.1)
                 continue
-            if snapshot["logical_extent"][0] < 640.0 or snapshot["logical_extent"][1] < 440.0:
+            if snapshot[LIT_LOGICAL_EXTENT][0] < 640.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 440.0:
                 raise SmokeSkip("the TextArea fixture needs a logical client of at least 640x440")
             if not settled:
-                if snapshot["sequence"] <= entry_sequence:
+                if snapshot[LIT_SEQUENCE] <= entry_sequence:
                     # The viewport click only lands after the next published marker sequence; pre-toggle logs describe the old viewport geometry.
                     time.sleep(0.1)
                     continue
@@ -97,17 +139,17 @@ class TextAreaRun:
                     self.backend.capture_client_window(self.handle, path)
                 if refresh_snapshot:
                     refreshed = snapshot_from_logs(collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern))
-                    if refreshed is not None and refreshed["sequence"] >= snapshot["sequence"]:
+                    if refreshed is not None and refreshed[LIT_SEQUENCE] >= snapshot[LIT_SEQUENCE]:
                         snapshot = refreshed
                 return observe_text_area(read_bmp_24_rows(path), snapshot, self.expected, skin=self.args.skin, extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines, allow_offscreen_caret=allow_offscreen_caret)
 
             report = capture_frame()
-            failed = [probe for probe in report["probes"] if not probe["passed"]]
-            if (report["model_matches"] and report["geometry_matches"] and report["extra_matches"] and (extent is None or tuple(report["extent"]) == extent) and len(failed) == 1 and failed[0]["name"] == "caret"):
+            failed = [probe for probe in report["probes"] if not probe[LIT_PASSED]]
+            if (report["model_matches"] and report["geometry_matches"] and report["extra_matches"] and (extent is None or tuple(report[LIT_EXTENT]) == extent) and len(failed) == 1 and failed[0]["name"] == LIT_CARET):
                 # Reuse the exact oracle sample only when every other displayed-state requirement already matches.
                 probe = failed[0]
                 column, row = probe["position"]
-                sample = (column, max(0, row - 1), min(report["extent"][1], row + 2), probe["expected"], probe["tolerance"])
+                sample = (column, max(0, row - 1), min(report[LIT_EXTENT][1], row + 2), probe[LIT_EXPECTED], probe["tolerance"])
                 try:
                     wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
                     self.caret_phase_waits += 1
@@ -117,14 +159,14 @@ class TextAreaRun:
                     continue
                 # Freeze the admitted caret phase before log collection or another native preparation delay.
                 report = capture_frame(prepared=True, refresh_snapshot=True)
-            if report["passed"]:
+            if report[LIT_PASSED]:
                 self.snapshot = snapshot
-                report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
+                report.update({LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window()})
                 self.stages.append(report)
                 self.write_report(False)
                 return
             time.sleep(0.1)
-        self.failure_report = {"stage": name, "capture": str(path), "observation": report, "native_window": self.native.observe_window()}
+        self.failure_report = {LIT_STAGE: name, LIT_CAPTURE: str(path), "observation": report, LIT_NATIVE_WINDOW: self.native.observe_window()}
         self.write_report(False)
         raise SmokeFailure(f"TextArea displayed-state gate '{name}' failed: {self.failure_report}")
 
@@ -135,29 +177,29 @@ class TextAreaRun:
             ensure_process_running(self.process, "during TextArea OS clipboard verification")
             observed = self.native.clipboard_text(timeout=min(2.0, max(0.1, deadline - time.monotonic())))
             if observed == expected:
-                self.stages[-1]["os_clipboard"] = {"expected": expected, "observed": observed, "passed": True}
+                self.stages[-1][LIT_OS_CLIPBOARD] = {LIT_EXPECTED: expected, "observed": observed, LIT_PASSED: True}
                 self.write_report(False)
                 return
             time.sleep(0.05)
-        self.failure_report = {"stage": self.stages[-1]["stage"], "os_clipboard": {"expected": expected, "observed_bytes": len(observed.encode("utf-8")) if observed is not None else None,
-            "observed_hash": text_hash(observed) if observed is not None else None, "passed": False}}
+        self.failure_report = {LIT_STAGE: self.stages[-1][LIT_STAGE], LIT_OS_CLIPBOARD: {LIT_EXPECTED: expected, "observed_bytes": len(observed.encode(LIT_UTF_8)) if observed is not None else None,
+            "observed_hash": text_hash(observed) if observed is not None else None, LIT_PASSED: False}}
         self.write_report(False)
         raise SmokeFailure(f"TextArea OS clipboard gate failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "marker_count_per_gate": 57, "caret_phase_waits": self.caret_phase_waits,
+        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "marker_count_per_gate": 57, "caret_phase_waits": self.caret_phase_waits,
             "input_path": "Win32 maintained cursor, posted text/keys/buttons and positioned WM_MOUSEWHEEL/WM_MOUSEHWHEEL, modifier chords, CF_UNICODETEXT reads"
                 if self.native.windows else "X11 synthetic ASCII keys/buttons, positioned wheel buttons4/5/6/7, native focus, UTF8_STRING selection reads",
             "ordered_batch_scope": "Text then Down then text has no displayed-state wait; native delivery may cross frames.", "runtime_limit": "No fake preedit injection, live IME, native Wayland, or physical keyboard/grab qualification."}
-        (self.args.output_directory / "text_area.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (self.args.output_directory / "text_area.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
 
     def manual_checkpoint(self, name, **changes):
         self.native.pointer(4, 4)
         self.checkpoint(name, allow_offscreen_caret=True, **changes)
 
     def track_click(self, axis, after):
-        name = "x" if axis == 0 else "y"
-        track, thumb = (self.snapshot["rectangles"][name + suffix] for suffix in ("_track", "_thumb"))
+        name = LIT_X if axis == 0 else LIT_Y
+        track, thumb = (self.snapshot[LIT_RECTANGLES][name + suffix] for suffix in (LIT_TRACK, LIT_THUMB))
         start = thumb[axis] + thumb[axis + 2] if after else track[axis]
         end = track[axis] + track[axis + 2] if after else thumb[axis]
         if end - start < 4.0:
@@ -167,8 +209,8 @@ class TextAreaRun:
         self.native.click(*self.point(*position))
 
     def thumb_drag(self, axis, at_end):
-        name = "x" if axis == 0 else "y"
-        track, thumb = (self.snapshot["rectangles"][name + suffix] for suffix in ("_track", "_thumb"))
+        name = LIT_X if axis == 0 else LIT_Y
+        track, thumb = (self.snapshot[LIT_RECTANGLES][name + suffix] for suffix in (LIT_TRACK, LIT_THUMB))
         if track[axis + 2] <= thumb[axis + 2]:
             raise SmokeFailure(f"the accepted {name} scrollbar thumb has no travel")
         destination = list(center(thumb))
@@ -177,184 +219,184 @@ class TextAreaRun:
 
     def scrolling_gates(self):
         self.expected.update({name: self.snapshot[name] for name in (*MODEL_EPOCHS, "can_undo", "can_redo")})
-        old = self.snapshot["scroll"]
-        target = (max(0.0, old[0] - self.snapshot["rectangles"]["content"][2]), old[1])
+        old = self.snapshot[LIT_SCROLL]
+        target = (max(0.0, old[0] - self.snapshot[LIT_RECTANGLES][LIT_CONTENT][2]), old[1])
         self.track_click(0, False)
         self.manual_checkpoint("unfocused_horizontal_track_pages_without_selecting", focus=1, extra=lambda state: scroll_matches(state, target))
         self.manual_checkpoint("manual_track_scroll_survives_idle_frames", settle=0.5, extra=lambda state: scroll_matches(state, target))
-        old = self.snapshot["scroll"]
-        target = (old[0], max(0.0, old[1] - self.snapshot["line_height"] * 3.0))
-        self.native.wheel(1, *self.point(*center(self.snapshot["rectangles"]["content"])))
+        old = self.snapshot[LIT_SCROLL]
+        target = (old[0], max(0.0, old[1] - self.snapshot[LIT_LINE_HEIGHT] * 3.0))
+        self.native.wheel(1, *self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_CONTENT])))
         self.manual_checkpoint("positive_vertical_wheel_scrolls_up_without_selection", extra=lambda state: scroll_matches(state, target))
-        old = self.snapshot["scroll"]
+        old = self.snapshot[LIT_SCROLL]
         target = (max(0.0, old[0] - 48.0), old[1])
-        self.native.wheel_x(-1, *self.point(*center(self.snapshot["rectangles"]["content"])))
+        self.native.wheel_x(-1, *self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_CONTENT])))
         self.manual_checkpoint("negative_horizontal_wheel_scrolls_left_only", extra=lambda state: scroll_matches(state, target))
-        old = self.snapshot["scroll"]
-        target = (min(self.snapshot["maximum"][0], old[0] + 48.0), min(self.snapshot["maximum"][1], old[1] + self.snapshot["line_height"] * 3.0))
-        position = self.point(*center(self.snapshot["rectangles"]["content"]))
+        old = self.snapshot[LIT_SCROLL]
+        target = (min(self.snapshot[LIT_MAXIMUM][0], old[0] + 48.0), min(self.snapshot[LIT_MAXIMUM][1], old[1] + self.snapshot[LIT_LINE_HEIGHT] * 3.0))
+        position = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_CONTENT]))
         self.native.wheel_x(1, *position)
         self.native.wheel(-1, *position)
         self.manual_checkpoint("right_down_wheel_axes_preserve_plain_model", extra=lambda state: scroll_matches(state, target))
-        target = (0.0, self.snapshot["scroll"][1])
+        target = (0.0, self.snapshot[LIT_SCROLL][1])
         self.thumb_drag(0, False)
         self.manual_checkpoint("horizontal_thumb_clamps_to_document_left", extra=lambda state: scroll_matches(state, target))
-        target = (self.snapshot["maximum"][0], self.snapshot["scroll"][1])
+        target = (self.snapshot[LIT_MAXIMUM][0], self.snapshot[LIT_SCROLL][1])
         self.thumb_drag(0, True)
         self.manual_checkpoint("horizontal_thumb_clamps_to_document_right", extra=lambda state: scroll_matches(state, target))
-        target = (self.snapshot["scroll"][0], 0.0)
+        target = (self.snapshot[LIT_SCROLL][0], 0.0)
         self.thumb_drag(1, False)
         self.manual_checkpoint("vertical_thumb_clamps_to_document_top", extra=lambda state: scroll_matches(state, target))
-        target = (self.snapshot["scroll"][0], self.snapshot["rectangles"]["content"][3])
+        target = (self.snapshot[LIT_SCROLL][0], self.snapshot[LIT_RECTANGLES][LIT_CONTENT][3])
         self.track_click(1, True)
         self.manual_checkpoint("vertical_after_track_pages_one_accepted_viewport", extra=lambda state: scroll_matches(state, target))
-        target = (self.snapshot["scroll"][0], self.snapshot["maximum"][1])
+        target = (self.snapshot[LIT_SCROLL][0], self.snapshot[LIT_MAXIMUM][1])
         self.thumb_drag(1, True)
         self.manual_checkpoint("vertical_thumb_clamps_to_document_bottom", extra=lambda state: scroll_matches(state, target))
-        target = (max(0.0, self.snapshot["scroll"][0] - self.snapshot["rectangles"]["content"][2]), self.snapshot["scroll"][1])
+        target = (max(0.0, self.snapshot[LIT_SCROLL][0] - self.snapshot[LIT_RECTANGLES][LIT_CONTENT][2]), self.snapshot[LIT_SCROLL][1])
         self.track_click(0, False)
         self.manual_checkpoint("horizontal_before_track_pages_one_accepted_viewport", extra=lambda state: scroll_matches(state, target))
         self.manual_checkpoint("two_axis_manual_scroll_persists_without_editing", settle=0.5, extra=lambda state: scroll_matches(state, target))
         for name in MODEL_EPOCHS:
             self.expected.pop(name)
-        self.native.tap("Left")
-        self.checkpoint("caret_move_resumes_reveal_after_manual_scroll", anchor=1038, caret=1038, extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
-        self.native.tap("Right")
+        self.native.tap(LIT_LEFT)
+        self.checkpoint("caret_move_resumes_reveal_after_manual_scroll", anchor=1038, caret=1038, extra=lambda state: state[LIT_SCROLL][0] > 0.0 and state[LIT_SCROLL][1] > 0.0)
+        self.native.tap(LIT_RIGHT)
         self.checkpoint("caret_move_restores_original_plain_position", anchor=1039, caret=1039)
         self.expected.update({name: self.snapshot[name] for name in MODEL_EPOCHS})
-        target = self.snapshot["scroll"]
-        self.controller("readonly")
+        target = self.snapshot[LIT_SCROLL]
+        self.controller(LIT_READONLY)
         self.manual_checkpoint("readonly_policy_preserves_manual_document", readonly=1, focus=0, extra=lambda state: scroll_matches(state, target))
-        old = self.snapshot["scroll"]
-        target = (old[0], max(0.0, old[1] - self.snapshot["line_height"] * 3.0))
-        self.native.wheel(1, *self.point(*center(self.snapshot["rectangles"]["content"])))
+        old = self.snapshot[LIT_SCROLL]
+        target = (old[0], max(0.0, old[1] - self.snapshot[LIT_LINE_HEIGHT] * 3.0))
+        self.native.wheel(1, *self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_CONTENT])))
         self.manual_checkpoint("readonly_vertical_wheel_still_scrolls", extra=lambda state: scroll_matches(state, target))
-        target = (0.0, self.snapshot["scroll"][1])
+        target = (0.0, self.snapshot[LIT_SCROLL][1])
         self.thumb_drag(0, False)
         self.manual_checkpoint("readonly_horizontal_thumb_preserves_selection", focus=1, extra=lambda state: scroll_matches(state, target))
-        target = self.snapshot["scroll"]
-        self.controller("enabled")
+        target = self.snapshot[LIT_SCROLL]
+        self.controller(LIT_ENABLED)
         self.manual_checkpoint("disabled_scrollbars_publish_disabled_skin", enabled=0, focus=0, extra=lambda state: scroll_matches(state, target))
-        position = self.point(*center(self.snapshot["rectangles"]["content"]))
+        position = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_CONTENT]))
         self.native.wheel_x(1, *position)
         self.native.wheel(-1, *position)
         self.thumb_drag(1, False)
         self.manual_checkpoint("disabled_wheel_and_thumb_cannot_scroll_or_select", extra=lambda state: scroll_matches(state, target))
-        self.controller("enabled")
+        self.controller(LIT_ENABLED)
         self.manual_checkpoint("reenabled_scrollbars_preserve_plain_document", enabled=1, focus=0, extra=lambda state: scroll_matches(state, target))
-        self.controller("readonly")
+        self.controller(LIT_READONLY)
         self.manual_checkpoint("editable_policy_preserves_scroll_and_selection", readonly=0, focus=0, extra=lambda state: scroll_matches(state, target))
-        self.native.click(*self.point(*center(self.snapshot["rectangles"]["corner"])))
+        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES]["corner"])))
         self.manual_checkpoint("corner_focus_preserves_manual_scroll_without_selecting", focus=1, extra=lambda state: scroll_matches(state, target))
         for name in MODEL_EPOCHS:
             self.expected.pop(name)
-        self.native.tap("Left")
-        self.native.tap("Right")
+        self.native.tap(LIT_LEFT)
+        self.native.tap(LIT_RIGHT)
         self.native.pointer(4, 4)
-        self.checkpoint("text_navigation_after_corner_restores_caret_reveal", anchor=1039, caret=1039, extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
+        self.checkpoint("text_navigation_after_corner_restores_caret_reveal", anchor=1039, caret=1039, extra=lambda state: state[LIT_SCROLL][0] > 0.0 and state[LIT_SCROLL][1] > 0.0)
 
     def execute(self):
         self.native.pointer(4, 4)
         self.checkpoint("initial_multilingual_document")
         self.focus("focus_precedes_vertical_navigation")
-        self.native.tap("Down")
+        self.native.tap(LIT_DOWN)
         self.checkpoint("short_line_preserves_preferred_column", anchor=8, caret=8, preferred_valid=1)
-        column = self.snapshot["preferred_bits"]
-        self.expected["preferred_bits"] = column
-        self.native.tap("Down")
+        column = self.snapshot[LIT_PREFERRED_BITS]
+        self.expected[LIT_PREFERRED_BITS] = column
+        self.native.tap(LIT_DOWN)
         self.checkpoint("next_long_line_restores_column", anchor=14, caret=14)
-        self.native.tap("Up")
-        self.native.tap("Up")
+        self.native.tap(LIT_UP)
+        self.native.tap(LIT_UP)
         self.checkpoint("up_returns_to_original_column", anchor=5, caret=5)
-        self.native.tap("Down", shift=True)
-        self.native.tap("Down", shift=True)
+        self.native.tap(LIT_DOWN, shift=True)
+        self.native.tap(LIT_DOWN, shift=True)
         self.checkpoint("shift_down_paints_multiple_selection_lines", anchor=5, caret=14, minimum_selection_lines=2)
-        self.native.tap("c", control=True)
+        self.native.tap(LIT_C, control=True)
         self.checkpoint("cross_line_copy_preserves_selection", minimum_selection_lines=2)
         self.require_clipboard("f\nx\nabcde")
-        self.native.tap("x", control=True)
+        self.native.tap(LIT_X, control=True)
         self.checkpoint("cross_line_cut_is_one_completed_edit", text="abcdef\n한국어", anchor=5, caret=5, preferred_valid=0, preferred_bits=0)
         self.require_clipboard("f\nx\nabcde")
-        self.native.tap("z", control=True)
+        self.native.tap(LIT_Z, control=True)
         self.checkpoint("one_undo_restores_cross_line_cut_and_selection", text=INITIAL, anchor=5, caret=14, minimum_selection_lines=2, preferred_valid=0, preferred_bits=0)
         self.controller("clipboard")
-        seeds = self.snapshot["clipboard_seeds"] + 1
+        seeds = self.snapshot[LIT_CLIPBOARD_SEEDS] + 1
         self.checkpoint("real_clipboard_seed_is_complete", focus=0, clipboard_seeds=seeds, preferred_valid=0, preferred_bits=0)
         self.require_clipboard("ab\r\ncdef\r\nxy" if not self.native.windows else "ab\ncdef\nxy")
         self.focus("focus_precedes_crlf_paste")
-        self.native.tap("a", control=True)
-        self.native.tap("v", control=True)
+        self.native.tap(LIT_A, control=True)
+        self.native.tap(LIT_V, control=True)
         canonical = "ab\ncdef\nxy"
         self.checkpoint("os_paste_admits_canonical_lf", text=canonical, anchor=10, caret=10, preferred_valid=0, preferred_bits=0)
-        self.native.tap("z", control=True)
-        self.checkpoint("one_undo_restores_multiline_paste", text=INITIAL, anchor=0, caret=len(INITIAL.encode("utf-8")), minimum_selection_lines=3)
-        self.native.tap("y", control=True)
+        self.native.tap(LIT_Z, control=True)
+        self.checkpoint("one_undo_restores_multiline_paste", text=INITIAL, anchor=0, caret=len(INITIAL.encode(LIT_UTF_8)), minimum_selection_lines=3)
+        self.native.tap(LIT_Y, control=True)
         self.checkpoint("redo_restores_canonical_lf", text=canonical, anchor=10, caret=10)
-        self.native.tap("Return")
+        self.native.tap(LIT_RETURN)
         self.checkpoint("enter_inserts_trailing_hard_line", text=canonical + "\n", anchor=11, caret=11)
-        self.native.tap("Return", shift=True)
+        self.native.tap(LIT_RETURN, shift=True)
         self.checkpoint("shift_enter_inserts_another_lf", text=canonical + "\n\n", anchor=12, caret=12)
-        submits = self.snapshot["submits"] + 1
-        self.native.tap("Return", control=True)
+        submits = self.snapshot[LIT_SUBMITS] + 1
+        self.native.tap(LIT_RETURN, control=True)
         self.checkpoint("ctrl_enter_submits_without_rewrite", submits=submits)
-        self.controller("outside")
-        self.checkpoint("ordinary_blur_preserves_plain_text", focus=0, outside=self.snapshot["outside"] + 1, extra=lambda state: state["blurs"] > self.snapshot["blurs"])
-        self.controller("reset")
+        self.controller(LIT_OUTSIDE)
+        self.checkpoint("ordinary_blur_preserves_plain_text", focus=0, outside=self.snapshot[LIT_OUTSIDE] + 1, extra=lambda state: state[LIT_BLURS] > self.snapshot[LIT_BLURS])
+        self.controller(LIT_RESET)
         self.checkpoint("reset_replaces_document_before_loan", text=INITIAL, anchor=5, caret=5, preferred_valid=0, preferred_bits=0, long_document=0, compact=0)
         self.focus("fresh_focus_precedes_ordered_batch")
-        self.native.text_down_text("q", "z")
+        self.native.text_down_text("q", LIT_Z)
         ordered = "abcdeqf\nxz\nabcdef\n한국어"
         self.checkpoint("text_down_text_keeps_event_order", text=ordered, anchor=10, caret=10, preferred_valid=0, preferred_bits=0)
-        cancels = self.snapshot["cancels"] + 1
+        cancels = self.snapshot[LIT_CANCELS] + 1
         self.native.tap("Escape")
         self.checkpoint("escape_preserves_plain_draft_and_retires_focus", focus=0, cancels=cancels)
-        self.controller("reset")
+        self.controller(LIT_RESET)
         self.checkpoint("reset_precedes_readonly", text=INITIAL, anchor=5, caret=5)
-        self.controller("readonly")
+        self.controller(LIT_READONLY)
         self.checkpoint("readonly_policy_is_displayed", readonly=1, focus=0)
         self.focus("readonly_focus_precedes_selection")
-        self.native.tap("a", control=True)
-        self.native.tap("c", control=True)
-        self.native.text("z")
-        self.native.tap("Return")
-        self.native.tap("x", control=True)
-        self.native.tap("v", control=True)
-        self.checkpoint("readonly_allows_copy_and_blocks_mutation", anchor=0, caret=len(INITIAL.encode("utf-8")), minimum_selection_lines=3)
+        self.native.tap(LIT_A, control=True)
+        self.native.tap(LIT_C, control=True)
+        self.native.text(LIT_Z)
+        self.native.tap(LIT_RETURN)
+        self.native.tap(LIT_X, control=True)
+        self.native.tap(LIT_V, control=True)
+        self.checkpoint("readonly_allows_copy_and_blocks_mutation", anchor=0, caret=len(INITIAL.encode(LIT_UTF_8)), minimum_selection_lines=3)
         self.require_clipboard(INITIAL)
-        self.native.tap("Home", control=True)
-        self.native.tap("Down", shift=True)
+        self.native.tap(LIT_HOME, control=True)
+        self.native.tap(LIT_DOWN, shift=True)
         self.checkpoint("readonly_vertical_navigation_still_extends", anchor=0, caret=7, preferred_valid=1)
-        self.controller("readonly")
+        self.controller(LIT_READONLY)
         self.checkpoint("editable_policy_preserves_plain_selection", readonly=0, focus=0, preferred_valid=0, preferred_bits=0)
-        self.controller("enabled")
+        self.controller(LIT_ENABLED)
         self.checkpoint("disabled_policy_is_displayed", enabled=0, focus=0)
-        self.native.click(*self.point(*center(self.snapshot["rectangles"]["bounds"])))
-        self.native.text("z")
-        self.native.tap("Down")
-        self.native.tap("Return")
+        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES]["bounds"])))
+        self.native.text(LIT_Z)
+        self.native.tap(LIT_DOWN)
+        self.native.tap(LIT_RETURN)
         self.checkpoint("disable_blocks_text_navigation_and_submit", enabled=0, focus=0)
-        self.controller("enabled")
+        self.controller(LIT_ENABLED)
         self.checkpoint("enable_requires_fresh_focus", enabled=1, focus=0)
         self.controller("long")
-        self.checkpoint("long_document_reveals_caret_on_both_axes", text=LONG_DOCUMENT, anchor=1039, caret=1039, long_document=1, extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
+        self.checkpoint("long_document_reveals_caret_on_both_axes", text=LONG_DOCUMENT, anchor=1039, caret=1039, long_document=1, extra=lambda state: state[LIT_SCROLL][0] > 0.0 and state[LIT_SCROLL][1] > 0.0)
         self.controller("viewport")
-        self.checkpoint("smaller_viewport_reveals_caret", compact=1, wait_for_settle=True, extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
+        self.checkpoint("smaller_viewport_reveals_caret", compact=1, wait_for_settle=True, extra=lambda state: state[LIT_SCROLL][0] > 0.0 and state[LIT_SCROLL][1] > 0.0)
         self.scrolling_gates()
         self.focus("small_viewport_focus_precedes_home")
-        self.native.tap("Home", control=True)
-        self.checkpoint("document_home_restores_top_left", anchor=0, caret=0, preferred_valid=0, preferred_bits=0, extra=lambda state: state["scroll"] == (0.0, 0.0))
-        page = min(16, math.floor(0.5 + self.snapshot["rectangles"]["content"][3] / self.snapshot["line_height"]))
+        self.native.tap(LIT_HOME, control=True)
+        self.checkpoint("document_home_restores_top_left", anchor=0, caret=0, preferred_valid=0, preferred_bits=0, extra=lambda state: state[LIT_SCROLL] == (0.0, 0.0))
+        page = min(16, math.floor(0.5 + self.snapshot[LIT_RECTANGLES][LIT_CONTENT][3] / self.snapshot[LIT_LINE_HEIGHT]))
         self.native.tap("Page_Down", shift=True)
         self.checkpoint("page_down_uses_accepted_content_height", anchor=0, caret=page * 65, preferred_valid=1, minimum_selection_lines=max(1, min(2, page - 1)), extra=lambda state: state["selection_count"] == page)
         self.native.tap("Page_Up")
         self.checkpoint("page_up_returns_to_document_start", anchor=0, caret=0)
         self.native.tap("End", control=True)
-        self.checkpoint("document_end_reveals_trailing_line", anchor=len(LONG_DOCUMENT), caret=len(LONG_DOCUMENT), preferred_valid=0, preferred_bits=0, extra=lambda state: state["scroll"][1] > 0.0)
+        self.checkpoint("document_end_reveals_trailing_line", anchor=len(LONG_DOCUMENT), caret=len(LONG_DOCUMENT), preferred_valid=0, preferred_bits=0, extra=lambda state: state[LIT_SCROLL][1] > 0.0)
         self.backend.resize_client(self.handle, 800, 600)
         self.checkpoint("client_resize_publishes_matching_geometry", focus=0, preferred_valid=0, preferred_bits=0, extent=(800, 600))
         self.focus("fresh_focus_after_resize_precedes_native_focus_loss")
         self.native.focus_loss_and_gain()
-        self.native.text("z")
+        self.native.text(LIT_Z)
         self.checkpoint("native_focus_loss_preserves_plain_draft", focus=0, extent=(800, 600))
 
 
@@ -384,15 +426,15 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, "UI TextArea fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI TextArea fixture")
+                exit_code, tail = terminate_process(application, LIT_UI_TEXTAREA_FIXTURE, handle)
+                require_normal_process_exit(exit_code, tail, LIT_UI_TEXTAREA_FIXTURE)
         finally:
             try:
                 text = ""
                 if log_directory is not None:
                     text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
                     logserver = None
-                    (args.output_directory / "text_area.log").write_text(text, encoding="utf-8")
+                    (args.output_directory / "text_area.log").write_text(text, encoding=LIT_UTF_8)
             finally:
                 try:
                     if logserver is not None:

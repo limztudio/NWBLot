@@ -17,6 +17,26 @@ from raster_ir_parity_probe import compare_frames, observe_scene  # noqa: E402
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows  # noqa: E402
 from fixture_environment import build_fixture_environment
 
+LIT_EXECUTABLE = "--executable"
+LIT_WORKING_DIRECTORY = "--working-directory"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_TIMEOUT = "--timeout"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_STARTUP = "startup"
+LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
+LIT_APPLICATION_CAPTURE = "--application-capture"
+LIT_LOG_OUTPUT = "--log-output"
+LIT_APPLICATION_CAPTURE_FRAME_COUNT = "--application-capture-frame-count"
+LIT_PAINT = "paint"
+LIT_TEXTURE_IMAGE = "texture_image"
+LIT_REPLAY = "replay"
+LIT_UTF_8 = "utf-8"
+LIT_PASSED = "passed"
+LIT_SCENES = "scenes"
+LIT_DIRECT_OBSERVATION = "direct_observation"
+LIT_REPLAY_OBSERVATION = "replay_observation"
+LIT_PARITY = "parity"
+
 
 SCENES = ("startup", "paint", "texture_image")
 MODES = ("direct", "replay")
@@ -24,15 +44,15 @@ MODES = ("direct", "replay")
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executable", type=Path, required=True)
-    parser.add_argument("--working-directory", type=Path, required=True)
+    parser.add_argument(LIT_EXECUTABLE, type=Path, required=True)
+    parser.add_argument(LIT_WORKING_DIRECTORY, type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
-    parser.add_argument("--logserver-executable", type=Path)
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
     parser.add_argument("--replay-marker", required=True, help="Exact log substring emitted only after retained raster IR was actually replayed.")
     parser.add_argument("--mode-environment", default="NWB_UI_IR_REPLAY")
     parser.add_argument("--frames", type=int, default=60)
-    parser.add_argument("--timeout", type=float, default=75.0)
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument(LIT_TIMEOUT, type=float, default=75.0)
+    parser.add_argument(LIT_GPU_VALIDATION, action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 3:
         parser.error("--frames must include both empty startup frames and painted UI")
@@ -44,33 +64,33 @@ def parse_args(argv):
 
 
 def capture_command(args, scene, mode, path, log_path=None, *, resize=False):
-    script = Path(__file__).resolve().parent / "raster_ir_flat_capture.py" if scene == "startup" or resize \
+    script = Path(__file__).resolve().parent / "raster_ir_flat_capture.py" if scene == LIT_STARTUP or resize \
         else SMOKE_DIRECTORY / "window_capture_smoke.py"
-    command = [sys.executable, str(script), "--executable", str(args.executable.resolve()), "--working-directory", str(args.working_directory.resolve()), "--output", str(path), "--window-title", "NWB UI Layer Smoke", "--timeout", str(args.timeout),
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation", "--expect-log-message", "Loader: project startup complete", "--expect-log-message", "UiLayerSmokeProject: shutdown",]
+    command = [sys.executable, str(script), LIT_EXECUTABLE, str(args.executable.resolve()), LIT_WORKING_DIRECTORY, str(args.working_directory.resolve()), "--output", str(path), "--window-title", "NWB UI Layer Smoke", LIT_TIMEOUT, str(args.timeout),
+        LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation", LIT_EXPECT_LOG_MESSAGE, "Loader: project startup complete", LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: shutdown",]
     if resize:
-        command += ["--application-capture", "--log-output", str(log_path), "--application-capture-frame-count", "240", "--resize-before-capture", "800", "600", "--expect-log-message", "GraphicsRuntime: Back buffer resized to 800x600"]
+        command += [LIT_APPLICATION_CAPTURE, LIT_LOG_OUTPUT, str(log_path), LIT_APPLICATION_CAPTURE_FRAME_COUNT, "240", "--resize-before-capture", "800", "600", LIT_EXPECT_LOG_MESSAGE, "GraphicsRuntime: Back buffer resized to 800x600"]
     else:
-        command += ["--application-capture", "--log-output", str(log_path), "--application-capture-frame-count", "2" if scene == "startup" else str(args.frames)]
-    if scene == "paint" or resize:
-        command += ["--expect-log-message", "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"]
-    elif scene == "texture_image":
-        command += ["--expect-log-message", "UiTextureImageSmoke: state sequence="]
-    if mode == "replay" and scene != "startup":
-        command += ["--expect-log-message", args.replay_marker]
+        command += [LIT_APPLICATION_CAPTURE, LIT_LOG_OUTPUT, str(log_path), LIT_APPLICATION_CAPTURE_FRAME_COUNT, "2" if scene == LIT_STARTUP else str(args.frames)]
+    if scene == LIT_PAINT or resize:
+        command += [LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"]
+    elif scene == LIT_TEXTURE_IMAGE:
+        command += [LIT_EXPECT_LOG_MESSAGE, "UiTextureImageSmoke: state sequence="]
+    if mode == LIT_REPLAY and scene != LIT_STARTUP:
+        command += [LIT_EXPECT_LOG_MESSAGE, args.replay_marker]
     elif mode == "direct":
         command += ["--reject-log-message", args.replay_marker]
     if args.logserver_executable:
-        command += ["--logserver-executable", str(args.logserver_executable.resolve())]
+        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable.resolve())]
     else:
         command += ["--no-logserver"]
     return command
 
 
 def capture_environment(args, scene, mode):
-    fixture = "TEXTURE_IMAGE" if scene == "texture_image" else None
+    fixture = "TEXTURE_IMAGE" if scene == LIT_TEXTURE_IMAGE else None
     environment = build_fixture_environment(os.environ, fixture, skin="alternate" if fixture else "default", force_x11=True)
-    environment[args.mode_environment] = "1" if mode == "replay" else "0"
+    environment[args.mode_environment] = "1" if mode == LIT_REPLAY else "0"
     return environment
 
 
@@ -93,19 +113,19 @@ def capture(args, scene, mode):
     frame = read_bmp_24_rows(path)
     if frame[:2] != (960, 540):
         raise SmokeFailure(f"{scene} {mode} framebuffer extent was {frame[:2]}, expected 960x540")
-    log_text = log_path.read_text(encoding="utf-8")
+    log_text = log_path.read_text(encoding=LIT_UTF_8)
     return frame, observe_scene(scene, frame, log_text)
 
 
 def capture_resize(args, mode):
     path = args.output_directory / f"paint_resize_{mode}.bmp"
     log_path = args.output_directory / f"paint_resize_{mode}.log"
-    if not launch_capture(args, "paint", mode, path, log_path, resize=True):
+    if not launch_capture(args, LIT_PAINT, mode, path, log_path, resize=True):
         return None
     frame = read_bmp_24_rows(path)
     if frame[:2] != (800, 600):
         raise SmokeFailure(f"paint {mode} resized framebuffer extent was {frame[:2]}, expected 800x600")
-    return frame, observe_scene("paint", frame, log_path.read_text(encoding="utf-8"))
+    return frame, observe_scene(LIT_PAINT, frame, log_path.read_text(encoding=LIT_UTF_8))
 
 
 def run(args):
@@ -113,8 +133,8 @@ def run(args):
         raise SmokeFailure(f"executable does not exist: {args.executable}")
     args.output_directory.mkdir(parents=True, exist_ok=True)
     report_path = args.output_directory / "raster_ir_parity.json"
-    report = {"passed": False, "frames": args.frames, "scenes": {}}
-    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    report = {LIT_PASSED: False, "frames": args.frames, LIT_SCENES: {}}
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
     for scene in SCENES:
         direct = capture(args, scene, MODES[0])
         if direct is None:
@@ -123,9 +143,9 @@ def run(args):
         if replay is None:
             return SKIP_EXIT_CODE
         parity = compare_frames(direct[0], replay[0])
-        report["scenes"][scene] = {"direct_observation": direct[1], "replay_observation": replay[1], "parity": parity}
-        report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        if not parity["passed"]:
+        report[LIT_SCENES][scene] = {LIT_DIRECT_OBSERVATION: direct[1], LIT_REPLAY_OBSERVATION: replay[1], LIT_PARITY: parity}
+        report_path.write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        if not parity[LIT_PASSED]:
             raise SmokeFailure(f"{scene} direct/replay framebuffer pixels differ: {parity}")
     direct_resize = capture_resize(args, MODES[0])
     if direct_resize is None:
@@ -134,13 +154,13 @@ def run(args):
     if replay_resize is None:
         return SKIP_EXIT_CODE
     parity = compare_frames(direct_resize[0], replay_resize[0])
-    resize_report = {"before": "paint scene fixed-frame application capture at 960x540", "after": {"direct_observation": direct_resize[1], "replay_observation": replay_resize[1], "parity": parity}}
-    report["scenes"]["paint_resize"] = resize_report
-    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    if not parity["passed"]:
+    resize_report = {"before": "paint scene fixed-frame application capture at 960x540", "after": {LIT_DIRECT_OBSERVATION: direct_resize[1], LIT_REPLAY_OBSERVATION: replay_resize[1], LIT_PARITY: parity}}
+    report[LIT_SCENES]["paint_resize"] = resize_report
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+    if not parity[LIT_PASSED]:
         raise SmokeFailure(f"paint resize direct/replay framebuffer pixels differ: {parity}")
-    report["passed"] = True
-    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    report[LIT_PASSED] = True
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
     print("UI raster IR: startup, passive, engine-image, and resized framebuffers match within one RGB level", flush=True)
     return 0
 

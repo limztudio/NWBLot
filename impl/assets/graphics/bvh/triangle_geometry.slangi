@@ -11,6 +11,14 @@
 
 #include "constants.h"
 #include "bindless_heap_rt.slangi"
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static const float NWB_RAYTRACE_COPLANAR_SEAM_EPSILON_SCALE = 24.0;
+static const float NWB_RAYTRACE_INCIDENT_SUPPORT_EPSILON_SCALE = 8.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,14 +70,14 @@ bool nwbRayTraceCoplanarSeam(const uint instanceMaterialHeapSlot, const uint ins
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[instance];
     const uint3 first = nwbHeapRawBuffer(material.indexSlot).Load3(firstPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const uint3 second = nwbHeapRawBuffer(material.indexSlot).Load3(secondPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    uint opposite = 3u;
-    [unroll] for(uint firstEdge = 0u; firstEdge < 3u; ++firstEdge){
-        [unroll] for(uint secondEdge = 0u; secondEdge < 3u; ++secondEdge){
-            if(first[firstEdge] == second[(secondEdge + 1u) % 3u] && first[(firstEdge + 1u) % 3u] == second[secondEdge])
-                opposite = (secondEdge + 2u) % 3u;
+    uint opposite = NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    [unroll] for(uint firstEdge = 0u; firstEdge < NWB_RAYTRACE_TRIANGLE_CORNER_COUNT; ++firstEdge){
+        [unroll] for(uint secondEdge = 0u; secondEdge < NWB_RAYTRACE_TRIANGLE_CORNER_COUNT; ++secondEdge){
+            if(first[firstEdge] == second[(secondEdge + 1u) % NWB_RAYTRACE_TRIANGLE_CORNER_COUNT] && first[(firstEdge + 1u) % NWB_RAYTRACE_TRIANGLE_CORNER_COUNT] == second[secondEdge])
+                opposite = (secondEdge + 2u) % NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
         }
     }
-    if(opposite == 3u)
+    if(opposite == NWB_RAYTRACE_TRIANGLE_CORNER_COUNT)
         return false;
     if(any(second[opposite] == first))
         return false;
@@ -83,7 +91,7 @@ bool nwbRayTraceCoplanarSeam(const uint instanceMaterialHeapSlot, const uint ins
     const float3 normal = cross(a, b);
     const float determinant = dot(normal, c);
     const float magnitude = dot(abs(a), abs(b.yzx * c.zxy) + abs(b.zxy * c.yzx));
-    const float error = 24.0 * 1.1920928955078125e-7 * magnitude;
+    const float error = NWB_RAYTRACE_COPLANAR_SEAM_EPSILON_SCALE * NWB_FLOAT_EPSILON * magnitude;
     return isfinite(determinant) && isfinite(error) && dot(normal, normal) > 0.0 && abs(determinant) <= error;
 }
 
@@ -91,7 +99,7 @@ bool nwbRayTraceCoplanarSeam(const uint instanceMaterialHeapSlot, const uint ins
 bool nwbRayTraceIncidentBoundary(const NwbRtInstanceMaterial material, const uint firstPrimitive, const float2 firstBarycentrics, const uint secondPrimitive, const float2 secondBarycentrics){
     const float3 firstWeights = float3(1.0 - firstBarycentrics.x - firstBarycentrics.y, firstBarycentrics);
     const float3 secondWeights = float3(1.0 - secondBarycentrics.x - secondBarycentrics.y, secondBarycentrics);
-    const float supportEpsilon = 8.0 * 1.1920928955078125e-7;
+    const float supportEpsilon = NWB_RAYTRACE_INCIDENT_SUPPORT_EPSILON_SCALE * NWB_FLOAT_EPSILON;
     // Interior triangle hits cannot share an incident edge/vertex, so reject them before loading either triangle's geometry.
     if(all(abs(firstWeights) > supportEpsilon) && !any(firstWeights >= 1.0 - supportEpsilon))
         return false;
@@ -99,18 +107,18 @@ bool nwbRayTraceIncidentBoundary(const NwbRtInstanceMaterial material, const uin
         return false;
     const uint3 first = nwbHeapRawBuffer(material.indexSlot).Load3(firstPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const uint3 second = nwbHeapRawBuffer(material.indexSlot).Load3(secondPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    [unroll] for(uint firstCorner = 0u; firstCorner < 3u; ++firstCorner){
+    [unroll] for(uint firstCorner = 0u; firstCorner < NWB_RAYTRACE_TRIANGLE_CORNER_COUNT; ++firstCorner){
         const float3 firstPosition = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first[firstCorner] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-        [unroll] for(uint secondCorner = 0u; secondCorner < 3u; ++secondCorner){
+        [unroll] for(uint secondCorner = 0u; secondCorner < NWB_RAYTRACE_TRIANGLE_CORNER_COUNT; ++secondCorner){
             const float3 secondPosition = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(second[secondCorner] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             if(any(firstPosition != secondPosition))
                 continue;
             if(firstWeights[firstCorner] >= 1.0 - supportEpsilon && secondWeights[secondCorner] >= 1.0 - supportEpsilon)
                 return true;
-            if(abs(firstWeights[(firstCorner + 2u) % 3u]) > supportEpsilon || abs(secondWeights[(secondCorner + 1u) % 3u]) > supportEpsilon)
+            if(abs(firstWeights[(firstCorner + 2u) % NWB_RAYTRACE_TRIANGLE_CORNER_COUNT]) > supportEpsilon || abs(secondWeights[(secondCorner + 1u) % NWB_RAYTRACE_TRIANGLE_CORNER_COUNT]) > supportEpsilon)
                 continue;
-            const float3 firstNext = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first[(firstCorner + 1u) % 3u] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const float3 secondPrevious = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(second[(secondCorner + 2u) % 3u] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 firstNext = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first[(firstCorner + 1u) % NWB_RAYTRACE_TRIANGLE_CORNER_COUNT] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 secondPrevious = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(second[(secondCorner + 2u) % NWB_RAYTRACE_TRIANGLE_CORNER_COUNT] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             if(all(firstNext == secondPrevious))
                 return true;
         }

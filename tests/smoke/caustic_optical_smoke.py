@@ -17,6 +17,8 @@ from caustic_optical_reference import exterior_samples, expected_environment_col
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_GPU_VALIDATION = "--gpu-validation"
+
 LIT_COMBINED = "combined"
 LIT_REFLECTION_DISABLED = "reflection_disabled"
 LIT_CAUSTICS_DISABLED = "caustics_disabled"
@@ -60,7 +62,7 @@ def capture(args, variant):
     output = args.output_directory / (variant + ".bmp")
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", "360", LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG)), LIT_EXPECT_LOG_MESSAGE, "TransparentMultiSmokeProject: shutdown",
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
+        LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
     enabled = variant != LIT_REFLECTION_DISABLED
     command += [LIT_EXPECT_LOG_MESSAGE, "CausticSphereSmokeProject: reflection mode " + (("1" if args.software_ray_tracing else "2") if enabled else "0"), LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: "
         + (("screen-space" if args.software_ray_tracing else LIT_HARDWARE) if enabled else LIT_DISABLED)]
@@ -225,7 +227,7 @@ def parse_args(argv):
     route.add_argument("--software-ray-tracing", action=LIT_STORE_TRUE, help="Disable logical-device hardware ray tracing and validate software/screen-space optical contributions.")
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     caustic_quality_smoke.add_arguments(parser)
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument(LIT_GPU_VALIDATION, action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("timeout must be positive")

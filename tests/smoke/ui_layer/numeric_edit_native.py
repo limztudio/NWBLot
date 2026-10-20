@@ -8,17 +8,28 @@ from __future__ import annotations
 import ctypes
 import time
 
+from edit_native import TEXT_SETTLE_SECONDS
 from popup_tools_native import PopupToolsNativeInput
 from window_capture_smoke import SmokeFailure
 
+LIT_TYPE = "type"
+LIT_SELECTION = "selection"
+LIT_MINUS = "minus"
+LIT_PERIOD = "period"
+LIT_PLUS = "plus"
+
+CLIPBOARD_READ_TIMEOUT_SECONDS = 2.0
+CLIPBOARD_POLL_SECONDS = 0.02
+CLIPBOARD_MAX_BYTES = 65536
+
 
 class NumericSelectionEvent(ctypes.Structure):
-    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int), ("display", ctypes.c_void_p), ("requestor", ctypes.c_ulong), ("selection", ctypes.c_ulong),
+    _fields_ = [(LIT_TYPE, ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int), ("display", ctypes.c_void_p), ("requestor", ctypes.c_ulong), (LIT_SELECTION, ctypes.c_ulong),
         ("target", ctypes.c_ulong), ("property", ctypes.c_ulong), ("time", ctypes.c_ulong)]
 
 
 class NumericClipboardEvent(ctypes.Union):
-    _fields_ = [("type", ctypes.c_int), ("selection", NumericSelectionEvent), ("pad", ctypes.c_long * 24)]
+    _fields_ = [(LIT_TYPE, ctypes.c_int), (LIT_SELECTION, NumericSelectionEvent), ("pad", ctypes.c_long * 24)]
 
 
 class NumericEditNativeInput(PopupToolsNativeInput):
@@ -54,7 +65,7 @@ class NumericEditNativeInput(PopupToolsNativeInput):
             x11.XCheckTypedWindowEvent.restype = ctypes.c_int
 
     def key(self, name, down, *, repeat=False, shift=False, control=False):
-        numeric_keys = {"minus": 0xBD, "period": 0xBE, "plus": 0xBB, **{digit: ord(digit) for digit in "0123456789"}}
+        numeric_keys = {LIT_MINUS: 0xBD, LIT_PERIOD: 0xBE, LIT_PLUS: 0xBB, **{digit: ord(digit) for digit in "0123456789"}}
         if self.windows and name in numeric_keys:
             flags = 1 | ((1 << 30) if repeat or not down else 0) | ((1 << 31) if not down else 0)
             self._post(0x0100 if down else 0x0101, numeric_keys[name], flags)
@@ -68,13 +79,13 @@ class NumericEditNativeInput(PopupToolsNativeInput):
         if self.windows:
             super().text(value, settle=settle)
             return
-        punctuation = {"-": ("minus", False), ".": ("period", False), "+": ("plus", True), " ": ("space", False)}
+        punctuation = {"-": (LIT_MINUS, False), ".": (LIT_PERIOD, False), "+": (LIT_PLUS, True), " ": ("space", False)}
         for character in value:
             name, shift = punctuation.get(character, (character.lower(), character.isupper()))
             self.key(name, True, shift=shift)
             self.key(name, False, shift=shift)
         if settle:
-            time.sleep(0.15)
+            time.sleep(TEXT_SETTLE_SECONDS)
 
     def replace_text(self, value):
         self.tap("a", control=True)
@@ -83,10 +94,10 @@ class NumericEditNativeInput(PopupToolsNativeInput):
         else:
             self.tap("BackSpace")
 
-    def clipboard_text(self, *, timeout=2.0, max_bytes=65536):
+    def clipboard_text(self, *, timeout=CLIPBOARD_READ_TIMEOUT_SECONDS, max_bytes=CLIPBOARD_MAX_BYTES):
         """Read CLIPBOARD/CF_UNICODETEXT without replacing its owner or data."""
-        if max_bytes <= 0 or max_bytes > 65536:
-            raise ValueError("numeric clipboard read bound must be between 1 and 65536 bytes")
+        if max_bytes <= 0 or max_bytes > CLIPBOARD_MAX_BYTES:
+            raise ValueError(f"numeric clipboard read bound must be between 1 and {CLIPBOARD_MAX_BYTES} bytes")
         if self.windows:
             return self._windows_clipboard_text(timeout, max_bytes)
         return self._x11_clipboard_text(timeout, max_bytes)
@@ -96,7 +107,7 @@ class NumericEditNativeInput(PopupToolsNativeInput):
         while not self.backend.user32.OpenClipboard(None):
             if time.monotonic() >= deadline:
                 raise SmokeFailure("OpenClipboard remained unavailable during numeric copy verification")
-            time.sleep(0.02)
+            time.sleep(CLIPBOARD_POLL_SECONDS)
         try:
             if not self.backend.user32.IsClipboardFormatAvailable(13):
                 return None
@@ -137,7 +148,7 @@ class NumericEditNativeInput(PopupToolsNativeInput):
             while not x11.XCheckTypedWindowEvent(display, requestor, 31, ctypes.byref(event)):
                 if time.monotonic() >= deadline:
                     raise SmokeFailure("X11 numeric clipboard conversion did not complete")
-                time.sleep(0.02)
+                time.sleep(CLIPBOARD_POLL_SECONDS)
             if not event.selection.property:
                 return None
             actual_type, actual_format = ctypes.c_ulong(), ctypes.c_int()

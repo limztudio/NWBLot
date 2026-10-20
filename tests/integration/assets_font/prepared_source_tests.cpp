@@ -45,6 +45,11 @@ static constexpr usize s_GroupCount = 4u;
 static constexpr usize s_FontBytes = 7u;
 static constexpr usize s_FontOffset = s_HeaderBytes + s_GroupCount * s_GroupHeaderBytes;
 static constexpr usize s_PixelOffset = s_FontOffset + s_FontBytes;
+static constexpr usize s_GroupHeightField = 4u;
+static constexpr usize s_GroupChannelsField = 8u;
+static constexpr usize s_GroupImageBytesField = 12u;
+static constexpr u32 s_MaxImageSide = 2048u;
+static constexpr u32 s_MaxChannelCount = 4u;
 
 struct SourceFixture{
     Core::Assets::AssetVector<PreparedFontImageGroup> groups;
@@ -212,18 +217,18 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
         { "groups_overflow.font", 16u, Limit<u32>::s_Max, true },
         { "missing_group_header.font", 16u, 5u, false },
         { "width_zero.font", s_HeaderBytes, 0u, false },
-        { "width_limit.font", s_HeaderBytes, 2049u, false },
+        { "width_limit.font", s_HeaderBytes, s_MaxImageSide + 1u, false },
         { "width_overflow.font", s_HeaderBytes, Limit<u32>::s_Max, false },
-        { "height_zero.font", s_HeaderBytes + 4u, 0u, false },
-        { "height_limit.font", s_HeaderBytes + 4u, 2049u, false },
-        { "height_overflow.font", s_HeaderBytes + 4u, Limit<u32>::s_Max, false },
-        { "channels_zero.font", s_HeaderBytes + 8u, 0u, false },
-        { "channels_limit.font", s_HeaderBytes + 8u, 5u, false },
-        { "channels_overflow.font", s_HeaderBytes + 8u, Limit<u32>::s_Max, false },
-        { "image_bytes_zero.font", s_HeaderBytes + 12u, 0u, false },
-        { "image_bytes_short.font", s_HeaderBytes + 12u, 14u, false },
-        { "image_bytes_long.font", s_HeaderBytes + 12u, 16u, false },
-        { "image_bytes_overflow.font", s_HeaderBytes + 12u, Limit<u32>::s_Max, false },
+        { "height_zero.font", s_HeaderBytes + s_GroupHeightField, 0u, false },
+        { "height_limit.font", s_HeaderBytes + s_GroupHeightField, s_MaxImageSide + 1u, false },
+        { "height_overflow.font", s_HeaderBytes + s_GroupHeightField, Limit<u32>::s_Max, false },
+        { "channels_zero.font", s_HeaderBytes + s_GroupChannelsField, 0u, false },
+        { "channels_limit.font", s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount + 1u, false },
+        { "channels_overflow.font", s_HeaderBytes + s_GroupChannelsField, Limit<u32>::s_Max, false },
+        { "image_bytes_zero.font", s_HeaderBytes + s_GroupImageBytesField, 0u, false },
+        { "image_bytes_short.font", s_HeaderBytes + s_GroupImageBytesField, 14u, false },
+        { "image_bytes_long.font", s_HeaderBytes + s_GroupImageBytesField, 16u, false },
+        { "image_bytes_overflow.font", s_HeaderBytes + s_GroupImageBytesField, Limit<u32>::s_Max, false },
     };
     for(const MalformedField& field : s_Fields){
         Core::Assets::AssetBytes malformed(binary.begin(), binary.end(), testArena.arena);
@@ -243,10 +248,10 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     }
     // Valid maximum dimensions still require their full payload length before any SFNT/image allocation.
     Core::Assets::AssetBytes oversized(binary.begin(), binary.end(), testArena.arena);
-    WriteLittleU32(oversized, s_HeaderBytes, 2048u);
-    WriteLittleU32(oversized, s_HeaderBytes + 4u, 2048u);
-    WriteLittleU32(oversized, s_HeaderBytes + 8u, 4u);
-    WriteLittleU32(oversized, s_HeaderBytes + 12u, 2048u * 2048u * 4u);
+    WriteLittleU32(oversized, s_HeaderBytes, s_MaxImageSide);
+    WriteLittleU32(oversized, s_HeaderBytes + s_GroupHeightField, s_MaxImageSide);
+    WriteLittleU32(oversized, s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount);
+    WriteLittleU32(oversized, s_HeaderBytes + s_GroupImageBytesField, s_MaxImageSide * s_MaxImageSide * s_MaxChannelCount);
     auto oversizedPathResult = WriteCase(testArena, "missing_large_image.font", oversized);
     ASSERT_TRUE(oversizedPathResult);
     path = Move(*oversizedPathResult);

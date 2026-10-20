@@ -25,6 +25,9 @@ from smoke_volume_identity import authored_volume_hashes, file_identity, runtime
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
+LIT_SCOPE = "scope"
+LIT_REPORT_JSON = "report.json"
+
 LIT_ROUGH = "rough"
 LIT_DISABLED = "disabled"
 LIT_HARDWARE_RAW = "hardware_raw"
@@ -167,9 +170,9 @@ def parse_intervals(text, symbols=None, finalized=False):
             parsed = SCOPE_RE.fullmatch(line)
             if not parsed:
                 raise SmokeFailure(f"malformed completed GPU timing row: {line}")
-            scope = symbols.get(parsed.group("scope"), parsed.group("scope"))
+            scope = symbols.get(parsed.group(LIT_SCOPE), parsed.group(LIT_SCOPE))
             values = tuple(float(parsed.group(field)) for field in ("average", "minimum", "maximum", "total", "sample_average"))
-            gpu_samples = int(parsed.group("gpu_samples"))
+            gpu_samples = int(parsed.group(LIT_GPU_SAMPLES))
             published_windows = int(parsed.group("published_windows"))
             if (any(not math.isfinite(value) or value < 0.0 for value in values) or not 0 < published_windows < 2 ** 32 or not 0 < gpu_samples < 2 ** 64 or values[1] > values[0] or values[0] > values[2]):
                 raise SmokeFailure(f"invalid current GPU timing values: {line}")
@@ -270,7 +273,7 @@ def compare_trials(trials, variants, practical_ms=.02, practical_fraction=.03, c
         block = by_block.setdefault(trial[LIT_BLOCK], {})
         name = trial[LIT_VARIANT][LIT_NAME]
         if name in block:
-            raise SmokeFailure(f"duplicate trial {trial['block']}/{name}")
+            raise SmokeFailure(f"duplicate trial {trial[LIT_BLOCK]}/{name}")
         block[name] = trial
     names = [variant.name for variant in variants]
     if any(set(block) != set(names) for block in by_block.values()):
@@ -562,7 +565,7 @@ def validate_long_miss_qualification(args, executable_identity):
         value = qualified.get(key)
         if not isinstance(value, (float, int)) or not math.isfinite(value) or not math.isclose(value, actual, rel_tol=1e-9):
             raise SmokeFailure("costly-miss qualification aggregate ratios contradict its work totals")
-    return {LIT_PATH: str(args.qualification), **file_identity(args.qualification), LIT_METRICS: qualified, LIT_BUILD_IDENTITY: build, "settings_match": True, "scope": "separate diagnostics-on workload qualification; no GPU timing or speed claim"}
+    return {LIT_PATH: str(args.qualification), **file_identity(args.qualification), LIT_METRICS: qualified, LIT_BUILD_IDENTITY: build, "settings_match": True, LIT_SCOPE: "separate diagnostics-on workload qualification; no GPU timing or speed claim"}
 
 
 def parse_args(argv):
@@ -674,8 +677,8 @@ def run(args):
                 trials.append(run_trial(args, variant, block, position, symbols, identity))
                 write_json(args.output_directory / "trials.json", trials)
         comparisons = compare_trials(trials, variants, args.practical_ms, args.practical_fraction, args.control_floor_ms, args.analysis_seed)
-        write_json(args.output_directory / "report.json", {"plan": plan, "trials": trials, "comparisons": comparisons})
-        write_status(f"GPU benchmark complete: {args.output_directory / 'report.json'}")
+        write_json(args.output_directory / LIT_REPORT_JSON, {"plan": plan, "trials": trials, "comparisons": comparisons})
+        write_status(f"GPU benchmark complete: {args.output_directory / LIT_REPORT_JSON}")
         return 0
     except (SmokeFailure, SmokeSkip, OSError, subprocess.SubprocessError) as error:
         write_json(args.output_directory / "failure.json", {"error": str(error), "completed_trials": len(trials)})

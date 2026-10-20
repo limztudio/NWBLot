@@ -24,6 +24,8 @@ struct NwbDeferredCompositePushConstants{
 
 #define g_NwbDeferredBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbDeferredCompositePushConstants.resourceSlots]
 
+static const half NWB_DEFERRED_FINITE_HALF_MAX = 65504.0h;
+
 struct NwbDeferredCompositePixelInput{
     [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
 };
@@ -45,12 +47,12 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const half3 compositeColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
     // Bound extreme finite exposure controls to the representable scene range before HDR conversion or division.
     // Exposure color math stays in FP16: inputs/outputs are RGBA16F and the 65504 clamp matches half max.
-    const half3 exposedColor = min(clamp(compositeColor, half3(0.0h), half3(65504.0h)) * half(g_NwbDeferredCompositePushConstants.exposure), half3(65504.0h));
+    const half3 exposedColor = min(clamp(compositeColor, half3(0.0h), half3(NWB_DEFERRED_FINITE_HALF_MAX)) * half(g_NwbDeferredCompositePushConstants.exposure), half3(NWB_DEFERRED_FINITE_HALF_MAX));
     const half3 sdrColor = g_NwbDeferredCompositePushConstants.toneMap == NWB_DEFERRED_TONE_MAP_REINHARD ? exposedColor / (exposedColor + half(g_NwbDeferredCompositePushConstants.shoulder)) : saturate(exposedColor);
 
     // The optional layer is display-linear premultiplied Rec.709; it joins after scene mapping and before encoding.
     float4 outputLayer = float4(0.0);
-    if(g_NwbDeferredCompositePushConstants.outputLayerSlot != 0xffffffffu)
+    if(g_NwbDeferredCompositePushConstants.outputLayerSlot != NWB_DEFERRED_INVALID_HEAP_SLOT)
         outputLayer = nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.outputLayerSlot).Sample(sampler, input.uv);
 
     NwbDeferredCompositePixelOutput output;

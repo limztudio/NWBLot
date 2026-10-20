@@ -43,6 +43,18 @@ from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_capture_result,)
 
+LIT_DETAIL = "detail"
+LIT_TIMING_FILE = "timing_file"
+LIT_LOG_FILE = "log_file"
+LIT_CAPTURE_FILE = "capture_file"
+LIT_TRANSPARENT_DELTA_PERCENT = "transparent_delta_percent"
+LIT_NOT_COLLECTED = 'not collected'
+LIT_HEALTHY_EXECUTABLE = "--healthy-executable"
+LIT_BASELINE_EXECUTABLE_2 = "--baseline-executable"
+LIT_RUNTIME_DIR = "--runtime-dir"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_SYS_STDERR = "sys.stderr"
+
 LIT_RENDER_SHADOW_VISIBILITY = "render.shadow_visibility"
 LIT_STRESSTESTSMOKEPROJECT_ENABLED_HEALTHY = "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"
 LIT_STRESSTESTSMOKEPROJECT_RAYQUERY_CAPABL = "StressTestSmokeProject: RayQuery-capable hardware shadow route available"
@@ -258,11 +270,11 @@ def percent_delta(candidate_ms: float, baseline_ms: float) -> float:
 
 
 def gate(name: str, passed: bool, detail: str) -> Dict[str, object]:
-    return {LIT_NAME: name, LIT_PASSED: passed, "detail": detail}
+    return {LIT_NAME: name, LIT_PASSED: passed, LIT_DETAIL: detail}
 
 
 def raw_run_payload(run: RunResult) -> Dict[str, object]:
-    return { "executable": run.executable, "timing_file": run.timing_file, "log_file": run.log_file, "capture_file": run.capture_file, "missing_required_log_messages": run.missing_required_log_messages,
+    return { "executable": run.executable, LIT_TIMING_FILE: run.timing_file, LIT_LOG_FILE: run.log_file, LIT_CAPTURE_FILE: run.capture_file, "missing_required_log_messages": run.missing_required_log_messages,
         "runtime_forbidden_log_messages": run.runtime_forbidden_log_messages, "semantic_forbidden_log_messages": run.semantic_forbidden_log_messages, "measurement_start_byte_offset": run.measurement_start_byte_offset,
         "scopes": {name: asdict(summary) for name, summary in run.scopes.items()}, }
 
@@ -273,7 +285,7 @@ def comparison_scope_payload(healthy: Mapping[str, ScopeSummary], baseline: Mapp
     delta = None
     if healthy_summary and baseline_summary and baseline_summary.median_ms > 0.0:
         delta = percent_delta(healthy_summary.median_ms, baseline_summary.median_ms)
-    return { LIT_HEALTHY: asdict(healthy_summary) if healthy_summary else None, LIT_BASELINE: asdict(baseline_summary) if baseline_summary else None, "transparent_delta_percent": delta, }
+    return { LIT_HEALTHY: asdict(healthy_summary) if healthy_summary else None, LIT_BASELINE: asdict(baseline_summary) if baseline_summary else None, LIT_TRANSPARENT_DELTA_PERCENT: delta, }
 
 
 def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunResult) -> Dict[str, object]:
@@ -341,7 +353,7 @@ def write_json(path: Path, payload: Mapping[str, object]) -> None:
 
 
 def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
-    lines = ["# Hardware transparent versus opaque shadows", "", f"Verdict: **{str(report['verdict']).upper()}**", "", "The baseline arm uses opaque materials so it naturally omits the transparent shadow tail. "
+    lines = ["# Hardware transparent versus opaque shadows", "", f"Verdict: **{str(report[LIT_VERDICT]).upper()}**", "", "The baseline arm uses opaque materials so it naturally omits the transparent shadow tail. "
         "The captures are therefore diagnostic artifacts, not a pixel-parity comparison.", "",]
     if report.get(LIT_COLLECTION_ERROR):
         lines.extend(("## Incomplete telemetry", "", str(report[LIT_COLLECTION_ERROR]), "",))
@@ -351,7 +363,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
         lines.extend(("| Gate | Result | Detail |", "| --- | --- | --- |",))
         for entry in gates:
             assert isinstance(entry, Mapping)
-            lines.append(f"| {entry['name']} | {'PASS' if entry['passed'] else 'FAIL'} | {entry['detail']} |")
+            lines.append(f"| {entry[LIT_NAME]} | {'PASS' if entry[LIT_PASSED] else 'FAIL'} | {entry[LIT_DETAIL]} |")
 
         comparisons = report[LIT_SCOPE_COMPARISONS]
         assert isinstance(comparisons, Mapping)
@@ -361,7 +373,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
             healthy = comparison.get(LIT_HEALTHY)
             baseline = comparison.get(LIT_BASELINE)
             lines.append(f"| `{scope}` | {format_scope_value(healthy if isinstance(healthy, Mapping) else None)} | " f"{format_scope_value(baseline if isinstance(baseline, Mapping) else None)} | "
-                f"{format_delta(comparison.get('transparent_delta_percent'))} |")
+                f"{format_delta(comparison.get(LIT_TRANSPARENT_DELTA_PERCENT))} |")
         lines.extend(("", "A missing optional scope means that arm did not publish the scope; it is not treated as a zero-duration pass.", "",))
 
     lines.extend(("## Artifacts", ""))
@@ -369,7 +381,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
         arm = report.get(label)
         if not isinstance(arm, Mapping):
             continue
-        lines.extend((f"- {label.title()} timing: `{arm.get('timing_file', 'not collected')}`", f"- {label.title()} log: `{arm.get('log_file', 'not collected')}`", f"- {label.title()} capture: `{arm.get('capture_file', 'not collected')}`",))
+        lines.extend((f"- {label.title()} timing: `{arm.get(LIT_TIMING_FILE, LIT_NOT_COLLECTED)}`", f"- {label.title()} log: `{arm.get(LIT_LOG_FILE, LIT_NOT_COLLECTED)}`", f"- {label.title()} capture: `{arm.get(LIT_CAPTURE_FILE, LIT_NOT_COLLECTED)}`",))
     path.write_text("\n".join(lines) + "\n", encoding=LIT_UTF_8)
 
 
@@ -391,10 +403,10 @@ def require_non_negative(parser: argparse.ArgumentParser, option: str, value: fl
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser and report checks without starting a graphics application.")
-    parser.add_argument("--healthy-executable", type=Path, help="Path to nwb_hardware_shadow_boundary_healthy_benchmark.")
-    parser.add_argument("--baseline-executable", dest=LIT_BASELINE_EXECUTABLE, type=Path, help="Path to the benchmark binary reused for the opaque baseline.",)
-    parser.add_argument("--runtime-dir", type=Path, help="Cooked stress-scene runtime root used as process working directory.")
-    parser.add_argument("--output-dir", type=Path, help="Fresh artifact directory for timing files, logs, captures, and reports.")
+    parser.add_argument(LIT_HEALTHY_EXECUTABLE, type=Path, help="Path to nwb_hardware_shadow_boundary_healthy_benchmark.")
+    parser.add_argument(LIT_BASELINE_EXECUTABLE_2, dest=LIT_BASELINE_EXECUTABLE, type=Path, help="Path to the benchmark binary reused for the opaque baseline.",)
+    parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Cooked stress-scene runtime root used as process working directory.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Fresh artifact directory for timing files, logs, captures, and reports.")
     parser.add_argument("--logserver-executable", type=Path, help="Optional path to nwb_logserver/logserver.")
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Use standalone loader logs rather than a logserver.")
     parser.add_argument("--healthy-namesym", type=Path, help="Optional name-symbol sidecar for an opt/fin healthy binary.")
@@ -442,11 +454,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def run_self_test() -> int:
     defaults = parse_args([LIT_SELF_TEST])
-    numeric_arguments = ["--healthy-executable", "healthy", "--baseline-executable", "baseline", "--runtime-dir", "runtime", "--output-dir", "output"]
+    numeric_arguments = [LIT_HEALTHY_EXECUTABLE, LIT_HEALTHY, LIT_BASELINE_EXECUTABLE_2, LIT_BASELINE, LIT_RUNTIME_DIR, "runtime", LIT_OUTPUT_DIR, "output"]
     numeric_options = (LIT_WARMUP_SECONDS, LIT_MEASURE_SECONDS, LIT_STARTUP_TIMEOUT, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2)
     for option in numeric_options:
         for value in ("nan", "inf", "-inf"):
-            with mock.patch("sys.stderr"):
+            with mock.patch(LIT_SYS_STDERR):
                 try:
                     parse_args(numeric_arguments + [f"{option}={value}"])
                 except SystemExit as error:
@@ -456,7 +468,7 @@ def run_self_test() -> int:
     for option in (LIT_WARMUP_SECONDS, LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2):
         assert getattr(parse_args(numeric_arguments + [f"{option}=0"]), option[2:].replace("-", "_")) == 0.0
     for option in (LIT_MEASURE_SECONDS, LIT_STARTUP_TIMEOUT):
-        with mock.patch("sys.stderr"):
+        with mock.patch(LIT_SYS_STDERR):
             try:
                 parse_args(numeric_arguments + [f"{option}=0"])
             except SystemExit as error:

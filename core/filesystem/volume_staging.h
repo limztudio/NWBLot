@@ -17,6 +17,9 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_StageDirectoryLabel = "stage directory";
+inline constexpr AStringView s_BackupDirectoryLabel = "backup directory";
+
 bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, AStringView operationName, AStringView label);
 void CleanupStagedDirectoryBestEffort(const Path& directoryPath, AStringView operationName, AStringView label);
 bool EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
@@ -24,7 +27,7 @@ bool EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operation
 class StagedDirectoryCleanupGuard : NoCopy{
 public:
     // The operation and label backing text must outlive this guard.
-    StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = "stage directory");
+    StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = s_StageDirectoryLabel);
     ~StagedDirectoryCleanupGuard()noexcept;
 
 

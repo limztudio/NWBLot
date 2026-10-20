@@ -69,6 +69,10 @@ template<typename Source, usize LabelCount, u64 DisabledKey>
 class UiFilteredListSource : public UiImmutableListSource<Source, LabelCount, DisabledKey, NWB::Impl::Ui::ISearchableListDataSource>{
 private:
     class View final : public NWB::Impl::Ui::IListDataSource, NoCopy{
+    private:
+        static constexpr u64 s_FilteredInstanceGeneration = 2u;
+
+
     public:
         explicit View(const UiFilteredListSource& source)noexcept
             : m_source(source)
@@ -76,7 +80,7 @@ private:
 
 
     public:
-        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
+        virtual u64 instanceGeneration()const noexcept override{ return s_FilteredInstanceGeneration; }
         virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
         virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
         virtual u64 key(const u64 index)const noexcept override{ return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u; }

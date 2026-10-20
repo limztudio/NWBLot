@@ -5,6 +5,7 @@ import ctypes
 import time
 
 from combo_native import ComboNativeInput
+from interaction_smoke import INPUT_SETTLE_SECONDS, PRESS_HOLD_SECONDS, WIN32_WORD_MASK
 from window_capture_smoke import LinuxXEvent, SmokeFailure
 
 
@@ -69,7 +70,7 @@ class PopupToolsNativeInput(ComboNativeInput):
     def right_button(self, down, x, y):
         self.pointer(x, y)
         if self.windows:
-            self._post(0x0204 if down else 0x0205, 2 if down else 0, ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF))
+            self._post(0x0204 if down else 0x0205, 2 if down else 0, ((int(y) & WIN32_WORD_MASK) << 16) | (int(x) & WIN32_WORD_MASK))
         else:
             event = LinuxXEvent()
             event.xbutton.type = self.backend.BUTTON_PRESS if down else self.backend.BUTTON_RELEASE
@@ -82,6 +83,6 @@ class PopupToolsNativeInput(ComboNativeInput):
 
     def right_click(self, x, y):
         self.right_button(True, x, y)
-        time.sleep(0.08)
+        time.sleep(PRESS_HOLD_SECONDS)
         self.right_button(False, x, y)
-        time.sleep(0.1)
+        time.sleep(INPUT_SETTLE_SECONDS)

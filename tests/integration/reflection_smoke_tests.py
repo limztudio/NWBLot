@@ -18,6 +18,9 @@ from reflection_smoke import (
 )  # noqa: E402
 from window_capture_smoke import write_bmp_24  # noqa: E402
 
+LIT_CAPTURES = "captures"
+LIT_OPTICAL_CSG_CAP = "optical_csg_cap"
+
 LIT_ONSCREEN = "onscreen"
 LIT_SCREEN = "screen"
 LIT_RED = "red"
@@ -258,7 +261,7 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
             parser.handle_starttag = lambda tag, attributes: elements.append((tag, dict(attributes)))
             parser.feed(document)
             links = [attributes["href"] for tag, attributes in elements if tag == "a"]
-            self.assertEqual(links, [manifest["captures"][0]["file"], manifest["captures"][0]["log"]])
+            self.assertEqual(links, [manifest[LIT_CAPTURES][0]["file"], manifest[LIT_CAPTURES][0]["log"]])
             self.assertIn('href="odd&amp;case_hybrid.log"', document)
 
 
@@ -303,15 +306,15 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
         log = ("ReflectionSmokeStatistics: sequence=3 generation=2 frame=3 mode=2 width=960 height=720 " "requested_budget=0 effective_budget=0 queue_capacity=1 hardware_requested=1 hardware_available=0 "
             "hardware_ready=0 token_queue=0 token_value=81 physical_queue=0 device_generation=1 candidates=0 " "hardware_rays=0 hardware_hits=0 opaque_pixels=217668 glass_pixels=0 fallback_pixels=217668 " "screen_attempts=0 screen_hits=0")
         sample = parse_statistics(log)[0]
-        validate_statistics([sample], "optical_csg_cap", LIT_HARDWARE, budget=0)
-        sample["hardware_rays"] = 1
+        validate_statistics([sample], LIT_OPTICAL_CSG_CAP, LIT_HARDWARE, budget=0)
+        sample[LIT_HARDWARE_RAYS] = 1
         with self.assertRaisesRegex(SmokeFailure, LIT_EXCEEDED_BUDGET):
-            validate_statistics([sample], "optical_csg_cap", LIT_HARDWARE, budget=0)
+            validate_statistics([sample], LIT_OPTICAL_CSG_CAP, LIT_HARDWARE, budget=0)
         for available, ready in ((0, 0), (0, 1), (1, 0)):
             sample = self.sample(LIT_HARDWARE, budget=1)
             sample.update(hardware_available=available, hardware_ready=ready, hardware_rays=0, hardware_hits=0, fallback_pixels=1000)
             with self.subTest(available=available, ready=ready), self.assertRaisesRegex(SmokeFailure, "ready hardware route"):
-                validate_statistics([sample], "optical_csg_cap", LIT_HARDWARE, budget=1)
+                validate_statistics([sample], LIT_OPTICAL_CSG_CAP, LIT_HARDWARE, budget=1)
 
     def test_static_capture_rejects_wrong_mode_dimensions_budget_and_generation(self):
         for field, value in (("mode", 1), ("width", 1920), ("requested_budget", 64), ("effective_budget", 64), ("queue_capacity", 0), ("generation", 2), (LIT_DEVICE_GENERATION, 2)):

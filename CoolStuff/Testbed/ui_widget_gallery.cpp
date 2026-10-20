@@ -3,6 +3,7 @@
 
 
 #include "ui_widget_gallery.h"
+#include "ui_gallery_constants.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -33,11 +34,8 @@ namespace Section{
 };
 
 static constexpr f32 s_Margin = 18.0f;
-static constexpr f32 s_SelectorWidth = 400.0f;
 static constexpr f32 s_SelectorHeight = 88.0f;
-static constexpr f32 s_ContentHeight = 260.0f;
 static constexpr f32 s_ContentGap = 12.0f;
-static constexpr f32 s_OrdinaryGalleryWidth = 280.0f;
 static constexpr Name s_SelectorArena("testbed/ui/gallery_selector");
 static constexpr Array<StringView, Section::kCount> s_SectionNames{
     "Controls and menu", "Text editing", "Virtual list", "Keyed combo", "Searchable combo",
@@ -89,8 +87,9 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
         return;
     ContainerOptions row;
     bool valid = ui.beginRow("navigation", row);
+    constexpr f32 s_NavigationButtonWidth = 100.0f;
     WidgetOptions navigation;
-    navigation.width = { LayoutSizePolicy::Fixed, 100.0f };
+    navigation.width = { LayoutSizePolicy::Fixed, s_NavigationButtonWidth };
     navigation.enabled = m_selectedGallery != 0u && !ui.input().hasPopup();
     if(ui.button("previous", "Previous", navigation))
         --m_selectedGallery;
@@ -139,10 +138,11 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
 void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
-    if(!ui.beginPanel("interactive_gallery", { x, y, 280.0f, 180.0f }))
+    constexpr f32 s_PanelHeight = 180.0f;
+    if(!ui.beginPanel("interactive_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
-    bool valid = ui.label("title", "Interactive custom UI");
-    if(ui.checkbox("enabled", "Enable counter", m_enabled))
+    bool valid = ui.label(s_TitleKey, "Interactive custom UI");
+    if(ui.checkbox(s_EnabledKey, "Enable counter", m_enabled))
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom UI counter enabled={}"), m_enabled);
     valid = ui.beginRow("actions") && valid;
     WidgetOptions options;

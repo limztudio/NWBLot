@@ -11,6 +11,16 @@ from csg_optics_smoke import require_refraction_match, require_refraction_distin
 from refraction_gallery_smoke import capture, png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
+LIT_AUTOMATIC = "automatic"
+LIT_SCREEN = "screen"
+LIT_NEAR_AIR_ORDINARY = "near_air_ordinary"
+LIT_NEAR_AIR_CSG = "near_air_csg"
+LIT_IDENTITY_REFERENCE = "identity_reference"
+LIT_IDENTITY_SAME_IOR = "identity_same_ior"
+LIT_IDENTITY_DIFFERENT_IOR = "identity_different_ior"
+LIT_CROSSING_OVERFLOW = "crossing_overflow"
+LIT_STORE_TRUE = "store_true"
+
 
 IDENTITY_CAPTURES = tuple((case, route) for case in ("identity_reference", "identity_same_ior", "identity_different_ior") for route in ("automatic", "screen"))
 FAILURE_CAPTURES = (("crossing_overflow", "automatic"), ("crossing_overflow", "screen"))
@@ -63,22 +73,22 @@ def require_near_air_thickness(hardware, screen):
 
 def analyze_near_air_frames(frames):
     metrics = {}
-    for route in ("automatic", "screen"):
-        metrics["near_air_" + route + "_retained_geometry"] = require_refraction_match(frames[("near_air_ordinary", route)], frames[("near_air_csg", route)])
-    for case in ("near_air_ordinary", "near_air_csg"):
-        metrics[case + "_measured_thickness"] = require_near_air_thickness(frames[(case, "automatic")], frames[(case, "screen")])
+    for route in (LIT_AUTOMATIC, LIT_SCREEN):
+        metrics["near_air_" + route + "_retained_geometry"] = require_refraction_match(frames[(LIT_NEAR_AIR_ORDINARY, route)], frames[(LIT_NEAR_AIR_CSG, route)])
+    for case in (LIT_NEAR_AIR_ORDINARY, LIT_NEAR_AIR_CSG):
+        metrics[case + "_measured_thickness"] = require_near_air_thickness(frames[(case, LIT_AUTOMATIC)], frames[(case, LIT_SCREEN)])
     return metrics
 
 
 def analyze_frames(frames, identity_only=False):
-    reference_screen = frames[("identity_reference", "screen")]
-    metrics = {"valid_volume_uses_hardware": require_refraction_distinct(reference_screen, frames[("identity_reference", "automatic")], "valid closed-volume hardware control")}
-    for case in ("identity_same_ior", "identity_different_ior"):
-        metrics[case + "_capture_primary"] = require_refraction_match(reference_screen, frames[(case, "screen")])
-        metrics[case + "_exact_association"] = require_refraction_match(frames[(case, "screen")], frames[(case, "automatic")])
-    metrics["ior_does_not_select_entity"] = require_refraction_match(frames[("identity_different_ior", "automatic")], frames[("identity_same_ior", "automatic")])
+    reference_screen = frames[(LIT_IDENTITY_REFERENCE, LIT_SCREEN)]
+    metrics = {"valid_volume_uses_hardware": require_refraction_distinct(reference_screen, frames[(LIT_IDENTITY_REFERENCE, LIT_AUTOMATIC)], "valid closed-volume hardware control")}
+    for case in (LIT_IDENTITY_SAME_IOR, LIT_IDENTITY_DIFFERENT_IOR):
+        metrics[case + "_capture_primary"] = require_refraction_match(reference_screen, frames[(case, LIT_SCREEN)])
+        metrics[case + "_exact_association"] = require_refraction_match(frames[(case, LIT_SCREEN)], frames[(case, LIT_AUTOMATIC)])
+    metrics["ior_does_not_select_entity"] = require_refraction_match(frames[(LIT_IDENTITY_DIFFERENT_IOR, LIT_AUTOMATIC)], frames[(LIT_IDENTITY_SAME_IOR, LIT_AUTOMATIC)])
     if not identity_only:
-        metrics["explicit_capacity_failure_is_terminal"] = require_capacity_rejection(frames[("crossing_overflow", "automatic")], frames[("crossing_overflow", "screen")])
+        metrics["explicit_capacity_failure_is_terminal"] = require_capacity_rejection(frames[(LIT_CROSSING_OVERFLOW, LIT_AUTOMATIC)], frames[(LIT_CROSSING_OVERFLOW, LIT_SCREEN)])
     return metrics
 
 
@@ -92,8 +102,8 @@ def parse_args(argv):
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--application-arg", action="append", default=[])
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--identity-only", action="store_true", help="Run only the six identity controls.")
-    selection.add_argument("--near-air-only", action="store_true", help="Run only the four near-air measured-thickness controls.")
+    selection.add_argument("--identity-only", action=LIT_STORE_TRUE, help="Run only the six identity controls.")
+    selection.add_argument("--near-air-only", action=LIT_STORE_TRUE, help="Run only the four near-air measured-thickness controls.")
     args = parser.parse_args(argv)
     if args.frames <= 0 or args.timeout <= 0:
         parser.error("frames and timeout must be positive")

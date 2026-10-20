@@ -39,6 +39,10 @@ using namespace Impl;
 using namespace Impl::Ui;
 using namespace UiWidgetTests;
 
+inline constexpr AStringView s_MultilineViewFontPath = "tests/ui/widgets/multiline_view/font";
+inline constexpr AStringView s_MultilineViewSkinPath = "tests/ui/widgets/multiline_view/skin";
+inline constexpr Rect s_MultilineViewViewport{ 0.0f, 0.0f, 500.0f, 500.0f };
+
 class FixtureShaper final : public ITextShaper{
 public:
     explicit FixtureShaper(Core::Alloc::GlobalArena& arena)noexcept
@@ -109,9 +113,9 @@ public:
         , m_shaper(m_arena)
         , m_layoutBuilder(m_arena, m_shaper)
         , m_view(m_arena)
-        , m_font(m_arena, Name("tests/ui/widgets/multiline_view/font"))
+        , m_font(m_arena, Name(s_MultilineViewFontPath))
         , m_text(m_arena)
-        , m_skin(m_arena, Name("tests/ui/widgets/multiline_view/skin"))
+        , m_skin(m_arena, Name(s_MultilineViewSkinPath))
         , m_paint(m_arena)
     {
         UiSkin::RegionVector regions(m_arena);
@@ -128,7 +132,7 @@ protected:
     }
 
     [[nodiscard]] bool place(const f32 width = 100.0f, const f32 height = 100.0f, const Point previousScroll = {})noexcept{
-        const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, previousScroll);
+        const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, s_MultilineViewViewport, previousScroll);
         if(!placement)
             return false;
         m_placement = *placement;
@@ -146,12 +150,12 @@ protected:
         m_font.setFontBytes(Move(bytes));
         if(!m_font.validatePayload())
             return false;
-        const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/widgets/multiline_view/font"), m_font, 1u };
+        const FontSource source{ Core::Assets::AssetRef<Font>(s_MultilineViewFontPath), m_font, 1u };
         return m_text.setFonts(fontScratchArena, &source, 1u);
     }
 
     [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
-        m_paint.begin({ 500.0f, 500.0f, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/widgets/multiline_view/skin"), m_skin);
+        m_paint.begin({ s_MultilineViewViewport.width, s_MultilineViewViewport.height, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_MultilineViewSkinPath), m_skin);
         if(!m_view.paint(m_text, m_paint, m_skin, m_placement, style, flags))
             return MakeUnexpected(Failure{});
         EXPECT_FALSE(m_paint.popClip());

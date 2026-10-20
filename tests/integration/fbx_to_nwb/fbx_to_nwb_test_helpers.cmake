@@ -1,3 +1,6 @@
+# Converter runs in the verify scripts must finish well inside their CTest budget.
+set(nwb_fbx_to_nwb_process_timeout_seconds 30)
+
 function(nwb_run_converter input_path normal_mode output_path)
     execute_process(COMMAND "${FBX_TO_NWB_EXE}" "${input_path}" --output "${output_path}" --asset-type mesh --normal-mode "${normal_mode}" --preserve-space --yes --force RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
     if(NOT result EQUAL 0)

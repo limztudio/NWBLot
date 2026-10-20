@@ -69,7 +69,7 @@ SMOKE_REQUIRED_DEFINES = { "NWB_BUILD_LOADER": DEFINE_ON, "NWB_BUILD_LOGSERVER":
 
 
 SMOKE_SCENES = { "reflection": SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_reflection_smoke", "reflection_smoke"), },), "refraction": SmokeScene(runtime=RUNTIME_SMOKE, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_refraction_smoke", "refraction_smoke"), },), "transparent-multi": SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_transparent_multi_smoke", "transparent_multi_smoke"), },),
+            BACKEND_NATIVE: SmokeExecutable("nwb_refraction_smoke", "refraction_smoke"), },), DEFAULT_SCENE: SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_transparent_multi_smoke", "transparent_multi_smoke"), },),
     "transparent-csg": SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_transparent_csg_smoke", "transparent_csg_smoke"), },), "texture": SmokeScene(runtime=RUNTIME_TEXTURE_SMOKE, backends={
             BACKEND_NATIVE: SmokeExecutable("nwb_texture_smoke", "texture_smoke"), },), "caustic-sphere": SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_caustic_sphere_smoke", "caustic_sphere_smoke"), },),
     "csg-visible": SmokeScene(runtime=RUNTIME_CSG_VISIBLE_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_csg_visible_smoke", "csg_visible_smoke"), },), "csg-skinned-visible": SmokeScene(runtime=RUNTIME_CSG_SKINNED_VISIBLE_SMOKE, backends={
@@ -186,7 +186,7 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reflection-screen-steps", type=int, choices=range(8, 257), metavar="8..256", help="Typed bound on actual screen traversal iterations.")
     parser.add_argument("--reflection-extent", choices=(BACKEND_NATIVE, "npot"), help="Use the 960x720 standard framebuffer or the fixed 953x713 partial-workgroup fixture.")
     for option in (REFLECTION_OPT_TEMPORAL, REFLECTION_OPT_SPATIAL, REFLECTION_OPT_DIAGNOSTICS, "final-state", REFLECTION_OPT_FEEDBACK):
-        parser.add_argument("--reflection-" + option, choices=("on", "off"), help="Set the test fixture's typed " + option + " control.")
+        parser.add_argument("--reflection-" + option, choices=(FLAG_VALUE_ON, "off"), help="Set the test fixture's typed " + option + " control.")
     parser.add_argument("--refraction-case", choices=("single", "separate", "stacked", "intersecting", "nested", "coincident", "coincident_tinted", "torus", "same_mesh", "prism",
         "duplicate_single_cool", "duplicate_single_warm", "duplicate_single_cool_tinted", "duplicate_single_warm_tinted", "coincident_reversed", "coincident_tinted_reversed", "coincident_priority_swap", "coincident_tinted_priority_swap",
         "coincident_identical", "coincident_tinted_identical", "near_coincident", "coincident_preserved", "csg_reference", "csg_cap", "csg_middle", "csg_uncut",

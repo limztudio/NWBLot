@@ -23,6 +23,8 @@ NWB_ASSETS_BEGIN
 
 using AssetBytes = AssetVector<u8>;
 
+inline constexpr TStringView s_UnnamedAssetPathText = NWB_TEXT("<unnamed>");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,7 +92,7 @@ private:
 
 template<typename ArenaT>
 [[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
-    return asset.virtualPath() ? StringConvert(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(NWB_TEXT("<unnamed>"), arena);
+    return asset.virtualPath() ? StringConvert(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
 }
 
 template<typename AssetT>

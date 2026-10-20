@@ -28,6 +28,8 @@ from window_capture_smoke import (  # noqa: E402
     run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process,)
 
+LIT_NON_FINITE_LIFECYCLE_DEADLINE = "non-finite lifecycle deadline"
+
 LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE = "lagged lighting-history capture skipped because its source state was unavailable"
 LIT_BOOTSTRAP = "bootstrap"
 LIT_ACTIVE_HISTORY = "active history"
@@ -227,11 +229,11 @@ def run_self_test() -> int:
     numeric_parser.error.assert_not_called()
     for value in (math.nan, math.inf, -math.inf):
         numeric_parser.error.reset_mock()
-        numeric_parser.error.side_effect = ValueError("non-finite lifecycle deadline")
+        numeric_parser.error.side_effect = ValueError(LIT_NON_FINITE_LIFECYCLE_DEADLINE)
         try:
             require_positive(numeric_parser, LIT_TRANSITION_TIMEOUT, value)
         except ValueError as error:
-            assert str(error) == "non-finite lifecycle deadline"
+            assert str(error) == LIT_NON_FINITE_LIFECYCLE_DEADLINE
         else:
             raise AssertionError("a non-finite lifecycle deadline was accepted")
         numeric_parser.error.assert_called_once()

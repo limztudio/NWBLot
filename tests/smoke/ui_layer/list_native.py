@@ -5,10 +5,12 @@ import ctypes
 import math
 import time
 
-from edit_native import EditNativeInput
+from edit_native import POINTER_SETTLE_SECONDS, EditNativeInput
+from interaction_smoke import WIN32_WORD_MASK
 from window_capture_smoke import LinuxXEvent, SmokeFailure
 
 
+WIN32_WHEEL_DELTA = 120
 LIST_KEYS = {"Up": 0x26, "Down": 0x28, "Page_Up": 0x21, "Page_Down": 0x22, "F8": 0x77, "F9": 0x78}
 
 
@@ -31,8 +33,8 @@ class ListNativeInput(EditNativeInput):
             point = self.backend.POINT(int(x), int(y))
             if not self.backend.user32.ClientToScreen(ctypes.c_void_p(self.handle), ctypes.byref(point)):
                 raise SmokeFailure("ClientToScreen failed for the positioned list wheel event")
-            delta = int(steps) * 120
-            self._post(0x020A, (delta & 0xFFFF) << 16, ((int(point.y) & 0xFFFF) << 16) | (int(point.x) & 0xFFFF))
+            delta = int(steps) * WIN32_WHEEL_DELTA
+            self._post(0x020A, (delta & WIN32_WORD_MASK) << 16, ((int(point.y) & WIN32_WORD_MASK) << 16) | (int(point.x) & WIN32_WORD_MASK))
         else:
             for _ in range(abs(int(steps))):
                 for down in (True, False):
@@ -44,12 +46,12 @@ class ListNativeInput(EditNativeInput):
                     if not self.backend.x11.XSendEvent(self.backend.display, self.handle, False, mask, ctypes.byref(event)):
                         raise SmokeFailure("failed to send the X11 list wheel event")
             self.backend.x11.XFlush(self.backend.display)
-        time.sleep(0.15)
+        time.sleep(POINTER_SETTLE_SECONDS)
 
     def drag(self, start, end):
         self.button(True, *start)
-        time.sleep(0.15)
+        time.sleep(POINTER_SETTLE_SECONDS)
         self.pointer(*end)
-        time.sleep(0.15)
+        time.sleep(POINTER_SETTLE_SECONDS)
         self.button(False, *end)
-        time.sleep(0.15)
+        time.sleep(POINTER_SETTLE_SECONDS)

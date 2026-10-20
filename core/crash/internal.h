@@ -76,6 +76,9 @@ inline constexpr StringView s_AckFdArgument = "--ack-fd";
 inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
 inline constexpr StringView s_ManualDumpCategory = "manual_dump";
 inline constexpr StringView s_GpuCrashCategory = "gpu_crash";
+inline constexpr StringView s_WarningEventName = "warning";
+inline constexpr usize s_SnapshotImageCount = 2u;
+inline constexpr usize s_MaxCrashSignals = 6u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -366,7 +369,7 @@ struct CrashState{
     usize nextBreadcrumb = 0u;
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
-    CrashSnapshotImage snapshotImages[2u];
+    CrashSnapshotImage snapshotImages[s_SnapshotImageCount];
     Atomic<u32> publishedSnapshotImage{ 0u };
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -378,16 +381,16 @@ struct CrashState{
     bool exceptionFilterInstalled = false;
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
-    struct sigaction previousSignalActions[6u] = {};
-    int installedSignals[6u] = {};
-    bool signalActionInstalled[6u] = {};
+    struct sigaction previousSignalActions[s_MaxCrashSignals] = {};
+    int installedSignals[s_MaxCrashSignals] = {};
+    bool signalActionInstalled[s_MaxCrashSignals] = {};
     bool signalStackInstalled = false;
     ThreadId signalStackOwner{};
 #elif defined(NWB_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
-    struct sigaction previousSignalActions[6u] = {};
-    int installedSignals[6u] = {};
-    bool signalActionInstalled[6u] = {};
+    struct sigaction previousSignalActions[s_MaxCrashSignals] = {};
+    int installedSignals[s_MaxCrashSignals] = {};
+    bool signalActionInstalled[s_MaxCrashSignals] = {};
     bool signalStackInstalled = false;
     ThreadId signalStackOwner{};
 #endif

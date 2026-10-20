@@ -7,6 +7,17 @@ import re
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker, linear_rgb_bytes
 
+LIT_SKIN = "skin"
+LIT_SEQUENCE = "sequence"
+LIT_BOUNDS = "bounds"
+LIT_COLLAPSED = "collapsed"
+LIT_LOCKED = "locked"
+LIT_COUNT = "count"
+LIT_SCALE = "scale"
+LIT_RECTANGLES = "rectangles"
+LIT_PASSED = "passed"
+LIT_TITLE = "title"
+
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiWindowSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
 STATE = re.compile(rf"UiWindowSmoke: state sequence=(\d+) bounds=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})" r" collapsed=([01]) locked=([01]) count=(\d+)")
@@ -44,8 +55,8 @@ def snapshot_from_logs(text):
     values = (*display, *map(float, state.groups()[1:5]), *minimum, *(value for rectangle in rectangles.values() for value in rectangle))
     if not all(math.isfinite(value) for value in values) or not all(value > 0.0 for value in display):
         raise SmokeFailure("window fixture reported invalid geometry or display metrics")
-    return {"skin": skins[-1][1], "sequence": sequence, "bounds": tuple(map(float, state.groups()[1:5])), "collapsed": bool(int(state[6])), "locked": bool(int(state[7])), "count": int(state[8]),
-        "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles, "minimum": minimum}
+    return {LIT_SKIN: skins[-1][1], LIT_SEQUENCE: sequence, LIT_BOUNDS: tuple(map(float, state.groups()[1:5])), LIT_COLLAPSED: bool(int(state[6])), LIT_LOCKED: bool(int(state[7])), LIT_COUNT: int(state[8]),
+        "logical_extent": display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles, "minimum": minimum}
 
 
 def center(rectangle):
@@ -55,7 +66,7 @@ def center(rectangle):
 
 def observe_window(frame, snapshot, expected_bounds, count, collapsed, locked, *, extent=None, skin="default"):
     width, height, rows = frame
-    scale_x, scale_y = snapshot["scale"]
+    scale_x, scale_y = snapshot[LIT_SCALE]
     probes = []
 
     def probe(name, logical_position, expected=None, *, colored=False, tolerance=TOLERANCE):
@@ -66,26 +77,26 @@ def observe_window(frame, snapshot, expected_bounds, count, collapsed, locked, *
         sample = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
         observed = tuple(sorted(pixel[channel] for pixel in sample)[4] for channel in range(3))
         error = max(abs(actual - reference) for actual, reference in zip(observed, expected)) if expected else None
-        probes.append({"name": name, "position": [x, y], "expected": list(expected) if expected else "skin color", "observed": list(observed), "error": error, "passed": max(observed) > 12 if colored else error <= tolerance})
+        probes.append({"name": name, "position": [x, y], "expected": list(expected) if expected else "skin color", "observed": list(observed), "error": error, LIT_PASSED: max(observed) > 12 if colored else error <= tolerance})
 
-    values = (*snapshot["bounds"], snapshot["count"], int(snapshot["collapsed"]), int(snapshot["locked"]), snapshot["sequence"])
+    values = (*snapshot[LIT_BOUNDS], snapshot[LIT_COUNT], int(snapshot[LIT_COLLAPSED]), int(snapshot[LIT_LOCKED]), snapshot[LIT_SEQUENCE])
     logical_height = height / scale_y
     for index, value in enumerate(values):
         probe(f"model_{index}", (19.0 + index * 20.0, logical_height - 14.0), encoded_marker(math.floor(max(0.0, value) + 0.5)))
     x, y, window_width, window_height = expected_bounds
-    title_height = snapshot["rectangles"]["title"][3]
+    title_height = snapshot[LIT_RECTANGLES][LIT_TITLE][3]
     visible_height = title_height if collapsed else window_height
     probe("title_anchor", (x + window_width - 9.0, y + 9.0), linear_rgb_bytes(TITLE_ANCHOR))
     probe("content_visibility", (x + window_width - 9.0, y + title_height + 9.0), (0, 0, 0) if collapsed else linear_rgb_bytes(CONTENT_ANCHOR))
-    probe("title_skin", (x + window_width - 36.0, y + title_height / 2.0), SKIN_COLORS[skin]["title"], tolerance=SKIN_TOLERANCE)
+    probe("title_skin", (x + window_width - 36.0, y + title_height / 2.0), SKIN_COLORS[skin][LIT_TITLE], tolerance=SKIN_TOLERANCE)
     if not collapsed:
         probe("body_skin", (x + window_width - 36.0, y + window_height - 8.0), SKIN_COLORS[skin]["body"], tolerance=SKIN_TOLERANCE)
     probe("painted_title_edge", (x + 3.0, y + title_height / 2.0), colored=True)
     probe("painted_bottom_edge", (x + window_width - 3.0, y + visible_height - 3.0), colored=True)
     probe("clear_right", (x + window_width + 3.0, y + 6.0), (0, 0, 0))
     probe("clear_below", (x + window_width / 2.0, y + visible_height + 3.0), (0, 0, 0))
-    model_matches = max(abs(actual - expected) for actual, expected in zip(snapshot["bounds"], expected_bounds)) <= 0.75
-    model_matches = model_matches and snapshot["skin"] == skin and title_height == SKIN_COLORS[skin]["title_height"]
-    model_matches = model_matches and snapshot["count"] == count and snapshot["collapsed"] == collapsed and snapshot["locked"] == locked
-    return {"skin": skin, "extent": [width, height], "snapshot": snapshot, "expected_bounds": list(expected_bounds), "count": count, "collapsed": collapsed, "locked": locked, "probes": probes,
-        "passed": model_matches and (extent is None or (width, height) == extent) and all(item["passed"] for item in probes)}
+    model_matches = max(abs(actual - expected) for actual, expected in zip(snapshot[LIT_BOUNDS], expected_bounds)) <= 0.75
+    model_matches = model_matches and snapshot[LIT_SKIN] == skin and title_height == SKIN_COLORS[skin]["title_height"]
+    model_matches = model_matches and snapshot[LIT_COUNT] == count and snapshot[LIT_COLLAPSED] == collapsed and snapshot[LIT_LOCKED] == locked
+    return {LIT_SKIN: skin, "extent": [width, height], "snapshot": snapshot, "expected_bounds": list(expected_bounds), LIT_COUNT: count, LIT_COLLAPSED: collapsed, LIT_LOCKED: locked, "probes": probes,
+        LIT_PASSED: model_matches and (extent is None or (width, height) == extent) and all(item[LIT_PASSED] for item in probes)}

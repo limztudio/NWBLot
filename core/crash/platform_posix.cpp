@@ -321,7 +321,9 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
         return false;
     if(setsid() < 0)
         return false;
-    int nullDescriptor = open("/dev/null", O_RDWR);
+    constexpr AStringView s_NullDevicePath = "/dev/null";
+
+    int nullDescriptor = open(s_NullDevicePath.data(), O_RDWR);
     if(nullDescriptor < 0)
         return false;
     if(dup2(nullDescriptor, STDIN_FILENO) < 0 || dup2(nullDescriptor, STDOUT_FILENO) < 0 || dup2(nullDescriptor, STDERR_FILENO) < 0)
@@ -407,8 +409,9 @@ static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, Det
         return;
     constexpr u32 s_WaitPollCount = 300u;
     constexpr int s_WaitPollMilliseconds = 10;
+    constexpr u32 s_WaitPhaseCount = 2u;
     bool terminated = terminateImmediately;
-    for(u32 phase = 0u; phase < 2u; ++phase){
+    for(u32 phase = 0u; phase < s_WaitPhaseCount; ++phase){
         if(phase != 0u || terminateImmediately){
             if(kill(child, SIGKILL) != 0 && errno != ESRCH){
                 observations.record(NativeFailure(Detail::PlatformOperation::KillChild, errno));
@@ -673,7 +676,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
         g_State.previousTerminateHandler = nullptr;
     }
     bool pending = false;
-    for(usize remaining = 6u; remaining != 0u; --remaining){
+    for(usize remaining = s_MaxCrashSignals; remaining != 0u; --remaining){
         const usize index = remaining - 1u;
         if(!g_State.signalActionInstalled[index])
             continue;

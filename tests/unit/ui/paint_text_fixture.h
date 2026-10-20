@@ -31,6 +31,8 @@ using namespace Impl::Ui;
 
 class PaintTextFixture : public testing::Test{
 public:
+    static constexpr u64 s_DefaultAtlasIdentity = 11u;
+
     static void ExpectClippedQuad(const DrawSnapshot& snapshot);
 
 
@@ -40,10 +42,10 @@ public:
 
 protected:
     void begin(const u64 generation);
-    [[nodiscard]] Expected<SharedGlyphPage> makeCoverage(const u64 atlasIdentity = 11u, const u64 generation = 1u);
-    [[nodiscard]] Expected<SharedGlyphPage> makeGlyphPage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u);
+    [[nodiscard]] Expected<SharedGlyphPage> makeCoverage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u);
+    [[nodiscard]] Expected<SharedGlyphPage> makeGlyphPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u);
     [[nodiscard]] Expected<SharedSdfAtlasPage> makeDistance();
-    [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdfPage(const u64 atlasIdentity = 11u, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u);
+    [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdfPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u);
 
 
 protected:

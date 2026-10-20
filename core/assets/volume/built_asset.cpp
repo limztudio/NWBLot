@@ -40,6 +40,8 @@ inline constexpr AStringView s_TemporaryNamePrefix = ".nwb_";
 inline constexpr char s_TemporaryNameSeparator = '_';
 inline constexpr AStringView s_TemporaryNameExtension = ".tmp";
 inline constexpr u64 s_TemporarySequenceStep = 1u;
+inline constexpr usize s_FilenameHexFieldCount = 3u;
+inline constexpr StringView s_WarningEventName = "warning";
 Atomic<u64> g_TemporarySequence{0u};
 
 
@@ -64,7 +66,7 @@ static bool WriteIfChanged(const ScratchPath& path, const ScratchBytes& bytes, S
     ScopeExit removeTemporary([&temporary]()noexcept{
         if(!RemoveFile(temporary)){
             CaptureDiagnosticEvent(DiagnosticEventRecord{
-                .event = "warning",
+                .event = s_WarningEventName,
                 .category = "built_asset_temporary_cleanup",
                 .message = "AssetBuilder: failed to remove temporary output",
             });
@@ -105,10 +107,10 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
     __hidden_built_asset::ScratchBytes existingBytes(scratchArena);
     __hidden_built_asset::ScratchString manifestText(scratchArena);
     __hidden_built_asset::ScratchString filename(scratchArena);
-    filename.reserve(NameDetail::s_HexDigitsPerHashLane * 3u + s_Extension.size());
+    filename.reserve(NameDetail::s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size());
     const __hidden_built_asset::ScratchPath scratchOutputDirectory(scratchArena, outputDirectory);
     __hidden_built_asset::ScratchPath path(scratchArena);
-    usize manifestLineBytes = NameDetail::s_HexDigitsPerHashLane * 3u + s_Extension.size();
+    usize manifestLineBytes = NameDetail::s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size();
     usize manifestReserveBytes = 0u;
     if(AddBinaryReserveBytes(manifestLineBytes, 1u) && AddBinaryRepeatedReserveBytes(manifestReserveBytes, manifest.entries.size(), manifestLineBytes))
         manifestText.reserve(manifestReserveBytes);

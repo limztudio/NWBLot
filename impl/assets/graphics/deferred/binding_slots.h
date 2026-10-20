@@ -13,6 +13,9 @@
 #define NWB_DEFERRED_LIGHTING_GROUP_SIZE 8
 #define NWB_DEFERRED_COMPOSITE_GROUP_SIZE 8
 
+// Optional composite inputs use this heap slot when absent.
+#define NWB_DEFERRED_INVALID_HEAP_SLOT 0xffffffffu
+
 // Shared by deferred lighting and final presentation.
 #define NWB_DEFERRED_PRESENTATION_SDR 0u
 #define NWB_DEFERRED_PRESENTATION_HDR10 1u

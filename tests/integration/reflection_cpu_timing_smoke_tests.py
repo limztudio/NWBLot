@@ -11,6 +11,14 @@ import reflection_cpu_timing_smoke as smoke
 import smoke_cpu_gpu_timing as timing
 from window_capture_smoke import SmokeFailure
 
+LIT_N_100_COMPLETED = "100 completed"
+LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
+LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
+LIT_OLD_TXT = "old.txt"
+LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS = "NWB_REFLECTION_SMOKE_DIAGNOSTICS"
+LIT_NWB_REFLECTION_CPU_GPU_TIMING_FILE = "NWB_REFLECTION_CPU_GPU_TIMING_FILE"
+LIT_NEW_TXT = "new.txt"
+
 CASE = "optical_csg_cap"
 
 
@@ -88,10 +96,10 @@ class ReflectionCpuTimingTests(unittest.TestCase):
         self.assertFalse(result["performance_qualification"])
 
     def test_missing_target_scope_and_too_few_completed_samples_fail(self):
-        with self.assertRaisesRegex(SmokeFailure, "100 completed"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_N_100_COMPLETED):
             replay(raw=raw_publications().replace("render.reflection_hardware", "unrelated.scope"))
         raw = raw_publications().replace("10 0.5 0.05 0.05 0.05", "9 0.45 0.05 0.05 0.05")
-        with self.assertRaisesRegex(SmokeFailure, "100 completed"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_N_100_COMPLETED):
             replay(raw=raw)
 
     def test_wrong_owner_or_stale_generation_fail(self):
@@ -105,11 +113,11 @@ class ReflectionCpuTimingTests(unittest.TestCase):
                 replay(raw=raw_publications().replace(before, after))
 
     def test_inherited_capture_and_diagnostic_controls_are_removed(self):
-        env = smoke.launch_environment({"NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp", "NWB_GPU_TIMING_FILE": "old.txt", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1", "NWB_REFLECTION_CPU_GPU_TIMING_FILE": "old.txt"}, CASE, Path("new.txt"))
-        self.assertNotIn("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", env)
-        self.assertNotIn("NWB_GPU_TIMING_FILE", env)
-        self.assertEqual(env["NWB_REFLECTION_SMOKE_DIAGNOSTICS"], "0")
-        self.assertEqual(env["NWB_REFLECTION_CPU_GPU_TIMING_FILE"], "new.txt")
+        env = smoke.launch_environment({LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: "old.bmp", LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_CPU_GPU_TIMING_FILE: LIT_OLD_TXT}, CASE, Path(LIT_NEW_TXT))
+        self.assertNotIn(LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, env)
+        self.assertNotIn(LIT_NWB_GPU_TIMING_FILE, env)
+        self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
+        self.assertEqual(env[LIT_NWB_REFLECTION_CPU_GPU_TIMING_FILE], LIT_NEW_TXT)
 
     def test_contradictory_scene_hardware_extent_and_warning_fail(self):
         for extra in ("ReflectionSmokeProject: hardware unavailable", "ReflectionSmokeProject: case optical_clear created", "[WARNING] unsupported source", "ReflectionSmokeStatistics: unexpected diagnostics",

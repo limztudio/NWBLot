@@ -29,6 +29,8 @@ namespace UiEditCaretTests{
 
 using namespace Impl::Ui;
 
+inline constexpr f32 s_CaretGlyphAdvance = 10.0f;
+
 namespace ShaperFault{
     enum Enum : u8{ None, LeadingGap, TrailingGap, Overlap, InconsistentGlyphEnd, NonfinitePlacement };
 };
@@ -46,11 +48,11 @@ public:
         ShapedRun run(m_arena);
         run.metrics = variedHeight && request.text == "TALL" ? FontMetrics{ 10.0f, 4.0f, 6.0f } : FontMetrics{ 8.0f, 2.0f, 2.0f };
         if(fault == ShaperFault::Overlap){
-            run.glyphs.push_back({ {}, 1u, 0u, 2u, {}, { 10.0f, 0.0f }, {} });
-            run.glyphs.push_back({ {}, 2u, 1u, 3u, {}, { 10.0f, 0.0f }, {} });
+            run.glyphs.push_back({ {}, 1u, 0u, 2u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+            run.glyphs.push_back({ {}, 2u, 1u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
         }
         else if(fault == ShaperFault::InconsistentGlyphEnd){
-            run.glyphs.push_back({ {}, 1u, 0u, 1u, {}, { 10.0f, 0.0f }, {} });
+            run.glyphs.push_back({ {}, 1u, 0u, 1u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
             run.glyphs.push_back({ {}, 2u, 0u, 3u, {}, {}, {} });
         }
         else if(fault == ShaperFault::NonfinitePlacement){
@@ -60,11 +62,11 @@ public:
         else if(request.text == "ffi")
             run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 30.0f, 0.0f }, {} });
         else if(request.text == "A\xcc\x81" "B"){
-            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 10.0f, 0.0f }, {} });
-            run.glyphs.push_back({ {}, 2u, 3u, 4u, {}, { 10.0f, 0.0f }, {} });
+            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+            run.glyphs.push_back({ {}, 2u, 3u, 4u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
         }
         else if(request.text == "e\xcc\x81")
-            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 10.0f, 0.0f }, {} });
+            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
         else if(request.text == "\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab")
             run.glyphs.push_back({ {}, 1u, 0u, 9u, {}, { 12.0f, 0.0f }, {} });
         else{
@@ -96,7 +98,7 @@ private:
 
 public:
     ShaperFault::Enum fault = ShaperFault::None;
-    f32 scalarAdvance = 10.0f;
+    f32 scalarAdvance = s_CaretGlyphAdvance;
     bool variedHeight = false;
     bool zeroAdvance = false;
 };

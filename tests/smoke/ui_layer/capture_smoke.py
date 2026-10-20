@@ -18,18 +18,28 @@ sys.path.insert(0, str(SMOKE_DIRECTORY))
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows  # noqa: E402
 from fixture_environment import build_fixture_environment
 
+LIT_EXECUTABLE = "--executable"
+LIT_WORKING_DIRECTORY = "--working-directory"
+LIT_FRAMEBUFFER = "framebuffer"
+LIT_RESIZE = "resize"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_TIMEOUT = "--timeout"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
+LIT_CAPTURE = "capture"
+
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executable", type=Path, required=True)
-    parser.add_argument("--working-directory", type=Path, required=True)
+    parser.add_argument(LIT_EXECUTABLE, type=Path, required=True)
+    parser.add_argument(LIT_WORKING_DIRECTORY, type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
-    parser.add_argument("--mode", choices=("framebuffer", "resize"), default="framebuffer")
-    parser.add_argument("--logserver-executable", type=Path)
+    parser.add_argument("--mode", choices=(LIT_FRAMEBUFFER, LIT_RESIZE), default=LIT_FRAMEBUFFER)
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
     parser.add_argument("--frames", type=int, default=60)
-    parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument(LIT_TIMEOUT, type=float, default=60.0)
     parser.add_argument("--application-arg", action="append", default=[])
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument(LIT_GPU_VALIDATION, action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 3:
         parser.error("--frames must be at least 3 so the empty startup frames precede painted capture")
@@ -39,15 +49,15 @@ def parse_args(argv):
 
 
 def capture_command(args, output):
-    command = [sys.executable, str(SMOKE_DIRECTORY / "window_capture_smoke.py"), "--executable", str(args.executable.resolve()), "--working-directory", str(args.working_directory.resolve()), "--output", str(output), "--window-title", "NWB UI Layer Smoke",
-        "--timeout", str(args.timeout), "--expect-log-message", "Loader: project startup complete", "--expect-log-message", "UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2",
-        "--expect-log-message", "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted", "--expect-log-message", "UiLayerSmokeProject: shutdown", "--gpu-validation" if args.gpu_validation else "--no-gpu-validation",]
-    if args.mode == "framebuffer":
+    command = [sys.executable, str(SMOKE_DIRECTORY / "window_capture_smoke.py"), LIT_EXECUTABLE, str(args.executable.resolve()), LIT_WORKING_DIRECTORY, str(args.working_directory.resolve()), "--output", str(output), "--window-title", "NWB UI Layer Smoke",
+        LIT_TIMEOUT, str(args.timeout), LIT_EXPECT_LOG_MESSAGE, "Loader: project startup complete", LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2",
+        LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted", LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: shutdown", LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation",]
+    if args.mode == LIT_FRAMEBUFFER:
         command += ["--application-capture", "--application-capture-frame-count", str(args.frames), "--log-output", str(output.with_suffix(".log"))]
     else:
         command += ["--resize-client", "800", "600", "--settle-seconds", "1.0", "--resize-settle-seconds", "1.0"]
     if args.logserver_executable:
-        command += ["--logserver-executable", str(args.logserver_executable.resolve())]
+        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable.resolve())]
     else:
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
@@ -67,7 +77,7 @@ def run(args):
 
     capture_paths = [output]
     expected_extents = [(960, 540)]
-    if args.mode == "resize":
+    if args.mode == LIT_RESIZE:
         capture_paths.insert(0, output.with_name(output.stem + ".before-resize" + output.suffix))
         expected_extents.append((800, 600))
     reports = []
@@ -76,10 +86,10 @@ def run(args):
         if frame[:2] != expected_extent:
             raise SmokeFailure(f"UI capture '{path.name}' has extent {frame[:2]}, expected {expected_extent}")
         report = analyze_frame(frame)
-        report["capture"] = str(path)
+        report[LIT_CAPTURE] = str(path)
         reports.append(report)
     (args.output_directory / "pixels.json").write_text(json.dumps(reports, indent=2) + "\n", encoding="utf-8")
-    failures = [f"{Path(report['capture']).name}: {failure_description(report)}" for report in reports if not report["passed"]]
+    failures = [f"{Path(report[LIT_CAPTURE]).name}: {failure_description(report)}" for report in reports if not report["passed"]]
     if failures:
         raise SmokeFailure("; ".join(failures))
     print(f"UI layer {args.mode}: {len(reports)} captures, {sum(len(report['probes']) for report in reports)} pixel probes passed", flush=True)

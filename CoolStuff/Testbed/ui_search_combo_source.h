@@ -18,17 +18,20 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiSearchComboSource final : public UiFilteredListSource<UiSearchComboSource, 12u, 5u>{
-    friend class UiImmutableListSource<UiSearchComboSource, 12u, 5u, NWB::Impl::Ui::ISearchableListDataSource>;
-    friend class UiFilteredListSource<UiSearchComboSource, 12u, 5u>;
+inline constexpr usize s_SearchComboLabelCount = 12u;
+inline constexpr u64 s_SearchComboDisabledKey = 5u;
+
+class UiSearchComboSource final : public UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>{
+    friend class UiImmutableListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey, NWB::Impl::Ui::ISearchableListDataSource>;
+    friend class UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>;
 
 
 private:
-    static constexpr Array<StringView, 12u> s_Labels{ "Apple", "Banana", "Blueberry", "Cherry", "Fig (disabled)", "Grape", "Kiwi", "Lemon", "Mango", "Orange", "Pear", "Plum" };
+    static constexpr Array<StringView, s_SearchComboLabelCount> s_Labels{ "Apple", "Banana", "Blueberry", "Cherry", "Fig (disabled)", "Grape", "Kiwi", "Lemon", "Mango", "Orange", "Pear", "Plum" };
 
 
 public:
-    using UiFilteredListSource<UiSearchComboSource, 12u, 5u>::UiFilteredListSource;
+    using UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>::UiFilteredListSource;
 };
 
 

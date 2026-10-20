@@ -33,7 +33,7 @@ endif()
 if(TARGET nwb_caustic_sphere_smoke)
     add_test(NAME nwb_software_raytracing_optical_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py" --software-ray-tracing "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
             --executable "$<TARGET_FILE:nwb_caustic_sphere_smoke>" --working-directory "${_nwb_sw_smoke_runtime}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/software_optical" --timeout 150)
-    set_tests_properties(nwb_software_raytracing_optical_smoke PROPERTIES LABELS "software_raytracing" RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 1020)
+    set_tests_properties(nwb_software_raytracing_optical_smoke PROPERTIES LABELS "software_raytracing" RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 1020)
 endif()
 
 if(TARGET nwb_stress_test_smoke)

@@ -15,6 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import reflection_benchmark as benchmark
 from smoke_volume_identity import volume_segment_filename
 
+LIT_UNRESOLVED = "unresolved"
+LIT_RAW = "raw"
+LIT_VK_LAYER_KHRONOS_VALIDATION = "VK_LAYER_KHRONOS_validation"
+LIT_SUMMARY_JSON = "summary.json"
+
 LIT_GPU_SAMPLES = "gpu_samples"
 LIT_TIMING_UNFOCUSED = "ReflectionSmokeProject: timing render unfocused 1\n"
 LIT_TIMING_RANGES = "ReflectionSmokeProject: timing in-flight ranges 32\n"
@@ -230,7 +235,7 @@ class PairedInferenceTests(unittest.TestCase):
             benchmark.paired_statistics([1, 2, 3, 4])
 
     def test_small_change_and_material_control_drift_cannot_claim_speedup(self):
-        for delta, control, status in ((-.5, 0, LIT_RESOLVED_GPU_TIME_REDUCTION), (-.01, 0, "unresolved"), (-.5, -.1, "control_drift")):
+        for delta, control, status in ((-.5, 0, LIT_RESOLVED_GPU_TIME_REDUCTION), (-.01, 0, LIT_UNRESOLVED), (-.5, -.1, "control_drift")):
             variants, trials = matched_trials(delta, control)
             results = benchmark.compare_trials(trials, variants)
             pair = next(item for item in results if item[LIT_BASELINE] == LIT_HARDWARE and item[LIT_CANDIDATE] == LIT_HYBRID)
@@ -241,7 +246,7 @@ class PairedInferenceTests(unittest.TestCase):
         next(trial for trial in trials if trial[LIT_VARIANT][LIT_NAME] == LIT_HYBRID)[benchmark.LIT_POSITIVE_FRAME_REPORTS] = 10
         statuses = {(item[LIT_BASELINE], item[LIT_CANDIDATE]): item[LIT_STATUS] for item in benchmark.compare_trials(trials, variants)}
         self.assertEqual(statuses[(LIT_HARDWARE, LIT_HYBRID)], "inconclusive_interval_count")
-        self.assertEqual(statuses[("disabled", LIT_HARDWARE)], "unresolved")
+        self.assertEqual(statuses[("disabled", LIT_HARDWARE)], LIT_UNRESOLVED)
 
     def test_positive_frame_reports_ignore_missing_and_zero_frame_rows(self):
         text = report([(benchmark.FRAME, 1, 2)]) + report([(benchmark.CLASSIFY, 1, 2)]) + report([(benchmark.FRAME, 0, 2)]) + report([])
@@ -285,7 +290,7 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
         args = SimpleNamespace(family=LIT_ROUGH, ray_budget=100, history_samples=16, roughness=.4, sampling_seed=0, optical_queries=8, screen_steps=96)
         inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_FINAL_STATE: "1", "NWB_REFRACTION_SMOKE_GALLERY": "1", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
             "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT": "4", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: LIT_N_10, LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_NWB_REFLECTION_SMOKE_FEEDBACK: "1", LIT_PRESERVED: LIT_YES}
-        env, overrides = benchmark.timed_environment(inherited, args, benchmark.Variant("raw", LIT_HARDWARE), Path(LIT_NEW_TXT))
+        env, overrides = benchmark.timed_environment(inherited, args, benchmark.Variant(LIT_RAW, LIT_HARDWARE), Path(LIT_NEW_TXT))
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_FEEDBACK], "0")
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_FINAL_STATE], "0")
@@ -299,10 +304,10 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
     def test_explicit_loader_layers_are_rejected_without_mutating_inherited_controls(self):
         args = SimpleNamespace(family=LIT_ROUGH, ray_budget=100, history_samples=16, roughness=.4, sampling_seed=0, optical_queries=8, screen_steps=96)
         for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
-            inherited = {key: "VK_LAYER_KHRONOS_validation", LIT_PRESERVED: LIT_YES}
+            inherited = {key: LIT_VK_LAYER_KHRONOS_VALIDATION, LIT_PRESERVED: LIT_YES}
             with self.subTest(key=key), self.assertRaisesRegex(benchmark.SmokeFailure, key):
-                benchmark.timed_environment(inherited, args, benchmark.Variant("raw", LIT_HARDWARE), Path(LIT_NEW_TXT))
-            self.assertEqual(inherited, {key: "VK_LAYER_KHRONOS_validation", LIT_PRESERVED: LIT_YES})
+                benchmark.timed_environment(inherited, args, benchmark.Variant(LIT_RAW, LIT_HARDWARE), Path(LIT_NEW_TXT))
+            self.assertEqual(inherited, {key: LIT_VK_LAYER_KHRONOS_VALIDATION, LIT_PRESERVED: LIT_YES})
 
     def test_cli_rejects_capture_and_zero_ray_budget(self):
         common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
@@ -512,7 +517,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             backend.focus_window.assert_not_called()
             backend.close.assert_called_once()
             stop.assert_any_call(runtime, benchmark.LIT_REFLECTION_BENCHMARK, None)
-            self.assertFalse((args.output_directory / LIT_BLOCK_00_00_HARDWARE / "summary.json").exists())
+            self.assertFalse((args.output_directory / LIT_BLOCK_00_00_HARDWARE / LIT_SUMMARY_JSON).exists())
 
     def test_empty_completed_timing_reports_explain_absent_gpu_samples(self):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
@@ -536,7 +541,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             stack.enter_context(patch.object(benchmark.time, "sleep"))
             with self.assertRaisesRegex(benchmark.SmokeFailure, "timing reports contain no completed GPU frame samples"):
                 benchmark.run_trial(args, benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE), 0, 0, {}, {})
-            self.assertFalse((args.output_directory / LIT_BLOCK_00_00_HARDWARE / "summary.json").exists())
+            self.assertFalse((args.output_directory / LIT_BLOCK_00_00_HARDWARE / LIT_SUMMARY_JSON).exists())
 
 
 if __name__ == LIT_MAIN:

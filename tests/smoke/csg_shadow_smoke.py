@@ -12,6 +12,11 @@ import sys
 from csg_shadow_reference import ANALYTIC_ARMS, ARMS, compare_analytic_frames, compare_frames
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_REUSE_TWO_FRAMES = 'reuse_two_frames'
+LIT_FINITE = 'finite'
+LIT_POINT = 'point'
+LIT_GPU_VALIDATION = "--gpu-validation"
+
 LIT_REFERENCE_GRID9 = "reference_grid9"
 LIT_BOXES = "boxes"
 LIT_EVERY_FRAME = "every_frame"
@@ -57,11 +62,11 @@ def capture_arm(args, arm):
     log = output.with_suffix(".log")
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout), "--log-output", str(log), LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: shutdown",
-        LIT_EXPECT_LOG_MESSAGE, f"CsgShadowSmokeProject: atlas arm={ARMS.index(arm)} light={args.light} hardware={int(args.route == 'hardware')}", LIT_EXPECT_LOG_MESSAGE, "caster_z_max=-5 receiver_z=0",
+        LIT_EXPECT_LOG_MESSAGE, f"CsgShadowSmokeProject: atlas arm={ARMS.index(arm)} light={args.light} hardware={int(args.route == LIT_HARDWARE)}", LIT_EXPECT_LOG_MESSAGE, "caster_z_max=-5 receiver_z=0",
         LIT_EXPECT_LOG_MESSAGE, "SoftwareShadowSmoke: requested backend=0 directional_resolution=" + f"{512 // args.map_resolution_divisor} point_resolution={256 // args.map_resolution_divisor} "
-            + f"budget_bytes=268435456 coverage=0 blocker_search={BLOCKER_SEARCH[args.blocker_search]} " + f"capture_cadence={('every_frame', 'reuse_one_frame', 'reuse_two_frames').index(args.capture_cadence)}",
-        LIT_EXPECT_LOG_MESSAGE, f"CsgShadowSmokeProject: light_source={args.light_source} " + f"angular_radius={0.005 if args.light_source == 'finite' and args.light == 'directional' else 0.0:.3f} "
-            + f"source_radius={0.02 if args.light_source == 'finite' and args.light == 'point' else 0.0:.3f}", "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
+            + f"budget_bytes=268435456 coverage=0 blocker_search={BLOCKER_SEARCH[args.blocker_search]} " + f"capture_cadence={(LIT_EVERY_FRAME, LIT_REUSE_ONE_FRAME, LIT_REUSE_TWO_FRAMES).index(args.capture_cadence)}",
+        LIT_EXPECT_LOG_MESSAGE, f"CsgShadowSmokeProject: light_source={args.light_source} " + f"angular_radius={0.005 if args.light_source == LIT_FINITE and args.light == LIT_DIRECTIONAL else 0.0:.3f} "
+            + f"source_radius={0.02 if args.light_source == LIT_FINITE and args.light == LIT_POINT else 0.0:.3f}", LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
     if args.atlas == LIT_ANALYTIC:
         command += [LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"]
     if arm == "moved":
@@ -107,16 +112,16 @@ def parse_args(argv):
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
     parser.add_argument("--route", choices=(LIT_HARDWARE, LIT_SOFTWARE), required=True)
-    parser.add_argument("--light", choices=(LIT_DIRECTIONAL, "point"), default=LIT_DIRECTIONAL)
-    parser.add_argument("--light-source", choices=(LIT_HARD, "finite"), default=LIT_HARD)
+    parser.add_argument("--light", choices=(LIT_DIRECTIONAL, LIT_POINT), default=LIT_DIRECTIONAL)
+    parser.add_argument("--light-source", choices=(LIT_HARD, LIT_FINITE), default=LIT_HARD)
     parser.add_argument("--blocker-search", choices=tuple(BLOCKER_SEARCH), default=LIT_REFERENCE_GRID9, help="Center1 estimates penumbra width from the fully checked central blocker only.")
     parser.add_argument("--atlas", choices=(LIT_BOXES, LIT_ANALYTIC), default=LIT_BOXES)
-    parser.add_argument("--capture-cadence", choices=(LIT_EVERY_FRAME, LIT_REUSE_ONE_FRAME, "reuse_two_frames"), default=LIT_EVERY_FRAME)
+    parser.add_argument("--capture-cadence", choices=(LIT_EVERY_FRAME, LIT_REUSE_ONE_FRAME, LIT_REUSE_TWO_FRAMES), default=LIT_EVERY_FRAME)
     parser.add_argument("--map-resolution-divisor", type=int, choices=(1, 2, 4), default=1)
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument(LIT_TIMEOUT, type=float, default=90.0)
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
+    parser.add_argument(LIT_GPU_VALIDATION, action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 100 or not math.isfinite(args.timeout) or args.timeout <= 0.0:
         parser.error("frames must be at least 100 (60 after cutter motion), and timeout must be finite and positive")

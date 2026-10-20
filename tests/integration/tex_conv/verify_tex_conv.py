@@ -16,6 +16,30 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "common"))
 
 from png_fixture import write_png_rows  # noqa: E402
 
+LIT_A = "A"
+LIT_B = "B"
+LIT_G = "G"
+LIT_R = "R"
+LIT_Y = "Y"
+LIT_FORCE = "--force"
+LIT_FORMAT = "format"
+LIT_DIMENSION = "dimension"
+LIT_RESOLUTION = "resolution"
+LIT_ALPHA_MODE = "alpha_mode"
+LIT_ALPHA_CONSTANT_UNORM8 = "alpha_constant_unorm8"
+LIT_CUBE = "cube"
+LIT_VOLUME = "volume"
+LIT_ALPHA_CONSTANT = "alpha_constant"
+LIT_MIPS = "mips"
+LIT_CUBE_2 = "--cube"
+LIT_VOLUME_2 = "--volume"
+LIT_OUTPUT = "--output"
+LIT_ORIGINAL_MASK = "original_mask"
+LIT_MASK = "mask"
+LIT_WHITE = "white"
+LIT_BLACK = "black"
+LIT_ALPHA = "--alpha"
+
 LIT_ASCII = "ascii"
 LIT_X00 = b"\x00"
 LIT_COMPRESSION = "compression"
@@ -71,7 +95,7 @@ def exr_attribute(name: str, kind: str, value: bytes) -> bytes:
     return name.encode(LIT_ASCII) + LIT_X00 + kind.encode(LIT_ASCII) + LIT_X00 + struct.pack("<I", len(value)) + value
 
 
-def write_openexr(path: pathlib.Path, pixels: tuple[tuple[float, float, float, float], ...], channel_names: tuple[str, ...] = ("A", "B", "G", "R"), channel_types: tuple[int, ...] = ()) -> None:
+def write_openexr(path: pathlib.Path, pixels: tuple[tuple[float, float, float, float], ...], channel_names: tuple[str, ...] = (LIT_A, LIT_B, LIT_G, LIT_R), channel_types: tuple[int, ...] = ()) -> None:
     # This is a minimal uncompressed scanline EXR writer with explicit UINT or FLOAT channel declarations.
     # Keeping it here makes the converter test independent of host image packages.
     width = 4
@@ -109,7 +133,7 @@ def write_openexr(path: pathlib.Path, pixels: tuple[tuple[float, float, float, f
         output.extend(struct.pack("<ii", row, chunk_data_size))
         row_pixels = pixels[row * width : (row + 1) * width]
         for channel, pixel_type in zip(channel_names, channel_types):
-            component = {"R": 0, "G": 1, "B": 2, "A": 3, "Y": 0}[channel]
+            component = {LIT_R: 0, LIT_G: 1, LIT_B: 2, LIT_A: 3, LIT_Y: 0}[channel]
             packing = "I" if pixel_type == EXR_UINT else "f"
             output.extend(struct.pack(f"<{width}{packing}", *(pixel[component] for pixel in row_pixels)))
     path.write_bytes(output)
@@ -131,7 +155,7 @@ def verify_publication_failure_preserves_outputs(executable: str, source_path: p
         sentinel = b"unrelated recovery file"
         backup.write_bytes(sentinel)
         try:
-            result = subprocess.run([executable, str(source_path), "--force", LIT_LINEAR], cwd=output_dir, text=True, capture_output=True,)
+            result = subprocess.run([executable, str(source_path), LIT_FORCE, LIT_LINEAR], cwd=output_dir, text=True, capture_output=True,)
             if result.returncode != 1:
                 raise AssertionError("tex_conv did not refuse an occupied publication backup path")
             if backup.read_bytes() != sentinel:
@@ -146,7 +170,7 @@ def verify_publication_failure_preserves_outputs(executable: str, source_path: p
             raise AssertionError("dangling-link fixture target unexpectedly exists")
         backups[0].symlink_to(missing_target.name)
         try:
-            result = subprocess.run([executable, str(source_path), "--force", LIT_LINEAR], cwd=output_dir, text=True, capture_output=True,)
+            result = subprocess.run([executable, str(source_path), LIT_FORCE, LIT_LINEAR], cwd=output_dir, text=True, capture_output=True,)
             if result.returncode != 1 or not backups[0].is_symlink():
                 raise AssertionError("tex_conv did not preserve an occupied dangling backup link")
             require_preserved_pair()
@@ -167,7 +191,7 @@ def verify_publication_failure_preserves_outputs(executable: str, source_path: p
         if handle == ctypes.c_void_p(-1).value:
             raise OSError(ctypes.get_last_error(), "could not lock publication fixture")
         try:
-            result = subprocess.run([executable, str(source_path), "--force", LIT_LINEAR], cwd=output_dir, text=True, capture_output=True,)
+            result = subprocess.run([executable, str(source_path), LIT_FORCE, LIT_LINEAR], cwd=output_dir, text=True, capture_output=True,)
         finally:
             if not kernel32.CloseHandle(handle):
                 raise OSError(ctypes.get_last_error(), "could not release publication fixture")
@@ -177,7 +201,7 @@ def verify_publication_failure_preserves_outputs(executable: str, source_path: p
         if any(path.exists() for path in backups):
             raise AssertionError("rollback did not restore the previous output locations")
 
-    recovered = subprocess.run([executable, str(source_path), "--force"], cwd=output_dir, text=True, capture_output=True,)
+    recovered = subprocess.run([executable, str(source_path), LIT_FORCE], cwd=output_dir, text=True, capture_output=True,)
     if recovered.returncode != 0:
         raise AssertionError("tex_conv could not publish after the obstruction was removed")
     if tuple(path.read_bytes() for path in outputs) != originals:
@@ -191,22 +215,22 @@ def read_raw_pair(path: pathlib.Path) -> dict:
     metadata = metadata_path.read_text(encoding="utf-8")
     assignments = re.findall(r"asset\.(\w+)\s*=\s*([^;]+);", metadata)
     fields = dict(assignments)
-    required = {"format", "dimension", "resolution", "alpha_mode"}
-    if len(fields) != len(assignments) or set(fields) not in (required, required | {"alpha_constant_unorm8"}):
+    required = {LIT_FORMAT, LIT_DIMENSION, LIT_RESOLUTION, LIT_ALPHA_MODE}
+    if len(fields) != len(assignments) or set(fields) not in (required, required | {LIT_ALPHA_CONSTANT_UNORM8}):
         raise AssertionError(f"texture metadata contains missing, duplicate, or unsupported fields: {metadata_path}\n{metadata}")
     try:
         values = {name: json.loads(value) for name, value in fields.items()}
     except json.JSONDecodeError as error:
         raise AssertionError(f"texture metadata contains malformed descriptor values: {metadata_path}") from error
     formats = {"uastc_ldr_4x4": 0, "uastc_hdr_4x4": 1}
-    dimensions = {"2d": 0, "cube": 1, "volume": 2}
+    dimensions = {"2d": 0, LIT_CUBE: 1, LIT_VOLUME: 2}
     alpha_modes = {"opaque": 0, "embedded_ldr": 1, "constant_unorm8": 2, "separate_uastc_ldr_4x4": 3}
-    if values["format"] not in formats or values["dimension"] not in dimensions or values["alpha_mode"] not in alpha_modes:
+    if values[LIT_FORMAT] not in formats or values[LIT_DIMENSION] not in dimensions or values[LIT_ALPHA_MODE] not in alpha_modes:
         raise AssertionError(f"texture metadata has an unsupported format, dimension, or alpha mode: {metadata_path}")
-    dimension = dimensions[values["dimension"]]
-    payload_format = formats[values["format"]]
-    alpha_mode = alpha_modes[values["alpha_mode"]]
-    resolution = values["resolution"]
+    dimension = dimensions[values[LIT_DIMENSION]]
+    payload_format = formats[values[LIT_FORMAT]]
+    alpha_mode = alpha_modes[values[LIT_ALPHA_MODE]]
+    resolution = values[LIT_RESOLUTION]
     if not isinstance(resolution, list) or len(resolution) != (3 if dimension == 2 else 2) or any(type(value) is not int or value <= 0 for value in resolution):
         raise AssertionError(f"invalid texture resolution: {metadata_path}")
     width, height = resolution[:2]
@@ -214,9 +238,9 @@ def read_raw_pair(path: pathlib.Path) -> dict:
     count = max(width, height, depth).bit_length()
     if dimension == 1 and width != height:
         raise AssertionError(f"cube texture faces must be square: {metadata_path}")
-    if (alpha_mode == 2) != ("alpha_constant_unorm8" in values):
+    if (alpha_mode == 2) != (LIT_ALPHA_CONSTANT_UNORM8 in values):
         raise AssertionError(f"alpha constant must appear only for constant transport: {metadata_path}")
-    alpha_constant = values.get("alpha_constant_unorm8", 255)
+    alpha_constant = values.get(LIT_ALPHA_CONSTANT_UNORM8, 255)
     if alpha_mode == 2 and (type(alpha_constant) is not int or not 0 <= alpha_constant <= 254):
         raise AssertionError(f"invalid alpha constant: {metadata_path}")
     if (payload_format == 0 and alpha_mode not in (0, 1)) or (payload_format == 1 and alpha_mode == 1):
@@ -234,14 +258,14 @@ def read_raw_pair(path: pathlib.Path) -> dict:
         mip_depth = max(1, mip_depth // 2) if dimension == 2 else 1
     if len(path.read_bytes()) != primary_size * (2 if alpha_mode == 3 else 1):
         raise AssertionError(f"raw sidecar length does not match metadata mip and alpha layout: {path}")
-    return {"dimension": dimension, "format": payload_format, "alpha_mode": alpha_mode, "alpha_constant": alpha_constant, "mips": records}
+    return {LIT_DIMENSION: dimension, LIT_FORMAT: payload_format, LIT_ALPHA_MODE: alpha_mode, LIT_ALPHA_CONSTANT: alpha_constant, LIT_MIPS: records}
 
 
 def run_conversion(executable: str, output_dir: pathlib.Path, name: str, inputs: tuple[pathlib.Path, ...], *options: str) -> pathlib.Path:
     base = output_dir / name
-    mode = tuple(option for option in options if option in ("--cube", "--volume"))
-    remaining = tuple(option for option in options if option not in ("--cube", "--volume"))
-    command = [executable, *mode, *(str(path) for path in inputs), *remaining, "--force", "--output", str(base)]
+    mode = tuple(option for option in options if option in (LIT_CUBE_2, LIT_VOLUME_2))
+    remaining = tuple(option for option in options if option not in (LIT_CUBE_2, LIT_VOLUME_2))
+    command = [executable, *mode, *(str(path) for path in inputs), *remaining, LIT_FORCE, LIT_OUTPUT, str(base)]
     result = subprocess.run(command, cwd=output_dir, text=True, capture_output=True)
     if result.returncode != 0:
         raise AssertionError(f"conversion failed: {command}\n{result.stdout}\n{result.stderr}")
@@ -251,7 +275,7 @@ def run_conversion(executable: str, output_dir: pathlib.Path, name: str, inputs:
 
 def decode_pixels(executable: str, prepared: pathlib.Path, level: int = 0) -> tuple[tuple[float, ...], ...]:
     description = read_raw_pair(prepared)
-    extent = description["mips"][level]
+    extent = description[LIT_MIPS][level]
     destination = prepared.with_suffix(f".mip{level}.decoded")
     result = subprocess.run([executable, str(prepared.with_suffix(".nwb")), str(destination), str(level)], text=True, capture_output=True)
     if result.returncode != 0:
@@ -299,7 +323,7 @@ def main() -> int:
     source_path = output_dir / "checker.png"
     write_png_pixels(source_path, 7, 5, 6, checker)
     prepared = run_conversion(args.tex_conv, output_dir, "checker", (source_path,))
-    if read_raw_pair(prepared)["mips"] != [(7, 5, 1), (3, 2, 1), (1, 1, 1)]:
+    if read_raw_pair(prepared)[LIT_MIPS] != [(7, 5, 1), (3, 2, 1), (1, 1, 1)]:
         raise AssertionError("non-power-of-two preparation changed its complete mip chain")
     overwrite = subprocess.run([args.tex_conv, str(source_path)], cwd=output_dir, text=True, capture_output=True)
     if overwrite.returncode != 1 or "Output already exists:" not in overwrite.stdout + overwrite.stderr or "[ERROR]:" not in overwrite.stdout + overwrite.stderr:
@@ -309,7 +333,7 @@ def main() -> int:
     gray = output_dir / "gray.png"
     write_png_pixels(gray, 2, 2, 6, ((128, 128, 128, 128),) * 4)
     srgb = run_conversion(args.tex_conv, output_dir, "gray_srgb", (gray,))
-    linear = run_conversion(args.tex_conv, output_dir, "gray_linear", (gray,), "--linear")
+    linear = run_conversion(args.tex_conv, output_dir, "gray_linear", (gray,), LIT_LINEAR)
     require_pixels(decode_pixels(args.prepared_decode, srgb), ((srgb_to_linear(128.0 / 255.0),) * 3 + (128.0 / 255.0,),) * 4)
     require_pixels(decode_pixels(args.prepared_decode, linear), ((128.0 / 255.0,) * 4,) * 4)
 
@@ -324,7 +348,7 @@ def main() -> int:
         value = 255 if index == 2 else 0
         write_png_pixels(path, 1, 1, 6, ((value, value, value, 255),))
         pulse_paths.append(path)
-    pulse = run_conversion(args.tex_conv, output_dir, "pulse", tuple(pulse_paths), "--volume", "--linear")
+    pulse = run_conversion(args.tex_conv, output_dir, "pulse", tuple(pulse_paths), LIT_VOLUME_2, LIT_LINEAR)
     for level, count in ((1, 2), (2, 1)):
         require_pixels(decode_pixels(args.prepared_decode, pulse, level), ((0.2, 0.2, 0.2, 1.0),) * count)
 
@@ -335,18 +359,18 @@ def main() -> int:
     alpha_source = output_dir / "alpha_input.png"
     write_png_pixels(alpha_source, 4, 4, 6, tuple((*rgb, alpha) for rgb, alpha in zip(colors, original_alpha)))
     original = run_conversion(args.tex_conv, output_dir, "alpha_original", (alpha_source,))
-    for name, values, override in (("original_mask", original_alpha, "mask"), ("red_mask", mask_alpha, "mask"), ("white", (255,) * 16, "white"), ("black", (0,) * 16, "black")):
+    for name, values, override in ((LIT_ORIGINAL_MASK, original_alpha, LIT_MASK), ("red_mask", mask_alpha, LIT_MASK), (LIT_WHITE, (255,) * 16, LIT_WHITE), (LIT_BLACK, (0,) * 16, LIT_BLACK)):
         reference_path = output_dir / f"{name}_reference.png"
         write_png_pixels(reference_path, 4, 4, 6, tuple((*rgb, alpha) for rgb, alpha in zip(colors, values)))
         reference = run_conversion(args.tex_conv, output_dir, f"{name}_reference", (reference_path,))
         argument = override
-        if override == "mask":
+        if override == LIT_MASK:
             mask = output_dir / f"{name}.png"
             write_png_pixels(mask, 4, 4, 6, tuple((alpha, (alpha + 83) & 255, (alpha + 159) & 255, 255 - alpha) for alpha in values))
             argument = str(mask)
-        actual = run_conversion(args.tex_conv, output_dir, f"alpha_{name}", (alpha_source,), "--alpha", argument)
+        actual = run_conversion(args.tex_conv, output_dir, f"alpha_{name}", (alpha_source,), LIT_ALPHA, argument)
         require_matching_payloads(actual, reference, f"alpha {name}")
-        if name == "original_mask":
+        if name == LIT_ORIGINAL_MASK:
             require_matching_payloads(actual, original, "default original alpha")
     opaque_source = output_dir / "rgb_only.png"
     write_png_pixels(opaque_source, 4, 4, 2, colors)
@@ -354,7 +378,7 @@ def main() -> int:
     require_matching_payloads(opaque, output_dir / "white_reference.tex", "missing original alpha")
 
     # Uniform planes make cube face and volume slice ordering observable without depending on lossy edge fitting.
-    for dimension, count, width, height in (("cube", 6, 2, 2), ("volume", 3, 4, 2)):
+    for dimension, count, width, height in ((LIT_CUBE, 6, 2, 2), (LIT_VOLUME, 3, 4, 2)):
         inputs, expected = [], []
         for plane in range(count):
             path = output_dir / f"{dimension}_{plane}.png"
@@ -363,7 +387,7 @@ def main() -> int:
             inputs.append(path)
             expected.extend(normalized((pixel,) * (width * height)))
         result = run_conversion(args.tex_conv, output_dir, dimension, tuple(inputs), f"--{dimension}")
-        if read_raw_pair(result)["dimension"] != (1 if dimension == "cube" else 2):
+        if read_raw_pair(result)[LIT_DIMENSION] != (1 if dimension == LIT_CUBE else 2):
             raise AssertionError(f"wrong prepared {dimension} dimension")
         require_pixels(decode_pixels(args.prepared_decode, result), tuple(expected))
 
@@ -372,17 +396,17 @@ def main() -> int:
     write_radiance_hdr_pixels(radiance_path, 4, 2, radiance_pixels)
     radiance = run_conversion(args.tex_conv, output_dir, "radiance", (radiance_path,))
     require_pixels(decode_pixels(args.prepared_decode, radiance), radiance_pixels, absolute=0.025, relative=0.05)
-    if read_raw_pair(radiance)["alpha_mode"] != 0:
+    if read_raw_pair(radiance)[LIT_ALPHA_MODE] != 0:
         raise AssertionError("opaque HDR alpha was not inferred")
-    for mode, alpha in (("white", 1.0), ("black", 0.0)):
-        result = run_conversion(args.tex_conv, output_dir, f"radiance_{mode}", (radiance_path,), "--alpha", mode)
+    for mode, alpha in ((LIT_WHITE, 1.0), (LIT_BLACK, 0.0)):
+        result = run_conversion(args.tex_conv, output_dir, f"radiance_{mode}", (radiance_path,), LIT_ALPHA, mode)
         require_pixels(decode_pixels(args.prepared_decode, result), tuple((*pixel[:3], alpha) for pixel in radiance_pixels), absolute=0.025, relative=0.05)
-        if mode == "white":
+        if mode == LIT_WHITE:
             require_matching_payloads(result, radiance, "HDR alpha white")
-        elif read_raw_pair(result)["alpha_mode"] != 2 or read_raw_pair(result)["alpha_constant"] != 0:
+        elif read_raw_pair(result)[LIT_ALPHA_MODE] != 2 or read_raw_pair(result)[LIT_ALPHA_CONSTANT] != 0:
             raise AssertionError("zero HDR alpha did not use its constant transport")
 
-    for dimension, count in (("cube", 6), ("volume", 3)):
+    for dimension, count in ((LIT_CUBE, 6), (LIT_VOLUME, 3)):
         inputs, expected = [], []
         for plane in range(count):
             path = output_dir / f"hdr_{dimension}_{plane}.hdr"
@@ -391,18 +415,18 @@ def main() -> int:
             inputs.append(path)
             expected.extend((pixel,) * 4)
         result = run_conversion(args.tex_conv, output_dir, f"hdr_{dimension}", tuple(inputs), f"--{dimension}")
-        if read_raw_pair(result)["format"] != 1:
+        if read_raw_pair(result)[LIT_FORMAT] != 1:
             raise AssertionError(f"HDR {dimension} lost its HDR payload")
         require_pixels(decode_pixels(args.prepared_decode, result), tuple(expected), absolute=0.025, relative=0.05)
 
     # Actual EXR channel declarations distinguish real equal-valued RGBA alpha from single-channel luminance.
     equal = tuple((value,) * 4 for value in (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 0.25))
-    exr_cases = (("equal_rgba_constant", ((0.5,) * 4,) * 8, ("A", "B", "G", "R"), 2), ("equal_rgba_varying", equal, ("A", "B", "G", "R"), 3), ("single_luminance", equal, ("Y",), 0))
+    exr_cases = (("equal_rgba_constant", ((0.5,) * 4,) * 8, (LIT_A, LIT_B, LIT_G, LIT_R), 2), ("equal_rgba_varying", equal, (LIT_A, LIT_B, LIT_G, LIT_R), 3), ("single_luminance", equal, (LIT_Y,), 0))
     for name, pixels, channels, alpha_mode in exr_cases:
         path = output_dir / f"{name}.exr"
         write_openexr(path, pixels, channels)
         result = run_conversion(args.tex_conv, output_dir, name, (path,))
-        if read_raw_pair(result)["alpha_mode"] != alpha_mode:
+        if read_raw_pair(result)[LIT_ALPHA_MODE] != alpha_mode:
             raise AssertionError(f"EXR channel metadata changed alpha transport: {name}")
         expected = tuple((*pixel[:3], 1.0) for pixel in pixels) if len(channels) == 1 else pixels
         require_pixels(decode_pixels(args.prepared_decode, result), expected, absolute=0.04, relative=0.05)
@@ -419,7 +443,7 @@ def main() -> int:
         write_openexr(path, pixels, channel_types=pixel_types)
         result = run_conversion(args.tex_conv, output_dir, name, (path,))
         description = read_raw_pair(result)
-        if description["format"] != 1 or description["alpha_mode"] != alpha_mode:
+        if description[LIT_FORMAT] != 1 or description[LIT_ALPHA_MODE] != alpha_mode:
             raise AssertionError(f"EXR integer channel types changed HDR or alpha transport: {name}")
         require_pixels(decode_pixels(args.prepared_decode, result), pixels, absolute=0.04, relative=0.05)
 
@@ -431,7 +455,7 @@ def main() -> int:
         first = list(valid_pixels[0])
         first[channel] = value
         write_openexr(invalid_path, (tuple(first), *valid_pixels[1:]))
-        invalid = subprocess.run([args.tex_conv, str(invalid_path), "--force", "--output", str(prepared.with_suffix(".nwb"))], cwd=output_dir, text=True, capture_output=True)
+        invalid = subprocess.run([args.tex_conv, str(invalid_path), LIT_FORCE, LIT_OUTPUT, str(prepared.with_suffix(".nwb"))], cwd=output_dir, text=True, capture_output=True)
         if invalid.returncode != 1:
             raise AssertionError(f"invalid float channel {channel}: {value} was accepted\n{invalid.stdout}\n{invalid.stderr}")
         if (prepared.with_suffix(".nwb").read_bytes(), prepared.read_bytes()) != original_pair:

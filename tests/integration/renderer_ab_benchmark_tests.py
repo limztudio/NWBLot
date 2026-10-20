@@ -18,6 +18,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_ab_benchmark as benchmark
 from smoke_volume_identity import volume_segment_filename
 
+LIT_A = "a"
+LIT_B = "b"
+LIT_ELIGIBLE = "eligible"
+LIT_RETAINED_REPORT_RANGE = "retained_report_range"
+LIT_FRAMES = "frames"
+LIT_SECONDS = "seconds"
+LIT_MEAN_FRAME_MS = "mean_frame_ms"
+LIT_MEAN_FPS = "mean_fps"
+LIT_MIN_FRAME_MS = "min_frame_ms"
+LIT_MAX_FRAME_MS = "max_frame_ms"
+LIT_REFLECTION_OPTICAL_CSG_CAP = "reflection-optical-csg-cap"
+LIT_WALL_FRAME = "wall_frame"
+LIT_FRAME_MS_DELTA = "frame_ms_delta"
+LIT_NATURAL_HARDWARE_SHADOW_ROUTE = "natural hardware shadow route"
+LIT_NATURAL_HYBRID_SHADOW_ROUTE = "natural hybrid shadow route"
+LIT_R = "r"
+LIT_B_ORIGINAL_FAILURE_EVIDENCE = b"original failure evidence"
+
 LIT_TOTAL_MS = "total_ms"
 LIT_GPU_SAMPLES = "gpu_samples"
 LIT_REPORTS = "reports"
@@ -187,7 +205,7 @@ def make_arm(directory, name):
 
 def trial_matrix(frame_delta=-.5):
     workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
-    arms = (benchmark.Arm(LIT_BASELINE, Path("a"), Path("a_runtime"), Path("a.json")), benchmark.Arm(LIT_CANDIDATE, Path("b"), Path("b_runtime"), Path("b.json")))
+    arms = (benchmark.Arm(LIT_BASELINE, Path(LIT_A), Path("a_runtime"), Path("a.json")), benchmark.Arm(LIT_CANDIDATE, Path(LIT_B), Path("b_runtime"), Path("b.json")))
     orders = [[arm.name for arm in row] for row in benchmark.balanced_orders(arms, 8, 0)]
     trials = []
     for block, row in enumerate(orders):
@@ -259,36 +277,36 @@ class WallFrameEvidenceTests(unittest.TestCase):
         workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
         text, timing = self.reports(((30, .5), (30, .5), (100, .5), (30, .6), (900, .6)))
         value = benchmark.summarize_wall_frames(text.replace("\n", "\r\n"), timing, workload, [2, 4])
-        self.assertTrue(value["eligible"])
-        self.assertEqual(value["retained_report_range"], [2, 4])
-        self.assertEqual(value["frames"], 130)
-        self.assertEqual(value["reports"], 2)
-        self.assertAlmostEqual(value["seconds"], 1.1)
-        self.assertAlmostEqual(value["mean_frame_ms"], 1100 / 130)
-        self.assertAlmostEqual(value["mean_fps"], 130 / 1.1)
-        self.assertEqual(value["min_frame_ms"], 2.5)
-        self.assertEqual(value["max_frame_ms"], 40)
+        self.assertTrue(value[LIT_ELIGIBLE])
+        self.assertEqual(value[LIT_RETAINED_REPORT_RANGE], [2, 4])
+        self.assertEqual(value[LIT_FRAMES], 130)
+        self.assertEqual(value[LIT_REPORTS], 2)
+        self.assertAlmostEqual(value[LIT_SECONDS], 1.1)
+        self.assertAlmostEqual(value[LIT_MEAN_FRAME_MS], 1100 / 130)
+        self.assertAlmostEqual(value[LIT_MEAN_FPS], 130 / 1.1)
+        self.assertEqual(value[LIT_MIN_FRAME_MS], 2.5)
+        self.assertEqual(value[LIT_MAX_FRAME_MS], 40)
 
     def test_long_positive_frames_are_retained_and_weighted_without_a_duration_cutoff(self):
-        workload = benchmark.workloads()["reflection-optical-csg-cap"]
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CSG_CAP]
         text, timing = self.reports(((30, .5), (30, .5), (2, .6), (1, .9), (900, .6)))
         value = benchmark.summarize_wall_frames(text, timing, workload, [2, 4])
-        self.assertEqual(value["retained_report_range"], [2, 4])
-        self.assertEqual(value["frames"], 3)
-        self.assertEqual(value["reports"], 2)
-        self.assertAlmostEqual(value["seconds"], 1.5)
-        self.assertAlmostEqual(value["mean_frame_ms"], 500)
-        self.assertAlmostEqual(value["mean_fps"], 2)
-        self.assertAlmostEqual(value["min_frame_ms"], 150)
-        self.assertAlmostEqual(value["max_frame_ms"], 1800)
+        self.assertEqual(value[LIT_RETAINED_REPORT_RANGE], [2, 4])
+        self.assertEqual(value[LIT_FRAMES], 3)
+        self.assertEqual(value[LIT_REPORTS], 2)
+        self.assertAlmostEqual(value[LIT_SECONDS], 1.5)
+        self.assertAlmostEqual(value[LIT_MEAN_FRAME_MS], 500)
+        self.assertAlmostEqual(value[LIT_MEAN_FPS], 2)
+        self.assertAlmostEqual(value[LIT_MIN_FRAME_MS], 150)
+        self.assertAlmostEqual(value[LIT_MAX_FRAME_MS], 1800)
 
     def test_long_positive_maximum_does_not_discard_an_otherwise_consistent_interval(self):
         workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
         text, timing = self.reports(((30, .5), (30, .5), (100, .5), (100, .5)))
         value = benchmark.summarize_wall_frames(text.replace("max=10", "max=251", 1), timing, workload, [2, 4])
-        self.assertEqual(value["frames"], 200)
-        self.assertAlmostEqual(value["mean_frame_ms"], 5)
-        self.assertEqual(value["max_frame_ms"], 251)
+        self.assertEqual(value[LIT_FRAMES], 200)
+        self.assertAlmostEqual(value[LIT_MEAN_FRAME_MS], 5)
+        self.assertEqual(value[LIT_MAX_FRAME_MS], 251)
 
     def test_missing_malformed_nonfinite_and_inconsistent_reports_are_refused(self):
         workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CLEAR]
@@ -310,12 +328,12 @@ class WallFrameEvidenceTests(unittest.TestCase):
         for name in (LIT_TRANSPARENT_MULTI, LIT_SHADOW_ZERO_EXTENT, LIT_CAUSTIC_POPULATED):
             value = benchmark.summarize_wall_frames("", "", benchmark.workloads()[name], [2, 8])
             with self.subTest(workload=name):
-                self.assertFalse(value["eligible"])
+                self.assertFalse(value[LIT_ELIGIBLE])
                 self.assertIn("fixed simulation delta", value["reason"])
         workload, orders, trials = trial_matrix()
         for trial in trials:
-            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": 1, "mean_fps": 1000}
-        self.assertFalse(benchmark.compare_trials(trials, orders, workload)["wall_frame"]["eligible"])
+            trial[LIT_WALL_FRAME] = {LIT_ELIGIBLE: True, LIT_MEAN_FRAME_MS: 1, LIT_MEAN_FPS: 1000}
+        self.assertFalse(benchmark.compare_trials(trials, orders, workload)[LIT_WALL_FRAME][LIT_ELIGIBLE])
 
     def test_ten_positive_frame_reports_in_one_trial_cannot_resolve_a_change(self):
         workload, orders, trials = trial_matrix()
@@ -329,11 +347,11 @@ class WallFrameEvidenceTests(unittest.TestCase):
         for trial in trials:
             trial[LIT_SCOPES] = scopes(workload)
             frame_ms = 5 if trial[LIT_ARM] == LIT_BASELINE else 4
-            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": frame_ms, "mean_fps": 1000 / frame_ms}
-        value = benchmark.compare_trials(trials, orders, workload)["wall_frame"]
-        self.assertTrue(value["eligible"])
-        self.assertEqual(value["frame_ms_delta"]["blocks"], 8)
-        self.assertEqual(value["frame_ms_delta"]["ci95_mean_ms"], [-1, -1])
+            trial[LIT_WALL_FRAME] = {LIT_ELIGIBLE: True, LIT_MEAN_FRAME_MS: frame_ms, LIT_MEAN_FPS: 1000 / frame_ms}
+        value = benchmark.compare_trials(trials, orders, workload)[LIT_WALL_FRAME]
+        self.assertTrue(value[LIT_ELIGIBLE])
+        self.assertEqual(value[LIT_FRAME_MS_DELTA]["blocks"], 8)
+        self.assertEqual(value[LIT_FRAME_MS_DELTA]["ci95_mean_ms"], [-1, -1])
         self.assertEqual(value["fps_delta"]["ci95_mean_fps"], [50, 50])
         self.assertEqual(value["means"][LIT_CANDIDATE], {"frame_ms": 4, "fps": 250})
         with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_EVERY_PLANNED_TRIAL):
@@ -341,7 +359,7 @@ class WallFrameEvidenceTests(unittest.TestCase):
         for omitted in (1, len(trials)):
             invalid = copy.deepcopy(trials)
             for trial in invalid[:omitted]:
-                del trial["wall_frame"]
+                del trial[LIT_WALL_FRAME]
             with self.subTest(omitted=omitted), self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial.*qualified reports"):
                 benchmark.compare_trials(invalid, orders, workload)
 
@@ -396,15 +414,15 @@ class WorkloadPolicyTests(unittest.TestCase):
         for altered in (log_text().replace(marker, ""), log_text() + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
-        retired = log_text().replace("natural hardware shadow route", "natural hybrid shadow route")
-        retired_route = next(line for line in retired.splitlines() if "natural hybrid shadow route" in line)
+        retired = log_text().replace(LIT_NATURAL_HARDWARE_SHADOW_ROUTE, LIT_NATURAL_HYBRID_SHADOW_ROUTE)
+        retired_route = next(line for line in retired.splitlines() if LIT_NATURAL_HYBRID_SHADOW_ROUTE in line)
         for altered in (retired, log_text() + "\n" + retired_route):
             for require_hardware in (False, True):
                 with self.subTest(hardware=require_hardware), self.assertRaises(benchmark.SmokeFailure):
                     benchmark.transparent_multi_log(altered, workload, require_hardware)
 
     def test_cli_rejects_lower_coverage_and_unbalanced_plans(self):
-        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+        common = [LIT_BASELINE_EXECUTABLE, LIT_A, LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, LIT_B, LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         for extra in ((LIT_BLOCKS, "7"), (LIT_BLOCKS, "6"), ("--warmup-intervals", "1"), ("--sample-intervals", "10"), ("--minimum-frame-samples", "99"), ("--timeout", LIT_NAN), ("--application-arg=--gpudbg",)):
             with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -481,7 +499,7 @@ def soft_shadow_log_text(workload, route=LIT_HARDWARE):
     values = dict(workload.environment_overrides)
     return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1", "ShadowTimingProbe: caustic emission 0", LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE, f"ShadowTimingProbe: natural shadow route {route}",
         LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA,
-        f"ShadowTimingProbe: source extents angular={values['NWB_SOFT_SHADOW_TEST_ANGLE']} radius={values['NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS']}",
+        f"ShadowTimingProbe: source extents angular={values[LIT_NWB_SOFT_SHADOW_TEST_ANGLE]} radius={values[LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS]}",
         "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad", LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG, LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
         LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN))
 
@@ -570,7 +588,7 @@ class FrozenIdentityTests(unittest.TestCase):
             (root / LIT_SOURCE_CPP).write_text("changed", encoding=LIT_UTF_8)
             with self.assertRaisesRegex(benchmark.SmokeFailure, "source bytes"):
                 benchmark.source_identity(manifest)
-            for document in ([], {LIT_REVISION: "r", LIT_FILES: {}}, {LIT_REVISION: "r", LIT_FILES: {"x": "invalid"}}):
+            for document in ([], {LIT_REVISION: LIT_R, LIT_FILES: {}}, {LIT_REVISION: LIT_R, LIT_FILES: {"x": "invalid"}}):
                 manifest.write_text(json.dumps(document), encoding=LIT_UTF_8)
                 with self.assertRaises(benchmark.SmokeFailure):
                     benchmark.source_identity(manifest)
@@ -612,8 +630,8 @@ class FrozenIdentityTests(unittest.TestCase):
     def test_shared_or_hard_linked_caches_are_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            first = make_arm(root / "a", LIT_BASELINE)
-            second = make_arm(root / "b", LIT_CANDIDATE)
+            first = make_arm(root / LIT_A, LIT_BASELINE)
+            second = make_arm(root / LIT_B, LIT_CANDIDATE)
             with self.assertRaisesRegex(benchmark.SmokeFailure, "distinct"):
                 benchmark.validate_arm_separation((first, first))
             benchmark.validate_arm_separation((first, second))
@@ -752,10 +770,10 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 workload.validate_log(changed, workload, True)
 
     def test_declared_native_dispatch_count_never_changes_range_coverage(self):
-        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+        common = [LIT_BASELINE_EXECUTABLE, LIT_A, LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, LIT_B, LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         for count in (2, 169):
-            args = benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap", LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, str(count)])
+            args = benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CSG_CAP, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, str(count)])
             workload = benchmark.workloads()[args.workload]
             value = scopes(workload)
             benchmark.validate_coverage(value, workload, 6, 100)
@@ -764,20 +782,20 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 benchmark.validate_coverage(value, workload, 6, 100)
         for invalid in ("0", "-1", "1382401"):
             with self.subTest(native_calls=invalid), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                benchmark.parse_args(common + [LIT_WORKLOAD, "reflection-optical-csg-cap", LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, invalid])
+                benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CSG_CAP, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, invalid])
         for name in (LIT_TRANSPARENT_MULTI, LIT_REFLECTION_SCREEN_DEPTH, LIT_REFLECTION_ROUGH_FILTERED):
             with self.subTest(workload=name), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(common + [LIT_WORKLOAD, name, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, "2"])
 
     def test_sliced_long_hardware_range_retains_all_work_in_per_frame_and_paired_times(self):
-        workload = benchmark.workloads()["reflection-optical-csg-cap"]
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_CSG_CAP]
         _, orders, trials = trial_matrix()
         for trial in trials:
             candidate = trial[LIT_ARM] == LIT_CANDIDATE
             trial["native_hardware_dispatches_per_range"] = 169 if candidate else 1
             frame_ms = 2400 if candidate else 100
             trial[LIT_SCOPES] = scopes(workload, frame_ms=frame_ms)
-            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": frame_ms, "mean_fps": 1000 / frame_ms}
+            trial[LIT_WALL_FRAME] = {LIT_ELIGIBLE: True, LIT_MEAN_FRAME_MS: frame_ms, LIT_MEAN_FPS: 1000 / frame_ms}
             hardware = trial[LIT_SCOPES][benchmark.reflection.HARDWARE]
             hardware[LIT_MEAN_MS] = 2351 if candidate else 50
             hardware[LIT_TOTAL_MS] = hardware[LIT_MEAN_MS] * hardware[LIT_GPU_SAMPLES]
@@ -794,7 +812,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
         for trial in trials:
             frame_ms = 5 if trial[LIT_ARM] == LIT_BASELINE else 4.5
             trial[LIT_SCOPES] = scopes(workload, frame_ms=frame_ms)
-            trial["wall_frame"] = {"eligible": True, "mean_frame_ms": frame_ms, "mean_fps": 1000 / frame_ms}
+            trial[LIT_WALL_FRAME] = {LIT_ELIGIBLE: True, LIT_MEAN_FRAME_MS: frame_ms, LIT_MEAN_FPS: 1000 / frame_ms}
             if trial[LIT_ARM] == LIT_CANDIDATE:
                 trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_MEAN_MS] = .4
                 trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_TOTAL_MS] = .4 * 200 * 10
@@ -858,10 +876,10 @@ class CausticMeasurementTests(unittest.TestCase):
         settings = dict(workload.environment_overrides)
         text = caustic_log_text()
         hardware_marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
-        legacy = text.replace("natural hardware shadow route", "natural hybrid shadow route").replace(hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
+        legacy = text.replace(LIT_NATURAL_HARDWARE_SHADOW_ROUTE, LIT_NATURAL_HYBRID_SHADOW_ROUTE).replace(hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.caustic.validate_log(legacy, settings)
-        retired_route = next(line for line in legacy.splitlines() if "natural hybrid shadow route" in line)
+        retired_route = next(line for line in legacy.splitlines() if LIT_NATURAL_HYBRID_SHADOW_ROUTE in line)
         for altered in (legacy, text + "\n" + retired_route):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 workload.validate_log(altered, workload, True)
@@ -914,7 +932,7 @@ class CausticMeasurementTests(unittest.TestCase):
             benchmark.caustic.validate_metrics({LIT_POPULATED: good[LIT_POPULATED], LIT_SPARSE: good[LIT_POPULATED]})
 
     def test_caustic_cli_requires_both_frozen_arm_qualification_reports(self):
-        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+        common = [LIT_BASELINE_EXECUTABLE, LIT_A, LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON, LIT_CANDIDATE_EXECUTABLE, LIT_B, LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         proofs = ["--baseline-caustic-qualification", "aqual.json", "--candidate-caustic-qualification", "bqual.json"]
         for partial in ([], proofs[:2], proofs[2:]):
@@ -939,13 +957,13 @@ class CausticMeasurementTests(unittest.TestCase):
             output = directory / "old_evidence"
             output.mkdir()
             saved = output / LIT_FAILURE_JSON
-            saved.write_bytes(b"original failure evidence")
+            saved.write_bytes(LIT_B_ORIGINAL_FAILURE_EVIDENCE)
             argv = ["--executable", str(directory / "bin" / LIT_FIXTURE_EXE), "--runtime", str(directory / LIT_RUNTIME), "--source-manifest", str(directory / LIT_SOURCE / LIT_SOURCE_JSON),
                 LIT_LOGSERVER_EXECUTABLE, str(directory / LIT_LOGGER / LIT_LOGGER_EXE), LIT_OUTPUT_DIRECTORY, str(output)]
             with patch.object(benchmark.caustic.subprocess, "run") as launch, contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(benchmark.caustic.main(argv), 1)
             launch.assert_not_called()
-            self.assertEqual(saved.read_bytes(), b"original failure evidence")
+            self.assertEqual(saved.read_bytes(), LIT_B_ORIGINAL_FAILURE_EVIDENCE)
             self.assertEqual(sorted(path.name for path in output.iterdir()), [LIT_FAILURE_JSON])
 
     def test_caustic_output_overlap_rejected_in_both_directions(self):

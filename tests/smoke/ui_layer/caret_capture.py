@@ -9,6 +9,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from window_capture_smoke import SmokeFailure, ensure_process_running  # noqa: E402
 
+# A blink-on sample must follow an observed off phase within this window.
+CARET_PHASE_WINDOW_SECONDS = 0.15
+CARET_POLL_SECONDS = 0.025
+
 
 def wait_for_caret_phase(backend, handle, process, samples, deadline):
     off_at = None
@@ -21,7 +25,7 @@ def wait_for_caret_phase(backend, handle, process, samples, deadline):
         now = time.monotonic()
         if not visible:
             off_at = now
-        elif off_at is not None and now - off_at < 0.15:
+        elif off_at is not None and now - off_at < CARET_PHASE_WINDOW_SECONDS:
             return
-        time.sleep(0.025)
+        time.sleep(CARET_POLL_SECONDS)
     raise SmokeFailure("caret did not enter its visible phase before the displayed-state deadline")

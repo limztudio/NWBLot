@@ -14,6 +14,20 @@ from fixture_environment import (  # noqa: E402
 from probe_reference import (  # noqa: E402
     authored_texel, compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile,)
 
+LIT_PATH = "PATH"
+LIT_LOADER_PATH = "loader-path"
+LIT_NWB_LINUX_BACKEND = "NWB_LINUX_BACKEND"
+LIT_WAYLAND = "wayland"
+LIT_ALTERNATE = "alternate"
+LIT_DEFAULT = "default"
+LIT_PRESERVED = "preserved"
+LIT_EDIT = "EDIT"
+LIT_FIXTURE_ENVIRONMENT_PLATFORM_SYSTEM = "fixture_environment.platform.system"
+LIT_NWB_UI_IR_REPLAY = "NWB_UI_IR_REPLAY"
+LIT_NWB_UI_LAYER_RESIZE_CAPTURE = "NWB_UI_LAYER_RESIZE_CAPTURE"
+LIT_DOT = "dot"
+LIT_PANEL = "panel"
+
 
 class UiFixtureEnvironmentTests(unittest.TestCase):
     def test_inherited_selectors_and_capture_controls_cannot_override_selected_fixture(self):
@@ -21,11 +35,11 @@ class UiFixtureEnvironmentTests(unittest.TestCase):
         inherited.update({f"NWB_UI_LAYER_{fixture}_SKIN": "1" for fixture in SKIN_FIXTURES})
         inherited.update({name: "1" for name in AUXILIARY_SWITCHES})
         inherited.update({name: "stale" for name in CAPTURE_ENVIRONMENT})
-        inherited.update({"PATH": "loader-path", "NWB_LINUX_BACKEND": "wayland"})
+        inherited.update({LIT_PATH: LIT_LOADER_PATH, LIT_NWB_LINUX_BACKEND: LIT_WAYLAND})
         frozen = dict(inherited)
         for fixture in (None, *FIXTURE_FLAGS):
             with self.subTest(fixture=fixture):
-                skin = "alternate" if fixture in SKIN_FIXTURES else "default"
+                skin = LIT_ALTERNATE if fixture in SKIN_FIXTURES else LIT_DEFAULT
                 environment = build_fixture_environment(inherited, fixture, skin=skin)
                 active = [name for name in FIXTURE_FLAGS if environment[f"NWB_UI_LAYER_{name}"] == "1"]
                 self.assertEqual(active, [] if fixture is None else [fixture])
@@ -33,41 +47,41 @@ class UiFixtureEnvironmentTests(unittest.TestCase):
                 self.assertEqual(active_skins, [fixture] if fixture in SKIN_FIXTURES else [])
                 self.assertTrue(all(environment[name] == "0" for name in AUXILIARY_SWITCHES))
                 self.assertTrue(all(name not in environment for name in CAPTURE_ENVIRONMENT))
-                self.assertEqual(environment["PATH"], "loader-path")
-                self.assertEqual(environment["NWB_LINUX_BACKEND"], "wayland")
+                self.assertEqual(environment[LIT_PATH], LIT_LOADER_PATH)
+                self.assertEqual(environment[LIT_NWB_LINUX_BACKEND], LIT_WAYLAND)
                 self.assertEqual(inherited, frozen)
 
     def test_unknown_or_incoherent_selection_fails_without_mutating_inherited_state(self):
-        inherited = {"PATH": "preserved"}
-        for fixture, skin in (("missing", "default"), ("image", "default"), ("", "default"), ("IMAGE", "unknown"), (None, "alternate"), ("EDIT", "alternate"), ("INTERACTIVE", "alternate")):
+        inherited = {LIT_PATH: LIT_PRESERVED}
+        for fixture, skin in (("missing", LIT_DEFAULT), ("image", LIT_DEFAULT), ("", LIT_DEFAULT), ("IMAGE", "unknown"), (None, LIT_ALTERNATE), (LIT_EDIT, LIT_ALTERNATE), ("INTERACTIVE", LIT_ALTERNATE)):
             with self.subTest(fixture=fixture, skin=skin), self.assertRaises(ValueError):
                 build_fixture_environment(inherited, fixture, skin=skin)
-        self.assertEqual(inherited, {"PATH": "preserved"})
+        self.assertEqual(inherited, {LIT_PATH: LIT_PRESERVED})
 
     def test_x11_admission_is_explicit_and_does_not_change_other_platform_selection(self):
-        inherited = {"NWB_LINUX_BACKEND": "wayland"}
-        with patch("fixture_environment.platform.system", return_value="Linux"):
-            self.assertEqual(build_fixture_environment(inherited, "EDIT")["NWB_LINUX_BACKEND"], "wayland")
-            self.assertEqual(build_fixture_environment(inherited, "EDIT", force_x11=True)["NWB_LINUX_BACKEND"], "x11")
-        with patch("fixture_environment.platform.system", return_value="Windows"):
-            self.assertEqual(build_fixture_environment(inherited, "EDIT", force_x11=True)["NWB_LINUX_BACKEND"], "wayland")
-        self.assertEqual(inherited["NWB_LINUX_BACKEND"], "wayland")
+        inherited = {LIT_NWB_LINUX_BACKEND: LIT_WAYLAND}
+        with patch(LIT_FIXTURE_ENVIRONMENT_PLATFORM_SYSTEM, return_value="Linux"):
+            self.assertEqual(build_fixture_environment(inherited, LIT_EDIT)[LIT_NWB_LINUX_BACKEND], LIT_WAYLAND)
+            self.assertEqual(build_fixture_environment(inherited, LIT_EDIT, force_x11=True)[LIT_NWB_LINUX_BACKEND], "x11")
+        with patch(LIT_FIXTURE_ENVIRONMENT_PLATFORM_SYSTEM, return_value="Windows"):
+            self.assertEqual(build_fixture_environment(inherited, LIT_EDIT, force_x11=True)[LIT_NWB_LINUX_BACKEND], LIT_WAYLAND)
+        self.assertEqual(inherited[LIT_NWB_LINUX_BACKEND], LIT_WAYLAND)
 
     def test_replay_scene_re_admits_only_its_explicit_current_switch(self):
         from raster_ir_parity_smoke import capture_environment
         from types import SimpleNamespace
         inherited = {f"NWB_UI_LAYER_{name}": "1" for name in FIXTURE_FLAGS}
-        inherited.update({"NWB_UI_IR_REPLAY": "1", "NWB_UI_LAYER_RESIZE_CAPTURE": "1"})
-        args = SimpleNamespace(mode_environment="NWB_UI_IR_REPLAY")
+        inherited.update({LIT_NWB_UI_IR_REPLAY: "1", LIT_NWB_UI_LAYER_RESIZE_CAPTURE: "1"})
+        args = SimpleNamespace(mode_environment=LIT_NWB_UI_IR_REPLAY)
         with patch.dict("os.environ", inherited, clear=True):
             direct = capture_environment(args, "paint", "direct")
             replay = capture_environment(args, "texture_image", "replay")
         self.assertTrue(all(direct[f"NWB_UI_LAYER_{name}"] == "0" for name in FIXTURE_FLAGS))
-        self.assertEqual(direct["NWB_UI_IR_REPLAY"], "0")
-        self.assertEqual(replay["NWB_UI_IR_REPLAY"], "1")
+        self.assertEqual(direct[LIT_NWB_UI_IR_REPLAY], "0")
+        self.assertEqual(replay[LIT_NWB_UI_IR_REPLAY], "1")
         self.assertEqual(replay["NWB_UI_LAYER_TEXTURE_IMAGE"], "1")
         self.assertEqual(replay["NWB_UI_LAYER_TEXTURE_IMAGE_SKIN"], "1")
-        self.assertEqual(replay["NWB_UI_LAYER_RESIZE_CAPTURE"], "0")
+        self.assertEqual(replay[LIT_NWB_UI_LAYER_RESIZE_CAPTURE], "0")
         self.assertTrue(all(replay[f"NWB_UI_LAYER_{name}"] == "0" for name in FIXTURE_FLAGS if name != "TEXTURE_IMAGE"))
 
 
@@ -86,18 +100,18 @@ class UiProbeReferenceTests(unittest.TestCase):
                 self.assertEqual(compose((0.9, 0.1, 0.3), alpha, tint, background), background)
 
     def test_outside_authored_tile_and_transparent_corners_have_zero_color_and_alpha(self):
-        for kind in ("dot", "panel"):
+        for kind in (LIT_DOT, LIT_PANEL):
             for x, y in ((-1, 12), (24, 12), (12, -1), (12, 24), (0, 0)):
                 self.assertEqual(authored_texel(kind, x, y, (53, 131, 192), (97, 176, 233)), ((0.0, 0.0, 0.0), 0.0))
 
     def test_partial_dot_edge_keeps_straight_color_with_quantized_coverage(self):
-        source, alpha = authored_texel("dot", 7, 9, (0, 0, 0), (0, 0, 0))
+        source, alpha = authored_texel(LIT_DOT, 7, 9, (0, 0, 0), (0, 0, 0))
         self.assertEqual(linear_rgb_bytes(source), (235, 245, 255))
         self.assertEqual(alpha, 80 / 255)
 
     def test_partial_uv_crop_matches_corresponding_full_tile_pixels(self):
         fill, border = (53, 131, 192), (97, 176, 233)
-        for kind in ("dot", "panel"):
+        for kind in (LIT_DOT, LIT_PANEL):
             for x, y in ((0, 0), (3, 4), (6, 7), (11, 11)):
                 cropped = sampled_tile(kind, (0, 0, 12, 12), (x, y), (1, 1), fill, border, crop=(12, 12, 12, 12))
                 full = sampled_tile(kind, (0, 0, 24, 24), (x + 12, y + 12), (1, 1), fill, border)

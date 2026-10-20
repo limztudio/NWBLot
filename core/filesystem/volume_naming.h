@@ -23,6 +23,8 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_VolumeSegmentExtension = ".vol";
+
 [[nodiscard]] inline bool ValidVolumeName(const AStringView volumeName)noexcept{
     if(volumeName.empty())
         return false;
@@ -44,7 +46,7 @@ NWB_FILESYSTEM_BEGIN
     hash = UpdateFnv64TextExact(hash, volumeName);
     hash = UpdateFnv64TextExact(hash, AStringView("_"));
     hash = UpdateFnv64TextExact(hash, segmentIndexText);
-    hash = UpdateFnv64TextExact(hash, AStringView(".vol"));
+    hash = UpdateFnv64TextExact(hash, s_VolumeSegmentExtension);
     return hash;
 }
 
@@ -53,7 +55,7 @@ NWB_FILESYSTEM_BEGIN
 
     ACompactString fileName;
     AppendHexU64(hash, fileName);
-    fileName += ".vol";
+    fileName += s_VolumeSegmentExtension;
     return fileName;
 }
 

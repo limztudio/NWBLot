@@ -7,6 +7,10 @@ import time
 from guarded_native import GuardedNativeInput
 from window_capture_smoke import SmokeFailure
 
+LIT_REQUESTED_CLIENT = "requested_client"
+LIT_CURSOR_SCREEN = "cursor_screen"
+LIT_REQUESTED_SCREEN = "requested_screen"
+
 
 COMMAND_KEYS = { "fence_value": "F4", "toggle_range": "F5", "toggle_step": "F6", "toggle_enabled": "F7", "set_quarter": "F8", "close_parent": "F9", }
 
@@ -41,14 +45,14 @@ class SliderNativeInput(GuardedNativeInput):
     def maintain_pointer(self):
         before = self.observe_window()
         super().maintain_pointer()
-        if self.windows and before.get("requested_client") is not None:
-            if before.get("cursor_screen") == before.get("requested_screen"):
+        if self.windows and before.get(LIT_REQUESTED_CLIENT) is not None:
+            if before.get(LIT_CURSOR_SCREEN) == before.get(LIT_REQUESTED_SCREEN):
                 return
             self.record("maintain_pointer_corrected", before=before)
 
     def observe_window(self):
         observation = super().observe_window()
-        observation["requested_client"] = list(self.requested_pointer) if self.requested_pointer is not None else None
+        observation[LIT_REQUESTED_CLIENT] = list(self.requested_pointer) if self.requested_pointer is not None else None
         observation["cursor_guard_screen"] = list(self.cursor_guard) if self.cursor_guard is not None else None
         if not self.windows:
             return observation
@@ -56,8 +60,8 @@ class SliderNativeInput(GuardedNativeInput):
             requested = self.backend.POINT(*self.requested_pointer)
             if not self.backend.user32.ClientToScreen(ctypes.c_void_p(self.handle), ctypes.byref(requested)):
                 raise SmokeFailure("failed to observe the requested slider cursor position")
-            observation["requested_screen"] = [requested.x, requested.y]
-        cursor = observation.get("cursor_screen")
+            observation[LIT_REQUESTED_SCREEN] = [requested.x, requested.y]
+        cursor = observation.get(LIT_CURSOR_SCREEN)
         if cursor is not None:
             observed = self.backend.POINT(*cursor)
             if not self.backend.user32.ScreenToClient(ctypes.c_void_p(self.handle), ctypes.byref(observed)):

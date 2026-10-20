@@ -29,6 +29,37 @@ from probe_reference import encoded_marker  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     ensure_process_running, launch_captured_process, read_process_tail, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_messages,)
 
+LIT_TIMEOUT = "--timeout"
+LIT_RENDER_READY_TIMEOUT = "--render-ready-timeout"
+LIT_CREATE_WINDOWS_USER32 = "create_windows_user32"
+LIT_INVISIBLE_STATION = "invisible station"
+LIT_PASSED = "passed"
+LIT_SKIPPED = "skipped"
+LIT_TEMPORAL_CAPTURE_FAILED_WITH_EXIT_1 = "temporal capture failed with exit 1"
+LIT_RAISE = "raise"
+LIT_FLUSH = "flush"
+LIT_SYNC = "sync"
+LIT_ROOT = "root"
+LIT_CLIENT = "client"
+LIT_SETTLE = "settle"
+LIT_READ = "read"
+LIT_LOG_2 = "log"
+LIT_UNUSED = "unused"
+LIT_PHASE_CAPTURE = "phase_capture"
+LIT_PROBES = "probes"
+LIT_NAME = "name"
+LIT_CARET = "caret"
+LIT_MODEL_MATCHES = "model_matches"
+LIT_GEOMETRY_MATCHES = "geometry_matches"
+LIT_RECTANGLES = "rectangles"
+LIT_MEASURE = "measure"
+LIT_X_TRACK = "x_track"
+LIT_Y_TRACK = "y_track"
+LIT_X_THUMB = "x_thumb"
+LIT_Y_THUMB = "y_thumb"
+LIT_CORNER = "corner"
+LIT_CAPTURE_BEFORE_RESIZE_BMP = "capture.before-resize.bmp"
+
 LIT_UNIT = "unit"
 LIT_CAPTURE = "capture"
 LIT_I = "<I"
@@ -182,7 +213,7 @@ class TimingCaptureConfigurationTests(unittest.TestCase):
     def test_non_finite_timings_are_rejected_for_each_capture_mode(self):
         base_args = [LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
         for mode in ([], [LIT_APPLICATION_CAPTURE], [LIT_WINDOW_HANDLE, "1"], [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701]):
-            options = ["--timeout", "--render-ready-timeout", LIT_SETTLE_SECONDS]
+            options = [LIT_TIMEOUT, LIT_RENDER_READY_TIMEOUT, LIT_SETTLE_SECONDS]
             if LIT_RESIZE_CLIENT in mode:
                 options.append(LIT_RESIZE_SETTLE_SECONDS)
             for option in options:
@@ -197,7 +228,7 @@ class TimingCaptureConfigurationTests(unittest.TestCase):
     def test_zero_settle_is_allowed_but_zero_timeouts_are_rejected(self):
         base_args = [LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
         self.assertEqual(window_capture_smoke.parse_args(base_args + [LIT_SETTLE_SECONDS, "0"]).settle_seconds, 0.0)
-        for option in ("--timeout", "--render-ready-timeout"):
+        for option in (LIT_TIMEOUT, LIT_RENDER_READY_TIMEOUT):
             with self.subTest(option=option), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as rejection:
                 window_capture_smoke.parse_args(base_args + [option, "0"])
             self.assertEqual(rejection.exception.code, 2)
@@ -243,7 +274,7 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
                     user32.GetUserObjectInformationW.assert_not_called()
 
     def test_capture_constructor_checks_the_station_before_loading_gdi(self):
-        with mock.patch.object(window_capture_smoke, "create_windows_user32", return_value=self.user32(0)), \
+        with mock.patch.object(window_capture_smoke, LIT_CREATE_WINDOWS_USER32, return_value=self.user32(0)), \
              mock.patch.object(window_capture_smoke.ctypes, "WinDLL", create=True) as load_dll, \
              self.assertRaises(window_capture_smoke.WindowsDesktopUnavailable):
             window_capture_smoke.WindowsCapture()
@@ -253,7 +284,7 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
         for mode in ([], [LIT_APPLICATION_CAPTURE]):
             with tempfile.TemporaryDirectory() as temp_dir, self.subTest(mode=mode):
                 with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
-                     mock.patch.object(window_capture_smoke, "create_windows_user32", return_value=self.user32(0)), \
+                     mock.patch.object(window_capture_smoke, LIT_CREATE_WINDOWS_USER32, return_value=self.user32(0)), \
                      mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER) as launch_logger, \
                      mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED) as launch_application, \
                      mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS):
@@ -267,21 +298,21 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
             with mock.patch.object(logger_busy_spin_smoke, "os", SimpleNamespace(name="nt")), \
-                 mock.patch.object(logger_busy_spin_smoke, "WindowsCapture", side_effect=window_capture_smoke.WindowsDesktopUnavailable("invisible station")), \
-                 mock.patch.object(logger_busy_spin_smoke, "launch_logserver") as launch_logger, \
-                 mock.patch.object(logger_busy_spin_smoke, "write_status"):
+                 mock.patch.object(logger_busy_spin_smoke, "WindowsCapture", side_effect=window_capture_smoke.WindowsDesktopUnavailable(LIT_INVISIBLE_STATION)), \
+                 mock.patch.object(logger_busy_spin_smoke, LIT_LAUNCH_LOGSERVER) as launch_logger, \
+                 mock.patch.object(logger_busy_spin_smoke, LIT_WRITE_STATUS):
                 code = logger_busy_spin_smoke.main([LIT_EXECUTABLE, sys.executable, "--working-directory", temp_dir, "--output-directory", temp_dir])
             evidence = json.loads((directory / "evidence.json").read_text(encoding=LIT_UTF_8))
             self.assertEqual(code, window_capture_smoke.SKIP_EXIT_CODE)
-            self.assertFalse(evidence["passed"])
-            self.assertTrue(evidence["skipped"])
-            self.assertEqual(evidence["skip_reason"], "invisible station")
+            self.assertFalse(evidence[LIT_PASSED])
+            self.assertTrue(evidence[LIT_SKIPPED])
+            self.assertEqual(evidence["skip_reason"], LIT_INVISIBLE_STATION)
             self.assertEqual(evidence["failures"], [])
             launch_logger.assert_not_called()
 
     def test_native_probe_skips_only_the_unavailable_windows_desktop(self):
         import avboit_depth_warp_probe_smoke
-        for error, expected in ((window_capture_smoke.WindowsDesktopUnavailable("invisible station"), 77), (window_capture_smoke.SmokeSkip("missing device support"), 1), (window_capture_smoke.SmokeFailure("query failed"), 1)):
+        for error, expected in ((window_capture_smoke.WindowsDesktopUnavailable(LIT_INVISIBLE_STATION), 77), (window_capture_smoke.SmokeSkip("missing device support"), 1), (window_capture_smoke.SmokeFailure("query failed"), 1)):
             with tempfile.TemporaryDirectory() as temp_dir, self.subTest(error=error):
                 args = SimpleNamespace(output_directory=Path(temp_dir))
                 with mock.patch.object(avboit_depth_warp_probe_smoke, "parse_args", return_value=args), \
@@ -289,8 +320,8 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
                      redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     self.assertEqual(avboit_depth_warp_probe_smoke.main([]), expected)
                 evidence = json.loads(next(args.output_directory.glob("*/result.json")).read_text(encoding=LIT_UTF_8))
-                self.assertFalse(evidence["passed"])
-                self.assertEqual(evidence.get("skipped", False), expected == 77)
+                self.assertFalse(evidence[LIT_PASSED])
+                self.assertEqual(evidence.get(LIT_SKIPPED, False), expected == 77)
 
 
 class ApplicationCaptureConfigurationTests(unittest.TestCase):
@@ -346,13 +377,13 @@ class TemporalLaggedCapabilityTests(unittest.TestCase):
                     window_capture_smoke.write_bmp_24(capture_args.output, 8, 8, rows)
                     return application_exit, True
 
-                with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
-                     mock.patch.object(window_capture_smoke, "launch_logserver", return_value=(object(), 49152, directory, {}, "*.log")), \
-                     mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
-                     mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", side_effect=wait_for_capture), \
-                     mock.patch.object(window_capture_smoke, "terminate_process", return_value=(application_exit, "")), \
-                     mock.patch.object(window_capture_smoke, "shutdown_logserver_and_collect", return_value=log_text), \
-                     mock.patch.object(window_capture_smoke, "write_status"), \
+                with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
+                     mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, return_value=(object(), 49152, directory, {}, "*.log")), \
+                     mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
+                     mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, side_effect=wait_for_capture), \
+                     mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(application_exit, "")), \
+                     mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=log_text), \
+                     mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
                      redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     return SimpleNamespace(returncode=window_capture_smoke.main(command[2:]))
 
@@ -368,18 +399,18 @@ class TemporalLaggedCapabilityTests(unittest.TestCase):
         for missing in (self.BOOTSTRAP_MARKER, self.HISTORY_MARKER):
             with self.subTest(missing=missing):
                 log_text = self.CAPTURE_LOG + "\n" + (self.HISTORY_MARKER if missing == self.BOOTSTRAP_MARKER else self.BOOTSTRAP_MARKER)
-                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "temporal capture failed with exit 1"):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_TEMPORAL_CAPTURE_FAILED_WITH_EXIT_1):
                     self.capture_with_log(log_text)
         self.assertEqual(self.capture_with_log(self.CAPTURE_LOG + "\n" + self.BOOTSTRAP_MARKER + "\n" + self.HISTORY_MARKER), 0)
 
     def test_capability_skip_cannot_hide_strict_runtime_diagnostics(self):
         for marker in window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES:
             with self.subTest(marker=marker):
-                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "temporal capture failed with exit 1"):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_TEMPORAL_CAPTURE_FAILED_WITH_EXIT_1):
                     self.capture_with_log(self.CAPTURE_LOG + "\n" + self.CAPABILITY_MARKER + "\n" + marker)
 
     def test_capability_skip_cannot_hide_nonzero_application_exit(self):
-        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "temporal capture failed with exit 1"):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_TEMPORAL_CAPTURE_FAILED_WITH_EXIT_1):
             self.capture_with_log(self.CAPTURE_LOG + "\n" + self.CAPABILITY_MARKER, application_exit=9)
 
 
@@ -1033,20 +1064,20 @@ class LinuxCaptureFallbackTests(unittest.TestCase):
         flat = SimpleNamespace(has_pixel_variation=False, appears_empty_or_white=False)
         rendered = SimpleNamespace(has_pixel_variation=True, appears_empty_or_white=False)
         events = []
-        backend.x11.XRaiseWindow.side_effect = lambda *_args: events.append("raise")
-        backend.x11.XFlush.side_effect = lambda *_args: events.append("flush")
-        backend.x11.XSync.side_effect = lambda *_args: events.append("sync")
+        backend.x11.XRaiseWindow.side_effect = lambda *_args: events.append(LIT_RAISE)
+        backend.x11.XFlush.side_effect = lambda *_args: events.append(LIT_FLUSH)
+        backend.x11.XSync.side_effect = lambda *_args: events.append(LIT_SYNC)
 
         def read(drawable, *_args):
-            events.append("root" if drawable == backend.root else "client")
+            events.append(LIT_ROOT if drawable == backend.root else LIT_CLIENT)
             return rendered if drawable == backend.root else flat
 
         backend._capture_drawable_region = mock.Mock(side_effect=read)
-        with mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda delay: events.append(("settle", delay))), \
+        with mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda delay: events.append((LIT_SETTLE, delay))), \
              mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS):
             result = backend.capture_client_window(42, Path(LIT_CAPTURE_BMP))
         self.assertIs(result, rendered)
-        self.assertEqual(events, ["raise", "flush", ("settle", 0.2), "sync", "client", "root"])
+        self.assertEqual(events, [LIT_RAISE, LIT_FLUSH, (LIT_SETTLE, 0.2), LIT_SYNC, LIT_CLIENT, LIT_ROOT])
         self.assertEqual(backend._capture_drawable_region.call_args_list, [mock.call(42, 42, 0, 0, 100, 80, Path(LIT_CAPTURE_BMP)), mock.call(1, 42, 10, 20, 100, 80, Path(LIT_CAPTURE_BMP))])
 
 
@@ -1141,7 +1172,7 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         def read(*_args):
             clock.reads += 1
             on = clock.now < clock.visible_until
-            events.append(("read", clock.reads, on))
+            events.append((LIT_READ, clock.reads, on))
             clock.frame = on_frame if on else off_frame
             clock.now += 0.05
             return SimpleNamespace(has_pixel_variation=True, appears_empty_or_white=False)
@@ -1155,7 +1186,7 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
 
         def collect(*_args):
             clock.logs += 1
-            events.append(("log", clock.logs))
+            events.append((LIT_LOG_2, clock.logs))
             if clock.logs > 1:
                 clock.now += 0.25
             return before if clock.logs == 1 else refreshed
@@ -1169,23 +1200,23 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         backend._capture_drawable_region = mock.Mock(side_effect=read)
         backend.sample_client_pixels = mock.Mock(side_effect=sample)
         run = object.__new__(text_area_smoke.TextAreaRun)
-        run.args = SimpleNamespace(output_directory=Path("unused"), skin="default")
+        run.args = SimpleNamespace(output_directory=Path(LIT_UNUSED), skin="default")
         run.backend, run.handle, run.process = backend, 42, SimpleNamespace(poll=lambda: None)
         run.native = SimpleNamespace(windows=False, maintain_pointer=mock.Mock(), observe_window=lambda: {})
-        run.log_directory, run.log_baseline, run.log_pattern = Path("unused"), {}, "*.log"
+        run.log_directory, run.log_baseline, run.log_pattern = Path(LIT_UNUSED), {}, "*.log"
         run.deadline, run.snapshot, run.failure_report, run.stages, run.expected = 1.0, None, None, [], expected
         run.caret_phase_waits = 0
         run.write_report = mock.Mock()
-        with mock.patch.object(text_area_smoke.time, "monotonic", side_effect=lambda: clock.now), \
+        with mock.patch.object(text_area_smoke.time, LIT_MONOTONIC, side_effect=lambda: clock.now), \
              mock.patch.object(text_area_smoke.time, LIT_SLEEP, side_effect=sleep), \
-             mock.patch.object(text_area_smoke, "collect_log_delta", side_effect=collect), \
+             mock.patch.object(text_area_smoke, LIT_COLLECT_LOG_DELTA, side_effect=collect), \
              mock.patch.object(text_area_smoke, "read_bmp_24_rows", side_effect=lambda _path: clock.frame), \
              mock.patch.object(text_area_smoke, "observe_text_area", side_effect=observe):
             if refreshed_sequence == 7:
-                run.checkpoint("phase_capture", settle=0.0)
+                run.checkpoint(LIT_PHASE_CAPTURE, settle=0.0)
             else:
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "displayed-state gate"):
-                    run.checkpoint("phase_capture", settle=0.0)
+                    run.checkpoint(LIT_PHASE_CAPTURE, settle=0.0)
         return run, events, reports, backend, clock
 
     def test_phase_capture_freezes_visible_pixels_before_slow_latest_log_refresh(self):
@@ -1193,23 +1224,23 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         self.assertEqual(len(run.stages), 1)
         self.assertEqual(clock.samples, 2)
         self.assertEqual(clock.reads, 2)
-        self.assertLess(events.index(("read", 2, True)), events.index(("log", 2)))
-        self.assertTrue(reports[1]["passed"])
+        self.assertLess(events.index((LIT_READ, 2, True)), events.index((LIT_LOG_2, 2)))
+        self.assertTrue(reports[1][LIT_PASSED])
         self.assertEqual(reports[1]["marker_count"], 57)
-        self.assertTrue(next(probe for probe in reports[1]["probes"] if probe["name"] == "caret")["passed"])
+        self.assertTrue(next(probe for probe in reports[1][LIT_PROBES] if probe[LIT_NAME] == LIT_CARET)[LIT_PASSED])
         backend.x11.XRaiseWindow.assert_called_once()
         backend._window_root_region.assert_not_called()
 
     def test_newer_post_capture_snapshot_rejects_old_markers_despite_visible_caret(self):
         run, events, reports, _backend, _clock = self.checkpoint_with_refresh(8)
         self.assertEqual(run.stages, [])
-        self.assertLess(events.index(("read", 2, True)), events.index(("log", 2)))
+        self.assertLess(events.index((LIT_READ, 2, True)), events.index((LIT_LOG_2, 2)))
         self.assertEqual(reports[1]["snapshot"]["sequence"], 8)
-        self.assertTrue(reports[1]["model_matches"])
-        self.assertTrue(reports[1]["geometry_matches"])
-        self.assertTrue(next(probe for probe in reports[1]["probes"] if probe["name"] == "caret")["passed"])
-        self.assertEqual([probe["name"] for probe in reports[1]["probes"] if not probe["passed"]], ["model_25_0"])
-        self.assertFalse(reports[1]["passed"])
+        self.assertTrue(reports[1][LIT_MODEL_MATCHES])
+        self.assertTrue(reports[1][LIT_GEOMETRY_MATCHES])
+        self.assertTrue(next(probe for probe in reports[1][LIT_PROBES] if probe[LIT_NAME] == LIT_CARET)[LIT_PASSED])
+        self.assertEqual([probe[LIT_NAME] for probe in reports[1][LIT_PROBES] if not probe[LIT_PASSED]], ["model_25_0"])
+        self.assertFalse(reports[1][LIT_PASSED])
 
 
 class CaretPixelColumnTests(unittest.TestCase):
@@ -1231,25 +1262,25 @@ class CaretPixelColumnTests(unittest.TestCase):
         run = object.__new__(numeric_edit_smoke.NumericEditRun)
         run.backend, run.handle = SimpleNamespace(client_size=lambda _handle: (640, 440)), 42
         snapshot = {"scale": (1.0, 1.0), "enabled": 1, "readonly": 0, "i_focus": 1, "i_anchor": 32, "i_caret": 32,
-            "rectangles": {"integer_caret": caret, "integer_content": content}}
+            LIT_RECTANGLES: {"integer_caret": caret, "integer_content": content}}
         self.assertEqual(run._caret_probe_sample(snapshot)[0], 333)
 
     def test_text_area_oracle_requires_the_covered_column_and_rejects_an_adjacent_decoy(self):
         _text, snapshot, frame, expected = TextAreaCaretCaptureTests.fixture(7, False)
-        snapshot["rectangles"]["caret"] = (333.5, 148.0, 1.0, 21.796875)
+        snapshot[LIT_RECTANGLES][LIT_CARET] = (333.5, 148.0, 1.0, 21.796875)
         rows = frame[2]
         for y in range(148, 170):
             rows[y][333] = (249, 252, 255)
         report = text_area_probe.observe_text_area(frame, snapshot, expected)
-        self.assertTrue(report["passed"])
-        self.assertEqual(next(probe for probe in report["probes"] if probe["name"] == "caret")["position"][0], 333)
+        self.assertTrue(report[LIT_PASSED])
+        self.assertEqual(next(probe for probe in report[LIT_PROBES] if probe[LIT_NAME] == LIT_CARET)["position"][0], 333)
         for y in range(148, 170):
             rows[y][333], rows[y][334] = (18, 26, 37), (249, 252, 255)
         report = text_area_probe.observe_text_area(frame, snapshot, expected)
-        self.assertTrue(report["model_matches"])
-        self.assertTrue(report["geometry_matches"])
-        self.assertEqual([probe["name"] for probe in report["probes"] if not probe["passed"]], ["caret"])
-        self.assertFalse(report["passed"])
+        self.assertTrue(report[LIT_MODEL_MATCHES])
+        self.assertTrue(report[LIT_GEOMETRY_MATCHES])
+        self.assertEqual([probe[LIT_NAME] for probe in report[LIT_PROBES] if not probe[LIT_PASSED]], [LIT_CARET])
+        self.assertFalse(report[LIT_PASSED])
 
 
 class UiSmokeEntrypointBootstrapTests(unittest.TestCase):
@@ -1267,34 +1298,34 @@ class UiSmokeEntrypointBootstrapTests(unittest.TestCase):
 class TextAreaVisualMeasurementTests(unittest.TestCase):
     def test_visual_extent_matches_scroll_maximum_and_stale_logical_extent_is_rejected(self):
         _text, snapshot, frame, expected = TextAreaCaretCaptureTests.fixture(7, True)
-        snapshot["measure"], snapshot["maximum"] = (533.09375, 370.54688), (184.09375, 240.54688)
-        rectangles = snapshot["rectangles"]
+        snapshot[LIT_MEASURE], snapshot["maximum"] = (533.09375, 370.54688), (184.09375, 240.54688)
+        rectangles = snapshot[LIT_RECTANGLES]
         rectangles["content"] = rectangles["clip"] = (40.0, 148.0, 350.0, 130.0)
-        rectangles["x_track"], rectangles["y_track"] = (40.0, 278.0, 350.0, 14.0), (390.0, 148.0, 14.0, 130.0)
-        rectangles["x_thumb"] = (40.0, 278.0, 350.0 * 350.0 / 534.09375, 14.0)
-        rectangles["y_thumb"] = (390.0, 148.0, 14.0, 130.0 * 130.0 / 370.54688)
-        rectangles["corner"] = (390.0, 278.0, 14.0, 14.0)
+        rectangles[LIT_X_TRACK], rectangles[LIT_Y_TRACK] = (40.0, 278.0, 350.0, 14.0), (390.0, 148.0, 14.0, 130.0)
+        rectangles[LIT_X_THUMB] = (40.0, 278.0, 350.0 * 350.0 / 534.09375, 14.0)
+        rectangles[LIT_Y_THUMB] = (390.0, 148.0, 14.0, 130.0 * 130.0 / 370.54688)
+        rectangles[LIT_CORNER] = (390.0, 278.0, 14.0, 14.0)
         rows = frame[2]
         def fill(rectangle, color):
             x, y, width, height = rectangle
             for row in range(math.ceil(y - 0.5), math.ceil(y + height - 0.5)):
                 for column in range(math.ceil(x - 0.5), math.ceil(x + width - 0.5)):
                     rows[row][column] = color
-        for name in ("x_track", "y_track", "corner"):
+        for name in (LIT_X_TRACK, LIT_Y_TRACK, LIT_CORNER):
             fill(rectangles[name], (24, 29, 37))
-        for name in ("x_thumb", "y_thumb"):
+        for name in (LIT_X_THUMB, LIT_Y_THUMB):
             fill(rectangles[name], (45, 60, 80))
         report = text_area_probe.observe_text_area(frame, snapshot, expected)
-        self.assertTrue(report["model_matches"])
-        self.assertTrue(report["geometry_matches"])
-        self.assertTrue(all(probe["passed"] for probe in report["probes"]))
-        self.assertTrue(report["passed"])
-        snapshot["measure"] = (532.59375, 370.54688)
+        self.assertTrue(report[LIT_MODEL_MATCHES])
+        self.assertTrue(report[LIT_GEOMETRY_MATCHES])
+        self.assertTrue(all(probe[LIT_PASSED] for probe in report[LIT_PROBES]))
+        self.assertTrue(report[LIT_PASSED])
+        snapshot[LIT_MEASURE] = (532.59375, 370.54688)
         report = text_area_probe.observe_text_area(frame, snapshot, expected)
-        self.assertTrue(report["model_matches"])
-        self.assertTrue(all(probe["passed"] for probe in report["probes"]))
-        self.assertFalse(report["geometry_matches"])
-        self.assertFalse(report["passed"])
+        self.assertTrue(report[LIT_MODEL_MATCHES])
+        self.assertTrue(all(probe[LIT_PASSED] for probe in report[LIT_PROBES]))
+        self.assertFalse(report[LIT_GEOMETRY_MATCHES])
+        self.assertFalse(report[LIT_PASSED])
 
 
 class GracefulTerminationTests(unittest.TestCase):
@@ -1331,7 +1362,7 @@ class GracefulTerminationTests(unittest.TestCase):
                 return 1
 
         user32 = window_capture_smoke.bind_windows_user32(FakeUser32())
-        with mock.patch.object(window_capture_smoke, "create_windows_user32", return_value=user32):
+        with mock.patch.object(window_capture_smoke, LIT_CREATE_WINDOWS_USER32, return_value=user32):
             self.assertTrue(window_capture_smoke.request_windows_graceful_exit(process_id))
 
         self.assertEqual(observed_owner_queries, [high_bit_hwnd])
@@ -1393,7 +1424,7 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_SETTLE_SECONDS, "0"],
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_SETTLE_SECONDS, LIT_NAN],
             [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, "0.5"],
-            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, LIT_INF], [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, "--render-ready-timeout", LIT_INF], [LIT_RESIZE_SETTLE_SECONDS, "2"],):
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, LIT_INF], [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RENDER_READY_TIMEOUT, LIT_INF], [LIT_RESIZE_SETTLE_SECONDS, "2"],):
             with self.subTest(extra=extra), mock.patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
                 window_capture_smoke.parse_args(self.base_args() + extra)
 
@@ -1441,7 +1472,7 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
              mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=[10.0, 10.1]), \
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda seconds: events.append((LIT_SLEEP, seconds))):
             window_capture_smoke.capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
-        self.assertEqual(events, [LIT_PREPARE, (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_SLEEP, 2.0), (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1),
+        self.assertEqual(events, [LIT_PREPARE, (LIT_CAPTURE, Path(LIT_CAPTURE_BEFORE_RESIZE_BMP)), (LIT_SLEEP, 2.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BEFORE_RESIZE_BMP)), (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1),
             (LIT_SLEEP, 3.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BMP))])
 
     def test_resize_requires_both_client_extent_and_renderer_acknowledgement(self):

@@ -27,6 +27,11 @@
 #error "caustic/splat.slangi requires the backend resource macros"
 #endif
 
+static const float NWB_CAUSTIC_SPLAT_MIN_CLIP_W = 1e-6;
+// Receiver match tolerance: a few G-buffer texels of world spacing, with a world-space floor.
+static const float NWB_CAUSTIC_SPLAT_REJECT_TEXEL_SCALE = 4.0;
+static const float NWB_CAUSTIC_SPLAT_REJECT_MIN_DISTANCE = 0.05;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +46,7 @@ void nwbCausticAccumulate(const int2 pixel, const uint channel, const uint value
 
 void nwbCausticSplat(const float3 worldPos, const half3 flux){
     const float4 clip = mul(NWB_CAUSTIC_SPLAT_VIEW.worldToClip, float4(worldPos, 1.0));
-    if(clip.w <= 1e-6)
+    if(clip.w <= NWB_CAUSTIC_SPLAT_MIN_CLIP_W)
         return;
 
     const float3 ndc = clip.xyz / clip.w;
@@ -67,7 +72,7 @@ void nwbCausticSplat(const float3 worldPos, const half3 flux){
     const int2 rightTexel = int2(min(baseTexel.x + 1, (int)NWB_CAUSTIC_SPLAT_PUSH.width - 1), baseTexel.y);
     const half3 sceneWorldPosRightSample = half3(NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(rightTexel, 0)).xyz);
     const float3 sceneWorldPosRight = float3(sceneWorldPosRightSample);
-    const float rejectTolerance = max(length(sceneWorldPosRight - sceneWorldPos) * 4.0, 0.05);
+    const float rejectTolerance = max(length(sceneWorldPosRight - sceneWorldPos) * NWB_CAUSTIC_SPLAT_REJECT_TEXEL_SCALE, NWB_CAUSTIC_SPLAT_REJECT_MIN_DISTANCE);
     if(length(worldPos - sceneWorldPos) > rejectTolerance)
         return;
 

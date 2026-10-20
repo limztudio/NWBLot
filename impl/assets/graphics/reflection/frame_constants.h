@@ -31,6 +31,17 @@
 #define NWB_REFLECTION_MODE_HARDWARE 2u
 #define NWB_REFLECTION_MODE_HYBRID 3u
 
+// Debug view values match ReflectionDebugView in C++.
+#define NWB_REFLECTION_DEBUG_VIEW_TRACE_SOURCE 1u
+#define NWB_REFLECTION_DEBUG_VIEW_CONFIDENCE 2u
+
+// Stored source alpha: fallback, screen trace plus scaled confidence, or a hardware hit.
+#define NWB_REFLECTION_SOURCE_FALLBACK 1.0
+#define NWB_REFLECTION_SOURCE_SCREEN 2.0
+#define NWB_REFLECTION_SOURCE_HARDWARE 3.0
+#define NWB_REFLECTION_SOURCE_CONFIDENCE_ENCODE_SCALE 0.5
+#define NWB_REFLECTION_SOURCE_CONFIDENCE_DECODE_SCALE 2.0
+
 // Counter byte offsets: candidates and the feedback receiver bound drive scheduling.
 #define NWB_REFLECTION_COUNTER_CANDIDATES 0u
 #define NWB_REFLECTION_COUNTER_HARDWARE_RAYS 4u

@@ -3,6 +3,7 @@
 
 
 #include "ui_edit_gallery.h"
+#include "ui_gallery_constants.h"
 
 #include <core/common/log.h>
 
@@ -26,20 +27,21 @@ UiEditGallery::UiEditGallery(NWB::Core::Alloc::GlobalArena& arena)
 
 void UiEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
+    constexpr f32 s_PanelHeight = 154.0f;
     Builder& ui = context.ui;
-    if(!ui.beginPanel("edit_gallery", { x, y, 280.0f, 154.0f }))
+    if(!ui.beginPanel("edit_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
     const f32 previousFontSize = ui.style().fontSize;
-    ui.style().fontSize = 14.0f;
-    bool valid = ui.label("title", "Text editing");
+    ui.style().fontSize = s_GalleryFontSize;
+    bool valid = ui.label(s_TitleKey, "Text editing");
     EditBoxOptions options;
     const EditBoxResult text = ui.editBox("editable", m_text, m_textState, options);
     if(text.textChanged)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom edit text bytes={}"), m_text.text().size());
     options.readOnly = true;
-    const EditBoxResult readOnly = ui.editBox("read_only", m_readOnly, m_readOnlyState, options);
+    const EditBoxResult readOnly = ui.editBox(s_ReadOnlyKey, m_readOnly, m_readOnlyState, options);
     valid = text.valid && readOnly.valid && valid;
-    valid = ui.label("hint", "Ctrl+A/C/X/V, undo and redo") && valid;
+    valid = ui.label(s_HintKey,"Ctrl+A/C/X/V, undo and redo") && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)

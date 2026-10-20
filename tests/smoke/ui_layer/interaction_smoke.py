@@ -24,7 +24,22 @@ from window_capture_smoke import (  # noqa: E402
     launch_logserver, launch_testbed, read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from smoke_arguments import parse_ui_smoke_args
 from fixture_environment import build_fixture_environment
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
 from probe_reference import linear_rgb_bytes
+
+LIT_FLAGS = "flags"
+LIT_TIME = "time"
+LIT_EXTRA = "extra"
+LIT_DATA = "data"
+LIT_ENABLED = "enabled"
+LIT_PASSED = "passed"
+LIT_UTF_8 = "utf-8"
+LIT_ESCAPE = "Escape"
+LIT_SPACE = "space"
+LIT_TAB = "Tab"
+LIT_RETURN = "Return"
+LIT_UI_INTERACTION_FIXTURE = "UI interaction fixture"
 
 DISPLAY_PATTERN = re.compile(r"UiInteractiveSmoke: display logical=([0-9.eE+-]+)x([0-9.eE+-]+) scale=([0-9.eE+-]+)x([0-9.eE+-]+)")
 ACTION_PATTERN = re.compile(r"UiInteractiveSmoke: action=(increase|enabled|reset) count=(\d+) enabled=([01]) actions=(\d+)")
@@ -33,14 +48,25 @@ VIRTUAL_KEYS = {"Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B}
 OFF = (0.08, 0.01, 0.01)
 ON = (0.02, 0.70, 0.12)
 MARKER_TOLERANCE = 4
+COUNT_MARKER_BITS = 8
+BUTTON_POINT = (91, 76)
+RESIZED_CLIENT_EXTENT = (800, 600)
+# Native input pacing shared by every derived fixture input class.
+KEY_REPEAT_INTERVAL_SECONDS = 0.04
+PRESS_HOLD_SECONDS = 0.08
+INPUT_SETTLE_SECONDS = 0.1
+FOCUS_SETTLE_SECONDS = 0.15
+HIT_LAYOUT_SETTLE_SECONDS = 0.2
+# Win32 packs client x/y and wheel deltas into 16-bit message words.
+WIN32_WORD_MASK = 0xFFFF
 
 
 class WinKeyboardInput(ctypes.Structure):
-    _fields_ = [("virtual_key", ctypes.c_uint16), ("scan", ctypes.c_uint16), ("flags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("extra", ctypes.c_void_p)]
+    _fields_ = [("virtual_key", ctypes.c_uint16), ("scan", ctypes.c_uint16), (LIT_FLAGS, ctypes.c_uint32), (LIT_TIME, ctypes.c_uint32), (LIT_EXTRA, ctypes.c_void_p)]
 
 
 class WinMouseInput(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_int32), ("y", ctypes.c_int32), ("data", ctypes.c_uint32), ("flags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("extra", ctypes.c_void_p)]
+    _fields_ = [("x", ctypes.c_int32), ("y", ctypes.c_int32), (LIT_DATA, ctypes.c_uint32), (LIT_FLAGS, ctypes.c_uint32), (LIT_TIME, ctypes.c_uint32), (LIT_EXTRA, ctypes.c_void_p)]
 
 
 class WinInputUnion(ctypes.Union):
@@ -48,11 +74,11 @@ class WinInputUnion(ctypes.Union):
 
 
 class WinInput(ctypes.Structure):
-    _fields_ = [("type", ctypes.c_uint32), ("data", WinInputUnion)]
+    _fields_ = [("type", ctypes.c_uint32), (LIT_DATA, WinInputUnion)]
 
 
 class WinGuiThreadInfo(ctypes.Structure):
-    _fields_ = [("cbSize", ctypes.c_uint32), ("flags", ctypes.c_uint32), ("hwndActive", ctypes.c_void_p), ("hwndFocus", ctypes.c_void_p), ("hwndCapture", ctypes.c_void_p),
+    _fields_ = [("cbSize", ctypes.c_uint32), (LIT_FLAGS, ctypes.c_uint32), ("hwndActive", ctypes.c_void_p), ("hwndFocus", ctypes.c_void_p), ("hwndCapture", ctypes.c_void_p),
         ("hwndMenuOwner", ctypes.c_void_p), ("hwndMoveSize", ctypes.c_void_p), ("hwndCaret", ctypes.c_void_p), ("rcCaret", WinRect),]
 
 
@@ -63,19 +89,19 @@ def parse_args(argv, *, description=__doc__):
 def observe_markers(frame, scale_x, scale_y, expected_count, enabled):
     width, height, rows = frame
     probes = []
-    for bit in range(9):
-        logical_x = 25.0 + bit * 20.0 if bit < 8 else 224.0
+    for bit in range(COUNT_MARKER_BITS + 1):
+        logical_x = 25.0 + bit * 20.0 if bit < COUNT_MARKER_BITS else 224.0
         x = int(round(logical_x * scale_x))
         y = int(round(height - 14.0 * scale_y))
         if not 1 <= x < width - 1 or not 1 <= y < height - 1:
             raise SmokeFailure(f"model marker falls outside {width}x{height} at ({x},{y})")
-        wanted = bool(expected_count & (1 << bit)) if bit < 8 else enabled
+        wanted = bool(expected_count & (1 << bit)) if bit < COUNT_MARKER_BITS else enabled
         expected = linear_rgb_bytes(ON if wanted else OFF)
         sample = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
         observed = tuple(sorted(pixel[channel] for pixel in sample)[4] for channel in range(3))
         error = max(abs(actual - reference) for actual, reference in zip(observed, expected))
-        probes.append({"bit": bit if bit < 8 else "enabled", "position": [x, y], "expected": list(expected), "observed": list(observed), "error": error, "passed": error <= MARKER_TOLERANCE})
-    return {"extent": [width, height], "count": expected_count, "enabled": enabled, "probes": probes, "passed": all(probe["passed"] for probe in probes)}
+        probes.append({"bit": bit if bit < COUNT_MARKER_BITS else LIT_ENABLED, "position": [x, y], "expected": list(expected), "observed": list(observed), "error": error, LIT_PASSED: error <= MARKER_TOLERANCE})
+    return {"extent": [width, height], "count": expected_count, LIT_ENABLED: enabled, "probes": probes, LIT_PASSED: all(probe[LIT_PASSED] for probe in probes)}
 
 
 class NativeInput:
@@ -106,21 +132,21 @@ class NativeInput:
 
     def pointer(self, x, y):
         if self.windows:
-            self._post(0x0200, 0, ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF))
+            self._post(0x0200, 0, ((int(y) & WIN32_WORD_MASK) << 16) | (int(x) & WIN32_WORD_MASK))
         else:
             self.backend.send_motion_event(self.handle, int(x), int(y))
 
     def button(self, down, x, y):
         self.pointer(x, y)
         if self.windows:
-            self._post(0x0201 if down else 0x0202, 1 if down else 0, ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF))
+            self._post(0x0201 if down else 0x0202, 1 if down else 0, ((int(y) & WIN32_WORD_MASK) << 16) | (int(x) & WIN32_WORD_MASK))
         else:
             event_type = self.backend.BUTTON_PRESS if down else self.backend.BUTTON_RELEASE
             self.backend.send_button_event(self.handle, event_type, int(x), int(y))
 
     def click(self, x, y):
         self.button(True, x, y)
-        time.sleep(0.08)
+        time.sleep(PRESS_HOLD_SECONDS)
         self.button(False, x, y)
 
     def key(self, name, down, *, repeat=False, shift=False):
@@ -151,34 +177,34 @@ class NativeInput:
     def tap(self, name, *, repeat_count=0, shift=False):
         if shift and self.windows:
             self.backend.focus_window(self.handle)
-            time.sleep(0.1)
+            time.sleep(INPUT_SETTLE_SECONDS)
             if self.backend.user32.GetForegroundWindow() != self.handle:
                 raise SmokeSkip("the fixture cannot take foreground focus for native Shift+Tab")
             self._shift(True)
-            time.sleep(0.1)
+            time.sleep(INPUT_SETTLE_SECONDS)
         try:
             self.key(name, True, shift=shift)
             for _ in range(repeat_count):
-                time.sleep(0.04)
+                time.sleep(KEY_REPEAT_INTERVAL_SECONDS)
                 self.key(name, True, repeat=True, shift=shift)
-            time.sleep(0.08)
+            time.sleep(PRESS_HOLD_SECONDS)
             self.key(name, False, shift=shift)
         finally:
             if shift and self.windows:
                 self._shift(False)
-        time.sleep(0.1)
+        time.sleep(INPUT_SETTLE_SECONDS)
 
     def focus_loss_and_gain(self):
         if self.windows:
             self._post(0x0006, 0)  # WM_ACTIVATE / WA_INACTIVE reaches the real native lifecycle callback.
-            time.sleep(0.15)
+            time.sleep(FOCUS_SETTLE_SECONDS)
             self._post(0x0006, 1)
         else:
             self.backend.x11.XSetInputFocus(self.backend.display, self.backend.root, self.backend.REVERT_TO_PARENT, self.backend.CURRENT_TIME)
             self.backend.x11.XFlush(self.backend.display)
-            time.sleep(0.15)
+            time.sleep(FOCUS_SETTLE_SECONDS)
             self.backend.focus_window(self.handle)
-        time.sleep(0.15)
+        time.sleep(FOCUS_SETTLE_SECONDS)
 
 
 class InteractionRun:
@@ -212,9 +238,9 @@ class InteractionRun:
 
     def checkpoint(self, name, count, enabled, *, extent=None):
         # Unchanged-state gates also wait beyond the native event batch, catching delayed activation/replay.
-        time.sleep(0.25)
+        time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during interactive UI capture")
@@ -223,76 +249,76 @@ class InteractionRun:
             frame = read_bmp_24_rows(path)
             report = observe_markers(frame, self.scale_x, self.scale_y, count, enabled)
             if extent is not None and tuple(frame[:2]) != extent:
-                report["passed"] = False
-            if report["passed"]:
+                report[LIT_PASSED] = False
+            if report[LIT_PASSED]:
                 report.update({"stage": name, "capture": str(path)})
                 self.stages.append(report)
                 self.write_report(False)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         raise SmokeFailure(f"interactive marker gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "stages": self.stages, "input_path": "Win32 posted messages with native Shift modifier; posted activation loss/gain" if self.native.windows else "X11 XSendEvent and XSetInputFocus",
+        report = {LIT_PASSED: passed, "platform": platform.system(), "stages": self.stages, "input_path": "Win32 posted messages with native Shift modifier; posted activation loss/gain" if self.native.windows else "X11 XSendEvent and XSetInputFocus",
             "runtime_limit": "No physical pointer grab or Wayland input qualification"}
-        (self.args.output_directory / "interaction.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (self.args.output_directory / "interaction.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
 
     def execute(self):
         self.checkpoint("initial", 0, True)
-        time.sleep(0.2)  # Let the host publish the matching successfully presented initial hit layout.
-        self.native.button(True, *self.point(91, 76))
+        time.sleep(HIT_LAYOUT_SETTLE_SECONDS)  # Let the host publish the matching successfully presented initial hit layout.
+        self.native.button(True, *self.point(*BUTTON_POINT))
         self.checkpoint("pointer_press_has_no_submit", 0, True)
-        self.native.tap("Escape")
-        self.native.button(False, *self.point(91, 76))
+        self.native.tap(LIT_ESCAPE)
+        self.native.button(False, *self.point(*BUTTON_POINT))
         self.checkpoint("escape_cancels_pointer_before_release", 0, True)
-        self.native.click(*self.point(91, 76))
+        self.native.click(*self.point(*BUTTON_POINT))
         self.checkpoint("first_click", 1, True)
-        self.native.key("space", True)
-        self.native.key("space", True, repeat=True)
+        self.native.key(LIT_SPACE, True)
+        self.native.key(LIT_SPACE, True, repeat=True)
         self.checkpoint("keyboard_press_and_repeat_have_no_submit", 1, True)
-        self.native.tap("Escape")
-        self.native.key("space", True, repeat=True)
-        self.native.key("space", False)
+        self.native.tap(LIT_ESCAPE)
+        self.native.key(LIT_SPACE, True, repeat=True)
+        self.native.key(LIT_SPACE, False)
         self.checkpoint("escape_cancels_keyboard_before_release", 1, True)
-        self.native.tap("Tab")
-        self.native.key("space", True)
+        self.native.tap(LIT_TAB)
+        self.native.key(LIT_SPACE, True)
         self.checkpoint("fresh_keyboard_press_waits_for_release", 1, True)
-        self.native.key("space", False)
+        self.native.key(LIT_SPACE, False)
         self.checkpoint("space_single_activation", 2, True)
-        self.native.key("Return", True)
-        self.native.key("Return", True, repeat=True)
+        self.native.key(LIT_RETURN, True)
+        self.native.key(LIT_RETURN, True, repeat=True)
         self.checkpoint("enter_hold_waits_for_release", 2, True)
-        self.native.key("Return", False)
+        self.native.key(LIT_RETURN, False)
         self.checkpoint("enter_single_activation", 3, True)
-        self.native.tap("Tab")
-        self.native.tap("space")
+        self.native.tap(LIT_TAB)
+        self.native.tap(LIT_SPACE)
         self.checkpoint("keyboard_checkbox_disabled", 3, False)
-        self.native.click(*self.point(91, 76))
-        self.native.tap("space")
+        self.native.click(*self.point(*BUTTON_POINT))
+        self.native.tap(LIT_SPACE)
         self.checkpoint("disabled_button_barrier", 3, False)
-        self.native.tap("Tab")
-        self.native.tap("Tab")
-        self.native.tap("Tab", shift=True)
-        self.native.tap("space")
+        self.native.tap(LIT_TAB)
+        self.native.tap(LIT_TAB)
+        self.native.tap(LIT_TAB, shift=True)
+        self.native.tap(LIT_SPACE)
         self.checkpoint("tab_shift_tab_checkbox_enabled", 3, True)
-        self.native.click(*self.point(91, 76))
+        self.native.click(*self.point(*BUTTON_POINT))
         self.checkpoint("enabled_click", 4, True)
-        self.native.button(True, *self.point(91, 76))
-        time.sleep(0.1)
+        self.native.button(True, *self.point(*BUTTON_POINT))
+        time.sleep(INPUT_SETTLE_SECONDS)
         self.native.button(False, *self.point(400, 260))
         self.checkpoint("drag_out_cancels", 4, True)
-        self.native.tap("space")
+        self.native.tap(LIT_SPACE)
         self.checkpoint("release_outside_cleanup", 5, True)
-        self.native.button(True, *self.point(91, 76))
-        time.sleep(0.1)
+        self.native.button(True, *self.point(*BUTTON_POINT))
+        time.sleep(INPUT_SETTLE_SECONDS)
         self.native.focus_loss_and_gain()
-        self.native.button(False, *self.point(91, 76))
+        self.native.button(False, *self.point(*BUTTON_POINT))
         self.checkpoint("focus_loss_cancels_hold", 5, True)
-        self.backend.resize_client(self.handle, 800, 600)
-        self.checkpoint("resized", 5, True, extent=(800, 600))
-        time.sleep(0.2)
-        self.native.click(*self.point(91, 76))
-        self.checkpoint("resized_first_click", 6, True, extent=(800, 600))
+        self.backend.resize_client(self.handle, *RESIZED_CLIENT_EXTENT)
+        self.checkpoint("resized", 5, True, extent=RESIZED_CLIENT_EXTENT)
+        time.sleep(HIT_LAYOUT_SETTLE_SECONDS)
+        self.native.click(*self.point(*BUTTON_POINT))
+        self.checkpoint("resized_first_click", 6, True, extent=RESIZED_CLIENT_EXTENT)
 
 
 def run(args):
@@ -312,21 +338,21 @@ def run(args):
             ensure_process_running(application, "before the interactive window appeared")
             raise SmokeFailure("interactive UI window did not appear")
         backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiInteractiveSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiInteractiveSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         interaction = InteractionRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         interaction.execute()
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, "UI interaction fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI interaction fixture")
+                exit_code, tail = terminate_process(application, LIT_UI_INTERACTION_FIXTURE, handle)
+                require_normal_process_exit(exit_code, tail, LIT_UI_INTERACTION_FIXTURE)
         finally:
             try:
                 text = ""
                 if log_directory is not None:
                     text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
                     logserver = None
-                    (args.output_directory / "interaction.log").write_text(text, encoding="utf-8")
+                    (args.output_directory / "interaction.log").write_text(text, encoding=LIT_UTF_8)
             finally:
                 if logserver is not None:
                     terminate_process(logserver, "UI interaction logserver")

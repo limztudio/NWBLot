@@ -9,6 +9,20 @@ from window_capture_smoke import SmokeFailure
 from probe_common import center, snapshot_from_patterns
 from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region
 
+LIT_VALUES = "values"
+LIT_SEQUENCE = "sequence"
+LIT_RECTANGLES = "rectangles"
+LIT_BITS = "bits"
+LIT_PHASE = "phase"
+LIT_EXPECTED = "expected"
+LIT_PASSED = "passed"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_FROZEN = "frozen"
+LIT_EXTERNAL = "external"
+LIT_EXTERNAL_CLIP = "external_clip"
+LIT_PARENT = "parent"
+LIT_CHILD = "child"
+
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiProgressSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -29,8 +43,8 @@ def snapshot_from_logs(text):
     snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="progress", bit_fields=BIT_FIELDS)
     if snapshot is None:
         return None
-    values, sequence, rectangles = snapshot["values"], snapshot["sequence"], snapshot["rectangles"]
-    bits = snapshot["bits"]
+    values, sequence, rectangles = snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE], snapshot[LIT_RECTANGLES]
+    bits = snapshot[LIT_BITS]
     if any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
         raise SmokeFailure("progress fixture reported invalid display or placement extents")
     if any(value > 0xFFFFFF for value in (*values, sequence)) or any(value > 0xFFFFFFFFFFFFFFFF for value in bits):
@@ -42,9 +56,9 @@ def snapshot_from_logs(text):
 
 def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
-    scale, rectangles = snapshot["scale"], snapshot["rectangles"]
+    scale, rectangles = snapshot["scale"], snapshot[LIT_RECTANGLES]
     probes = []
-    geometry_matches = snapshot["phase"] in (0, 1) and snapshot["progress_targets"] == 0
+    geometry_matches = snapshot[LIT_PHASE] in (0, 1) and snapshot["progress_targets"] == 0
 
     def pixel(point):
         return round(point[0] * scale[0]), round(point[1] * scale[1])
@@ -55,25 +69,25 @@ def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", 
             raise SmokeFailure(f"progress probe '{name}' falls outside {width}x{height}: ({x},{y})")
         observed = rows[y][x]
         error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": list(position), "expected": list(color), "observed": list(observed), "error": error, "passed": error <= tolerance})
+        probes.append({"name": name, "position": list(position), LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
 
     def inside(rectangle, position):
         x, y = (position[0] + 0.5) / scale[0], (position[1] + 0.5) / scale[1]
         return rectangle[0] <= x < rectangle[0] + rectangle[2] and rectangle[1] <= y < rectangle[1] + rectangle[3]
 
     marker = 0
-    for value, parts in (*((v, 2) for v in snapshot["values"]), *((v, 6) for v in snapshot["bits"]), (snapshot["sequence"], 2)):
+    for value, parts in (*((v, 2) for v in snapshot[LIT_VALUES]), *((v, 6) for v in snapshot[LIT_BITS]), (snapshot[LIT_SEQUENCE], 2)):
         for part in range(parts):
-            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot["logical_extent"][1] - 14.0)), encoded_marker(value >> (12 * part)), 5)
+            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0)), encoded_marker(value >> (12 * part)), 5)
             marker += 1
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
-    logical_width = snapshot["logical_extent"][0]
+    logical_width = snapshot[LIT_LOGICAL_EXTENT][0]
     main_width = max(300.0, logical_width * 0.5 - 40.0)
     right = 24.0 + main_width + 32.0
     other_width = max(220.0, logical_width - right - 24.0)
     declarations = {name: (32.0, 92.0 + index * 40.0, main_width - 16.0, 32.0) for index, name in enumerate(FRACTIONS)}
-    declarations.update({ "before": (32.0, 56.0, main_width - 16.0, 28.0), "after": (32.0, 332.0, main_width - 16.0, 28.0), "frozen": (right + 8.0, 56.0, other_width - 16.0, 32.0), "external": (right + 8.0, 184.0, other_width - 16.0, 32.0),
-        "external_clip": (right + 8.0, 184.0, (other_width - 16.0) * 0.5, 32.0), })
+    declarations.update({ "before": (32.0, 56.0, main_width - 16.0, 28.0), "after": (32.0, 332.0, main_width - 16.0, 28.0), LIT_FROZEN: (right + 8.0, 56.0, other_width - 16.0, 32.0), LIT_EXTERNAL: (right + 8.0, 184.0, other_width - 16.0, 32.0),
+        LIT_EXTERNAL_CLIP: (right + 8.0, 184.0, (other_width - 16.0) * 0.5, 32.0), })
     geometry_matches = geometry_matches and all(all(abs(actual - wanted) <= 0.025 for actual, wanted in zip(rectangles[name], declaration)) for name, declaration in declarations.items())
 
     def progress(name, fraction, backdrop, constraint=None, obscured=None):
@@ -82,7 +96,7 @@ def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", 
         bx, by, bw, bh = bounds
         geometry_matches = geometry_matches and bw > 28.0 and abs(bh - 32.0) < 0.025
         geometry_matches = geometry_matches and bx >= 0.0 and by >= 0.0 \
-            and bx + bw <= snapshot["logical_extent"][0] + 0.025 and by + bh <= snapshot["logical_extent"][1] + 0.025
+            and bx + bw <= snapshot[LIT_LOGICAL_EXTENT][0] + 0.025 and by + bh <= snapshot[LIT_LOGICAL_EXTENT][1] + 0.025
         content = bx + 8.0, by + 8.0, bw - 16.0, bh - 16.0
         reveal_width = content[2] * min(1.0, max(0.0, fraction))
         reveal = content[0], content[1], reveal_width, content[3]
@@ -128,17 +142,17 @@ def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", 
 
     for name, fraction in FRACTIONS.items():
         progress(name, fraction, panel)
-    frozen = 0.25 if snapshot["phase"] == 0 else 0.75
-    progress("frozen", frozen, panel)
-    progress("external", 0.75, panel, rectangles["external_clip"])
+    frozen = 0.25 if snapshot[LIT_PHASE] == 0 else 0.75
+    progress(LIT_FROZEN, frozen, panel)
+    progress(LIT_EXTERNAL, 0.75, panel, rectangles[LIT_EXTERNAL_CLIP])
     bounds = rectangles["zero"]
     record("replacement_panel_gutter", pixel((bounds[0] + bounds[2] - 8.0, bounds[1] + bounds[3] + 2.0)), panel)
-    for opened, name, fraction in (("parent", "parent_progress", 0.25), ("child", "child_progress", 0.75)):
+    for opened, name, fraction in ((LIT_PARENT, "parent_progress", 0.25), (LIT_CHILD, "child_progress", 0.75)):
         if snapshot[opened]:
             popup = rectangles[opened]
-            declaration = popup[0] + 8.0, popup[1] + (44.0 if opened == "parent" else 8.0), popup[2] - 16.0, 32.0
+            declaration = popup[0] + 8.0, popup[1] + (44.0 if opened == LIT_PARENT else 8.0), popup[2] - 16.0, 32.0
             geometry_matches = geometry_matches and all(abs(actual - wanted) <= 0.025 for actual, wanted in zip(rectangles[name], declaration))
-            obscured = rectangles["child"] if opened == "parent" and snapshot["child"] else None
+            obscured = rectangles[LIT_CHILD] if opened == LIT_PARENT and snapshot[LIT_CHILD] else None
             progress(name, fraction, (26, 34, 45), obscured=obscured)
         else:
             geometry_matches = geometry_matches and rectangles[name][2:] == (0.0, 0.0) \
@@ -146,5 +160,5 @@ def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", 
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
     model_matches = model_matches and snapshot["declared_frozen_bits"] == value_bits(frozen) \
         and snapshot["post_declaration_bits"] == value_bits(1.0 - frozen)
-    return { "extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes, "geometry_matches": geometry_matches, "passed": model_matches and geometry_matches
-            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot)) and all(probe["passed"] for probe in probes), }
+    return { "extent": [width, height], "snapshot": snapshot, LIT_EXPECTED: dict(expected), "probes": probes, "geometry_matches": geometry_matches, LIT_PASSED: model_matches and geometry_matches
+            and (extent is None or (width, height) == extent) and (extra is None or extra(snapshot)) and all(probe[LIT_PASSED] for probe in probes), }

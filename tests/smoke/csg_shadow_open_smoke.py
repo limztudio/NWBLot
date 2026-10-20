@@ -16,6 +16,24 @@ from csg_shadow_smoke import capture_environment
 import window_capture_smoke as capture
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, read_bmp_24_rows
 
+LIT_ENABLED = "enabled"
+LIT_HARDWARE = "hardware"
+LIT_SOFTWARE = "software"
+LIT_DISABLED = "disabled"
+LIT_TERMINAL65 = "terminal65"
+LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_ROUTE = "route"
+LIT_RGB = "rgb"
+LIT_RETAINED = "retained"
+LIT_CLIPPED = "clipped"
+LIT_EXECUTABLE = "--executable"
+LIT_WORKING_DIRECTORY = "--working-directory"
+LIT_TIMEOUT = "--timeout"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_UTF_8 = "utf-8"
+LIT_STATUS = "status"
+
 
 CASES = ("reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65")
 ORDINARY_CASES = ("reference", "clipped_reference")
@@ -34,13 +52,13 @@ def expected_open_rgb(length, events):
     return tuple(255. * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1. / 2.4) - 0.055) for value in linear)
 
 
-def validate_runtime(log_text, case, route, frames, warning_policy="enabled"):
-    if case not in CASES or route not in ("hardware", "software") or warning_policy not in ("enabled", "disabled"):
+def validate_runtime(log_text, case, route, frames, warning_policy=LIT_ENABLED):
+    if case not in CASES or route not in (LIT_HARDWARE, LIT_SOFTWARE) or warning_policy not in (LIT_ENABLED, LIT_DISABLED):
         raise SmokeFailure("unknown open-shadow case, route or warning policy")
     lines = log_text.splitlines()
     warning_indices = [index for index, line in enumerate(lines) if "[WARNING]" in line]
     remaining = log_text
-    if case == "terminal65" and warning_policy == "enabled":
+    if case == LIT_TERMINAL65 and warning_policy == LIT_ENABLED:
         if len(warning_indices) != 1:
             raise SmokeFailure("terminal65 requires only the exact open-capacity flags=16 diagnostic")
         start = warning_indices[0]
@@ -59,27 +77,27 @@ def validate_runtime(log_text, case, route, frames, warning_policy="enabled"):
             raise SmokeFailure(f"{case}: rejected runtime diagnostic {marker}")
     first, second = COUNTS[case]
     required = ["FramebufferCapture: capture ready", "CsgShadowSmokeProject: shutdown", f"CsgShadowSmokeProject: open_case={case} retained_events={first},{second} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1",
-        f"CsgShadowSmokeProject: atlas arm=1 light=directional hardware={int(route == 'hardware')}",
+        f"CsgShadowSmokeProject: atlas arm=1 light=directional hardware={int(route == LIT_HARDWARE)}",
         "SoftwareShadowSmoke: requested backend=0 directional_resolution=512 point_resolution=256 budget_bytes=268435456 coverage=0 blocker_search=0 capture_cadence=0"]
-    if route == "software":
+    if route == LIT_SOFTWARE:
         required.append("Loader: hardware ray tracing disabled before device creation")
-        if "RendererSystem: dispatched hardware transparent shadow traversal" in log_text:
+        if LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA in log_text:
             raise SmokeFailure("software arm used hardware transparent shadows")
     if case in ORDINARY_CASES:
-        required.append("RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware" else "RendererSystem: dispatched light-space shadow maps")
+        required.append(LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else "RendererSystem: dispatched light-space shadow maps")
         if "RendererSystem: dispatched CSG light-space shadows" in log_text:
             raise SmokeFailure("ordinary open reference admitted CSG shadow work")
     else:
-        required.append(f"RendererSystem: dispatched CSG light-space shadows (hardware_compose={int(route == 'hardware')}")
+        required.append(f"RendererSystem: dispatched CSG light-space shadows (hardware_compose={int(route == LIT_HARDWARE)}")
     for message in required:
         if message not in log_text:
             raise SmokeFailure(f"{case}: missing exact runtime evidence: {message}")
     sources = [int(value) for value in re.findall(r"FramebufferCapture: graphics source frame (\d+)", log_text)]
     if len(sources) != 1 or sources[0] < frames - 1:
         raise SmokeFailure(f"{case}: capture lacks one completed source after the required frame warmup")
-    flags_observed = case == "terminal65" and warning_policy == "enabled"
-    return {"graphics_source_frame": sources[0], "route": route, "retained_events": [first, second], "diagnostic_flags": 16 if flags_observed else None,
-        "diagnostic_flags_observed": flags_observed, "warning_policy": warning_policy, "capacity_diagnostic_available": warning_policy == "enabled", "expected_capacity_terminal": case == "terminal65"}
+    flags_observed = case == LIT_TERMINAL65 and warning_policy == LIT_ENABLED
+    return {"graphics_source_frame": sources[0], LIT_ROUTE: route, "retained_events": [first, second], "diagnostic_flags": 16 if flags_observed else None,
+        "diagnostic_flags_observed": flags_observed, "warning_policy": warning_policy, "capacity_diagnostic_available": warning_policy == LIT_ENABLED, "expected_capacity_terminal": case == LIT_TERMINAL65}
 
 
 def measure_frame(frame, case):
@@ -97,7 +115,7 @@ def measure_frame(frame, case):
         error = max(abs(value - target) for value, target in zip(rgb, expected))
         if error > tolerance:
             raise SmokeFailure(f"{case}/{region[0]}: open shadow disagrees with independent pairing/Beer/Fresnel oracle; rgb={rgb}, expected={expected}")
-        measurements[region[0]] = {"rgb": rgb, "expected_rgb": expected, "optical_length": length, "interface_count": events, "maximum_mean_byte_error": error, "samples": len(pixels)}
+        measurements[region[0]] = {LIT_RGB: rgb, "expected_rgb": expected, "optical_length": length, "interface_count": events, "maximum_mean_byte_error": error, "samples": len(pixels)}
     return measurements
 
 
@@ -105,13 +123,13 @@ def compare_frames(frames):
     if set(frames) != set(CASES) or len({frame[:2] for frame in frames.values()}) != 1:
         raise SmokeFailure("open-shadow qualification requires all six matched capture cases")
     measured = {case: measure_frame(frame, case) for case, frame in frames.items()}
-    for reference, csg in (("reference", "retained"), ("clipped_reference", "clipped")):
+    for reference, csg in (("reference", LIT_RETAINED), ("clipped_reference", LIT_CLIPPED)):
         for region in REGIONS:
-            difference = max(abs(a - b) for a, b in zip(measured[reference][region[0]]["rgb"], measured[csg][region[0]]["rgb"]))
+            difference = max(abs(a - b) for a, b in zip(measured[reference][region[0]][LIT_RGB], measured[csg][region[0]][LIT_RGB]))
             if difference > BYTE_TOLERANCE:
                 raise SmokeFailure(f"{csg}: retained open optics differ from independent ordinary reference")
     for name in ("first_receiver", "six_sheet_control"):
-        change = max(abs(a - b) for a, b in zip(measured["retained"][name]["rgb"], measured["clipped"][name]["rgb"]))
+        change = max(abs(a - b) for a, b in zip(measured[LIT_RETAINED][name][LIT_RGB], measured[LIT_CLIPPED][name][LIT_RGB]))
         if change < 15.:
             raise SmokeFailure(f"{name}: clipping did not change the open pairing control")
     return {"oracle": "independent odd span/even pairs, clipped ordinary geometry, Beer absorption and IOR1.5 interface Fresnel through the 64/65 boundary", "ior": IOR, "unit_transmission": TRANSMISSION,
@@ -121,19 +139,19 @@ def compare_frames(frames):
 def capture_case(args, case):
     output = args.output_directory / (case + ".bmp")
     runtime_log = output.with_suffix(".log")
-    command = ["--executable", str(args.executable), "--working-directory", str(args.working_directory), "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
-        "--timeout", str(args.timeout), "--log-output", str(runtime_log), "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
+    command = [LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory), "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
+        LIT_TIMEOUT, str(args.timeout), "--log-output", str(runtime_log), LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
     if args.logserver_executable:
-        command.extend(("--logserver-executable", str(args.logserver_executable)))
+        command.extend((LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)))
     else:
         command.append("--no-logserver")
-    if args.route == "software":
+    if args.route == LIT_SOFTWARE:
         command.append("--application-arg=--disable-hardware-ray-tracing")
     else:
         command.extend(("--skip-log-message", "atlas arm=1 light=directional hardware=0"))
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     capture_args = capture.parse_args(command)
-    if case == "terminal65" and args.warning_policy == "enabled":
+    if case == LIT_TERMINAL65 and args.warning_policy == LIT_ENABLED:
         # Only the warning-enabled terminal arm defers WARNING validation to the exact single flags=16 check below.
         capture_args.reject_log_message.remove("[WARNING]")
     environment = capture_environment("cut", "directional", "open")
@@ -152,7 +170,7 @@ def capture_case(args, case):
     finally:
         os.environ.clear()
         os.environ.update(previous_environment)
-    receipt = validate_runtime(runtime_log.read_text(encoding="utf-8"), case, args.route, args.frames, args.warning_policy)
+    receipt = validate_runtime(runtime_log.read_text(encoding=LIT_UTF_8), case, args.route, args.frames, args.warning_policy)
     frame = read_bmp_24_rows(output)
     if frame[:2] != (960, 720):
         raise SmokeFailure("open-shadow smoke requires the actual 960x720 framebuffer")
@@ -163,18 +181,18 @@ def capture_case(args, case):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executable", type=Path, required=True)
-    parser.add_argument("--working-directory", type=Path, required=True)
+    parser.add_argument(LIT_EXECUTABLE, type=Path, required=True)
+    parser.add_argument(LIT_WORKING_DIRECTORY, type=Path, required=True)
     output = parser.add_mutually_exclusive_group(required=True)
     output.add_argument("--output-directory", type=Path, help="Use the exact evidence directory with the existing freshness checks.")
     output.add_argument("--output-root", type=Path, help="Preserve prior evidence and create a unique child directory for this run.")
-    parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--route", choices=("hardware", "software"), required=True)
-    parser.add_argument("--warning-policy", choices=("enabled", "disabled"), required=True, help="Build warning-log capability; canonical fin disables ordinary warnings.")
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
+    parser.add_argument("--route", choices=(LIT_HARDWARE, LIT_SOFTWARE), required=True)
+    parser.add_argument("--warning-policy", choices=(LIT_ENABLED, LIT_DISABLED), required=True, help="Build warning-log capability; canonical fin disables ordinary warnings.")
     parser.add_argument("--frames", type=int, default=120)
-    parser.add_argument("--timeout", type=float, default=120.)
+    parser.add_argument(LIT_TIMEOUT, type=float, default=120.)
     parser.add_argument("--application-arg", action="append", default=[])
-    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(LIT_GPU_VALIDATION, action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args(argv)
     if args.frames < 120 or not math.isfinite(args.timeout) or args.timeout <= 0.:
         parser.error("at least 120 capture frames and a finite positive timeout are required")
@@ -199,15 +217,15 @@ def main(argv):
         for case in CASES:
             frames[case], receipts[case] = capture_case(args, case)
         result = compare_frames(frames)
-        result.update({"status": "passed", "route": args.route, "capture_count": len(receipts), "captures": receipts, "limits": "source receipts prove completed static captures and selected route; no per-ray diagnostic attribution or performance claim"})
-        (args.output_directory / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        result.update({LIT_STATUS: "passed", LIT_ROUTE: args.route, "capture_count": len(receipts), "captures": receipts, "limits": "source receipts prove completed static captures and selected route; no per-ray diagnostic attribution or performance claim"})
+        (args.output_directory / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding=LIT_UTF_8)
         print("PASS: retained/clipped five/six-sheet optics, exact 64 capacity, and conservative 65 terminal")
         return 0
     except SmokeSkip as error:
-        (args.output_directory / "skip.json").write_text(json.dumps({"status": "skipped", "reason": str(error)}, indent=2) + "\n", encoding="utf-8")
+        (args.output_directory / "skip.json").write_text(json.dumps({LIT_STATUS: "skipped", "reason": str(error)}, indent=2) + "\n", encoding=LIT_UTF_8)
         return SKIP_EXIT_CODE
     except (SmokeFailure, OSError) as error:
-        (args.output_directory / "failure.json").write_text(json.dumps({"status": "failed", "error": str(error)}, indent=2) + "\n", encoding="utf-8")
+        (args.output_directory / "failure.json").write_text(json.dumps({LIT_STATUS: "failed", "error": str(error)}, indent=2) + "\n", encoding=LIT_UTF_8)
         print(str(error), file=sys.stderr)
         return 1
 

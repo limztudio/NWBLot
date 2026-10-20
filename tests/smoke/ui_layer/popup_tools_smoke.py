@@ -16,6 +16,21 @@ from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, S
 from fixture_environment import build_fixture_environment
 from checkpoint_report import accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
 
+LIT_CURSOR = "cursor"
+LIT_RECTANGLES = "rectangles"
+LIT_ANCHOR = "anchor"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_PASSED = "passed"
+LIT_UTF_8 = "utf-8"
+LIT_COUNTER = "counter"
+LIT_MENU = "Menu"
+LIT_DOWN = "Down"
+LIT_RETURN = "Return"
+LIT_F10 = "F10"
+LIT_SECOND = "second"
+LIT_F9 = "F9"
+LIT_UI_POPUP_TOOLS_FIXTURE = "UI popup tools fixture"
+
 
 class PopupToolsRun:
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
@@ -31,7 +46,7 @@ class PopupToolsRun:
         self.snapshot = None
         self.stages = []
         self.failure_report = None
-        self.expected = {"tooltip": 0, "open": 0, "cursor": 0, "command": 0, "commits": 0, "anchor_clicks": 0, "underlying": 0, "sentinel_focused": 0, "enabled": 1, "reversed": 0, "source_revision": 1, "source_generation": 1, "text_bytes": 8}
+        self.expected = {"tooltip": 0, "open": 0, LIT_CURSOR: 0, "command": 0, "commits": 0, "anchor_clicks": 0, "underlying": 0, "sentinel_focused": 0, "enabled": 1, "reversed": 0, "source_revision": 1, "source_generation": 1, "text_bytes": 8}
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -41,13 +56,13 @@ class PopupToolsRun:
         return round(x * scale_x), round(y * scale_y)
 
     def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot["rectangles"][name])))
+        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def hover(self, name):
-        self.native.pointer(*self.point(*center(self.snapshot["rectangles"][name])))
+        self.native.pointer(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def right_click_anchor(self):
-        self.native.right_click(*self.point(*center(self.snapshot["rectangles"]["anchor"])))
+        self.native.right_click(*self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR])))
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), settle=0.25, **changes):
         path, stage_deadline = prepare_guarded_checkpoint(self, name, changes, dynamic, settle)
@@ -59,65 +74,65 @@ class PopupToolsRun:
             if snapshot is None:
                 time.sleep(0.1)
                 continue
-            if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < 400.0:
+            if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
                 raise SmokeSkip("the popup tools fixture needs a logical client of at least 600x400")
             if self.native.windows:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
                 self.backend.capture_client_window(self.handle, path)
             report = observe_popup_tools(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
-            if report["passed"]:
+            if report[LIT_PASSED]:
                 accept_checkpoint(self, name, path, snapshot, report, dynamic)
                 return
             time.sleep(0.1)
         fail_checkpoint(self, name, path, report, "popup tools")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report,
+        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report,
             "input_path": "Win32 physical hover positioning with posted motion/buttons/Menu keys and native Shift+F10 modifiers" if self.native.windows else "X11 XSendEvent keys/button1/button3 and XSetInputFocus",
             "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
-        (self.args.output_directory / "popup_tools.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (self.args.output_directory / "popup_tools.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
 
     def execute(self):
         self.native.pointer(4, 4)
         self.checkpoint("initial_tools_state")
         self.click("sentinel")
         self.checkpoint("outside_edit_owns_focus", sentinel_focused=1)
-        self.hover("anchor")
+        self.hover(LIT_ANCHOR)
         self.checkpoint("hover_before_delay", settle=0.05)
         self.checkpoint("delayed_tooltip_keeps_edit_focus", tooltip=1)
         self.native.text("x")
         self.checkpoint("tooltip_does_not_steal_native_text", text_bytes=9)
-        self.hover("counter")
+        self.hover(LIT_COUNTER)
         self.checkpoint("leaving_anchor_hides_tooltip", tooltip=0)
-        self.hover("anchor")
+        self.hover(LIT_ANCHOR)
         self.checkpoint("new_hover_restarts_delay", settle=0.05)
         self.checkpoint("tooltip_reappears_after_new_delay", tooltip=1)
-        anchor = self.point(*center(self.snapshot["rectangles"]["anchor"]))
+        anchor = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR]))
         self.native.button(True, *anchor)
         self.checkpoint("held_primary_suppresses_tooltip", tooltip=0, sentinel_focused=0)
         self.native.button(False, *anchor)
         # Park the pointer off the anchor before the gate: the 1.0s hover delay would otherwise reshow the tooltip mid-capture under load, while the activation itself only depends on the press/release sequence.
-        self.hover("counter")
+        self.hover(LIT_COUNTER)
         self.checkpoint("primary_release_activates_anchor", anchor_clicks=1)
-        self.hover("counter")
-        self.native.key("Menu", True)
+        self.hover(LIT_COUNTER)
+        self.native.key(LIT_MENU, True)
         self.checkpoint("menu_key_press_waits_for_release")
-        self.native.key("Menu", False)
+        self.native.key(LIT_MENU, False)
         self.checkpoint("menu_key_opens_on_focused_anchor", open=1, cursor=1)
-        self.native.tap("Down")
+        self.native.tap(LIT_DOWN)
         self.checkpoint("menu_down_previews_second", cursor=2)
-        self.native.tap("Down")
+        self.native.tap(LIT_DOWN)
         self.checkpoint("menu_down_skips_disabled", cursor=4)
         self.native.tap("Up")
         self.checkpoint("menu_up_skips_disabled", cursor=2)
-        self.native.tap("Return")
-        self.checkpoint("menu_enter_activates_and_closes", open=0, command=2, commits=1, dynamic=("cursor",))
-        self.native.tap("F10", shift=True)
+        self.native.tap(LIT_RETURN)
+        self.checkpoint("menu_enter_activates_and_closes", open=0, command=2, commits=1, dynamic=(LIT_CURSOR,))
+        self.native.tap(LIT_F10, shift=True)
         self.checkpoint("shift_f10_opens_on_returned_focus", open=1, cursor=1)
         self.native.tap("space")
-        self.checkpoint("menu_space_activates_first_command", open=0, command=1, commits=2, dynamic=("cursor",))
-        anchor = self.point(*center(self.snapshot["rectangles"]["anchor"]))
+        self.checkpoint("menu_space_activates_first_command", open=0, command=1, commits=2, dynamic=(LIT_CURSOR,))
+        anchor = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR]))
         self.native.right_button(True, *anchor)
         self.checkpoint("secondary_press_waits_for_release")
         self.native.right_button(False, *anchor)
@@ -125,70 +140,70 @@ class PopupToolsRun:
         self.click("disabled")
         self.checkpoint("disabled_menu_command_cannot_activate")
         self.click("last")
-        self.checkpoint("pointer_command_activates_and_closes", open=0, command=5, commits=3, dynamic=("cursor",))
+        self.checkpoint("pointer_command_activates_and_closes", open=0, command=5, commits=3, dynamic=(LIT_CURSOR,))
         self.right_click_anchor()
         self.checkpoint("outside_dismissal_setup", open=1, cursor=1)
-        self.click("counter")
-        self.checkpoint("outside_press_and_release_are_consumed", open=0, dynamic=("cursor",))
-        self.click("counter")
+        self.click(LIT_COUNTER)
+        self.checkpoint("outside_press_and_release_are_consumed", open=0, dynamic=(LIT_CURSOR,))
+        self.click(LIT_COUNTER)
         self.checkpoint("next_outside_sequence_activates", underlying=1)
         self.right_click_anchor()
         self.checkpoint("source_revision_held_pointer_setup", open=1, cursor=1)
-        old_second = self.point(*center(self.snapshot["rectangles"]["second"]))
+        old_second = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_SECOND]))
         self.native.button(True, *old_second)
         self.native.tap("F5")
         self.checkpoint("source_revision_resets_preview_and_fences_pointer", reversed=1, source_revision=2, cursor=5)
         self.native.button(False, *old_second)
         self.checkpoint("stale_pointer_release_cannot_activate_new_order")
-        self.hover("counter")
+        self.hover(LIT_COUNTER)
         self.native.tap("Home")
         self.checkpoint("reversed_home_previews_first", cursor=5)
         self.native.tap("End")
         self.checkpoint("reversed_end_previews_last", cursor=1)
-        self.native.tap("Return")
-        self.checkpoint("reversed_command_commit", open=0, command=1, commits=4, dynamic=("cursor",))
+        self.native.tap(LIT_RETURN)
+        self.checkpoint("reversed_command_commit", open=0, command=1, commits=4, dynamic=(LIT_CURSOR,))
         self.right_click_anchor()
         self.checkpoint("source_replacement_held_key_setup", open=1, cursor=5)
-        self.native.key("Down", True)
+        self.native.key(LIT_DOWN, True)
         self.checkpoint("held_key_previews_once", cursor=4)
-        self.hover("counter")
+        self.hover(LIT_COUNTER)
         self.native.tap("F6")
-        self.checkpoint("source_replacement_dismisses_and_retires_owner", open=0, source_generation=2, source_revision=3, dynamic=("cursor",))
-        self.native.key("Down", True, repeat=True)
-        self.native.key("Down", False)
+        self.checkpoint("source_replacement_dismisses_and_retires_owner", open=0, source_generation=2, source_revision=3, dynamic=(LIT_CURSOR,))
+        self.native.key(LIT_DOWN, True, repeat=True)
+        self.native.key(LIT_DOWN, False)
         self.checkpoint("stale_held_key_cannot_reopen_or_activate")
-        self.native.tap("F9")
+        self.native.tap(LIT_F9)
         self.right_click_anchor()
-        self.native.tap("Menu")
-        self.native.tap("F10", shift=True)
+        self.native.tap(LIT_MENU)
+        self.native.tap(LIT_F10, shift=True)
         self.checkpoint("disabled_anchor_blocks_pointer_and_keyboard_menu", enabled=0)
-        self.hover("anchor")
+        self.hover(LIT_ANCHOR)
         self.checkpoint("disabled_anchor_blocks_delayed_tooltip", settle=1.2)
-        self.native.tap("F9")
-        self.hover("counter")
+        self.native.tap(LIT_F9)
+        self.hover(LIT_COUNTER)
         self.checkpoint("enable_restores_attachment", enabled=1)
-        self.click("anchor")
+        self.click(LIT_ANCHOR)
         # Same hover-delay race as the first activation: park off the anchor so the 1.0s tooltip cannot reshow during the 10s capture window.
-        self.hover("counter")
+        self.hover(LIT_COUNTER)
         self.checkpoint("fresh_primary_focuses_enabled_anchor", anchor_clicks=2)
-        self.hover("counter")
-        self.native.tap("Menu")
+        self.hover(LIT_COUNTER)
+        self.native.tap(LIT_MENU)
         self.checkpoint("fresh_menu_after_source_replacement", open=1, cursor=5)
         self.native.tap("Escape")
-        self.checkpoint("escape_dismisses_context_commands", open=0, dynamic=("cursor",))
+        self.checkpoint("escape_dismisses_context_commands", open=0, dynamic=(LIT_CURSOR,))
         self.right_click_anchor()
         self.checkpoint("focus_loss_menu_setup", open=1, cursor=5)
-        self.hover("counter")
+        self.hover(LIT_COUNTER)
         self.native.focus_loss_and_gain()
-        self.checkpoint("native_focus_loss_dismisses_menu", open=0, sentinel_focused=0, dynamic=("cursor",))
-        self.native.tap("Down")
+        self.checkpoint("native_focus_loss_dismisses_menu", open=0, sentinel_focused=0, dynamic=(LIT_CURSOR,))
+        self.native.tap(LIT_DOWN)
         self.checkpoint("unfocused_navigation_cannot_activate")
         self.backend.resize_client(self.handle, 800, 600)
         self.checkpoint("resize_preserves_host_commands", extent=(800, 600))
         self.right_click_anchor()
         self.checkpoint("first_secondary_request_after_resize", open=1, cursor=5, extent=(800, 600))
-        self.click("second")
-        self.checkpoint("pointer_command_after_resize", open=0, command=2, commits=5, extent=(800, 600), dynamic=("cursor",))
+        self.click(LIT_SECOND)
+        self.checkpoint("pointer_command_after_resize", open=0, command=2, commits=5, extent=(800, 600), dynamic=(LIT_CURSOR,))
 
 
 def run(args):
@@ -217,15 +232,15 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, "UI popup tools fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI popup tools fixture")
+                exit_code, tail = terminate_process(application, LIT_UI_POPUP_TOOLS_FIXTURE, handle)
+                require_normal_process_exit(exit_code, tail, LIT_UI_POPUP_TOOLS_FIXTURE)
         finally:
             try:
                 text = ""
                 if log_directory is not None:
                     text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
                     logserver = None
-                    (args.output_directory / "popup_tools.log").write_text(text, encoding="utf-8")
+                    (args.output_directory / "popup_tools.log").write_text(text, encoding=LIT_UTF_8)
             finally:
                 try:
                     if logserver is not None:

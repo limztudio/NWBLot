@@ -33,6 +33,9 @@ inline constexpr usize s_UnsignedTextBufferCapacity = 32u;
 inline constexpr usize s_ManifestReserveBytes = 2048u;
 inline constexpr usize s_LinuxProcPathTextCapacity = 128u;
 inline constexpr usize s_LinuxCopyBufferBytes = 4096u;
+inline constexpr StringView s_InstructionPointerFieldPrefix = "\ninstruction_pointer=";
+inline constexpr StringView s_StackPointerFieldPrefix = "\nstack_pointer=";
+inline constexpr StringView s_FramePointerFieldPrefix = "\nframe_pointer=";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,11 +177,11 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     AppendUnsignedText(text, request.exceptionPointers);
     text += "\nfault_address=";
     AppendUnsignedText(text, request.faultAddress);
-    text += "\ninstruction_pointer=";
+    text += s_InstructionPointerFieldPrefix;
     AppendUnsignedText(text, request.instructionPointer);
-    text += "\nstack_pointer=";
+    text += s_StackPointerFieldPrefix;
     AppendUnsignedText(text, request.stackPointer);
-    text += "\nframe_pointer=";
+    text += s_FramePointerFieldPrefix;
     AppendUnsignedText(text, request.framePointer);
     text += "\nevent=";
     text += request.event;
@@ -209,11 +212,11 @@ static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashReques
     CrashStringT<ArenaT> text{arena};
     text += "fault_address=";
     AppendUnsignedText(text, request.faultAddress);
-    text += "\ninstruction_pointer=";
+    text += s_InstructionPointerFieldPrefix;
     AppendUnsignedText(text, request.instructionPointer);
-    text += "\nstack_pointer=";
+    text += s_StackPointerFieldPrefix;
     AppendUnsignedText(text, request.stackPointer);
-    text += "\nframe_pointer=";
+    text += s_FramePointerFieldPrefix;
     AppendUnsignedText(text, request.framePointer);
     text += "\n";
     return text;
@@ -293,6 +296,8 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
 #if defined(NWB_PLATFORM_WINDOWS)
 template<typename ArenaT>
 static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
+    constexpr AStringView s_CloseDumpProcessOperation = "close_dump_process";
+
     const ::Path<ArenaT> dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
     HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE, FALSE, request.processId);
     if(!process){
@@ -306,7 +311,7 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
         const ErrorCode closeError = processClosed ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
         CaptureCrashPackageFilesystemFailure("create_minidump_file", createError);
         if(!processClosed)
-            CaptureCrashPackageFilesystemFailure("close_dump_process", closeError);
+            CaptureCrashPackageFilesystemFailure(s_CloseDumpProcessOperation, closeError);
         return false;
     }
     const MINIDUMP_TYPE dumpType = request.dumpDetailMode == DumpDetailMode::Full
@@ -339,7 +344,7 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
     if(!dumpClosed)
         CaptureCrashPackageFilesystemFailure("close_minidump_file", dumpCloseError);
     if(!processClosed)
-        CaptureCrashPackageFilesystemFailure("close_dump_process", processCloseError);
+        CaptureCrashPackageFilesystemFailure(s_CloseDumpProcessOperation, processCloseError);
     return written == TRUE && dumpClosed == TRUE && processClosed == TRUE;
 }
 #endif
@@ -347,6 +352,8 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 template<typename ArenaT>
 static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const AStringView sourcePath, const AStringView outputName){
+    constexpr StringView s_OptionalArtifactCategory = "crash_package";
+
     InputFileStream input(sourcePath.data(), s_FileOpenBinary);
     if(!input.is_open())
         return;
@@ -354,7 +361,7 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
     const ::Path<ArenaT> outputPath = RequestPendingDirectory(arena, request) / outputName;
     OutputFileStream output(outputPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
     if(!output.is_open()){
-        CaptureDiagnosticEvent("crash_package", "Failed to open optional crash artifact output", __FILE__, __LINE__);
+        CaptureDiagnosticEvent(s_OptionalArtifactCategory, "Failed to open optional crash artifact output", __FILE__, __LINE__);
         return;
     }
 
@@ -380,7 +387,7 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
     if(copied && output.good())
         return;
 
-    CaptureDiagnosticEvent("crash_package", "Failed to copy or close optional crash artifact output", __FILE__, __LINE__);
+    CaptureDiagnosticEvent(s_OptionalArtifactCategory, "Failed to copy or close optional crash artifact output", __FILE__, __LINE__);
     const auto removed = RemoveFile(outputPath);
     if(!removed)
         CaptureCrashPackageFilesystemFailure("remove_incomplete_optional_artifact", removed.error());
@@ -442,7 +449,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
 
 void CaptureCrashPackageFilesystemFailure(const AStringView operation, const ErrorCode& error)noexcept{
     const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash package I/O failure: {} {}", error.category().name(), error.value());
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_package_error", .expression = operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_PackageErrorCategory, .expression = operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
 }
 
 bool WriteCrashPackage(const CrashRequest& request){

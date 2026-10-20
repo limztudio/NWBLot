@@ -8,6 +8,11 @@ import json
 from pathlib import Path
 import subprocess
 
+LIT_ATLAS_NWB = "atlas.nwb"
+LIT_UTF_8 = "utf-8"
+LIT_NAME = "name"
+LIT_PADDING = "padding"
+
 REPO = Path(__file__).resolve().parents[3]
 OUTPUT = Path(__file__).resolve().parent / "assets/ui/skins/alternate"
 PALETTE = { "panel.normal": ((39, 63, 34), (116, 150, 79)), "window.normal": ((45, 72, 38), (132, 162, 87)), "window.title": ((142, 92, 28), (214, 169, 76)), "button.normal": ((49, 100, 63), (111, 168, 105)), "button.hover": ((69, 135, 77), (162, 204, 110)),
@@ -23,20 +28,20 @@ def generate(work_directory, output_directory, converter):
     artwork.PANELS = [(name, *PALETTE.get(name, (fill, border))) for name, fill, border in reversed(artwork.PANELS)]
     artwork.ICONS = list(reversed(artwork.ICONS))
     artwork.generate(work_directory)
-    metadata = (work_directory / "atlas.nwb").read_text(encoding="utf-8")
+    metadata = (work_directory / LIT_ATLAS_NWB).read_text(encoding=LIT_UTF_8)
     region_lines = metadata.split("asset.regions = [", 1)[1].split("];", 1)[0].splitlines()
     regions = [json.loads(line.strip().rstrip(",")) for line in region_lines if line.strip().startswith("{")]
     expected_regions = len(artwork.PANELS) + len(artwork.ICONS) + 10  # Default artwork plus semantic aliases.
-    if (len(regions) != expected_regions or len({region["name"] for region in regions}) != len(regions) or any("rect" not in region for region in regions)):
+    if (len(regions) != expected_regions or len({region[LIT_NAME] for region in regions}) != len(regions) or any("rect" not in region for region in regions)):
         raise ValueError("default skin region catalog changed unexpectedly")
     for region in regions:
-        if region["name"] == "window.normal":
-            region["padding"] = [6.0, 7.0, 10.0, 5.0]
-        elif region["name"] == "window.title":
-            region["padding"] = [10.0, 4.0, 6.0, 8.0]
+        if region[LIT_NAME] == "window.normal":
+            region[LIT_PADDING] = [6.0, 7.0, 10.0, 5.0]
+        elif region[LIT_NAME] == "window.title":
+            region[LIT_PADDING] = [10.0, 4.0, 6.0, 8.0]
     colors = [dict(color) for color in artwork.COLOR_ROLES]
     for color in colors:
-        if color["name"] == "text.tooltip":
+        if color[LIT_NAME] == "text.tooltip":
             color["rgba"] = [1.0, 0.58, 0.26, 1.0]
     lines = ["ui_skin asset;", "", 'asset.texture = "project/ui/skins/alternate/texture";', "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets\";", "asset.regions = ["]
     lines += ["    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions]
@@ -44,7 +49,7 @@ def generate(work_directory, output_directory, converter):
     lines += ["    " + json.dumps(color, separators=(", ", ": ")) + "," for color in colors]
     lines += ["];", 'asset.typography = {"default_font_size": 16.0};', ""]
     output_directory.mkdir(parents=True, exist_ok=True)
-    (output_directory / "atlas.nwb").write_bytes("\r\n".join(lines).encode("utf-8"))
+    (output_directory / LIT_ATLAS_NWB).write_bytes("\r\n".join(lines).encode(LIT_UTF_8))
     subprocess.run([str(converter.resolve()), str(work_directory / "source.png"), "--output", str(output_directory / "texture"), "--force"], check=True)
     print(f"Replacement skin: {len(regions)} remapped regions, amber title, green frame; {output_directory}")
 

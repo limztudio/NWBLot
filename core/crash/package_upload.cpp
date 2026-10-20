@@ -39,6 +39,8 @@ inline constexpr long s_HttpSuccessStatusBegin = 200L;
 inline constexpr long s_HttpSuccessStatusEnd = 300L;
 inline constexpr char s_SafeNameDigitFirst = '0';
 inline constexpr char s_SafeNameDigitLast = '9';
+inline constexpr StringView s_UploadCategory = "crash_package_upload";
+inline constexpr StringView s_SpoolRetentionCategory = "crash_spool_retention";
 
 static_assert(sizeof(size_t) == sizeof(usize), "libcurl callback sizes must match the supported native address size");
 
@@ -125,7 +127,7 @@ static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
         }
     }
     const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash upload initialization failed: curl code={} {}", static_cast<i64>(result), curl_easy_strerror(result));
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_package_upload", .expression = "initialize_upload_runtime", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_UploadCategory, .expression = "initialize_upload_runtime", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     return false;
 }
 
@@ -169,15 +171,15 @@ struct UploadFailure{
 static void CaptureUploadFailure(const UploadFailure& failure)noexcept{
     if(failure.curlCode){
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash upload failed: curl code={} {}", static_cast<i64>(*failure.curlCode), curl_easy_strerror(*failure.curlCode));
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_package_upload", .expression = failure.operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_UploadCategory, .expression = failure.operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         return;
     }
     if(failure.responseCode){
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash upload failed: HTTP status={}", static_cast<i64>(*failure.responseCode));
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_package_upload", .expression = failure.operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_UploadCategory, .expression = failure.operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         return;
     }
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_package_upload", .expression = failure.operation, .message = "Crash upload SDK resource admission failed", .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_UploadCategory, .expression = failure.operation, .message = "Crash upload SDK resource admission failed", .file = __FILE__, .line = __LINE__, });
 }
 
 template<typename ArenaT>
@@ -261,7 +263,7 @@ static bool WriteUploadAttemptText(Alloc::ScratchArena& scratchArena, const ::Pa
     text += "\n";
     if(WriteTextFile(packageDirectory / PackageNames::s_UploadAttemptFileName, AStringView(text.data(), text.size())))
         return true;
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_package_error", .expression = "write_upload_attempt", .message = "Crash upload state text could not be written or closed", .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_PackageErrorCategory, .expression = "write_upload_attempt", .message = "Crash upload state text could not be written or closed", .file = __FILE__, .line = __LINE__, });
     return false;
 }
 
@@ -416,8 +418,8 @@ static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, con
             return;
         if(!WriteAndroidCollectionNote(scratchArena, request))
             CaptureDiagnosticEvent(DiagnosticEventRecord{
-                .event = "warning",
-                .category = "crash_package_error",
+                .event = s_WarningEventName,
+                .category = s_PackageErrorCategory,
                 .expression = "write_android_collection_note",
                 .message = "Android collection note could not be written or closed",
                 .file = __FILE__,
@@ -428,8 +430,8 @@ static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, con
     CrashBytesT<Alloc::ScratchArena> empty(scratchArena);
     if(!WriteBinaryFile(recordPath, empty))
         CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = "warning",
-            .category = "crash_package_error",
+            .event = s_WarningEventName,
+            .category = s_PackageErrorCategory,
             .expression = "clear_android_emergency_record",
             .message = "Collected Android emergency record could not be cleared or closed",
             .file = __FILE__,
@@ -456,7 +458,7 @@ bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snap
     const auto retentionBeforeUpload = ApplyCrashSpoolRetention(scratchArena, spoolDirectory, snapshot.spoolRetention, AStringView(snapshot.protectedPendingPackageName));
     if(!retentionBeforeUpload){
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash spool retention failed before upload: {} {}", retentionBeforeUpload.error().category().name(), retentionBeforeUpload.error().value());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_spool_retention", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_SpoolRetentionCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     }
     const bool retentionOk = static_cast<bool>(retentionBeforeUpload);
 
@@ -500,7 +502,7 @@ bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snap
     const auto retentionAfterUpload = ApplyCrashSpoolRetention(scratchArena, spoolDirectory, snapshot.spoolRetention);
     if(!retentionAfterUpload){
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash spool retention failed after upload: {} {}", retentionAfterUpload.error().category().name(), retentionAfterUpload.error().value());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "crash_spool_retention", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_SpoolRetentionCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     }
     return allUploaded && recoveryOk && retentionOk && static_cast<bool>(retentionAfterUpload);
 }

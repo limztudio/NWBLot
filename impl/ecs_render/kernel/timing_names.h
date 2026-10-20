@@ -114,6 +114,34 @@ inline constexpr Core::GpuTimingScopeDefinition s_SurfelUpsample("render.surfel_
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Pass graph names and labels shared by task declarations, imported stage resources, and frame telemetry.
+namespace RendererGpuPassText{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr AStringView s_AvboitDepthWarpName = "render.avboit.depth_warp";
+inline constexpr AStringView s_AvboitDepthWarpLabel = "AVBOIT Depth Warp";
+inline constexpr AStringView s_AvboitExtinctionName = "render.avboit.extinction";
+inline constexpr AStringView s_AvboitExtinctionLabel = "AVBOIT Extinction";
+inline constexpr AStringView s_AvboitIntegrationLabel = "AVBOIT Integration";
+inline constexpr AStringView s_TransparentCsgIntervalsLabel = "Transparent CSG Intervals";
+inline constexpr AStringView s_ShadowVisibilityLabel = "Shadow Visibility";
+inline constexpr AStringView s_DeferredLightingLabel = "Deferred Lighting";
+inline constexpr AStringView s_DeferredCompositeLabel = "Deferred Composite";
+inline constexpr AStringView s_DeferredPresentLabel = "Deferred Present";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 

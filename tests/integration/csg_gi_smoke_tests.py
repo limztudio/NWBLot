@@ -9,6 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from csg_gi_smoke import validate_capture_evidence  # noqa: E402
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
+LIT_BEGAN_BEFORE = "began before"
+LIT_NAN = "nan"
+LIT_INF = "inf"
+LIT_CAPTURE_SOURCE = "capture source"
+
 
 EVIDENCE = """GiTestSmokeProject: CSG GI live warmup start source_frame=361 presentations=360 required_presentations=360 required_seconds=30
 GiTestSmokeProject: CSG GI live warmup end source_frame=512 presentations=511 elapsed_seconds=30.000001
@@ -32,17 +37,17 @@ class CsgGiCaptureEvidenceTests(unittest.TestCase):
 
     def test_compilation_time_cannot_replace_post_frame_warmup(self):
         for count in (0, 359):
-            with self.subTest(count=count), self.assertRaisesRegex(SmokeFailure, "began before"):
+            with self.subTest(count=count), self.assertRaisesRegex(SmokeFailure, LIT_BEGAN_BEFORE):
                 validate_capture_evidence(EVIDENCE.replace("presentations=360 required", f"presentations={count} required"), 360)
 
     def test_reduced_or_mismatched_warmup_count_is_rejected(self):
         with self.assertRaisesRegex(SmokeFailure, "at least 360"):
             validate_capture_evidence(EVIDENCE, 359)
-        with self.assertRaisesRegex(SmokeFailure, "began before"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_BEGAN_BEFORE):
             validate_capture_evidence(EVIDENCE, 361)
 
     def test_short_or_nonfinite_elapsed_interval_is_rejected(self):
-        for value in ("29.999999", "0", "-30", "nan", "inf", "-inf"):
+        for value in ("29.999999", "0", "-30", LIT_NAN, LIT_INF, "-inf"):
             with self.subTest(value=value), self.assertRaisesRegex(SmokeFailure, "completed 30-second"):
                 validate_capture_evidence(EVIDENCE.replace("elapsed_seconds=30.000001", f"elapsed_seconds={value}"), 360)
 
@@ -53,7 +58,7 @@ class CsgGiCaptureEvidenceTests(unittest.TestCase):
                     validate_capture_evidence(EVIDENCE.replace(f"{field}={current}", f"{field}={value}"), 360)
 
     def test_lower_or_nonfinite_declared_interval_is_rejected(self):
-        for value in ("0", "29", "nan", "inf"):
+        for value in ("0", "29", LIT_NAN, LIT_INF):
             with self.subTest(value=value), self.assertRaisesRegex(SmokeFailure, "require 30"):
                 validate_capture_evidence(EVIDENCE.replace("required_seconds=30", f"required_seconds={value}"), 360)
 
@@ -64,13 +69,13 @@ class CsgGiCaptureEvidenceTests(unittest.TestCase):
 
     def test_stale_or_missing_source_identity_is_rejected(self):
         for value in ("511", "513", str(2**64 - 1)):
-            with self.subTest(value=value), self.assertRaisesRegex(SmokeFailure, "capture source"):
+            with self.subTest(value=value), self.assertRaisesRegex(SmokeFailure, LIT_CAPTURE_SOURCE):
                 validate_capture_evidence(EVIDENCE.replace("capture source_frame=512", f"capture source_frame={value}"), 360)
 
     def test_same_old_readback_and_fixture_source_cannot_precede_live_interval(self):
         altered = EVIDENCE.replace("graphics source frame 512", "graphics source frame 511")
         altered = altered.replace("capture source_frame=512", "capture source_frame=511")
-        with self.assertRaisesRegex(SmokeFailure, "capture source"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_CAPTURE_SOURCE):
             validate_capture_evidence(altered, 360)
 
     def test_duplicate_evidence_cannot_select_a_favorable_interval(self):

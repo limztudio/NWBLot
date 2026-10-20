@@ -25,6 +25,25 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_volume_staging{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr StringView s_WarningEventName = "warning";
+inline constexpr StringView s_CleanupCategory = "filesystem_volume_cleanup";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView operationName, const AStringView label){
 
     if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
@@ -70,7 +89,7 @@ StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard()noexcept{
         return;
     if(const auto removed = RemoveAllForCleanup(m_directoryPath); !removed){
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("{}: failed to remove {} '{}', error {}", m_operationName, m_label, m_directoryPath.c_str(), removed.error().value());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "filesystem_volume_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_volume_staging::s_WarningEventName, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     }
 }
 
@@ -225,7 +244,7 @@ bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outpu
                     if(const auto restored = RenamePath(move.destinationPath, move.sourcePath); !restored){
                         rollbackComplete = false;
                         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to restore volume segment '{}', error {}", move.sourcePath.c_str(), restored.error().value());
-                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "filesystem_volume_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_volume_staging::s_WarningEventName, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
                     }
                 }
                 else{
@@ -233,7 +252,7 @@ bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outpu
                         rollbackComplete = false;
                         const i32 errorValue = removed ? 0 : removed.error().value();
                         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to remove promoted volume segment '{}', error {}", move.destinationPath.c_str(), errorValue);
-                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "filesystem_volume_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_volume_staging::s_WarningEventName, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
                     }
                 }
             }
@@ -255,8 +274,8 @@ bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outpu
         }
     }
     if(promoted || rollbackComplete){
-        CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, "backup directory");
-        CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, "stage directory");
+        CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, s_BackupDirectoryLabel);
+        CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, s_StageDirectoryLabel);
     }
     return promoted;
 }

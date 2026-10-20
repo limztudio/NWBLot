@@ -16,6 +16,23 @@ import smoke_cpu_gpu_timing as timing
 from smoke_volume_identity import file_identity
 from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text)
 
+LIT_REFLECTIONSMOKEPROJECT_HARDWARE_AVAILA = "ReflectionSmokeProject: hardware available"
+LIT_DIAGNOSTIC = "diagnostic"
+LIT_HARDWARE = "hardware"
+LIT_PRESENTATIONS = "presentations"
+LIT_SECONDS = "seconds"
+LIT_FIRST_SOURCE_FRAME = "first_source_frame"
+LIT_FIRST_SOURCE = "first_source"
+LIT_END_SOURCE = "end_source"
+LIT_SAMPLES = "samples"
+LIT_LAST_SOURCE_FRAME = "last_source_frame"
+LIT_NWB_REFLECTION_CPU_GPU_TIMING_FILE = "NWB_REFLECTION_CPU_GPU_TIMING_FILE"
+LIT_UTF_8 = "utf-8"
+LIT_REFLECTION_CPU_DIAGNOSTIC = "reflection CPU diagnostic"
+LIT_PROCESS_TAIL_TXT = "process_tail.txt"
+LIT_RUNTIME_LOG = "runtime.log"
+LIT_CPU_GPU_SUMMARY_JSON = "cpu_gpu_summary.json"
+
 CASES = ("optical_csg_reference", "optical_csg_cap")
 REQUIRED_GPU = ("render.frame", "render.reflection_hardware")
 REQUIRED_CPU = ("graphics.frame", "graphics.prepare_resources", "graphics.render_passes")
@@ -46,16 +63,16 @@ def _one(lines, prefix, pattern):
 def parse_runtime_log(text, case):
     if case not in CASES:
         raise SmokeFailure("unsupported reflection CPU diagnostic fixture")
-    validate_expected_log_text(text, [f"ReflectionSmokeProject: case {case} created", "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: shutdown"], [*STRICT_LOG_FAILURE_MESSAGES, "FramebufferCapture:", "ReflectionSmokeStatistics:",
+    validate_expected_log_text(text, [f"ReflectionSmokeProject: case {case} created", LIT_REFLECTIONSMOKEPROJECT_HARDWARE_AVAILA, "ReflectionSmokeProject: shutdown"], [*STRICT_LOG_FAILURE_MESSAGES, "FramebufferCapture:", "ReflectionSmokeStatistics:",
          "ReflectionSmokeHistory:", "ReflectionSmokeOptics:", "ReflectionSmokeSlicePackets:", "ReflectionSmokeProject: fps avg=", "render submission suspended"])
     args = SimpleNamespace(family=case, ray_budget=1382400, optical_queries=16, screen_steps=96, mip_count=10, width=960, height=720, require_hardware=True)
-    reflection.validate_trial_log(text, args, reflection.Variant("diagnostic", "hardware", temporal=False, spatial=False, feedback=False))
+    reflection.validate_trial_log(text, args, reflection.Variant(LIT_DIAGNOSTIC, LIT_HARDWARE, temporal=False, spatial=False, feedback=False))
     lines = text.replace("\r\n", "\n").splitlines()
     extents = set(ab.DIMENSIONS.findall(text))
     if extents != {("960", "720")}:
         raise SmokeFailure("reflection diagnostic extent differs from 960x720")
     availability = [line for line in lines if line.startswith("ReflectionSmokeProject: hardware ") and line.endswith((" available", " unavailable"))]
-    if availability != ["ReflectionSmokeProject: hardware available"]:
+    if availability != [LIT_REFLECTIONSMOKEPROJECT_HARDWARE_AVAILA]:
         raise SmokeFailure("reflection diagnostic has contradictory hardware availability")
     configured, configured_index = _one(lines, "ReflectionCpuTiming: configured ", re.escape(f"ReflectionCpuTiming: configured case={case} preparation_presentations=64 warmup_seconds=5 "
         "minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"))
@@ -93,10 +110,10 @@ def parse_runtime_log(text, case):
             raise SmokeFailure("reflection diagnostic interval count differs from its endpoints")
         intervals.append(dict(presentations=admitted, seconds=wall, first=start, last=finish, first_source=frame_start, end_source=frame_end))
         previous_presentation, previous_source = finish, frame_end
-    actual_positive = sum(row["presentations"] > 0 for row in intervals)
+    actual_positive = sum(row[LIT_PRESENTATIONS] > 0 for row in intervals)
     if (previous_presentation, previous_source) != (last, source_end) or positive != actual_positive:
         raise SmokeFailure("reflection diagnostic final endpoints or positive interval count disagree")
-    if not math.isclose(sum(row["seconds"] for row in intervals), seconds, rel_tol=1e-7, abs_tol=1e-6):
+    if not math.isclose(sum(row[LIT_SECONDS] for row in intervals), seconds, rel_tol=1e-7, abs_tol=1e-6):
         raise SmokeFailure("reflection diagnostic interval duration sum differs from the actual window")
     return dict(case=case, first=first, last=last, seconds=seconds, presentations=count, first_source=source_first, end_source=source_end, warmup_seconds=warmup, preparation_presentations=prepared,
         positive_intervals=positive, intervals=intervals, accepted_wall_frame_ms=1000 * seconds / count, diagnostic_only=True, performance_qualification=False, runtime_signature=ab.device_material_signature(text))
@@ -105,43 +122,43 @@ def parse_runtime_log(text, case):
 def validate_publications(log_text, raw_path, measurement):
     result = timing.verify_capture(log_text, raw_path, measurement, True, "reflection")
     window = result["window"]
-    if (window["first_source_frame"], window["end_source_frame_exclusive"]) != (measurement["first_source"], measurement["end_source"]):
+    if (window[LIT_FIRST_SOURCE_FRAME], window["end_source_frame_exclusive"]) != (measurement[LIT_FIRST_SOURCE], measurement[LIT_END_SOURCE]):
         raise SmokeFailure("reflection publication source window disagrees with native measurement")
     coverage = {}
     for domain, names in (("cpu", REQUIRED_CPU), ("gpu", REQUIRED_GPU)):
         for name in names:
             rows = [row for row in result["publications"] if row["included"] and row["domain"] == domain and row["scope"] == name]
-            if sum(row["samples"] for row in rows) < MINIMUM_SAMPLES:
+            if sum(row[LIT_SAMPLES] for row in rows) < MINIMUM_SAMPLES:
                 raise SmokeFailure(f"reflection diagnostic has fewer than 100 completed {domain} samples: {name}")
             seen_intervals = set()
             last_end = None
             for row in rows:
-                if row["seconds"] <= 0:
+                if row[LIT_SECONDS] <= 0:
                     raise SmokeFailure(f"reflection diagnostic target publication is not positive: {name}")
-                if last_end is not None and row["first_source_frame"] <= last_end:
+                if last_end is not None and row[LIT_FIRST_SOURCE_FRAME] <= last_end:
                     raise SmokeFailure(f"reflection diagnostic target publication source ranges overlap or regress: {name}")
-                if row["samples"] > row["last_source_frame"] - row["first_source_frame"] + 1:
+                if row[LIT_SAMPLES] > row[LIT_LAST_SOURCE_FRAME] - row[LIT_FIRST_SOURCE_FRAME] + 1:
                     raise SmokeFailure(f"reflection diagnostic target scope has more than one sample per source frame: {name}")
-                last_end = row["last_source_frame"]
+                last_end = row[LIT_LAST_SOURCE_FRAME]
                 for index, interval in enumerate(measurement["intervals"]):
-                    if interval["presentations"] > 0 and interval["first_source"] < row["observation_frame"] <= interval["end_source"]:
+                    if interval[LIT_PRESENTATIONS] > 0 and interval[LIT_FIRST_SOURCE] < row["observation_frame"] <= interval[LIT_END_SOURCE]:
                         seen_intervals.add(index)
                         break
             if len(seen_intervals) < MINIMUM_INTERVALS:
                 raise SmokeFailure(f"reflection diagnostic has fewer than 11 positive completed publication intervals: {name}")
-            coverage[f"{domain}:{name}"] = dict(positive_publication_intervals=len(seen_intervals), completed_samples=sum(row["samples"] for row in rows), first_source=rows[0]["first_source_frame"], last_source=rows[-1]["last_source_frame"])
+            coverage[f"{domain}:{name}"] = dict(positive_publication_intervals=len(seen_intervals), completed_samples=sum(row[LIT_SAMPLES] for row in rows), first_source=rows[0][LIT_FIRST_SOURCE_FRAME], last_source=rows[-1][LIT_LAST_SOURCE_FRAME])
     result["required_publication_coverage"] = coverage
     return result
 
 
 def launch_environment(base, case, raw_path):
     # Use the existing reflection workload settings; replace its output producer with the explicit CPU/GPU probe.
-    workload = ab.reflection_workload("diagnostic", case, "hardware", 0.0, False, False, reflection.HARDWARE)
+    workload = ab.reflection_workload(LIT_DIAGNOSTIC, case, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE)
     env, overrides = ab.configure_environment(base, workload, raw_path)
     env.pop("NWB_GPU_TIMING_FILE", None)
-    env.pop("NWB_REFLECTION_CPU_GPU_TIMING_FILE", None)
+    env.pop(LIT_NWB_REFLECTION_CPU_GPU_TIMING_FILE, None)
     env["NWB_REFLECTION_SMOKE_CPU_DIAGNOSTICS"] = "1"
-    env["NWB_REFLECTION_CPU_GPU_TIMING_FILE"] = str(raw_path)
+    env[LIT_NWB_REFLECTION_CPU_GPU_TIMING_FILE] = str(raw_path)
     return env
 
 
@@ -153,7 +170,7 @@ def identities(args):
 
 
 def write_json(path, value):
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding=LIT_UTF_8)
 
 
 def acquire(args):
@@ -174,21 +191,21 @@ def acquire(args):
             process.wait(timeout=args.timeout)
         except subprocess.TimeoutExpired as error:
             raise SmokeFailure("reflection CPU diagnostic did not self-exit before its deadline") from error
-        code, tail = terminate_process(process, "reflection CPU diagnostic")
+        code, tail = terminate_process(process, LIT_REFLECTION_CPU_DIAGNOSTIC)
         process = None
-        (output / "process_tail.txt").write_text(tail, encoding="utf-8")
-        require_normal_process_exit(code, tail, "reflection CPU diagnostic")
+        (output / LIT_PROCESS_TAIL_TXT).write_text(tail, encoding=LIT_UTF_8)
+        require_normal_process_exit(code, tail, LIT_REFLECTION_CPU_DIAGNOSTIC)
         text = shutdown_logserver_and_collect(logger, log_directory, baseline, pattern)
         logger, collected = None, True
-        (output / "runtime.log").write_text(text, encoding="utf-8")
+        (output / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
         measurement = parse_runtime_log(text, args.case)
         publications = validate_publications(text, output / RAW_NAME, measurement)
-        write_json(output / "cpu_gpu_summary.json", publications)
+        write_json(output / LIT_CPU_GPU_SUMMARY_JSON, publications)
         after = identities(args)
         if before != after:
             raise SmokeFailure("reflection diagnostic executable, dependencies, resources or Python closure changed")
         result = dict(schema=1, passed=True, diagnostic_only=True, performance_qualification=False, exit_code=code, case=args.case, measurement=measurement, cpu_gpu_diagnostics=publications, identity_before=before, identity_after=after,
-            artifacts={name: file_identity(output / name) for name in ("runtime.log", "process_tail.txt", RAW_NAME, "cpu_gpu_summary.json")},
+            artifacts={name: file_identity(output / name) for name in (LIT_RUNTIME_LOG, LIT_PROCESS_TAIL_TXT, RAW_NAME, LIT_CPU_GPU_SUMMARY_JSON)},
             interpretation="Same final renderer and resource contract; scopes overlap and are not summed. This is CPU/frame diagnostic evidence, not an FPS or speed qualification.")
         write_json(output / "result.json", result)
         return result
@@ -197,14 +214,14 @@ def acquire(args):
         errors = []
         if process is not None:
             try:
-                _, tail = terminate_process(process, "reflection CPU diagnostic")
-                (output / "process_tail.txt").write_text(tail, encoding="utf-8")
+                _, tail = terminate_process(process, LIT_REFLECTION_CPU_DIAGNOSTIC)
+                (output / LIT_PROCESS_TAIL_TXT).write_text(tail, encoding=LIT_UTF_8)
             except Exception as error:
                 errors.append(str(error))
         if not collected and log_directory is not None:
             try:
                 text = shutdown_logserver_and_collect(logger, log_directory, baseline, pattern)
-                (output / "runtime.log").write_text(text, encoding="utf-8")
+                (output / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
                 logger = None
             except Exception as error:
                 errors.append(str(error))
@@ -247,7 +264,7 @@ def main(argv=None):
     try:
         args = parse_args(argv)
         result = acquire(args)
-        print(f"PASS reflection CPU/GPU diagnostic {args.case}: {result['measurement']['presentations']} presentations")
+        print(f"PASS reflection CPU/GPU diagnostic {args.case}: {result['measurement'][LIT_PRESENTATIONS]} presentations")
         return 0
     except (SmokeFailure, SmokeSkip, OSError, ValueError, subprocess.SubprocessError) as error:
         if args is not None and args.output_directory.is_dir():

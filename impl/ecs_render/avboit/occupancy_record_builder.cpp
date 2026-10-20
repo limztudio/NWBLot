@@ -37,6 +37,8 @@ static constexpr usize s_CsgIntervalUseCount = 4u;
 static constexpr usize s_EmulationBaseCount = 4u;
 static constexpr usize s_EmulationPlanUseCount = 8u;
 static constexpr usize s_SharedGenerateUseCount = 5u;
+static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
+static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,7 +186,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[3u] = {};
+    Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[__hidden_avboit_occupancy_record::s_MaterialResourceSetUseCapacity] = {};
     usize occupancyMaterialResourceSetUseCount = 0u;
     if(occupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
         occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] = occupancyMaterialGeometrySetUse;
@@ -254,7 +256,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
                 inputs.csgRemovedIntervalCountSubresources
             );
         }
-        Core::GpuTaskResourceSetUse occupancyComputeEmulationResourceSetUses[3u] = {};
+        Core::GpuTaskResourceSetUse occupancyComputeEmulationResourceSetUses[__hidden_avboit_occupancy_record::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize occupancyComputeEmulationResourceSetUseCount = 0u;
         occupancyComputeEmulationResourceSetUses[occupancyComputeEmulationResourceSetUseCount++] = occupancyMaterialGeometrySetUse;
         if(inputs.materialSampledTextureSet.valid()){
@@ -418,7 +420,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     }
     else{
         const Core::GpuTaskId rasterDependencies[] = { occupancyDependency, inputs.reusedGeometryProducer };
-        const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != occupancyDependency ? 2u : 1u;
+        const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != occupancyDependency ? LengthOf(rasterDependencies) : 1u;
         Core::GpuTaskDesc avboitOccupancyDesc;
         avboitOccupancyDesc
             .setIdentity(Name("render.avboit.pre"))

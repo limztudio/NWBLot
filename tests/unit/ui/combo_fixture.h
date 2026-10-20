@@ -27,6 +27,13 @@ namespace UiComboTests{
 using namespace Impl::Ui;
 using namespace UiWidgetTests;
 
+inline constexpr Rect s_ComboPanelBounds{ 10.0f, 10.0f, 320.0f, 240.0f };
+inline constexpr AStringView s_ComboPanelKey = "panel";
+inline constexpr AStringView s_ComboKey = "combo";
+// The combo popup list part and the list's own row container share the "rows" text.
+inline constexpr AStringView s_ComboRowsKey = "rows";
+inline constexpr AStringView s_ListRowsKey = "rows";
+
 
 // Keys remain stable through reorder and removal; the large source needs no row allocation.
 class ComboSource : public IListDataSource{
@@ -115,31 +122,31 @@ public:
 
 class ComboFixture : public WidgetFixture{
 protected:
-    [[nodiscard]] bool declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
+    [[nodiscard]] bool declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return declareSource(generation, m_source, m_state, options, bounds);
     }
 
-    [[nodiscard]] bool declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
-        if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
+    [[nodiscard]] bool declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, bounds))
             return false;
-        m_result = m_builder.comboBox("combo", source, state, options);
+        m_result = m_builder.comboBox(s_ComboKey, source, state, options);
         return m_result.valid;
     }
 
-    [[nodiscard]] bool prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
+    [[nodiscard]] bool prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return declareCombo(generation, options, bounds) && finishPanel();
     }
 
-    [[nodiscard]] bool accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
+    [[nodiscard]] bool accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return prepare(generation, options, bounds) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId host(const AStringView key = "combo")const{ return id(key, "panel"); }
-    [[nodiscard]] WidgetId popup(const AStringView key = "combo")const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "popup")); }
-    [[nodiscard]] WidgetId list(const AStringView key = "combo")const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "rows")); }
+    [[nodiscard]] WidgetId host(const AStringView key = s_ComboKey)const{ return id(key, s_ComboPanelKey); }
+    [[nodiscard]] WidgetId popup(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "popup")); }
+    [[nodiscard]] WidgetId list(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), s_ComboRowsKey)); }
 
-    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = "combo")const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(list(combo), "rows")), key));
+    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = s_ComboKey)const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(list(combo), s_ListRowsKey)), key));
     }
 
     using WidgetFixture::press;

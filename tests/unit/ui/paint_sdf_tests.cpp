@@ -43,7 +43,7 @@ TEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip){
     auto firstCreationResult = makeSdfPage();
     ASSERT_TRUE(firstCreationResult);
     const SharedSdfAtlasPage first = Move(*firstCreationResult);
-    auto secondCreationResult = makeSdfPage(11u, 1u, 1u);
+    auto secondCreationResult = makeSdfPage(s_DefaultAtlasIdentity, 1u, 1u);
     ASSERT_TRUE(secondCreationResult);
     const SharedSdfAtlasPage second = Move(*secondCreationResult);
     auto coverageCreationResult = makeCoverage(22u);
@@ -145,7 +145,7 @@ TEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes){
     auto originalCreationResult = makeSdfPage();
     ASSERT_TRUE(originalCreationResult);
     const SharedSdfAtlasPage original = Move(*originalCreationResult);
-    auto conflictingCreationResult = makeSdfPage(11u, 1u, 0u, 64u);
+    auto conflictingCreationResult = makeSdfPage(s_DefaultAtlasIdentity, 1u, 0u, 64u);
     ASSERT_TRUE(conflictingCreationResult);
     const SharedSdfAtlasPage conflicting = Move(*conflictingCreationResult);
     ASSERT_TRUE(original && conflicting);

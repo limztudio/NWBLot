@@ -11,6 +11,11 @@ sys.path.insert(0, str(ROOT / "tests" / "smoke"))
 sys.path.insert(0, str(ROOT / "tests" / "ab"))
 from gpu_timing_parse import NAME_SYMBOLS_HEADER, load_name_symbols, parse_timing_file, SmokeFailure
 
+LIT_UTF_8 = "utf-8"
+LIT_RENDER_FRAME = "render.frame"
+LIT_N_0_5S = "0.5s"
+LIT_N_20_FRAMES = "20 frames"
+
 INTERVAL = "=== interval: 20 frames / 0.5s ===\n"
 CURRENT_ROW = "  frame_hash: window_avg_ms=4 window_min_ms=3 window_max_ms=5 published_windows=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
 RETIRED_ROW = "  frame_hash: avg=4 min=3 max=5 samples=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
@@ -24,7 +29,7 @@ class GpuTimingParseTests(unittest.TestCase):
         self.path = Path(directory.name) / "timing.txt"
 
     def parse(self, text, offset=0):
-        self.path.write_bytes(text.encode("utf-8"))
+        self.path.write_bytes(text.encode(LIT_UTF_8))
         return parse_timing_file(self.path, SYMBOLS, offset)
 
     def test_unsupported_name_symbol_document_cannot_import_rows_then_current_input_recovers(self):
@@ -33,13 +38,13 @@ class GpuTimingParseTests(unittest.TestCase):
         unsupported = ("", row, "\n" + current, "nwb_namesym_v0\n" + row, "nwb_namesym_v2\n" + row, "nwb_namesym_v10\n" + row, NAME_SYMBOLS_HEADER + "_suffix\n" + row, "unknown\n" + current,)
         for text in unsupported:
             with self.subTest(document=text):
-                self.path.write_text(text, encoding="utf-8")
+                self.path.write_text(text, encoding=LIT_UTF_8)
                 with self.assertRaisesRegex(SmokeFailure, "requires current nwb_namesym_v1 header"):
                     load_name_symbols(self.path, ())
-                self.path.write_text(current, encoding="utf-8")
+                self.path.write_text(current, encoding=LIT_UTF_8)
                 self.assertEqual(load_name_symbols(self.path, ()), {"sidecar_hash": "sidecar.scope"})
 
-        self.path.write_text(NAME_SYMBOLS_HEADER + "\n", encoding="utf-8")
+        self.path.write_text(NAME_SYMBOLS_HEADER + "\n", encoding=LIT_UTF_8)
         self.assertEqual(load_name_symbols(self.path, ()), {})
 
     def test_retired_or_partial_rows_fail_alone_and_among_current_intervals_then_recover(self):
@@ -49,7 +54,7 @@ class GpuTimingParseTests(unittest.TestCase):
             for text in (INTERVAL + row, INTERVAL + CURRENT_ROW + INTERVAL + row):
                 with self.subTest(text=text), self.assertRaises(SmokeFailure):
                     self.parse(text)
-                self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{"render.frame": 4.0}])
+                self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{LIT_RENDER_FRAME: 4.0}])
 
     def test_invalid_values_and_duplicate_scope_evidence_fail_then_recover(self):
         rows = [CURRENT_ROW.replace(old, new) for old, new in (("window_avg_ms=4", "window_avg_ms=1e999"), ("window_avg_ms=4", "window_avg_ms=..."), ("window_avg_ms=4", "window_avg_ms=1e"), ("total_ms=80", "total_ms=-1"),
@@ -58,35 +63,35 @@ class GpuTimingParseTests(unittest.TestCase):
         for row in rows:
             with self.subTest(row=row), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + row)
-            self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{"render.frame": 4.0}])
+            self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{LIT_RENDER_FRAME: 4.0}])
 
     def test_unrecognized_indentation_or_rows_cannot_hide_retired_evidence(self):
         retired = RETIRED_ROW
         for row in (retired[1:], "\t" + retired.lstrip(), CURRENT_ROW.lstrip(), "unexpected telemetry\n"):
             with self.subTest(row=row), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + CURRENT_ROW + row)
-            self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{"render.frame": 4.0}])
+            self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{LIT_RENDER_FRAME: 4.0}])
         with self.assertRaises(SmokeFailure):
             self.parse(CURRENT_ROW)
 
     def test_malformed_intervals_and_native_counter_overflows_fail_then_recover(self):
-        for header in (INTERVAL.replace("0.5s", "...s"), INTERVAL.replace("0.5s", "1e999s"), INTERVAL.replace("0.5s", "0s"), INTERVAL.replace("0.5s", "-1s"), INTERVAL.replace("20 frames", "0 frames"), INTERVAL.replace("20 frames", "4294967296 frames")):
+        for header in (INTERVAL.replace(LIT_N_0_5S, "...s"), INTERVAL.replace(LIT_N_0_5S, "1e999s"), INTERVAL.replace(LIT_N_0_5S, "0s"), INTERVAL.replace(LIT_N_0_5S, "-1s"), INTERVAL.replace(LIT_N_20_FRAMES, "0 frames"), INTERVAL.replace(LIT_N_20_FRAMES, "4294967296 frames")):
             with self.subTest(header=header), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + CURRENT_ROW + header + CURRENT_ROW)
         for old, new in (("published_windows=20", "published_windows=4294967296"), ("gpu_samples=40", "gpu_samples=18446744073709551616")):
             with self.subTest(counter=new), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + CURRENT_ROW.replace(old, new))
         zero = CURRENT_ROW.replace("window_avg_ms=4 window_min_ms=3 window_max_ms=5", "window_avg_ms=0 window_min_ms=0 window_max_ms=0").replace("total_ms=80", "total_ms=0").replace("sample_avg_ms=2", "sample_avg_ms=0")
-        self.assertEqual(self.parse(INTERVAL + zero), [{"render.frame": 0.0}])
-        self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{"render.frame": 4.0}])
+        self.assertEqual(self.parse(INTERVAL + zero), [{LIT_RENDER_FRAME: 0.0}])
+        self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{LIT_RENDER_FRAME: 4.0}])
 
     def test_measurement_offset_excludes_retired_prefix_and_preserves_window_average(self):
         prefix = INTERVAL + RETIRED_ROW
         text = prefix + INTERVAL + CURRENT_ROW
         with self.assertRaises(SmokeFailure):
             self.parse(text)
-        self.assertEqual(self.parse(text, len(prefix.encode("utf-8"))), [{"render.frame": 4.0}])
-        for offset in (-1, len(text.encode("utf-8")) + 1):
+        self.assertEqual(self.parse(text, len(prefix.encode(LIT_UTF_8))), [{LIT_RENDER_FRAME: 4.0}])
+        for offset in (-1, len(text.encode(LIT_UTF_8)) + 1):
             with self.subTest(offset=offset), self.assertRaises(SmokeFailure):
                 parse_timing_file(self.path, SYMBOLS, offset)
 

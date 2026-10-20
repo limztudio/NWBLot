@@ -9,6 +9,17 @@ from pathlib import Path
 import re
 import struct
 
+LIT_E = "e"
+LIT_OPTICAL_CSG_UNSPECIFIED_CAP = "optical_csg_unspecified_cap"
+LIT_OPTICAL_CSG_CAP = "optical_csg_cap"
+LIT_OPTICAL_CSG_CAVITY = "optical_csg_cavity"
+LIT_OPTICAL_CSG_OPEN_TAIL = "optical_csg_open_tail"
+LIT_QUERIES = "queries"
+LIT_REASON = "reason"
+LIT_ENVIRONMENT = "environment"
+LIT_CROSSINGS = "crossings"
+LIT_TIR_EVENTS = "tir_events"
+
 LIT_NESTED = "nested"
 LIT_OPTICAL_TIR = "optical_tir"
 LIT_SINGLE = "single"
@@ -31,7 +42,7 @@ LIT_UTF_8 = "utf-8"
 
 
 def half(value):
-    return struct.unpack("e", struct.pack("e", value))[0]
+    return struct.unpack(LIT_E, struct.pack(LIT_E, value))[0]
 
 
 def add(a, b):
@@ -161,9 +172,9 @@ def authored_torus_triangles():
 def boundaries(case):
     if case == "optical_reference":
         return ()
-    if case in ("optical_unspecified_reference", "optical_csg_unspecified_cap"):
+    if case in ("optical_unspecified_reference", LIT_OPTICAL_CSG_UNSPECIFIED_CAP):
         return (box("retained_air", -9.5, 1, 1., CLEAR, LIT_UNSPECIFIED),)
-    if case in ("optical_csg_reference", "optical_csg_cap", "optical_csg_cavity", "optical_csg_open_tail"):
+    if case in ("optical_csg_reference", LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_CAVITY, LIT_OPTICAL_CSG_OPEN_TAIL):
         return (box("retained", -9.5, 1),)
     if case == LIT_OPTICAL_TIR:
         inverse_root_two = math.sqrt(0.5)
@@ -231,8 +242,8 @@ def dense_receiver_intersections(origin, direction):
 
 def csg_receiver_intersects(case, origin, direction, maximum):
     # The open quad extends the same source receiver behind the chart; even a no-hit collection reserves a traversal unit.
-    minimum_z = -16. if case == "optical_csg_open_tail" else -10.
-    maximum_z = 4. if case == "optical_csg_cavity" else -8.
+    minimum_z = -16. if case == LIT_OPTICAL_CSG_OPEN_TAIL else -10.
+    maximum_z = 4. if case == LIT_OPTICAL_CSG_CAVITY else -8.
     near, far = 0., maximum
     for position, component, bounds in zip(origin, direction, ((-12., 12.), (-7.6, 10.4), (minimum_z, maximum_z))):
         if component == 0.:
@@ -248,14 +259,14 @@ def trace_transmission(case, origin, direction, max_queries=16):
     if case in DENSE_CASES:
         intersections = dense_receiver_intersections(origin, direction)
         if not intersections:
-            return (0., 0., 0.), {"queries": 1, "reason": "environment", "crossings": 0, "tir_events": 0}
-        return DENSE_RADIANCE, {"queries": 2 if case == "optical_csg_dense" else 1, "reason": "opaque_dense", "crossings": len(intersections), "tir_events": 0, "nearest_distance": intersections[0]}
+            return (0., 0., 0.), {LIT_QUERIES: 1, LIT_REASON: LIT_ENVIRONMENT, LIT_CROSSINGS: 0, LIT_TIR_EVENTS: 0}
+        return DENSE_RADIANCE, {LIT_QUERIES: 2 if case == "optical_csg_dense" else 1, LIT_REASON: "opaque_dense", LIT_CROSSINGS: len(intersections), LIT_TIR_EVENTS: 0, "nearest_distance": intersections[0]}
 
     if case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
         # Unresolved thin spans or gaps retain conservative rejection even when grouped endpoints leave the same nonzero membership.
-        return (0.0, 0.0, 0.0), {"queries": 0, "reason": LIT_AMBIGUOUS, "crossings": 0, "tir_events": 0}
+        return (0.0, 0.0, 0.0), {LIT_QUERIES: 0, LIT_REASON: LIT_AMBIGUOUS, LIT_CROSSINGS: 0, LIT_TIR_EVENTS: 0}
     objects = boundaries(case)
-    csg_receiver = case in ("optical_csg_cap", "optical_csg_cavity", "optical_csg_open_tail", "optical_csg_unspecified_cap")
+    csg_receiver = case in (LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_CAVITY, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_CSG_UNSPECIFIED_CAP)
     active = [item for item in objects if item.contains(origin)]
     # At an interior start, ascending entry distance along the opposite direction reconstructs outer->inner membership.
     active.sort(key=lambda item: item.intersect(origin, scale(direction, -1))[0], reverse=True)
@@ -263,7 +274,7 @@ def trace_transmission(case, origin, direction, max_queries=16):
     throughput, radiance = [1.0] * 3, [0.0] * 3
     alpha_pending = case in (LIT_OPTICAL_ALPHA_BEFORE, "optical_alpha_after")
     tir_events, crossings = 0, 0
-    reason = "environment"
+    reason = LIT_ENVIRONMENT
     for _ in range(32):
         if used_queries >= max_queries:
             reason = LIT_QUERY_LIMIT
@@ -357,7 +368,7 @@ def trace_transmission(case, origin, direction, max_queries=16):
                 throughput = [weight * (1.0 - fresnel) * (eta_i / eta_t) ** 2 for weight in throughput]
                 direction, active = transmitted, proposed
         origin = add(hit_point, scale(direction, 2e-6))
-    return tuple(radiance), {"queries": used_queries, "crossings": crossings, "tir_events": tir_events, "reason": reason}
+    return tuple(radiance), {LIT_QUERIES: used_queries, LIT_CROSSINGS: crossings, LIT_TIR_EVENTS: tir_events, LIT_REASON: reason}
 
 
 def pixel_reference(case, x, y, width=960, height=720, max_queries=16):

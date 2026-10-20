@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "../graphics/common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Directions remain unnormalized so transformed intervals preserve the caller's ray parameter.
 bool nwbCsgAnalyticSlab(const float origin, const float direction, const float extent, inout float2 interval){
     if(direction == 0.0)
@@ -65,7 +71,7 @@ bool nwbCsgAnalyticPlaneInterval(const float3 origin, const float3 direction, co
     const float slope = dot(direction, normalDistance.xyz);
     if(!isfinite(distance) || !isfinite(slope) || dot(normalDistance.xyz, normalDistance.xyz) <= 0.0)
         return false;
-    const float unbounded = asfloat(0x7f7fffffu);
+    const float unbounded = asfloat(NWB_FLOAT_MAX_BITS);
     if(slope == 0.0){
         if(distance <= 0.0)
             interval = float2(-unbounded, unbounded);
@@ -82,7 +88,7 @@ bool nwbCsgAnalyticBoxInterval(const float3 origin, const float3 direction, cons
     interval = float2(1.0, 0.0);
     if(any(halfExtents < 0.0))
         return false;
-    const float unbounded = asfloat(0x7f7fffffu);
+    const float unbounded = asfloat(NWB_FLOAT_MAX_BITS);
     interval = float2(-unbounded, unbounded);
     for(uint axis = 0u; axis < 3u; ++axis){
         if(direction[axis] == 0.0 && abs(origin[axis]) > halfExtents[axis]){
@@ -106,7 +112,7 @@ bool nwbCsgAnalyticCapsuleInterval(const float3 origin, const float3 direction, 
     nwbCsgAnalyticUnionConvexPart(lower, interval);
     nwbCsgAnalyticUnionConvexPart(upper, interval);
     const float radialSpeed = dot(direction.xz, direction.xz);
-    const float unbounded = asfloat(0x7f7fffffu);
+    const float unbounded = asfloat(NWB_FLOAT_MAX_BITS);
     float2 cylinder = float2(-unbounded, unbounded);
     if(radialSpeed == 0.0){
         if(dot(origin.xz, origin.xz) > radius * radius)

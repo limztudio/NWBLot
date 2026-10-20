@@ -43,7 +43,7 @@ TEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndCl
     auto firstCreationResult = makeGlyphPage();
     ASSERT_TRUE(firstCreationResult);
     const SharedGlyphPage first = Move(*firstCreationResult);
-    auto secondCreationResult = makeGlyphPage(11u, 1u, 1u);
+    auto secondCreationResult = makeGlyphPage(s_DefaultAtlasIdentity, 1u, 1u);
     ASSERT_TRUE(secondCreationResult);
     const SharedGlyphPage second = Move(*secondCreationResult);
     ASSERT_TRUE(first);
@@ -87,7 +87,7 @@ TEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlier
     auto originalCreationResult = makeGlyphPage();
     ASSERT_TRUE(originalCreationResult);
     const SharedGlyphPage original = Move(*originalCreationResult);
-    auto appendedCreationResult = makeGlyphPage(11u, 2u);
+    auto appendedCreationResult = makeGlyphPage(s_DefaultAtlasIdentity, 2u);
     ASSERT_TRUE(appendedCreationResult);
     const SharedGlyphPage appended = Move(*appendedCreationResult);
     ASSERT_TRUE(original);
@@ -127,7 +127,7 @@ TEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPa
     const DrawSnapshot first = m_builder.freeze();
     original.reset();
     begin(8u);
-    auto appendedCreationResult = makeGlyphPage(11u, 2u);
+    auto appendedCreationResult = makeGlyphPage(s_DefaultAtlasIdentity, 2u);
     ASSERT_TRUE(appendedCreationResult);
     SharedGlyphPage appended = Move(*appendedCreationResult);
     ASSERT_TRUE(appended);

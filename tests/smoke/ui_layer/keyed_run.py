@@ -9,6 +9,9 @@ from fixture_launch import admit_fixture_processes, prepare_fixture_launch
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message)
 
+LIT_RECTANGLES = "rectangles"
+LIT_LOGICAL_EXTENT = "logical_extent"
+
 
 class KeyedRun:
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern, *, native_type, snapshot_reader, observer, minimum_height, fixture, capture_stage):
@@ -37,11 +40,11 @@ class KeyedRun:
         return round(x * scale_x), round(y * scale_y)
 
     def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot["rectangles"][name])))
+        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def row(self, offset):
-        x, y, width, height = self.snapshot["rectangles"]["first_row"]
-        vx, vy, vw, vh = self.snapshot["rectangles"]["viewport"]
+        x, y, width, height = self.snapshot[LIT_RECTANGLES]["first_row"]
+        vx, vy, vw, vh = self.snapshot[LIT_RECTANGLES]["viewport"]
         left, right = max(vx, x), min(vx + vw, x + width)
         top, bottom = max(vy, y + offset * height), min(vy + vh, y + (offset + 1) * height)
         if height <= 0.0 or right <= left or not 0 <= offset < self.snapshot["past"] - self.snapshot["first"] or bottom <= top:
@@ -53,7 +56,7 @@ class KeyedRun:
         for field in dynamic:
             self.expected.pop(field, None)
         if self.snapshot is not None:
-            self.native.pointer(*self.point(*center(self.snapshot["rectangles"]["counter"])))
+            self.native.pointer(*self.point(*center(self.snapshot[LIT_RECTANGLES]["counter"])))
         time.sleep(0.25)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
         stage_deadline = min(self.deadline, time.monotonic() + 10.0)
@@ -64,7 +67,7 @@ class KeyedRun:
             if snapshot is None:
                 time.sleep(0.1)
                 continue
-            if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < self.minimum_height:
+            if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < self.minimum_height:
                 raise SmokeSkip(f"the {self.fixture} fixture needs a logical client of at least 600x{self.minimum_height:g}")
             self.backend.capture_client_window(self.handle, path)
             report = self.observer(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)

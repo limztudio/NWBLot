@@ -28,23 +28,42 @@ struct NwbSurfelGuide{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// lowbias32 integer hash.
+static const uint NWB_SURFEL_GUIDE_HASH_OUTER_SHIFT = 16u;
+static const uint NWB_SURFEL_GUIDE_HASH_MIDDLE_SHIFT = 15u;
+static const uint NWB_SURFEL_GUIDE_HASH_FIRST_MULTIPLIER = 0x7feb352du;
+static const uint NWB_SURFEL_GUIDE_HASH_SECOND_MULTIPLIER = 0x846ca68bu;
+
+// Random values keep the top 22 hash bits and scale them by 2^-22.
+static const uint NWB_SURFEL_GUIDE_RANDOM_DROPPED_BITS = 10u;
+static const float NWB_SURFEL_GUIDE_RANDOM_UNIT_SCALE = 1.0 / 4194304.0;
+
+// Each float4 guide entry packs four bins.
+static const uint NWB_SURFEL_GUIDE_BINS_PER_FLOAT4 = 4u;
+static const uint NWB_SURFEL_GUIDE_FLOAT4_BIN_SHIFT = 2u;
+static const uint NWB_SURFEL_GUIDE_FLOAT4_BIN_MASK = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbSurfelGuideHash(uint value){
-    value ^= value >> 16u;
-    value *= 0x7feb352du;
-    value ^= value >> 15u;
-    value *= 0x846ca68bu;
-    value ^= value >> 16u;
+    value ^= value >> NWB_SURFEL_GUIDE_HASH_OUTER_SHIFT;
+    value *= NWB_SURFEL_GUIDE_HASH_FIRST_MULTIPLIER;
+    value ^= value >> NWB_SURFEL_GUIDE_HASH_MIDDLE_SHIFT;
+    value *= NWB_SURFEL_GUIDE_HASH_SECOND_MULTIPLIER;
+    value ^= value >> NWB_SURFEL_GUIDE_HASH_OUTER_SHIFT;
     return value;
 }
 
 float nwbSurfelGuideRandom(uint seed){
     // A 22-bit midpoint is exactly representable in float32 and stays strictly inside (0, 1).
     // Using 24 bits could round the upper endpoint to one, outside the last CDF stratum.
-    return (float(nwbSurfelGuideHash(seed) >> 10u) + 0.5) * (1.0 / 4194304.0);
+    return (float(nwbSurfelGuideHash(seed) >> NWB_SURFEL_GUIDE_RANDOM_DROPPED_BITS) + 0.5) * NWB_SURFEL_GUIDE_RANDOM_UNIT_SCALE;
 }
 
 float nwbSurfelGuideWeight(const NwbSurfelGuide guide, const uint bin){
-    return max(guide.weights[bin >> 2u][bin & 3u], NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
+    return max(guide.weights[bin >> NWB_SURFEL_GUIDE_FLOAT4_BIN_SHIFT][bin & NWB_SURFEL_GUIDE_FLOAT4_BIN_MASK], NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
 }
 
 float nwbSurfelGuideTotal(const NwbSurfelGuide guide){

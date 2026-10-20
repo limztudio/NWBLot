@@ -178,6 +178,8 @@ static constexpr u32 s_AsciiDigitFirst = '0';
 static constexpr u32 s_AsciiDigitLast = '9';
 static constexpr u32 s_AsciiUpperFirst = 'A';
 static constexpr u32 s_AsciiUpperLast = 'Z';
+static constexpr StringView s_WarningEventName = "warning";
+static constexpr StringView s_WindowLifecycleCategory = "frame_window_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -780,11 +782,11 @@ void Frame::cleanupPlatform()noexcept{
 
     if(windowFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame window destruction failed; native_domain=Win32 native_code={}", windowError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "frame_window_lifecycle", .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = FrameDetail::s_WarningEventName, .category = FrameDetail::s_WindowLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
     if(classFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame window class release failed; native_domain=Win32 native_code={}", classError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "frame_window_lifecycle", .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = FrameDetail::s_WarningEventName, .category = FrameDetail::s_WindowLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
 }
 

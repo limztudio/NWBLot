@@ -15,6 +15,20 @@ from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, S
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
 
+LIT_MODAL = "modal"
+LIT_RECTANGLES = "rectangles"
+LIT_LOGICAL_EXTENT = "logical_extent"
+LIT_PASSED = "passed"
+LIT_UTF_8 = "utf-8"
+LIT_TRIGGER = "trigger"
+LIT_TAB = "Tab"
+LIT_ESCAPE = "Escape"
+LIT_RETURN = "Return"
+LIT_COUNTER = "counter"
+LIT_F5 = "F5"
+LIT_F7 = "F7"
+LIT_UI_POPUP_FIXTURE = "UI popup fixture"
+
 
 class PopupRun:
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
@@ -29,7 +43,7 @@ class PopupRun:
         self.deadline = time.monotonic() + args.timeout
         self.snapshot = None
         self.stages = []
-        self.expected = {"open": 0, "modal": 0, "underlying": 0, "selected": 0, "checked": 0, "edit_focused": 0, "outside_focused": 0, "edge": 0, "right": 0, "visible": 1, "text_bytes": 5}
+        self.expected = {"open": 0, LIT_MODAL: 0, "underlying": 0, "selected": 0, "checked": 0, "edit_focused": 0, "outside_focused": 0, "edge": 0, "right": 0, "visible": 1, "text_bytes": 5}
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -39,7 +53,7 @@ class PopupRun:
         return round(x * scale_x), round(y * scale_y)
 
     def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot["rectangles"][name])))
+        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def checkpoint(self, name, *, extent=None, **changes):
         self.expected.update(changes)
@@ -53,11 +67,11 @@ class PopupRun:
             if snapshot is None:
                 time.sleep(0.1)
                 continue
-            if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < 390.0:
+            if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 390.0:
                 raise SmokeSkip("the popup fixture needs a logical client of at least 600x390")
             self.backend.capture_client_window(self.handle, path)
             report = observe_popup(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin)
-            if report["passed"]:
+            if report[LIT_PASSED]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path)})
                 self.stages.append(report)
@@ -67,72 +81,72 @@ class PopupRun:
         raise SmokeFailure(f"popup displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/WM_CHAR messages with native Shift modifiers"
+        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/WM_CHAR messages with native Shift modifiers"
                 if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus", "runtime_limit": "Synthetic text bypasses live IME. No native Wayland, physical pointer-grab, or native Linux qualification."}
-        (self.args.output_directory / "popup.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (self.args.output_directory / "popup.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
 
     def execute(self):
         self.checkpoint("initial")
         self.click("outside")
         self.checkpoint("outside_focus", outside_focused=1)
-        self.click("trigger")
+        self.click(LIT_TRIGGER)
         self.checkpoint("open_above_later_root", open=1, outside_focused=0)
-        self.native.tap("Tab")
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
+        self.native.tap(LIT_TAB)
         self.native.tap("space")
         self.checkpoint("popup_checkbox_by_keyboard", checked=1)
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
         self.checkpoint("tab_reaches_popup_edit", edit_focused=1)
         self.native.text("z")
         self.checkpoint("popup_edit_native_commit", text_bytes=6)
-        self.native.tap("Escape")
+        self.native.tap(LIT_ESCAPE)
         self.checkpoint("escape_from_edit_closes", open=0, edit_focused=0)
-        self.native.tap("Return")
+        self.native.tap(LIT_RETURN)
         self.checkpoint("restored_trigger_reopens", open=1)
-        self.native.tap("Tab", shift=True)
+        self.native.tap(LIT_TAB, shift=True)
         self.checkpoint("shift_tab_wraps_to_last", edit_focused=1)
-        self.native.tap("Tab")
+        self.native.tap(LIT_TAB)
         self.checkpoint("tab_wraps_to_first", edit_focused=0)
-        self.native.tap("Return")
+        self.native.tap(LIT_RETURN)
         self.checkpoint("keyboard_choice_closes", open=0, selected=1)
-        self.native.tap("Return")
+        self.native.tap(LIT_RETURN)
         self.checkpoint("choice_restores_trigger", open=1)
-        outside = self.point(*center(self.snapshot["rectangles"]["counter"]))
+        outside = self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_COUNTER]))
         self.native.button(True, *outside)
         self.checkpoint("outside_press_dismisses", open=0)
         self.native.button(False, *outside)
         self.checkpoint("outside_release_is_consumed")
-        self.click("counter")
+        self.click(LIT_COUNTER)
         self.checkpoint("next_outside_sequence_activates", underlying=1)
-        self.click("trigger")
+        self.click(LIT_TRIGGER)
         self.checkpoint("pointer_choice_open", open=1)
         self.click("second")
         self.checkpoint("pointer_choice_closes", open=0, selected=2)
-        self.click("modal")
+        self.click(LIT_MODAL)
         self.checkpoint("modal_dims_later_root", open=1, modal=1)
-        self.click("counter")
+        self.click(LIT_COUNTER)
         self.checkpoint("modal_blocks_underlying")
-        self.native.tap("Escape")
+        self.native.tap(LIT_ESCAPE)
         self.checkpoint("modal_escape_restores", open=0)
-        self.click("trigger")
+        self.click(LIT_TRIGGER)
         self.checkpoint("placement_popup_open", open=1, modal=0)
-        self.native.tap("F5")
+        self.native.tap(LIT_F5)
         self.checkpoint("below_flips_above_and_clamps", edge=1)
         self.native.tap("F6")
         self.checkpoint("right_flips_left", right=1)
         self.backend.resize_client(self.handle, 800, 600)
         self.checkpoint("placement_after_resize", extent=(800, 600))
-        self.native.tap("F5")
+        self.native.tap(LIT_F5)
         self.checkpoint("ordinary_right_placement", extent=(800, 600), edge=0)
-        first = self.point(*center(self.snapshot["rectangles"]["first"]))
+        first = self.point(*center(self.snapshot[LIT_RECTANGLES]["first"]))
         self.native.button(True, *first)
-        self.native.tap("F7")
+        self.native.tap(LIT_F7)
         self.checkpoint("hidden_popup_retires_capture", open=0, visible=0, extent=(800, 600))
         self.native.button(False, *first)
         self.checkpoint("hidden_popup_release_cannot_choose", extent=(800, 600))
-        self.native.tap("F7")
+        self.native.tap(LIT_F7)
         self.checkpoint("restored_popup_requires_open", visible=1, extent=(800, 600))
-        self.click("trigger")
+        self.click(LIT_TRIGGER)
         self.checkpoint("focus_loss_popup_open", open=1, extent=(800, 600))
         self.native.focus_loss_and_gain()
         self.checkpoint("native_focus_loss_closes", open=0, extent=(800, 600))
@@ -163,15 +177,15 @@ def run(args):
     finally:
         try:
             if application is not None:
-                exit_code, tail = terminate_process(application, "UI popup fixture", handle)
-                require_normal_process_exit(exit_code, tail, "UI popup fixture")
+                exit_code, tail = terminate_process(application, LIT_UI_POPUP_FIXTURE, handle)
+                require_normal_process_exit(exit_code, tail, LIT_UI_POPUP_FIXTURE)
         finally:
             try:
                 text = ""
                 if log_directory is not None:
                     text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
                     logserver = None
-                    (args.output_directory / "popup.log").write_text(text, encoding="utf-8")
+                    (args.output_directory / "popup.log").write_text(text, encoding=LIT_UTF_8)
             finally:
                 if logserver is not None:
                     terminate_process(logserver, "UI popup logserver")

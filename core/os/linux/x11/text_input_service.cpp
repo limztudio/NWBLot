@@ -172,6 +172,7 @@ TextInputAdmission::Enum X11TextInputService::startNativeSession(const TextInput
     m_nativeToken = token;
     m_preedit.clear();
     m_caretVisible = true;
+    m_caretSpotApplied = false;
     if(!createContext()){
         m_nativeToken = {};
         return TextInputAdmission::NativeFailure;
@@ -200,6 +201,10 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
         return TextInputAdmission::Unavailable;
     if(!m_caretHintSupported)
         return TextInputAdmission::Accepted;
+    XPoint spot{ static_cast<short>(Clamp<i32>(caret.x, -32768, 32767)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, -32768, 32767)), };
+    // The current context already holds this spot, so skip building another native argument list.
+    if(m_caretSpotApplied && m_appliedCaretSpot.x == spot.x && m_appliedCaretSpot.y == spot.y)
+        return TextInputAdmission::Accepted;
     m_dispatch.enter();
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
@@ -207,7 +212,6 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     }
     );
 
-    XPoint spot{ static_cast<short>(Clamp<i32>(caret.x, -32768, 32767)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, -32768, 32767)), };
     XVaNestedList attributes = XVaCreateNestedList(0, XNSpotLocation, &spot, nullptr);
     if(!attributes)
         return TextInputAdmission::NativeFailure;
@@ -218,6 +222,8 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     XFree(attributes);
     if(unsupported)
         NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: active input style does not support native caret positioning"));
+    m_appliedCaretSpot = spot;
+    m_caretSpotApplied = !unsupported;
     return TextInputAdmission::Accepted;
 }
 
@@ -278,6 +284,7 @@ void X11TextInputService::nativeFailure(){
 
 void X11TextInputService::releaseContext()noexcept{
     m_resetting = true;
+    m_caretSpotApplied = false;
     if(m_context){
         XUnsetICFocus(m_context);
         if(m_context){

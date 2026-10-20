@@ -4,6 +4,7 @@
 
 #include "runtime.h"
 #include "runtime_internal.h"
+#include "runtime_standalone_graph.h"
 #include "profile_names.h"
 
 #include <core/graphics/backend_selection.h>
@@ -160,6 +161,7 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
     , m_cpuTiming(cpuTiming)
     , m_backend(MakeNotNullUnique(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_cpuScheduler)))
+    , m_standaloneGraphWorkspaces(MakeNotNullUnique(MakeGlobalUnique<GraphicsModuleDetail::StandaloneGraphWorkspacePool>(m_allocator.getObjectArena(), m_allocator.getObjectArena())))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
@@ -383,6 +385,10 @@ bool GraphicsRuntime::destroy(){
     m_gpuTiming.resetQueries();
 
     m_swapChainFramebuffers.clear();
+    if(!m_standaloneGraphWorkspaces->releaseCommandListCaches()){
+        requestDeviceRecreation();
+        return false;
+    }
     GraphicsBackend::Device* const device = m_backend->getDevice();
     const bool detachScheduler = device && m_gpuTasks.isAttachedTo(*device);
     if(detachScheduler && !m_gpuTasks.detachDevice(*device)){
@@ -495,7 +501,7 @@ bool GraphicsRuntime::prepareFramePreamble(){
         // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
-        if(!GraphicsModuleDetail::SubmitGraphOwnedFrameTimingReset(*this, m_allocator.getObjectArena(), m_gpuTiming)){
+        if(!GraphicsModuleDetail::SubmitGraphOwnedFrameTimingReset(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
             m_gpuTiming.discardFrameReset();
             NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
         }

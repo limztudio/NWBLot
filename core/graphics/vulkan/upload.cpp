@@ -14,12 +14,12 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer)
+UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, const ChunkKind chunkKind)
     : m_device(pParent)
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
     , m_queueChunkLedgers(m_device.m_context.objectArena)
-    , m_isScratchBuffer(isScratchBuffer)
+    , m_chunkKind(chunkKind)
 {}
 UploadManager::~UploadManager()noexcept{
     clear();
@@ -86,12 +86,23 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
 
     BufferDesc bufferDesc;
     bufferDesc.byteSize = chunkSize;
-    bufferDesc.cpuAccess = m_isScratchBuffer ? CpuAccessMode::None : CpuAccessMode::Write;
     bufferDesc.isVolatile = false;
-    bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
-    if(m_isScratchBuffer){
+    switch(m_chunkKind){
+    case ChunkKind::Upload:
+        bufferDesc.cpuAccess = CpuAccessMode::Write;
+        bufferDesc.debugName = "UploadBuffer";
+        break;
+    case ChunkKind::Scratch:
+        bufferDesc.cpuAccess = CpuAccessMode::None;
+        bufferDesc.debugName = "ScratchBuffer";
         bufferDesc.structStride = 1u;
         bufferDesc.canHaveUAVs = true;
+        break;
+    case ChunkKind::AccelStructBuildInput:
+        bufferDesc.cpuAccess = CpuAccessMode::Write;
+        bufferDesc.debugName = "AccelStructBuildInputBuffer";
+        bufferDesc.isAccelStructBuildInput = true;
+        break;
     }
 
     auto bufferHandleResult = m_device.createBuffer(bufferDesc);

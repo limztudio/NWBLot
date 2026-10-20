@@ -60,6 +60,8 @@ void GpuPersistentResourceStateCache::reset()noexcept{
     m_states.reset();
     m_textures.clear();
     m_buffers.clear();
+    m_spareTextures.clear();
+    m_spareBuffers.clear();
 }
 
 
@@ -97,9 +99,10 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
             reset();
             return false;
         }
-        GraphicsVector<TextureHandle> retainedTextures(m_arena);
-        GraphicsVector<BufferHandle> retainedBuffers(m_arena);
-        RetainSelectedHandles(selection, textures, buffers, retainedTextures, retainedBuffers);
+        // A prior unwound call may have left partial handles here.
+        m_spareTextures.clear();
+        m_spareBuffers.clear();
+        RetainSelectedHandles(selection, textures, buffers, m_spareTextures, m_spareBuffers);
 
         // Finish every allocation and retain new live handles before filtering the accepted snapshot.
         // Self-filtering only shrinks its existing state arrays; after its input checks, compaction and these same-arena swaps cannot fail.
@@ -107,8 +110,11 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
             reset();
             return false;
         }
-        m_textures.swap(retainedTextures);
-        m_buffers.swap(retainedBuffers);
+        m_textures.swap(m_spareTextures);
+        m_buffers.swap(m_spareBuffers);
+        // Release the displaced handles now but keep their capacity.
+        m_spareTextures.clear();
+        m_spareBuffers.clear();
         return true;
     }
 

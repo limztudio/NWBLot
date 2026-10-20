@@ -3,12 +3,15 @@
 
 
 #include "runtime_internal.h"
+#include "runtime_standalone_graph.h"
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/compiler.h>
 #include <core/task/gpu/scheduler.h>
 #include <core/graphics/rhi/queue_sharing.h>
+
+#include <global/exception.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -237,6 +240,104 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void StandaloneGraphWorkspace::reset(){
+    {
+        const GpuCompiledGraph::ReadView planAccess(compiledGraph);
+        if(planAccess.valid()){
+            const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+            if(recordingAttemptGeneration != 0u && !transaction.discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration))
+                NWB_FATAL_ASSERT_MSG(false, "standalone graph workspace reuse requires every unaccepted packet to resolve");
+            transaction.reset(compiledGraph);
+            recordedGraph.reset(compiledGraph);
+        }
+    }
+
+    graph.reset();
+    analysis.reset();
+    assignments.reset();
+    compiledGraph.reset();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StandaloneGraphWorkspacePool::Lease::Lease(StandaloneGraphWorkspacePool& pool)
+    : m_pool(pool)
+    , m_workspace(pool.acquire())
+    , m_exceptionCount(UncaughtExceptionCount())
+{}
+StandaloneGraphWorkspacePool::Lease::~Lease()noexcept(false){
+    if(!m_workspace)
+        return;
+    // An unwinding submission destroys its workspace instead of resetting it, so no reset callback runs during the unwind.
+    if(UncaughtExceptionCount() > m_exceptionCount){
+        m_pool.discard(*m_workspace);
+        return;
+    }
+    m_pool.release(*m_workspace);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool StandaloneGraphWorkspacePool::releaseCommandListCaches()noexcept{
+    NothrowScopedLock lock(m_mutex);
+    bool released = true;
+    for(WorkspaceOwner& workspace : m_workspaces){
+        if(workspace->leased || !workspace->recordedGraph.releaseCommandListCache())
+            released = false;
+    }
+    return released;
+}
+
+StandaloneGraphWorkspace* StandaloneGraphWorkspacePool::acquire(){
+    ScopedLock lock(m_mutex);
+    for(WorkspaceOwner& workspace : m_workspaces){
+        if(!workspace->leased){
+            workspace->leased = true;
+            return workspace.get();
+        }
+    }
+
+    // Only a new peak of overlapping or reentrant submissions creates another owner set.
+    WorkspaceOwner created = MakeGlobalUnique<StandaloneGraphWorkspace>(m_arena, m_arena);
+    if(!created)
+        return nullptr;
+    StandaloneGraphWorkspace* const workspace = created.get();
+    m_workspaces.push_back(Move(created));
+    workspace->leased = true;
+    return workspace;
+}
+
+void StandaloneGraphWorkspacePool::release(StandaloneGraphWorkspace& workspace){
+    // Reset outside the lock because payload teardown may run task callbacks.
+    workspace.reset();
+
+    ScopedLock lock(m_mutex);
+    workspace.leased = false;
+}
+
+void StandaloneGraphWorkspacePool::discard(StandaloneGraphWorkspace& workspace){
+    WorkspaceOwner discarded;
+    {
+        ScopedLock lock(m_mutex);
+        for(auto it = m_workspaces.begin(); it != m_workspaces.end(); ++it){
+            if(it->get() != &workspace)
+                continue;
+            discarded = Move(*it);
+            m_workspaces.erase(it);
+            break;
+        }
+    }
+    NWB_ASSERT(discarded);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(GraphicsBackend::Device& device, const CommandQueue::Enum consumerQueue, const usize uploadBytes)noexcept{
     SetupUploadSameClassRouting result;
     if(uploadBytes < s_SetupUploadLargeMinimumBytes)
@@ -318,7 +419,7 @@ ResourceStates::Mask SetupUploadGraphFinalState(const ResourceStates::Mask decla
 
 Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     const GraphicsRuntime& graphics,
-    GraphicsArena& graphArena,
+    StandaloneGraphWorkspacePool& workspaces,
     void* const userData,
     const GraphTaskDeclaration declareTask,
     const GpuPhysicalQueueId requiredTerminalQueue,
@@ -332,7 +433,12 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
 
     auto& device = graphics.getDevice();
 
-    GpuTaskGraph graph(graphArena);
+    // Every view and scratch owner below ends before this lease resets the workspace for the next submission.
+    const StandaloneGraphWorkspacePool::Lease lease(workspaces);
+    StandaloneGraphWorkspace* const workspace = lease.workspace();
+    if(!workspace)
+        return MakeUnexpected(Failure{});
+    GpuTaskGraph& graph = workspace->graph;
     const auto declaredTerminal = declareTask(userData, graph);
     if(!declaredTerminal)
         return MakeUnexpected(declaredTerminal.error());
@@ -353,11 +459,11 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
         return MakeUnexpected(declaredRecovery.error());
     const GpuTaskId recoveryTask = *declaredRecovery;
 
-    GpuTaskGraphAnalysis analysis(graphArena);
-    GpuTaskGraphQueueAssignments assignments(graphArena);
-    GpuCompiledGraph compiledGraph(graphArena);
-    GpuRecordedGraph recordedGraph(graphArena);
-    GpuGraphSubmissionTransaction transaction(graphArena);
+    GpuTaskGraphAnalysis& analysis = workspace->analysis;
+    GpuTaskGraphQueueAssignments& assignments = workspace->assignments;
+    GpuCompiledGraph& compiledGraph = workspace->compiledGraph;
+    GpuRecordedGraph& recordedGraph = workspace->recordedGraph;
+    GpuGraphSubmissionTransaction& transaction = workspace->transaction;
     Alloc::ScratchArena scratchArena(__hidden_graphics_graph_setup::s_StandaloneTaskGraphScratchArena);
     const GpuTaskScheduler& scheduler = graphics.gpuTasks();
     GpuTaskGraphCompileOptions compileOptions;
@@ -471,7 +577,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
 
 bool SubmitGraphOwnedSetupUpload(
     const GraphicsRuntime& graphics,
-    GraphicsArena& graphArena,
+    StandaloneGraphWorkspacePool& workspaces,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum consumerQueue,
     void* const userData,
@@ -484,7 +590,7 @@ bool SubmitGraphOwnedSetupUpload(
 
     auto& device = graphics.getDevice();
     __hidden_graphics_graph_setup::SetupUploadSubmissionData submissionData{ .device = device, .userData = userData, .declareTask = declareTask, .queueSharing = queueSharing, .consumerQueue = consumerQueue, };
-    const auto terminalToken = SubmitGraphOwnedStandaloneTask(graphics, graphArena, &submissionData, &__hidden_graphics_graph_setup::DeclareSetupUploadGraph, requiredTerminalQueue);
+    const auto terminalToken = SubmitGraphOwnedStandaloneTask(graphics, workspaces, &submissionData, &__hidden_graphics_graph_setup::DeclareSetupUploadGraph, requiredTerminalQueue);
     if(!terminalToken)
         return false;
 
@@ -495,14 +601,14 @@ bool SubmitGraphOwnedSetupUpload(
     return true;
 }
 
-bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, GraphicsArena& graphArena, GpuTimingRecorder& timing){
+bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing){
     auto& device = graphics.getDevice();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(!graphicsQueue.valid())
         return false;
 
     __hidden_graphics_graph_setup::FrameTimingResetSubmissionData submissionData{ .timing = timing, };
-    const auto acceptedToken = SubmitGraphOwnedStandaloneTask(graphics, graphArena, &submissionData, &__hidden_graphics_graph_setup::DeclareFrameTimingResetGraph, graphicsQueue);
+    const auto acceptedToken = SubmitGraphOwnedStandaloneTask(graphics, workspaces, &submissionData, &__hidden_graphics_graph_setup::DeclareFrameTimingResetGraph, graphicsQueue);
     if(!acceptedToken)
         return false;
 
@@ -529,7 +635,7 @@ Expected<QueueSubmissionToken> GraphicsRuntime::submitStandaloneTaskGraph(
     if(!declareTask)
         return MakeUnexpected(Failure{});
 
-    return GraphicsModuleDetail::SubmitGraphOwnedStandaloneTask(*this, m_allocator.getObjectArena(), userData, declareTask, requiredTerminalQueue, &m_cpuScheduler, timingRecorder, frameTimingTransaction);
+    return GraphicsModuleDetail::SubmitGraphOwnedStandaloneTask(*this, *m_standaloneGraphWorkspaces, userData, declareTask, requiredTerminalQueue, &m_cpuScheduler, timingRecorder, frameTimingTransaction);
 }
 
 

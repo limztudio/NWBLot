@@ -392,6 +392,8 @@ private:
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(const void* data, usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<VkDeviceAddress> suballocateBuildScratchAddress(u64 buildScratchSize, u64 scratchAlignment, TStringView operationName);
+    // Returns mapped CPU-written build-input bytes whose device address is aligned. The pool reuses them only after the owning queue completes.
+    [[nodiscard]] Expected<BufferSuballocation> suballocateBuildInput(u64 byteCount, u64 deviceAddressAlignment, TStringView operationName);
     [[nodiscard]] Expected<bool> validateAccelStructBuildSignature(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,

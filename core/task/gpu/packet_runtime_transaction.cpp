@@ -122,8 +122,11 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
     }
 
     const GpuPhysicalQueueTopology queueTopology = planAccess.queueTopology();
-    GraphicsVector<PacketRuntime> nextPackets(m_arena);
-    GraphicsVector<LatestAcceptedQueueToken> nextLatestAcceptedQueueTokens(m_arena);
+    // A prior unwound reset may have left partial staging contents.
+    GraphicsVector<PacketRuntime>& nextPackets = m_resetStagingPackets;
+    GraphicsVector<LatestAcceptedQueueToken>& nextLatestAcceptedQueueTokens = m_resetStagingLatestAcceptedQueueTokens;
+    nextPackets.clear();
+    nextLatestAcceptedQueueTokens.clear();
     nextPackets.resize(planAccess.packetCount());
     nextLatestAcceptedQueueTokens.reserve(queueTopology.queueCount);
 
@@ -137,14 +140,17 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
     nextSubmissionStatistics.planGeneration = nextPlanGeneration;
     nextSubmissionStatistics.deviceGeneration = nextDeviceGeneration;
 
-    static_assert(noexcept(m_packets = Move(nextPackets)), "packet reset publication must be non-throwing");
-    static_assert(noexcept(m_latestAcceptedQueueTokens = Move(nextLatestAcceptedQueueTokens)), "accepted queue-frontier reset publication must be non-throwing");
+    static_assert(noexcept(m_packets.swap(nextPackets)), "packet reset publication must be non-throwing");
+    static_assert(noexcept(m_latestAcceptedQueueTokens.swap(nextLatestAcceptedQueueTokens)), "accepted queue-frontier reset publication must be non-throwing");
     static_assert(IsNothrowMoveConstructible_V<LatestAcceptedQueueToken>);
     static_assert(IsNothrowDestructible_V<PacketRuntime>);
 
     NothrowScopedLock lock(m_mutex);
-    m_packets = Move(nextPackets);
-    m_latestAcceptedQueueTokens = Move(nextLatestAcceptedQueueTokens);
+    m_packets.swap(nextPackets);
+    m_latestAcceptedQueueTokens.swap(nextLatestAcceptedQueueTokens);
+    // Drop the displaced contents but keep the capacity for the next reset.
+    nextPackets.clear();
+    nextLatestAcceptedQueueTokens.clear();
     m_generation = nextGeneration;
     m_planGeneration = nextPlanGeneration;
     m_recordingAttemptGeneration = 0u;

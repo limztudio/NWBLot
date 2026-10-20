@@ -346,7 +346,7 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
-        m_allocator.getObjectArena(),
+        *m_standaloneGraphWorkspaces,
         uploadDesc.queueSharing,
         consumerQueue,
         &submissionData,
@@ -406,7 +406,7 @@ Expected<TextureHandle> GraphicsRuntime::setupTexture(const TextureSetupDesc& de
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
-        m_allocator.getObjectArena(),
+        *m_standaloneGraphWorkspaces,
         uploadDesc.queueSharing,
         consumerQueue,
         &submissionData,

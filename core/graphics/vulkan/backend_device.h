@@ -432,6 +432,7 @@ private:
 
     UploadManager m_uploadManager;
     UploadManager m_scratchManager;
+    UploadManager m_accelStructInputManager;
 };
 
 

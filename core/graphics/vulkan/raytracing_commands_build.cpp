@@ -402,7 +402,6 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         blasScratch.geometries[i].geometry.triangles.pNext = &ommGeometry;
     }
 
-    BufferHandle transformBuffer;
     VkDeviceAddress transformBaseAddress = 0;
     if(transformCount > 0){
         if(transformCount > Limit<usize>::s_Max / sizeof(VkTransformMatrixKHR)){
@@ -411,31 +410,11 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
 
         const usize transformBufferSize = transformCount * sizeof(VkTransformMatrixKHR);
-
-        BufferDesc transformBufferDesc;
-        transformBufferDesc.byteSize = static_cast<u64>(transformBufferSize);
-        transformBufferDesc.cpuAccess = CpuAccessMode::Write;
-        transformBufferDesc.isAccelStructBuildInput = true;
-        transformBufferDesc.debugName = "BLAS_TransformBuffer";
-
-        auto transformBufferResult = m_device.createBuffer(transformBufferDesc);
-        if(!transformBufferResult){
-            invalidateCommandRecording();
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate BLAS transform buffer"));
+        constexpr u32 s_TransformDeviceAddressAlignment = 16u;
+        const auto transformInput = suballocateBuildInput(static_cast<u64>(transformBufferSize), s_TransformDeviceAddressAlignment, NWB_TEXT("allocate BLAS transform input"));
+        if(!transformInput)
             return;
-        }
-        transformBuffer = Move(*transformBufferResult);
-        if(!isBufferReadyForCommandQueue(transformBuffer.get(), s_BuildInputUsage)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: BLAS transform buffer is not ready for device-address access"));
-            return;
-        }
-
-        const Expected<void*> mappedTransformsResult = m_device.mapBuffer(*transformBuffer, CpuAccessMode::Write);
-        if(!mappedTransformsResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map BLAS transform buffer"));
-            return;
-        }
-        auto* mappedTransforms = static_cast<u8*>(*mappedTransformsResult);
+        auto* mappedTransforms = static_cast<u8*>(transformInput->cpuAddress);
 
         usize transformIndex = 0;
         for(usize i = 0u; i < numGeometries; ++i){
@@ -448,14 +427,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             ++transformIndex;
         }
 
-        m_device.unmapBuffer(*transformBuffer);
-
-        transformBaseAddress = VulkanDetail::GetBufferDeviceAddress(transformBuffer.get());
-        constexpr u32 s_TransformDeviceAddressAlignment = 16u;
-        if(transformBaseAddress == 0u || transformBaseAddress % s_TransformDeviceAddressAlignment != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: transform buffer device address must be 16-byte aligned"));
-            return;
-        }
+        transformBaseAddress = VulkanDetail::GetBufferDeviceAddress(transformInput->buffer, transformInput->offset);
     }
 
     auto buildGeometry = [&](usize i)noexcept{
@@ -573,9 +545,6 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
     m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
 
-    if(transformBuffer)
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(transformBuffer));
-
     for(usize i = 0u; i < numGeometries; ++i){
         const RayTracingGeometryDesc& geomDesc = pGeometries[i];
         if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
@@ -657,6 +626,53 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     }
 
     return *alignedScratchAddress;
+}
+
+Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteCount, const u64 deviceAddressAlignment, TStringView operationName){
+    if(!m_currentCmdBuf || m_nativeRecordingID == 0u || byteCount == 0u || deviceAddressAlignment == 0u){
+        invalidateCommandRecording();
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input recording identity, size, or alignment is invalid"), operationName);
+        return MakeUnexpected(Failure{});
+    }
+    const u64 inputPadding = deviceAddressAlignment - 1u;
+    if(byteCount > Limit<u64>::s_Max - inputPadding){
+        invalidateCommandRecording();
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input allocation size overflows"), operationName);
+        return MakeUnexpected(Failure{});
+    }
+    const u64 inputAllocationSize = byteCount + inputPadding;
+
+    const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
+    // Without a completed value, no retired chunk is reused.
+    const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
+    const auto allocation = m_device.m_accelStructInputManager.suballocateBuffer(inputAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
+    if(!allocation){
+        invalidateCommandRecording();
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input suballocation failed"), operationName);
+        return MakeUnexpected(Failure{});
+    }
+    if(!allocation->cpuAddress || !isBufferReadyForCommandQueue(allocation->buffer, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
+        invalidateCommandRecording();
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input buffer is not mapped or not ready for device-address access"), operationName);
+        return MakeUnexpected(Failure{});
+    }
+
+    const VkDeviceAddress inputBaseAddress = VulkanDetail::GetBufferDeviceAddress(allocation->buffer, allocation->offset);
+    const auto alignedInputAddress = AlignUpChecked(inputBaseAddress, deviceAddressAlignment);
+    if(inputBaseAddress == 0u || !alignedInputAddress){
+        invalidateCommandRecording();
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input device address is null or cannot be aligned"), operationName);
+        return MakeUnexpected(Failure{});
+    }
+    const u64 inputOffset = *alignedInputAddress - inputBaseAddress;
+    if(inputOffset > inputAllocationSize || byteCount > inputAllocationSize - inputOffset){
+        invalidateCommandRecording();
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: aligned build-input range is outside the buffer"), operationName);
+        return MakeUnexpected(Failure{});
+    }
+
+    retainStagingBuffer(*allocation->buffer);
+    return BufferSuballocation{ allocation->buffer, allocation->offset + inputOffset, static_cast<u8*>(allocation->cpuAddress) + inputOffset };
 }
 
 Expected<bool> CommandList::validateAccelStructBuildSignature(

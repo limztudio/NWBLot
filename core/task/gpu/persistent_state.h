@@ -63,6 +63,8 @@ public:
         , m_states(arena)
         , m_textures(arena)
         , m_buffers(arena)
+        , m_spareTextures(arena)
+        , m_spareBuffers(arena)
     {}
     GpuPersistentResourceStateCache(GpuPersistentResourceStateCache&&) = delete;
 
@@ -131,6 +133,9 @@ private:
     CommandListResourceStateHandoff m_states;
     GraphicsVector<TextureHandle> m_textures;
     GraphicsVector<BufferHandle> m_buffers;
+    // The in-place self filter stages new handles here and swaps them in. These stay empty between calls and only keep capacity.
+    GraphicsVector<TextureHandle> m_spareTextures;
+    GraphicsVector<BufferHandle> m_spareBuffers;
 };
 
 

@@ -551,11 +551,13 @@ void CommandList::discardUnsubmittedUploadChunks(){
     if(!reusableVersion){
         m_device.m_uploadManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
         m_device.m_scratchManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
+        m_device.m_accelStructInputManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
         return;
     }
 
     m_device.m_uploadManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
     m_device.m_scratchManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
+    m_device.m_accelStructInputManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
 }
 
 void CommandList::abandonUnsubmittedUploadChunks()noexcept{
@@ -567,6 +569,7 @@ void CommandList::abandonUnsubmittedUploadChunks()noexcept{
     const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
     m_device.m_uploadManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
     m_device.m_scratchManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
+    m_device.m_accelStructInputManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
 }
 
 

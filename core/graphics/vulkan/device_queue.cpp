@@ -149,6 +149,7 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
     if(submissionAccepted){
         m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
         m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
+        m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
         return;
     }
 
@@ -170,10 +171,12 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
         if(!reusableVersion){
             m_uploadManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
             m_scratchManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
+            m_accelStructInputManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
             continue;
         }
         m_uploadManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
         m_scratchManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
+        m_accelStructInputManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
     }
 }
 

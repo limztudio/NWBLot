@@ -136,8 +136,9 @@ Device::Device(const DeviceDesc& desc)
     , m_nativeQueueStates(m_context.objectArena)
     , m_physicalQueues(m_context.objectArena)
     , m_physicalQueueInfos(m_context.objectArena)
-    , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
-    , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true)
+    , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, UploadManager::ChunkKind::Upload)
+    , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, UploadManager::ChunkKind::Scratch)
+    , m_accelStructInputManager(*this, s_DefaultAccelStructInputChunkSize, s_AccelStructInputMemoryLimit, UploadManager::ChunkKind::AccelStructBuildInput)
 {
     // A constructor failure cannot invoke Device::~Device; no work has been published to callers yet.
     const i32 initialExceptionCount = UncaughtExceptionCount();
@@ -574,6 +575,7 @@ Device::~Device()noexcept{
 void Device::releaseOwnedResources()noexcept{
     m_uploadManager.clear();
     m_scratchManager.clear();
+    m_accelStructInputManager.clear();
 
     m_gpuDescriptorHeap.shutdownForDeviceTeardown();
     m_descriptorBufferManager.shutdownForDeviceTeardown();

@@ -230,7 +230,7 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
-        m_allocator.getObjectArena(),
+        *m_standaloneGraphWorkspaces,
         textureDesc.queueSharing,
         consumerQueue,
         &submissionData,

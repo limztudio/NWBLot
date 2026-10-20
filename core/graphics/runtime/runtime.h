@@ -26,11 +26,16 @@ class GpuTaskScheduler;
 class GpuTaskGraph;
 struct GpuTaskId;
 
+namespace GraphicsModuleDetail{
+    class StandaloneGraphWorkspacePool;
+};
+
 
 class GraphicsRuntime{
 private:
     using Backend = GraphicsBackend::Backend;
     using BackendOwner = GlobalUniquePtr<Backend>;
+    using StandaloneGraphWorkspacesOwner = GlobalUniquePtr<GraphicsModuleDetail::StandaloneGraphWorkspacePool>;
 
 
 public:
@@ -329,6 +334,8 @@ private:
 
 private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;
+    // Declared after the backend so its device-bound command-list caches release before the device.
+    NotNullUniquePtr<GraphicsModuleDetail::StandaloneGraphWorkspacePool, StandaloneGraphWorkspacesOwner::deleter_type> m_standaloneGraphWorkspaces;
 
     bool m_hasPresentedFrame = false;
     bool m_windowVisible = false;

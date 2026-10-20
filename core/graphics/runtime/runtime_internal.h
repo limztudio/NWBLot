@@ -50,7 +50,7 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
 
 [[nodiscard]] Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     const GraphicsRuntime& graphics,
-    GraphicsArena& graphArena,
+    StandaloneGraphWorkspacePool& workspaces,
     void* userData,
     GraphTaskDeclaration declareTask,
     GpuPhysicalQueueId requiredTerminalQueue = {},
@@ -60,7 +60,7 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
 );
 [[nodiscard]] bool SubmitGraphOwnedSetupUpload(
     const GraphicsRuntime& graphics,
-    GraphicsArena& graphArena,
+    StandaloneGraphWorkspacePool& workspaces,
     ResourceQueueSharing::Mask queueSharing,
     CommandQueue::Enum consumerQueue,
     void* userData,
@@ -68,7 +68,7 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
     QueueSubmissionToken& inOutUploadToken,
     GpuPhysicalQueueId requiredTerminalQueue = {}
 );
-[[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, GraphicsArena& graphArena, GpuTimingRecorder& timing);
+[[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing);
 
 bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc);
 bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc);

@@ -662,6 +662,8 @@ public:
         : m_arena(arena)
         , m_packets(arena)
         , m_latestAcceptedQueueTokens(arena)
+        , m_resetStagingPackets(arena)
+        , m_resetStagingLatestAcceptedQueueTokens(arena)
         , m_externalResourceHandoffBuildScratch(GpuPacketRuntimeDetail::s_ExternalResourceHandoffScratchArena)
         , m_transactionIdentity(GpuTaskGraph::AllocateGeneration())
     {}
@@ -762,6 +764,9 @@ private:
     GraphicsArena& m_arena;
     GraphicsVector<PacketRuntime> m_packets;
     GraphicsVector<LatestAcceptedQueueToken> m_latestAcceptedQueueTokens;
+    // Reset fills these under its exclusive barrier and swaps them with the live arrays. They stay empty between resets and only keep capacity.
+    GraphicsVector<PacketRuntime> m_resetStagingPackets;
+    GraphicsVector<LatestAcceptedQueueToken> m_resetStagingLatestAcceptedQueueTokens;
     mutable Alloc::ScratchArena m_externalResourceHandoffBuildScratch;
     u64 m_generation = 0u;
     u64 m_planGeneration = 0u;

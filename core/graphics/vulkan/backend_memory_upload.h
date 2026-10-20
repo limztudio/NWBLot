@@ -109,6 +109,13 @@ class UploadManager final : NoCopy{
 
 
 private:
+    enum class ChunkKind : u8{
+        Upload,
+        Scratch,
+        // CPU-written, device-addressed acceleration-structure build inputs such as TLAS instances and BLAS transforms.
+        AccelStructBuildInput,
+    };
+
     struct BufferChunk final : public RefCounter<GraphicsResource>{
         BufferHandle buffer;
         TrackedCommandBuffer* owner;
@@ -150,7 +157,7 @@ private:
 
 
 public:
-    UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
+    UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, ChunkKind chunkKind);
     ~UploadManager()noexcept;
 
 
@@ -181,7 +188,7 @@ private:
     u64 m_retiredChunkBytes = 0;
 
     GraphicsDeque<QueueChunkLedger> m_queueChunkLedgers;
-    bool m_isScratchBuffer;
+    ChunkKind m_chunkKind;
 };
 
 

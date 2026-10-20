@@ -70,9 +70,12 @@ private:
     XIC m_context = nullptr;
     XIMStyle m_style = 0u;
     TextInputSessionToken m_nativeToken;
+    // Last spot the current context accepted; cleared whenever the context or session changes.
+    XPoint m_appliedCaretSpot{};
     bool m_caretVisible = true;
     bool m_resetting = false;
     bool m_caretHintSupported = true;
+    bool m_caretSpotApplied = false;
     bool m_reopenPending = false;
     bool m_shuttingDown = false;
     X11TextInputDispatchFence m_dispatch;

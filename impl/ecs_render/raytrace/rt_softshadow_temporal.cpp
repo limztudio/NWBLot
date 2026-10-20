@@ -80,7 +80,7 @@ bool RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::Comma
 
     const DeferredBindlessFrameResources& bindless = targets.bindless;
     ShadowCombinedTemporalPushConstants push;
-    push.prevWorldToClip = m_rayTracingState.m_prevWorldToClip;
+    NWB_MEMCPY(&push.prevWorldToClip, sizeof(push.prevWorldToClip), &m_rayTracingState.m_prevWorldToClip, sizeof(push.prevWorldToClip));
     push.receiverFactor = targets.shadowReceiverFactor;
     for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
         if((m_rayTracingState.m_softShadowSlotMask & (1u << slot)) != 0u)

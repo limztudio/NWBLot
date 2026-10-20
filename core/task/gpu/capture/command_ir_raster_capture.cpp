@@ -224,6 +224,8 @@ bool GpuCommandIrCapture::captureBindGraphicsHeap(
     if(!pipeline.valid() || pipeline.generation != task.generation || !pipelineOwner || !descriptorOwner.valid() || !heap.isInitialized())
         return false;
     auto* const lease = NewArenaObject<__hidden_gpu_command_ir_raster_capture::HeapLeaseOwner>(ownerArena, ownerArena, heap);
+    if(!lease)
+        return false;
     GpuCommandIrOwnerAnchor leaseAnchor(lease, s_AdoptRef);
     if(!lease->valid())
         return false;
@@ -294,8 +296,11 @@ bool GpuCommandIrCapture::appendRasterBytes(
     const usize nextCount = m_recordEndOffsets.size() + 1u;
     if(!BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextCount))
         return false;
-    if((stateOwner || heapOwner) && !m_rasterOwners)
+    if((stateOwner || heapOwner) && !m_rasterOwners){
         m_rasterOwners = NewArenaObject<GpuCommandIrRasterOwnerTable>(m_arena, m_arena);
+        if(!m_rasterOwners)
+            return false;
+    }
     if(stateOwner && m_rasterOwners->stateOwners.size() >= Limit<u32>::s_Max)
         return false;
     if(heapOwner && m_rasterOwners->heapOwners.size() >= Limit<u32>::s_Max)

@@ -48,7 +48,7 @@ GpuTaskGraphDeclarationReadView GpuTaskGraphDeclarationReadView::TryAcquire(cons
 
 
 GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph){
-    UniqueLock<RecursiveMutex> declarationTurnstile(graph.m_declarationMutex);
+    ScopedLock declarationTurnstile(graph.m_declarationMutex);
 
     acquire(graph);
 }

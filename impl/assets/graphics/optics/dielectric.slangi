@@ -55,7 +55,7 @@ half3 nwbDielectricAbsorptionCoefficient(const half3 unitSurvival){
 }
 
 half3 nwbDielectricBeerTransmission(const half3 absorption, const float distance){
-    return exp(-absorption * half(max(distance, 0.0)));
+    return half3(exp(-float3(absorption) * max(distance, 0.0)));
 }
 
 

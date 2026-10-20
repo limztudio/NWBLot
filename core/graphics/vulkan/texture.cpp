@@ -123,7 +123,7 @@ Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo&
 }
 
 Expected<u32> TryComputeUploadSuballocationAlignment(const u32 requiredAlignment)noexcept{
-    return CommonAlignmentChecked(s_DefaultUploadSuballocationAlignment, requiredAlignment);
+    return CommonAlignmentChecked<u32>(s_DefaultUploadSuballocationAlignment, requiredAlignment);
 }
 
 bool IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)noexcept{

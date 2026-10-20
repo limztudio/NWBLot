@@ -180,8 +180,8 @@ void nwbHwShadowFinishInstance(inout NwbHardwareTransparentStream stream, const 
         // Unspecified materials use singleton/odd-boundary admission.
         chord = stream.crossingCount > 1u ? stream.lastDistance - stream.firstDistance : 0.0;
     }
-    // Bounded (0, 1) visibility math stays half; widen only the geometry chord product.
-    stream.opticalDepth += stream.instanceAbsorption * half(chord);
+    // Bounded (0, 1) visibility math stays half; the chord product stays FP32 so long chords do not turn into inf * 0.
+    stream.opticalDepth += half3(float3(stream.instanceAbsorption) * chord);
     stream.transmission *= lerp(half(1.0h), stream.instanceTransmission, half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord)));
 }
 

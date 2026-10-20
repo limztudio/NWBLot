@@ -163,7 +163,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
 
         ShadowReprojectMergePushConstants push;
         push.receiverFactor = targets.shadowReceiverFactor;
-        push.prevWorldToClip = m_rayTracingState.m_prevWorldToClip;
+        NWB_MEMCPY(&push.prevWorldToClip, sizeof(push.prevWorldToClip), &m_rayTracingState.m_prevWorldToClip, sizeof(push.prevWorldToClip));
         push.width = targets.width;
         push.height = targets.height;
         push.halfWidth = softHalfWidth;
@@ -297,7 +297,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 tracePush.geometryCurrSlot = targets.bindless.shadowSoftGeometry.slot();
                 tracePush.geometryPrevSlot = targets.bindless.shadowSoftGeometryPrev.slot();
                 tracePush.momentsInSlot = frontIsA ? targets.bindless.transparentMomentsA.slot() : targets.bindless.transparentMomentsB.slot();
-                tracePush.prevWorldToClip = m_rayTracingState.m_prevWorldToClip;
+                NWB_MEMCPY(&tracePush.prevWorldToClip, sizeof(tracePush.prevWorldToClip), &m_rayTracingState.m_prevWorldToClip, sizeof(tracePush.prevWorldToClip));
                 const auto& pipeline = m_rayTracingState.m_softwareTransparentSampling.m_pipelines[samplingHistoryUsable ? 1u : 0u];
                 commandList.setComputeState(passState(pipeline));
                 bindHeap(pipeline);

@@ -257,6 +257,8 @@ Expected<GpuCommandIrOwnedStream> GpuCommandIrCapture::exportOwned(GraphicsArena
         staged.stateOwners = m_rasterOwners->stateOwners;
         staged.heapOwners = m_rasterOwners->heapOwners;
         ownerCandidate = NewArenaObject<GpuCommandIrRasterOwnerTable>(arena, arena);
+        if(!ownerCandidate)
+            return MakeUnexpected(Failure{});
         ownerCandidate->stateOwners.swap(staged.stateOwners);
         ownerCandidate->heapOwners.swap(staged.heapOwners);
     }

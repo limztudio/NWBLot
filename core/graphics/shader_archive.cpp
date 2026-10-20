@@ -102,16 +102,16 @@ const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name&
     const NameHash& targetShader = shaderName.hash();
     const NameHash& targetStage = stageName.hash();
     const auto it = LowerBound(records.begin(), records.end(), nullptr, [&targetShader, &variantName, &targetStage](const ShaderArchive::Record& record, decltype(nullptr)){
-            const NameHash& recordShader = record.shaderName.hash();
-            if(recordShader != targetShader)
-                return LessNameHash(recordShader, targetShader);
+        const NameHash& recordShader = record.shaderName.hash();
+        if(recordShader != targetShader)
+            return LessNameHash(recordShader, targetShader);
 
-            const AStringView recordVariant(record.variantName);
-            if(recordVariant != variantName)
-                return recordVariant < variantName;
+        const AStringView recordVariant(record.variantName);
+        if(recordVariant != variantName)
+            return recordVariant < variantName;
 
-            return LessNameHash(record.stage.hash(), targetStage);
-        }
+        return LessNameHash(record.stage.hash(), targetStage);
+    }
     );
     if(it == records.end())
         return nullptr;

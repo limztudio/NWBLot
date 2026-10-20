@@ -187,6 +187,25 @@ template<typename T>
     return AlignUpChecked(value, alignment);
 }
 
+// Least common multiple of two nonzero alignments; zero inputs and overflow fail.
+template<typename T>
+[[nodiscard]] constexpr Expected<T> CommonAlignmentChecked(const T firstAlignment, const T secondAlignment)noexcept(IsArithmetic_V<T>){
+    if(firstAlignment == 0 || secondAlignment == 0)
+        return MakeUnexpected(Failure{});
+
+    T first = firstAlignment;
+    T second = secondAlignment;
+    while(second != 0){
+        const T remainder = first % second;
+        first = second;
+        second = remainder;
+    }
+    const T scale = firstAlignment / first;
+    if(scale > Limit<T>::s_Max / secondAlignment)
+        return MakeUnexpected(Failure{});
+    return scale * secondAlignment;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

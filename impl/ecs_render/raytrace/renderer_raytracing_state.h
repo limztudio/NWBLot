@@ -111,7 +111,7 @@ struct RtSceneBvhState{
     // One context-slot descriptor shared by all ray-tracing effects.
     Core::GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // Previous-frame transform for soft-shadow reprojection; invalid after target recreation.
-    Float44U m_prevWorldToClip = {};
+    Float44 m_prevWorldToClip = {};
 
     bool m_tlasStaticSceneHashValid = false;
     bool m_sceneSwBvhStaticSceneHashValid = false;

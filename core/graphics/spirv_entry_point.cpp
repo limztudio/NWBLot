@@ -176,12 +176,12 @@ template<typename Source>
 
     bool found = false;
     const bool validModule = ScanSpirvEntryPoints(source, [&](const SpirvEntryPointInstruction& entryPoint)noexcept{
-            if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
-                return;
+        if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
+            return;
 
-            entryPointName = entryPoint.name;
-            found = true;
-        }
+        entryPointName = entryPoint.name;
+        found = true;
+    }
     );
     if(!validModule)
         return MakeUnexpected(SpirvEntryPointLookupResult::InvalidSpirv);

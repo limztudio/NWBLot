@@ -178,7 +178,6 @@ TextInputAdmission::Enum X11TextInputService::startNativeSession(const TextInput
     m_nativeToken = token;
     m_preedit.clear();
     m_caretVisible = true;
-    m_caretSpotApplied = false;
     if(!createContext()){
         m_nativeToken = {};
         return TextInputAdmission::NativeFailure;
@@ -207,10 +206,8 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
         return TextInputAdmission::Unavailable;
     if(!m_caretHintSupported)
         return TextInputAdmission::Accepted;
-    XPoint spot{ static_cast<short>(Clamp<i32>(caret.x, s_MinI16, s_MaxI16)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, s_MinI16, s_MaxI16)), };
-    // The current context already holds this spot, so skip building another native argument list.
-    if(m_caretSpotApplied && m_appliedCaretSpot.x == spot.x && m_appliedCaretSpot.y == spot.y)
-        return TextInputAdmission::Accepted;
+    if(!m_caretAttributes)
+        return TextInputAdmission::NativeFailure;
     m_dispatch.enter();
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
@@ -218,18 +215,14 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     }
     );
 
-    XVaNestedList attributes = XVaCreateNestedList(0, XNSpotLocation, &spot, nullptr);
-    if(!attributes)
-        return TextInputAdmission::NativeFailure;
+    m_caretSpot = XPoint{ static_cast<short>(Clamp<i32>(caret.x, s_MinI16, s_MaxI16)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, s_MinI16, s_MaxI16)), };
+    // Send the spot even when it did not move: this IM round trip also drains forwarded-key sync work, which keeps committed text and key events in order.
     // Callback/no-preedit styles may ignore this optional candidate-window hint.
-    const bool unsupported = XSetICValues(m_context, XNPreeditAttributes, attributes, nullptr) != nullptr;
-    if(unsupported)
+    const bool unsupported = XSetICValues(m_context, XNPreeditAttributes, m_caretAttributes, nullptr) != nullptr;
+    if(unsupported){
         m_caretHintSupported = false;
-    XFree(attributes);
-    if(unsupported)
         NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: active input style does not support native caret positioning"));
-    m_appliedCaretSpot = spot;
-    m_caretSpotApplied = !unsupported;
+    }
     return TextInputAdmission::Accepted;
 }
 
@@ -275,6 +268,8 @@ bool X11TextInputService::createContext(){
     }
     if(!m_context)
         return false;
+    // The list points at m_caretSpot, so caret updates reuse it for the life of this context.
+    m_caretAttributes = XVaCreateNestedList(0, XNSpotLocation, &m_caretSpot, nullptr);
     long filterMask = 0;
     XWindowAttributes attributes{};
     if(!XGetICValues(m_context, XNFilterEvents, &filterMask, nullptr) && XGetWindowAttributes(&m_display, m_window, &attributes))
@@ -290,7 +285,6 @@ void X11TextInputService::nativeFailure(){
 
 void X11TextInputService::releaseContext()noexcept{
     m_resetting = true;
-    m_caretSpotApplied = false;
     if(m_context){
         XUnsetICFocus(m_context);
         if(m_context){
@@ -302,6 +296,10 @@ void X11TextInputService::releaseContext()noexcept{
             XDestroyIC(m_context);
             m_context = nullptr;
         }
+    }
+    if(m_caretAttributes){
+        XFree(m_caretAttributes);
+        m_caretAttributes = nullptr;
     }
     // Forwarded keys can leave connection-wide XIM_SYNC_REPLY work behind after their IC is destroyed.
     // A replacement session gets a fresh connection; its input cannot inherit that retired protocol queue.
